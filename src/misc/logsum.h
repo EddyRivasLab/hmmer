@@ -12,9 +12,4 @@ extern int   p7_logsum_Reinit(void);
 extern int   p7_logsum_IsSlowExact(void);
 
 #endif /*p7LOGSUM_INCLUDED*/
-/*****************************************************************
- * @LICENSE@
- * 
- * SVN $Id$
- * SVN $URL$
- *****************************************************************/
+

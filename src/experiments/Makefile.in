@@ -4,11 +4,12 @@ OBJS =
 
 HDRS = 
 
-PROGS = decoding-animate \
-	decoding-hunt \
-	decoding-study \
-	hmmsim \
-        sim-alignment
+PROGS = 
+#	decoding-animate \  SRE REVISIT
+#	decoding-hunt    \
+#	decoding-study   \
+#	hmmsim           \
+#       sim-alignment
 
 UTESTS = 
 
@@ -18,12 +19,6 @@ BENCHMARKS =
 
 EXAMPLES =
 
-LIBOBJS = 
-
-LIBHDRS =  
-
-LIBTMP = 
-
 top_srcdir   = @top_srcdir@
 top_builddir = @top_builddir@
 srcdir       = @srcdir@
@@ -32,10 +27,4 @@ SHELL        = /bin/sh
 
 include ../Makefile-subdirs.mk
 
-################################################################
-# @LICENSE@
-#
-# SVN $URL$
-# SVN $Id$
-################################################################
 

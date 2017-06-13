@@ -1,18 +1,14 @@
 MODULE = build
 
-LIBOBJS =  build.o\
-	   evalues.o\
-	   eweight.o\
-	   modelsample.o\
-	   modelstats.o\
-	   p7_builder.o\
-	   seqmodel.o
+OBJS =  build.o       \
+	evalues.o     \
+	eweight.o     \
+	modelsample.o \
+	modelstats.o  \
+	p7_builder.o  \
+	seqmodel.o
 
-LIBHDRS =  
-
-OBJS = 
-
-HDRS =
+HDRS =  
 
 PROGS =
 
@@ -37,11 +33,4 @@ VPATH        = @srcdir@
 SHELL        = /bin/sh
 
 include ../Makefile-subdirs.mk
-
-################################################################
-# @LICENSE@
-#
-# SVN $URL$
-# SVN $Id$
-################################################################
 

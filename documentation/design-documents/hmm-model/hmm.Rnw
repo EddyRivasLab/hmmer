@@ -1,0 +1,286 @@
+\documentclass[fonts, justified]{tufte-handout}
+
+\title{Design Documment: HMMER 4's Hidden Markov Models}
+
+\author[Sean Eddy and Nick Carter]{Sean Eddy and Nick Carter}
+
+%\date{28 March 2010} % without \date command, current date is supplied 
+
+%\geometry{showframe} % display margins for debugging page layout
+
+\usepackage{graphicx} % allow embedded images
+  \setkeys{Gin}{width=\linewidth,totalheight=\textheight,keepaspectratio}
+  \graphicspath{{tufte-latex/graphics/}} % set of paths to search for images
+\usepackage{amsmath}  % extended mathematics
+\usepackage{booktabs} % book-quality tables
+\usepackage{units}    % non-stacked fractions and better unit spacing
+\usepackage{multicol} % multiple column layout facilities
+\usepackage{lipsum}   % filler text
+\usepackage{fancyvrb} % extended verbatim environments
+\usepackage{listings}
+\usepackage{minted}
+  \fvset{fontsize=\normalsize}% default font size for fancy-verbatim environments
+
+% Standardize command font styles and environments
+\newcommand{\doccmd}[1]{\texttt{\textbackslash#1}}% command name -- adds backslash automatically
+\newcommand{\docopt}[1]{\ensuremath{\langle}\textrm{\textit{#1}}\ensuremath{\rangle}}% optional command argument
+\newcommand{\docarg}[1]{\textrm{\textit{#1}}}% (required) command argument
+\newcommand{\docenv}[1]{\textsf{#1}}% environment name
+\newcommand{\docpkg}[1]{\texttt{#1}}% package name
+\newcommand{\doccls}[1]{\texttt{#1}}% document class name
+\newcommand{\docclsopt}[1]{\texttt{#1}}% document class option name
+\newenvironment{docspec}{\begin{quote}\noindent}{\end{quote}}% command specification environment
+
+\newcommand{\innermid}{\nonscript\;\delimsize\vert\nonscript\;}
+\newcommand{\activatebar}{%
+  \begingroup\lccode`\~=`\|
+  \lowercase{\endgroup\let~}\innermid 
+  \mathcode`|=\string"8000
+}
+
+\begin{document}
+% commands to tell listings package how we want code printed
+
+\maketitle% this prints the handout title, author, and date
+
+\begin{abstract}
+\noindent
+This document outlines the structure and C-code representation of the hidden Markov models (HMMs) used in HMMER 4.  While the underlying algorithms HMMER uses are applicable to any HMM, HMMER's implementation of these algorithms is heavily optimized for the structure of the "profile" HMMs that it uses.  Similarly, the C-language HMM data structures that HMMER uses are optimized for performance and to support the techniques that HMMER uses to take advantage of SIMD vector instructions. 
+
+\end{abstract}
+
+\section{Introduction}
+HMMER uses a class of hidden Markov models\cite{Rabiner:1989hmm} known as {\em profile} HMMs\cite{Krogh:1993vw}\cite{Eddy:1998vg}.  Profile HMMs have a regular structure and are designed to model genetic or protein sequences, meaning that traversing the HMM will, with high probability, generate a sequence that is similar to the sequence(s) used to define the HMM. 
+
+More specifically, a profile HMM is constructed to model an {\em aligned} set of one or more genetic/protein sequences.  Loosely speaking, sequences are said to be aligned if they have been similar structure and if they have been arranged in a manner that identifies the points of greatest similarity.  Alignments are typically presented in a gridded fashion, as shown in Figure \ref{fig:alignment}, which is based on Figure 5.3 in \cite{Durbin:1998wz}.  This figure shows an aligned set of fragments taken from different globin proteins.  Each row represents a fragment of a different protein, and each letter represents one of the 20 amino acids that proteins are constructed from.  The sequences have been arranged so that the points of greatest similarity lie in vertical columns known as {\em consensus positions}, which are labeled with asterisks in the figure.  Dashes in the figure represent {\em gaps} where the shorter sequences had to be stretched in order to make the consensus positions line up correctly.  
+
+\begin{marginfigure}
+\vspace{0.2in} \newline
+\begin{centering}\texttt{VGA-{}-HAGEY} \newline
+\texttt{V-{}-{}-{}-NVDEV}	\newline
+\texttt{VEA-{}-DVAGH} \newline
+\texttt{VKG-{}-{}-{}-{}-{}-D} \newline
+\texttt{VYS-{}-TYETS} \newline
+\texttt{IAGADNGAGV} \newline
+\texttt{*** {} *****} \newline
+\end{centering}
+\caption{Example sequence alignment. Columns labeled with asterisks are consensus positions in the alignment.}
+\label{fig:alignment}
+\end{marginfigure}
+
+The states in a profile HMM can be divided into two categories: the {\em core} states that model the consensus positions, insertions, and deletions; and the {\em periphery} states that determine how the model enters and leaves the core states and whether the model is allowed to make multiple passes through the core states.  While the core states of the HMM are uniquely determined by the alignment used to create the HMM, the choice of which periphery states to use and how those states enter and leave the core states has a great deal of influence over the types of sequences the HMM is able to model and detect.  HMMER 4 uses different arrangements of periphery states around the same core states to implement two sub-models that together form the full HMM: a "local" model\footnote{The local model used in HMMER4 is the same as the full model used in HMMER 3.  HMMER 2 supported either local or glocal models, but the decision about which model type to use had to be made when the HMM was constructed.}, and a "glocal" model.  The local model allows matches to begin and end at any position in the core model, which makes the local model good at detecting partial matches between sequences and the HMM, but imposes a penalty on the score\footnote{A number representing the closeness of the match between an HMM and a sequence.} that a full match can achieve.  Under some conditions, this penalty can make it difficult to distinguish true matches from false positives. 
+
+In contrast, the glocal model only enters the core states at the first position.  This limits the model's ability to detect partial matches, but allows it to generate higher scores on complete matches, reducing the number of false negatives.  By including both sub-modules, HMMER 4 is able to detect a large set of partial and complete matches without being overwhelmed by false positives.
+
+\section{Core States of a Profile HMM}
+Figure \ref{fig:hmm-core} shows the structure of the core of a profile HMM.  Each consensus position in the alignment used to generate the HMM becomes three states: a match (M) state, which represents the model emitting a symbol at the consensus position, an insert (I) state, which represents the model inserting a symbol between two consensus position, and a delete (D) state, which represents the model not emitting a symbol at the consensus position.  The last consensus position has no insert state; any symbols that appear after the last consensus position are handled by the periphery states of the HMM.  (Notational note: states represented by circles do not emit symbols, while states represented by squares and diamonds emit a symbol every time they are entered.) 
+
+HMMER allows seven transitions\footnote{Because it has seven transitions per consensus position, HMMER's model is sometimes called the "plan 7" or "p7" model.  The model proposed by Krogh {\em et. al.} had nine transitions per consensus position and is thus called the "plan 9" or "p9" model.} between the states that represent consensus positions. State $M_{x}$ may transition to $I_{x}$, $M_{x+1}$, or $D_{x+1}$. State $D_{x}$ may transition to $M_{x+1}$ or $D_{x+1}$, and state $I_{x}$ may transition either to state $M_{x+1}$ or back to itself.  In contrast to the model proposed in \cite{Krogh:1993vw}, HMMER does not allow transitions between the insert and delete states, treating insert-delete combinations as substitutions (cases where the match state at a given position emits a different symbol than one of the ones in the training data).
+
+\begin{figure*}
+      \includegraphics[width=6.5in]{figures/hmm-core}
+      \caption{Core States of a Profile HMM that Models the Alignment in Figure \ref{fig:alignment}}
+      \label{fig:hmm-core}
+\end{figure*}
+ 
+The decision to use the seven-transition model has some implications for the types of analyses that HMMER can perform well.  While knowing whether a one-symbol change between two sequences was due to a symbol replacing another one, an insertion followed by a deletion, or a deletion followed by an insertion is generally irrelevant to understanding the sequence's function, that distinction can be very important when attempting to figure out where an organism fits in a phylogenic tree.  For this reason, and because the factors that led to the decision to use the seven-transition model\footnote{Time to process the model, which is less important in current versions of HMMER because only a very small fraction of sequence-HMM comparisons reach the portion of the engine that considers the full model; and difficulty in generating alignments when a nine-transition model is used, which is less of an issue because other alignment techniques are available} have become less important over time, there is some interest in returning to the nine-transition model in future versions of HMMER.  This change is not under consideration for the initial release of HMMER 4 due to the amount of work required and the impact that it would have on our release date.
+
+In addition to its basic structure (the states in the model and the allowable transitions between them), an HMM is specified by two sets of probabilities: the {\em transition} probabilities (the probability of taking each of the transitions out of a state given that the model starts a timestep in that state), and the {\em emission probabiliites} (the probability that each state emits each of the symbols in the alphabet used by the HMM).  The core states of a profile HMM  with  N$_{M}$ consensus positions and K$_{p}$ symbols in its alphabet will have $7N_{M}$ transition probabilities and $2N_{M}K_{p}$ emission probabilities, because the D states do not emit symbols. 
+
+The exact process used to estimate these probabilities from an alignment is beyond the scope of this document, and is discussed in Chapter 5 of \cite{Durbin:1998wz}.  The general approach used in HMMER's HMM-generation code is to estimate each probability using a combination of the data provided in the alignment and a set of {\em priors}, probability distributions that model the general behavior of sequences.  This approach allows the data in the alignment to determine the most-probable transitions and emissions in the HMM, but assigns non-zero probabilities to events that are not present in the alignment, allowing the HMM to match sequences that contain those events but are otherwise similar to the alignment.  It also has the property that, as the number of sequences in the alignment increases, the impact of the priors on the HMM's probabilities decreases, reflecting the greater confidence that comes from increased data.
+
+\subsection{The Local Sub-Model}
+Figure \ref{fig:hmm-local} shows the periphery states that are added to the core HMM states to create the local model.  The model always begins in the S (for "start") state, and immediately proceeds to the N state\footnote{The letters used for the N and C states are derived from the terminology used for the beginning and end of the amino-acid chain that makes up a protein, respectively.}, where it spends one or more timesteps before proceeding to the L state\footnote{In HMMER 3 and in many of the papers about profile HMMs, the L state is known as the B (for begin) state.  In HMMER 4, the B state is part of the full model, and transitions to either the L (for local) or G (for glocal) state.}.   and then to one of the M states.  After passing through the core states, the model jumps to the E (for "end") state.  From there, it goes to either the C state followed by the T (termination) state, or to the J (join) state which leads back to the L state to start another pass through the core states.  
+ 
+The N, C, and J states behave differently from any of the states in the core model.  When the model first enters one of these states, it does not emit a symbol.  However, if the model transitions from one of these states back to itself, it does emit a symbol.  Thus, we represent these states with a circle inside a diamond to indicate that they may emit 0 or more symbols depending on the number of timesteps the model spends in the state.
+
+\begin{figure*}[t]
+      \includegraphics[width=6.5in]{figures/hmm-local}
+      \caption{Local HMM Structure}
+      \label{fig:hmm-local}
+\end{figure*} 
+
+Adding the S, N, C, and T states allows the model to recognize sequences that have an arbitrary number of other symbols before or after a region that matches the alignment used to generate the HMM.  Without these states, HMMER would only be able to recognize cases where the match started at the first symbol in the sequence.  Adding the J state allows HMMER to recognize cases where multiple portions of a sequence match with some or all of the alignment that was used to create the HMM.  For example, by using the J state, HMMER can recognize that a sequence has a repeated pattern of matches to the HMM, or where evolution has inserted a large number of symbols between fragments that match the HMM.  
+
+\subsection{The Glocal Sub-Model}
+The glocal model shown in Figure \ref{fig:hmm-glocal} is similar in structure to the local model, with the change that the G state, which replaces the L state, only has transitions to the M$_{1}$ and D$_{1}$ states instead of to all of the M states.  Similarly, only the last M and D states in the core chain have transitions to the end states.  
+
+\begin{figure*}[t]
+      \includegraphics[width=6.5in]{figures/hmm-glocal}
+      \caption{Glocal HMM Structure}
+      \label{fig:hmm-glocal}
+\end{figure*}
+
+This change has two effects.  First, matches that do not begin at the first consensus position in the alignment must pay the cost of going through the D states to reach the first consensus position that they do match, which reduces the scores of partial matches.  Second, because the probability of the G$\rightarrow$M$_{1}$ transition in the glocal model is higher than the probability of the L$\rightarrow$M$_{1}$ transition in the local model, a sequence that matches all or almost all of the consensus positions will generate a higher match score using the glocal model than would be possible with the local model.  The overall effect is that the glocal model is less effective than the local model at detecting partial matches to the HMM, but is often more able to detect complete matches between a sequence and the HMM.
+
+\subsection{The Full HMM}
+Finally, Figure \ref{fig:hmm-full} shows how the local and glocal models are combined to form the full HMMER 4 HMM.  A B (for begin) state is inserted between the N and the G/L states, and the E states in the two sub-models are merged.  By default, the B state has an equal probability of transitioning to either the G or the L state, giving the two sub-models equal weight in detecting matches.
+
+\begin{figure*}[t]
+      \includegraphics[width=6.5in]{figures/hmm-full}
+      \caption{Full HMMER4 HMM Structure}
+      \label{fig:hmm-full}
+\end{figure*}
+
+\section{C-language Representation of HMMs}
+
+HMMER 4 uses two different data structures to represent hidden Markov models.  The first, {\tt P7\_PROFILE}, is a generic representation of the full HMM, and is described in this section.  The second, {\tt P7\_OPROFILE}, encodes optimized representations of the sub-models used by each of HMMER's filter stages, and is described in the next section.  The code for these data structures can be found in {\tt src/base/p7\_profile.h} and {\tt src/base/p7\_oprofile.h}, respectively.  
+
+\subsection{Log-likelihood Scores}
+Both the generic and the optimized model represent transition and emission probabilities as {\em log-likelihood scores} instead of conventional probabilities.  The log-likelihood score of an event $x$ is defined as $\log_{2}(\frac{P(x|HMM)}{P(x|R)})$\footnote{The choice of a base-2 logarithm is somewhat arbitrary, but has the effect that the unit of the log-likelihood score becomes the {\em bit}} , the logarithm of the HMM's estimate of the probability that $x$ will occur divided by the probability that $x$ will occur according to some background model of random events.  For example, in calculating the log-likelihood scores for emission probabilities, the background model $R$ that is generally used is a distribution where the chance of emitting each symbol is the probability of finding that symbol at a random position in a random genome.  
+
+Since the log-likelihood score is the logarithm of a ratio, positive scores indicate a ratio greater than 1, i.e., that the model predicts that the event will occur more often than would be expected in the random background model.  Negative scores indicate the reverse: a ratio less than 1, meaning that the HMM predicts that the event will occur less often than the background model does.  
+
+Using log-likelihood scores (often referred to as just {\em scores}) instead of probabilities transforms the multiplication required to calculate the joint probability of two independent events into an addition, i.e. if $S(x) = \log_{2}(\frac{P(x|HMM)}{P(x|R)})$,  $P(x, y) = P(x)P(y) \rightarrow S(x,y) = S(x) + S(y)$.  On some computers, addition operations take less time than multiplications, so this transformation can improve performance.  The primary benefit, however, is that using log-likelihood scores greatly reduces the number of calculations that over- or under-flow their numeric representation.  Calculating the probability of a particular path through an HMM often requires multiplying tens or hundreds of transition probabilities.  Since each probability must be between 0 and 1, the product of a large number of probabilities tends to be very close to 0, and often underflows the precision of the numeric representation being used.  
+
+In contrast, summing many log-likelihood scores is much less likely to cause over- or under-flow errors, because of the lower dynamic range of addition operations.  Also, log-likelihood scores are not limited to a small range of values the way probabilities are.  They can be either positive or negative, and can have magnitudes greater than, less than, or equal to one, so the sum of a set of log-likelihood scores does not tend to converge to a fixed value the way the product of a set of probabilities tends to approach zero as the number of probabilities in the set increases, further reducing the risk of underflow or overflow.
+
+\subsection{The P7\_PROFILE Data Structure}
+Figure \ref{fig:p7_profile} shows the C-language declaration of the {\tt P7\_PROFILE} data structure.  The data structure begins with the {\tt M} field, which contains the number of nodes (consensus positions) in the model, followed by the {\tt tsc} (transition scores), {\tt rsc} (residue scores\footnote{The symbols emitted by an HMM are sometimes called {\em residues}.}), and {\tt xsc} (special scores) arrays, which contain the transition and emission scores for the HMM.  {\tt Tsc}  and {\tt rsc} hold the transition and emission scores for the model's core states, and {\tt xsc} holds the transition scores for the states in the periphery.  Even though there are two copies of the core states in the model, one in each sub-model, only one {\tt rsc} field is required because the emission scores for each state in the two copies are the same.  The single {\tt tsc} field holds a "merged" representation of the transition scores in both sub-models even though some of the transition scores differ between the sub-models. 
+
+\begin{figure*}[]
+\begin{minted}{c}
+typedef struct p7_profile_s {
+  int     M;    /* number of nodes in the model                              */
+  float  *tsc;          /* transitions  [0.1..M][0..p7P_NTRANS-1], hand-indexed      */
+  float **rsc;          /* emissions [0..Kp-1][0.1..M][p7P_NR], hand-indexed         */
+  float   xsc[p7P_NXSTATES][p7P_NXTRANS]; /* special transitions [ENJCBG][LOOP,MOVE] */
+  int     allocM; /* max # of nodes allocated in this structure                */
+  int     L;    /* current configured target seq length           (unset:-1) */
+  float   nj;           /* exp # of J's; 0.0=unihit 1.0=standard multihit (unset:-1) */
+  float   pglocal;  /* base B->G; 0.0=local; 0.5=dual; 1.0=glocal     (unset:-1) */
+
+  /* Annotation copied from parent HMM:                                                   */
+  char  *name;      /* unique name of model                                   */
+  char  *acc;     /* unique accession of model, or NULL                     */
+  char  *desc;                  /* brief (1-line) description of model, or NULL           */
+  char  *rf;                    /* reference line from alignment 1..M; *rf=0 means unused */
+  char  *mm;                    /* modelmask line           1..M; *ref=0: unused          */
+  char  *cs;                    /* consensus structure line 1..M, *cs=0 means unused      */
+  char  *consensus;   /* consensus residues to display in alignments, 1..M      */
+  float  evparam[p7_NEVPARAM];  /* parameters for determining E-values, or UNSET          */
+  float  cutoff[p7_NCUTOFFS];   /* per-seq/per-domain bit score cutoffs, or UNSET         */
+  float  compo[p7_MAXABET]; /* per-model HMM filter composition, or UNSET             */
+
+  /* Disk offset information supporting fast model retrieval:                             */
+  off_t  offs[p7_NOFFSETS];     /* p7_{MFP}OFFSET, or -1                                  */
+  off_t  roff;                  /* record offset (start of record); -1 if none            */
+  off_t  eoff;                  /* offset to last byte of record; -1 if unknown           */
+
+  int     max_length; /* calc'ed upper bound on emitted seq length (nhmmer) (unset:-1)  */
+  const ESL_ALPHABET *abc;  /* copy of pointer to appropriate alphabet                */
+} P7_PROFILE;
+
+\end{minted}
+\caption{Data Structure that Represents a Profile HMM}
+\label{fig:p7_profile}
+\end{figure*}
+
+{\tt Tsc} is allocated as a contiguous block of memory, and is treated as an array of M+1 sub-arrays, each of which contains {\tt p7P\_NTRANS} floating-point transition scores.  Allocating M+1 sub-arrays for a model with M nodes allows HMMER to retain the mathematical one-indexed array notation for the nodes in the HMM instead of having to switch back and forth to C-language zero-indexing (i.e., transition scores for node 1 of the model are found in {\tt tsc[1]}, not {\tt tsc[0]}).  Each sub-array holds the scores for transitions {\em out} of the corresponding node in the model, with the exception of {\tt tsc[0]}, which holds the scores for the transitions from the G and L nodes {\em into} node 1 of the model.
+
+{\tt P7\_profile.h} contains a set of symbolic constants that define the transition that each position in a sub-array of {\tt tsc} represents, which are reproduced in Table \ref{table:profile_tsc}.  Most of the transitions are self-explanatory, but two require more explanation: the glocal model-only G$\rightarrow$M$_{k+1}$ and M$_{k}$$\rightarrow$E transitions in positions 4 and 9 of each sub-array.  Since the glocal model does not allow direct G$\rightarrow$M and M$\rightarrow$E transitions, these scores represent the cost of traveling from G to M$_{k+1}$ or from D$_{k}$ to E through the intervening D states, and are included because the sparse algorithm used in parts of HMMER sometimes needs these costs but does not have all of the information needed to compute them.  No scores are provided for the M$\rightarrow$E and B$\rightarrow$E transitions.  The scores for these transitions are constant and independent of the HMM being modeled, so do not have to be represented in the data structure.
+
+\begin{table}[t]
+\centering
+\begin{tabular}{lll}
+Constant Name & Position  & Transition                               \\ \hline
+p7P\_MM       & 0     & M$_{k}$ $\rightarrow$ M$_{k+1}$ \\
+p7P\_IM              &   1    &  I$_{k}$ $\rightarrow$ M$_{k+1}$ \\
+p7P\_DM              &   2    & D$_{k}$ $\rightarrow$ M$_{k+1}$ \\
+p7P\_LM       & 3     & L $\rightarrow$ M$_{k+1}$ (local sub-model only) \\
+p7P\_GM              &  4    &  G  $\rightarrow$ M$_{k+1}$ (glocal sub-model only) \\
+p7P\_MD              &   5    & M$_{k}$ $\rightarrow$ D$_{k+1}$ \\
+p7P\_DD       & 6     & D$_{k}$ $\rightarrow$ D$_{k+1}$ \\
+p7P\_MI              &   7    &  M$_{k}$ $\rightarrow$ I$_{k+1}$ \\
+p7P\_II              &   8   & I$_{k}$ $\rightarrow$ I$_{k}$  (self loop) \\
+p7P\_DGE      & 9     & M$_{k}$ $\rightarrow$ E (glocal sub-model only) \\                    
+
+\end{tabular}
+\caption{Constants for the Transitions in the {\tt tsc} field of P7\_PROFILE}
+\label{table:profile_tsc}
+\end{table}
+
+The {\tt rsc} field is a two-dimensional C-language array that can be thought of as an array of Kp (where Kp is the number of symbols in the HMM's alphabet) sub-structures that contain the log-likelihood of the probability that each of the model's core states will emit a particular symbol from the alphabet, so {\tt rsc[0]} contains the log-likelihood of the probability that each state will emit symbol 0 in the alphabet, and so on.  This organization allows HMMER to compute the emission scores for the entire model as a function of a particular symbol with one array look-up to fetch the appropriate entry of {\tt rsc} followed by a number of sequential reads from memory, which is significantly more efficient than the one array look-up per state in the model that would be required if {\tt rsc} were organized as an array of records that each contained the Kp emission scores for a particular state.  Each sub-structure {\tt rsc[k]} is a contiguous memory array of M+1 records (again padding the M nodes in the model to allow use of one-based indexing) that contain emission scores for the M and I states in the node.  
+
+{\tt Xsc} contains the scores for the transitions out of the E, N, J, C, B, and G states.  Each of those states has two possible destinations, so {\tt xsc} is organized as a 6x2 array.  {\tt P7\_profile.h} describes the two transitions out of each state as "{\tt LOOP, MOVE}", which is accurate for the N, J, and C states, but somewhat of a misnomer for the E, B, and G states.  {\tt P7\_PROFILE} does not contain emission scores for the N, C, and J states in the model.  The emission probabilities for these states are assumed to be the same as the background distribution of symbols in the HMM's alphabet, so these states have emission scores of zero for all symbols.  (If $P(x|HMM) = P(x|R), \log_{2}(\frac{P(x|HMM)}{P(x|R)}) = \log_{2}(1) = 0 $).
+
+The {\tt allocM} field of the data structure is used to reduce memory allocation time when a {\tt P7\_PROFILE} data structure is reused by multiple HMMs, and holds the number of nodes (M) of the largest model that has been loaded into the data structure.  When HMMER loads a new HMM into a {\tt P7\_PROFILE}, it compares that HMMs value of M to {\tt allocM}, and re-uses the existing {\tt rsc} and {\tt tsc} buffers if the HMM's M is $\le$ {\tt allocM}.  If M\textgreater{\tt allocM}, HMMER re-allocates the {\tt rsc} and {\tt tsc} buffers and sets {\tt allocM} to the new value of M.
+
+After {\tt allocM}, {\tt P7\_PROFILE} contains a field that holds the length of the current target sequence ({\tt L}), as well as two parameters that determine the type of the HMM being modeled.  {\tt Nj} specifies the number of J states in the model and thus whether the model is unihit (only supports one pass through the core states) or multihit (supports multiple passes through the core states).  {\tt Pglocal} controls whether the model is local-only, glocal-only, or dual-mode by specifying the probability of the B$\rightarrow$G transition.  
+ 
+These parameters are followed by a set of descriptive values, including the name and description of the HMM and information that is used to display alignments of sequences relative to the HMM.  Next comes information about the HMM's location in the file it came from, which is used to reduce file I/O time, a field that determines the maximum length of the output sequence when HMMER is used in NHMMER mode, and finally a pointer to the alphabet of symbols that the HMM may emit.
+
+\section{Optimizing the HMM Filter Stages and Vector Instructions}
+To improve performance, HMMER incorporates a set of {\em filter} routines that detect the (common) case where there is so little similarity between a sequence and an HMM that it is clear that the sequence is not a homolog of the sequence(s) used to generate the HMM and abort the sequence-HMM comparison.  These filters can be 100,000x faster than a worst-case sequence-HMM comparison, and are able to determine that well over 90\% of the comparisons in a typical HMMER run are not homologs, greatly improving performance.  They operate on simpler HMMs than the full comparison, and make heavy use of vector instruction sets to further improve performance.
+
+The filters are described in \footnote{That engine design document that Nick will start writing real soon now, he promises}.  Here, we describe the reduced models that the filters operate on and how those models are represented in the {\tt P7\_OPROFILE} data structure.  HMMER 4 uses four filter stages:
+\begin{enumerate}
+\item{A single-segment Viterbi (SSV) filter that detects ungapped, single-hit matches between the sequence and the HMM}
+\item{A multi-sement Viterbi (MSV) filter that detects ungapped, multihit matches between the sequence and the HMM}
+\item{A full Viterbi analysis}
+\item{A forward-backward filter\footnote{The backward stage is not technically a filter, in that it never eliminates comparisons from consideration, but it is integrated with the forward filter and uses the same data structures.}}
+\end{enumerate}
+
+\subsection{The MSV and SSV Filters}
+The MSV filter uses the reduced HMM shown in Figure \ref{fig:hmm-msv}, which is identical to the local sub-model of HMMER 4's full HMM with the I and D states removed.  Removing the I and D states means that the HMM can only detect regions of the sequence that exactly match regions of the HMM, although the emission scores for each M state make it possible to detect matches where a few of the symbols differ between the sequence and the HMM.  The SSV filter further simplifies the HMM by eliminating the J state, restricting it to detecting only the single region of greatest match.
+
+\begin{figure*}[t]
+      \includegraphics[width=6.5in]{figures/hmm-msv}
+      \caption{Reduced HMM used in the MSV Filter}
+      \label{fig:hmm-msv}
+\end{figure*}
+
+Eliminating the I and D states makes all of the B$\rightarrow$M transition scores the same, so HMMER stores them in the scalar {\tt tbm\_b} field of {\tt P7\_OPROFILE}.  Similarly, the $\tt tec\_b$ field holds the score for E$\rightarrow$C transitions, and the {\tt tjb\_b} field holds the move cost for the N, C, and J states.  Thus, the only non-scalar parameter that we have to represent in this model is the emission (residue) scores for the M states.  Figure \ref{fig:p7_msv_ssv} shows how these scores are represented in {\tt P7\_OPROFILE} for the version of HMMER that uses the SSE instructions. {\tt Src/dp\_vector/p7\_oprofile.h} also contains similar declarations for the other vector ISAs HMMER supports.\footnote{To balance compatibility and memory usage, HMMER determines at compile-time which vector instruction sets the compiler can support and adds the pointers required to support them to {\tt P7\_OPROFILE}.  However, at run-time, the code queries the CPU to find out which vector ISA would give the best performance and only allocates the arrays required to support that ISA.}
+
+Unlike the emission scores in {\tt P7\_PROFILE}, which are 32-bit floating-point numbers, the emission scores used by the MSV and SSV are 8-bit integers, which are generated from the values in {\tt P7\_PROFILE}.  This allows a large number of computations to be packed into each SIMD vector operation,  but is vulnerable to overflow even when using log-likelihood scores.  The filters address this by using {\em saturating} arithmetic operations that return the maximum representable value when a computation overflows.  Any result that saturates the 8-bit representation is treated as a good enough match to justify further analysis, so the loss of information when a computation saturates is not a problem.
+
+\begin{figure*}[]
+\begin{minted}{c}
+__m128i **rbv;         
+__m128i **sbv;             
+__m128i  *rbv_mem;
+__m128i  *sbv_mem;
+\end{minted}
+\caption{Representation of the emission scores used by the MSV and SSV filters in the {\tt P7\_OPROFILE} data structure}
+\label{fig:p7_msv_ssv}
+\end{figure*}
+
+{\tt Rbv}\footnote{residue score, byte-width, vectorized} and {\tt sbv}\footnote{SSV score,  byte-width, vectorized} are  Kp$\times$(M rounded up to the next multiple of the vector length) arrays, where each row contains the scores for all of the M states to emit a particular symbol. To better support vectorization, each row of {\tt rbv} and {\tt sbv} is aligned to lie on a multiple of the vector size by allocating somewhat-padded buffers in {\tt rbv\_mem} and {\tt sbv\_mem}, and then setting each of the {\tt sbv[]} and {\tt rbv[]} pointers to aligned addresses within those buffers.  Further, the emission scores in each row of {\tt rbv} and {\tt sbv} are {\em striped} in a round-robin fashion across the vectors required to hold them, using the technique outlined in\cite{Farrar:2007ce}.  Striping the scores in this way greatly simplifies vector computations, but makes it necessary to include different versions of {\tt rbv} and {\tt sbv} for each vector size that HMMER supports, as the set of scores contained in each vector changes with the vector size.
+
+\subsection{The Viterbi and Forward/Backward Filters}
+The Viterbi and forward/backward filters operate on the local HMM model shown in Figure \ref{fig:hmm-local}, with the change that the state labeled "L" in the model is referred to as "B" in the code\footnote{This is likely a left-over from HMMER 3, which only supported the local model, and should possibly be changed to be more consistent}.  This model adds the I and D states to the ungapped model used in the MSV and SSV filters, allowing the Viterbi and forward/backward filters to match sequences that add or remove symbols from the consensus positions in the HMM.  Adding the I and D states makes the transition scores for each node in the HMM non-constant, requiring that the {\tt P7\_OPROFILE} data structure include transition scores for each node in the model.  
+
+Figure  \ref{fig:p7_viterbi} shows how {\tt P7\_OPROFILE} represents the emission and transition scores used by the Viterbi filter when SSE instructions are used. The {\tt rvw}\footnote{residue score, word-width, vectorized} field is organized in the same manner as the {\tt rbv} field, with the change that each score is represented by a 16-bit word instead of an 8-bit byte to allow greater precision in the arithmetic.  Similarly, the {\tt tvw}\footnote{transition score, word-width, vectorized} field is organized in the same manner as the {\tt tsc} field in {\tt P7\_PROFILE}, except that each score is a 16-bit value and there are only eight transitions per node.  These transitions are the same as the transitions shown in Table \ref{table:profile_tsc}, except that the G$\rightarrow$M$_{k+1}$ and M$_{k}$$\rightarrow$E transitions are omitted because those transitions are only used in the glocal sub-model.  The {\tt rvw} and {\tt tvw} fields are aligned and striped in the same manner as the {\tt rvb} and {\tt tvb} fields.
+
+\begin{figure*}[]
+\begin{minted}{c}
+__m128i **rwv;
+__m128i  *twv;
+__m128i  *rwv_mem;
+__m128i  *twv_mem;
+\end{minted}
+\caption{Representation of the transition and emission scores for the Viterbi filter in the {\tt P7\_OPROFILE} data structure}
+\label{fig:p7_viterbi}
+\end{figure*}
+
+Figure \ref{fig:p7_forwardbackward} shows how the emission and transition scores for the forward/backward filters are represented when SSE instructions are used.  These filters represent scores as 32-bit floating-point values, which are striped and aligned to the vector length.  The organization of the {\tt rfv}\footnote{residue scores, float representation, vectorized} and {\tt tfv}\footnote{transition scores, float representation, vectorized} fields are the same as the corresponding fields used by the other filters.
+
+\begin{figure*}[]
+\begin{minted}{c}
+__m128 **rfv;
+__m128  *tfv; 
+__m128   *tfv_mem;
+__m128   *rfv_mem;
+\end{minted}
+\caption{Representation of the transition and emission scores for the forward/backward filters in the {\tt P7\_OPROFILE} data structure}
+\label{fig:p7_forwardbackward}
+\end{figure*} 
+
+Most of the other fields in {\tt P7\_OPROFILE} are either self-explanatory or analogous to corresponding fields in {\tt P7\_PROFILE}.  One exception is the {\tt is\_shadow} field, which records whether a  {\tt P7\_OPROFILE} data structure is a "shadow" of another {\tt P7\_OPROFILE} structure.  Shadow structures are created by doing a byte-by-byte copy of another data structure.  The result is a data structure that has the same values as the original data structure in all of its non-pointer fields and whose pointers point to the same memory regions as the original data structure's pointers.  Shadows are used in some cases to limit the amount of memory consumed when multiple copies of a {\tt P7\_OPROFILE} are required, but care must be taken when de-allocating these data structures to avoid freeing buffers that other copies of the structure point to.  HMMER's utility routines perform the appropriate checks, so should always be used when de-allocating {\tt P7\_OPROFILE} data structures.
+
+\section{Conclusion}
+HMMER's hidden Markov models have a regular structure that allows them to effectively model genetic sequences.  This regular structure also simplifies the process of constructing an HMM from an alignment of one or more sequences and makes it easier to develop optimized algorithms that compare sequences to HMMs.  HMMER uses two data structures to represent these HMMs: the {\tt P7\_PROFILE} structure, which represents the full HMM model, and the {\tt P7\_OPROFILE} structure, which contains representations of several reduced HMM models that are used by HMMER's filter stages.
+
+\bibliography{hmm}
+\bibliographystyle{plainnat}
+\end{document}

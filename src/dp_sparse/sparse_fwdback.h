@@ -11,9 +11,3 @@ extern int p7_SparseForward (const ESL_DSQ *dsq, int L, const P7_PROFILE *gm, co
 extern int p7_SparseBackward(const ESL_DSQ *dsq, int L, const P7_PROFILE *gm, const P7_SPARSEMASK *sm, P7_SPARSEMX *sxb, float *opt_sc);
 
 #endif /*p7SPARSE_FWDBACK_INCLUDED*/
-/*****************************************************************
- * @LICENSE@
- * 
- * SVN $Id$
- * SVN $URL$
- *****************************************************************/

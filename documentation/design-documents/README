@@ -1,0 +1,8 @@
+This directory contains design documents for different pieces of HMMER 4.  
+They are currently under development and may be incoherent, fragmentary or just
+plain wrong.
+
+These documents require the R package "knitr" and the Python package
+"Pygmentize" to build.  If we include these documents in the release version of
+HMMER 4, we will ship them as PDFs, both to prevent changes and to eliminate 
+dependencies on external tools.

@@ -55,6 +55,8 @@ typedef struct p7_shard{
 	char *descriptors;
 
 	ESL_ALPHABET *abc;  // the alphabet used by this database
+
+	uint64_t total_length;  // Number of residues if a sequence shard, or sum of HMM lengths if an HMM shard
 } P7_SHARD;
 
 //! Creates a shard from a set of dsqdata files

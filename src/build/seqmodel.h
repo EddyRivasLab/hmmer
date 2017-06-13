@@ -14,9 +14,3 @@ extern int p7_Seqmodel(const ESL_ALPHABET *abc, ESL_DSQ *dsq, int M, char *name,
 		       P7_HMM **ret_hmm);
 
 #endif /*p7SEQMODEL_INCLUDED*/
-/*****************************************************************
- * @LICENSE@
- * 
- * SVN $Id$
- * SVN $URL$
- *****************************************************************/

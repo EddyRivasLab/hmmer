@@ -137,9 +137,4 @@ extern int   p7_masstrace_Validate(const P7_MASSTRACE *mt, char *errbuf);
  */
 
 #endif /*p7MASSTRACE_INCLUDED*/
-/*****************************************************************
- * @LICENSE@
- *
- * SVN $Id$
- * SVN $URL$
- *****************************************************************/
+

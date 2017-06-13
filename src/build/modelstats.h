@@ -15,9 +15,3 @@ extern int    p7_hmm_CompositionKLDist(P7_HMM *hmm, P7_BG *bg, float *ret_KL, fl
 extern int    p7_hmm_GetSimpleRepeats(P7_HMM *hmm, int maxK, int min_rep, int min_length, float relent_thresh, P7_HMM_WINDOWLIST *ranges);
 
 #endif /*p7MODELSTATS_INCLUDED*/
-/*****************************************************************
- * @LICENSE@
- * 
- * SVN $Id$
- * SVN $URL$
- *****************************************************************/

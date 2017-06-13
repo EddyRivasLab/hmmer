@@ -83,10 +83,5 @@ extern int p7_SingleBuilder(P7_BUILDER *bld, ESL_SQ *sq,   P7_BG *bg, P7_HMM **o
 extern int p7_Builder_MaxLength      (P7_HMM *hmm, double emit_thresh);
 
 #endif /*p7BUILDER_INCLUDED*/
-/*****************************************************************
- * @LICENSE@
- * 
- * SVN $Id$
- * SVN $URL$
- *****************************************************************/
+
 

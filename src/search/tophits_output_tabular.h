@@ -18,9 +18,3 @@ extern int p7_tophits_TabularTail(FILE *ofp, const char *progname, enum p7_pipem
 
 
 #endif /*p7TOPHITS_OUTPUT_TABULAR_INCLUDED*/
-/*****************************************************************
- * @LICENSE@
- * 
- * SVN $Id$
- * SVN $URL$
- *****************************************************************/

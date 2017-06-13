@@ -1,22 +1,19 @@
 MODULE = search
 
-LIBOBJS =  modelconfig.o     \
-	   p7_mpas.o         \
-	   p7_pipeline.o     \
-	   p7_pipeline_mpi.o \
-	   tophits_output.o  \
-	   tophits_output_tabular.o
+OBJS =  modelconfig.o     \
+	p7_mpas.o         \
+	tophits_output.o  \
+	tophits_output_tabular.o
+#	p7_pipeline.o     \       SRE REVISIT
+#	p7_pipeline_mpi.o \
 
-LIBHDRS =  
-
-OBJS =
 
 HDRS =
 
 PROGS =
 
-UTESTS =  modelconfig_utest \
-	  p7_pipeline_mpi_utest
+UTESTS =  modelconfig_utest 
+#	  p7_pipeline_mpi_utest   NPCARTER deleted because depends on p7_pipeline.o
 
 STATS  =  
 
@@ -25,9 +22,6 @@ BENCHMARKS =
 EXAMPLES = p7_pipeline_example \
 	   p7_pipeline_example2
 
-LIBTMP = 
-
-
 top_srcdir   = @top_srcdir@
 top_builddir = @top_builddir@
 srcdir       = @srcdir@
@@ -35,11 +29,4 @@ VPATH        = @srcdir@
 SHELL        = /bin/sh
 
 include ../Makefile-subdirs.mk
-
-################################################################
-# @LICENSE@
-#
-# SVN $URL$
-# SVN $Id$
-################################################################
 

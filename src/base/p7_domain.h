@@ -33,9 +33,4 @@ extern int        p7_domain_Validate(const P7_DOMAIN *dcl, char *errbuf);
 extern int        p7_domain_Compare(const P7_DOMAIN *dcl1, const P7_DOMAIN *dcl2, float tol);
 
 #endif /*p7DOMAIN_INCLUDED*/
-/*****************************************************************
- * @LICENSE@
- * 
- * SVN $Id$
- * SVN $URL$
- *****************************************************************/
+

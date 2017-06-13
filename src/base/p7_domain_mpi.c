@@ -11,7 +11,6 @@
  *    1. Pack/unpack of P7_DOMAIN, one domain hit and its alignment
  *    2. Unit tests
  *    3. Test driver
- *    4. Copyright and license information.
  */
 #include "p7_config.h"
 #ifdef HAVE_MPI
@@ -323,13 +322,5 @@ void p7_domain_mpi_DoAbsolutelyNothing(void) { return; }
 int main(void) { return 0; }
 #endif
 #endif /*HAVE_MPI*/
-
-
-/*****************************************************************
- * @LICENSE@
- * 
- * SVN $Id$
- * SVN $URL$
- *****************************************************************/
 
 

@@ -33,7 +33,7 @@ typedef struct {
 
   uint64_t   nmodels;         	/* # of HMMs searched                       */
   uint64_t   nseqs;           	/* # of sequences searched                  */
-  uint64_t   n_past_msv;      	/* # comparisons that pass MSVFilter()      */
+  uint64_t   n_past_ssv;      	/* # comparisons that pass MSVFilter()      */
   uint64_t   n_past_bias;     	/* # comparisons that pass bias filter      */
   uint64_t   n_past_vit;      	/* # comparisons that pass ViterbiFilter()  */
   uint64_t   n_past_fwd;      	/* # comparisons that pass ForwardFilter()  */
@@ -140,9 +140,3 @@ extern int  process_searchopts(int fd, char *cmdstr, ESL_GETOPTS **ret_opts);
 extern void free_QueueData(QUEUE_DATA *data);
 
 #endif /*p7HMMDUTILS_INCLUDED*/
-/*****************************************************************
- * @LICENSE@
- * 
- * SVN $Id$
- * SVN $URL$
- *****************************************************************/

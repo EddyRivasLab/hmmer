@@ -36,10 +36,6 @@ P7_DAEMON_WORKERNODE_STATE *p7_daemon_workernode_Create(uint32_t num_databases, 
   workernode->num_shards = num_shards;
   workernode->my_shard = my_shard;
 
-  workernode->hw = p7_hardware_Create();  // get information about the machine we're running on
-  if(workernode->hw == NULL){
-    p7_Fail("Unable to allocate memory in p7_daemon_workernode_Create\n");
-  }
   // allocate array[num_databases] of pointers to shards
   ESL_ALLOC(workernode->database_shards, (num_databases * sizeof(P7_SHARD *)));
   for(i = 0; i < num_databases; i++){
@@ -192,7 +188,7 @@ int p7_daemon_workernode_Setup(uint32_t num_databases, char **database_names, ui
   // First, figure out how many threads to create
   if(num_threads == 0){  // detect number of threads to use
     esl_threads_CPUCount((int *) &worker_threads);
-      worker_threads -= 2;  // Leave one spare thread for the worker node master, one for the OS
+      worker_threads -= 1;  // Leave one spare thread for the worker node master, one for the OS
   }
   else{
     worker_threads = num_threads; // use the value specified by the user
@@ -502,7 +498,7 @@ P7_ENGINE_STATS *p7_daemon_workernode_aggregate_stats(P7_DAEMON_WORKERNODE_STATE
   }
   int i;
   for(i = 0; i < workernode->num_threads; i++){
-    combined_stats->n_past_msv += workernode->thread_state[i].engine->stats->n_past_msv;
+    combined_stats->n_past_ssv += workernode->thread_state[i].engine->stats->n_past_ssv;
     combined_stats->n_past_bias += workernode->thread_state[i].engine->stats->n_past_bias;
     combined_stats->n_ran_vit += workernode->thread_state[i].engine->stats->n_ran_vit;
     combined_stats->n_past_vit += workernode->thread_state[i].engine->stats->n_past_vit;
@@ -739,7 +735,7 @@ void *p7_daemon_worker_thread(void *worker_argument){
   // Main work loop
   while(!workernode->shutdown){
     // reset stats for new search 
-    engine_stats->n_past_msv  = 0;
+    engine_stats->n_past_ssv  = 0;
     engine_stats->n_past_bias = 0;
     engine_stats->n_ran_vit   = 0;
     engine_stats->n_past_vit  = 0;
@@ -767,7 +763,7 @@ void *p7_daemon_worker_thread(void *worker_argument){
           p7_profile_Copy(workernode->compare_model, workernode->thread_state[my_id].gm);
         }
         if(workernode->thread_state[my_id].om == NULL){
-          workernode->thread_state[my_id].om = p7_oprofile_Create(workernode->thread_state[my_id].gm->M, workernode->thread_state[my_id].gm->abc, workernode->thread_state[my_id].engine->hw->simd);      
+          workernode->thread_state[my_id].om = p7_oprofile_Create(workernode->thread_state[my_id].gm->M, workernode->thread_state[my_id].gm->abc);      
           if(workernode->thread_state[my_id].om == NULL){
             p7_Fail("Unable to allocate memory in p7_daemon_worker_thread\n");
           }
@@ -931,7 +927,7 @@ int worker_thread_front_end_sequence_search_loop(P7_DAEMON_WORKERNODE_STATE *wor
         p7_oprofile_ReconfigLength(workernode->thread_state[my_id].om, L);
 
         // First, the overthruster filters
-        int status = p7_engine_Overthruster_tophalf(workernode->thread_state[my_id].engine, (ESL_DSQ *) the_sequence, L, workernode->thread_state[my_id].om, workernode->thread_state[my_id].bg, P);  
+        int status = p7_engine_Overthruster(workernode->thread_state[my_id].engine, (ESL_DSQ *) the_sequence, L, workernode->thread_state[my_id].om, workernode->thread_state[my_id].bg);  
 
         if (status == eslFAIL) { // filters say no match, go on to next sequence
 #ifdef TEST_SEQUENCES              
@@ -1070,64 +1066,47 @@ void worker_thread_back_end_sequence_search_loop(P7_DAEMON_WORKERNODE_STATE *wor
     the_entry->sm = workernode->thread_state[my_id].engine->sm;
     workernode->thread_state[my_id].engine->sm = temp_mask;
 
-    int status = p7_engine_Overthruster_bottomhalf(workernode->thread_state[my_id].engine, the_entry->sequence, the_entry->L, workernode->thread_state[my_id].om, workernode->thread_state[my_id].bg, &(the_entry->P));  
+ 
+    p7_profile_SetLength(workernode->thread_state[my_id].gm, the_entry->L);
+    int status = p7_engine_Main(workernode->thread_state[my_id].engine, the_entry->sequence, the_entry->L, workernode->thread_state[my_id].gm); 
 
-    if (status == eslFAIL) { // filters say no match, go on to next comparison
+
 #ifdef TEST_SEQUENCES 
-      //test code
       workernode->sequences_processed[the_entry->seq_id] = 1;
 #endif
+    // we hit, so record the hit.  Stub, to be replaced with actual hit generation code
+
+    the_hit_entry = p7_get_hit_tree_entry_from_pool(workernode, my_id);
+    the_hit_entry->key = (double) the_entry->seq_id; // For now, we only sort on sequence ID.  Need to change this to possibly sort
+    // on score
+
+    // Fake up a hit for comparison purposes.  Do not use for actual analysis
+    P7_HIT *the_hit = (P7_HIT *) the_hit_entry->contents;
+    the_hit->seqidx = the_entry->seq_id;
+    the_hit->sortkey = the_hit_entry->key; // need to fix this to sort on score when we make hits work
+    char *descriptors;
+
+    // Get the descriptors for this sequence
+    p7_shard_Find_Descriptor_Nexthigh(workernode->database_shards[workernode->compare_database], the_entry->seq_id, &descriptors);
+    the_hit->name = descriptors;
+    the_hit->acc = descriptors + (strlen(the_hit->name) +1); //+1 for termination character
+    the_hit->desc = the_hit->acc + (strlen(the_hit->acc) +1); //+1 for termination character
+    // Add the hit to the threads's list of hits
+    while(pthread_mutex_trylock(&(workernode->thread_state[my_id].hits_lock))){
+      // spin-wait until the lock on the hitlist is cleared.  Should never be locked for long
     }
-    else{ 
-    // we have a real live hit
-    // call main
-      p7_profile_SetLength(workernode->thread_state[my_id].gm, the_entry->L);
-//      struct timeval start_time, end_time;
-//      gettimeofday(&start_time, NULL);
-      status = p7_engine_Main(workernode->thread_state[my_id].engine, the_entry->sequence, the_entry->L, workernode->thread_state[my_id].gm); 
-//      gettimeofday(&end_time, NULL);
-
-#ifdef TEST_SEQUENCES 
-      workernode->sequences_processed[the_entry->seq_id] = 1;
-#endif
-      // we hit, so record the hit.  Stub, to be replaced with actual hit generation code
-
-      //printf("Thread %d found hit\n", my_id);
-      the_hit_entry = p7_get_hit_tree_entry_from_pool(workernode, my_id);
-      the_hit_entry->key = (double) the_entry->seq_id; // For now, we only sort on sequence ID.  Need to change this to possibly sort
-      // on score
-
-      // Fake up a hit for comparison purposes.  Do not use for actual analysis
-      P7_HIT *the_hit = (P7_HIT *) the_hit_entry->contents;
-      the_hit->seqidx = the_entry->seq_id;
-      the_hit->sortkey = the_hit_entry->key; // need to fix this to sort on score when we make hits work
-      char *descriptors;
-
-      // Get the descriptors for this sequence
-      p7_shard_Find_Descriptor_Nexthigh(workernode->database_shards[workernode->compare_database], the_entry->seq_id, &descriptors);
-      the_hit->name = descriptors;
-      the_hit->acc = descriptors + (strlen(the_hit->name) +1); //+1 for termination character
-      the_hit->desc = the_hit->acc + (strlen(the_hit->acc) +1); //+1 for termination character
-//      printf("%s, %f\n", the_hit->name, ((float)((end_time.tv_sec * 1000000 + (end_time.tv_usec)) - (start_time.tv_sec * 1000000 + start_time.tv_usec)))/1000000.0);
-      // Add the hit to the threads's list of hits
-      while(pthread_mutex_trylock(&(workernode->thread_state[my_id].hits_lock))){
-        // spin-wait until the lock on the hitlist is cleared.  Should never be locked for long
-        //printf("Thread %d spin-waiting on hit_tree_lock\n", my_id);
-      }
                     
-      the_hit_entry->large = workernode->thread_state[my_id].my_hits;
-      workernode->thread_state[my_id].my_hits = the_hit_entry;
+    the_hit_entry->large = workernode->thread_state[my_id].my_hits;
+    workernode->thread_state[my_id].my_hits = the_hit_entry;
 
-      pthread_mutex_unlock(&(workernode->thread_state[my_id].hits_lock));
-    }
+    pthread_mutex_unlock(&(workernode->thread_state[my_id].hits_lock));
+  
 
 
     p7_put_backend_queue_entry_in_pool(workernode, the_entry); // Put the entry back in the free pool
     p7_engine_Reuse(workernode->thread_state[my_id].engine);  // Reset engine structure for next comparison
     the_entry = p7_get_backend_queue_entry_from_queue(workernode); //see if there's another backend operation to do
   }
-
- //printf("Thread %d switching back to frontend\n", my_id);
 
   //If we get here, the queue of backend entries is empty, so switch back to processing frontend entries
   while(pthread_mutex_trylock(&(workernode->backend_threads_lock))){
@@ -1137,17 +1116,7 @@ void worker_thread_back_end_sequence_search_loop(P7_DAEMON_WORKERNODE_STATE *wor
   workernode->thread_state[my_id].mode = FRONTEND; // change my mode to frontend
   //workernode->thread_state[my_id].comparisons_queued = 0; // reset this count
   workernode->num_backend_threads -= 1;
-/*  printf("%d threads processing backend", workernode->num_backend_threads); 
- int i;
-  for(i = 0; i < workernode->num_threads; i++){
-    if(workernode->thread_state[i].mode == FRONTEND){
-      printf("F ");
-    }
-    else{
-      printf("B ");
-    }
-  }
-  printf("\n"); */
+
   pthread_mutex_unlock(&(workernode->backend_threads_lock));
   return;
 }
@@ -1430,7 +1399,7 @@ P7_BACKEND_QUEUE_ENTRY *p7_backend_pool_Create(int num_entries, P7_DAEMON_WORKER
     the_entry->L = 0;
     the_entry->biassc = 0.0;
     the_entry->next = prev;
-    the_entry->sm = p7_sparsemask_Create(400, 400, workernode->hw->simd);
+    the_entry->sm = p7_sparsemask_Create(400, 400);
     if(the_entry->sm == NULL){
       p7_Fail("Unable to allocate memory in p7_daemon_workernode_Create\n");
     }
@@ -1632,7 +1601,9 @@ void worker_node_main(int argc, char **argv, int my_rank, MPI_Datatype *daemon_m
       P7_PROFILE     *gm      = NULL;
 //    P7_OPROFILE    *om      = NULL;
 //    P7_ENGINE      *eng     = NULL;
-
+    int stop = 0;
+    uint32_t works_requested =0;
+    uint32_t works_received =0;
     switch(the_command.type){
       case P7_DAEMON_HMM_VS_SEQUENCES: // Master node wants us to compare an HMM to a database of sequences
 //        gettimeofday(&start, NULL);
@@ -1667,9 +1638,7 @@ void worker_node_main(int argc, char **argv, int my_rank, MPI_Datatype *daemon_m
         }
 
         p7_daemon_workernode_release_threads(workernode);
-        int stop = 0;
-        uint32_t works_requested =0;
-        uint32_t works_received =0;
+
         while(stop == 0){
 
           while(workernode->num_waiting != workernode->num_threads){

@@ -9,7 +9,6 @@
  *    1. ASC Decoding
  *    2. Unit tests
  *    3. Test driver
- *    5. Copyright and license information
  */
 
 #include "p7_config.h"
@@ -1491,13 +1490,3 @@ main(int argc, char **argv)
 #endif /*p7REFERENCE_ASC_DECODING_TESTDRIVE*/
 /*-------------------- end, test driver -------------------------*/
 
-
-
-
-
-/*****************************************************************
- * @LICENSE@
- *
- * SVN $URL$
- * SVN $Id$
- *****************************************************************/

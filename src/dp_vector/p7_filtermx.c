@@ -1,42 +1,43 @@
-/* Implementation of P7_FILTERMX, the one-row DP memory for MSV and
- * Viterbi filters.
+/* P7_FILTERMX: one-row of DP memory for SSV and Viterbi filters.
  * 
-* Note: many of the functions in this file now just dispatch to the 
-* appropriate SIMD-versioned function.  Where the SIMD type
-* is known in advance, performance can be improved by calling
-* the appropriate version directly.
- * Contents:
+ * Independent of vector ISA. (Do not add any ISA-specific code.)
+ *
  *   1. The P7_FILTERMX object
  *   2. Debugging and development routines
- *   3. Copyright and license information
  */
-
 #include "p7_config.h"
 
 #include <stdlib.h>
 #include <stdio.h>
 
-
 #include "easel.h"
-#include "esl_random.h"
+#include "esl_alloc.h"
+
 #include "dp_vector/simdvec.h"
 #include "dp_vector/p7_filtermx.h"
-#include "hardware/hardware.h"
-#include "base/general.h"
+
+
 /*****************************************************************
  * 1. The P7_FILTERMX object.
  *****************************************************************/
 
-
 /* Function:  p7_filtermx_Create()
- * Synopsis:  Create a one-row DP matrix for MSV, VF.
+ * Synopsis:  Create a one-row DP matrix for SSV, VF.
  *
  * Purpose:   Allocate a reusable, resizeable one-row <P7_FILTERMX>
- *            suitable for MSV and Viterbi filter calculations on 
+ *            suitable for SSV and Viterbi filter calculations on 
  *            query profiles of up to <allocM> consensus positions.
  *            
- *            <allocM> must be $\leq$ 100,000. This is an H3 design
+ *            <allocM> must be $\leq$ 100,000. This is a design
  *            limit.
+ *            
+ *            As a special case, <allocM> may be 0, in which case an
+ *            empty structure is created, and <p7_filtermx_Reinit()>
+ *            must be called on it to finish the allocation before it
+ *            is used. This is a frill, supporting a pattern where we
+ *            have to have a <_Reinit()> inside a loop anyway,
+ *            following something that gives us the size of the first
+ *            (and subsequent) problems.
  *            
  * Args:      allocM - initial allocation size, in profile positions. (>=1, <=100000)
  *
@@ -45,33 +46,40 @@
  * Throws:    <NULL> on allocation failure.
  */
 P7_FILTERMX *
-p7_filtermx_Create(int allocM, SIMD_TYPE simd)
+p7_filtermx_Create(int allocM)
 {
+  P7_FILTERMX *fx = NULL;
+  int          status;
 
-  switch(simd){
-    case SSE:
-      return p7_filtermx_Create_sse(allocM);
-      break;
-    case AVX:
-      return p7_filtermx_Create_avx(allocM);
-      break;
-    case AVX512:
-      return p7_filtermx_Create_avx512(allocM);
-      break;
-    case NEON:
-      return p7_filtermx_Create_neon(allocM);
-      break;
-    case NEON64:
-      return p7_filtermx_Create_neon64(allocM);
-      break;
-    default:
-      p7_Fail("Unrecognized SIMD type passed to p7_filtermx_Create");  
-  }
+  /* Contract checks / argument validation */
+  ESL_DASSERT1( (allocM >= 0 && allocM <= 100000) ); // 0 is ok here; gives you a shell.
+
+  ESL_ALLOC(fx, sizeof(P7_FILTERMX));
+  fx->M         = 0;
+  fx->Vw        = 0;
+  fx->dp        = NULL;
+  fx->allocM    = 0;
+  fx->type      = p7F_NONE;
+#if eslDEBUGLEVEL > 0
+  fx->do_dumping= FALSE;
+  fx->dfp       = NULL;
+#endif 
   
+  if (allocM) {
+    /* VF needs, in bytes:         3 MDI cells *     maxQw vectors        * bytes/vector; (aligned) */
+    fx->dp     = esl_alloc_aligned(p7F_NSCELLS * P7_Q(allocM, p7_VMAX_VF) * p7_VWIDTH,    p7_VALIGN);
+    if (fx->dp == NULL) goto ERROR;
+    fx->allocM = allocM;
+  }
+  return fx;
+
+ ERROR:
+  p7_filtermx_Destroy(fx);
+  return NULL;
 }
 
 
-/* Function:  p7_filtermx_GrowTo()
+/* Function:  p7_filtermx_Reinit()
  * Synopsis:  Resize filter DP matrix for new profile size.
  *
  * Purpose:   Given an existing filter matrix structure <fx>,
@@ -80,42 +88,110 @@ p7_filtermx_Create(int allocM, SIMD_TYPE simd)
  *            assure that <fx> is large enough for such a 
  *            profile; reallocate and reinitialize as needed.
  *
- *            <p7_filtermx_Reuse(fx); p7_filtermx_GrowTo(fx, M)>
- *            is essentially equivalent to <p7_filtermx_Create(M)>,
- *            while minimizing reallocation.
+ *            Debugging flags (if any) are also cleared, so
+ *            caller may need to do <_SetDumpMode()> again.
+ *
+ *            <p7_filtermx_Reinit(fx,M)> is essentially equivalent to
+ *            <p7_filtermx_Create(M)>, while minimizing reallocation.
+ *            It should only be called in a similar context as a
+ *            p7_filtermx_Create() call. Existing data may be lost,
+ *            because for efficiency, old data are not copied to new
+ *            internal allocations.
  *
  * Returns:   <eslOK> on success.
  *
- * Throws:    <eslEMEM> on allocation failure. The state of
- *            <fx> is now undefined, and it should not be used.
+ * Throws:    <eslEMEM> on allocation failure. <fx> is unchanged
+ *            and its data remain valid.
  */
 int
-p7_filtermx_GrowTo(P7_FILTERMX *fx, int allocM)
+p7_filtermx_Reinit(P7_FILTERMX *fx, int allocM)
 {
- switch(fx->simd){
-    case SSE:
-      return p7_filtermx_GrowTo_sse(fx, allocM);
-      break;
-    case AVX:
-      return p7_filtermx_GrowTo_avx(fx, allocM);
-      break;
-    case AVX512:
-      return p7_filtermx_GrowTo_avx512(fx, allocM);
-      break;
-    case NEON:
-      return p7_filtermx_GrowTo_neon(fx, allocM);
-      break;
-    case NEON64:
-      return p7_filtermx_GrowTo_neon64(fx, allocM);
-      break;
-    default:
-      p7_Fail("Unrecognized SIMD type passed to p7_filtermx_GrowTo");  
+  int   status;
+
+  /* Contract checks / argument validation */
+  ESL_DASSERT1( (allocM >= 1 && allocM <= 100000) );
+
+  /* Reinitialization to an empty structure */
+  fx->M          = 0;
+  fx->Vw         = 0;
+  fx->type       = p7F_NONE;
+  // But don't change debugging status (do_dumping, dfp)
+
+  /* Reallocate if needed */
+  if (allocM > fx->allocM) {
+    free(fx->dp);
+    /*                             3 MDI cells *   maxQw vectors/row      * bytes/vector; aligned */ 
+    fx->dp     = esl_alloc_aligned(p7F_NSCELLS * P7_Q(allocM, p7_VMAX_VF) * p7_VWIDTH,    p7_VALIGN);
+    if (fx->dp == NULL) { status = eslEMEM; goto ERROR; }
+    fx->allocM = allocM;
   }
+  return eslOK;
+
+ ERROR:
+  fx->allocM = 0;
+  return status;
 }
 
+/* Function:  p7_filtermx_GetScore()
+ * Synopsis:  Get a score from striped DP memory.
+ * Incept:    SRE, Sun Feb 12 10:46:28 2017 [The Chemical Brothers]
+ *
+ * Purpose:   Return the score at position <k>, state <s> in the striped
+ *            vector DP row of <fx>. <k> is a model coordinate from 1..M.
+ *            <s> is a state flag, one of <p7F_M | p7F_D | p7F_I>.
+ *
+ *            Slow, because it accesses the data in scalar form, and
+ *            has to do a convoluted coord conversion from <k,s> to
+ *            striped <q,r> coords. Only use this in noncritical code
+ *            like debugging comparisons and dumps.
+ *
+ *            Independent of vector ISA, because all it needs to
+ *            unstripe is the vector width <V>. 
+ *
+ *            SSV matrices only have p7F_M scores. If a D or I score
+ *            is asked for, returns 0.
+ *
+ *            If k==0, returns 0, as a special case that we use in
+ *            debugging dumps to sync to the output of
+ *            p7_refmx_Dump().
+ *
+ * Args:      k : position (0).1..M
+ *            s : state,   p7F_M | p7F_D | p7F_I
+ *
+ * Returns:   the score
+ */
+int
+p7_filtermx_GetScore(const P7_FILTERMX *fx, int k, enum p7f_scells_e s)
+{
+  int Q;
+  int q, z;
+
+  ESL_DASSERT1(( k >= 0 &&  k <= fx->allocM ));
+  ESL_DASSERT1(( fx->Vw &&  !(fx->Vw & (fx->Vw-1)) ));     // Vw is set to a power of two.
+  ESL_DASSERT1(( fx->M ));                                 // matrix has to have some data in it
+
+  if (k == 0) return 0;
+
+  if (fx->type == p7F_SSVFILTER)
+    {
+      if (s != p7F_M) return 0;
+      Q = P7_Q(fx->M, fx->Vw * 2);
+      int8_t *dp = (int8_t *) fx->dp;          // Baseline SSV filter hacks and recasts.
+      return dp[P7_Y_FROM_K(k,Q,fx->Vw*2)];
+    }
+  else if (fx->type == p7F_VITFILTER)
+    {
+      Q = P7_Q(fx->M, fx->Vw);
+      q = P7_Q_FROM_K(k,Q);
+      z = P7_Z_FROM_K(k,Q);
+      return fx->dp[ (q * p7F_NSCELLS + s) * fx->Vw + z];
+    }
+  //NOTREACHED
+  return 0;
+}
 
 /* Function:  p7_filtermx_Sizeof()
- * Synopsis:  Calculate and return the current size, in bytes.
+ * Synopsis:  Calculate and return current size, in bytes.
  *
  * Purpose:   Calculate and return the current allocated size
  *            of the filter matrix <fx>, in bytes.
@@ -127,26 +203,11 @@ p7_filtermx_GrowTo(P7_FILTERMX *fx, int allocM)
 size_t 
 p7_filtermx_Sizeof(const P7_FILTERMX *fx)
 {
-
-  switch(fx->simd){
-    case SSE:
-      return p7_filtermx_Sizeof_sse(fx);
-      break;
-    case AVX:
-      return p7_filtermx_Sizeof_avx(fx);
-      break;
-    case AVX512:
-      return p7_filtermx_Sizeof_avx512(fx);
-      break;
-    case NEON:
-      return p7_filtermx_Sizeof_neon(fx);
-      break;
-    case NEON64:
-      return p7_filtermx_Sizeof_neon64(fx);
-      break;
-    default:
-      p7_Fail("Unrecognized SIMD type passed to p7_filtermx_Sizeof");  
-  }
+  size_t n = sizeof(P7_FILTERMX);
+  n       += p7F_NSCELLS * P7_Q(fx->allocM, p7_VMAX_VF) * p7_VWIDTH; 
+  // that's:    MDI      *   max vectors/row            * bytes/vector 
+  // neglects any alignment overhead, which may be up to p7_VALIGN bytes.
+  return n;
 }
 
 
@@ -158,93 +219,37 @@ p7_filtermx_Sizeof(const P7_FILTERMX *fx)
  *            profile of <M> consensus positions.
  */
 size_t
-p7_filtermx_MinSizeof(int M, SIMD_TYPE simd)
+p7_filtermx_MinSizeof(int M)
 {
-switch(simd){
-    case SSE:
-      return p7_filtermx_MinSizeof_sse(M);
-      break;
-    case AVX:
-      return p7_filtermx_MinSizeof_avx(M);
-      break;
-    case AVX512:
-      return p7_filtermx_MinSizeof_avx512(M);
-      break;
-    case NEON:
-      return p7_filtermx_MinSizeof_neon(M);
-      break;
-    case NEON64:
-      return p7_filtermx_MinSizeof_neon64(M);
-      break;
-    default:
-      p7_Fail("Unrecognized SIMD type passed to p7_filtermx_MinSizeof");  
-  }
-}
-
-
-/* Function:  p7_filtermx_Reuse()
- * Synopsis:  Recycle a P7_FILTERMX.
- *
- * Purpose:   Recycle the filter DP matrix <fx>: reinitialize
- *            information having to do with the current calculation,
- *            but leave the allocation so we can reuse it.
- *            
- *            Debugging flags are reset too. If the caller reuses this
- *            matrix on another profile, and wants to dump those
- *            comparisons for diagnostics, it must call
- *            <p7_filtermx_SetDumpMode()> again.
- *
- * Returns:   <eslOK> on success.
- */
-int
-p7_filtermx_Reuse(P7_FILTERMX *fx)
-{
-  fx->M         = 0;
-  fx->type      = p7F_NONE;
-#ifdef p7_DEBUGGING
-  fx->do_dumping= FALSE;
-  fx->dfp       = NULL;
-#endif
-  return eslOK;
+  size_t n = sizeof(P7_FILTERMX);
+  n       += p7F_NSCELLS * P7_Q(M, p7_VMAX_VF) * p7_VWIDTH; 
+  // that's:    MDI      *   max vectors/row   * bytes/vector 
+  // neglects any alignment overhead
+  return n;
 }
 
 
 /* Function:  p7_filtermx_Destroy()
- * Synopsis:  Frees a one-row MSV/VF filter DP matrix.
+ * Synopsis:  Frees a one-row SSV/VF filter DP matrix.
  *
- * Purpose:   Frees the one-row MSV/VF filter DP matrix <fx>.
- *
- * Returns:   (void)
+ * Purpose:   Frees the one-row SSV/VF filter DP matrix <fx>.
  */
 void
 p7_filtermx_Destroy(P7_FILTERMX *fx)
 {
-  switch(fx->simd){
-    case SSE:
-      p7_filtermx_Destroy_sse(fx);
-      break;
-    case AVX:
-      p7_filtermx_Destroy_avx(fx);
-      break;
-    case AVX512:
-      p7_filtermx_Destroy_avx512(fx);
-      break;
-    case NEON:
-      p7_filtermx_Destroy_neon(fx);
-      break;
-    case NEON64:
-      p7_filtermx_Destroy_neon64(fx);
-      break;
-    default:
-      p7_Fail("Unrecognized SIMD type passed to p7_filtermx_Destroy");  
+  if (fx) {
+    if (fx->dp) esl_alloc_free(fx->dp);  // not free(); this is an aligned mem ptr
+    free(fx);
   }
-  return;
 }
   
+
+
 
 /*****************************************************************
  * 2. Debugging and development routines
  *****************************************************************/
+#if eslDEBUGLEVEL > 0
 
 /* Function:  p7_filtermx_SetDumpMode()
  * Synopsis:  Set the dump mode flag in a P7_FILTERMX.
@@ -258,10 +263,6 @@ p7_filtermx_Destroy(P7_FILTERMX *fx)
  *            To turn off dumping, <truefalse> is <FALSE>, and <dfp>
  *            is <NULL>.
  *            
- *            For this to have any effect, <p7_DEBUGGING> compile-time
- *            flag must be up. If it is not, no dumping will occur,
- *            and this call is a no-op.
- *            
  * Args:      fx        - DP matrix object to set for diagnostic dumping
  *            dfp       - open FILE * for diagnostic output, or NULL     
  *            truefalse - TRUE to set, FALSE to unset.
@@ -273,22 +274,20 @@ p7_filtermx_Destroy(P7_FILTERMX *fx)
 int
 p7_filtermx_SetDumpMode(P7_FILTERMX *fx, FILE *dfp, int truefalse)
 {
-#ifdef p7_DEBUGGING
   fx->do_dumping = truefalse;
   fx->dfp        = dfp;
-#endif
   return eslOK;
 }
 
-#ifdef p7_DEBUGGING
-/* Function:  p7_filtermx_DumpMFRow()
- * Synopsis:  Dump one row from MSV version of a DP matrix.
+
+/* Function:  p7_filtermx_DumpSSVRow()
+ * Synopsis:  Dump one row from SSV version of a DP matrix.
  *
- * Purpose:   Dump current row of MSV calculations from DP matrix <fx>
+ * Purpose:   Dump current row of SSV calculations from DP matrix <fx>
  *            for diagnostics, and include the values of specials
  *            <xE>, etc. The index <rowi> for the current row is used
  *            as a row label. This routine has to be specialized for
- *            the layout of the MSVFilter() row, because it's all
+ *            the layout of the SSVFilter() row, because it's all
  *            match scores dp[0..q..Q-1], rather than triplets of
  *            M,D,I.
  * 
@@ -296,39 +295,48 @@ p7_filtermx_SetDumpMode(P7_FILTERMX *fx, FILE *dfp, int truefalse)
  * 
  *            The output format is coordinated with <p7_refmx_Dump()> to
  *            facilitate comparison to a known answer.
- *            
- *            This also works for an SSV filter row, for SSV implementations
- *            that use a single row of DP memory (like <_longtarget>). 
- *            The Knudsen assembly code SSV does not use any RAM.
  *
  * Returns:   <eslOK> on success.
- *
- * Throws:    <eslEMEM> on allocation failure. 
  */
 int
-p7_filtermx_DumpMFRow(const P7_FILTERMX *fx, int rowi, uint8_t xE, uint8_t xN, uint8_t xJ, uint8_t xB, uint8_t xC)
+p7_filtermx_DumpSSVRow(const P7_FILTERMX *fx, int rowi, uint8_t xE, uint8_t xN, uint8_t xJ, uint8_t xB, uint8_t xC)
 {
- switch(fx->simd){
-    case SSE:
-      return p7_filtermx_DumpMFRow_sse(fx, rowi, xE, xN, xJ, xB, xC);
-      break;
-    case AVX:
-      return p7_filtermx_DumpMFRow_avx(fx, rowi, xE, xN, xJ, xB, xC);
-      break;
-    case AVX512:
-      return p7_filtermx_DumpMFRow_avx512(fx, rowi, xE, xN, xJ, xB, xC);
-      break;
-    case NEON:
-      return p7_filtermx_DumpMFRow_neon(fx, rowi, xE, xN, xJ, xB, xC);
-      break;
-    case NEON64:
-      return p7_filtermx_DumpMFRow_neon64(fx, rowi, xE, xN, xJ, xB, xC);
-      break;
-    default:
-      p7_Fail("Unrecognized SIMD type passed to p7_filtermx_DumpMFRow");  
-  }
-}
+  int k;
 
+  ESL_DASSERT1(( fx->type == p7F_SSVFILTER ));
+  ESL_DASSERT1(( fx->Vw &&  !(fx->Vw & (fx->Vw-1)) ));     // V is set, to a power of two.
+  ESL_DASSERT1(( fx->M ));
+  
+  /* Header (if we're on the 0th row)  */
+  if (rowi == 0)
+    {
+      fprintf(fx->dfp, "       ");
+      for (k = 0; k <= fx->M;  k++) fprintf(fx->dfp, "%3d ", k);
+      fprintf(fx->dfp, "%3s %3s %3s %3s %3s\n", "E", "N", "J", "B", "C");
+      fprintf(fx->dfp, "       ");
+      for (k = 0; k <= fx->M+5;  k++) fprintf(fx->dfp, "%3s ", "---");
+      fprintf(fx->dfp, "\n");
+    }
+
+  /* Unstripe and print match scores. */
+  fprintf(fx->dfp, "%4d M ", rowi);
+  for (k = 0; k <= fx->M; k++) fprintf(fx->dfp, "%3d ", p7_filtermx_GetScore(fx, k, p7F_M));
+
+  /* Specials */
+  fprintf(fx->dfp, "%3d %3d %3d %3d %3d\n", xE, xN, xJ, xB, xC);
+
+  /* I's are all 0's; print just to facilitate comparison to refmx. */
+  fprintf(fx->dfp, "%4d I ", rowi);
+  for (k = 0; k <= fx->M; k++) fprintf(fx->dfp, "%3d ", 0);
+  fprintf(fx->dfp, "\n");
+
+  /* D's are all 0's too */
+  fprintf(fx->dfp, "%4d D ", rowi);
+  for (k = 0; k <= fx->M; k++) fprintf(fx->dfp, "%3d ", 0);
+  fprintf(fx->dfp, "\n\n");
+
+  return eslOK;
+}
 
 
 /* Function:  p7_filtermx_DumpVFRow()
@@ -351,33 +359,41 @@ p7_filtermx_DumpMFRow(const P7_FILTERMX *fx, int rowi, uint8_t xE, uint8_t xN, u
 int
 p7_filtermx_DumpVFRow(const P7_FILTERMX *fx, int rowi, int16_t xE, int16_t xN, int16_t xJ, int16_t xB, int16_t xC)
 {
-  switch(fx->simd){
-    case SSE:
-      return p7_filtermx_DumpVFRow_sse(fx, rowi, xE, xN, xJ, xB, xC);
-      break;
-    case AVX:
-      return p7_filtermx_DumpVFRow_avx(fx, rowi, xE, xN, xJ, xB, xC);
-      break;
-    case AVX512:
-      return p7_filtermx_DumpVFRow_avx512(fx, rowi, xE, xN, xJ, xB, xC);
-      break;
-    case NEON:
-      return p7_filtermx_DumpVFRow_neon(fx, rowi, xE, xN, xJ, xB, xC);
-      break;
-    case NEON64:
-      return p7_filtermx_DumpVFRow_neon64(fx, rowi, xE, xN, xJ, xB, xC);
-      break;
-    default:
-      p7_Fail("Unrecognized SIMD type passed to p7_filtermx_DumpVFRow");  
-  }
+  int k;
+
+  ESL_DASSERT1(( fx->type == p7F_VITFILTER ));
+  ESL_DASSERT1(( fx->Vw &&  !(fx->Vw & (fx->Vw-1)) ));     // V is set, to a power of two.
+  ESL_DASSERT1(( fx->M ));
+
+  /* Header (if we're on the 0th row) */
+  if (rowi == 0)
+    {
+      fprintf(fx->dfp, "       ");
+      for (k = 0; k <= fx->M;  k++) fprintf(fx->dfp, "%6d ", k);
+      fprintf(fx->dfp, "%6s %6s %6s %6s %6s\n", "E", "N", "J", "B", "C");
+      fprintf(fx->dfp, "       ");
+      for (k = 0; k <= fx->M+5;  k++) fprintf(fx->dfp, "%6s ", "------");
+      fprintf(fx->dfp, "\n");
+    }
+
+  /* Unstripe and print match scores. */
+  fprintf(fx->dfp, "%4d M ", rowi);
+  for (k = 0; k <= fx->M; k++) fprintf(fx->dfp, "%6d ", p7_filtermx_GetScore(fx, k, p7F_M));
+  
+  /* Specials */
+  fprintf(fx->dfp, "%6d %6d %6d %6d %6d\n", xE, xN, xJ, xB, xC);
+
+  /* Insert scores. */
+  fprintf(fx->dfp, "%4d I ", rowi);
+  for (k = 0; k <= fx->M; k++) fprintf(fx->dfp, "%6d ", p7_filtermx_GetScore(fx, k, p7F_I));
+  fprintf(fx->dfp, "\n");
+
+  /* Delete scores. */
+  fprintf(fx->dfp, "%4d D ", rowi);
+  for (k = 0; k <= fx->M; k++) fprintf(fx->dfp, "%6d ", p7_filtermx_GetScore(fx, k, p7F_D));
+  fprintf(fx->dfp, "\n\n");
+
+  return eslOK;
 }
-#endif /*p7_DEBUGGING*/
+#endif // eslDEBUGLEVEL
 
-
-
-/*****************************************************************
- * @LICENSE@
- * 
- * SVN $Id$
- * SVN $URL$
- *****************************************************************/

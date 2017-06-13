@@ -19,7 +19,6 @@
  *    3. Unit tests.
  *    4. Test driver.
  *    5. Example.
- *    6. Copyright and license.
  */
 
 #include "p7_config.h"
@@ -273,7 +272,7 @@ matassign2hmm(ESL_MSA *msa, int *matassign, P7_HMM **ret_hmm, P7_TRACE ***opt_tr
   int      M;                   /* length of new model in match states */
   int      idx;                 /* counter over sequences              */
   int      apos;                /* counter for aligned columns         */
-#ifdef p7_DEBUGGING
+#if eslDEBUGLEVEL > 0
   char     errbuf[eslERRBUFSIZE];
 #endif
 
@@ -291,7 +290,7 @@ matassign2hmm(ESL_MSA *msa, int *matassign, P7_HMM **ret_hmm, P7_TRACE ***opt_tr
   for (idx = 0; idx < msa->nseq; idx++)
     {
       if ((status = p7_trace_Doctor(tr[idx], NULL, NULL))                       != eslOK) goto ERROR;
-#ifdef p7_DEBUGGING
+#if eslDEBUGLEVEL > 0
       if ((status = p7_trace_Validate(tr[idx], msa->abc, msa->ax[idx], errbuf)) != eslOK) 
 	ESL_XEXCEPTION(eslFAIL, "validation failed: %s", errbuf);
 #endif
@@ -694,10 +693,5 @@ main(int argc, char **argv)
 #endif /*p7BUILD_EXAMPLE*/
 
 
-
-
-/************************************************************
- * @LICENSE@
- ************************************************************/
 
 

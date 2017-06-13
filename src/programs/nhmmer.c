@@ -18,19 +18,19 @@
 #include "esl_stopwatch.h"
 
 
-#ifdef HMMER_THREADS
+#ifdef HAVE_PTHREAD
 #include <unistd.h>
 #include "esl_threads.h"
 #include "esl_workqueue.h"
-#endif /*HMMER_THREADS*/
+#endif /*HAVE_PTHREAD*/
 
 #include "hmmer.h"
 #include "hardware/hardware.h"
 
 typedef struct {
-#ifdef HMMER_THREADS
+#ifdef HAVE_PTHREAD
   ESL_WORK_QUEUE   *queue;
-#endif /*HMMER_THREADS*/
+#endif /*HAVE_PTHREAD*/
   P7_BG            *bg;             /* null model                              */
   P7_PIPELINE      *pli;         /* work pipeline                           */
   P7_TOPHITS       *th;          /* top hit results                         */
@@ -128,7 +128,7 @@ static ESL_OPTIONS options[] = {
 
 
 
-#ifdef HMMER_THREADS 
+#ifdef HAVE_PTHREAD 
   { "--cpu",        eslARG_INT, NULL,"HMMER_NCPU","n>=0",NULL,  NULL,  CPUOPTS,         "number of parallel CPU workers to use for multithreads",      12 },
 #endif
   {  0, 0, 0, 0, 0, 0, 0, 0, 0, 0 },
@@ -158,12 +158,12 @@ static char banner[] = "search a DNA model against a DNA database";
 static int  serial_master(ESL_GETOPTS *go, struct cfg_s *cfg);
 static int  serial_loop  (WORKER_INFO *info, ID_LENGTH_LIST *id_length_list, ESL_SQFILE *dbfp);
 
-#ifdef HMMER_THREADS
+#ifdef HAVE_PTHREAD
 #define BLOCK_SIZE 1000
 
 static int  thread_loop(WORKER_INFO *info, ID_LENGTH_LIST *id_length_list, ESL_THREADS *obj, ESL_WORK_QUEUE *queue, ESL_SQFILE *dbfp);
 static void pipeline_thread(void *arg);
-#endif /*HMMER_THREADS*/
+#endif /*HAVE_PTHREAD*/
 
 
 static int
@@ -287,7 +287,7 @@ output_header(FILE *ofp, const ESL_GETOPTS *go, char *hmmfile, char *seqfile)
   if (esl_opt_IsUsed(go, "--w_beta")     && fprintf(ofp, "# window length beta value:        %g\n",             esl_opt_GetReal(go, "--w_beta"))      < 0) ESL_EXCEPTION_SYS(eslEWRITE, "write failed");
   if (esl_opt_IsUsed(go, "--w_length")   && fprintf(ofp, "# window length :                  %d\n",             esl_opt_GetInteger(go, "--w_length")) < 0) ESL_EXCEPTION_SYS(eslEWRITE, "write failed");
   if (esl_opt_IsUsed(go, "--block_length")&&fprintf(ofp, "# block length :                   %d\n",             esl_opt_GetInteger(go, "--block_length")) < 0) ESL_EXCEPTION_SYS(eslEWRITE, "write failed");
-  #ifdef HMMER_THREADS
+#ifdef HAVE_PTHREAD
   if (esl_opt_IsUsed(go, "--cpu")        && fprintf(ofp, "# number of worker threads:        %d\n",             esl_opt_GetInteger(go, "--cpu"))      < 0) ESL_EXCEPTION_SYS(eslEWRITE, "write failed");
 #endif
   if (fprintf(ofp, "# - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -\n\n")                                                   < 0) ESL_EXCEPTION_SYS(eslEWRITE, "write failed");
@@ -367,7 +367,7 @@ serial_master(ESL_GETOPTS *go, struct cfg_s *cfg)
 
   int              infocnt  = 0;
   WORKER_INFO     *info     = NULL;
-#ifdef HMMER_THREADS
+#ifdef HAVE_PTHREAD
   ESL_SQ_BLOCK    *block    = NULL;
   ESL_THREADS     *threadObj= NULL;
   ESL_WORK_QUEUE  *queue    = NULL;
@@ -375,11 +375,8 @@ serial_master(ESL_GETOPTS *go, struct cfg_s *cfg)
   char   errbuf[eslERRBUFSIZE];
   double window_beta = -1.0 ;
   int window_length  = -1;
-  P7_HARDWARE *hw;
-  if ((hw = p7_hardware_Create ()) == NULL)  p7_Fail("Couldn't get HW information data structure"); 
-  if(hw->simd == AVX || hw->simd == AVX512){
-    hw->simd = SSE; // nhmmer only supports SSE and NEON SIMD at the moment
-  }
+
+  // SRE: FIXME: nhmmer only supports SSE and NEON SIMD at the moment
   if (esl_opt_IsUsed(go, "--w_beta")) { if (  ( window_beta   = esl_opt_GetReal(go, "--w_beta") )  < 0 || window_beta > 1  ) esl_fatal("Invalid window-length beta value\n"); }
   if (esl_opt_IsUsed(go, "--w_length")) { if (( window_length = esl_opt_GetInteger(go, "--w_length")) < 4  ) esl_fatal("Invalid window length value\n"); }
 
@@ -425,7 +422,7 @@ serial_master(ESL_GETOPTS *go, struct cfg_s *cfg)
   if (esl_opt_IsOn(go, "--aliscoresout"))  { if ((aliscoresfp  = fopen(esl_opt_GetString(go, "--aliscoresout"),"w")) == NULL)  esl_fatal("Failed to open alignment scores output file %s for writing\n", esl_opt_GetString(go, "--aliscoresout")); }
 
 
-#ifdef HMMER_THREADS
+#ifdef HAVE_PTHREAD
   /* initialize thread data */
   if (esl_opt_IsOn(go, "--cpu")) ncpus = esl_opt_GetInteger(go, "--cpu");
   else                                   esl_threads_CPUCount(&ncpus);
@@ -459,14 +456,14 @@ serial_master(ESL_GETOPTS *go, struct cfg_s *cfg)
           info[i].om     = NULL;
           info[i].bg     = p7_bg_Create(abc);
 
-#ifdef HMMER_THREADS
+#ifdef HAVE_PTHREAD
           info[i].queue = queue;
 #endif
       }
 
 
 
-#ifdef HMMER_THREADS
+#ifdef HAVE_PTHREAD
       for (i = 0; i < ncpus * 2; ++i) {
           block = esl_sq_CreateDigitalBlock(BLOCK_SIZE, abc);
           if (block == NULL)           esl_fatal("Failed to allocate sequence block");
@@ -505,7 +502,7 @@ serial_master(ESL_GETOPTS *go, struct cfg_s *cfg)
 
       /* Convert to an optimized model */
       gm = p7_profile_Create (hmm->M, abc);
-      om = p7_oprofile_Create(hmm->M, abc, hw->simd);
+      om = p7_oprofile_Create(hmm->M, abc);
       p7_profile_Config(gm, hmm, info->bg);
       p7_oprofile_Convert(gm, om);                    /* <om> is now p7_LOCAL, multihit */
 
@@ -516,7 +513,7 @@ serial_master(ESL_GETOPTS *go, struct cfg_s *cfg)
           info[i].th  = p7_tophits_Create(p7_TOPHITS_DEFAULT_INIT_ALLOC);
           info[i].gm  = p7_profile_Clone(gm);
           info[i].om  = p7_oprofile_Shadow(om);
-          info[i].pli = p7_pipeline_Create(go, om->M, 100, TRUE, p7_SEARCH_SEQS, hw->simd); /* L_hint = 100 is just a dummy for now */
+          info[i].pli = p7_pipeline_Create(go, om->M, 100, TRUE, p7_SEARCH_SEQS); /* L_hint = 100 is just a dummy for now */
           p7_pipeline_NewModel(info[i].pli, info[i].om, info[i].bg);
 
           if (  esl_opt_IsUsed(go, "--toponly") )
@@ -534,7 +531,7 @@ serial_master(ESL_GETOPTS *go, struct cfg_s *cfg)
 
           info[i].scoredata = p7_hmm_ScoreDataClone(scoredata, om->abc->Kp);
 
-#ifdef HMMER_THREADS
+#ifdef HAVE_PTHREAD
           if (ncpus > 0) esl_threads_AddThread(threadObj, &info[i]);
 #endif
       }
@@ -543,7 +540,7 @@ serial_master(ESL_GETOPTS *go, struct cfg_s *cfg)
       id_length_list = init_id_length(1000);
 
 
-#ifdef HMMER_THREADS
+#ifdef HAVE_PTHREAD
 
         if (ncpus > 0)  sstatus = thread_loop(info, id_length_list, threadObj, queue, dbfp);
         else            sstatus = serial_loop(info, id_length_list, dbfp);
@@ -674,7 +671,7 @@ serial_master(ESL_GETOPTS *go, struct cfg_s *cfg)
   for (i = 0; i < infocnt; ++i)
     p7_bg_Destroy(info[i].bg);
 
-#ifdef HMMER_THREADS
+#ifdef HAVE_PTHREAD
   if (ncpus > 0) {
       esl_workqueue_Reset(queue);
       while (esl_workqueue_Remove(queue, (void **) &block) == eslOK) {
@@ -808,7 +805,7 @@ serial_loop(WORKER_INFO *info, ID_LENGTH_LIST *id_length_list, ESL_SQFILE *dbfp)
 }
 
 
-#ifdef HMMER_THREADS
+#ifdef HAVE_PTHREAD
 static int
 thread_loop(WORKER_INFO *info, ID_LENGTH_LIST *id_length_list, ESL_THREADS *obj, ESL_WORK_QUEUE *queue, ESL_SQFILE *dbfp)
 {
@@ -994,7 +991,7 @@ pipeline_thread(void *arg)
   esl_threads_Finished(obj, workeridx);
   return;
 }
-#endif   /* HMMER_THREADS */
+#endif   /* HAVE_PTHREAD */
 
 
 
@@ -1071,9 +1068,6 @@ assign_Lengths(P7_TOPHITS *th, ID_LENGTH_LIST *id_length_list) {
   return eslOK;
 }
 
-/*****************************************************************
- * @LICENSE@
- *****************************************************************/
 
 
 

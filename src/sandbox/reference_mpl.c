@@ -1,4 +1,3 @@
-
 #include "p7_config.h"
 
 #include "easel.h"
@@ -194,12 +193,5 @@ main(int argc, char **argv)
 #endif /*p7REFERENCE_MPL_EXAMPLE*/
 
 
-
-/*****************************************************************
- * @LICENSE@
- * 
- * SVN $Id$
- * SVN $URL$
- *****************************************************************/
 
 

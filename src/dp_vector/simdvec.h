@@ -1,56 +1,118 @@
 /* Configuration constants and initialization of our SIMD vector environment.
  * 
- * This header file may be included by non-vector code: for example,
- * P7_SPARSEMASK code that is called by the vectorized fwd-bck local
- * decoder.
+ * This header file is designed to be included by non-vectorized
+ * code. For example, P7_SPARSEMASK code that is called by the
+ * vectorized fwd-bck local decoder.
+ *
+ * See simdvec.md for additional notes.
  */
 #ifndef p7SIMDVEC_INCLUDED
 #define p7SIMDVEC_INCLUDED
+#include "easel.h"
 
-/* Define our SIMD vector sizes.
- * SSE, Altivec/VMX are 128b/16B vectors, but we anticipate others.
- * Intel AVX is already roadmapped out to 1024b/128B vectors. 
- * See note [1] below on memory alignment, SIMD vectors, and
- * malloc(). We need these constants and macros not only in the
- * vector implementation, but also in the P7_SPARSEMASK code that
- * interfaces with the vector f/b decoder.
+
+/* Actual vector widths (in # of elements) that our SSV, VF, and F/B
+ * filters use. These are runtime queries, using cpu dispatching.
+ *  
+ * Striping and unstriping requires knowing V, so even nonvector code
+ * may need these if it's accessing striped data.
+ * 
  */
-#define p7_VALIGN   16		/* Vector memory must be aligned on 16-byte boundaries   */
-#define p7_VNF      4		/* Number of floats per SIMD vector (Forward, Backward)  */
-#define p7_VNW      8		/* Number of shorts (words) per SIMD vector (Viterbi)    */
-#define p7_VNB      16		/* Number of bytes per SIMD vector (SSV, MSV)            */
-#define p7_VALIMASK (~0xf)      /* Ptrs are aligned using & p7_VALIMASK                  */
+#define P7_V_SSV   (p7_simdvec_Width())     // (Actual) width of SSV score vectors (# of int8)
+#define P7_V_VF    (p7_simdvec_Width()/2)   //            ... of VF score vectors (# of int16)
+#define P7_V_FB    (p7_simdvec_Width()/4)   //            ... of FB score vectors (# of float)
 
 
-// Define new constants for AVX, AVX-512 to support running multiple versions while testing
-#define p7_VALIGN_AVX   32		/* AVX Vector memory must be aligned on 32-byte boundaries   */
-#define p7_VNF_AVX      8		/* Number of floats per AVX SIMD vector (Forward, Backward)  */
-#define p7_VNW_AVX      16		/* Number of shorts (words) per AVX SIMD vector (Viterbi)    */
-#define p7_VNB_AVX      32		/* Number of bytes per AVX SIMD vector (SSV, MSV)            */
-#define p7_VALIMASK_AVX (~0x1f)      /* Ptrs are aligned using & p7_VALIMASK_AVX                  */
-
-#define p7_VALIGN_AVX_512   64		/* AVX-512 Vector memory must be aligned on 64-byte boundaries   */
-#define p7_VNF_AVX_512      16		/* Number of floats per AVX-512 SIMD vector (Forward, Backward)  */
-#define p7_VNW_AVX_512      32		/* Number of shorts (words) per AVX-512 SIMD vector (Viterbi)    */
-#define p7_VNB_AVX_512      64		/* Number of bytes per AVX-512 SIMD vector (SSV, MSV)            */
-#define p7_VALIMASK_AVX_512 (~0x3f)      /* Ptrs are aligned using & p7_VALIMASK                  */
-
-/* In calculating Q, the number of vectors we need in a row, we have
- * to make sure there's at least 2, or a striped implementation fails.
+/* Maximum vector widths (in # of elements).  When we allocate space
+ * for vector arrays, we do allocations that will work for *any*
+ * vector ISA. For that, we only need to know the maximum vector sizes
+ * that are possible, to be able to calculate Q, the number of vectors
+ * per DP row.
+ *
+ * We also need to align memory that's suitable for any vector ISA, so
+ * that also depends on the maximum vector size. It's the same number
+ * as p7_VMAX_SSV, but we call it p7_VALIGN for "clarity".
+ * 
+ * And we also need to know the maximum width of a vector in *bytes*,
+ * for allocation purposes; we call that p7_VWIDTH, but it's also the
+ * same as p7_VALIGN and p7_VMAX_SSV.
+ *
+ * If we add a new wide (>128b) vector ISA, tests here need to be edited.
+ *
+ *                     ----------------- V ----------------------
+ *                     bits   int8 (SSV)  int16 (VF)  float (F/B)
+ *                     ----   ----------  ----------  -----------
+ * ARM NEON            128       16           8            4
+ * Power Altivec/VMX   128       16           8            4
+ * x86 SSE             128       16           8            4
+ * x86 AVX             256       32          16            8
+ * x86 AVX-512         512       64          32           16
  */
-#define P7_NVB(M)   ( ESL_MAX(2, ((((M)-1) / p7_VNB) + 1)))   /* 16 uchars  */
-#define P7_NVW(M)   ( ESL_MAX(2, ((((M)-1) / p7_VNW) + 1)))   /*  8 words   */
-#define P7_NVF(M)   ( ESL_MAX(2, ((((M)-1) / p7_VNF) + 1)))   /*  4 floats  */
+#if     defined(eslENABLE_AVX512)  // If we support up to 512b vector ISAs, then:
+#define p7_VALIGN     64           //   memory alignment, in bytes.
+#define p7_VWIDTH     64           //   max vector width, in bytes.
+#define p7_VMAX_SSV   64           //                 ... in int8's
+#define p7_VMAX_VF    32           //                 ... in int16's
+#define p7_VMAX_FB    16           //                 ... in floats 
+#elif   defined(eslENABLE_AVX)     // Or for supporting up to 256b vector ISAs:
+#define p7_VALIGN     32
+#define p7_VWIDTH     32
+#define p7_VMAX_SSV   32
+#define p7_VMAX_VF    16
+#define p7_VMAX_FB     8          
+#else                              // Or for supporting up to 128b vector ISAs (SSE,VMX,NEON) :
+#define p7_VALIGN     16
+#define p7_VWIDTH     16
+#define p7_VMAX_SSV   16
+#define p7_VMAX_VF     8
+#define p7_VMAX_FB     4          
+#endif
 
-// values for 256-bit AVX vectors
-#define P7_NVB_AVX(M)   ( ESL_MAX(2, ((((M)-1) / p7_VNB_AVX) + 1)))   /* 32 uchars  */
-#define P7_NVW_AVX(M)   ( ESL_MAX(2, ((((M)-1) / p7_VNW_AVX) + 1)))   /*  16 words   */
-#define P7_NVF_AVX(M)   ( ESL_MAX(2, ((((M)-1) / p7_VNF_AVX) + 1)))   /*  8 floats  */
 
-// values for 512-bit AVX-512 vectors
-#define P7_NVB_AVX_512(M)   ( ESL_MAX(2, ((((M)-1) / p7_VNB_AVX_512) + 1)))   /* 64 uchars  */
-#define P7_NVW_AVX_512(M)   ( ESL_MAX(2, ((((M)-1) / p7_VNW_AVX_512) + 1)))   /*  32 words   */
-#define P7_NVF_AVX_512(M)   ( ESL_MAX(2, ((((M)-1) / p7_VNF_AVX_512) + 1)))   /*  16 floats  */
+/* In vector ISA-specific code (*_sse.c, for example), rather than
+ * hardcoding vector width in bytes, int16's, or floats as 16, 8, 4,
+ * we write
+ *       p7_VWIDTH_SSE 
+ *       p7_VWIDTH_SSE / sizeof(int16_t)
+ *       p7_VWIDTH_SSE / sizeof(float)
+ * to make it more obvious what the number means.
+ */
+#define p7_VWIDTH_SSE    16
+#define p7_VWIDTH_AVX    32
+#define p7_VWIDTH_AVX512 64
+#define p7_VWIDTH_NEON   16
+#define p7_VWIDTH_VMX    16
+
+
+/* P7_Q(M,V): calculate length of a DP matrix row, in vectors.
+ * 
+ * Q must be at least 2, or striped DP implementations fail.
+ * Allocations account for slop caused by roundoff to integer number
+ * of vectors: i.e. an allocation might be for, in bytes:
+ *    P7_Q(M, p7_VMAX_SSV) * p7_VWIDTH
+ *    P7_Q(M, p7_VMAX_VF)  * p7_VWIDTH
+ *    P7_Q(M, p7_VMAX_FB)  * p7_VWIDTH
+ * and this allocation must also be aligned on a p7_VALIGN byte boundary.
+ */
+#define P7_Q(M,V)  ( ESL_MAX(2, ((((M)-1) / (V)) + 1)) )
+
+
+
+/* These macros translate between striped and unstriped coordinate
+ * systems. They're conveniences, intended for code that's not
+ * performance-critical. See simdvec.md notes on striped coordinates.
+ */
+#define P7_Q_FROM_K(k,Q)        ( ((k)-1)%(Q) )
+#define P7_Z_FROM_K(k,Q)        ( ((k)-1)/(Q) )
+#define P7_Y_FROM_K(k,Q,V)      ( (V) * (((k)-1)%(Q)) + ((k)-1)/(Q) )
+#define P7_K_FROM_QZ(q,z,Q)     ( (z)*(Q)+((q)+1) )
+#define P7_Y_FROM_QZ(q,z,V)     ( (q)*(V)+(z) )
+#define P7_K_FROM_Y(y,Q,V)      ( ((y)%(V))*(Q) + (y)/(V) + 1 )
+#define P7_Q_FROM_Y(y,V)        ( (y)/(V) )
+#define P7_Z_FROM_Y(y,V)        ( (y)%(V) )
+
+#define p7O_EXTRA_SB 17    /* see ssvfilter.c for explanation */
+
 
 // Files to convert striped data from one vector size to another
 extern void p7_restripe_byte(char *source, char *dest, int length, int source_vector_length, int dest_vector_length);
@@ -58,41 +120,7 @@ extern void p7_restripe_short(int16_t *source, int16_t *dest, int length, int so
 extern void p7_restripe_float(float *source, float *dest, int length, int source_vector_length, int dest_vector_length);
 
 extern void p7_simdvec_Init(void);
+extern int  p7_simdvec_Width(void);
 
-/* [1]. On memory alignment, SIMD vectors, and malloc(): 
- * 
- * Yes, the C99 standard says malloc() mustreturn a pointer "suitably
- * aligned so that it may be aligned to a pointer of any type of
- * object" (C99 7.20.3). Yes, __m128 vectors are 16 bytes. Yes, you'd
- * think malloc() ought to be required return a pointer aligned on a
- * 16-byte boundary. But, no, malloc() doesn't have to do this;
- * malloc() will return improperly aligned memory on many systems.
- * Reason: vectors are officially considered "out of scope" of the C99
- * language.
- * 
- * So vector memory has to be manually aligned. For 16-byte alignment,
- * the idiom looks like the following, where for any to-be-aligned
- * ptr, we first allocate a raw (unaligned) memory space that's 15
- * bytes larger than we need, then set the aligned ptr into that space;
- * and when we free, we free the raw memory ptr:
- * 
- *   raw_mem = malloc(n + 15);
- *   ptr     = (__m128 *) ( ((uintptr_t) raw_mem + 15) & (~0xf));
- *   
- * To allow for arbitrary byte alignment (e.g. AVX), instead of
- * hard-coding 16-byte alignment with constants 15 and 0xf, we use
- * p7_VALIGN, (p7_VALIGN-1) and p7_VALIMASK.
- * 
- * Technically, the result of casting a non-NULL pointer to an integer
- * type is undefined (C99 6.3.2.3), but this idiom for manual memory
- * alignment is in widespread use so seems generally safe.
- * 
- * See also: posix_memalign(), as an alternative.
- */
 #endif  /*p7SIMDVEC_INCLUDED*/
-/*****************************************************************
- * @LICENSE@
- *
- * SVN $Id$
- * SVN $URL$
- *****************************************************************/
+

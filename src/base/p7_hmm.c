@@ -8,8 +8,6 @@
  *   5. Other routines in the API.
  *   6. Unit tests.
  *   7. Test driver. 
- *   8. Copyright and license.
- * 
  */
 #include "p7_config.h"
 
@@ -932,7 +930,7 @@ p7_hmm_Validate(P7_HMM *hmm, char *errbuf, float tol)
   if (! (hmm->flags & p7H_MAP) && hmm->map != NULL)  ESL_XFAIL(eslFAIL, errbuf, "p7H_MAP flag down, but map string is present");
 
   if (hmm->flags & p7H_STATS) {
-    if (hmm->evparam[p7_MLAMBDA] <= 0.) ESL_XFAIL(eslFAIL, errbuf, "lambda parameter can't be negative");
+    if (hmm->evparam[p7_SLAMBDA] <= 0.) ESL_XFAIL(eslFAIL, errbuf, "lambda parameter can't be negative");
     if (hmm->evparam[p7_VLAMBDA] <= 0.) ESL_XFAIL(eslFAIL, errbuf, "lambda parameter can't be negative");
     if (hmm->evparam[p7_FLAMBDA] <= 0.) ESL_XFAIL(eslFAIL, errbuf, "lambda parameter can't be negative");
   }
@@ -1134,11 +1132,4 @@ main(int argc, char **argv)
 #endif /*p7HMM_TESTDRIVE*/
 /*-------------------- end of test driver ---------------------*/
 
-
-/************************************************************
- * @LICENSE@
- *
- * SVN $Id$
- * SVN $URL$
- ************************************************************/
 

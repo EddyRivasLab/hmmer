@@ -16,9 +16,4 @@ extern int p7_profile_ConfigCustom   (P7_PROFILE *gm, const P7_HMM *hmm, const P
 extern int p7_profile_SetLength      (P7_PROFILE *gm, int L);
 
 #endif /*p7MODELCONFIG_INCLUDED*/
-/*****************************************************************
- * @LICENSE@
- * 
- * SVN $Id$
- * SVN $URL$
- *****************************************************************/
+

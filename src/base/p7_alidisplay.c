@@ -1,15 +1,13 @@
-/* Formatting, transmitting, and printing single alignments to a
- * profile.
+/* Formatting, transmitting, printing alignments to a profile.
  * 
  * Contents:
- *   1. The P7_ALIDISPLAY object.
- *   2. The P7_ALIDISPLAY API.
- *   3. Debugging/dev code.
- *   4. Benchmark driver.
- *   5. Unit tests.
- *   6. Test driver.
- *   7. Example.
- *   8. Copyright and license information.
+ *   1. The P7_ALIDISPLAY object
+ *   2. The P7_ALIDISPLAY API
+ *   3. Debugging/dev code
+ *   4. Benchmark driver
+ *   5. Unit tests
+ *   6. Test driver
+ *   7. Example
  */
 #include "p7_config.h"
 
@@ -23,9 +21,9 @@
 #include "esl_randomseq.h"
 
 #include "base/p7_alidisplay.h"
+#include "base/p7_profile.h"
 #include "base/p7_trace.h"
-#include "dp_vector/p7_oprofile.h"
-#include "hardware/hardware.h"
+
 
 /*****************************************************************
  * 1. The P7_ALIDISPLAY object
@@ -37,7 +35,7 @@
  *
  * Purpose:   Creates and returns an alignment display for domain number
  *            <which> in traceback <tr>, where the traceback
- *            corresponds to an alignment of optimized profile <om> to digital sequence
+ *            corresponds to an alignment of profile <gm> to digital sequence
  *            <dsq>, and the unique name of that target
  *            sequence <dsq> is <sqname>. The <which> index starts at 0.
  *            
@@ -51,7 +49,7 @@
  *
  * Args:      tr       - traceback
  *            which    - domain number, 0..tr->ndom-1
- *            om       - optimized profile (query)
+ *            gm       - profile (query)
  *            sq       - digital sequence (target)
  *
  * Returns:   <eslOK> on success.
@@ -60,31 +58,174 @@
  *            in the data.
  */
 P7_ALIDISPLAY *
-p7_alidisplay_Create(const P7_TRACE *tr, int which, const P7_OPROFILE *om, const ESL_SQ *sq)
+p7_alidisplay_Create(const P7_TRACE *tr, int which, const P7_PROFILE *gm, const ESL_SQ *sq)
 {
-  //Call the appropriate SIMD-specific versions of this function 
-  switch(om->simd){
-    case SSE:
-      return(p7_alidisplay_Create_sse(tr, which, om, sq));
-      break;
+  P7_ALIDISPLAY *ad       = NULL;
+  char          *Alphabet = gm->abc->sym;
+  int            n, pos, z;
+  int            z1,z2,za,zb;
+  int            k,x,i,s;
+  int            hmm_namelen, hmm_acclen, hmm_desclen;
+  int            sq_namelen,  sq_acclen,  sq_desclen;
+  int            status;
 
-    case AVX:
-      return(p7_alidisplay_Create_avx(tr, which, om, sq));
-      break;
+  /* First figure out start/end coords in the trace.
+   *   B->{GL}-> D? ... M ... M ... D? ->E
+   *             ^      ^     ^     ^
+   *             z1     za    zb    z2
+   *   ^                                 ^          
+   *   tfrom[d]                          tto[d]           
+   */
+  if (tr->ndom)
+    { /* if trace is indexed, this is a little faster: */
+      z1 = tr->tfrom[which];	
+      z2 = tr->tto[which];        
+    } 
+  else
+    {/* else, we have to find domain <which> ourselves, by scanning */
+      for (z1 = 0; which >= 0 && z1 < tr->N; z1++) if (tr->st[z1] == p7T_B) which--; /* now z1 should be on B state    */
+      if (z1 == tr->N) return NULL;                                                  /* ... if not, no domain <which>. */
+      for (z2 = z1+1; z2 < tr->N; z2++) if (tr->st[z2] == p7T_E) break;              /* now z2 should be on E state    */
+      if (z2 == tr->N) return NULL;                                                  /* ... if not, trace is corrupt   */
+    }
+  z1 += 2;                                             /* skip B, {GL} in trace */
+  z2 -= 1;                                             /* back off E in trace  */      
+  za = z1; while (tr->st[za] == p7T_DG) za++;	       /* find first emitting state (glocal traces can start with G->D1... */
+  zb = z2; while (tr->st[zb] == p7T_DG || tr->st[zb] == p7T_DL) zb--; /* find last emitting state (both local,glocal can end with D->E */
 
-    case AVX512:
-      return(p7_alidisplay_Create_avx512(tr, which, om, sq));
-      break;
+  /* Now we know that z1..z2 in the trace will be represented in the
+   * alidisplay; that's z2-z1+1 positions. We need a \0 trailer on all
+   * our display strings, so allocate z2-z1+2. We know each position is
+   * M, D, or I, so there's a 1:1 correspondence of trace positions
+   * with alignment display positions.  We also know the display
+   * starts and ends with {MD} states.
+   * 
+   * So now let's allocate. The alidisplay is packed into a single
+   * memory space, so this appears to be intricate, but it's just
+   * bookkeeping.  
+   */
+  n = (z2-z1+2) * 3;                     /* model, mline, aseq mandatory         */
+  if (gm->rf[0]  != 0)    n += z2-z1+2;  /* optional reference line              */
+  if (gm->mm[0]  != 0)    n += z2-z1+2;  /* optional modelmask line              */
+  if (gm->cs[0]  != 0)    n += z2-z1+2;  /* optional structure line              */
+  if (tr->pp     != NULL) n += z2-z1+2;  /* optional posterior prob line         */
 
-    case NEON: case NEON64:
-      return(p7_alidisplay_Create_neon(tr, which, om, sq));
-      exit(0);
-      break;
+  hmm_namelen = strlen(gm->name);                           n += hmm_namelen + 1;
+  hmm_acclen  = (gm->acc  != NULL ? strlen(gm->acc)  : 0);  n += hmm_acclen  + 1;
+  hmm_desclen = (gm->desc != NULL ? strlen(gm->desc) : 0);  n += hmm_desclen + 1;
+  sq_namelen  = strlen(sq->name);                           n += sq_namelen  + 1;
+  sq_acclen   = strlen(sq->acc);                            n += sq_acclen   + 1; /* sq->acc is "\0" when unset */
+  sq_desclen  = strlen(sq->desc);                           n += sq_desclen  + 1; /* same for desc              */
+ 
 
-    default: 
-      printf("Error: oprofile with unrecognized SIMD type passed to p7_alidisplay_Create\n");
-      exit(0);
+  ESL_ALLOC(ad, sizeof(P7_ALIDISPLAY));
+  ad->mem = NULL;
+  ad->memsize = sizeof(char) * n;
+  ESL_ALLOC(ad->mem, ad->memsize);
+
+  /* Set all the string pointers into the single chunk of allocated memory, ad->mem  */
+  pos = 0; 
+  if (gm->rf[0]  != 0) { ad->rfline = ad->mem + pos; pos += z2-z1+2; } else { ad->rfline = NULL; }
+  if (gm->mm[0]  != 0) { ad->mmline = ad->mem + pos; pos += z2-z1+2; } else { ad->mmline = NULL; }
+  if (gm->cs[0]  != 0) { ad->csline = ad->mem + pos; pos += z2-z1+2; } else { ad->csline = NULL; }
+  ad->model   = ad->mem + pos;  pos += z2-z1+2;
+  ad->mline   = ad->mem + pos;  pos += z2-z1+2;
+  ad->aseq    = ad->mem + pos;  pos += z2-z1+2;
+  if (tr->pp)    { ad->ppline  = ad->mem + pos;  pos += z2-z1+2;} else { ad->ppline  = NULL; }
+  ad->hmmname = ad->mem + pos;  pos += hmm_namelen +1;
+  ad->hmmacc  = ad->mem + pos;  pos += hmm_acclen +1;
+  ad->hmmdesc = ad->mem + pos;  pos += hmm_desclen +1;
+  ad->sqname  = ad->mem + pos;  pos += sq_namelen +1;
+  ad->sqacc   = ad->mem + pos;  pos += sq_acclen +1;
+  ad->sqdesc  = ad->mem + pos;  // pos += sq_desclen +1; // increment unnecessary on final.
+
+  /* Copy annotation for hmm, seq */
+  strcpy(ad->hmmname, gm->name);
+  if (gm->acc)  strcpy(ad->hmmacc,  gm->acc);  else ad->hmmacc[0]  = 0;
+  if (gm->desc) strcpy(ad->hmmdesc, gm->desc); else ad->hmmdesc[0] = 0;
+  strcpy(ad->sqname,  sq->name);
+  strcpy(ad->sqacc,   sq->acc);
+  strcpy(ad->sqdesc,  sq->desc);
+
+  /* Determine hit coords */
+  ad->hmmfrom = tr->k[z1];
+  ad->hmmto   = tr->k[z2];
+  ad->M       = gm->M;
+  ad->sqfrom  = tr->i[za];	/* za = first emitting position */
+  ad->sqto    = tr->i[zb];	/* zb = last emitting position  */
+  ad->L       = sq->n;
+
+  /* Set whether the domain is glocal or local */
+  ad->is_glocal = (tr->st[z1-1] == p7T_G ? TRUE : FALSE);
+
+  /* optional rf line */
+  if (ad->rfline) {
+    for (z = z1; z <= z2; z++) ad->rfline[z-z1] = ((tr->st[z] == p7T_IL || tr->st[z] == p7T_IG) ? '.' : gm->rf[tr->k[z]]);
+    ad->rfline[z-z1] = '\0';
   }
+
+  /* optional mm line */
+  if (ad->mmline != NULL) {
+    for (z = z1; z <= z2; z++) ad->mmline[z-z1] = ((tr->st[z] == p7T_IL || tr->st[z] == p7T_IG) ? '.' : gm->mm[tr->k[z]]);
+    ad->mmline[z-z1] = '\0';
+  }
+
+  /* optional cs line */
+  if (ad->csline) {
+    for (z = z1; z <= z2; z++) ad->csline[z-z1] = ((tr->st[z] == p7T_IL || tr->st[z] == p7T_IG) ? '.' : gm->cs[tr->k[z]]);
+    ad->csline[z-z1] = '\0';
+  }
+
+  /* optional pp line */
+  if (ad->ppline) {
+    for (z = z1; z <= z2; z++) ad->ppline[z-z1] = ( (tr->st[z] == p7T_DL || tr->st[z] == p7T_DG) ? '.' : p7_alidisplay_EncodePostProb(tr->pp[z]));
+    ad->ppline[z-z1] = '\0';
+  }
+
+  /* mandatory three alignment display lines: model, mline, aseq */
+  for (z = z1; z <= z2; z++) 
+    {
+      k = tr->k[z];
+      i = tr->i[z];
+      x = sq->dsq[i];
+      s = tr->st[z];
+
+      switch (s) {
+      case p7T_ML:
+      case p7T_MG:
+        ad->model[z-z1] = gm->consensus[k];
+        if (x == esl_abc_DigitizeSymbol(gm->abc, gm->consensus[k])) ad->mline[z-z1] = ad->model[z-z1];
+        else if (P7P_MSC(gm, k, x) > 0.)                            ad->mline[z-z1] = '+'; 
+        else                                                        ad->mline[z-z1] = ' ';
+        ad->aseq  [z-z1] = toupper(Alphabet[x]);
+        break;
+	
+      case p7T_IL:
+      case p7T_IG:
+        ad->model [z-z1] = '.';
+        ad->mline [z-z1] = ' ';
+        ad->aseq  [z-z1] = tolower(Alphabet[x]);
+        break;
+	
+      case p7T_DL:
+      case p7T_DG:
+        ad->model [z-z1] = gm->consensus[k];
+        ad->mline [z-z1] = ' ';
+        ad->aseq  [z-z1] = '-';
+        break;
+
+      default: ESL_XEXCEPTION(eslEINVAL, "invalid state in trace: not M,D,I");
+      }
+    }
+  ad->model [z2-z1+1] = '\0';
+  ad->mline [z2-z1+1] = '\0';
+  ad->aseq  [z2-z1+1] = '\0';
+  ad->N = z2-z1+1;
+  return ad;
+
+ ERROR:
+  p7_alidisplay_Destroy(ad);
+  return NULL;
 }
 
 
@@ -252,7 +393,7 @@ p7_alidisplay_Serialize(P7_ALIDISPLAY *ad)
   return eslOK;
 
  ERROR:
-  if (ad->mem) free(ad->mem); ad->mem = NULL;
+  if (ad->mem) { free(ad->mem); ad->mem = NULL; }
   return status;
 }
 
@@ -605,7 +746,7 @@ p7_alidisplay_Backconvert(const P7_ALIDISPLAY *ad, const ESL_ALPHABET *abc, ESL_
   if (i     != subL+1)     ESL_XEXCEPTION(eslECORRUPT, "backconverted subseq didn't end at expected length (%s/%s)",        ad->sqname, ad->hmmname);
 
   /* Set up <sq> annotation as a subseq of a source sequence */
-  if ((status = esl_sq_FormatName(sq, "%s/%ld-%ld", ad->sqname, ad->sqfrom, ad->sqto))                      != eslOK) goto ERROR;
+  if ((status = esl_sq_FormatName(sq, "%s/%" PRId64 "-%" PRId64, ad->sqname, ad->sqfrom, ad->sqto))                      != eslOK) goto ERROR;
   if ((status = esl_sq_FormatDesc(sq, "[subseq from] %s", ad->sqdesc[0] != '\0' ? ad->sqdesc : ad->sqname)) != eslOK) goto ERROR;
   if ((status = esl_sq_SetSource (sq, ad->sqname))                                                          != eslOK) goto ERROR;
   if (ad->sqacc[0]  != '\0') { if ((status = esl_sq_SetAccession  (sq, ad->sqacc)) != eslOK) goto ERROR; }
@@ -934,7 +1075,7 @@ main(int argc, char **argv)
 	    for (z = 0; z < tr->N; z++)
 	      if (tr->i[z] > 0) tr->pp[z] = esl_random(r);
 
-	  ad = p7_alidisplay_Create(tr, 0, om, sq, NULL);
+	  ad = p7_alidisplay_Create(tr, 0, gm, sq, NULL);
 	  p7_alidisplay_Print(stdout, ad, 40, 80, FALSE);
 	  p7_alidisplay_Destroy(ad);
 	}
@@ -1345,11 +1486,4 @@ main(int argc, char **argv)
 }
 #endif /*p7ALIDISPLAY_EXAMPLE*/
 
-
-/*****************************************************************
- * @LICENSE@
- *
- * SVN $Id$
- * SVN $URL$
- *****************************************************************/
 

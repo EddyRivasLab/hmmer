@@ -7,7 +7,6 @@
  *   3. Unit tests
  *   4. Test driver
  *   5. References
- *   6. Copyright and license information
  */
 #include "p7_config.h"
 
@@ -146,9 +145,14 @@ p7_profile_ConfigCustom(P7_PROFILE *gm, const P7_HMM *hmm, const P7_BG *bg, int 
   if (! (hmm->flags & p7H_CONS))       ESL_EXCEPTION(eslEINVAL, "HMM must have a consensus to transfer to the profile");
 
   /* Copy annotation across from HMM  */
-  if (gm->name) free(gm->name);   if ((status = esl_strdup(hmm->name,   -1, &(gm->name))) != eslOK) return status;
-  if (gm->acc)  free(gm->acc);    if ((status = esl_strdup(hmm->acc,    -1, &(gm->acc)))  != eslOK) return status;
-  if (gm->desc) free(gm->desc);   if ((status = esl_strdup(hmm->desc,   -1, &(gm->desc))) != eslOK) return status;
+  if (gm->name) free(gm->name);   
+  if ((status = esl_strdup(hmm->name,   -1, &(gm->name))) != eslOK) return status;
+
+  if (gm->acc)  free(gm->acc);   
+  if ((status = esl_strdup(hmm->acc,    -1, &(gm->acc)))  != eslOK) return status;
+
+  if (gm->desc) free(gm->desc);  
+  if ((status = esl_strdup(hmm->desc,   -1, &(gm->desc))) != eslOK) return status;
 
   if (hmm->flags & p7H_RF)    strcpy(gm->rf,        hmm->rf);
   if (hmm->flags & p7H_MMASK) strcpy(gm->mm,        hmm->mm);
@@ -517,9 +521,4 @@ main(int argc, char **argv)
  */
 
 
-/*****************************************************************
- * @LICENSE@
- * 
- * SVN $Id$
- * SVN $URL$
- *****************************************************************/
+

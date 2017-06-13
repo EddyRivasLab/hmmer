@@ -16,10 +16,3 @@ extern int p7_ReferenceASCBackward(const ESL_DSQ *dsq, int L, const P7_PROFILE *
 				   P7_REFMX *abu, P7_REFMX *abd, float *opt_sc);
 
 #endif /*p7REFERENCE_ASC_FWDBACK_INCLUDED*/
-
-/*****************************************************************
- * @LICENSE@
- * 
- * SVN $URL$
- * SVN $Id$
- *****************************************************************/

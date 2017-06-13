@@ -1,16 +1,12 @@
 MODULE = misc
 
-LIBOBJS =  emit.o\
-	   h2_io.o\
-	   logsum.o\
-	   p7_trace_metrics.o\
-	   tracealign.o
+OBJS =  emit.o             \
+	h2_io.o            \
+	logsum.o           \
+	p7_trace_metrics.o \
+	tracealign.o
 
-LIBHDRS =  
-
-OBJS =
-
-HDRS =
+HDRS =  
 
 PROGS =
 
@@ -37,10 +33,5 @@ SHELL        = /bin/sh
 
 include ../Makefile-subdirs.mk
 
-################################################################
-# @LICENSE@
-#
-# SVN $URL$
-# SVN $Id$
-################################################################
+
 

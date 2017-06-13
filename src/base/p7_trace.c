@@ -11,7 +11,6 @@
  *   8. Unit tests
  *   9. Test driver
  *  10. Example
- *  11. Copyright and license information
  * 
  * Stylistic note: elements in a trace path are usually indexed by z.
  */
@@ -2189,28 +2188,29 @@ utest_check_counts_undoctored(P7_HMM *hmm)
   k = 3; sym = 'E'; ct = 5.0; x = esl_abc_DigitizeSymbol(hmm->abc, sym);  if (hmm->ins[k][x] != ct) esl_fatal(msg); hmm->ins[k][x] = 0.0;
   k = 5; sym = 'Y'; ct = 3.0; x = esl_abc_DigitizeSymbol(hmm->abc, sym);  if (hmm->ins[k][x] != ct) esl_fatal(msg); hmm->ins[k][x] = 0.0;
 
-  /* check nonzero transitions, zero as we go */
-  if (hmm->t[0][p7H_MM] != 3.0) esl_fatal(msg); hmm->t[0][p7H_MM] = 0.0;
-  if (hmm->t[0][p7H_MD] != 1.0) esl_fatal(msg); hmm->t[0][p7H_MD] = 0.0;
-  if (hmm->t[1][p7H_MM] != 3.0) esl_fatal(msg); hmm->t[1][p7H_MM] = 0.0;
-  if (hmm->t[1][p7H_MI] != 1.0) esl_fatal(msg); hmm->t[1][p7H_MI] = 0.0;
-  if (hmm->t[1][p7H_DD] != 1.0) esl_fatal(msg); hmm->t[1][p7H_DD] = 0.0;
-  if (hmm->t[2][p7H_MM] != 3.0) esl_fatal(msg); hmm->t[2][p7H_MM] = 0.0;
-  if (hmm->t[2][p7H_MD] != 1.0) esl_fatal(msg); hmm->t[2][p7H_MD] = 0.0;
-  if (hmm->t[2][p7H_DM] != 1.0) esl_fatal(msg); hmm->t[2][p7H_DM] = 0.0;
-  if (hmm->t[2][p7H_DD] != 3.0) esl_fatal(msg); hmm->t[2][p7H_DD] = 0.0;
-  if (hmm->t[3][p7H_MM] != 3.0) esl_fatal(msg); hmm->t[3][p7H_MM] = 0.0;
-  if (hmm->t[3][p7H_MI] != 1.0) esl_fatal(msg); hmm->t[3][p7H_MI] = 0.0;
-  if (hmm->t[3][p7H_IM] != 2.0) esl_fatal(msg); hmm->t[3][p7H_IM] = 0.0;
-  if (hmm->t[4][p7H_MM] != 4.0) esl_fatal(msg); hmm->t[4][p7H_MM] = 0.0;
-  if (hmm->t[4][p7H_MD] != 1.0) esl_fatal(msg); hmm->t[4][p7H_MD] = 0.0;
-  if (hmm->t[4][p7H_DM] != 2.0) esl_fatal(msg); hmm->t[4][p7H_DM] = 0.0;
-  if (hmm->t[4][p7H_DD] != 1.0) esl_fatal(msg); hmm->t[4][p7H_DD] = 0.0;
-  if (hmm->t[5][p7H_MM] != 3.0) esl_fatal(msg); hmm->t[5][p7H_MM] = 0.0;
-  if (hmm->t[5][p7H_MI] != 2.0) esl_fatal(msg); hmm->t[5][p7H_MI] = 0.0;
-  if (hmm->t[5][p7H_DD] != 1.0) esl_fatal(msg); hmm->t[5][p7H_DD] = 0.0;
-  if (hmm->t[6][p7H_MM] != 2.0) esl_fatal(msg); hmm->t[6][p7H_MM] = 0.0;
-  if (hmm->t[6][p7H_DM] != 2.0) esl_fatal(msg); hmm->t[6][p7H_DM] = 0.0;
+  /* check nonzero transitions, zero as we go. `if` last on line to appease --Wmisleading-indentation god */
+                            if (hmm->t[0][p7H_MM] != 3.0) esl_fatal(msg); 
+  hmm->t[0][p7H_MM] = 0.0;  if (hmm->t[0][p7H_MD] != 1.0) esl_fatal(msg); 
+  hmm->t[0][p7H_MD] = 0.0;  if (hmm->t[1][p7H_MM] != 3.0) esl_fatal(msg); 
+  hmm->t[1][p7H_MM] = 0.0;  if (hmm->t[1][p7H_MI] != 1.0) esl_fatal(msg); 
+  hmm->t[1][p7H_MI] = 0.0;  if (hmm->t[1][p7H_DD] != 1.0) esl_fatal(msg); 
+  hmm->t[1][p7H_DD] = 0.0;  if (hmm->t[2][p7H_MM] != 3.0) esl_fatal(msg); 
+  hmm->t[2][p7H_MM] = 0.0;  if (hmm->t[2][p7H_MD] != 1.0) esl_fatal(msg); 
+  hmm->t[2][p7H_MD] = 0.0;  if (hmm->t[2][p7H_DM] != 1.0) esl_fatal(msg); 
+  hmm->t[2][p7H_DM] = 0.0;  if (hmm->t[2][p7H_DD] != 3.0) esl_fatal(msg); 
+  hmm->t[2][p7H_DD] = 0.0;  if (hmm->t[3][p7H_MM] != 3.0) esl_fatal(msg); 
+  hmm->t[3][p7H_MM] = 0.0;  if (hmm->t[3][p7H_MI] != 1.0) esl_fatal(msg); 
+  hmm->t[3][p7H_MI] = 0.0;  if (hmm->t[3][p7H_IM] != 2.0) esl_fatal(msg); 
+  hmm->t[3][p7H_IM] = 0.0;  if (hmm->t[4][p7H_MM] != 4.0) esl_fatal(msg); 
+  hmm->t[4][p7H_MM] = 0.0;  if (hmm->t[4][p7H_MD] != 1.0) esl_fatal(msg); 
+  hmm->t[4][p7H_MD] = 0.0;  if (hmm->t[4][p7H_DM] != 2.0) esl_fatal(msg); 
+  hmm->t[4][p7H_DM] = 0.0;  if (hmm->t[4][p7H_DD] != 1.0) esl_fatal(msg); 
+  hmm->t[4][p7H_DD] = 0.0;  if (hmm->t[5][p7H_MM] != 3.0) esl_fatal(msg);
+  hmm->t[5][p7H_MM] = 0.0;  if (hmm->t[5][p7H_MI] != 2.0) esl_fatal(msg); 
+  hmm->t[5][p7H_MI] = 0.0;  if (hmm->t[5][p7H_DD] != 1.0) esl_fatal(msg); 
+  hmm->t[5][p7H_DD] = 0.0;  if (hmm->t[6][p7H_MM] != 2.0) esl_fatal(msg); 
+  hmm->t[6][p7H_MM] = 0.0;  if (hmm->t[6][p7H_DM] != 2.0) esl_fatal(msg);
+  hmm->t[6][p7H_DM] = 0.0;
 
   /* now all counts should be zeroed */
   utest_check_counts_are_zero(hmm);
@@ -2240,25 +2240,26 @@ utest_check_counts_doctored(P7_HMM *hmm)
   k = 3; sym = 'E'; ct = 1.0; x = esl_abc_DigitizeSymbol(hmm->abc, sym);  if (hmm->ins[k][x] != ct) esl_fatal(msg); hmm->ins[k][x] = 0.0;
   k = 5; sym = 'Y'; ct = 1.0; x = esl_abc_DigitizeSymbol(hmm->abc, sym);  if (hmm->ins[k][x] != ct) esl_fatal(msg); hmm->ins[k][x] = 0.0;
 
-  /* check nonzero transitions, zero as we go */
-  if (hmm->t[0][p7H_MM] != 3.0) esl_fatal(msg); hmm->t[0][p7H_MM] = 0.0;
-  if (hmm->t[0][p7H_MD] != 1.0) esl_fatal(msg); hmm->t[0][p7H_MD] = 0.0;
-  if (hmm->t[1][p7H_MM] != 4.0) esl_fatal(msg); hmm->t[1][p7H_MM] = 0.0;
-  if (hmm->t[1][p7H_DD] != 1.0) esl_fatal(msg); hmm->t[1][p7H_DD] = 0.0;
-  if (hmm->t[2][p7H_MM] != 7.0) esl_fatal(msg); hmm->t[2][p7H_MM] = 0.0;
-  if (hmm->t[2][p7H_DM] != 1.0) esl_fatal(msg); hmm->t[2][p7H_DM] = 0.0;
-  if (hmm->t[3][p7H_MM] != 4.0) esl_fatal(msg); hmm->t[3][p7H_MM] = 0.0;
-  if (hmm->t[3][p7H_MI] != 1.0) esl_fatal(msg); hmm->t[3][p7H_MI] = 0.0;
-  if (hmm->t[3][p7H_MD] != 3.0) esl_fatal(msg); hmm->t[3][p7H_MD] = 0.0;
-  if (hmm->t[3][p7H_IM] != 1.0) esl_fatal(msg); hmm->t[3][p7H_IM] = 0.0;
-  if (hmm->t[4][p7H_MM] != 4.0) esl_fatal(msg); hmm->t[4][p7H_MM] = 0.0;
-  if (hmm->t[4][p7H_MD] != 1.0) esl_fatal(msg); hmm->t[4][p7H_MD] = 0.0;
-  if (hmm->t[4][p7H_DM] != 3.0) esl_fatal(msg); hmm->t[4][p7H_DM] = 0.0;
-  if (hmm->t[5][p7H_MM] != 4.0) esl_fatal(msg); hmm->t[5][p7H_MM] = 0.0;
-  if (hmm->t[5][p7H_MI] != 1.0) esl_fatal(msg); hmm->t[5][p7H_MI] = 0.0;
-  if (hmm->t[5][p7H_DD] != 1.0) esl_fatal(msg); hmm->t[5][p7H_DD] = 0.0;
-  if (hmm->t[6][p7H_MM] != 3.0) esl_fatal(msg); hmm->t[6][p7H_MM] = 0.0;
-  if (hmm->t[6][p7H_DM] != 1.0) esl_fatal(msg); hmm->t[6][p7H_DM] = 0.0;
+  /* check nonzero transitions, zero as we go. `if` last on line to appease --Wmisleading-indentation god */
+                            if (hmm->t[0][p7H_MM] != 3.0) esl_fatal(msg); 
+  hmm->t[0][p7H_MM] = 0.0;  if (hmm->t[0][p7H_MD] != 1.0) esl_fatal(msg); 
+  hmm->t[0][p7H_MD] = 0.0;  if (hmm->t[1][p7H_MM] != 4.0) esl_fatal(msg); 
+  hmm->t[1][p7H_MM] = 0.0;  if (hmm->t[1][p7H_DD] != 1.0) esl_fatal(msg); 
+  hmm->t[1][p7H_DD] = 0.0;  if (hmm->t[2][p7H_MM] != 7.0) esl_fatal(msg); 
+  hmm->t[2][p7H_MM] = 0.0;  if (hmm->t[2][p7H_DM] != 1.0) esl_fatal(msg); 
+  hmm->t[2][p7H_DM] = 0.0;  if (hmm->t[3][p7H_MM] != 4.0) esl_fatal(msg); 
+  hmm->t[3][p7H_MM] = 0.0;  if (hmm->t[3][p7H_MI] != 1.0) esl_fatal(msg); 
+  hmm->t[3][p7H_MI] = 0.0;  if (hmm->t[3][p7H_MD] != 3.0) esl_fatal(msg); 
+  hmm->t[3][p7H_MD] = 0.0;  if (hmm->t[3][p7H_IM] != 1.0) esl_fatal(msg); 
+  hmm->t[3][p7H_IM] = 0.0;  if (hmm->t[4][p7H_MM] != 4.0) esl_fatal(msg); 
+  hmm->t[4][p7H_MM] = 0.0;  if (hmm->t[4][p7H_MD] != 1.0) esl_fatal(msg); 
+  hmm->t[4][p7H_MD] = 0.0;  if (hmm->t[4][p7H_DM] != 3.0) esl_fatal(msg); 
+  hmm->t[4][p7H_DM] = 0.0;  if (hmm->t[5][p7H_MM] != 4.0) esl_fatal(msg); 
+  hmm->t[5][p7H_MM] = 0.0;  if (hmm->t[5][p7H_MI] != 1.0) esl_fatal(msg); 
+  hmm->t[5][p7H_MI] = 0.0;  if (hmm->t[5][p7H_DD] != 1.0) esl_fatal(msg); 
+  hmm->t[5][p7H_DD] = 0.0;  if (hmm->t[6][p7H_MM] != 3.0) esl_fatal(msg); 
+  hmm->t[6][p7H_MM] = 0.0;  if (hmm->t[6][p7H_DM] != 1.0) esl_fatal(msg); 
+  hmm->t[6][p7H_DM] = 0.0;
 
   /* now all counts should be zeroed */
   utest_check_counts_are_zero(hmm);
@@ -2480,10 +2481,3 @@ main(int argc, char **argv)
   return 0;
 }
 #endif /*p7TRACE_EXAMPLE*/
-
-
-
-/************************************************************
- * @LICENSE@
- ************************************************************/
-

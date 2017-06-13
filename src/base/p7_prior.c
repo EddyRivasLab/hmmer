@@ -1,6 +1,5 @@
 /* Mixture Dirichlet priors for profile HMMs.
  */
-
 #include "p7_config.h"
 
 #include "easel.h"
@@ -392,11 +391,3 @@ p7_ParameterEstimation(P7_HMM *hmm, const P7_PRIOR *pri)
   return eslOK;
 }
 
-
-
-/*****************************************************************
- * @LICENSE@
- * 
- * SVN $Id$
- * SVN $URL$
- *****************************************************************/

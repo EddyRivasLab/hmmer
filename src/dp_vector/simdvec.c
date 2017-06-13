@@ -1,45 +1,84 @@
 /* Processor-specific initialization of SIMD vector environment.
  * Called by p7_Init() whenever a new thread or process starts.
- * 
  */
-
 #include "p7_config.h"
-#include "easel.h"
-#include "base/general.h"
 
-#if p7_CPU_ARCH == intel
-#include <xmmintrin.h>    /* SSE  */
-#include <emmintrin.h>    /* SSE2 */
-#ifdef HAVE_PMMINTRIN_H
-#include <pmmintrin.h>   /* DENORMAL_MODE */
+#ifdef HAVE_FLUSH_ZERO_MODE
+#include <xmmintrin.h>    // x86 SSE 
 #endif
-#endif /* intel arch */
+#ifdef HAVE_DENORMALS_ZERO_MODE
+#include <pmmintrin.h>    // x86 SSE3 
+#endif
 
+#include "easel.h"
+#include "esl_cpu.h"
+
+#include "base/general.h"
 #include "dp_vector/simdvec.h"
 
 void
 p7_simdvec_Init(void)
 {
-  /* In order to avoid the performance penalty dealing with denormalized
-   * values in the floating point calculations, set the processor flag
-   * so denormals are "flushed" immediately to zero.
-   * This is the FTZ flag on an Intel CPU.
+  /* Turn off denormalized floating-point, if possible.  Vectorized
+   * prob-space Fwd/Bck filter underflows by design, and underflows
+   * are negligible. See notes in simdvec.md.
    */
 #ifdef HAVE_FLUSH_ZERO_MODE
   _MM_SET_FLUSH_ZERO_MODE(_MM_FLUSH_ZERO_ON);
 #endif  
-
-  /*
-   * FLUSH_ZERO doesn't necessarily work in non-SIMD calculations
-   * (yes on 64-bit, maybe not of 32-bit). This ensures that those
-   * scalar calculations will agree across architectures.
-   * (See TW notes  2012/0106_printf_underflow_bug/00NOTES for details)
-   * This is the DAZ flag on an Intel CPU.
-   */
-#ifdef HAVE_PMMINTRIN_H
+#ifdef HAVE_DENORMAL_ZERO_MODE
   _MM_SET_DENORMALS_ZERO_MODE(_MM_DENORMALS_ZERO_ON);
 #endif
 }
+
+
+/* Function:  p7_simdvec_Width()
+ * Synopsis:  Returns SIMD vector width, in bytes
+ * Incept:    SRE, Tue Feb 21 08:17:34 2017 [Bear McCreary]
+ *
+ * Purpose:   Returns the SIMD vector width, in bytes, for the vector
+ *            implementation that this process/thread is (or will be
+ *            using). Possible answers are 16 (SSE, NEON, VMX); 32
+ *            (AVX); 64 (AVX-512).
+ *            
+ *            Having this one function allows other code to be vector
+ *            ISA independent. For example, <p7_oprofile> routines
+ *            only need to know the vector width <V> to stripe data;
+ *            they don't need to know which ISA is being used.
+ */
+int
+p7_simdvec_Width(void)
+{
+  static int V = -1;  // decide once, and store the answer. This is threadsafe.
+
+  if (V == -1) 
+    {
+#ifdef eslENABLE_AVX512
+      if (esl_cpu_has_avx512()) { V =  64; goto DONE; }
+#endif
+#ifdef eslENABLE_AVX
+      if (esl_cpu_has_avx())    { V = 32;  goto DONE; }
+#endif
+#ifdef eslENABLE_SSE
+      if (esl_cpu_has_sse())    { V = 16;  goto DONE; }
+#endif
+#ifdef eslENABLE_NEON
+      V = 16; goto DONE;
+#endif
+#ifdef eslENABLE_VMX
+      V = 16; goto DONE;
+#endif
+    }
+
+ DONE:
+  if (V == -1) p7_Die("found no vector implementation - this shouldn't happen");
+  return V;
+}
+
+
+
+
+
 
 /*****************************************************************
  * NOTE:  The p7_restripe_foo routines have been written for 
@@ -186,9 +225,4 @@ extern void p7_restripe_float(float *source, float *dest, int length, int source
   }
 
 }
-/*****************************************************************
- * @LICENSE@
- *
- * SVN $Id$
- * SVN $URL$
- *****************************************************************/
+

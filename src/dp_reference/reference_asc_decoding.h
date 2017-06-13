@@ -18,9 +18,4 @@ extern int p7_ReferenceASCDecoding(const ESL_DSQ *dsq, int L, const P7_PROFILE *
 
 #endif /*p7REFERENCE_ASC_DECODING_INCLUDED*/
 
-/*****************************************************************
- * @LICENSE@
- * 
- * SVN $URL$
- * SVN $Id$
- *****************************************************************/
+

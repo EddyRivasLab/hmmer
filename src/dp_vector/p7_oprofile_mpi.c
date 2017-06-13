@@ -5,11 +5,10 @@
  *    2. Benchmark driver.
  *    3. Unit tests.
  *    4. Test driver.
- *    5. Copyright and license information.
  */
 #include "p7_config.h"		
-
 #ifdef HAVE_MPI
+
 #include <stdlib.h>
 #include <stdio.h>
 #include <string.h>
@@ -541,7 +540,7 @@ main(int argc, char **argv)
       if (p7_hmmfile_OpenE(hmmfile, NULL, &hfp, NULL) != eslOK) p7_Fail("Failed to open HMM file %s", hmmfile);
 
       esl_stopwatch_Start(w);
-      while (p7_oprofile_ReadMSV(hfp, &abc, &om)  == eslOK &&
+      while (p7_oprofile_ReadSSV(hfp, &abc, &om)  == eslOK &&
 	     p7_oprofile_ReadRest(hfp, om)       == eslOK)
 	{
 	  if (!esl_opt_GetBoolean(go, "-b"))
@@ -696,22 +695,12 @@ main(int argc, char **argv)
 /*---------------------- end, test driver -----------------------*/
 
 
-#else /*!HAVE_MPI*/
-/* If we don't have MPI compiled in, provide some nothingness to:
- *   a. prevent Mac OS/X ranlib from bitching about .o file that "has no symbols" 
- *   b. prevent compiler from bitching about "empty compilation unit"
- *   c. automatically pass the automated tests.
- */
-void p7_mpi_DoAbsolutelyNothing(void) { return; }
+#else // ! HAVE_MPI
+
+void p7_oprofile_mpi_silence_hack(void) { return; }
 
 #if defined p7OPROFILE_MPI_TESTDRIVE || p7OPROFILE_MPI_BENCHMARK || p7OPROFILE_MPI_EXAMPLE
 int main(void) { return 0; }
 #endif
-#endif /*HAVE_MPI*/
+#endif // HAVE_MPI or not
 
-/*****************************************************************
- * @LICENSE@
- *
- * SVN $Id$
- * SVN $URL$
- *****************************************************************/

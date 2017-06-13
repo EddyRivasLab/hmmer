@@ -4,7 +4,6 @@
  * Contents:
  *   1. Null2 calculation routine.
  *   2. Example
- *   3. Copyright and license information.
  */
 #include "p7_config.h"
 
@@ -576,13 +575,4 @@ main(int argc, char **argv)
 #endif /*p7SPARSE_NULL2_EXAMPLE*/
 /*---------------------- end, example ---------------------------*/
 
-
-/*****************************************************************
- * @LICENSE@
- * 
- * SVN $Id$
- * SVN $URL$
- *****************************************************************/
-
-  
 

@@ -10,7 +10,6 @@
  * Contents:
  *    1. P7_DOMAIN object (arrays of)
  *    2. Debugging and development tools
- *    3. Copyright and license information.
  */
 #include "p7_config.h"
 
@@ -132,12 +131,5 @@ p7_domain_Compare(const P7_DOMAIN *dcl1, const P7_DOMAIN *dcl2, float tol)
   return p7_alidisplay_Compare(dcl1->ad, dcl2->ad);
 }
 
-
-/*****************************************************************
- * @LICENSE@
- * 
- * SVN $Id$
- * SVN $URL$
- *****************************************************************/
 
 

@@ -4,7 +4,6 @@
  *   1. Sparse posterior decoding
  *   2. Unit tests
  *   3. Test driver
- *   4. Copyright and license information
  */
 #include "p7_config.h"
 
@@ -269,13 +268,11 @@ p7_SparseDecoding(const ESL_DSQ *dsq, int L, const P7_PROFILE *gm, const P7_SPAR
 static void
 utest_overwrite(ESL_RANDOMNESS *rng, ESL_ALPHABET *abc, P7_BG *bg, int M, int L)
 {
-  P7_HARDWARE *hw;
-  if ((hw = p7_hardware_Create ()) == NULL)  p7_Fail("Couldn't get HW information data structure"); 
   char           msg[] = "reference_decoding: overwrite unit test failed";
   ESL_SQ        *sq    = esl_sq_CreateDigital(abc);
   P7_HMM        *hmm   = NULL;
   P7_PROFILE    *gm    = p7_profile_Create(M, abc);
-  P7_OPROFILE   *om    = p7_oprofile_Create(M, abc, hw->simd);
+  P7_OPROFILE   *om    = p7_oprofile_Create(M, abc);
   P7_CHECKPTMX  *ox    = NULL;
   P7_SPARSEMASK *sm    = NULL;
   P7_SPARSEMX   *fwd   = p7_sparsemx_Create(NULL);
@@ -303,8 +300,8 @@ utest_overwrite(ESL_RANDOMNESS *rng, ESL_ALPHABET *abc, P7_BG *bg, int M, int L)
   if ( p7_oprofile_ReconfigLength(om, sq->n)  != eslOK)  esl_fatal(msg);
 
   /* F/B filter to calculate the sparse mask */
-  if ( (ox = p7_checkptmx_Create(gm->M, sq->n, ESL_MBYTES(32), hw->simd))          == NULL)  esl_fatal(msg);
-  if ( (sm = p7_sparsemask_Create(gm->M, sq->n, hw->simd))                         == NULL)  esl_fatal(msg);
+  if ( (ox = p7_checkptmx_Create(gm->M, sq->n, ESL_MBYTES(32)))          == NULL)  esl_fatal(msg);
+  if ( (sm = p7_sparsemask_Create(gm->M, sq->n))                         == NULL)  esl_fatal(msg);
   if ( p7_ForwardFilter (sq->dsq, sq->n, om, ox, /*fsc=*/NULL)           != eslOK) esl_fatal(msg);
   if ( p7_BackwardFilter(sq->dsq, sq->n, om, ox, sm, p7_SPARSIFY_THRESH) != eslOK) esl_fatal(msg);
 
@@ -340,15 +337,13 @@ utest_overwrite(ESL_RANDOMNESS *rng, ESL_ALPHABET *abc, P7_BG *bg, int M, int L)
 static void
 utest_rowsum(ESL_RANDOMNESS *rng, ESL_ALPHABET *abc, P7_BG *bg, int M, int L, int N)
 {
-  P7_HARDWARE *hw;
-  if ((hw = p7_hardware_Create ()) == NULL)  p7_Fail("Couldn't get HW information data structure"); 
   char           msg[] = "reference_decoding: rowsum unit test failed";
   ESL_SQ        *sq    = esl_sq_CreateDigital(abc);
   P7_HMM        *hmm   = NULL;
   P7_PROFILE    *gm    = p7_profile_Create(M, abc);
-  P7_OPROFILE   *om    = p7_oprofile_Create(M, abc, hw->simd);
-  P7_CHECKPTMX  *ox    = p7_checkptmx_Create(M, L, ESL_MBYTES(32), hw->simd);
-  P7_SPARSEMASK *sm    = p7_sparsemask_Create(M, L, hw->simd);
+  P7_OPROFILE   *om    = p7_oprofile_Create(M, abc);
+  P7_CHECKPTMX  *ox    = p7_checkptmx_Create(M, L, ESL_MBYTES(32));
+  P7_SPARSEMASK *sm    = p7_sparsemask_Create(M, L);
   P7_SPARSEMX   *sxf   = p7_sparsemx_Create(sm);
   P7_SPARSEMX   *sxb   = p7_sparsemx_Create(sm);
   P7_SPARSEMX   *sxd   = p7_sparsemx_Create(sm);
@@ -380,10 +375,9 @@ utest_rowsum(ESL_RANDOMNESS *rng, ESL_ALPHABET *abc, P7_BG *bg, int M, int L, in
       if ( p7_oprofile_ReconfigLength(om, sq->n)   != eslOK) esl_fatal(msg);
 
       /* F/B filter to calculate the sparse mask */
-      if ( p7_checkptmx_GrowTo (ox,  gm->M, sq->n)                           != eslOK) esl_fatal(msg);
-      if ( p7_sparsemask_Reinit(sm,  gm->M, sq->n)                           != eslOK) esl_fatal(msg);
+      if ( p7_checkptmx_Reinit (ox,  gm->M, sq->n)                           != eslOK) esl_fatal(msg);
       if ( p7_ForwardFilter (sq->dsq, sq->n, om, ox, /*fsc=*/NULL)           != eslOK) esl_fatal(msg);
-      if ( p7_BackwardFilter(sq->dsq, sq->n, om, ox, sm, p7_SPARSIFY_THRESH) != eslOK) esl_fatal(msg);
+      if ( p7_BackwardFilter(sq->dsq, sq->n, om, ox, sm, p7_SPARSIFY_THRESH) != eslOK) esl_fatal(msg); // sparse mask is _Reinit'ed here.
 
       /* F/B, then decode in place */
       if (p7_SparseForward (sq->dsq, sq->n, gm, sm, sxf, &fsc)     != eslOK) esl_fatal(msg);
@@ -414,7 +408,6 @@ utest_rowsum(ESL_RANDOMNESS *rng, ESL_ALPHABET *abc, P7_BG *bg, int M, int L, in
 	  }
 	}
       
-      p7_checkptmx_Reuse(ox);
       p7_sparsemask_Reuse(sm);
       p7_sparsemx_Reuse(sxf);
       p7_sparsemx_Reuse(sxb);
@@ -453,13 +446,11 @@ utest_rowsum(ESL_RANDOMNESS *rng, ESL_ALPHABET *abc, P7_BG *bg, int M, int L, in
 static void
 utest_approx_decoding(ESL_RANDOMNESS *rng, ESL_ALPHABET *abc, P7_BG *bg, int M, int L, int ntr)
 {
-  P7_HARDWARE *hw;
-  if ((hw = p7_hardware_Create ()) == NULL)  p7_Fail("Couldn't get HW information data structure"); 
   char           msg[]  = "sparse fwdback, approx-decoding unit test failed";
   P7_HMM        *hmm    = NULL;
   P7_PROFILE    *gm     = p7_profile_Create(M, abc);
   ESL_SQ        *sq     = esl_sq_CreateDigital(abc);       /* space for generated (homologous) target seqs              */
-  P7_OPROFILE   *om     = p7_oprofile_Create(M, abc, hw->simd);
+  P7_OPROFILE   *om     = p7_oprofile_Create(M, abc);
   P7_CHECKPTMX  *ox     = NULL;
   P7_TRACE      *tr     = NULL;
   P7_SPARSEMASK *sm     = NULL;
@@ -488,9 +479,9 @@ utest_approx_decoding(ESL_RANDOMNESS *rng, ESL_ALPHABET *abc, P7_BG *bg, int M, 
   if ( p7_oprofile_ReconfigLength(om, sq->n) != eslOK) esl_fatal(msg);
 
   /* Fwd/Bck local filter to calculate the sparse mask */
-  if (  (ox = p7_checkptmx_Create(M, sq->n, ESL_MBYTES(32), hw->simd))             == NULL)  esl_fatal(msg);
-  if (  (sm = p7_sparsemask_Create(M, sq->n, hw->simd))                            == NULL)  esl_fatal(msg);
-  if ( p7_checkptmx_GrowTo(ox, M, sq->n)                                 != eslOK) esl_fatal(msg);
+  if (  (ox = p7_checkptmx_Create(M, sq->n, ESL_MBYTES(32)))             == NULL)  esl_fatal(msg);
+  if (  (sm = p7_sparsemask_Create(M, sq->n))                            == NULL)  esl_fatal(msg);
+  if ( p7_checkptmx_Reinit(ox, M, sq->n)                                 != eslOK) esl_fatal(msg);
   if ( p7_ForwardFilter (sq->dsq, sq->n, om, ox, /*fsc=*/NULL)           != eslOK) esl_fatal(msg);
   if ( p7_BackwardFilter(sq->dsq, sq->n, om, ox, sm, p7_SPARSIFY_THRESH) != eslOK) esl_fatal(msg);
 
@@ -601,9 +592,3 @@ main(int argc, char **argv)
 #endif /*p7SPARSE_DECODING_TESTDRIVE*/
 /*------------------ end, test driver ---------------------------*/
 
-/*****************************************************************
- * @LICENSE@
- * 
- * SVN $URL$
- * SVN $Id$
- *****************************************************************/

@@ -1,11 +1,8 @@
 MODULE = sandbox
 
-LIBOBJS =  reference_mpl.o \
-           reference_mpl_fwd.o 
-
-LIBHDRS =  
-
-OBJS =
+OBJS = 
+#	reference_mpl.o     \  SRE REVISIT
+#	reference_mpl_fwd.o 
 
 HDRS =
 
@@ -20,7 +17,6 @@ BENCHMARKS =
 EXAMPLES = reference_mpl_example         \
 	   reference_mpl_fwd_example     
 
-LIBTMP = 
 
 top_srcdir   = @top_srcdir@
 top_builddir = @top_builddir@
@@ -30,10 +26,5 @@ SHELL        = /bin/sh
 
 include ../Makefile-subdirs.mk
 
-################################################################
-# @LICENSE@
-#
-# SVN $URL$
-# SVN $Id$
-################################################################
+
 

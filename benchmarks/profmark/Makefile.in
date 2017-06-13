@@ -15,7 +15,7 @@ libdir       = @libdir@
 includedir   = @includedir@
 
 CC           = @CC@
-CFLAGS       = @CFLAGS@ @PTHREAD_CFLAGS@ @PIC_FLAGS@
+CFLAGS       = @CFLAGS@ @PTHREAD_CFLAGS@ 
 #SIMDFLAGS    = @SIMD_CFLAGS@
 CPPFLAGS     = @CPPFLAGS@
 LDFLAGS      = @LDFLAGS@
@@ -59,7 +59,7 @@ all:    ${PROGS}
 .c.o: 
 	${QUIET_CC}${CC} ${CFLAGS} ${SIMDFLAGS} ${CPPFLAGS} ${DEFS} ${PTHREAD_CFLAGS} ${MYINCDIRS} -o $@ -c $<		
 
-${PROGS}: @EXEC_DEPENDENCY@  ${MYLIBDEPS}
+${PROGS}: % : %.o  ${MYLIBDEPS}
 	${QUIET_GEN}${CC} ${CFLAGS} ${SIMDFLAGS} ${DEFS} ${LDFLAGS} ${MYLIBDIRS} -o $@ $@.o ${MPILIBS} ${LIBS}
 
 distclean: clean
@@ -68,6 +68,9 @@ distclean: clean
 clean:
 	-rm -f *.o *~ ${PROGS} 
 	-rm -f *.gcno
+	${QUIET}for prog in ${PROGS} ${UTESTS} ${STATS} ${BENCHMARKS} ${EXAMPLES}; do \
+	   if test -d $$prog.dSYM; then rm -rf $$prog.dSYM; fi ;\
+	done
 
 tags-append:
 	etags -o ${top_srcdir}/TAGS -a ${srcdir}/x-*
@@ -75,10 +78,5 @@ tags-append:
 	etags -o ${top_srcdir}/TAGS -a ${srcdir}/*.c
 	etags -o ${top_srcdir}/TAGS -a ${srcdir}/*.in
 
-################################################################
-# @LICENSE@
-# 
-# SVN $URL$
-# SVN $Id$
-################################################################
+
 

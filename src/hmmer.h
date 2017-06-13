@@ -59,8 +59,7 @@
 #include "dp_vector/p7_oprofile_mpi.h"     /*              :  ... add-on: MPI communication                               */
 #include "dp_vector/p7_filtermx.h"	   /* P7_FILTERMX  : a one-row O(M) memory DP matrix for SSV, MSV, VF             */
 #include "dp_vector/p7_checkptmx.h"	   /* P7_CHECKPTMX : checkpointed O(M sqrt(L)) memory DP for F/B/Decode           */
-#include "dp_vector/ssvfilter.h"           /* "single segment ungapped Viterbi" filter, from Bjarne Knudsen               */
-#include "dp_vector/msvfilter.h"	   /* "multiple seqment ungapped Viterbi" filter                                  */
+#include "dp_vector/ssvfilter.h"           /* SSV filter                                                                  */
 #include "dp_vector/vitfilter.h"	   /* Viterbi filter                                                              */
 #include "dp_vector/fwdfilter.h"	   /* Checkpointed Forward/Backward/posterior decoding filter                     */
 #include "dp_vector/io.h"		   /* Reading/writing P7_OPROFILEs to files                                       */
@@ -106,9 +105,4 @@
 
 
 
-/*****************************************************************
- * @LICENSE@
- *
- * SVN $Id$
- * SVN $URL$
- *****************************************************************/
+

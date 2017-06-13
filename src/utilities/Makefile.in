@@ -1,18 +1,14 @@
 MODULE = utilities
 
+OBJS =
+
+HDRS =
+
 PROGS =  alimask    \
 	 hmmconvert \
 	 hmmfetch   \
 	 hmmlogo    \
 	 hmmstat 
-
-LIBOBJS = 
-
-LIBHDRS = 
-
-OBJS =
-
-HDRS =
 
 UTESTS = 
 
@@ -22,8 +18,6 @@ BENCHMARKS =
 
 EXAMPLES =
 
-LIBTMP =
-
 top_srcdir   = @top_srcdir@
 top_builddir = @top_builddir@
 srcdir       = @srcdir@
@@ -32,10 +26,5 @@ SHELL        = /bin/sh
 
 include ../Makefile-subdirs.mk
 
-################################################################
-# @LICENSE@
-#
-# SVN $URL$
-# SVN $Id$
-################################################################
+
 

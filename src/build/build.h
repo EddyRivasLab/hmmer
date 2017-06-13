@@ -15,9 +15,4 @@ extern int p7_Handmodelmaker(ESL_MSA *msa,                P7_BUILDER *bld, P7_HM
 extern int p7_Fastmodelmaker(ESL_MSA *msa, float symfrac, P7_BUILDER *bld, P7_HMM **ret_hmm, P7_TRACE ***ret_tr);
 
 #endif /*p7BUILD_INCLUDED*/
-/*****************************************************************
- * @LICENSE@
- * 
- * SVN $Id$
- * SVN $URL$
- *****************************************************************/
+

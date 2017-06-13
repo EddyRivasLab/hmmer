@@ -40,9 +40,4 @@ extern int               p7_trace_metrics_Dump(FILE *ofp, P7_TRACE_METRICS *tm);
 
 
 #endif /*p7TRACE_METRICS_INCLUDED*/
-/*****************************************************************
- * @LICENSE@
- * 
- * SVN $Id$
- * SVN $URL$
- *****************************************************************/
+

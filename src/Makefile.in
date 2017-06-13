@@ -1,15 +1,15 @@
-SUBDIRS = base\
-	  build\
-          daemon\
-          dp_reference\
-	  dp_sparse\
-	  dp_vector\
-	  misc\
-	  sandbox \
-          search\
-	  programs \
-          utilities \
-          hardware\
+SUBDIRS = base         \
+	  build        \
+          daemon       \
+          dp_reference \
+	  dp_sparse    \
+	  dp_vector    \
+	  misc         \
+	  sandbox      \
+          search       \
+	  programs     \
+          utilities    \
+          hardware     \
 	  experiments
 
 HDRS =  
@@ -51,7 +51,7 @@ man1dir     = ${mandir}/man1
 man1ext     = .1
 
 CC        = @CC@
-CFLAGS    = @CFLAGS@ @PTHREAD_CFLAGS@ @PIC_FLAGS@
+CFLAGS    = @CFLAGS@ @PTHREAD_CFLAGS@
 SIMDFLAGS = @SIMD_CFLAGS@
 CPPFLAGS  = @CPPFLAGS@
 LDFLAGS   = @LDFLAGS@
@@ -160,9 +160,4 @@ tags-append:
 	etags -o ${top_srcdir}/TAGS -a ${srcdir}/*.h ${srcdir}/*.in
 
 
-################################################################
-# @LICENSE@
-#
-# SVN $URL$
-# SVN $Id$
-################################################################
+

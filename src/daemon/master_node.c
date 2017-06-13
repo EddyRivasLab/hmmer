@@ -394,7 +394,10 @@ void master_node_main(int argc, char ** argv, MPI_Datatype *daemon_mpitypes){
     ESL_RED_BLACK_DOUBLEKEY *old_tree = masternode->hit_tree;
     p7_print_and_recycle_hit_tree(outfile_name, old_tree, masternode);
     gettimeofday(&end, NULL);
-    printf("%s, %f\n", hmm->name, ((float)((end.tv_sec * 1000000 + (end.tv_usec)) - (start.tv_sec * 1000000 + start.tv_usec)))/1000000.0);
+    double ncells = (double) hmm->M * (double) database_shard->total_length;
+    double elapsed_time = ((double)((end.tv_sec * 1000000 + (end.tv_usec)) - (start.tv_sec * 1000000 + start.tv_usec)))/1000000.0;
+    double gcups = (ncells/elapsed_time) / 1.0e9;
+    printf("%s, %lf, %d, %lf\n", hmm->name, elapsed_time, hmm->M, gcups);
     char commandstring[255];
 //    printf("Masternode received %d hit messages\n", masternode->hit_messages_received);
 #ifdef __NICK_CHECK_OUTPUT

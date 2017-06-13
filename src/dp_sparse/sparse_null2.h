@@ -16,9 +16,4 @@ extern int p7_sparse_Null2ByExpectation(const P7_PROFILE *gm, const P7_SPARSEMX 
 					float *wrk, float *null2);
 
 #endif /*p7SPARSE_NULL2_INCLUDED*/
-/*****************************************************************
- * @LICENSE@
- * 
- * SVN $Id$
- * SVN $URL$
- *****************************************************************/
+

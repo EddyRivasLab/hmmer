@@ -49,10 +49,6 @@ P7_SHARD *p7_shard_Create_hmmfile(char *filename, uint32_t num_shards, uint32_t 
     P7_HMM         *hmm     = NULL;
     P7_PROFILE     *gm      = NULL;
     P7_OPROFILE    *om      = NULL;
-  P7_HARDWARE *hw =  p7_hardware_Create();
-  if(hw == NULL){
-    p7_Fail("Unable to allocate memory in p7_shard_Create_hmmfile");
-  }
 
   if (p7_hmmfile_OpenE(filename, NULL, &hfp, NULL) != eslOK) p7_Fail("Failed to open HMM file %s", filename);
 
@@ -68,7 +64,7 @@ P7_SHARD *p7_shard_Create_hmmfile(char *filename, uint32_t num_shards, uint32_t 
         p7_Fail("Unable to allocate memory in p7_shard_Create_hmmfile");
       }
 
-      om = p7_oprofile_Create(hmm->M, abc, hw->simd);
+      om = p7_oprofile_Create(hmm->M, abc);
       if(om == NULL){
         p7_Fail("Unable to allocate memory in p7_shard_Create_hmmfile");
       }
@@ -120,7 +116,7 @@ P7_SHARD *p7_shard_Create_hmmfile(char *filename, uint32_t num_shards, uint32_t 
   // Shard is built, set some final values and return it
   the_shard->num_objects = num_hmms;
   // Clean up
-  free(hw);
+
   p7_hmmfile_Close(hfp);
 
   return(the_shard);
@@ -179,6 +175,8 @@ P7_SHARD *p7_shard_Create_dsqdata(char *basename, uint32_t num_shards, uint32_t 
   }
 
   the_shard->abc = abc;  // save the alphabet in the shard so we can free it when done
+  the_shard->total_length = 0; // start out empty
+
   // Figure out how many sequences should be in the shard when we're done
   the_shard->num_objects = dd->nseq / num_shards;
   if (my_shard < (dd->nseq % num_shards)){
@@ -219,6 +217,7 @@ P7_SHARD *p7_shard_Create_dsqdata(char *basename, uint32_t num_shards, uint32_t 
             the_shard->directory[my_sequences].id = sequence_count;
             the_shard->directory[my_sequences].contents_offset = contents_offset;
             the_shard->directory[my_sequences].descriptor_offset = descriptors_offset;
+            the_shard->total_length += chu->L[i]; //add this sequence to the total length in the shard
 
             while(contents_offset + (2*sizeof(int64_t)) + chu->L[i]  +2 > contents_buffer_size){
               // +2 for begin-of-sequence and end-of-sequence sentinels around dsq
@@ -280,6 +279,8 @@ P7_SHARD *p7_shard_Create_dsqdata(char *basename, uint32_t num_shards, uint32_t 
   if (my_sequences != the_shard->num_objects){
     p7_Fail("Mis-match between expected sequence count of %d and actual sequence count of %d in p7_shard_Create_dsqdata", the_shard->num_objects, my_sequences);
   }
+  
+
 
   if (contents_offset < contents_buffer_size){
     // We've allocated too much space, shrink the buffer to the minimum
@@ -289,6 +290,7 @@ P7_SHARD *p7_shard_Create_dsqdata(char *basename, uint32_t num_shards, uint32_t 
     // We've allocated too much space, shrink the buffer to the minimum
     ESL_REALLOC(the_shard->descriptors, descriptors_offset);
   }
+
   esl_dsqdata_Close(dd);
   return(the_shard);
 
@@ -646,9 +648,10 @@ int shard_compare_dsqdata(P7_SHARD *the_shard, char *basename, uint32_t num_shar
   ESL_DSQDATA    *dd      = NULL;
 
   int status, i;
+  ESL_ALPHABET *abc = NULL;
   // pass NULL to the byp_alphabet input of esl_dsqdata_Open to have it get its alphabet from the dsqdata files
   // only configure for one reader thread
-  status = esl_dsqdata_Open(NULL, basename, 1, &dd);
+  status = esl_dsqdata_Open(&abc, basename, 1, &dd);
   if(status != eslOK){
     p7_Fail("Unable to open dsqdata database %s\n", basename);
   }
@@ -797,7 +800,7 @@ main(int argc, char **argv)
 {
   ESL_GETOPTS    *go   = p7_CreateDefaultApp(options, 1, argc, argv, banner, usage);
   char  *dsqfile = esl_opt_GetArg(go, 1);
-
+  ESL_ALPHABET   *abc     = NULL;
   //First, test creating a single shard from a database
   P7_SHARD *shard1 = p7_shard_Create_dsqdata(dsqfile, 1, 0);
   int status;
@@ -807,7 +810,7 @@ main(int argc, char **argv)
 
   // pass NULL to the byp_alphabet input of esl_dsqdata_Open to have it get its alphabet from the dsqdata files
   // only configure for one reader thread
-  status = esl_dsqdata_Open(NULL, dsqfile, 1, &dd);
+  status = esl_dsqdata_Open(&abc, dsqfile, 1, &dd);
   if(status != eslOK){
     p7_Fail("Unable to open dsqdata database %s\n", dsqfile);
   }
@@ -817,14 +820,14 @@ main(int argc, char **argv)
 
       // now, test shards that are only a fraction of the database
       int i;
-      for(i= 0; i < 15; i++){
-        shard1 = shard1 = p7_shard_Create_dsqdata(dsqfile, 15, i);
-        status = esl_dsqdata_Open(NULL, dsqfile, 1, &dd);
+      for(i= 0; i < 2; i++){
+        shard1 = p7_shard_Create_dsqdata(dsqfile, 2, i);
+        status = esl_dsqdata_Open(&abc, dsqfile, 1, &dd);
     if(status != eslOK){
       p7_Fail("Unable to open dsqdata database %s\n", dsqfile);
     }
 
-        status = shard_compare_dsqdata(shard1, dsqfile, 15, i);
+        status = shard_compare_dsqdata(shard1, dsqfile, 2, i);
         p7_shard_Destroy(shard1);
       }
 
@@ -854,7 +857,6 @@ main(int argc, char **argv)
     P7_HMM         *hmm     = NULL;
     P7_PROFILE     *gm      = NULL;
     P7_OPROFILE    *om      = NULL;
-  P7_HARDWARE *hw =  p7_hardware_Create();
 
   // make a shard out of the hmm file
   P7_SHARD *shard1 = p7_shard_Create_hmmfile(hmmfile, 1, 0);
@@ -871,7 +873,7 @@ main(int argc, char **argv)
     // First, create all of the standard data structures that define the HMM
     bg = p7_bg_Create(abc);
     gm = p7_profile_Create (hmm->M, abc);
-    om = p7_oprofile_Create(hmm->M, abc, hw->simd);
+    om = p7_oprofile_Create(hmm->M, abc);
       p7_profile_Config   (gm, hmm, bg);
       p7_oprofile_Convert (gm, om);
 

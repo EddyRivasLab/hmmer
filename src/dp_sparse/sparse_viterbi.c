@@ -1,8 +1,4 @@
 /* Sparse dynamic programming: Viterbi implementation.
- * 
- * Contents:
- *   1. Sparse Viterbi
- *   2. Copyright and license information
  */
 #include "p7_config.h"
 
@@ -172,11 +168,3 @@ p7_SparseViterbi(const ESL_DSQ *dsq, int L, const P7_PROFILE *gm, const P7_SPARS
   else                              return eslOK;
 }
 /*-------------------- end, Viterbi -----------------------------*/
-
-
-/*****************************************************************
- * @LICENSE@
- * 
- * SVN $Id$
- * SVN $URL$
- *****************************************************************/

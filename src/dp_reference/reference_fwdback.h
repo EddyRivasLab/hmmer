@@ -14,9 +14,4 @@ extern int p7_ReferenceForward (const ESL_DSQ *dsq, int L, const P7_PROFILE *gm,
 extern int p7_ReferenceBackward(const ESL_DSQ *dsq, int L, const P7_PROFILE *gm, P7_REFMX *rmx, float *opt_sc);
 
 #endif /* p7REFERENCE_FWDBACK_INCLUDED */
-/*****************************************************************
- * @LICENSE@
- * 
- * SVN $URL$
- * SVN $Id$
- *****************************************************************/
+

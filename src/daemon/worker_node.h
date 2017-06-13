@@ -72,7 +72,6 @@ typedef enum p7_search_type{IDLE, SEQUENCE_SEARCH, SEQUENCE_SEARCH_CONTINUE, HMM
 
 //! Structure that holds the state required to manage a worker node
 typedef struct p7_daemon_workernode_state{
-	P7_HARDWARE *hw;  // Information about the machine we're running on
 	// static information about the worker node.  Shouldn't change after initialization
 
 	uint32_t my_rank;

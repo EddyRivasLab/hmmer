@@ -44,7 +44,7 @@ typedef struct p7_pipeline_stats_s {
   uint64_t      nseqs;	        /* # of sequences searched                  */
   uint64_t      nres;	        /* # of residues searched                   */
   uint64_t      nnodes;	        /* # of model nodes searched                */
-  uint64_t      n_past_msv;	/* # comparisons that pass MSVFilter()      */
+  uint64_t      n_past_ssv;	/* # comparisons that pass MSVFilter()      */
   uint64_t      n_past_bias;	/* # comparisons that pass bias filter      */
   uint64_t      n_past_vit;	/* # comparisons that pass ViterbiFilter()  */
   uint64_t      n_past_fwd;	/* # comparisons that pass ForwardFilter()  */
@@ -131,7 +131,7 @@ typedef struct p7_pipeline_s {
 
 
 
-extern P7_PIPELINE *p7_pipeline_Create(ESL_GETOPTS *go, int M_hint, int L_hint, int do_longtargets, enum p7_pipemodes_e mode, SIMD_TYPE simd);
+extern P7_PIPELINE *p7_pipeline_Create(ESL_GETOPTS *go, int M_hint, int L_hint, int do_longtargets, enum p7_pipemodes_e mode);
 extern int          p7_pipeline_Reuse  (P7_PIPELINE *pli);
 extern void         p7_pipeline_Destroy(P7_PIPELINE *pli);
 
@@ -155,9 +155,4 @@ extern int p7_pipeline_AccelerationFilter(ESL_DSQ *dsq, int L, P7_OPROFILE *om, 
 					  P7_FILTERMX *fx, P7_CHECKPTMX *cx, P7_SPARSEMASK *sm);
 
 #endif /*p7PIPELINE_INCLUDED*/
-/*****************************************************************
- * @LICENSE@
- * 
- * SVN $Id$
- * SVN $URL$
- *****************************************************************/
+

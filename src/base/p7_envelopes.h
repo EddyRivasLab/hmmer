@@ -73,9 +73,3 @@ extern int p7_envelopes_Dump(FILE *ofp, P7_ENVELOPES *env);
 
 
 #endif /*p7ENVELOPES_INCLUDED*/
-/*****************************************************************
- * @LICENSE@
- * 
- * SVN $Id$
- * SVN $URL$
- *****************************************************************/
