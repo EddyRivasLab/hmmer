@@ -12,8 +12,8 @@ HDRS =
 
 PROGS =
 
-UTESTS =  modelconfig_utest \
-	  p7_pipeline_mpi_utest
+UTESTS =  modelconfig_utest 
+#	  p7_pipeline_mpi_utest   NPCARTER deleted because depends on p7_pipeline.o
 
 STATS  =  
 

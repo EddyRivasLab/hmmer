@@ -15,7 +15,7 @@
 #include "base/p7_bg.h"
 #include "base/p7_envelopes.h"
 #include "base/p7_trace.h"
-
+#include "daemon/p7_hitlist.h" //  This probably wants to move somewhere else once we figure out how command-line search will work
 #include "dp_vector/p7_checkptmx.h"
 #include "dp_vector/p7_filtermx.h"
 #include "dp_vector/p7_oprofile.h"

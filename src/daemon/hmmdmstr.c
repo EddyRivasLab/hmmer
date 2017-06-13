@@ -297,11 +297,12 @@ process_search(WORKERSIDE_ARGS *args, QUEUE_DATA *query)
   int inx;
   int rem;
   int tries;
-
+  struct timeval start_time, compute_time, gather_time, forward_time;
   memset(&results, 0, sizeof(SEARCH_RESULTS)); /* avoid valgrind bitching about uninit bytes; remove, if we ever serialize structs properly */
 
   w = esl_stopwatch_Create();
   esl_stopwatch_Start(w);
+  gettimeofday(&start_time, NULL);
 
   /* figure out the size of the database we are searching */
   inx = 0;
@@ -361,9 +362,11 @@ process_search(WORKERSIDE_ARGS *args, QUEUE_DATA *query)
 
       if ((n = pthread_mutex_unlock (&args->work_mutex)) != 0) LOG_FATAL_MSG("mutex unlock", n);
     }
+    gettimeofday(&compute_time, NULL);
 
     /* gather up the results from all the workers */
     gather_results(query, args, &results);
+    gettimeofday(&gather_time, NULL);
 
     /* we can recover from one worker crashing.  get the block that worker ran on
      * and redistribute its load to all the remaining workers.
@@ -390,8 +393,15 @@ process_search(WORKERSIDE_ARGS *args, QUEUE_DATA *query)
   } else {
     forward_results(query, &results);
   }
+  gettimeofday(&forward_time, NULL);
 
   esl_stopwatch_Destroy(w);
+  double start_milliseconds = start_time.tv_usec + (1000000 * start_time.tv_sec);
+  double compute_milliseconds = compute_time.tv_usec + (1000000 * compute_time.tv_sec); // convert merge_time to seconds
+  double gather_milliseconds = gather_time.tv_usec + (1000000 * gather_time.tv_sec); // convert sort_time to seconds
+  double forward_milliseconds = forward_time.tv_usec + (1000000 * forward_time.tv_sec); // convert thresh_time to seconds
+
+  printf("Compute time = %lf, gather time = %lf, forward time = %lf\n",(compute_milliseconds - start_milliseconds)/1000000, (gather_milliseconds - compute_milliseconds)/1000000, (forward_milliseconds - gather_milliseconds)/100000);
 }
 
 static void
@@ -892,13 +902,14 @@ forward_results(QUEUE_DATA *query, SEARCH_RESULTS *results)
   int i, j;
   int n;
   enum p7_pipemodes_e mode;
-
+  struct timeval start_time, merge_time, sort_time, send_time, thresh_time;
   fd    = query->sock;
   list  = results->hits;
-
+  
   if (query->cmd_type == HMMD_CMD_SEARCH) mode = p7_SEARCH_SEQS;
   else                                    mode = p7_SCAN_MODELS;
-    
+   
+  gettimeofday(&start_time, NULL);  
   /* sort the hits and apply score and E-value thresholds */
   if (results->nhits > 0) {
     P7_HIT *h1;
@@ -924,8 +935,10 @@ forward_results(QUEUE_DATA *query, SEARCH_RESULTS *results)
       memcpy(hits + offset, list[i].hit, sizeof(P7_HIT) * list[i].count);
       offset += list[i].count;
     }
+    gettimeofday(&merge_time, NULL);
 
     qsort(hits, results->stats.nhits, sizeof(P7_HIT), hit_sorter);
+ gettimeofday(&sort_time, NULL);
 
     th.unsrt     = NULL;
     th.N         = results->stats.nhits;
@@ -956,6 +969,7 @@ forward_results(QUEUE_DATA *query, SEARCH_RESULTS *results)
 
     for (i = 0; i < th.N; ++i) th.hit[i] = hits + i;
     p7_tophits_Threshold(&th, pli);
+ gettimeofday(&thresh_time, NULL);
 
     /* after the top hits thresholds are checked, the number of sequences
      * and domains to be reported can change. */
@@ -1023,10 +1037,18 @@ forward_results(QUEUE_DATA *query, SEARCH_RESULTS *results)
       }
     }
   }
-
+ gettimeofday(&send_time, NULL);
   printf("Results for %s (%d) sent %" PRId64 " bytes\n", query->ip_addr, fd, results->status.msg_size);
   printf("Hits:%"PRId64 "  reported:%" PRId64 "  included:%"PRId64 "\n", results->stats.nhits, results->stats.nreported, results->stats.nincluded);
   fflush(stdout);
+
+
+  double start_milliseconds = start_time.tv_usec + (1000000 * start_time.tv_sec);
+  double merge_milliseconds = merge_time.tv_usec + (1000000 * merge_time.tv_sec); // convert merge_time to seconds
+  double sort_milliseconds = sort_time.tv_usec + (1000000 * sort_time.tv_sec); // convert sort_time to seconds
+  double thresh_milliseconds = thresh_time.tv_usec + (1000000 * thresh_time.tv_sec); // convert thresh_time to seconds
+  double send_milliseconds = send_time.tv_usec + (1000000 * send_time.tv_sec); // convert send/_time to seconds
+  printf("Merge time = %lf, sort time = %lf, threshold time = %lf, send time = %lf\n",(merge_milliseconds - start_milliseconds)/1000000, (sort_milliseconds - merge_milliseconds)/1000000, (thresh_milliseconds - sort_milliseconds)/1000000, (send_milliseconds - thresh_milliseconds)/1000000);
 
  CLEAR:
   /* free all the data */
@@ -1043,6 +1065,7 @@ forward_results(QUEUE_DATA *query, SEARCH_RESULTS *results)
   if (dcl)  free(dcl);
 
   init_results(results);
+  printf("Leaving forward_results\n");
 }
 
 static void

@@ -99,10 +99,10 @@ ${VMX_EXAMPLES}:      SIMD_CFLAGS:= $(VMX_CFLAGS)
 .PHONY: all dev check tests install uninstall distclean clean tags-append
 .FORCE:
 
-all:   libhmmer-${MODULE}.stamp ${LIBTMPDEP} ${PROGS}
-dev:   libhmmer-${MODULE}.stamp ${LIBTMPDEP} ${PROGS} ${UTESTS} ${STATS} ${BENCHMARKS} ${EXAMPLES}
-check: libhmmer-${MODULE}.stamp ${LIBTMPDEP} ${PROGS} ${UTESTS}
-tests: libhmmer-${MODULE}.stamp ${LIBTMPDEP} ${PROGS} ${UTESTS}
+all:   libhmmer-${MODULE}.stamp ${LIBTMPDEP} ${PROGS} ${MPIPROGS}
+dev:   libhmmer-${MODULE}.stamp ${LIBTMPDEP} ${PROGS} ${MPIPROGS} ${UTESTS} ${STATS} ${BENCHMARKS} ${EXAMPLES}
+check: libhmmer-${MODULE}.stamp ${LIBTMPDEP} ${PROGS} ${MPIPROGS} ${UTESTS}
+tests: libhmmer-${MODULE}.stamp ${LIBTMPDEP} ${PROGS} ${MPIPROGS} ${UTESTS}
 
 # In some subdirs, ${ALL_OBJS} may be empty. We can't give an empty arg string to 'ar'.
 # Hence the ! -z shell test on ${ALL_OBJS} below.
@@ -131,7 +131,6 @@ lib${MODULE}.a: ${OBJS}
 	${QUIET_AR}${AR} -r lib${MODULE}.a $? > /dev/null 2>&1 
 	@${RANLIB} lib${MODULE}.a 
 
-
 # "Object" code is included in libhmmer.a.
 ${ALL_OBJS}:  %.o : %.c ${HDRS} 
 	${QUIET_CC}${CC} ${CFLAGS} ${SIMD_CFLAGS} ${PTHREAD_CFLAGS} ${CPPFLAGS} ${DEFS} ${MYINCDIRS} -c $<
@@ -141,8 +140,9 @@ ${PROGS}: % : %.c  libhmmer-${MODULE}.stamp ${MYLIBDEPS}
 	${QUIET_GEN}${CC} ${CFLAGS} ${SIMD_CFLAGS} ${PTHREAD_CFLAGS} ${CPPFLAGS} ${DEFS} ${MYINCDIRS} ${LDFLAGS} ${MYLIBDIRS} -o $@ $< ${LIBS}
 
 ${ALL_UTESTS}: libhmmer-${MODULE}.stamp ${MYLIBDEPS}
-	@BASENAME=`echo $@ | sed -e 's/_utest//'| sed -e 's/^p7_//'` ;\
-	DFLAG=`echo $${BASENAME} | sed -e 'y/abcdefghijklmnopqrstuvwxyz/ABCDEFGHIJKLMNOPQRSTUVWXYZ/'`;\
+	@BASENAME=`echo $@ | sed -e 's/_utest[0-9]*//'| sed -e 's/^p7_//'` ;\
+	FLAGNAME=`echo $@ | sed -e 's/_utest//'| sed -e 's/^p7_//'` ;\
+    DFLAG=`echo $${FLAGNAME} | sed -e 'y/abcdefghijklmnopqrstuvwxyz/ABCDEFGHIJKLMNOPQRSTUVWXYZ/'`;\
 	DFLAG=p7$${DFLAG}_TESTDRIVE ;\
 	if test -e ${srcdir}/p7_$${BASENAME}.c; then \
            DFILE=${srcdir}/p7_$${BASENAME}.c ;\

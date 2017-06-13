@@ -1,22 +1,16 @@
 MODULE = daemon
 
-OBJS =  
-#	cachedb.o     \    SRE REVISIT
-#	hmmdmstr.o    \
-#	hmmdutils.o   \
-#	hmmdwrkr.o    \
-#	hmmpgmd2msa.o \
-#	p7_hmmcache.o \
-#	hmmc2.o       \
-#	hmmpgmd.o     \
+OBJS = worker_node.o \
+	master_node.o \
+	shard.o \
+	p7_hitlist.o
 
 HDRS =  
 
-PROGS = 
-#	hmmc2\   SRE REVISIT
-#	hmmpgmd  
+PROGS = hmmpgmd2
 
-UTESTS = 
+UTESTS = shard_utest \
+	shard_utest2 
 
 STATS  = 
 

@@ -638,7 +638,7 @@ typedef struct {
  * MPI workers.  If multiple hmm's are in the query file, the
  * blocks are reused without parsing the database a second time.
  */
-int next_block(P7_HMMFILE *hfp, BLOCK_LIST *list, MSV_BLOCK *block)
+int next_block(P7_HMMFILE *hfp, BLOCK_LIST *list, MSV_BLOCK *block, P7_HARDWARE *hw)
 {
   P7_OPROFILE   *om       = NULL;
   ESL_ALPHABET  *abc      = NULL;
@@ -674,6 +674,7 @@ int next_block(P7_HMMFILE *hfp, BLOCK_LIST *list, MSV_BLOCK *block)
   block->count = 0;
 
   while (block->length < MAX_BLOCK_SIZE && (status = p7_oprofile_ReadInfoSSV(hfp, &abc, &om)) == eslOK)
+
     {
       if (block->count == 0) block->offset = om->roff;
       block->length = om->eoff - block->offset + 1;
@@ -767,7 +768,10 @@ mpi_master(ESL_GETOPTS *go, struct cfg_s *cfg)
     seqfmt = esl_sqio_EncodeFormat(esl_opt_GetString(go, "--qformat"));
     if (seqfmt == eslSQFILE_UNKNOWN) mpi_failure("%s is not a recognized input sequence file format\n", esl_opt_GetString(go, "--qformat"));
   }
-
+  
+  P7_HARDWARE *hw;  // get information about CPU
+  if ((hw = p7_hardware_Create ()) == NULL)  p7_Fail("Couldn't get HW information data structure"); 
+  
   /* Open the target profile database to get the sequence alphabet */
   status = p7_hmmfile_OpenE(cfg->hmmfile, p7_HMMDBENV, &hfp, errbuf);
   if      (status == eslENOTFOUND) mpi_failure("File existence/permissions problem in trying to open HMM file %s.\n%s\n", cfg->hmmfile, errbuf);
@@ -775,7 +779,9 @@ mpi_master(ESL_GETOPTS *go, struct cfg_s *cfg)
   else if (status != eslOK)        mpi_failure("Unexpected error %d in opening HMM file %s.\n%s\n",               status, cfg->hmmfile, errbuf);  
   if (! hfp->is_pressed)           mpi_failure("Failed to open binary auxfiles for %s: use hmmpress first\n",             hfp->fname);
   
+
   hstatus = p7_oprofile_ReadSSV(hfp, &abc, &om);
+
   if      (hstatus == eslEFORMAT)   mpi_failure("bad format, binary auxfiles, %s",            cfg->hmmfile);
   else if (hstatus == eslEINCOMPAT) mpi_failure("HMM file %s contains different alphabets",   cfg->hmmfile);
   else if (hstatus != eslOK)        mpi_failure("Unexpected error in reading HMMs from %s",   cfg->hmmfile); 
@@ -832,13 +838,13 @@ mpi_master(ESL_GETOPTS *go, struct cfg_s *cfg)
 
       /* Create processing pipeline and hit list */
       th  = p7_tophits_Create(p7_TOPHITS_DEFAULT_INIT_ALLOC); 
-      pli = p7_pipeline_Create(go, 100, 100, FALSE, p7_SCAN_MODELS); /* M_hint = 100, L_hint = 100 are just dummies for now */
+      pli = p7_pipeline_Create(go, 100, 100, FALSE, p7_SCAN_MODELS, hw->simd); /* M_hint = 100, L_hint = 100 are just dummies for now */
       pli->hfp = hfp;  /* for two-stage input, pipeline needs <hfp> */
 
       p7_pipeline_NewSeq(pli, qsq);
 
       /* Main loop: */
-      while ((hstatus = next_block(hfp, list, &block)) == eslOK)
+      while ((hstatus = next_block(hfp, list, &block, hw)) == eslOK)
 	{
 	  if (MPI_Probe(MPI_ANY_SOURCE, MPI_ANY_TAG, MPI_COMM_WORLD, &mpistatus) != 0) 
 	    mpi_failure("MPI error %d receiving message from %d\n", mpistatus.MPI_SOURCE);
@@ -1026,7 +1032,9 @@ mpi_worker(ESL_GETOPTS *go, struct cfg_s *cfg)
   else if (status != eslOK)        mpi_failure("Unexpected error %d in opening HMM file %s.\n%s\n",               status, cfg->hmmfile, errbuf);  
   if (! hfp->is_pressed)           mpi_failure("Failed to open binary dbs for HMM file %s: use hmmpress first\n",         hfp->fname);
 
+
   hstatus = p7_oprofile_ReadSSV(hfp, &abc, &om);
+
   if      (hstatus == eslEFORMAT)   mpi_failure("bad file format in HMM file %s",             cfg->hmmfile);
   else if (hstatus == eslEINCOMPAT) mpi_failure("HMM file %s contains different alphabets",   cfg->hmmfile);
   else if (hstatus != eslOK)        mpi_failure("Unexpected error in reading HMMs from %s",   cfg->hmmfile); 
@@ -1063,7 +1071,7 @@ mpi_worker(ESL_GETOPTS *go, struct cfg_s *cfg)
   
       /* Create processing pipeline and hit list */
       th  = p7_tophits_Create(p7_TOPHITS_DEFAULT_INIT_ALLOC); 
-      pli = p7_pipeline_Create(go, 100, 100, FALSE, p7_SCAN_MODELS); /* M_hint = 100, L_hint = 100 are just dummies for now */
+      pli = p7_pipeline_Create(go, 100, 100, FALSE, p7_SCAN_MODELS, hw->simd); /* M_hint = 100, L_hint = 100 are just dummies for now */
       pli->hfp = hfp;  /* for two-stage input, pipeline needs <hfp> */
 
       p7_pipeline_NewSeq(pli, qsq);
@@ -1079,6 +1087,7 @@ mpi_worker(ESL_GETOPTS *go, struct cfg_s *cfg)
 	  if (hstatus != eslOK) mpi_failure("Cannot position optimized model to %ld\n", block.offset);
 
 	  while (count > 0 && (hstatus = p7_oprofile_ReadSSV(hfp, &abc, &om)) == eslOK)
+
 	    {
 	      length = om->eoff - block.offset + 1;
 

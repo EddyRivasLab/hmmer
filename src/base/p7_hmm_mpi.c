@@ -280,7 +280,7 @@ p7_hmm_mpi_Unpack(char *buf, int n, int *pos, MPI_Comm comm, ESL_ALPHABET **byp_
   if (MPI_Unpack(buf, n, pos, &atype,         1, MPI_INT, comm) != MPI_SUCCESS) ESL_XEXCEPTION(eslESYS, "mpi unpack failed");
 
   /* Set or verify the alphabet */
-  if (*byp_abc == NULL) {	/* alphabet unknown. create new one */
+  if ( *byp_abc == NULL) {	/* alphabet unknown. create new one */
     if ( (abc = esl_alphabet_Create(atype)) == NULL)  { status = eslEMEM; goto ERROR; }
   } else {			/* already known: check it */
     abc = *byp_abc;

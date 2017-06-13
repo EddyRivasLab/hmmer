@@ -2,6 +2,7 @@
  */
 
 #include "p7_config.h"
+#include "time.h"
 
 #ifdef HAVE_PTHREAD
 
@@ -189,6 +190,8 @@ main(int argc, char *argv[])
   unsigned short       serv_port;
   struct sockaddr_in   serv_addr;
 
+  struct timeval start_time, end_time;
+
   p7_Init();
   /* set up defaults */
   strcpy(serv_ip, "127.0.0.1");
@@ -295,6 +298,9 @@ main(int argc, char *argv[])
         eod = 1;
       }
     }
+
+    // Have the input data, so start the clock
+    gettimeofday(&start_time, NULL);
 
     /* skip all leading white spaces */
     ptr = seq;
@@ -541,14 +547,17 @@ main(int argc, char *argv[])
         //p7_tophits_Sort(th);
 
         /* Print the results.  */
-        if (scores) p7_tophits_Targets(stdout, th, pli, 120); fprintf(stdout, "\n\n");
-        if (ali)    p7_tophits_Domains(stdout, th, pli, 120); fprintf(stdout, "\n\n");
+//        if (scores) p7_tophits_Targets(stdout, th, pli, 120); fprintf(stdout, "\n\n");
+//        if (ali)    p7_tophits_Domains(stdout, th, pli, 120); fprintf(stdout, "\n\n");
         p7_pipeline_WriteStats(stdout, pli, w);  
 
         p7_pipeline_Destroy(pli); 
         free(th->hit);
         free(data);
         free(th);
+        // get the time of the end of the search
+        gettimeofday(&end_time, NULL);
+        fprintf(stdout, "Elapsed Time: %f\n", ((float)((end_time.tv_sec * 1000000 + (end_time.tv_usec)) - (start_time.tv_sec * 1000000 + start_time.tv_usec)))/1000000.0);
 
         fprintf(stdout, "//\n");  fflush(stdout);
 

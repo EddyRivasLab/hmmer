@@ -7,6 +7,8 @@
 #include "dp_vector/p7_filtermx.h"        // DP matrix for SSV, VF
 #include "dp_vector/p7_checkptmx.h"       // DP matrix for FB
 
+#include "search/modelconfig.h"
+
 /* Sparse DP, dual-mode glocal/local:    */
 #include "dp_sparse/sparse_fwdback.h"     // sparse Forward/Backward
 #include "dp_sparse/sparse_viterbi.h"     // sparse Viterbi
@@ -21,11 +23,11 @@
 
 #include "dp_sparse/p7_engine.h"  // FIXME: we'll move the engine somewhere else, I think
 
+#include "daemon/p7_hitlist.h" //  This probably wants to move somewhere else once we figure out how command-line search will work
 #include "easel.h"
 #include "esl_random.h"
 #include "esl_exponential.h"
 #include "esl_gumbel.h"
-
 
 /*****************************************************************
  * 1. P7_ENGINE_PARAMS: config/control parameters for the Engine.
@@ -162,6 +164,7 @@ p7_engine_Create(const ESL_ALPHABET *abc, P7_ENGINE_PARAMS *prm, P7_ENGINE_STATS
   eng->F1     = 0.02;
   eng->F2     = 0.001;
   eng->F3     = 1e-5;
+
   return eng;
 
  ERROR:
@@ -211,6 +214,9 @@ p7_engine_Reuse(P7_ENGINE *eng)
   eng->vsc    = 0.;
   eng->fsc    = 0.;
   eng->asc_f  = 0.;
+
+  /* Don't clear out the current hit chunk -- that needs to stay around until we finish the entire search we're doing.
+     Caveat is that the chunk needs to be cleaned manually between searches */
 
   /* F1, F2, F3 are constants, they don't need to be reset. */
   return eslOK;
@@ -315,10 +321,11 @@ p7_engine_Overthruster(P7_ENGINE *eng, ESL_DSQ *dsq, int L, P7_OPROFILE *om, P7_
   seq_score = (eng->sfsc - eng->nullsc) / eslCONST_LOG2;          
   P = esl_gumbel_surv(seq_score,  om->evparam[p7_SMU],  om->evparam[p7_SLAMBDA]);
   if (P > eng->F1) return eslFAIL;
+
   if (eng->stats) eng->stats->n_past_ssv++;
 
   /* Biased composition HMM, ad hoc, acts as a modified null */
-  if (do_biasfilter)
+  if  (do_biasfilter)
     {
       if ((status = p7_bg_FilterScore(bg, dsq, L, &(eng->biassc))) != eslOK) return status;
       seq_score = (eng->sfsc - eng->biassc) / eslCONST_LOG2;
@@ -365,9 +372,6 @@ p7_engine_Overthruster(P7_ENGINE *eng, ESL_DSQ *dsq, int L, P7_OPROFILE *om, P7_
 }
 
 
-
-
-
   // om is assumed to be complete, w/ GA/NC/TC thresholds set, and w/ length model set.
   // Use dsq, L -- not sq -- so subseqs can be processed (should help longtarget/nhmmer)
 /* Function:  
@@ -401,7 +405,6 @@ int
 p7_engine_Main(P7_ENGINE *eng, ESL_DSQ *dsq, int L, P7_PROFILE *gm)
 {
   P7_MPAS_PARAMS *mpas_params     = (eng->params && eng->params->mpas_params ? eng->params->mpas_params : NULL);
-
   eng->used_main = TRUE;  // This flag causes engine_Reuse() to reuse all of the engine, 
                           // not just the structures used by the Overthruster.
 
@@ -418,10 +421,10 @@ p7_engine_Main(P7_ENGINE *eng, ESL_DSQ *dsq, int L, P7_PROFILE *gm)
   p7_sparse_anchors_SetFromTrace(eng->sxd, eng->tr, eng->vanch);
   p7_trace_Reuse(eng->tr);
   p7_sparse_Anchors(eng->rng, dsq, L, gm,
-		    eng->vsc, eng->fsc, eng->sxf, eng->sxd, eng->vanch,
-		    eng->tr, &(eng->wrkM), eng->ahash,  
-		    eng->asf, eng->anch, &(eng->asc_f), 
-		    mpas_params);
+        eng->vsc, eng->fsc, eng->sxf, eng->sxd, eng->vanch,
+        eng->tr, &(eng->wrkM), eng->ahash,  
+        eng->asf, eng->anch, &(eng->asc_f), 
+        mpas_params);
 
   /* Remaining ASC calculations. MPAS already did <asf> for us. */
   p7_sparse_asc_Backward(dsq, L, gm, eng->anch->a, eng->anch->D, eng->sm,    eng->asb, /*asc_b=*/NULL);
@@ -437,6 +440,7 @@ p7_engine_Main(P7_ENGINE *eng, ESL_DSQ *dsq, int L, P7_PROFILE *gm)
 
   /* Optimal alignments for each envelope */
   p7_sparsemx_Reuse(eng->sxf);                                      // sxf overwritten with AEC DP matrix
+  p7_trace_Reuse(eng->tr); 
   p7_sparse_aec_Align(gm, eng->asd, eng->env, eng->sxf, eng->tr);
 
   /* Pick up posterior probability annotation for the alignment */
@@ -444,6 +448,33 @@ p7_engine_Main(P7_ENGINE *eng, ESL_DSQ *dsq, int L, P7_PROFILE *gm)
 
   return eslOK;
 }
+
+/* Calls the engine to compare a sequence to an HMM.  Heavily cribbed from Seans 0226-px code*/
+// returns 0 if no hit was found, 1 if a hit was found
+int p7_engine_Compare_Sequence_HMM(P7_ENGINE *eng, ESL_DSQ *dsq, int L, P7_PROFILE *gm, P7_OPROFILE *om, P7_BG *bg){
+
+    int status;
+    // reset the models for the length of this sequence
+    p7_bg_SetLength(bg, L);           
+    p7_oprofile_ReconfigLength(om, L);
+    
+    // First, the overthruster (filters)
+    status = p7_engine_Overthruster(eng, dsq, L, om, bg);  
+    if (status == eslFAIL) { // filters say no match
+      p7_engine_Reuse(eng);
+      return 0;
+    }
+
+    // if we get here, run the full comparison
+    p7_profile_SetLength(gm, L);
+    status = p7_engine_Main(eng, dsq, L, gm); 
+
+    p7_engine_Reuse(eng);
+
+    return(1); // for now, everything that reaches the main stage is a hit
+}
+
+
 
 /*****************************************************************
  * x. Example
@@ -471,21 +502,21 @@ trace_dump_runlengths(P7_TRACE *tr)
   for (z = 0; z < tr->N; z++)
     {
       if (! in_domain && p7_trace_IsMain(tr->st[z]))
-	{
-	  in_domain = TRUE;
-	  nrun      = 1;
-	  last_st   = tr->st[z];
-	} 
+  {
+    in_domain = TRUE;
+    nrun      = 1;
+    last_st   = tr->st[z];
+  } 
       else if (in_domain)
-	{
-	  if   (tr->st[z] == last_st) nrun++;
-	  else {
-	    printf("%5d %-2s ", nrun, p7_trace_DecodeStatetype(last_st));
-	    last_st = tr->st[z];
-	    nrun    = 1;
-	  }
-	  if (tr->st[z] == p7T_E) { printf("\n"); in_domain = FALSE; }
-	}
+  {
+    if   (tr->st[z] == last_st) nrun++;
+    else {
+      printf("%5d %-2s ", nrun, p7_trace_DecodeStatetype(last_st));
+      last_st = tr->st[z];
+      nrun    = 1;
+    }
+    if (tr->st[z] == p7T_E) { printf("\n"); in_domain = FALSE; }
+  }
     }
   return eslOK;
 }
@@ -552,10 +583,10 @@ main(int argc, char **argv)
 
       status = p7_engine_Overthruster(eng, sq->dsq, sq->n, om, bg);
       if      (status == eslFAIL) { 
-	//printf("skip\n");
-	p7_engine_Reuse(eng);
-	esl_sq_Reuse(sq); 
-	continue; 
+  //printf("skip\n");
+  p7_engine_Reuse(eng);
+  esl_sq_Reuse(sq); 
+  continue; 
       }
       else if (status != eslOK)   p7_Fail("overthruster failed with code %d\n", status);
 
@@ -570,9 +601,9 @@ main(int argc, char **argv)
       esl_sq_Reuse(sq);
     }
   if      (status == eslEFORMAT) esl_fatal("Parse failed (sequence file %s)\n%s\n",
-					   sqfp->filename, sqfp->get_error(sqfp));     
+             sqfp->filename, sqfp->get_error(sqfp));     
   else if (status != eslEOF)     esl_fatal("Unexpected error %d reading sequence file %s",
-					   status, sqfp->filename);
+             status, sqfp->filename);
 
   
   p7_engine_Destroy(eng);
