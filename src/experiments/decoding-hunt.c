@@ -14,7 +14,7 @@
 #include "esl_sqio.h"
 
 #include "hmmer.h"
-#include "sandbox/reference_mpl_fwd.h"
+//#include "sandbox/reference_mpl_fwd.h"
 
 static ESL_OPTIONS options[] = {
   /* name           type           default  env  range  toggles reqs incomp  help                                       docgroup*/
@@ -51,13 +51,13 @@ main(int argc, char **argv)
   P7_PROFILE     *lgm        = NULL;           /* profile in local-only mode, emulating H3        */
   P7_OPROFILE    *om         = NULL;
   
-  P7_CHECKPTMX   *cx         = p7_checkptmx_Create(100, 100, ESL_MBYTES(p7_SPARSIFY_RAMLIMIT));
-  P7_SPARSEMASK  *sm         = p7_sparsemask_Create(100, 100);
+  P7_ENGINE      *eng        = NULL;           // Overthruster has <fx>, <cx>, <sm>.
+
   P7_REFMX       *vit        = p7_refmx_Create(100, 100);
   P7_REFMX       *fwd        = p7_refmx_Create(100, 100);
   P7_REFMX       *bck        = p7_refmx_Create(100, 100);
   P7_REFMX       *pp         = p7_refmx_Create(100, 100);
-  P7_REFMX       *mpl        = p7_refmx_Create(100, 100);
+  //  P7_REFMX       *mpl        = p7_refmx_Create(100, 100);
   P7_TRACE       *tr         = p7_trace_Create();
   P7_COORD2      *dom        = NULL;
   ESL_HISTOGRAM  *invit      = NULL;
@@ -68,7 +68,7 @@ main(int argc, char **argv)
   P7_REFMX       *fwd_l      = p7_refmx_Create(100, 100);
   P7_REFMX       *bck_l      = p7_refmx_Create(100, 100);
   P7_REFMX       *pp_l       = p7_refmx_Create(100, 100);
-  P7_REFMX       *mpl_l      = p7_refmx_Create(100, 100);
+  //  P7_REFMX       *mpl_l      = p7_refmx_Create(100, 100);
   P7_TRACE       *tr_l       = p7_trace_Create();
   P7_COORD2      *dom_l      = NULL;
   ESL_HISTOGRAM  *invit_l    = NULL;
@@ -76,8 +76,8 @@ main(int argc, char **argv)
   char           *histfile_l = esl_opt_GetString(go, "--lhistplot");
   FILE           *histfp_l   = NULL;
   int             Z          = esl_opt_GetInteger(go, "-Z");
-  float           fsc,   vsc,   bsc,   mplsc;
-  float           fsc_l, vsc_l, bsc_l, mplsc_l;
+  float           fsc,   vsc,   bsc;
+  float           fsc_l, vsc_l, bsc_l;
   int             nintotal,   nin90,   nout90,   nin50,   nout50,   nin0;
   int             nintotal_l, nin90_l, nout90_l, nin50_l, nout50_l, nin0_l;
   int             d;
@@ -85,9 +85,6 @@ main(int argc, char **argv)
   int             status;
  
   /* Read in one HMM. Set alphabet to whatever the HMM's alphabet is. */
-
-  P7_FILTERMX    *fx         = p7_filtermx_Create(100);
-
   if (p7_hmmfile_OpenE(hmmfile, NULL, &hfp, NULL) != eslOK) p7_Fail("Failed to open HMM file %s", hmmfile);
   if (p7_hmmfile_Read(hfp, &abc, &hmm)            != eslOK) p7_Fail("Failed to read HMM");
   p7_hmmfile_Close(hfp);
@@ -121,6 +118,8 @@ main(int argc, char **argv)
   outvit_l = esl_histogram_Create(0.0, 1.0, 0.1);
   if (histfile_l && (histfp_l = fopen(histfile_l, "w")) == NULL) p7_Fail("Failed to open local histogram file %s for writing.", histfile_l);
 
+  eng  = p7_engine_Create(abc, /*params=*/NULL, /*stats=*/NULL, gm->M, /*L_hint=*/400);
+
   /* For each target sequence... */
   while (( status = esl_sqio_Read(sqfp, sq)) == eslOK)
     {
@@ -129,9 +128,9 @@ main(int argc, char **argv)
       p7_profile_SetLength      (lgm, sq->n);
       p7_oprofile_ReconfigLength(om,  sq->n);
 
-      if (( status = acceleration_filter(sq->dsq, sq->n, om, bg, fx, cx, sm)) == eslOK)
+      if (( status = p7_engine_Overthruster(eng, sq->dsq, sq->n, om, bg)) == eslOK)
 	{
-	  printf("%15s  %30s  ", gm->name, sq->name);
+	  printf("%-15s  %-30s  ", gm->name, sq->name);
 
 	  p7_bg_NullOne(bg, sq->dsq, sq->n, &nullsc);
 
@@ -150,12 +149,12 @@ main(int argc, char **argv)
 	      //printf("domain %2d:  seq pos %5d..%-5d  model pos %5d..%5d\n",
 	      //d+1, tr->sqfrom[d], tr->sqto[d], tr->hmmfrom[d], tr->hmmto[d]);
 
-	      dom[d].n1 = tr->sqfrom[d];
-	      dom[d].n2   = tr->sqto[d];
-	      nintotal    += tr->sqto[d] - tr->sqfrom[d] + 1;
+	      dom[d].n1  = tr->sqfrom[d];
+	      dom[d].n2  = tr->sqto[d];
+	      nintotal   += tr->sqto[d] - tr->sqfrom[d] + 1;
 	    }
 	     
-	  p7_ReferenceMPLForward(sq->dsq, sq->n, gm, dom, tr->ndom, mpl, &mplsc);
+	  //p7_ReferenceMPLForward(sq->dsq, sq->n, gm, dom, tr->ndom, mpl, &mplsc);
 	     
 	  update_histograms   (pp, dom, tr->ndom, invit, outvit);
 	  count_nin_nout_above(pp, dom, tr->ndom, 0.9,   &nin90, &nout90); /* # of res labeled as in domain w/ pp >= 0.9; and outside domain yet pp >= 0.9 */
@@ -166,9 +165,9 @@ main(int argc, char **argv)
 		 (double) Z * esl_gumbel_surv( (vsc - nullsc) / eslCONST_LOG2, gm->evparam[p7_VMU],  gm->evparam[p7_VLAMBDA]),
 		 (double) Z * esl_exp_surv   ( (fsc - nullsc) / eslCONST_LOG2, gm->evparam[p7_FTAU], gm->evparam[p7_FLAMBDA]),
 		 vsc, 
-		 mplsc,
-		 fsc, 
-		 exp(mplsc - fsc));
+		 0.0, // was mplsc
+ 		 fsc, 
+		 0.0);  // was exp(mplsc - fsc));
 
 	  printf("%5d %5d %5d %5d ",  nintotal, nin90, nin50, nin0);
 	  printf("%5d %5d %5d ",      (int) sq->n - nintotal, nout90, nout50);
@@ -192,20 +191,20 @@ main(int argc, char **argv)
 	      nintotal_l    += tr_l->sqto[d] - tr_l->sqfrom[d] + 1;
 	    }
 
-	  p7_ReferenceMPLForward(sq->dsq, sq->n, lgm, dom_l, tr_l->ndom, mpl_l, &mplsc_l);
+	  //p7_ReferenceMPLForward(sq->dsq, sq->n, lgm, dom_l, tr_l->ndom, mpl_l, &mplsc_l);
 	     
 	  update_histograms   (pp_l, dom_l, tr_l->ndom, invit_l, outvit_l);
 	  count_nin_nout_above(pp_l, dom_l, tr_l->ndom, 0.9,   &nin90_l, &nout90_l); /* # of res labeled as in domain w/ pp >= 0.9; and outside domain yet pp >= 0.9 */
 	  count_nin_nout_above(pp_l, dom_l, tr_l->ndom, 0.5,   &nin50_l, &nout50_l); /* ditto, for 0.5 threshold */
-	  count_nin_nout_below(pp_l, dom_l, tr_l->ndom, 0.1,   &nin0_l,  NULL);    /* # of residues labeled by Viterbi as in a domain, yet pp < 0.1 */
+	  count_nin_nout_below(pp_l, dom_l, tr_l->ndom, 0.1,   &nin0_l,  NULL);      /* # of residues labeled by Viterbi as in a domain, yet pp < 0.1 */
 	  
 	  printf("%10.4g %10.4g %10.4f %10.4f %10.4f %10.4g ",
 		 (double) Z * esl_gumbel_surv( (vsc_l - nullsc) / eslCONST_LOG2, gm->evparam[p7_VMU],  gm->evparam[p7_VLAMBDA]),
 		 (double) Z * esl_exp_surv   ( (fsc_l - nullsc) / eslCONST_LOG2, gm->evparam[p7_FTAU], gm->evparam[p7_FLAMBDA]),
 		 vsc_l, 
-		 mplsc_l,
+		 0.0,    // was mplsc_l
 		 fsc_l, 
-		 exp(mplsc_l - fsc_l));
+                 0.0);  // was exp(mplsc_l - fsc_l)
 
 	  printf("%5d %5d %5d %5d ",  nintotal_l, nin90_l, nin50_l, nin0_l);
 	  printf("%5d %5d %5d ",      (int) sq->n - nintotal_l, nout90_l, nout50_l);
@@ -217,17 +216,17 @@ main(int argc, char **argv)
 	  p7_refmx_Reuse(fwd);
 	  p7_refmx_Reuse(bck);
 	  p7_refmx_Reuse(pp);
-	  p7_refmx_Reuse(mpl);
+	  //p7_refmx_Reuse(mpl);
 
 	  p7_trace_Reuse(tr_l);
 	  p7_refmx_Reuse(vit_l);
 	  p7_refmx_Reuse(fwd_l);
 	  p7_refmx_Reuse(bck_l);
 	  p7_refmx_Reuse(pp_l);
-	  p7_refmx_Reuse(mpl_l);
+	  //p7_refmx_Reuse(mpl_l);
 	}
 
-      p7_sparsemask_Reuse(sm);
+      p7_engine_Reuse(eng);
       esl_sq_Reuse(sq);
     }
   if      (status == eslEFORMAT) p7_Fail("Parse failed (sequence file %s)\n%s\n", sqfp->filename, sqfp->get_error(sqfp));
@@ -251,25 +250,22 @@ main(int argc, char **argv)
   esl_histogram_Destroy(outvit);
   esl_histogram_Destroy(invit);
   p7_trace_Destroy(tr);
-  p7_refmx_Destroy(mpl);
+  //p7_refmx_Destroy(mpl);
   p7_refmx_Destroy(pp);
   p7_refmx_Destroy(vit);
   p7_refmx_Destroy(bck);
   p7_refmx_Destroy(fwd);
-  p7_sparsemask_Destroy(sm);
 
   if (histfp_l) fclose(histfp_l);
   esl_histogram_Destroy(outvit_l);
   esl_histogram_Destroy(invit_l);
   p7_trace_Destroy(tr_l);
-  p7_refmx_Destroy(mpl_l);
+  //p7_refmx_Destroy(mpl_l);
   p7_refmx_Destroy(pp_l);
   p7_refmx_Destroy(vit_l);
   p7_refmx_Destroy(bck_l);
   p7_refmx_Destroy(fwd_l);
 
-  p7_checkptmx_Destroy(cx);
-  p7_filtermx_Destroy(fx);
   p7_oprofile_Destroy(om);
   p7_profile_Destroy(lgm);
   p7_profile_Destroy(gm);
@@ -284,103 +280,6 @@ main(int argc, char **argv)
  ERROR:
   return status;
 }
-
-
-/* acceleration_filter()
- * Simplified version of the standard HMMER acceleration filter of [Eddy11].
- *
- * Purpose:  Implements a simpified version of the HMMER acceleration
- *           pipeline in <p7_Pipeline()>: only the vector acceleration
- *           steps, and without the bias filter. Compares vector
- *           profile <om> against digital sequence <dsq> of length
- *           <L>, calculating bit scores against null model
- *           <bg>. Returns <eslOK> if the comparison passes the
- *           acceleration filters, and <eslFAIL> if it does not.
- * 
- *           Caller provides vector DP matrices: <fx> for SSV/MSV and
- *           <cx> for checkpointed Forward/Backward. These DP matrices
- *           can have any previous allocation size because they will
- *           be reallocated as needed by the vector DP routines.  Upon
- *           return, <fx> contains the Viterbi filter data from
- *           <p7_ViterbiFilter()>, and <cx> contains the checkpointed
- *           DP Forward/Backward matrix from <p7_ForwardFilter()> and
- *           <p7_BackwardFilter()>.
- *           
- *           Caller also provides a sparse mask object <sm>, which
- *           upon successful return will contain the sparse mask. It
- *           too can be provided in any valid allocation size, because
- *           it is reallocated as needed.
- *           
- *           Acceleration filter thresholds are set to defaults: P
- *           $\leq$ 0.02 for MSV, P $\leq$ 1e-3 for Viterbi, and P
- *           $\leq$ 1e-5 for Forward filters.
- *           
- * Args:     dsq  : digital sequence, 1..L
- *           L    : length of <dsq>
- *           om   : vector profile, with length parameterization set
- *           bg   : null model, with length parameterization set
- *           fx   : vector MSV/Vit DP matrix, at any valid alloc size
- *           cx   : vector checkpointed Fwd/Bck DP mx, any valid size
- *           sm   : RETURN: sparse mask
- *
- * Returns:  <eslOK> if <dsq> is a high-scoring target that passes the
- *           acceleration filter thresholds. <sm> contains the sparse
- *           DP mask for the <dsq>/<om> comparison. <fx> and <cx> DP
- *           matrices are valid too, if caller wants to use them for 
- *           something.
- *           
- *           <eslFAIL> if <dsq> is a low-scoring target that fails the
- *           filter thresholds. Now the data in <fx>, <cx>, <sm> are
- *           undefined though they remain validly allocated and can be
- *           reused.
- *
- * Throws:    (no abnormal error conditions)
- *
- * Xref:      J12/120.
- * 
- * To do:     We could put this in p7_Pipeline itself and streamline code
- *            there. We could add pipeline stats as an optional
- *            argument, add the bias filter, add an optional input arg
- *            for the F1/F2/F3 parameters, and do something about
- *            SCAN_MODELS mode -- perhaps just making two versions of
- *            this call, one for search mode and one for scan mode.
- */
-static int
-acceleration_filter(ESL_DSQ *dsq, int L, P7_OPROFILE *om, P7_BG *bg,
-		    P7_FILTERMX *fx, P7_CHECKPTMX *cx, P7_SPARSEMASK *sm)
-{
-  float  usc, vitsc, fwdsc;
-  float  nullsc;
-  float  seq_score;
-  double P;
-  float  F1 = 0.02;
-  float  F2 = 1e-3;
-  float  F3 = 1e-5;
-
-  if (L == 0) return eslFAIL;
-
-  p7_bg_NullOne(bg, dsq, L, &nullsc);
-
-  p7_MSVFilter(dsq, L, om, fx, &usc);
-  seq_score = (usc - nullsc) / eslCONST_LOG2;
-  P = esl_gumbel_surv(seq_score, om->evparam[p7_SMU], om->evparam[p7_SLAMBDA]);
-  if (P > F1) return eslFAIL;
-
-  p7_ViterbiFilter(dsq, L, om, fx, &vitsc);  
-  seq_score = (vitsc - nullsc) / eslCONST_LOG2;
-  P  = esl_gumbel_surv(seq_score,  om->evparam[p7_VMU],  om->evparam[p7_VLAMBDA]);
-  if (P > F2) return eslFAIL;
-  
-  p7_ForwardFilter(dsq, L, om, cx, &fwdsc);
-  seq_score = (fwdsc - nullsc) / eslCONST_LOG2;
-  P = esl_exp_surv(seq_score,  om->evparam[p7_FTAU],  om->evparam[p7_FLAMBDA]);
-  if (P > F3) return eslFAIL;
- 
-  p7_BackwardFilter(dsq, L, om, cx, sm, p7_SPARSIFY_THRESH);
-
-  return eslOK;
-}
-  
 
 
 static int

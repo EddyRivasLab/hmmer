@@ -629,11 +629,12 @@ main(int argc, char **argv)
 	{
 	  p7_trace_ScoreDomain(tr, sq->dsq, gm, d, &dvsc);
 
-	  printf("%-20s %-30s %10.2f %2d/%-2d %5d %5d %10.2f\n",
+	  printf("%-20s %-30s %10.2f %2d/%-2d %5d %5d %5d %5d %10.2f\n",
 		 gm->name, sq->name,
 		 (vsc - nullsc) / eslCONST_LOG2,
 		 d+1, tr->ndom,
-		 tr->sqfrom[d], tr->sqto[d],
+		 tr->sqfrom[d],  tr->sqto[d],
+		 tr->hmmfrom[d], tr->hmmto[d],
 		 (dvsc - nullsc) / eslCONST_LOG2);
 	}
 
