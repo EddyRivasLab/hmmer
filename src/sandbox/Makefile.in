@@ -14,8 +14,9 @@ STATS  =
 
 BENCHMARKS =
 
-EXAMPLES = reference_mpl_example         \
-	   reference_mpl_fwd_example     
+EXAMPLES = reference_mpl_fwd_example     
+
+# reference_mpl_example         \
 
 
 top_srcdir   = @top_srcdir@

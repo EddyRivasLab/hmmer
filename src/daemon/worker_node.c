@@ -204,7 +204,7 @@ int p7_daemon_workernode_Setup(uint32_t num_databases, char **database_names, ui
     P7_SHARD *current_shard;
 
     datafile = fopen(database_names[i], "r");
-    int ret_status = fread(id_string, 13, 1, datafile); //grab the first 13 characters of the file to determine the type of database it holds
+    fread(id_string, 13, 1, datafile); //grab the first 13 characters of the file to determine the type of database it holds
     fclose(datafile);
         
     if(!strncmp(id_string, "HMMER3", 5)){
@@ -601,7 +601,6 @@ int p7_daemon_workernode_create_threads(P7_DAEMON_WORKERNODE_STATE *workernode){
   if(pthread_attr_init(&attr)){
     p7_Fail("Couldn't create pthread attr structure in p7_daemon_workernode_create_threads");
   }
-  size_t stacksize;
 
   for(i = 0; i < workernode->num_threads; i++){
 
@@ -730,7 +729,8 @@ void *p7_daemon_worker_thread(void *worker_argument){
   // need to release it to let the next thread go
 
   //printf("Worker thread %d released\n", my_id);
-  struct timeval start_time, end_time;
+  struct timeval start_time;
+  //struct timeval end_time;
     
   // Main work loop
   while(!workernode->shutdown){
@@ -742,7 +742,7 @@ void *p7_daemon_worker_thread(void *worker_argument){
     engine_stats->n_past_fwd  = 0;
     int stop;
     gettimeofday(&start_time, NULL);
-    uint64_t chunk_length, sequences_processed; 
+    // uint64_t sequences_processed; 
     switch(workernode->search_type){ // do the right thing for each search type
       case SEQUENCE_SEARCH:
       case SEQUENCE_SEARCH_CONTINUE:     
@@ -773,7 +773,7 @@ void *p7_daemon_worker_thread(void *worker_argument){
           p7_bg_SetFilter(workernode->thread_state[my_id].bg, workernode->thread_state[my_id].om->M, workernode->thread_state[my_id].om->compo);
         }
 
-        sequences_processed = 0;
+        //sequences_processed = 0;
         stop = 0;
         while(stop == 0){
           switch(workernode->thread_state[my_id].mode){
@@ -838,7 +838,6 @@ int worker_thread_front_end_sequence_search_loop(P7_DAEMON_WORKERNODE_STATE *wor
   float *P;
   float P_backer=0.0;
   P = &P_backer; // set this up to pass info between tophalf and bottomhalf
-  int stop =0;
 
  // printf("Rank %d thread %d entering front-end loop\n", workernode->my_rank, my_id);
 
@@ -1068,7 +1067,7 @@ void worker_thread_back_end_sequence_search_loop(P7_DAEMON_WORKERNODE_STATE *wor
 
  
     p7_profile_SetLength(workernode->thread_state[my_id].gm, the_entry->L);
-    int status = p7_engine_Main(workernode->thread_state[my_id].engine, the_entry->sequence, the_entry->L, workernode->thread_state[my_id].gm); 
+    p7_engine_Main(workernode->thread_state[my_id].engine, the_entry->sequence, the_entry->L, workernode->thread_state[my_id].gm); 
 
 
 #ifdef TEST_SEQUENCES 
@@ -1132,7 +1131,6 @@ void worker_node_increase_backend_threads(P7_DAEMON_WORKERNODE_STATE *workernode
   uint32_t which_thread;
   uint64_t fewest_hits = -1;
   uint32_t fewest_hits_thread = -1;
-  int i;
 
   for(which_thread = 0; which_thread < workernode->num_threads; which_thread++){
     if((workernode->thread_state[which_thread].mode == FRONTEND) &&(workernode->thread_state[which_thread].comparisons_queued < fewest_hits)){
@@ -1461,10 +1459,10 @@ P7_BACKEND_QUEUE_ENTRY *p7_get_backend_queue_entry_from_queue(P7_DAEMON_WORKERNO
 }
 
 void p7_put_backend_queue_entry_in_pool(P7_DAEMON_WORKERNODE_STATE *workernode, P7_BACKEND_QUEUE_ENTRY *the_entry){
-  int result;
-  while(result =pthread_mutex_trylock(&(workernode->backend_pool_lock))){
+  while ( pthread_mutex_trylock(&(workernode->backend_pool_lock)) != 0)
+    {
         // spin-wait until the lock on our queue is cleared.  Should never be locked for long
-  }
+    }
   the_entry->next = workernode->backend_pool;
   workernode->backend_pool = the_entry;
   if(pthread_mutex_unlock(&(workernode->backend_pool_lock))){
@@ -1518,6 +1516,7 @@ void p7_workernode_wait_for_Work(P7_DAEMON_CHUNK_REPLY *the_reply, MPI_Datatype 
 }
 
 // used by Easel argument processor
+#ifdef HAVE_MPI
 static ESL_OPTIONS options[] = {
   /* name           type      default  env  range  toggles reqs incomp  help                               docgroup*/
   { "-h",        eslARG_NONE,  FALSE,  NULL, NULL,   NULL,  NULL, NULL, "show brief help on version and usage",  0 },
@@ -1528,6 +1527,7 @@ static ESL_OPTIONS options[] = {
 
 static char usage[]  = "[-options] <hmmfile> <seqence database>";
 static char banner[] = "hmmpgmd2, the daemon version of HMMER 4";
+#endif
 
 // main function that the daemon starts on each worker node
 void worker_node_main(int argc, char **argv, int my_rank, MPI_Datatype *daemon_mpitypes){
@@ -1800,7 +1800,7 @@ void worker_node_main(int argc, char **argv, int my_rank, MPI_Datatype *daemon_m
   //      printf("Worker %d done with current command\n", my_rank);
   }
 
-#endif
 ERROR:
   p7_Fail("Unable to allocate memory in worker_node_main");
+#endif
 }

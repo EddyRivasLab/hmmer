@@ -4,9 +4,8 @@ OBJS =
 
 HDRS = 
 
-PROGS = 
+PROGS = decoding-hunt
 #	decoding-animate \  SRE REVISIT
-#	decoding-hunt    \
 #	decoding-study   \
 #	hmmsim           \
 #       sim-alignment

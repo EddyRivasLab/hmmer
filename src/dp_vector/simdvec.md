@@ -221,7 +221,7 @@ significant bit (MSB) b=128 on the left and least significant bit
 
 ```
   in register:
-    b= 128                                             0
+    b= 127                                             0
   LE:  [ 3A 3B 3C 3D 2A 2B 2C 2D 1A 1B 1C 1D 0A 0B 0C 0D ]
   BE:  [ 0A 0B 0C 0D 1A 1B 1C 1D 2A 2B 2C 2D 3A 3B 3C 3D ]
 ```

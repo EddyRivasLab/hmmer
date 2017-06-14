@@ -585,21 +585,21 @@ p7_refmx_DumpCSV(FILE *fp, P7_REFMX *pp, int istart, int iend, int kstart, int k
   int   i, k;
   float val;
 
-  fprintf(fp, "i,");
-  for (k = kend; k >= kstart; k--)
-    fprintf(fp, "%-d%s", k, k==kstart ? "\n" : ",");
-
+  fprintf(fp, ",");
   for (i = istart; i <= iend; i++)
+    fprintf(fp, "%-d%s", i, i==iend ? "\n" : ",");
+
+  for (k = kstart; k <= kend; k++)
     {
-      fprintf(fp, "%-d,", i);
-      for (k = kend; k >= kstart; k--)
+      fprintf(fp, "%-d,", k);
+      for (i = istart; i <= iend; i++)
 	{
 	  val = 
 	    pp->dp[i][k * p7R_NSCELLS + p7R_ML] + pp->dp[i][k * p7R_NSCELLS + p7R_MG] + 
  	    pp->dp[i][k * p7R_NSCELLS + p7R_IL] + pp->dp[i][k * p7R_NSCELLS + p7R_IG] + 
 	    pp->dp[i][k * p7R_NSCELLS + p7R_DL] + pp->dp[i][k * p7R_NSCELLS + p7R_DG];
 
-	  fprintf(fp, "%*.*f%s", width, precision, val, k==kstart ? "\n" : ", ");
+	  fprintf(fp, "%*.*f%s", width, precision, val, i==iend ? "\n" : ", ");
 	}
     }
   return eslOK;

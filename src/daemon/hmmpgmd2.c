@@ -12,6 +12,7 @@
 
 
 
+#ifdef HAVE_MPI
 static ESL_OPTIONS options[] = {
   /* name           type      default  env  range  toggles reqs incomp  help                               docgroup*/
   { "-h",        eslARG_NONE,  FALSE,  NULL, NULL,   NULL,  NULL, NULL, "show brief help on version and usage",  0 },
@@ -21,6 +22,7 @@ static ESL_OPTIONS options[] = {
 
 static char usage[]  = "[-options] <hmmfile> <seqence database>";
 static char banner[] = "hmmpgmd2, the daemon version of HMMER 4";
+#endif
 
 //! Main function for the hmmpgmd2 program
 int main(int argc, char **argv){

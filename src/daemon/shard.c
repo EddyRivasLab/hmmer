@@ -40,15 +40,12 @@ P7_SHARD *p7_shard_Create_hmmfile(char *filename, uint32_t num_shards, uint32_t 
   uint64_t contents_offset = 0;
   uint64_t descriptors_offset = 0;
 
-  char *contents_pointer = the_shard->contents;
-  char *descriptors_pointer = the_shard->descriptors;
-
   ESL_ALPHABET   *abc     = NULL;
   P7_HMMFILE     *hfp     = NULL;
-    P7_BG          *bg      = NULL;
-    P7_HMM         *hmm     = NULL;
-    P7_PROFILE     *gm      = NULL;
-    P7_OPROFILE    *om      = NULL;
+  P7_BG          *bg      = NULL;
+  P7_HMM         *hmm     = NULL;
+  P7_PROFILE     *gm      = NULL;
+  P7_OPROFILE    *om      = NULL;
 
   if (p7_hmmfile_OpenE(filename, NULL, &hfp, NULL) != eslOK) p7_Fail("Failed to open HMM file %s", filename);
 
@@ -637,7 +634,9 @@ int p7_shard_Find_Descriptor_Nexthigh(P7_SHARD *the_shard, uint64_t id, char **r
 /******************************************************************************************************************************/
 /*                                                                                      Tests                                                                                                     */
 /******************************************************************************************************************************/
+// SRE FIXME: utests take no argument; only one utest driver per file
 #ifdef p7SHARD_TESTDRIVE
+#include "esl_randomseq.h"
 
 int shard_compare_dsqdata(P7_SHARD *the_shard, char *basename, uint32_t num_shards, uint32_t my_shard){
   /*! Compares a shard against the dsqdata database that it was generated from to verify that the database was parsed correctly */
@@ -789,61 +788,121 @@ int shard_compare_dsqdata(P7_SHARD *the_shard, char *basename, uint32_t num_shar
 static ESL_OPTIONS options[] = {
   /* name           type      default  env  range toggles reqs incomp  help                                       docgroup*/
   { "-h",        eslARG_NONE,   FALSE, NULL, NULL,  NULL,  NULL, NULL, "show brief help on version and usage",           0 },
+  { "-s",        eslARG_INT,      "0", NULL, NULL,  NULL,  NULL, NULL, "set random number seed to <n>",                  0 },
   {  0, 0, 0, 0, 0, 0, 0, 0, 0, 0 },
 };
 
-static char usage[]  = "[-options] <dsqdata_basename> <hmmfile_name>";
+static char usage[]  = "[options]";
 static char banner[] = "test driver for functions that create and process database shards";
 
 int
 main(int argc, char **argv)
 {
-  ESL_GETOPTS    *go   = p7_CreateDefaultApp(options, 2, argc, argv, banner, usage);
-  char  *dsqfile = esl_opt_GetArg(go, 1);
-  char *hmmfile = esl_opt_GetArg(go, 2);
-  ESL_ALPHABET   *abc     = NULL;
-  //First, test creating a single shard from a database
-  P7_SHARD *shard1 = p7_shard_Create_dsqdata(dsqfile, 1, 0);
+  ESL_GETOPTS    *go   = p7_CreateDefaultApp(options, 0, argc, argv, banner, usage);
+  // Test 1: creating shards from dsqdata
+
+  // Create a random dsqdata file to play with
+  // This code blatantly stolen from the esl_dsqdata unit test
   int status;
+  char tmpfile[32]     = "tmp-hmmerXXXXXX";
+  char               basename[32];
+  ESL_SQ           **sqarr         = NULL;
+  FILE              *tmpfp         = NULL;
+  ESL_SQFILE        *sqfp          = NULL;
+  ESL_RANDOMNESS *rng      = esl_randomness_Create(esl_opt_GetInteger(go, "-s"));
+  int               nseq           = 1 + esl_rnd_Roll(rng, 20000);  // 1..20000
+  int               maxL           = 100;
+  ESL_ALPHABET   *abc    = esl_alphabet_Create(eslAMINO);
+  char               msg[]         = "shard :: unit test failed";
+  int i;
+ /* 1. Sample <nseq> random dirty digital sequences, storing them for later comparison;
+   *    write them out to a tmp FASTA file. The Easel FASTA format writer writes <name> <acc> 
+   *    <desc> on the descline, but the reader only reads <name> <desc> (as is standard 
+   *    for FASTA format), so blank the accession to avoid confusion.
+   */
+  if (( status = esl_tmpfile_named(tmpfile, &tmpfp)) != eslOK) esl_fatal(msg);
+  if (( sqarr = malloc(sizeof(ESL_SQ *) * nseq))      == NULL) esl_fatal(msg);
+  for (i = 0; i < nseq; i++)   
+    {
+      sqarr[i] = NULL;
+      if (( status = esl_sq_Sample(rng, abc, maxL, &(sqarr[i])))              != eslOK) esl_fatal(msg);
+      if (( status = esl_sq_SetAccession(sqarr[i], ""))                       != eslOK) esl_fatal(msg);
+      if (( status = esl_sqio_Write(tmpfp, sqarr[i], eslSQFILE_FASTA, FALSE)) != eslOK) esl_fatal(msg);
+    }
+  fclose(tmpfp);
+
+  /* 2.  Make a dsqdata database from the FASTA tmpfile.
+   */   
+  if (( status = esl_sqfile_OpenDigital(abc, tmpfile, eslSQFILE_FASTA, NULL, &sqfp)) != eslOK) esl_fatal(msg);
+  if ((          snprintf(basename, 32, "%s-db", tmpfile))                           <= 0)     esl_fatal(msg);
+  if (( status = esl_dsqdata_Write(sqfp, basename, NULL))                            != eslOK) esl_fatal(msg);
+  esl_sqfile_Close(sqfp);
+
+  P7_SHARD *shard1 = p7_shard_Create_dsqdata(basename, 1, 0);
 
   //! dsqdata object
   ESL_DSQDATA    *dd      = NULL;
 
+  abc = NULL;
   // pass NULL to the byp_alphabet input of esl_dsqdata_Open to have it get its alphabet from the dsqdata files
   // only configure for one reader thread
-  status = esl_dsqdata_Open(&abc, dsqfile, 1, &dd);
+  status = esl_dsqdata_Open(&abc, basename, 1, &dd);
   if(status != eslOK){
-    p7_Fail("Unable to open dsqdata database %s\n", dsqfile);
+    p7_Fail("Unable to open dsqdata database %s\n", basename);
   }
 
-  status = shard_compare_dsqdata(shard1, dsqfile, 1, 0);
+  status = shard_compare_dsqdata(shard1, basename, 1, 0);
   p7_shard_Destroy(shard1);
 
   // now, test shards that are only a fraction of the database
-  int i;
+
   for(i= 0; i < 2; i++){
-    shard1 = p7_shard_Create_dsqdata(dsqfile, 2, i);
-    status = esl_dsqdata_Open(&abc, dsqfile, 1, &dd);
+    shard1 = p7_shard_Create_dsqdata(basename, 2, i);
+    status = esl_dsqdata_Open(&abc, basename, 1, &dd);
     if(status != eslOK){
-      p7_Fail("Unable to open dsqdata database %s\n", dsqfile);
+      p7_Fail("Unable to open dsqdata database %s\n", basename);
     }
 
-    status = shard_compare_dsqdata(shard1, dsqfile, 2, i);
+    status = shard_compare_dsqdata(shard1, basename, 2, i);
     p7_shard_Destroy(shard1);
   }
+  // clean up after ourselves
+  remove(tmpfile);
+  remove(basename);
+  snprintf(basename, 32, "%s-db.dsqi", tmpfile); remove(basename);
+  snprintf(basename, 32, "%s-db.dsqm", tmpfile); remove(basename);
+  snprintf(basename, 32, "%s-db.dsqs", tmpfile); remove(basename);
+  for (i = 0; i < nseq; i++) esl_sq_Destroy(sqarr[i]);
+  free(sqarr);
 
-  abc     = NULL;
+  // End of first test
+  // Test 2: read hmm into shard
+  abc     = esl_alphabet_Create(eslAMINO);
   P7_HMMFILE     *hfp     = NULL;
   P7_BG          *bg      = NULL;
   P7_HMM         *hmm     = NULL;
   P7_PROFILE     *gm      = NULL;
   P7_OPROFILE    *om      = NULL;
+  int           M      = 20;
+  FILE         *fp     = NULL;
+  nseq           = 1 + esl_rnd_Roll(rng, 200);
+  // create an hmmfile
+  char tmpfile2[32] = "tmp-hmmerXXXXXX";
+  if ((esl_tmpfile_named(tmpfile2, &fp))        != eslOK) esl_fatal("failed to create tmp file");
+  fclose(fp);
+
+  if ((fp = fopen(tmpfile2, "w"))              == NULL)  esl_fatal(msg);
+  for (i = 0; i < nseq; i++){
+    p7_modelsample(rng, M, abc, &hmm);
+    if (p7_hmmfile_WriteASCII(fp, -1, hmm)  != eslOK) esl_fatal(msg);
+  }
+  fclose(fp);
 
   // make a shard out of the hmm file
-  shard1 = p7_shard_Create_hmmfile(hmmfile, 1, 0);
+  shard1 = p7_shard_Create_hmmfile(tmpfile2, 1, 0);
   int shard_count = 0;
 
-  if (p7_hmmfile_OpenE(hmmfile, NULL, &hfp, NULL) != eslOK) p7_Fail("Failed to open HMM file %s", hmmfile);
+  if (p7_hmmfile_OpenE(tmpfile2, NULL, &hfp, NULL) != eslOK) p7_Fail("Failed to open HMM file %s", tmpfile);
 
   P7_OPROFILE **shard_oprofiles = (P7_OPROFILE **) shard1->contents;
   P7_PROFILE **shard_profiles = (P7_PROFILE **) shard1->descriptors;
@@ -870,8 +929,10 @@ main(int argc, char **argv)
   if(shard_count != shard1->num_objects){
     p7_Fail("Object number mis-match between shard and hmmfile %d vs %d", shard_count, shard1->num_objects);
   }
+   remove(tmpfile2);
   fprintf(stderr, "#  status = ok\n");
   return eslOK;
 }
 
 #endif /*p7SHARD_TESTDRIVE*/
+

@@ -1777,9 +1777,9 @@ static int parse_coord_string(const char *cstring, int *ret_start, int *ret_end)
 static ESL_OPTIONS options[] = {
   /* name           type      default  env  range  toggles reqs incomp  help                                       docgroup*/
   { "-h",        eslARG_NONE,   FALSE, NULL, NULL,   NULL,  NULL, NULL, "show brief help on version and usage",             0 },
-  { "-i",        eslARG_STRING, FALSE, NULL, NULL,   NULL,  NULL, NULL, "when dumping, restrict dump to rows <i1>..<i2>",    0 },
-  { "-k",        eslARG_STRING, FALSE, NULL, NULL,   NULL,  NULL, NULL, "when dumping, restrict dump to columns <k1>..<k2>", 0 },
-  { "-s",        eslARG_INT,      "0", NULL, NULL,   NULL,  NULL, NULL, "set random number seed to <n>",                     0 },
+  { "-i",        eslARG_STRING, FALSE, NULL, NULL,   NULL,  NULL, NULL, "when dumping, restrict dump to seq <i1>..<i2>",    0 },
+  { "-k",        eslARG_STRING, FALSE, NULL, NULL,   NULL,  NULL, NULL, "when dumping, restrict dump to model <k1>..<k2>",  0 },
+  { "-s",        eslARG_INT,      "0", NULL, NULL,   NULL,  NULL, NULL, "set random number seed to <n>",                    0 },
   { "--fs",      eslARG_NONE,   FALSE, NULL, NULL, STYLES,  NULL, NULL, "multihit local alignment",                         0 },
   { "--sw",      eslARG_NONE,   FALSE, NULL, NULL, STYLES,  NULL, NULL, "unihit local alignment",                           0 },
   { "--ls",      eslARG_NONE,   FALSE, NULL, NULL, STYLES,  NULL, NULL, "multihit glocal alignment",                        0 },
@@ -1893,7 +1893,7 @@ main(int argc, char **argv)
 
       if (csvfile) {
 	FILE *csvfp = fopen(csvfile, "w");
-	p7_refmx_DumpCSV(csvfp, pp, 1, sq->n, 1, gm->M);
+	p7_refmx_DumpCSV(csvfp, pp, istart ? istart : 1, iend ? iend : sq->n, kstart ? kstart : 1, kend ? kend : gm->M);
 	fclose(csvfp);
       }
 
