@@ -40,15 +40,12 @@ P7_SHARD *p7_shard_Create_hmmfile(char *filename, uint32_t num_shards, uint32_t 
   uint64_t contents_offset = 0;
   uint64_t descriptors_offset = 0;
 
-  char *contents_pointer = the_shard->contents;
-  char *descriptors_pointer = the_shard->descriptors;
-
   ESL_ALPHABET   *abc     = NULL;
   P7_HMMFILE     *hfp     = NULL;
-    P7_BG          *bg      = NULL;
-    P7_HMM         *hmm     = NULL;
-    P7_PROFILE     *gm      = NULL;
-    P7_OPROFILE    *om      = NULL;
+  P7_BG          *bg      = NULL;
+  P7_HMM         *hmm     = NULL;
+  P7_PROFILE     *gm      = NULL;
+  P7_OPROFILE    *om      = NULL;
 
   if (p7_hmmfile_OpenE(filename, NULL, &hfp, NULL) != eslOK) p7_Fail("Failed to open HMM file %s", filename);
 
@@ -637,6 +634,7 @@ int p7_shard_Find_Descriptor_Nexthigh(P7_SHARD *the_shard, uint64_t id, char **r
 /******************************************************************************************************************************/
 /*                                                                                      Tests                                                                                                     */
 /******************************************************************************************************************************/
+// SRE FIXME: utests take no argument; only one utest driver per file
 #ifdef p7SHARD_TESTDRIVE
 
 int shard_compare_dsqdata(P7_SHARD *the_shard, char *basename, uint32_t num_shards, uint32_t my_shard){
@@ -835,6 +833,9 @@ main(int argc, char **argv)
     return eslOK;
 }
 #endif /*p7SHARD_TESTDRIVE*/
+
+
+// SRE FIXME: utests take no argument; only one utest driver per file
 
 #ifdef p7SHARD2_TESTDRIVE
 static ESL_OPTIONS options[] = {

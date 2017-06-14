@@ -1,7 +1,10 @@
 //! functions that run on the master node of a daemon
-#include <stdio.h>
-#include <time.h>
 #include "p7_config.h"
+
+#include <stdio.h>
+#include <string.h>
+#include <time.h>
+
 #include "easel.h"
 #include "hmmer.h"
 
@@ -147,7 +150,7 @@ void p7_daemon_masternode_Setup(uint32_t num_shards, uint32_t num_databases, cha
     P7_SHARD *current_shard;
 
     datafile = fopen(database_names[i], "r");
-    int ret_status = fread(id_string, 13, 1, datafile); //grab the first 13 characters of the file to determine the type of database it holds
+    fread(id_string, 13, 1, datafile); //grab the first 13 characters of the file to determine the type of database it holds
     fclose(datafile);
         
     if(!strncmp(id_string, "HMMER3", 5)){
@@ -197,6 +200,7 @@ ERROR:
   p7_Fail("Unable to allocate memory in p7_daemon_message_Create");  
 }
 
+#ifdef HAVE_MPI
 static ESL_OPTIONS options[] = {
   /* name           type      default  env  range  toggles reqs incomp  help                               docgroup*/
   { "-h",        eslARG_NONE,  FALSE, NULL, NULL,  NULL,  NULL, NULL, "show brief help on version and usage",  0 },
@@ -207,6 +211,8 @@ static ESL_OPTIONS options[] = {
 
 static char usage[]  = "[-options] <hmmfile> <seqence database>";
 static char banner[] = "hmmpgmd2, the daemon version of HMMER 4";
+#endif // HAVE_MPI
+
 //! main function called on the master node at startup
 void master_node_main(int argc, char ** argv, MPI_Datatype *daemon_mpitypes){
 #ifndef HAVE_MPI
@@ -429,24 +435,18 @@ void master_node_main(int argc, char ** argv, MPI_Datatype *daemon_mpitypes){
   }
   free(hmmbuffer); 
   p7_daemon_masternode_Destroy(masternode);
-#endif
-
   
   exit(0);
   // GOTO target used to catch error cases from ESL_ALLOC
   ERROR:
     p7_Fail("Unable to allocate memory in master_node_main");
+#endif
 }
 
 
 void *p7_daemon_master_hit_thread(void *argument){
-  int status; // return code from ESL_ALLOC
-  //unpack the argument
-
-  P7_DAEMON_MASTERNODE_HIT_THREAD_ARGUMENT *the_argument;
+  P7_DAEMON_MASTERNODE_HIT_THREAD_ARGUMENT *the_argument;   //unpack the argument
   the_argument = (P7_DAEMON_MASTERNODE_HIT_THREAD_ARGUMENT *) argument;
-
-  MPI_Comm hmmer_hits_comm = the_argument->hmmer_hits_comm;
   P7_DAEMON_MASTERNODE_STATE *masternode = the_argument->masternode;
   while(pthread_mutex_trylock(&(masternode->hit_wait_lock))){  // Acquire this lock to prevent race on first go signal
     }
@@ -507,9 +507,6 @@ void *p7_daemon_master_hit_thread(void *argument){
   printf("After hit receive loop, we should never get here\n");
   // If we get here, we've been told to exit
   pthread_exit(NULL);
-
-  ERROR:
-    p7_Fail("Unable to allocate memory in p7_daemon_master_hit_thread");
 }
 
 int p7_masternode_sort_hits(P7_DAEMON_MESSAGE *the_message, P7_DAEMON_MASTERNODE_STATE *masternode){
@@ -561,7 +558,6 @@ int p7_masternode_sort_hits(P7_DAEMON_MESSAGE *the_message, P7_DAEMON_MASTERNODE
 
 //! handles incoming messages to the master node
 void p7_masternode_message_handler(P7_DAEMON_MASTERNODE_STATE *masternode, P7_DAEMON_MESSAGE **buffer_handle, MPI_Datatype *daemon_mpitypes){
-  int status;
 #ifndef HAVE_MPI
   p7_Fail("Attempt to call p7_masternode_message_handler when HMMER was compiled without MPI support");
 #endif

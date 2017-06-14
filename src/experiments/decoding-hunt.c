@@ -27,8 +27,6 @@ static ESL_OPTIONS options[] = {
 static char usage[]  = "[-options] <hmmfile> <seqfile>";
 static char banner[] = "testing importance of ensemble calculations";
 
-static int acceleration_filter(ESL_DSQ *dsq, int L, P7_OPROFILE *om, P7_BG *bg,
-			       P7_FILTERMX *fx, P7_CHECKPTMX *cx, P7_SPARSEMASK *sm);
 static int update_histograms(P7_REFMX *pp, P7_COORD2 *dom, int ndom, ESL_HISTOGRAM *indom, ESL_HISTOGRAM *outdom);
 static int count_nin_nout_above(P7_REFMX *pp, P7_COORD2 *dom, int ndom, float thresh, int *opt_nin, int *opt_nout);
 static int count_nin_nout_below(P7_REFMX *pp, P7_COORD2 *dom, int ndom, float thresh, int *opt_nin, int *opt_nout);

@@ -87,8 +87,9 @@
 
 1 exercise modelconfig		@src/search/modelconfig_utest@
 
-1 exercise shard_utest		@src/daemon/shard_utest@ !tutorial/globins45!
-1 exercise shard_utest2		@src/daemon/shard_utest2@ !tutorial/globins4.hmm!
+# SRE: FIXME: utests take no arguments; 1 utest per file.
+#1 exercise shard_utest		@src/daemon/shard_utest@ !tutorial/globins45!
+#1 exercise shard_utest2	@src/daemon/shard_utest2@ !tutorial/globins4.hmm!
 
 
 ################################################################

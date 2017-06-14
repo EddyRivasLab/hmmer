@@ -9,8 +9,8 @@ HDRS =
 
 PROGS = hmmpgmd2
 
-UTESTS = shard_utest \
-	shard_utest2 
+UTESTS = 
+# shard_utest 
 
 STATS  = 
 

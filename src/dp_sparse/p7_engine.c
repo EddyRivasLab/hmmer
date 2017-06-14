@@ -491,6 +491,7 @@ int p7_engine_Compare_Sequence_HMM(P7_ENGINE *eng, ESL_DSQ *dsq, int L, P7_PROFI
 
 #include "hmmer.h"
 
+#if 0
 static int
 trace_dump_runlengths(P7_TRACE *tr)
 {
@@ -520,6 +521,7 @@ trace_dump_runlengths(P7_TRACE *tr)
     }
   return eslOK;
 }
+#endif
 
 
 static ESL_OPTIONS options[] = {

@@ -221,7 +221,7 @@ void p7_print_and_recycle_hit_tree(char *filename, ESL_RED_BLACK_DOUBLEKEY *tree
     current = tail_ptr; //start at low end of list
     while(current != NULL){
       current_hit = (P7_HIT *) current->contents;
-      fprintf(outfile, "%lu %s %s %s\n", current_hit->seqidx, current_hit->name, current_hit->acc, current_hit->desc);
+      fprintf(outfile, "%" PRId64 " %s %s %s\n", current_hit->seqidx, current_hit->name, current_hit->acc, current_hit->desc);
       count++;
       current = current->large;
       } 
@@ -231,7 +231,7 @@ void p7_print_and_recycle_hit_tree(char *filename, ESL_RED_BLACK_DOUBLEKEY *tree
   (*tail)->small = NULL;  // break the circular list that convert_to_sorted_linked creates so that we don't infinite-loop trying to free it
   masternode->hit_tree = NULL;
   } 
-  fprintf(outfile, "%lu hits found\n", count);
+  fprintf(outfile, "%" PRIu64 " hits found\n", count);
   fclose(outfile);
 
 }
