@@ -252,6 +252,8 @@ p7_oprofile_mpi_Pack(const P7_OPROFILE *om, char *buf, int n, int *pos, MPI_Comm
 }
 
 
+// NOTE:  This function is currently broken and incompatible with the change to support multiple SIMD types 
+// It will need to be rewritten 
 /* Function:  p7_oprofile_mpi_Unpack()
  * Synopsis:  Unpacks an OPROFILE from an MPI buffer.
  *
@@ -320,7 +322,8 @@ p7_oprofile_mpi_Unpack(char *buf, int n, int *pos, MPI_Comm comm, ESL_ALPHABET *
   Q16 = P7_NVB(M);
 
   /* Model allocation. */
-  if ((om = p7_oprofile_Create(M, abc)) == NULL) { status = eslEMEM; goto ERROR;    }
+  // This needs to be fixed to do the right thing with different SIMD types
+  if ((om = p7_oprofile_Create(M, abc, SSE)) == NULL) { status = eslEMEM; goto ERROR;    }
   om->M = M;
 
   /* MSV Filter information */
@@ -603,11 +606,13 @@ utest_oprofileSendRecv(int my_rank, int nproc)
   int             wn   = 0;
   int             i;
   char            errbuf[eslERRBUFSIZE];
-
+  P7_HARDWARE *hw;  // get information about CPU
+  if ((hw = p7_hardware_Create ()) == NULL)  p7_Fail("Couldn't get HW information data structure"); 
+  
   p7_modelsample(r, M, abc, &hmm); /* master and worker's sampled profiles are identical */
   bg = p7_bg_Create(abc);
   gm = p7_profile_Create(hmm->M, abc);
-  om = p7_oprofile_Create(hmm->M, abc);
+  om = p7_oprofile_Create(hmm->M, abc, hw->simd);
   p7_profile_ConfigLocal(gm, hmm, bg, L);
   p7_oprofile_Convert(gm, om);
   p7_bg_SetLength  (bg, L);

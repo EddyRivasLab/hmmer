@@ -32,6 +32,7 @@ enum p7c_xcells_e {
 #define P7C_DQ(dp, q)     ((dp)[(q) * p7C_NSCELLS + p7C_D])
 #define P7C_IQ(dp, q)     ((dp)[(q) * p7C_NSCELLS + p7C_I])
 
+
 typedef struct p7_checkptmx_s {
   /* Aligned memory allocation (for all rows):                                       */
   int M;	/* current actual query model dimension (consensus positions)        */

@@ -905,7 +905,9 @@ mpi_master(ESL_GETOPTS *go, struct cfg_s *cfg)
     dbformat = esl_sqio_EncodeFormat(esl_opt_GetString(go, "--tformat"));
     if (dbformat == eslSQFILE_UNKNOWN) p7_Fail("%s is not a recognized sequence database file format\n", esl_opt_GetString(go, "--tformat"));
   }
-
+  P7_HARDWARE *hw;  // get information about CPU
+  if ((hw = p7_hardware_Create ()) == NULL)  p7_Fail("Couldn't get HW information data structure"); 
+  
   bg = p7_bg_Create(abc);
 
   /* Initialize a default builder configuration,
@@ -989,7 +991,7 @@ mpi_master(ESL_GETOPTS *go, struct cfg_s *cfg)
 
       /* Create processing pipeline and hit list */
       th  = p7_tophits_Create(p7_TOPHITS_DEFAULT_INIT_ALLOC); 
-      pli = p7_pipeline_Create(go, om->M, 100, FALSE, p7_SEARCH_SEQS); /* L_hint = 100 is just a dummy for now */
+      pli = p7_pipeline_Create(go, om->M, 100, FALSE, p7_SEARCH_SEQS, hw->simd); /* L_hint = 100 is just a dummy for now */
       p7_pipeline_NewModel(pli, om, bg);
 
       /* Main loop: */
@@ -1194,7 +1196,9 @@ mpi_worker(ESL_GETOPTS *go, struct cfg_s *cfg)
   abc  = esl_alphabet_Create(eslAMINO);
   w    = esl_stopwatch_Create();
   bg   = p7_bg_Create(abc);
-
+  P7_HARDWARE *hw;  // get information about CPU
+  if ((hw = p7_hardware_Create ()) == NULL)  p7_Fail("Couldn't get HW information data structure"); 
+  
   /* If caller declared input formats, decode them */
   if (esl_opt_IsOn(go, "--qformat")) {
     qformat = esl_sqio_EncodeFormat(esl_opt_GetString(go, "--qformat"));
@@ -1265,7 +1269,7 @@ mpi_worker(ESL_GETOPTS *go, struct cfg_s *cfg)
 
       /* Create processing pipeline and hit list */
       th  = p7_tophits_Create(p7_TOPHITS_DEFAULT_INIT_ALLOC); 
-      pli = p7_pipeline_Create(go, om->M, 100, FALSE, p7_SEARCH_SEQS); /* L_hint = 100 is just a dummy for now */
+      pli = p7_pipeline_Create(go, om->M, 100, FALSE, p7_SEARCH_SEQS, hw->simd); /* L_hint = 100 is just a dummy for now */
       p7_pipeline_NewModel(pli, om, bg);
 
       /* receive a sequence block from the master */

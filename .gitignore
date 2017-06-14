@@ -1,2 +1,11 @@
 configure
+config.log
+config.status
 lib/easel
+.o
+._.DS_Store
+.DS_Store
+Makefile
+Makefile-subdirs.mk
+.pdf
+LICENSE
