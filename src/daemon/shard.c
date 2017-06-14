@@ -792,14 +792,15 @@ static ESL_OPTIONS options[] = {
   {  0, 0, 0, 0, 0, 0, 0, 0, 0, 0 },
 };
 
-static char usage[]  = "[-options] <dsqdata_basename>";
+static char usage[]  = "[-options] <dsqdata_basename> <hmmfile_name>";
 static char banner[] = "test driver for functions that create and process database shards";
 
 int
 main(int argc, char **argv)
 {
-  ESL_GETOPTS    *go   = p7_CreateDefaultApp(options, 1, argc, argv, banner, usage);
+  ESL_GETOPTS    *go   = p7_CreateDefaultApp(options, 2, argc, argv, banner, usage);
   char  *dsqfile = esl_opt_GetArg(go, 1);
+  char *hmmfile = esl_opt_GetArg(go, 2);
   ESL_ALPHABET   *abc     = NULL;
   //First, test creating a single shard from a database
   P7_SHARD *shard1 = p7_shard_Create_dsqdata(dsqfile, 1, 0);
@@ -815,51 +816,31 @@ main(int argc, char **argv)
     p7_Fail("Unable to open dsqdata database %s\n", dsqfile);
   }
 
-      status = shard_compare_dsqdata(shard1, dsqfile, 1, 0);
-      p7_shard_Destroy(shard1);
+  status = shard_compare_dsqdata(shard1, dsqfile, 1, 0);
+  p7_shard_Destroy(shard1);
 
-      // now, test shards that are only a fraction of the database
-      int i;
-      for(i= 0; i < 2; i++){
-        shard1 = p7_shard_Create_dsqdata(dsqfile, 2, i);
-        status = esl_dsqdata_Open(&abc, dsqfile, 1, &dd);
+  // now, test shards that are only a fraction of the database
+  int i;
+  for(i= 0; i < 2; i++){
+    shard1 = p7_shard_Create_dsqdata(dsqfile, 2, i);
+    status = esl_dsqdata_Open(&abc, dsqfile, 1, &dd);
     if(status != eslOK){
       p7_Fail("Unable to open dsqdata database %s\n", dsqfile);
     }
 
-        status = shard_compare_dsqdata(shard1, dsqfile, 2, i);
-        p7_shard_Destroy(shard1);
-      }
+    status = shard_compare_dsqdata(shard1, dsqfile, 2, i);
+    p7_shard_Destroy(shard1);
+  }
 
-      fprintf(stderr, "#  status = ok\n");
-    return eslOK;
-}
-#endif /*p7SHARD_TESTDRIVE*/
-
-#ifdef p7SHARD2_TESTDRIVE
-static ESL_OPTIONS options[] = {
-  /* name           type      default  env  range toggles reqs incomp  help                                       docgroup*/
-  { "-h",        eslARG_NONE,   FALSE, NULL, NULL,  NULL,  NULL, NULL, "show brief help on version and usage",           0 },
-  {  0, 0, 0, 0, 0, 0, 0, 0, 0, 0 },
-};
-
-static char usage[]  = "[-options] <hmmfile_name>";
-static char banner[] = "test driver for functions that create and process database shards";
-
-int
-main(int argc, char **argv)
-{
-  ESL_GETOPTS    *go   = p7_CreateDefaultApp(options, 1, argc, argv, banner, usage);
-  char *hmmfile = esl_opt_GetArg(go, 1);
-  ESL_ALPHABET   *abc     = NULL;
+  abc     = NULL;
   P7_HMMFILE     *hfp     = NULL;
-    P7_BG          *bg      = NULL;
-    P7_HMM         *hmm     = NULL;
-    P7_PROFILE     *gm      = NULL;
-    P7_OPROFILE    *om      = NULL;
+  P7_BG          *bg      = NULL;
+  P7_HMM         *hmm     = NULL;
+  P7_PROFILE     *gm      = NULL;
+  P7_OPROFILE    *om      = NULL;
 
   // make a shard out of the hmm file
-  P7_SHARD *shard1 = p7_shard_Create_hmmfile(hmmfile, 1, 0);
+  shard1 = p7_shard_Create_hmmfile(hmmfile, 1, 0);
   int shard_count = 0;
 
   if (p7_hmmfile_OpenE(hmmfile, NULL, &hfp, NULL) != eslOK) p7_Fail("Failed to open HMM file %s", hmmfile);
@@ -874,23 +855,23 @@ main(int argc, char **argv)
     bg = p7_bg_Create(abc);
     gm = p7_profile_Create (hmm->M, abc);
     om = p7_oprofile_Create(hmm->M, abc);
-      p7_profile_Config   (gm, hmm, bg);
-      p7_oprofile_Convert (gm, om);
+    p7_profile_Config   (gm, hmm, bg);
+    p7_oprofile_Convert (gm, om);
 
-      if(shard_count >= shard1->num_objects){
-        p7_Fail("More HMMs found in hmmfile than in shard");
-      }
-      P7_PROFILE *shard_profile =  *(shard_profiles + (shard1->directory[shard_count].descriptor_offset / sizeof(P7_PROFILE *)));
+    if(shard_count >= shard1->num_objects){
+      p7_Fail("More HMMs found in hmmfile than in shard");
+    }
+    P7_PROFILE *shard_profile =  *(shard_profiles + (shard1->directory[shard_count].descriptor_offset / sizeof(P7_PROFILE *)));
     P7_OPROFILE *shard_oprofile =  *(shard_oprofiles + (shard1->directory[shard_count].contents_offset / sizeof(P7_OPROFILE *)));
-      p7_oprofile_Compare(shard_oprofile, om, 0.01, "Shard oprofile failed to match HMM oprofile");
-      p7_profile_Compare(shard_profile, gm, 0.01);
-      shard_count++;
-    }
-    if(shard_count != shard1->num_objects){
-      p7_Fail("Object number mis-match between shard and hmmfile %d vs %d", shard_count, shard1->num_objects);
-    }
-      fprintf(stderr, "#  status = ok\n");
-    return eslOK;
+    p7_oprofile_Compare(shard_oprofile, om, 0.01, "Shard oprofile failed to match HMM oprofile");
+    p7_profile_Compare(shard_profile, gm, 0.01);
+    shard_count++;
+  }
+  if(shard_count != shard1->num_objects){
+    p7_Fail("Object number mis-match between shard and hmmfile %d vs %d", shard_count, shard1->num_objects);
+  }
+  fprintf(stderr, "#  status = ok\n");
+  return eslOK;
 }
 
-#endif /*p7SHARD2_TESTDRIVE*/
+#endif /*p7SHARD_TESTDRIVE*/
