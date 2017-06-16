@@ -812,7 +812,7 @@ posterior_decode_row_vmx(P7_CHECKPTMX *ox, int rowi, P7_SPARSEMASK *sm, float sm
   float  pnonhomology;
   vector bool mask;
   vector float pv;
-  int    q,r;
+  int    q;
   int    status;
   vector float zerov = {0.0, 0.0, 0.0, 0.0};
 
@@ -878,7 +878,7 @@ posterior_decode_row_vmx(P7_CHECKPTMX *ox, int rowi, P7_SPARSEMASK *sm, float sm
   for (q = 0; q < Q; q++)       
     {
       P7C_MQ(fwd, q) = vec_madd(cv, vec_madd(P7C_MQ(fwd, q), P7C_MQ(bck, q), zerov), zerov);
-      P7C_DQ(fwd, q) = vec_madd(cv, vec_madd(P7C_DQ(fwd, q), P7C_DQ(b6ck, q), zerov), zerov);
+      P7C_DQ(fwd, q) = vec_madd(cv, vec_madd(P7C_DQ(fwd, q), P7C_DQ(bck, q), zerov), zerov);
       P7C_IQ(fwd, q) = vec_madd(cv, vec_madd(P7C_IQ(fwd, q), P7C_IQ(bck, q), zerov), zerov);
     }
 
