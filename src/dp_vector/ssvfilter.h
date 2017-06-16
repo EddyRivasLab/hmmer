@@ -26,4 +26,8 @@ extern int p7_SSVFilter_avx512(const ESL_DSQ *dsq, int L, const P7_OPROFILE *om,
 extern int p7_SSVFilter_neon(const ESL_DSQ *dsq, int L, const P7_OPROFILE *om, float *ret_sc); 
 #endif
 
+#ifdef eslENABLE_VMX
+extern int p7_SSVFilter_vmx(const ESL_DSQ *dsq, int L, const P7_OPROFILE *om, float *ret_sc); 
+#endif
+
 #endif /*p7SSVFILTER_INCLUDED*/

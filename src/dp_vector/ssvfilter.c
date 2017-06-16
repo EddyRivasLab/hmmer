@@ -103,10 +103,10 @@ ssvfilter_dispatcher(const ESL_DSQ *dsq, int L, const P7_OPROFILE *om, float *re
   return p7_SSVFilter_neon(dsq, L, om, ret_sc);
 #endif
 
-  //#ifdef eslENABLE_VMX
-  //  p7_SSVFilter = p7_SSVFilter_vmx;
-  //  return p7_SSVFilter_vmx(dsq, L, om, ret_sc);
-  //#endif
+#ifdef eslENABLE_VMX
+  p7_SSVFilter = p7_SSVFilter_vmx;
+  return p7_SSVFilter_vmx(dsq, L, om, ret_sc);
+#endif
 
   p7_Die("ssvfilter_dispatcher found no vector implementation - that shouldn't happen.");
 }
