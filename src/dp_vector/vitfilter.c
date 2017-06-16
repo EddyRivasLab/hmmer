@@ -119,10 +119,10 @@ vitfilter_dispatcher(const ESL_DSQ *dsq, int L, const P7_OPROFILE *om, P7_FILTER
   return p7_ViterbiFilter_neon(dsq, L, om, ox, ret_sc);
 #endif
 
-  //#ifdef eslENABLE_VMX
-  //  p7_ViterbFilter = p7_ViterbiFilter_vmx;
-  //  return p7_ViterbiFilter_vmx(dsq, L, om, ox, ret_sc);
-  //#endif
+#ifdef eslENABLE_VMX
+  p7_ViterbiFilter = p7_ViterbiFilter_vmx;
+  return p7_ViterbiFilter_vmx(dsq, L, om, ox, ret_sc);
+#endif
 
   p7_Die("vitfilter_dispatcher found no vector implementation - that shouldn't happen.");
 }
@@ -308,7 +308,7 @@ utest_comparison(ESL_RANDOMNESS *r, ESL_ALPHABET *abc, P7_BG *bg, int M, int L, 
       sc2 /= om->scale_w;
       sc2 -= 3.0;
 
-      if (fabs(sc1-sc2) > 0.001) esl_fatal("viterbi filter unit test failed: scores differ (%.2f, %.2f)", sc1, sc2);
+      if (fabs(sc1-sc2) > 0.001) esl_fatal("viterbi filter unit test failed: scores differ (%.3f, %.3f)", sc1, sc2);
       
       p7_refmx_Reuse(gx);
       //p7_filtermx_Reuse(ox);

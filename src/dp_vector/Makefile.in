@@ -32,6 +32,9 @@ NEON_OBJS = \
 	vitfilter_neon.o    \
 	fwdfilter_neon.o
 
+VMX_OBJS = \
+	vitfilter_vmx.o
+
 HDRS =
 
 PROGS =
