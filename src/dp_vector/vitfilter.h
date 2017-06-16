@@ -25,4 +25,8 @@ extern int p7_ViterbiFilter_avx512(const ESL_DSQ *dsq, int L, const P7_OPROFILE 
 extern int p7_ViterbiFilter_neon(const ESL_DSQ *dsq, int L, const P7_OPROFILE *om, P7_FILTERMX *ox, float *ret_sc);
 #endif
 
+#ifdef eslENABLE_VMX
+extern int p7_ViterbiFilter_vmx(const ESL_DSQ *dsq, int L, const P7_OPROFILE *om, P7_FILTERMX *ox, float *ret_sc);
+#endif
+
 #endif /*p7VITFILTER_INCLUDED*/

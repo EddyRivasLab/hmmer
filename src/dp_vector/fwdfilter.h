@@ -31,5 +31,9 @@ extern int p7_ForwardFilter_neon (const ESL_DSQ *dsq, int L, const P7_OPROFILE *
 extern int p7_BackwardFilter_neon(const ESL_DSQ *dsq, int L, const P7_OPROFILE *om, P7_CHECKPTMX *ox, P7_SPARSEMASK *sm, float sm_thresh);
 #endif
 
+#ifdef eslENABLE_VMX
+extern int p7_ForwardFilter_vmx (const ESL_DSQ *dsq, int L, const P7_OPROFILE *om, P7_CHECKPTMX *ox, float *opt_sc);
+extern int p7_BackwardFilter_vmx(const ESL_DSQ *dsq, int L, const P7_OPROFILE *om, P7_CHECKPTMX *ox, P7_SPARSEMASK *sm, float sm_thresh);
+#endif
 #endif /*p7FWDFILTER_INCLUDED*/
 

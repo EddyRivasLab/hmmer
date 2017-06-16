@@ -136,10 +136,10 @@ fwdfilter_dispatcher(const ESL_DSQ *dsq, int L, const P7_OPROFILE *om, P7_CHECKP
   return p7_ForwardFilter_neon(dsq, L, om, ox, opt_sc);
 #endif
 
-  //#ifdef eslENABLE_VMX
-  //  p7_ForwardFilter = p7_ForwardFilter_vmx;
-  //  return p7_ForwardFilter_vmx(dsq, L, om, ox, opt_sc);
-  //#endif
+#ifdef eslENABLE_VMX
+  p7_ForwardFilter = p7_ForwardFilter_vmx;
+  return p7_ForwardFilter_vmx(dsq, L, om, ox, opt_sc);
+#endif
 
   p7_Die("fwdfilter_dispatcher found no vector implementation - that shouldn't happen.");
 }
@@ -179,10 +179,10 @@ bckfilter_dispatcher(const ESL_DSQ *dsq, int L, const P7_OPROFILE *om, P7_CHECKP
   return p7_BackwardFilter_neon(dsq, L, om, ox, sm, sm_thresh);
 #endif
 
-  //#ifdef eslENABLE_VMX
-  //  p7_BackwardFilter = p7_BackwardFilter_vmx;
-  //  return p7_BackwardFilter_vmx(dsq, L, om, ox, sm, sm_thresh);
-  //#endif
+#ifdef eslENABLE_VMX
+  p7_BackwardFilter = p7_BackwardFilter_vmx;
+  return p7_BackwardFilter_vmx(dsq, L, om, ox, sm, sm_thresh);
+#endif
 
   p7_Die("bckfilter_dispatcher found no vector implementation - that shouldn't happen.");
 }
