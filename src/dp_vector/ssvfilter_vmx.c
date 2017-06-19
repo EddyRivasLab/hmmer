@@ -3,7 +3,7 @@
  * 
  * See ssvfilter.md for notes.
  *
- * This file is conditionally compiled when eslENABLE_SSE is defined.
+ * This file is conditionally compiled when eslENABLE_VMX is defined.
  */
 #include "p7_config.h"
 #ifdef eslENABLE_VMX
@@ -18,16 +18,12 @@
 #include "dp_vector/p7_oprofile.h"
 #include "dp_vector/ssvfilter.h"
 
-/* Note that some ifdefs below has to be changed if these values are
-   changed. These values are chosen based on some simple speed
-   tests. Apparently, two registers are generally used for something
-   else, leaving 14 registers on 64 bit versions and 6 registers on 32
-   bit versions. */
-#ifdef __x86_64__ /* 64 bit version */
-#define  MAX_BANDS 14
-#else
-#define  MAX_BANDS 6
-#endif
+
+// Altivec has 32 vector registers.
+// Performance seems sligtly better when we leave two of them free for
+// scratch variables, but the variation between MAX_BANDS=27 and MAX_BANDS=32 is on the order of the
+// run-to-run variation between tests with the same binary    
+#define MAX_BANDS 30
 
 
 #define STEP_SINGLE(sv)                   \
@@ -110,6 +106,62 @@
   STEP_BANDS_17()       \
   STEP_SINGLE(sv17)
 
+#define STEP_BANDS_19() \
+  STEP_BANDS_18()       \
+  STEP_SINGLE(sv18)
+
+#define STEP_BANDS_20() \
+  STEP_BANDS_19()       \
+  STEP_SINGLE(sv19)
+
+#define STEP_BANDS_21() \
+  STEP_BANDS_20()       \
+  STEP_SINGLE(sv20)
+
+#define STEP_BANDS_22() \
+  STEP_BANDS_21()       \
+  STEP_SINGLE(sv21)
+
+#define STEP_BANDS_23() \
+  STEP_BANDS_22()       \
+  STEP_SINGLE(sv22)
+
+#define STEP_BANDS_24() \
+  STEP_BANDS_23()       \
+  STEP_SINGLE(sv23)
+
+#define STEP_BANDS_25() \
+  STEP_BANDS_24()       \
+  STEP_SINGLE(sv24)
+
+#define STEP_BANDS_26() \
+  STEP_BANDS_25()       \
+  STEP_SINGLE(sv25)
+
+#define STEP_BANDS_27() \
+  STEP_BANDS_26()       \
+  STEP_SINGLE(sv26)
+
+#define STEP_BANDS_28() \
+  STEP_BANDS_27()       \
+  STEP_SINGLE(sv27)
+
+#define STEP_BANDS_29() \
+  STEP_BANDS_28()       \
+  STEP_SINGLE(sv28)
+
+#define STEP_BANDS_30() \
+  STEP_BANDS_29()       \
+  STEP_SINGLE(sv29)
+
+#define STEP_BANDS_31() \
+  STEP_BANDS_30()       \
+  STEP_SINGLE(sv30)
+
+#define STEP_BANDS_32() \
+  STEP_BANDS_31()       \
+  STEP_SINGLE(sv31)
+
 #define CONVERT_STEP(step, length_check, label, sv, pos) \
   length_check(label)                                    \
   rsc = (vector signed char *) om->rbv[dsq[i]] + pos;               \
@@ -188,6 +240,62 @@
   CONVERT_STEP(step, LENGTH_CHECK, label, sv17, Q - 18) \
   CONVERT_17(step, LENGTH_CHECK, label)
 
+#define CONVERT_19(step, LENGTH_CHECK, label)           \
+  CONVERT_STEP(step, LENGTH_CHECK, label, sv18, Q - 19) \
+  CONVERT_18(step, LENGTH_CHECK, label)
+
+#define CONVERT_20(step, LENGTH_CHECK, label)           \
+  CONVERT_STEP(step, LENGTH_CHECK, label, sv19, Q - 20) \
+  CONVERT_19(step, LENGTH_CHECK, label)
+
+#define CONVERT_21(step, LENGTH_CHECK, label)           \
+  CONVERT_STEP(step, LENGTH_CHECK, label, sv20, Q - 21) \
+  CONVERT_20(step, LENGTH_CHECK, label)
+
+#define CONVERT_22(step, LENGTH_CHECK, label)           \
+  CONVERT_STEP(step, LENGTH_CHECK, label, sv21, Q - 22) \
+  CONVERT_21(step, LENGTH_CHECK, label)
+
+#define CONVERT_23(step, LENGTH_CHECK, label)           \
+  CONVERT_STEP(step, LENGTH_CHECK, label, sv22, Q - 23) \
+  CONVERT_22(step, LENGTH_CHECK, label)
+
+#define CONVERT_24(step, LENGTH_CHECK, label)           \
+  CONVERT_STEP(step, LENGTH_CHECK, label, sv23, Q - 24) \
+  CONVERT_23(step, LENGTH_CHECK, label)
+
+#define CONVERT_25(step, LENGTH_CHECK, label)           \
+  CONVERT_STEP(step, LENGTH_CHECK, label, sv24, Q - 25) \
+  CONVERT_24(step, LENGTH_CHECK, label)
+
+#define CONVERT_26(step, LENGTH_CHECK, label)           \
+  CONVERT_STEP(step, LENGTH_CHECK, label, sv25, Q - 26) \
+  CONVERT_25(step, LENGTH_CHECK, label)
+
+#define CONVERT_27(step, LENGTH_CHECK, label)           \
+  CONVERT_STEP(step, LENGTH_CHECK, label, sv26, Q - 27) \
+  CONVERT_26(step, LENGTH_CHECK, label)
+
+#define CONVERT_28(step, LENGTH_CHECK, label)           \
+  CONVERT_STEP(step, LENGTH_CHECK, label, sv27, Q - 28) \
+  CONVERT_27(step, LENGTH_CHECK, label)
+
+#define CONVERT_29(step, LENGTH_CHECK, label)           \
+  CONVERT_STEP(step, LENGTH_CHECK, label, sv28, Q - 29) \
+  CONVERT_28(step, LENGTH_CHECK, label)
+
+#define CONVERT_30(step, LENGTH_CHECK, label)           \
+  CONVERT_STEP(step, LENGTH_CHECK, label, sv29, Q - 30) \
+  CONVERT_29(step, LENGTH_CHECK, label)
+
+#define CONVERT_31(step, LENGTH_CHECK, label)           \
+  CONVERT_STEP(step, LENGTH_CHECK, label, sv30, Q - 31) \
+  CONVERT_30(step, LENGTH_CHECK, label)
+
+#define CONVERT_32(step, LENGTH_CHECK, label)           \
+  CONVERT_STEP(step, LENGTH_CHECK, label, sv31, Q - 32) \
+  CONVERT_31(step, LENGTH_CHECK, label)
+
 #define RESET_1()                 \
   register vector signed char sv00 = beginv;
 
@@ -258,6 +366,62 @@
 #define RESET_18()                \
   RESET_17()                      \
   register vector signed char sv17 = beginv;
+
+#define RESET_19()                \
+  RESET_18()                      \
+  register vector signed char sv18 = beginv;
+
+#define RESET_20()                \
+  RESET_19()                      \
+  register vector signed char sv19 = beginv;
+
+#define RESET_21()                \
+  RESET_20()                      \
+  register vector signed char sv20 = beginv;
+
+#define RESET_22()                \
+  RESET_21()                      \
+  register vector signed char sv21 = beginv;
+
+#define RESET_23()                \
+  RESET_22()                      \
+  register vector signed char sv22 = beginv;
+
+#define RESET_24()                \
+  RESET_23()                      \
+  register vector signed char sv23 = beginv;
+
+#define RESET_25()                \
+  RESET_24()                      \
+  register vector signed char sv24 = beginv;
+
+#define RESET_26()                \
+  RESET_25()                      \
+  register vector signed char sv25 = beginv;
+
+#define RESET_27()                \
+  RESET_26()                      \
+  register vector signed char sv26 = beginv;
+
+#define RESET_28()                \
+  RESET_27()                      \
+  register vector signed char sv27 = beginv;
+
+#define RESET_29()                \
+  RESET_28()                      \
+  register vector signed char sv28 = beginv;
+
+#define RESET_30()                \
+  RESET_29()                      \
+  register vector signed char sv29 = beginv;
+
+#define RESET_31()                \
+  RESET_30()                      \
+  register vector signed char sv30 = beginv;
+
+#define RESET_32()                \
+  RESET_31()                      \
+  register vector signed char sv31 = beginv;
 
 
 /* Original Knudsen CALC() was simpler. (Look back in git for comparison.)
@@ -469,7 +633,91 @@ calc_band_18(const ESL_DSQ *dsq, int L, const P7_OPROFILE *om, int q, vector sig
   CALC(RESET_18, STEP_BANDS_18, CONVERT_18, 18)
 }
 #endif /* MAX_BANDS > 14 */
+#if MAX_BANDS > 18
+static vector signed char
+calc_band_19(const ESL_DSQ *dsq, int L, const P7_OPROFILE *om, int q, vector signed char beginv, register vector signed char xEv)
+{
+  CALC(RESET_19, STEP_BANDS_19, CONVERT_19, 19)
+}
 
+static vector signed char
+calc_band_20(const ESL_DSQ *dsq, int L, const P7_OPROFILE *om, int q, vector signed char beginv, register vector signed char xEv)
+{
+  CALC(RESET_20, STEP_BANDS_20, CONVERT_20, 20)
+}
+
+static vector signed char
+calc_band_21(const ESL_DSQ *dsq, int L, const P7_OPROFILE *om, int q, vector signed char beginv, register vector signed char xEv)
+{
+  CALC(RESET_21, STEP_BANDS_21, CONVERT_21, 21)
+}
+
+static vector signed char
+calc_band_22(const ESL_DSQ *dsq, int L, const P7_OPROFILE *om, int q, vector signed char beginv, register vector signed char xEv)
+{
+  CALC(RESET_22, STEP_BANDS_22, CONVERT_22, 22)
+}
+
+static vector signed char
+calc_band_23(const ESL_DSQ *dsq, int L, const P7_OPROFILE *om, int q, vector signed char beginv, register vector signed char xEv)
+{
+  CALC(RESET_23, STEP_BANDS_23, CONVERT_23, 23)
+}
+
+static vector signed char
+calc_band_24(const ESL_DSQ *dsq, int L, const P7_OPROFILE *om, int q, vector signed char beginv, register vector signed char xEv)
+{
+  CALC(RESET_24, STEP_BANDS_24, CONVERT_24, 24)
+}
+
+static vector signed char
+calc_band_25(const ESL_DSQ *dsq, int L, const P7_OPROFILE *om, int q, vector signed char beginv, register vector signed char xEv)
+{
+  CALC(RESET_25, STEP_BANDS_25, CONVERT_25, 25)
+}
+
+static vector signed char
+calc_band_26(const ESL_DSQ *dsq, int L, const P7_OPROFILE *om, int q, vector signed char beginv, register vector signed char xEv)
+{
+  CALC(RESET_26, STEP_BANDS_26, CONVERT_26, 26)
+}
+
+static vector signed char
+calc_band_27(const ESL_DSQ *dsq, int L, const P7_OPROFILE *om, int q, vector signed char beginv, register vector signed char xEv)
+{
+  CALC(RESET_27, STEP_BANDS_27, CONVERT_27, 27)
+}
+
+static vector signed char
+calc_band_28(const ESL_DSQ *dsq, int L, const P7_OPROFILE *om, int q, vector signed char beginv, register vector signed char xEv)
+{
+  CALC(RESET_28, STEP_BANDS_28, CONVERT_28, 28)
+}
+
+static vector signed char
+calc_band_29(const ESL_DSQ *dsq, int L, const P7_OPROFILE *om, int q, vector signed char beginv, register vector signed char xEv)
+{
+  CALC(RESET_29, STEP_BANDS_29, CONVERT_29, 29)
+}
+
+static vector signed char
+calc_band_30(const ESL_DSQ *dsq, int L, const P7_OPROFILE *om, int q, vector signed char beginv, register vector signed char xEv)
+{
+  CALC(RESET_30, STEP_BANDS_30, CONVERT_30, 30)
+}
+/* Commented out to prevent compiler warnings.  Put these back in if you increase MAX_BANDS
+static vector signed char
+calc_band_31(const ESL_DSQ *dsq, int L, const P7_OPROFILE *om, int q, vector signed char beginv, register vector signed char xEv)
+{
+  CALC(RESET_31, STEP_BANDS_31, CONVERT_18, 31)
+}
+
+static vector signed char
+calc_band_32(const ESL_DSQ *dsq, int L, const P7_OPROFILE *om, int q, vector signed char beginv, register vector signed char xEv)
+{
+  CALC(RESET_32, STEP_BANDS_32, CONVERT_32, 32)
+} */
+#endif
 
 
 /* Function:  p7_SSVFilter_vmx()
@@ -489,7 +737,10 @@ p7_SSVFilter_vmx(const ESL_DSQ *dsq, int L, const P7_OPROFILE *om, float *ret_sc
   int     q;			                 // counter over vectors 0..nq-1  
   int     bands;                                 // number of bands (rounds) to use   
   int     i;                                     // counter for bands                     
+
   /* function pointers for the various number of vectors to use */
+  // NEED TO CHANGE THESE IF YOU CHANGE MAX_BANDS!!!
+
   vector signed char (*fs[MAX_BANDS + 1]) (const ESL_DSQ *, int, const P7_OPROFILE *, int, register vector signed char, vector signed char)
     = {NULL, calc_band_1,  calc_band_2,  calc_band_3,  calc_band_4,  calc_band_5,  calc_band_6
 #if MAX_BANDS > 6
@@ -498,6 +749,10 @@ p7_SSVFilter_vmx(const ESL_DSQ *dsq, int L, const P7_OPROFILE *om, float *ret_sc
 #if MAX_BANDS > 14
           , calc_band_15, calc_band_16, calc_band_17, calc_band_18
 #endif
+#if MAX_BANDS > 18
+          , calc_band_19, calc_band_20, calc_band_21, calc_band_22, calc_band_23, calc_band_24, calc_band_25, calc_band_26
+          , calc_band_27, calc_band_28, calc_band_29, calc_band_30
+#endif          
   };
 
   /* Use the highest number of bands but no more than MAX_BANDS */

@@ -18,11 +18,7 @@
 #include "dp_vector/p7_oprofile.h"
 #include "dp_vector/ssvfilter.h"
 
-#ifdef __x86_64__ /* 64 bit version */
-#define  MAX_BANDS 14
-#else
-#define  MAX_BANDS 6
-#endif
+#define MAX_BANDS 30
 
 #define STEP_SINGLE(sv)                     \
   sv   = _mm512_adds_epi8(sv, *rsc); rsc++; \
@@ -104,6 +100,62 @@
   STEP_BANDS_17()       \
   STEP_SINGLE(sv17) 
 
+#define STEP_BANDS_19() \
+  STEP_BANDS_18()       \
+  STEP_SINGLE(sv18)
+
+#define STEP_BANDS_20() \
+  STEP_BANDS_19()       \
+  STEP_SINGLE(sv19)
+
+#define STEP_BANDS_21() \
+  STEP_BANDS_20()       \
+  STEP_SINGLE(sv20)
+
+#define STEP_BANDS_22() \
+  STEP_BANDS_21()       \
+  STEP_SINGLE(sv21)
+
+#define STEP_BANDS_23() \
+  STEP_BANDS_22()       \
+  STEP_SINGLE(sv22)
+
+#define STEP_BANDS_24() \
+  STEP_BANDS_23()       \
+  STEP_SINGLE(sv23)
+
+#define STEP_BANDS_25() \
+  STEP_BANDS_24()       \
+  STEP_SINGLE(sv24)
+
+#define STEP_BANDS_26() \
+  STEP_BANDS_25()       \
+  STEP_SINGLE(sv25)
+
+#define STEP_BANDS_27() \
+  STEP_BANDS_26()       \
+  STEP_SINGLE(sv26)
+
+#define STEP_BANDS_28() \
+  STEP_BANDS_27()       \
+  STEP_SINGLE(sv27)
+
+#define STEP_BANDS_29() \
+  STEP_BANDS_28()       \
+  STEP_SINGLE(sv28)
+
+#define STEP_BANDS_30() \
+  STEP_BANDS_29()       \
+  STEP_SINGLE(sv29)
+
+#define STEP_BANDS_31() \
+  STEP_BANDS_30()       \
+  STEP_SINGLE(sv30)
+
+#define STEP_BANDS_32() \
+  STEP_BANDS_31()       \
+  STEP_SINGLE(sv31)
+
 #define CONVERT_STEP(step, length_check, label, sv, pos) \
   length_check(label)                                    \
   rsc = (__m512i *) om->rbv[dsq[i]] + pos;               \
@@ -181,6 +233,61 @@
 #define CONVERT_18(step, LENGTH_CHECK, label)           \
   CONVERT_STEP(step, LENGTH_CHECK, label, sv17, Q - 18) \
   CONVERT_17(step, LENGTH_CHECK, label)
+#define CONVERT_19(step, LENGTH_CHECK, label)           \
+  CONVERT_STEP(step, LENGTH_CHECK, label, sv18, Q - 19) \
+  CONVERT_18(step, LENGTH_CHECK, label)
+
+#define CONVERT_20(step, LENGTH_CHECK, label)           \
+  CONVERT_STEP(step, LENGTH_CHECK, label, sv19, Q - 20) \
+  CONVERT_19(step, LENGTH_CHECK, label)
+
+#define CONVERT_21(step, LENGTH_CHECK, label)           \
+  CONVERT_STEP(step, LENGTH_CHECK, label, sv20, Q - 21) \
+  CONVERT_20(step, LENGTH_CHECK, label)
+
+#define CONVERT_22(step, LENGTH_CHECK, label)           \
+  CONVERT_STEP(step, LENGTH_CHECK, label, sv21, Q - 22) \
+  CONVERT_21(step, LENGTH_CHECK, label)
+
+#define CONVERT_23(step, LENGTH_CHECK, label)           \
+  CONVERT_STEP(step, LENGTH_CHECK, label, sv22, Q - 23) \
+  CONVERT_22(step, LENGTH_CHECK, label)
+
+#define CONVERT_24(step, LENGTH_CHECK, label)           \
+  CONVERT_STEP(step, LENGTH_CHECK, label, sv23, Q - 24) \
+  CONVERT_23(step, LENGTH_CHECK, label)
+
+#define CONVERT_25(step, LENGTH_CHECK, label)           \
+  CONVERT_STEP(step, LENGTH_CHECK, label, sv24, Q - 25) \
+  CONVERT_24(step, LENGTH_CHECK, label)
+
+#define CONVERT_26(step, LENGTH_CHECK, label)           \
+  CONVERT_STEP(step, LENGTH_CHECK, label, sv25, Q - 26) \
+  CONVERT_25(step, LENGTH_CHECK, label)
+
+#define CONVERT_27(step, LENGTH_CHECK, label)           \
+  CONVERT_STEP(step, LENGTH_CHECK, label, sv26, Q - 27) \
+  CONVERT_26(step, LENGTH_CHECK, label)
+
+#define CONVERT_28(step, LENGTH_CHECK, label)           \
+  CONVERT_STEP(step, LENGTH_CHECK, label, sv27, Q - 28) \
+  CONVERT_27(step, LENGTH_CHECK, label)
+
+#define CONVERT_29(step, LENGTH_CHECK, label)           \
+  CONVERT_STEP(step, LENGTH_CHECK, label, sv28, Q - 29) \
+  CONVERT_28(step, LENGTH_CHECK, label)
+
+#define CONVERT_30(step, LENGTH_CHECK, label)           \
+  CONVERT_STEP(step, LENGTH_CHECK, label, sv29, Q - 30) \
+  CONVERT_29(step, LENGTH_CHECK, label)
+
+#define CONVERT_31(step, LENGTH_CHECK, label)           \
+  CONVERT_STEP(step, LENGTH_CHECK, label, sv30, Q - 31) \
+  CONVERT_30(step, LENGTH_CHECK, label)
+
+#define CONVERT_32(step, LENGTH_CHECK, label)           \
+  CONVERT_STEP(step, LENGTH_CHECK, label, sv31, Q - 32) \
+  CONVERT_31(step, LENGTH_CHECK, label)
 
 #define RESET_1()                  \
   register __m512i sv00 = beginv;
@@ -252,6 +359,62 @@
 #define RESET_18()                 \
   RESET_17()                       \
   register __m512i sv17 = beginv;
+
+#define RESET_19()                \
+  RESET_18()                      \
+  register __m512i sv18 = beginv;
+
+#define RESET_20()                \
+  RESET_19()                      \
+  register __m512i sv19 = beginv;
+
+#define RESET_21()                \
+  RESET_20()                      \
+  register __m512i sv20 = beginv;
+
+#define RESET_22()                \
+  RESET_21()                      \
+  register __m512i sv21 = beginv;
+
+#define RESET_23()                \
+  RESET_22()                      \
+  register __m512i sv22 = beginv;
+
+#define RESET_24()                \
+  RESET_23()                      \
+  register __m512i sv23 = beginv;
+
+#define RESET_25()                \
+  RESET_24()                      \
+  register __m512i sv24 = beginv;
+
+#define RESET_26()                \
+  RESET_25()                      \
+  register __m512i sv25 = beginv;
+
+#define RESET_27()                \
+  RESET_26()                      \
+  register __m512i sv26 = beginv;
+
+#define RESET_28()                \
+  RESET_27()                      \
+  register __m512i sv27 = beginv;
+
+#define RESET_29()                \
+  RESET_28()                      \
+  register __m512i sv28 = beginv;
+
+#define RESET_30()                \
+  RESET_29()                      \
+  register __m512i sv29 = beginv;
+
+#define RESET_31()                \
+  RESET_30()                      \
+  register __m512i sv30 = beginv;
+
+#define RESET_32()                \
+  RESET_31()                      \
+  register __m512i sv31 = beginv;
 
 #define CALC(reset, step, convert, width)      \
   __m512i  neginfmask = _mm512_mask_blend_epi8(0x1, _mm512_setzero_si512(), beginv); \
@@ -458,6 +621,93 @@ calc_band_18(const ESL_DSQ *dsq, int L, const P7_OPROFILE *om, int q, __m512i be
 }
 #endif /* MAX_BANDS > 14 */
 
+#if MAX_BANDS > 18
+static __m512i
+calc_band_19(const ESL_DSQ *dsq, int L, const P7_OPROFILE *om, int q, __m512i beginv, register __m512i xEv)
+{
+  CALC(RESET_19, STEP_BANDS_19, CONVERT_19, 19)
+}
+
+static __m512i
+calc_band_20(const ESL_DSQ *dsq, int L, const P7_OPROFILE *om, int q, __m512i beginv, register __m512i xEv)
+{
+  CALC(RESET_20, STEP_BANDS_20, CONVERT_20, 20)
+}
+
+static __m512i
+calc_band_21(const ESL_DSQ *dsq, int L, const P7_OPROFILE *om, int q, __m512i beginv, register __m512i xEv)
+{
+  CALC(RESET_21, STEP_BANDS_21, CONVERT_21, 21)
+}
+
+static __m512i
+calc_band_22(const ESL_DSQ *dsq, int L, const P7_OPROFILE *om, int q, __m512i beginv, register __m512i xEv)
+{
+  CALC(RESET_22, STEP_BANDS_22, CONVERT_22, 22)
+}
+
+static __m512i
+calc_band_23(const ESL_DSQ *dsq, int L, const P7_OPROFILE *om, int q, __m512i beginv, register __m512i xEv)
+{
+  CALC(RESET_23, STEP_BANDS_23, CONVERT_23, 23)
+}
+
+static __m512i
+calc_band_24(const ESL_DSQ *dsq, int L, const P7_OPROFILE *om, int q, __m512i beginv, register __m512i xEv)
+{
+  CALC(RESET_24, STEP_BANDS_24, CONVERT_24, 24)
+}
+
+static __m512i
+calc_band_25(const ESL_DSQ *dsq, int L, const P7_OPROFILE *om, int q, __m512i beginv, register __m512i xEv)
+{
+  CALC(RESET_25, STEP_BANDS_25, CONVERT_25, 25)
+}
+
+static __m512i
+calc_band_26(const ESL_DSQ *dsq, int L, const P7_OPROFILE *om, int q, __m512i beginv, register __m512i xEv)
+{
+  CALC(RESET_26, STEP_BANDS_26, CONVERT_26, 26)
+}
+
+static __m512i
+calc_band_27(const ESL_DSQ *dsq, int L, const P7_OPROFILE *om, int q, __m512i beginv, register __m512i xEv)
+{
+  CALC(RESET_27, STEP_BANDS_27, CONVERT_27, 27)
+}
+
+static __m512i
+calc_band_28(const ESL_DSQ *dsq, int L, const P7_OPROFILE *om, int q, __m512i beginv, register __m512i xEv)
+{
+  CALC(RESET_28, STEP_BANDS_28, CONVERT_28, 28)
+}
+
+static __m512i
+calc_band_29(const ESL_DSQ *dsq, int L, const P7_OPROFILE *om, int q, __m512i beginv, register __m512i xEv)
+{
+  CALC(RESET_29, STEP_BANDS_29, CONVERT_29, 29)
+}
+
+static __m512i
+calc_band_30(const ESL_DSQ *dsq, int L, const P7_OPROFILE *om, int q, __m512i beginv, register __m512i xEv)
+{
+  CALC(RESET_30, STEP_BANDS_30, CONVERT_30, 30)
+}
+#endif
+#if MAX_BANDS > 30
+static __m512i
+calc_band_31(const ESL_DSQ *dsq, int L, const P7_OPROFILE *om, int q, __m512i beginv, register __m512i xEv)
+{
+  CALC(RESET_31, STEP_BANDS_31, CONVERT_18, 31)
+}
+
+static __m512i
+calc_band_32(const ESL_DSQ *dsq, int L, const P7_OPROFILE *om, int q, __m512i beginv, register __m512i xEv)
+{
+  CALC(RESET_32, STEP_BANDS_32, CONVERT_32, 32)
+} 
+
+#endif
 
 /* Function:  p7_SSVFilter_avx512()
  * Synopsis:  SSV filter; x86 AVX-512 version. 
@@ -482,6 +732,13 @@ p7_SSVFilter_avx512(const ESL_DSQ *dsq, int L, const P7_OPROFILE *om, float *ret
 #if MAX_BANDS > 14
           , calc_band_15, calc_band_16, calc_band_17, calc_band_18
 #endif
+#if MAX_BANDS > 18
+          , calc_band_19, calc_band_20, calc_band_21, calc_band_22, calc_band_23, calc_band_24, calc_band_25, calc_band_26
+       , calc_band_27, calc_band_28, calc_band_29, calc_band_30
+#endif
+#if MAX_BANDS > 30
+       , calc_band_31, calc_band_32
+#endif      
   };
 
   bands = (Q + MAX_BANDS - 1) / MAX_BANDS;
