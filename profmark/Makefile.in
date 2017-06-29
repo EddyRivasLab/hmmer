@@ -55,11 +55,7 @@ distclean: clean
 clean:
 	-rm -f *.o *~ ${PROGS} 
 	-rm -f *.gcno
-
-################################################################
-# @LICENSE@
-# 
-# SVN $URL$
-# SVN $Id$
-################################################################
+	for prog in ${PROGS}; do \
+	   if test -d $$prog.dSYM; then rm -rf $$prog.dSYM; fi ;\
+	done
 

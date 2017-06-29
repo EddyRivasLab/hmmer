@@ -292,11 +292,6 @@ main(int argc, char **argv)
   process_commandline(argc, argv, &go, &cfg.hmmfile, &cfg.dbfile);    
 
 /* is the range restricted? */
-
-#ifndef eslAUGMENT_SSI
-  if (esl_opt_IsUsed(go, "--restrictdb_stkey") || esl_opt_IsUsed(go, "--restrictdb_n")  || esl_opt_IsUsed(go, "--ssifile")  )
-    p7_Fail("Unable to use range-control options unless an SSI index file is available. See 'esl_sfetch --index'\n");
-#else
   if (esl_opt_IsUsed(go, "--restrictdb_stkey") )
     if ((cfg.firstseq_key = esl_opt_GetString(go, "--restrictdb_stkey")) == NULL)  p7_Fail("Failure capturing --restrictdb_stkey\n");
 
@@ -305,8 +300,6 @@ main(int argc, char **argv)
 
   if ( cfg.n_targetseq != -1 && cfg.n_targetseq < 1 )
     p7_Fail("--restrictdb_n must be >= 1\n");
-
-#endif
 
 
   /* Figure out who we are, and send control there: 
@@ -508,7 +501,8 @@ serial_master(ESL_GETOPTS *go, struct cfg_s *cfg)
         info[i].th  = p7_tophits_Create();
         info[i].om  = p7_oprofile_Clone(om);
         info[i].pli = p7_pipeline_Create(go, om->M, 100, FALSE, p7_SEARCH_SEQS); /* L_hint = 100 is just a dummy for now */
-        p7_pli_NewModel(info[i].pli, info[i].om, info[i].bg);
+        status = p7_pli_NewModel(info[i].pli, info[i].om, info[i].bg);
+        if (status == eslEINVAL) p7_Fail(info->pli->errbuf);
 
 #ifdef HMMER_THREADS
         if (ncpus > 0) esl_threads_AddThread(threadObj, &info[i]);
@@ -565,6 +559,11 @@ serial_master(ESL_GETOPTS *go, struct cfg_s *cfg)
 
 	if (p7_tophits_Alignment(info->th, abc, NULL, NULL, 0, p7_ALL_CONSENSUS_COLS, &msa) == eslOK)
 	  {
+	    esl_msa_SetName     (msa, hmm->name, -1);
+	    esl_msa_SetAccession(msa, hmm->acc,  -1);
+	    esl_msa_SetDesc     (msa, hmm->desc, -1);
+	    esl_msa_FormatAuthor(msa, "hmmsearch (HMMER %s)", HMMER_VERSION);
+
 	    if (textw > 0) esl_msafile_Write(afp, msa, eslMSAFILE_STOCKHOLM);
 	    else           esl_msafile_Write(afp, msa, eslMSAFILE_PFAM);
 	  
@@ -1048,6 +1047,11 @@ mpi_master(ESL_GETOPTS *go, struct cfg_s *cfg)
 
 	if (p7_tophits_Alignment(th, abc, NULL, NULL, 0, p7_ALL_CONSENSUS_COLS, &msa) == eslOK)
 	  {
+	    esl_msa_SetName     (msa, hmm->name, -1);
+	    esl_msa_SetAccession(msa, hmm->acc,  -1);
+	    esl_msa_SetDesc     (msa, hmm->desc, -1);
+	    esl_msa_FormatAuthor(msa, "hmmsearch (HMMER %s)", HMMER_VERSION);
+
 	    if (textw > 0) esl_msafile_Write(afp, msa, eslMSAFILE_STOCKHOLM);
 	    else           esl_msafile_Write(afp, msa, eslMSAFILE_PFAM);
 	  

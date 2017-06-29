@@ -501,7 +501,7 @@ p7_pli_NewModel(P7_PIPELINE *pli, const P7_OPROFILE *om, P7_BG *bg)
 
   if (pli->do_biasfilter) p7_bg_SetFilter(bg, om->M, om->compo);
 
-  if (pli->mode == p7_SEARCH_SEQS) 
+  if (pli->mode == p7_SEARCH_SEQS)
     status = p7_pli_NewModelThresholds(pli, om);
 
   pli->W = om->max_length;
@@ -538,26 +538,29 @@ p7_pli_NewModelThresholds(P7_PIPELINE *pli, const P7_OPROFILE *om)
 {
 
   if (pli->use_bit_cutoffs)
+  {
+    if (pli->use_bit_cutoffs == p7H_GA)
     {
-      if (pli->use_bit_cutoffs == p7H_GA)
-    {
-      if (om->cutoff[p7_GA1] == p7_CUTOFF_UNSET) ESL_FAIL(eslEINVAL, pli->errbuf, "GA bit thresholds unavailable on model %s\n", om->name);
+      if (om->cutoff[p7_GA1] == p7_CUTOFF_UNSET)
+        ESL_FAIL(eslEINVAL, pli->errbuf, "GA bit thresholds unavailable on model %s\n", om->name);
       pli->T    = pli->incT    = om->cutoff[p7_GA1];
       pli->domT = pli->incdomT = om->cutoff[p7_GA2];
     }
-      else if  (pli->use_bit_cutoffs == p7H_TC)
+    else if  (pli->use_bit_cutoffs == p7H_TC)
     {
-      if (om->cutoff[p7_TC1] == p7_CUTOFF_UNSET) ESL_FAIL(eslEINVAL, pli->errbuf, "TC bit thresholds unavailable on model %s\n", om->name);
+      if (om->cutoff[p7_TC1] == p7_CUTOFF_UNSET)
+        ESL_FAIL(eslEINVAL, pli->errbuf, "TC bit thresholds unavailable on model %s\n", om->name);
       pli->T    = pli->incT    = om->cutoff[p7_TC1];
       pli->domT = pli->incdomT = om->cutoff[p7_TC2];
     }
-      else if (pli->use_bit_cutoffs == p7H_NC)
+    else if (pli->use_bit_cutoffs == p7H_NC)
     {
-      if (om->cutoff[p7_NC1] == p7_CUTOFF_UNSET) ESL_FAIL(eslEINVAL, pli->errbuf, "NC bit thresholds unavailable on model %s\n", om->name);
+      if (om->cutoff[p7_NC1] == p7_CUTOFF_UNSET)
+        ESL_FAIL(eslEINVAL, pli->errbuf, "NC bit thresholds unavailable on model %s\n", om->name);
       pli->T    = pli->incT    = om->cutoff[p7_NC1];
       pli->domT = pli->incdomT = om->cutoff[p7_NC2];
     }
-    }
+  }
 
   return eslOK;
 }
@@ -1033,7 +1036,7 @@ ERROR:
 static int
 p7_pli_postViterbi_LongTarget(P7_PIPELINE *pli, P7_OPROFILE *om, P7_BG *bg, P7_TOPHITS *hitlist, const P7_SCOREDATA *data,
     int64_t seqidx, int window_start, int window_len, ESL_DSQ *subseq,
-    int seq_start, char *seq_name, char *seq_source, char* seq_acc, char* seq_desc, int seq_len,
+    int64_t seq_start, char *seq_name, char *seq_source, char* seq_acc, char* seq_desc, int seq_len,
     int complementarity, int *overlap, P7_PIPELINE_LONGTARGET_OBJS *pli_tmp
 )
 {
@@ -1467,10 +1470,6 @@ p7_Pipeline_LongTarget(P7_PIPELINE *pli, P7_OPROFILE *om, P7_SCOREDATA *data,
                         P7_BG *bg, P7_TOPHITS *hitlist,
                         int64_t seqidx, const ESL_SQ *sq, int complementarity,
                         const FM_DATA *fmf, const FM_DATA *fmb, FM_CFG *fm_cfg
-                        /*, ESL_STOPWATCH *ssv_watch_master
-                        , ESL_STOPWATCH *postssv_watch_master
-                        , ESL_STOPWATCH *watch_slave
-*/
                         )
 {
   int              i;
@@ -1495,6 +1494,7 @@ p7_Pipeline_LongTarget(P7_PIPELINE *pli, P7_OPROFILE *om, P7_SCOREDATA *data,
 
 
   ESL_ALLOC(pli_tmp, sizeof(P7_PIPELINE_LONGTARGET_OBJS));
+  pli_tmp->tmpseq = NULL;
   pli_tmp->bg = p7_bg_Clone(bg);
   pli_tmp->om = p7_oprofile_Create(om->M, om->abc);
   ESL_ALLOC(pli_tmp->scores, sizeof(float) * om->abc->Kp * 4); //allocation of space to store scores that will be used in p7_oprofile_Update(Fwd|Vit|MSV)EmissionScores
@@ -1516,21 +1516,11 @@ p7_Pipeline_LongTarget(P7_PIPELINE *pli, P7_OPROFILE *om, P7_SCOREDATA *data,
    * This variant of SSV will scan a long sequence and find
    * short high-scoring regions.
    */
-//  if (watch_slave) {
- //   esl_stopwatch_Start(watch_slave);
- // }
-
-
   if (fmf) // using an FM-index
     p7_SSVFM_longlarget(om, 2.0, bg, pli->F1, fmf, fmb, fm_cfg, data, pli->strands, &msv_windowlist );
   else // compare directly to sequence
     p7_SSVFilter_longtarget(sq->dsq, sq->n, om, pli->oxf, data, bg, pli->F1, &msv_windowlist);
-/*  if (watch_slave) {
-    esl_stopwatch_Stop(watch_slave);
-    esl_stopwatch_Include(ssv_watch_master, watch_slave);
-    esl_stopwatch_Start(watch_slave);
-  }
-*/
+
 
   /* convert hits to windows, merging neighboring windows
    */
@@ -1662,12 +1652,6 @@ p7_Pipeline_LongTarget(P7_PIPELINE *pli, P7_OPROFILE *om, P7_SCOREDATA *data,
     free (vit_windowlist.windows);
   }
 
-/*
-  if (watch_slave) {
-    esl_stopwatch_Stop(watch_slave);
-    esl_stopwatch_Include(postssv_watch_master, watch_slave);
-  }
-*/
   if (msv_windowlist.windows != NULL) free (msv_windowlist.windows);
 
   if (pli_tmp != NULL) {

@@ -321,6 +321,79 @@ prior.
 
 
 
+
+.SH OPTIONS CONTROLLING SINGLE SEQUENCE SCORING
+
+By default, if a query is a single sequence from a file in 
+.IR fasta
+format,
+.B hmmbuild 
+constructs a search model from that sequence and a standard
+20x20 substitution matrix for residue probabilities, along with two
+additional parameters for position-independent gap open and gap extend
+probabilities. These options allow the default single-sequence scoring
+parameters to be changed, and for single-sequence scoring options to
+be applied to a single sequence coming from an aligned format.
+
+.TP
+.BI --singlemx 
+If a single sequence query comes from a multiple sequence alignment file, 
+such as in 
+.IR stockholm
+format, the search model is by default constructed as is typically done 
+for multiple sequence alignments. This option forces 
+.B hmmbuild 
+to use the single-sequence method with substitution score matrix.
+
+.TP
+.BI --mx " <s>"
+Obtain residue alignment probabilities from the built-in
+substitution matrix named
+.IR <s> . 
+Several standard matrices are built-in, and do not need to be
+read from files. 
+The matrix name
+.I <s> 
+can be
+PAM30, PAM70, PAM120, PAM240, BLOSUM45, BLOSUM50, BLOSUM62, BLOSUM80,
+BLOSUM90, or DNA1.
+Only one of the
+.B --mx 
+and
+.B --mxfile
+options may be used.
+
+.TP
+.BI --mxfile " <mxfile>"
+Obtain residue alignment probabilities from the substitution matrix
+in file
+.IR <mxfile> .
+The default score matrix is BLOSUM62 for protein sequences, and 
+DNA1 for nucleotide sequences (these matrices are internal to
+HMMER and do not need to be available as a file). 
+The format of a substitution matrix
+.I <mxfile>
+is the standard format accepted by BLAST, FASTA, and other sequence 
+analysis software.
+
+
+.TP
+.BI --popen " <x>"
+Set the gap open probability for a single sequence query model to 
+.IR <x> .
+The default is 0.02. 
+.I <x> 
+must be >= 0 and < 0.5.
+
+.TP
+.BI --pextend " <x>"
+Set the gap extend probability for a single sequence query model to 
+.IR <x> .
+The default is 0.4. 
+.I <x> 
+must be >= 0 and < 1.0.
+
+
 .SH OPTIONS CONTROLLING E-VALUE CALIBRATION
 
 The location parameters for the expected score distributions for MSV

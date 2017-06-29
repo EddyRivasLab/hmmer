@@ -133,7 +133,7 @@ FM_backtrackSeed(const FM_DATA *fmf, const FM_CFG *fm_cfg, int i) {
   while ( j != fmf->term_loc && (j % fm_cfg->meta->freq_SA)) { //go until we hit a position in the full SA that was sampled during FM index construction
     c = fm_getChar( fm_cfg->meta->alph_type, j, fmf->BWT);
     j = fm_getOccCount (fmf, fm_cfg, j-1, c);
-    j += abs(fmf->C[c]);
+    j += abs((int)(fmf->C[c]));
     len++;
   }
 
@@ -464,7 +464,7 @@ static int FM_getSeeds ( const FM_DATA *fmf, const FM_DATA *fmb,
     int fwd_cnt=0;
     int rev_cnt=0;
     interval_f1.lower = interval_f2.lower = interval_bk.lower = fmf->C[i];
-    interval_f1.upper = interval_f2.upper = interval_bk.upper = abs(fmf->C[i+1])-1;
+    interval_f1.upper = interval_f2.upper = interval_bk.upper = abs((int)(fmf->C[i+1]))-1;
 
     if (interval_f1.lower<0 ) //none of that character found
       continue;
@@ -578,7 +578,6 @@ static int FM_getSeeds ( const FM_DATA *fmf, const FM_DATA *fmb,
 
 ERROR:
   return eslEMEM;
-
 }
 
 
@@ -603,22 +602,19 @@ ERROR:
  * Returns:   <eslOK> on success.
  */
 static int
-FM_window_from_diag (FM_DIAG *diag, const FM_DATA *fm, const FM_METADATA *meta, P7_HMM_WINDOWLIST *windowlist) {
-
+FM_window_from_diag (FM_DIAG *diag, const FM_DATA *fm, const FM_METADATA *meta, P7_HMM_WINDOWLIST *windowlist) 
+{
+  uint32_t seg_id;
+  uint64_t seg_pos;
   // if diag->complementarity == p7_NOCOMPLEMENT, these positions are in context of FM->T
   // otherwise, they're in context of revcomp(FM->T).
 
-  int status;
-  uint32_t seg_id;
-  uint64_t seg_pos;
-
-  status = fm_getOriginalPosition (fm, meta, 0, diag->length, diag->complementarity, diag->n, &seg_id, &seg_pos);
+  fm_getOriginalPosition (fm, meta, 0, diag->length, diag->complementarity, diag->n, &seg_id, &seg_pos);
 
   p7_hmmwindow_new(windowlist, seg_id, seg_pos, diag->n, diag->k+diag->length-1, diag->length, diag->score, diag->complementarity,
          meta->seq_data[seg_id].length);
 
   return eslOK;
-
 }
 
 
@@ -645,7 +641,6 @@ FM_window_from_diag (FM_DIAG *diag, const FM_DATA *fm, const FM_METADATA *meta, 
 static int
 FM_extendSeed(FM_DIAG *diag, const FM_DATA *fm, const P7_SCOREDATA *ssvdata, FM_CFG *cfg, ESL_SQ  *tmp_sq)
 {
-
   uint64_t k,n;
   int32_t model_start, model_end;
   int64_t target_start, target_end;

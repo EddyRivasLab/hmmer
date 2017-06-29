@@ -1,7 +1,6 @@
 #! /bin/sh
 
 etags    configure.ac
-etags -a COPYRIGHT
 etags -a INSTALL
 etags -a LICENSE
 

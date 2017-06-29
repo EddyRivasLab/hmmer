@@ -47,10 +47,12 @@ MYINCDIRS = -I../${ESLDIR} \
 PROGS = alimask\
 	hmmalign\
 	hmmbuild\
+	hmmc2\
 	hmmconvert\
 	hmmemit\
 	hmmfetch\
 	hmmlogo\
+	hmmpgmd\
 	hmmpress\
 	hmmscan\
 	hmmsearch\
@@ -60,21 +62,20 @@ PROGS = alimask\
 	phmmer\
 	nhmmer\
 	nhmmscan\
-	hmmpgmd\
-	hmmc2\
 	makehmmerdb\
 	hmmerfm-exactmatch
-
 
 PROGOBJS =\
 	alimask.o\
 	exactmatch.o\
 	hmmalign.o\
 	hmmbuild.o\
+	hmmc2.o\
 	hmmconvert.o\
 	hmmemit.o\
 	hmmfetch.o\
 	hmmlogo.o\
+	hmmpgmd.o\
 	hmmpress.o\
 	hmmscan.o\
 	hmmsearch.o\
@@ -84,8 +85,6 @@ PROGOBJS =\
 	phmmer.o\
 	nhmmer.o\
 	nhmmscan.o\
-	hmmpgmd.o\
-	hmmc2.o\
 	makehmmerdb.o\
 	hmmerfm-exactmatch.o
 
@@ -137,7 +136,6 @@ OBJS =  build.o\
 	p7_hmmcache.o\
 	p7_hmmfile.o\
 	p7_hmmwindow.o\
-	p7_null3.o\
 	p7_pipeline.o\
 	p7_prior.o\
 	p7_profile.o\
@@ -250,8 +248,8 @@ libhmmer-src.stamp: ${OBJS}
 
 .FORCE:
 
-${OBJS}:     ${HDRS} p7_config.h  
-${PROGOBJS}: ${HDRS} p7_config.h
+${OBJS}:        ${HDRS} p7_config.h  
+${PROGOBJS}:    ${HDRS} p7_config.h
 
 ${PROGS}: @EXEC_DEPENDENCY@  libhmmer.a ../${ESLDIR}/libeasel.a 
 	${QUIET_GEN}${CC} ${CFLAGS} ${SIMDFLAGS} ${DEFS} ${LDFLAGS} ${MYLIBDIRS} -o $@ $@.o ${MPILIBS} ${LIBS}
@@ -358,13 +356,8 @@ clean:
 	-rm -f ${EXAMPLES}
 	-rm -f *.gcno
 	-rm -f cscope.out
-	for prog in ${PROGS} ${UTESTS} ${STATS} ${BENCHMARKS} ${EXAMPLES}; do \
+	for prog in ${PROGS} ${UTESTS} ${STATS} ${BENCHMARKS} ${EXAMPLES} ${ITESTS}; do \
 	   if test -d $$prog.dSYM; then rm -rf $$prog.dSYM; fi ;\
 	done
 
-################################################################
-# @LICENSE@
-#
-# SVN $URL$
-# SVN $Id$
-################################################################
+

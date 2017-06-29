@@ -334,10 +334,6 @@ main(int argc, char **argv)
 
 
   /* is the range restricted? */
-#ifndef eslAUGMENT_SSI
-  if (esl_opt_IsUsed(go, "--restrictdb_stkey") || esl_opt_IsUsed(go, "--restrictdb_n")  || esl_opt_IsUsed(go, "--ssifile")  )
-    p7_Fail("Unable to use range-control options unless an SSI index file is available. See 'esl_sfetch --index'\n");
-#else
   if (esl_opt_IsUsed(go, "--restrictdb_stkey") )
     if ((cfg.firstseq_key = esl_opt_GetString(go, "--restrictdb_stkey")) == NULL)  p7_Fail("Failure capturing --restrictdb_stkey\n");
 
@@ -346,8 +342,6 @@ main(int argc, char **argv)
 
   if ( cfg.n_targetseq != -1 && cfg.n_targetseq < 1 )
     p7_Fail("--restrictdb_n must be >= 1\n");
-#endif
-
 
   /* Figure out who we are, and send control there: 
    * we might be an MPI master, an MPI worker, or a serial program.
@@ -649,6 +643,11 @@ serial_master(ESL_GETOPTS *go, struct cfg_s *cfg)
 
 	if ( p7_tophits_Alignment(info->th, abc, NULL, NULL, 0, p7_ALL_CONSENSUS_COLS, &msa) == eslOK) 
 	  {
+	    esl_msa_SetName     (msa, om->name, -1);   // don't use qsq->name; it's optional in a ESL_SQ, and SingleBuilder took care of naming model.
+	    if (qsq->acc[0]  != '\0') esl_msa_SetAccession(msa, qsq->acc,  -1);
+	    if (qsq->desc[0] != '\0') esl_msa_SetDesc     (msa, qsq->desc, -1);
+	    esl_msa_FormatAuthor(msa, "phmmer (HMMER %s)", HMMER_VERSION);
+
 	    if (textw > 0) esl_msafile_Write(afp, msa, eslMSAFILE_STOCKHOLM);
 	    else           esl_msafile_Write(afp, msa, eslMSAFILE_PFAM);
 
@@ -1156,6 +1155,13 @@ mpi_master(ESL_GETOPTS *go, struct cfg_s *cfg)
 
 	if ( p7_tophits_Alignment(th, abc, NULL, NULL, 0, p7_ALL_CONSENSUS_COLS, &msa) == eslOK) 
 	  {
+	    esl_msa_SetName     (msa, om->name, -1);   // don't use qsq->name; it's optional in a ESL_SQ, and SingleBuilder took care of naming model.
+	    if (qsq->acc[0]  != '\0') esl_msa_SetAccession(msa, qsq->acc,  -1);
+	    if (qsq->desc[0] != '\0') esl_msa_SetDesc     (msa, qsq->desc, -1);
+	    esl_msa_FormatAuthor(msa, "phmmer (HMMER %s)", HMMER_VERSION);
+
+	    esl_msa_FormatAuthor(msa, "phmmer (HMMER %s)", HMMER_VERSION);
+
 	    if (textw > 0) esl_msafile_Write(afp, msa, eslMSAFILE_STOCKHOLM);
 	    else           esl_msafile_Write(afp, msa, eslMSAFILE_PFAM);
 

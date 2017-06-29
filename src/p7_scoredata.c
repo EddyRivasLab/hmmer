@@ -371,17 +371,15 @@ p7_hmm_ScoreDataComputeRest(P7_OPROFILE *om, P7_SCOREDATA *data )
 static void
 utest_createScoreData(ESL_GETOPTS *go, ESL_RANDOMNESS *r )
 {
-  char          msg[]       = "create MSVData unit test failed";
+  char           msg[]      = "createScoreData unit test failed";
   P7_HMM        *hmm        = NULL;
   ESL_ALPHABET  *abc        = NULL;
   P7_PROFILE    *gm         = NULL;
   P7_OPROFILE   *om         = NULL;
-  P7_SCOREDATA  *scoredata    = NULL;
-
-  uint8_t scale = 3.0 / eslCONST_LOG2;                    /* scores in units of third-bits */
-  uint8_t bias;
-  int x;
-  float max = 0.0;
+  P7_SCOREDATA  *scoredata  = NULL;
+  uint8_t        scale      = 3.0 / eslCONST_LOG2;    /* scores in units of third-bits */
+  float          max        = 0.0;
+  int            x;
 
   if ( (abc = esl_alphabet_Create(eslDNA)) == NULL)  esl_fatal(msg);
 
@@ -392,8 +390,6 @@ utest_createScoreData(ESL_GETOPTS *go, ESL_RANDOMNESS *r )
   for (x = 0; x < gm->abc->K; x++)  max = ESL_MAX(max, esl_vec_FMax(gm->rsc[x], (gm->M+1)*2));
   //based on unbiased_byteify
   max  = -1.0f * roundf(scale * max);
-  bias   = (max > 255.) ? 255 : (uint8_t) max;
-
 
   if (  (scoredata = p7_hmm_ScoreDataCreate(om, FALSE))  == NULL ) esl_fatal(msg);
 
@@ -402,9 +398,8 @@ utest_createScoreData(ESL_GETOPTS *go, ESL_RANDOMNESS *r )
   p7_profile_Destroy(gm);
   p7_hmm_Destroy(hmm);
   esl_alphabet_Destroy(abc);
-
 }
-#endif /*p7BG_TESTDRIVE*/
+#endif /*p7SCOREDATA_TESTDRIVE*/
 
 
 /*****************************************************************

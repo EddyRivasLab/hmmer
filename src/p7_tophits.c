@@ -405,7 +405,7 @@ p7_tophits_Merge(P7_TOPHITS *h1, P7_TOPHITS *h2)
   P7_HIT  *ori1    = h1->unsrt;    /* original base of h1's data */
   P7_HIT  *new2;
   int      i,j,k;
-  uint64_t Nalloc = h1->Nalloc + h2->Nalloc;
+  uint64_t Nalloc = h1->N + h2->N;
   int      status;
 
   if(h2->N <= 0) return eslOK;
@@ -476,14 +476,16 @@ p7_tophits_Merge(P7_TOPHITS *h1, P7_TOPHITS *h2)
 int
 p7_tophits_GetMaxPositionLength(P7_TOPHITS *h)
 {
-  int i, max, n;
-  char buffer [11];
+  int64_t i;
+  int max = 0;
+  int n;
+  char buffer [13];
 
-  for (max = 0, i = 0; i < h->N; i++) {
+  for (i = 0; i < h->N; i++) {
     if (h->unsrt[i].dcl[0].iali > 0) {
-      n = sprintf (buffer, "%d", h->unsrt[i].dcl[0].iali);
+      n = sprintf (buffer, "%" PRId64 "", h->unsrt[i].dcl[0].iali);
       max = ESL_MAX(n, max);
-      n = sprintf (buffer, "%d", h->unsrt[i].dcl[0].jali);
+      n = sprintf (buffer, "%" PRId64 "", h->unsrt[i].dcl[0].jali);
       max = ESL_MAX(n, max);
     }
   }
@@ -1133,7 +1135,7 @@ p7_tophits_Targets(FILE *ofp, P7_TOPHITS *th, P7_PIPELINE *pli, int textw)
 
         if (pli->long_targets) 
         {
-          if (fprintf(ofp, "%c %9.2g %6.1f %5.1f  %-*s %*d %*d ",
+          if (fprintf(ofp, "%c %9.2g %6.1f %5.1f  %-*s %*" PRId64 " %*" PRId64 "",
           newness,
           exp(th->hit[h]->lnP), // * pli->Z,
           th->hit[h]->score,
@@ -1293,7 +1295,7 @@ p7_tophits_Domains(FILE *ofp, P7_TOPHITS *th, P7_PIPELINE *pli, int textw)
             if (pli->long_targets)
             {
 
-               if (fprintf(ofp, " %c %6.1f %5.1f %9.2g %9d %9d %c%c %9ld %9ld %c%c %9d %9d %c%c %9ld    %4.2f\n",
+               if (fprintf(ofp, " %c %6.1f %5.1f %9.2g %9d %9d %c%c %9" PRId64 " %9" PRId64 " %c%c %9" PRId64 " %9" PRId64 " %c%c %9" PRId64 "    %4.2f\n",
                     //nd,
                     th->hit[h]->dcl[d].is_included ? '!' : '?',
                     th->hit[h]->dcl[d].bitscore,
@@ -1331,14 +1333,14 @@ p7_tophits_Domains(FILE *ofp, P7_TOPHITS *th, P7_PIPELINE *pli, int textw)
                     (th->hit[h]->dcl[d].ad->hmmto   == th->hit[h]->dcl[d].ad->M ) ? ']' : '.') < 0)
                         ESL_EXCEPTION_SYS(eslEWRITE, "domain hit list: write failed");
 			
-              if (fprintf(ofp, " %7ld %7ld %c%c",
+              if (fprintf(ofp, " %7" PRId64 " %7" PRId64 " %c%c",
                        th->hit[h]->dcl[d].ad->sqfrom,
                        th->hit[h]->dcl[d].ad->sqto,
                        (th->hit[h]->dcl[d].ad->sqfrom == 1) ? '[' : '.',
                           (th->hit[h]->dcl[d].ad->sqto   == th->hit[h]->dcl[d].ad->L) ? ']' : '.') < 0)
                           ESL_EXCEPTION_SYS(eslEWRITE, "domain hit list: write failed");
 						
-              if (fprintf(ofp, " %7d %7d %c%c",
+              if (fprintf(ofp, " %7" PRId64 " %7" PRId64 " %c%c",
                     th->hit[h]->dcl[d].ienv,
                     th->hit[h]->dcl[d].jenv,
                     (th->hit[h]->dcl[d].ienv == 1) ? '[' : '.',
@@ -1574,7 +1576,7 @@ p7_tophits_TabularTargets(FILE *ofp, char *qname, char *qacc, P7_TOPHITS *th, P7
         d    = th->hit[h]->best_domain;
         if (pli->long_targets) 
         {
-            if (fprintf(ofp, "%-*s %-*s %-*s %-*s %7d %7d %*d %*d %*d %*d %*ld %6s %9.2g %6.1f %5.1f  %s\n",
+            if (fprintf(ofp, "%-*s %-*s %-*s %-*s %7d %7d %*" PRId64 " %*" PRId64 " %*" PRId64 " %*" PRId64 " %*" PRId64 " %6s %9.2g %6.1f %5.1f  %s\n",
                 tnamew, th->hit[h]->name,
                 taccw,  th->hit[h]->acc ? th->hit[h]->acc : "-",
                 qnamew, qname,
@@ -1680,7 +1682,7 @@ p7_tophits_TabularDomains(FILE *ofp, char *qname, char *qacc, P7_TOPHITS *th, P7
 
 
 
-              if (fprintf(ofp, "%-*s %-*s %5d %-*s %-*s %5d %9.2g %6.1f %5.1f %3d %3d %9.2g %9.2g %6.1f %5.1f %5d %5d %5ld %5ld %5d %5d %4.2f %s\n",
+              if (fprintf(ofp, "%-*s %-*s %5d %-*s %-*s %5d %9.2g %6.1f %5.1f %3d %3d %9.2g %9.2g %6.1f %5.1f %5d %5d %5" PRId64 " %5" PRId64 " %5" PRId64 " %5" PRId64 " %4.2f %s\n",
                 tnamew, th->hit[h]->name,
                 taccw,  th->hit[h]->acc ? th->hit[h]->acc : "-",
                 tlen,
@@ -1768,7 +1770,7 @@ p7_tophits_TabularXfam(FILE *ofp, char *qname, char *qacc, P7_TOPHITS *th, P7_PI
       if (th->hit[h]->flags & p7_IS_REPORTED)
       {
           //d    = th->hit[h]->best_domain;
-          if (fprintf(ofp, "%-*s  %-*s %-*s %6.1f %9.2g %5.1f %7d %7d %s %*d %*d %*d %*d %*ld   %s\n",
+          if (fprintf(ofp, "%-*s  %-*s %-*s %6.1f %9.2g %5.1f %7d %7d %s %*" PRId64 " %*" PRId64 " %*" PRId64 " %*" PRId64 " %*" PRId64 "   %s\n",
           tnamew, th->hit[h]->name,
           taccw, ( pli->mode == p7_SCAN_MODELS ? th->hit[h]->acc : qacc ),
           qnamew, qname,
@@ -1861,7 +1863,7 @@ p7_tophits_TabularXfam(FILE *ofp, char *qname, char *qacc, P7_TOPHITS *th, P7_PI
       {
         domhit = domHitlist->hit[h];
 
-        if (fprintf(ofp, "%-*s  %6.1f %9.2g %5d %5.1f %6d %6d %6ld %6ld %6d %6d     %s\n",
+        if (fprintf(ofp, "%-*s  %6.1f %9.2g %5d %5.1f %6" PRId64 " %6" PRId64 " %6" PRId64 " %6" PRId64 " %6d %6d     %s\n",
               tnamew, domHitlist->hit[h]->name,
               domhit->dcl[0].bitscore,
               exp(domhit->dcl[0].lnP) * pli->Z, //i-Evalue
@@ -1914,14 +1916,14 @@ p7_tophits_AliScores(FILE *ofp, char *qname, P7_TOPHITS *th )
     hit = th->hit[h];
     if (hit->flags & p7_IS_REPORTED)
     {
-      fprintf (ofp, "%s %s %d %d :", qname, hit->name, hit->dcl[0].iali, hit->dcl[0].jali);
+      fprintf (ofp, "%s %s %" PRId64 " %" PRId64 " :", qname, hit->name, hit->dcl[0].iali, hit->dcl[0].jali);
 
       scores = hit->dcl[0].scores_per_pos;
       for (i=0; i<hit->dcl[0].ad->N; i++) {
         if (scores[i] == -eslINFINITY)
           fprintf (ofp, " >");
         else
-          fprintf (ofp, " %.3f", scores[i]);
+          fprintf (ofp, " %.3f", scores[i] * eslCONST_LOG2R);
 
       }
       fprintf (ofp, "\n");

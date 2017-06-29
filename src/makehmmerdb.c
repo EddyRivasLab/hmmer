@@ -428,9 +428,6 @@ main(int argc, char **argv)
   uint32_t overlap = 0;
   uint32_t seq_cnt;
   uint32_t ambig_cnt;
-
-  uint32_t prev_numseqs = 0;
-
   int compressed_bytes;
   uint32_t term_loc;
 
@@ -694,9 +691,6 @@ main(int argc, char **argv)
       buildAndWriteFMIndex(meta, seq_offset, ambig_offset, seq_cnt, ambig_cnt, 0, fm_data,
                          NULL, cnts_sb, cnts_b, block_length, Tcompressed, fptmp);
     }
-
-    prev_numseqs = numseqs;
-
     numblocks++;
   }
 

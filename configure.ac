@@ -32,6 +32,12 @@
 #  12. checks for system services
 #  13. AC_CONFIG_FILES
 #  14. AC_OUTPUT
+#
+# Use full 3-arg form of AC_DEFINE() macros. autoheader chokes if you
+# don't.  We don't use autoheader (we only use autoconf, out of the
+# GNU build tools, to limit complexity) but some packagers do, such
+# as Debian.
+
 
 
 ################################################################
@@ -47,7 +53,7 @@ AC_PREREQ(2.63)
 # 2. AC_INIT
 ################################################################
 
-AC_INIT(HMMER, 3.1b3, sean@eddylab.org, hmmer)
+AC_INIT(HMMER, 3.1rc1, sean@eddylab.org, hmmer)
 AC_MSG_NOTICE([Configuring HMMER for your system.])
 
 # remember if the user is overriding CFLAGS
@@ -83,18 +89,18 @@ fi
 # to use HMMER as a library inside other packages, with no name clashes.
 ################################################################
 
-HMMER_DATE="July 2016"
-HMMER_COPYRIGHT="Copyright (C) 2016 Howard Hughes Medical Institute."
+HMMER_DATE="January 2017"
+HMMER_COPYRIGHT="Copyright (C) 2017 Howard Hughes Medical Institute."
 HMMER_LICENSE="Freely distributed under the BSD open source license."
 HMMER_VERSION=$PACKAGE_VERSION
 HMMER_URL="http://hmmer.org/"
 HMMER_ESLDIR="easel"
 HMMER_SADIR="libdivsufsort"
 
-EASEL_DATE="July 2016"
-EASEL_COPYRIGHT="Copyright (C) 2016 Howard Hughes Medical Institute."
+EASEL_DATE="January 2017"
+EASEL_COPYRIGHT="Copyright (C) 2017 Howard Hughes Medical Institute."
 EASEL_LICENSE="Freely distributed under the BSD open source license."
-EASEL_VERSION="0.43"
+EASEL_VERSION="0.44"
 EASEL_URL="http://bioeasel.org/"
 
 # Output variables  (AC_OUTPUT replaces @var@ in input files, such as Makefiles)
@@ -113,18 +119,17 @@ AC_SUBST(EASEL_VERSION)
 AC_SUBST(EASEL_URL)
 
 # Preprocessor symbols (replace #undefs in p7config.h)
-AC_DEFINE_UNQUOTED(HMMER_DATE,      "$HMMER_DATE")
-AC_DEFINE_UNQUOTED(HMMER_COPYRIGHT, "$HMMER_COPYRIGHT")
-AC_DEFINE_UNQUOTED(HMMER_LICENSE,   "$HMMER_LICENSE")
-AC_DEFINE_UNQUOTED(HMMER_VERSION,   "$HMMER_VERSION")
-AC_DEFINE_UNQUOTED(HMMER_URL,       "$HMMER_URL")
+AC_DEFINE_UNQUOTED([HMMER_DATE],      ["$HMMER_DATE"],      [Release date])
+AC_DEFINE_UNQUOTED([HMMER_COPYRIGHT], ["$HMMER_COPYRIGHT"], [Brief copyright statement])
+AC_DEFINE_UNQUOTED([HMMER_LICENSE],   ["$HMMER_LICENSE"],   [Brief license statement])
+AC_DEFINE_UNQUOTED([HMMER_VERSION],   ["$HMMER_VERSION"],   [Version number])
+AC_DEFINE_UNQUOTED([HMMER_URL],       ["$HMMER_URL"],       [HMMER web site])
 
-AC_DEFINE_UNQUOTED(EASEL_DATE,      "$EASEL_DATE")
-AC_DEFINE_UNQUOTED(EASEL_COPYRIGHT, "$EASEL_COPYRIGHT")
-AC_DEFINE_UNQUOTED(EASEL_LICENSE,   "$EASEL_LICENSE")
-AC_DEFINE_UNQUOTED(EASEL_VERSION,   "$EASEL_VERSION")
+AC_DEFINE_UNQUOTED([EASEL_DATE],      ["$EASEL_DATE"],      [Easel release date])
+AC_DEFINE_UNQUOTED([EASEL_COPYRIGHT], ["$EASEL_COPYRIGHT"], [Easel copyright])
+AC_DEFINE_UNQUOTED([EASEL_LICENSE],   ["$EASEL_LICENSE"],   [Easel license])
+AC_DEFINE_UNQUOTED([EASEL_VERSION],   ["$EASEL_VERSION"],   [Easel version])
 
-AC_DEFINE(eslLIBRARY)
 
 # Figure out what host we're compiling on.
 # Three GNU scripts must be included in the distro: 
@@ -167,11 +172,11 @@ AS_HELP_STRING([--enable-debugging=x],[also set diagnostics verbosity level to <
 enable_debugging=$enableval, enable_debugging=no)
 
 case $enable_debugging in
-   yes)  AC_DEFINE(eslDEBUGLEVEL, 0);;
-     1)  AC_DEFINE(eslDEBUGLEVEL, 1);;
-     2)  AC_DEFINE(eslDEBUGLEVEL, 2);;
-     3)  AC_DEFINE(eslDEBUGLEVEL, 3);;
-    no)  AC_DEFINE(eslDEBUGLEVEL, 0);;
+   yes)  AC_DEFINE(eslDEBUGLEVEL, 1, [debugging on (low verbosity)]);;
+     1)  AC_DEFINE(eslDEBUGLEVEL, 1, [debugging on (low verbosty)]);;
+     2)  AC_DEFINE(eslDEBUGLEVEL, 2, [debugging on (moderate verbosity)]);;
+     3)  AC_DEFINE(eslDEBUGLEVEL, 3, [debugging on (high verbosity)]);;
+    no)  AC_DEFINE(eslDEBUGLEVEL, 0, [debugging off]);;
      *)  AC_MSG_ERROR([Unknown argument to --enable-debugging: $enable_debugging]);;
 esac
 
@@ -212,6 +217,9 @@ fi
 # These set $impl_choice to one of sse, vmx, dummy, or none.
 #
 AC_ARG_ENABLE(sse,[AS_HELP_STRING([--enable-sse],[enable SSE implementation])],          enable_sse=$enableval,   enable_sse=check)
+AC_ARG_ENABLE(avx2,[AS_HELP_STRING([--enable-avx2],[force use of the AVX2 (Haswell) vector instructions])], enable_avx2=$enableval, enable_avx2=check)
+AC_ARG_ENABLE(avx512,[AS_HELP_STRING([--enable-AVX-512],[force use of the AVX-512 vector instructions])], enable_avx512=$enableval, enable_avx512=check)
+AC_ARG_ENABLE(neon,[AS_HELP_STRING([--enable-neon],[enable NEON instructions])] ,          enable_neon=$enableval,   enable_neon=check)
 AC_ARG_ENABLE(vmx,[AS_HELP_STRING([--enable-vmx],[enable Altivec/VMX implementation])],  enable_vmx=$enableval,   enable_vmx=check)
 AC_ARG_ENABLE(dummy,[AS_HELP_STRING([--enable-dummy],[enable portable implementation])], enable_dummy=$enableval, enable_dummy=check)
 if test "$enable_sse" = "yes"; then
@@ -279,8 +287,8 @@ case $enable_threads in
 esac
  
 AS_IF([test "x$check_threads" != xno],
-      [ACX_PTHREAD([AC_DEFINE(HMMER_THREADS)
-                    AC_DEFINE(HAVE_PTHREAD)
+      [ACX_PTHREAD([AC_DEFINE(HMMER_THREADS, 1, [Use POSIX threads])
+                    AC_DEFINE(HAVE_PTHREAD,  1, [Use POSIX threads])
                     AC_SUBST(PTHREAD_LIBS)
                     AC_SUBST(PTHREAD_CFLAGS)],
                    [if test "x$enable_threads" != xcheck; then
@@ -359,7 +367,7 @@ AC_PROG_INSTALL
 
 # MPI :  set @CC@ to mpicc, sets @MPILIBS@, defines HAVE_MPI. 
 if test "$enable_mpi" = "yes"; then
-   ACX_MPI([AC_DEFINE(HAVE_MPI)
+   ACX_MPI([AC_DEFINE(HAVE_MPI, 1, [Use MPI (Message Passing Interface) parallelism])
             AC_SUBST([MPI_UTESTS], ["mpi_utest"])
             AC_SUBST([MPI_BENCHMARKS], ["mpi_benchmark"])],
            AC_MSG_ERROR([MPI library not found for --enable-mpi]))
@@ -385,7 +393,7 @@ CHECK_GNU_MAKE
 # superaggressive and problematic in many respects. Use -O3 instead.
 #
 if test "$enable_debugging" != "no"; then
-   AC_DEFINE(p7_DEBUGGING,  1)
+   AC_DEFINE(p7_DEBUGGING,  1, [Debugging mode on])
    if test "$GCC" = "yes" && test "$sre_cflags_env_set" = "no"; then
       CFLAGS="-g -Wall"
    fi
@@ -399,6 +407,175 @@ fi
 # Figure out how to generate PIC code for shared libraries
 # This sets @PIC_FLAGS@ output variable for Easel.
 ESL_PIC_FLAGS
+
+
+# Set up the SSE_CFLAGS, AVX_CFLAGS, AVX512_CFLAGS, and ARM_CFLAGS 
+# fields that Easel now expects 
+if test "$enable_sse" = "yes" || test "$enable_sse" = "check"; then
+   if test "x$SSE_CFLAGS" = x; then
+     case $ax_cv_c_compiler_vendor in
+       gnu)   AX_CHECK_COMPILER_FLAGS(-msse2,[SSE_CFLAGS="-msse2"],[]);;
+       *)     ;;
+     esac   
+   fi
+fi
+if test "$enable_sse" = "check" && test "$enable_vmx" != "yes" && test "$enable_dummy" != "yes"; then
+   sre_save_CFLAGS="$CFLAGS"
+   sre_save_CPPFLAGS="$CPPFLAGS"
+   CFLAGS="$CFLAGS $SSE_CFLAGS"
+   CPPFLAGS="$CPPFLAGS $SSE_CFLAGS"
+   AC_CHECK_HEADER([emmintrin.h],[
+     AC_MSG_CHECKING([if platform can run SSE/SSE2 instructions])
+     AC_RUN_IFELSE([AC_LANG_PROGRAM( [[#include <emmintrin.h>]],
+		                      [[__m128i v = _mm_set1_epi8(0);]])],
+                   [AC_MSG_RESULT([yes])
+                     enable_sse=yes],
+                   [AC_MSG_RESULT([no])])])
+   CFLAGS="$sre_save_CFLAGS"
+   CPPFLAGS="$sre_save_CPPFLAGS"
+fi
+if test "$enable_sse" = "yes"; then
+   AC_DEFINE(HAVE_SSE2,1,[Support SSE2 (Streaming SIMD Extensions 2) instructions])
+fi
+
+if test "$enable_avx2" = "yes" || test "$enable_avx2" = "check"; then
+   if test "x$AVX2_CFLAGS" = x; then
+     case $ax_cv_c_compiler_vendor in
+      gnu)   AX_CHECK_COMPILER_FLAGS([-mavx -mavx2], [ AVX_CFLAGS="-mavx -mavx2" ],[]);;
+       *)     ;;
+     esac   
+   fi
+fi
+if test "$enable_avx2" = "check" && test "$enable_vmx" != "yes"; then
+AC_MSG_CHECKING([whether AVX2 is supported])
+  sre_save_cflags="$CFLAGS"
+  haveavx=no
+  CFLAGS="$CFLAGS $SSE_CFLAGS $AVX_CFLAGS"
+  AC_COMPILE_IFELSE(  [AC_LANG_PROGRAM([[#include <immintrin.h>]],
+        [[__m256i test1;
+         __m256i test2;
+         test1 = _mm256_set1_epi8(37);
+         test2 = _mm256_set1_epi8(111);
+         test2 = _mm256_adds_epi8(test1, test2);
+      ]])],
+  [AC_DEFINE([HAVE_AVX2], 1, [Support AVX2 (Advanced Vector Extensions) instructions])
+  haveavx=yes])
+  AC_MSG_RESULT([$haveavx])
+  CFLAGS="$sre_save_cflags"
+fi
+
+if test "$enable_avx512" = "yes" || test "$enable_avx512" = "check"; then
+   if test "x$AVX512_CFLAGS" = x; then
+     case $ax_cv_c_compiler_vendor in
+      gnu)   AX_CHECK_COMPILER_FLAGS([-mavx512bw -mavx512dq], [ AVX512_CFLAGS="-mavx512bw -mavx512dq" ],[]);;
+       *)     ;;
+     esac   
+   fi
+fi
+if test "$enable_avx512" = "check" && test "$enable_vmx" != "yes"; then
+AC_MSG_CHECKING([whether AVX-512 is supported])
+  sre_save_cflags="$CFLAGS"
+  haveavx512=no
+  CFLAGS="$CFLAGS $AVX512_CFLAGS"
+  AC_COMPILE_IFELSE(  [AC_LANG_PROGRAM([[#include <immintrin.h>]],
+        [[__m512i test1;
+         __m512i test2;
+         test1 = _mm512_set1_epi8(37);
+         test2 = _mm512_set1_epi8(111);
+         test2 = _mm512_adds_epi8(test1, test2);
+      ]])],
+  [AC_DEFINE([HAVE_AVX512], 1, [Support AVX-512 vector instructions])
+  haveavx512=yes])
+  AC_MSG_RESULT([$haveavx512])
+  CFLAGS="$sre_save_cflags"
+fi
+
+  AC_SUBST(SSE_CFLAGS)
+  AC_SUBST(AVX_CFLAGS)
+  AC_SUBST(AVX512_CFLAGS)
+
+# ARM and NEON SIMD flags
+if test "$enable_neon" = "yes" || test "$enable_neon" = "check"; then
+   if test "x$ARM_CFLAGS" = x; then
+     case $ax_cv_c_compiler_vendor in
+       gnu)   AX_CHECK_COMPILER_FLAGS(-mfpu=neon,[ARM_CFLAGS="-mfpu=neon"],[]);;
+       *)     ;;
+     esac   
+   fi
+fi
+if test "$enable_neon" = "check"; then
+   sre_save_CFLAGS="$CFLAGS"
+   sre_save_CPPFLAGS="$CPPFLAGS"
+   CFLAGS="$CFLAGS $ARM_CFLAGS"
+   CPPFLAGS="$CPPFLAGS $ARM_CFLAGS"
+   AC_CHECK_HEADER([arm_neon.h],[
+     AC_MSG_CHECKING([if platform can run NEON instructions])
+     AC_RUN_IFELSE([AC_LANG_PROGRAM( [[#include <arm_neon.h>]],
+		                      [[ int32x4_t x = vdupq_n_s32(0);]])],
+                   [AC_MSG_RESULT([yes])
+                     enable_neon=yes],
+                   [AC_MSG_RESULT([no])])])
+   CFLAGS="$sre_save_CFLAGS"
+   CPPFLAGS="$sre_save_CPPFLAGS"
+fi
+if test "$enable_neon" = "yes"; then
+   AC_DEFINE(HAVE_NEON,1,[Support NEON instructions])
+fi
+
+
+
+
+# NEON: Check for NEON compiler flag
+# todo: we can always check for other ARM floating point flags later
+#if test "$enable_neon" = "yes" || test "$enable_neon" = "check"; then
+# Determine target if targeting is specified.
+# Do this by attempting to execute code with different 
+# cominations of NEON/VFP compiler options. This allows 
+# us to determine the best compile options for each 
+# ARM architecture. 
+if test "$enable_neon" = "yes"; then
+  cortex_a5="-mfpu=neon-fp16"
+  cortex_a7="-mfpu=neon-vfpv4"
+  cortex_a8="-mfpu=neon"
+  cortex_a9="-mfpu=neon-fp16"
+  cortex_a15="-mfpu=neon-vfpv4"
+  sre_save_CFLAGS="$CFLAGS"
+  sre_save_CPPFLAGS="$CPPFLAGS"
+  CFLAGS="$CFLAGS $cortex_a5"
+  CPPFLAGS="$CPPFLAGS $cortex_a5"
+  AC_RUN_IFELSE([AC_LANG_PROGRAM( [[]],[[int a = 32;]])],
+                    [vector_flags="-mcpu=cortex-a5 -mfpu=neon-fp16"], [])
+  CFLAGS="$sre_save_CFLAGS $cortex_a7"
+  CPPFLAGS="$sre_save_CPPFLAGS $cortex_a7"
+  AC_RUN_IFELSE([AC_LANG_PROGRAM( [[]],[[int a = 32;]])],
+                    [vector_flags="-mcpu=cortex-a7 -mfpu=neon-vfpv4"], [])
+  CFLAGS="$sre_save_CFLAGS $cortex_a8"
+  CPPFLAGS="$sre_save_CPPFLAGS $cortex_a8"
+  AC_RUN_IFELSE([AC_LANG_PROGRAM( [[]],[[int a = 32;]])],
+                    [vector_flags="-mcpu=cortex-a8 -mfpu=neon"], [])
+  CFLAGS="$sre_save_CFLAGS $cortex_a9"
+  CPPFLAGS="$sre_save_CPPFLAGS $cortex_a9"
+  AC_RUN_IFELSE([AC_LANG_PROGRAM( [[]],[[int a = 32;]])],
+                    [vector_flags="-mcpu=cortex-a9 -mfpu=neon-fp16"], [])
+  CFLAGS="$sre_save_CFLAGS $cortex_a15"
+  CPPFLAGS="$sre_save_CPPFLAGS $cortex_a15"
+  AC_RUN_IFELSE([AC_LANG_PROGRAM( [[]],[[int a = 32;]])],
+                    [vector_flags="-mcpu=cortex-a15 -mfpu=neon-vfpv4"], [])
+  CFLAGS="$sre_save_CFLAGS"
+  CPPFLAGS="$sre_save_CPPFLAGS"
+fi
+
+if test "y$vector_flags" != "y"; then
+  ARM_CFLAGS="$vector_flags"
+  NEON_CFLAGS="$vector_flags"
+  NEON64_CFLAGS="$vector_flags"
+fi
+
+AC_SUBST(ARM_CFLAGS)
+AC_SUBST(NEON_CFLAGS)
+AC_SUBST(NEON64_CFLAGS)
+
+
 
 # If we're using SSE, figure out our @SIMD_CFLAGS@
 if test "$impl_choice" = "sse" && test "x$SIMD_CFLAGS" = x; then
@@ -454,7 +631,7 @@ if test "$impl_choice" = "sse"; then
                                        __m128i b;
                                        b = _mm_castps_si128(a);
                                        a = _mm_castsi128_ps(b);]])],
-                    [AC_DEFINE([HAVE_SSE2_CAST])
+                    [AC_DEFINE([HAVE_SSE2_CAST], 1, [Support SSE2 cast function])
                      ssecast=yes])
   AC_MSG_RESULT([$ssecast])
   CFLAGS="$sre_save_cflags"
@@ -531,7 +708,7 @@ if test "$impl_choice" = "sse"; then
  				 [[_MM_SET_FLUSH_ZERO_MODE (_MM_FLUSH_ZERO_ON);
 				 ]])],
 	[ AC_MSG_RESULT([yes])
-          AC_DEFINE([HAVE_FLUSH_ZERO_MODE])],
+          AC_DEFINE([HAVE_FLUSH_ZERO_MODE], 1, [Processor supports flush-to-zero mode])],
 	[ AC_MSG_RESULT([no])]
   )
   CFLAGS="$sre_save_cflags"
@@ -540,21 +717,21 @@ fi
 # Now, we can enable the appropriate optimized implementation.
 case "$impl_choice" in 
 sse)  AC_MSG_NOTICE([Activating Intel/AMD SSE optimized DP implementation])
-      AC_DEFINE([HAVE_SSE2])
-      AC_DEFINE([p7_IMPL_SSE])
+      AC_DEFINE([HAVE_SSE2], 1, [Support SSE2 vector instructions])
+      AC_DEFINE([p7_IMPL_SSE], 1, [Use SSE vector implementation])
       AC_SUBST([HMMERIMPLLIB], ["impl_sse/libhmmerimpl.a"])
       IMPL_CHOICE="sse"
       ;;
 
 vmx)  AC_MSG_NOTICE([Activating Altivec/VMX optimized DP implementation])
-      AC_DEFINE([HAVE_VMX])
-      AC_DEFINE([p7_IMPL_VMX])
+      AC_DEFINE([HAVE_VMX], 1, [Support Altivec/VMX vector instructions])
+      AC_DEFINE([p7_IMPL_VMX], 1, [Use Altivec/VMX vector implementation])
       AC_SUBST([HMMERIMPLLIB], ["impl_vmx/libhmmerimpl.a"])
       IMPL_CHOICE="vmx"
       ;;
 
 *)    AC_MSG_NOTICE([Activating "dummy" implementation])
-      AC_DEFINE([p7_IMPL_DUMMY])
+      AC_DEFINE([p7_IMPL_DUMMY], 1, [No vector implementation supported])
       AC_SUBST([HMMERIMPLLIB], ["impl_dummy/libhmmerimpl.a"])
       IMPL_CHOICE="dummy"
       ;;
@@ -581,7 +758,7 @@ AC_PATH_PROG(HAVE_GZIP, "gzip", "no")
 if test "${HAVE_GZIP}" = "no"; then
   AC_MSG_WARN([gzip not found])
 else
-  AC_DEFINE(HAVE_GZIP)
+  AC_DEFINE(HAVE_GZIP, 1, [Support external gzip decompression])
 fi
 
 ################################################################
@@ -676,6 +853,24 @@ AC_TYPE_OFF_T
 #
 AX_GCC_FUNC_ATTRIBUTE(noreturn)
 
+# HAVE_FUNC_ATTRIBUTE_FORMAT
+#   
+#   We have some printf()-style functions that use varargs.
+#   Apparently when you do something like 
+#           int64_t bigint;
+#           my_printf("%d", bigint);
+#   a compiler can't normally detect the size mismatch between the
+#   specifier (%d) and the argument (bigint). Usually this isn't a
+#   problem (apparently most platforms cast appropriately) but we had
+#   problems on ARM. gcc-like compilers allow declaring an attribute
+#   of format(printf, <string_index>, <first-to-check>), enabling the
+#   compiler to typecheck printf()-like arguments, and warn appropriately.
+#   We only need or use this in development.
+#
+# This gets set in the Easel esl_config.h.
+AX_GCC_FUNC_ATTRIBUTE(format)
+
+
 
 ################################################################
 # 11. Checks for functions, defining HAVE_FOO when foo is found
@@ -683,19 +878,26 @@ AX_GCC_FUNC_ATTRIBUTE(noreturn)
 
 AC_CHECK_FUNCS(mkstemp)
 AC_CHECK_FUNCS(popen)
+AC_CHECK_FUNCS(putenv)
 AC_CHECK_FUNCS(strcasecmp)
+AC_CHECK_FUNCS(strsep)
 AC_CHECK_FUNCS(times)
 AC_CHECK_FUNCS(getpid)
 AC_CHECK_FUNCS(sysctl)
 AC_CHECK_FUNCS(sysconf)
 AC_CHECK_FUNCS(getcwd)
+AC_CHECK_FUNCS(chmod)
 AC_CHECK_FUNCS(stat)
 AC_CHECK_FUNCS(fstat)
+AC_CHECK_FUNCS(erfc)
 
-AC_CHECK_FUNCS(ntohs, , AC_CHECK_LIB(socket, ntohs))
-AC_CHECK_FUNCS(ntohl, , AC_CHECK_LIB(socket, ntohl))
-AC_CHECK_FUNCS(htons, , AC_CHECK_LIB(socket, htons))
-AC_CHECK_FUNCS(htonl, , AC_CHECK_LIB(socket, htonl))
+AC_SEARCH_LIBS(ntohs,     socket)
+AC_SEARCH_LIBS(ntohl,     socket)
+AC_SEARCH_LIBS(htons,     socket)
+AC_SEARCH_LIBS(htonl,     socket)
+AC_SEARCH_LIBS(socket,    socket)
+AC_SEARCH_LIBS(inet_pton, nsl)
+
 AC_FUNC_FSEEKO
 
 
@@ -726,6 +928,8 @@ AC_CONFIG_FILES([src/Makefile])
 AC_CONFIG_FILES([testsuite/Makefile])
 AC_CONFIG_FILES([profmark/Makefile])
 AC_CONFIG_FILES([src/impl_${impl_choice}/Makefile])
+
+AC_CONFIG_HEADERS([easel/decoy_config.h])   # Put this first to keep gnu 'autoheader' from overwriting a real config file.
 AC_CONFIG_HEADERS([src/p7_config.h])
 AC_CONFIG_HEADERS([easel/esl_config.h])
 AC_CONFIG_HEADERS([libdivsufsort/divsufsort.h])
@@ -768,10 +972,4 @@ if test "$impl_choice" = "dummy"; then
   AC_MSG_WARN([It is slow, about 100x slower than real H3, and is NOT intended for production use!])
   AC_MSG_WARN([It only intended to show the basics of how HMMER3 works, portably.])
 fi
-
-
-#################################################################
-# @LICENSE@
-# xref autoconf macro archive: //www.gnu.org/software/ac-archive/
-#################################################################
 
