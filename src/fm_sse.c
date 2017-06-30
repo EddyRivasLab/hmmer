@@ -101,10 +101,10 @@ fm_configInit( FM_CFG *cfg, ESL_GETOPTS *go )
    * Incrementally chew off the 1s in chunks of 2 (for DNA) or 4 (for DNA_full)
    * from the right side, and stick each result into an element of a __m128 array
    */
-  //if (cfg->meta->alph_type == fm_DNA)
-   trim_chunk_count = 64; //2-bit steps
-//  else //(meta->alph_type == fm_DNA_full)
-//    trim_chunk_count = 16; //8-bit steps
+   if (cfg->meta->alph_type == fm_DNA)
+     trim_chunk_count = 64; //2-bit steps
+   else if (cfg->meta->alph_type == fm_AMINO)
+     trim_chunk_count = 16; //8-bit steps
 
   //chars_per_vector = 128/meta->charBits;
   cfg->fm_masks_v         = NULL;
@@ -312,6 +312,7 @@ fm_getOccCount (const FM_DATA *fm, const FM_CFG *cfg, int pos, uint8_t c) {
           counts_v = _mm_subs_epi8(counts_v, BWT_v); // adds 1 for each matching byte  (subtracting negative 1)
         }
         int remaining_cnt = pos + 1 -  i ;
+
         if (remaining_cnt > 0) {
           BWT_v    = *(__m128i*)(BWT+i);
           BWT_v    = _mm_cmpeq_epi8(BWT_v, c_v);
