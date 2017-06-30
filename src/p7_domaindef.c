@@ -41,7 +41,6 @@
 #include "esl_random.h"
 #include "esl_sq.h"
 #include "esl_vectorops.h"
-#include "esl_sse.h"
 
 #include "hmmer.h"
 
