@@ -1394,7 +1394,7 @@ extern int hmmlogo_IndelValues (P7_HMM *hmm, float *insert_P, float *insert_expL
 
 
 /* hmmpgmd2msa.c */
-extern int hmmpgmd2msa(void *data, P7_HMM *hmm, ESL_SQ *qsq,  int *incl, int incl_size, int *excl, int excl_size, ESL_MSA **ret_msa);
+extern int hmmpgmd2msa(void *data, P7_HMM *hmm, ESL_SQ *qsq, int *incl, int incl_size, int *excl, int excl_size, int excl_all, ESL_MSA **ret_msa);
 
 
 
