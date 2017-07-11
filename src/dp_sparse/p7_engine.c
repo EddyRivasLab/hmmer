@@ -23,7 +23,7 @@
 
 #include "dp_sparse/p7_engine.h"  // FIXME: we'll move the engine somewhere else, I think
 
-#include "daemon/p7_hitlist.h" //  This probably wants to move somewhere else once we figure out how command-line search will work
+#include "server/p7_hitlist.h" //  This probably wants to move somewhere else once we figure out how command-line search will work
 #include "easel.h"
 #include "esl_random.h"
 #include "esl_exponential.h"

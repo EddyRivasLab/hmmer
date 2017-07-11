@@ -1,4 +1,4 @@
-//! Functions that implement database sharding
+//! \file Functions that implement database sharding
 #include<string.h>
 
 #include "easel.h"
@@ -8,18 +8,19 @@
 #include "hmmer.h"
 #include "hardware/hardware.h"
 #include "base/general.h"
-#include "daemon/shard.h"
+#include "server/shard.h"
 
+// p7_shard_Create_hmmfile
 //! Reads the HMM file specified by filename, and builds a shard structure out of it.
-/*!   @param filename the name of the .hmm file containing the database
-    @param num_shards the number of shards the database will be divided into
-    @param my_shard which shard of the database should be generated? Must be between 0 and num_shards
-    @return the new shard  */
+/*! @param filename The name of the .hmm file containing the database.
+    @param num_shards The number of shards the database will be divided into.
+    @param my_shard Which shard of the database should be generated? Must be between 0 and num_shards.
+    @return The new shard.  Calls p7_Fail() to exit the program if unable to complete successfully.  */
 P7_SHARD *p7_shard_Create_hmmfile(char *filename, uint32_t num_shards, uint32_t my_shard){
-  //! return value used to tell if many esl routines completed successfully
+  // return value used to tell if many ESL routines completed successfully
   int status;
 
-  // allocate the base object that we're creating
+  // allocate the base shard object
   P7_SHARD *the_shard;
   ESL_ALLOC(the_shard, sizeof(P7_SHARD));
 
@@ -28,11 +29,16 @@ P7_SHARD *p7_shard_Create_hmmfile(char *filename, uint32_t num_shards, uint32_t 
   uint64_t num_hmms= 0; // Number of HMMs we've put in the database
   uint64_t hmms_in_file = 0; // Number of HMMs we've seen in the file
 
+
+  /* Because we don't know how many HMMs a file contains until we've gone through the file, we have to do dynamic
+   * re-allocation of many of the shard's data structures.  
+   */
   uint64_t directory_size =100; // Number of HMMs we've allocated directory space for
   ESL_ALLOC(the_shard->directory, (directory_size * sizeof(P7_SHARD_DIRECTORY_ENTRY)));
 
-
-  uint64_t contents_buffer_size = 100 * sizeof(P7_OPROFILE *); // track how much space we've allocated for contents, start with space for 100 pointers
+  uint64_t contents_buffer_size = 100 * sizeof(P7_OPROFILE *); // track how much space we've allocated for contents,
+  // start with space for 100 pointers
+  
   uint64_t descriptors_buffer_size = 100 * sizeof(P7_PROFILE *); // and for descriptors
   ESL_ALLOC(the_shard->contents, contents_buffer_size);
   ESL_ALLOC(the_shard->descriptors, descriptors_buffer_size);
@@ -49,6 +55,7 @@ P7_SHARD *p7_shard_Create_hmmfile(char *filename, uint32_t num_shards, uint32_t 
 
   if (p7_hmmfile_OpenE(filename, NULL, &hfp, NULL) != eslOK) p7_Fail("Failed to open HMM file %s", filename);
 
+  // iterate through the HMMs in the file
   while(p7_hmmfile_Read(hfp, &abc, &hmm) == eslOK){
     // There's another HMM in the file
     if(hmms_in_file % num_shards == my_shard){
@@ -79,7 +86,7 @@ P7_SHARD *p7_shard_Create_hmmfile(char *filename, uint32_t num_shards, uint32_t 
         ESL_REALLOC(the_shard->descriptors, descriptors_buffer_size);
       }
 
-        // Create the directory entry for this HMM now that we know there's space
+      // Create the directory entry for this HMM now that we know there's space
       the_shard->directory[num_hmms].id = num_hmms;
       the_shard->directory[num_hmms].contents_offset = contents_offset;
       the_shard->directory[num_hmms].descriptor_offset = descriptors_offset;
@@ -107,12 +114,9 @@ P7_SHARD *p7_shard_Create_hmmfile(char *filename, uint32_t num_shards, uint32_t 
   // realloc shard's memory buffers down to the actual size needed
   ESL_REALLOC(the_shard->directory, (num_hmms * sizeof(P7_SHARD_DIRECTORY_ENTRY)));
   ESL_REALLOC(the_shard->contents, contents_offset);
-  //ESL_REALLOC(the_shard->descriptors, descriptors_offset); 
-  // PUT ME BACK WHEN PROFILE ADDED TO SHARD *************
-
-  // Shard is built, set some final values and return it
+  ESL_REALLOC(the_shard->descriptors, descriptors_offset); 
+  
   the_shard->num_objects = num_hmms;
-  // Clean up
 
   p7_hmmfile_Close(hfp);
 
@@ -123,12 +127,20 @@ P7_SHARD *p7_shard_Create_hmmfile(char *filename, uint32_t num_shards, uint32_t 
     p7_Fail("Unable to allocate memory in p7_shard_Create_hmmfile");
 }
 
-
+// p7_shard_Create_dsqdata
+/* \brief Creates a shard of sequence data from a set of dsqdata files.
+ * \details This function leverages the routines in esl_dsqdata.c, which are multithreaded to overlap reads with computation when
+ * HMMER is run in non-server mode.  This introduces some threading overhead which is not necessary when we're loading a shard
+ * into memory, but the convenience of not having to write two sets of dsqdata-parsing functions is worth the small inefficiency,
+ * particularly because building the shards at server startup is not performance-critical.
+ * \param [in] basename The base name of the files in the dsqdata database.  A disqdata database consists of one file named basename,
+ * and a number of basename.foo files.
+ * \param [in] num_shards The number of shards that this database should be divided into.
+ * \param [in] my_shard The shard that this worker node is responsible for.  Must be between 0 and num_shards -1
+ * \returns The new shard.  Calls p7_Fail() to exit the program if unable to complete successfully.
+ */
 P7_SHARD *p7_shard_Create_dsqdata(char *basename, uint32_t num_shards, uint32_t my_shard){
-  /* This code heavily leverages the routines in esl_dsqdata.c, which are multithreaded to overlap file reads with computation when HMMER is run from the command line.  We don't need the multithreading in the daemon, because we're reading the data files once at start-up, but 
-  the convenience of not having to re-write everything and from avoiding any multiple-version problems is worth any potential inefficiency for
-  something that won't be performance-critical */
-
+ 
   //! return value used to tell if many esl routines completed successfully
   int status;
 
@@ -137,7 +149,7 @@ P7_SHARD *p7_shard_Create_dsqdata(char *basename, uint32_t num_shards, uint32_t 
   // Will point to chunks of dsq data that have been read out of the files
   ESL_DSQDATA_CHUNK *chu = NULL;
 
-  // allocate the base object that we're creating
+  // allocate the base shard object
   P7_SHARD *the_shard;
   ESL_ALLOC(the_shard, sizeof(P7_SHARD));
 
@@ -171,7 +183,7 @@ P7_SHARD *p7_shard_Create_dsqdata(char *basename, uint32_t num_shards, uint32_t 
       p7_Fail("Unsupported alphabet type found in dsqdata file");
   }
 
-  the_shard->abc = abc;  // save the alphabet in the shard so we can free it when done
+  the_shard->abc = abc;  // save the alphabet in the shard so we can free it when the server exits
   the_shard->total_length = 0; // start out empty
 
   // Figure out how many sequences should be in the shard when we're done
@@ -180,12 +192,13 @@ P7_SHARD *p7_shard_Create_dsqdata(char *basename, uint32_t num_shards, uint32_t 
         the_shard->num_objects += 1;
     }
 
-    // allocate space for the directory now that we know how big it needs to be
-    ESL_ALLOC(the_shard->directory, (the_shard->num_objects * sizeof(P7_SHARD_DIRECTORY_ENTRY)));
+  // allocate space for the directory now that we know how big it needs to be
+  ESL_ALLOC(the_shard->directory, (the_shard->num_objects * sizeof(P7_SHARD_DIRECTORY_ENTRY)));
 
-    // take a guess at how big the contents and descriptor buffers need to be.  Should be reasonably accurate for the contents,
-    // could be wildly inaccurate for the descriptors
-    uint64_t trial_size = dd->nres/num_shards + (the_shard->num_objects * 12); // 4 bytes/object for length, 8 bytes/object for id
+  // take a guess at how big the contents and descriptor buffers need to be.  Should be reasonably accurate for the contents,
+  // could be wildly inaccurate for the descriptors
+  // These buffers will be realloced as needed if our guess is too small
+  uint64_t trial_size = dd->nres/num_shards + (the_shard->num_objects * 16); // 8 bytes/object for length, 8 bytes/object for id
   ESL_ALLOC(the_shard->contents, trial_size);
   ESL_ALLOC(the_shard->descriptors, trial_size);
 
@@ -198,80 +211,82 @@ P7_SHARD *p7_shard_Create_dsqdata(char *basename, uint32_t num_shards, uint32_t 
   char *contents_pointer = the_shard->contents;
   char *descriptors_pointer = the_shard->descriptors;
     // counter to check that number of sequences we put in the shard matches what the database says should go there
-    uint64_t sequence_count = 0; 
-    uint64_t my_sequences = 0;
+  uint64_t sequence_count = 0; 
+  uint64_t my_sequences = 0;
+
   // process each of the sequences in the file
   while (( status = esl_dsqdata_Read(dd, &chu)) == eslOK)  {
-        for (i = 0; i < chu->N; i++) {
-          if(sequence_count % num_shards == my_shard){
-            // I have to care about this sequence
+    for (i = 0; i < chu->N; i++) {
+      if(sequence_count % num_shards == my_shard){
+        // I have to care about this sequence
 
-            if(my_sequences >= the_shard->num_objects){  // we've found more sequences than we expected
-              p7_Fail("Exceeded allocated number of sequences in p7_shard_Create_dsqdata");
-            }
+        if(my_sequences >= the_shard->num_objects){  // we've found more sequences than we expected
+          p7_Fail("Exceeded allocated number of sequences in p7_shard_Create_dsqdata");
+          }
 
-            // create the entry for this sequence in the directory
-            the_shard->directory[my_sequences].id = sequence_count;
-            the_shard->directory[my_sequences].contents_offset = contents_offset;
-            the_shard->directory[my_sequences].descriptor_offset = descriptors_offset;
-            the_shard->total_length += chu->L[i]; //add this sequence to the total length in the shard
+        // create the entry for this sequence in the directory
+        the_shard->directory[my_sequences].id = sequence_count;
+        the_shard->directory[my_sequences].contents_offset = contents_offset;
+        the_shard->directory[my_sequences].descriptor_offset = descriptors_offset;
+        the_shard->total_length += chu->L[i]; //add this sequence to the total length in the shard
 
-            while(contents_offset + (2*sizeof(int64_t)) + chu->L[i]  +2 > contents_buffer_size){
-              // +2 for begin-of-sequence and end-of-sequence sentinels around dsq
-              // there isn't enough space in the buffer for this sequence, so re-allocate
-              ESL_REALLOC(the_shard->contents, (contents_buffer_size + trial_size));
-              contents_buffer_size += trial_size;
-              contents_pointer = the_shard->contents + contents_offset;
-            }
+        while(contents_offset + (2*sizeof(int64_t)) + chu->L[i]  +2 > contents_buffer_size){
+        // +2 for begin-of-sequence and end-of-sequence sentinels around dsq
 
-            // copy this sequence into the contents buffer
-             *((int64_t *) contents_pointer) = sequence_count;
-            contents_pointer += sizeof(int64_t);
-            *((int64_t *) contents_pointer) = chu->L[i];
-            contents_pointer += sizeof(int64_t);
-            memcpy(contents_pointer, chu->dsq[i], (chu->L[i] +2));
-            // +2 for begin-of-sequence and end-of-sequence sentinels around dsq
-            contents_pointer += chu->L[i]+2;
-            contents_offset+= chu->L[i]+2 + (2* sizeof(int64_t));
+        // there isn't enough space in the buffer for this sequence, so re-allocate
+        ESL_REALLOC(the_shard->contents, (contents_buffer_size + trial_size));
+          contents_buffer_size += trial_size;
+          contents_pointer = the_shard->contents + contents_offset;
+        }
 
-            // now, handle the metadata
+        // copy this sequence into the contents buffer
+        *((int64_t *) contents_pointer) = sequence_count;
+        contents_pointer += sizeof(int64_t);
+        *((int64_t *) contents_pointer) = chu->L[i];
+        contents_pointer += sizeof(int64_t);
+        memcpy(contents_pointer, chu->dsq[i], (chu->L[i] +2));
+        // +2 for begin-of-sequence and end-of-sequence sentinels around dsq
+        contents_pointer += chu->L[i]+2;
+        contents_offset+= chu->L[i]+2 + (2* sizeof(int64_t));
+
+        // now, handle the metadata
 
         while((descriptors_offset + sizeof(int32_t) + strlen(chu->name[i]) + strlen(chu->acc[i]) + strlen(chu->desc[i]) + 3)> descriptors_buffer_size){
           // sizeof(int32_t) is for the taxid field, the +3 is for the termination characters in the name, acc, and desc 
           // strings
 
-              // there isn't enough space in the buffer for this sequence, so re-allocate
-              ESL_REALLOC(the_shard->descriptors, (descriptors_buffer_size + trial_size));
-              descriptors_buffer_size += trial_size;
-              descriptors_pointer = the_shard->descriptors + descriptors_offset;
-            }
-
-            // now, copy the descriptors 
-            strcpy(descriptors_pointer, chu->name[i]);
-            descriptors_pointer += strlen(chu->name[i]) +1;  // +1 for termination character
-            descriptors_offset += strlen(chu->name[i])  +1;
-
-            strcpy(descriptors_pointer, chu->acc[i]);
-            descriptors_pointer += strlen(chu->acc[i]) +1;  // +1 for termination character
-            descriptors_offset += strlen(chu->acc[i])  +1;
-
-            strcpy(descriptors_pointer, chu->desc[i]);
-            descriptors_pointer += strlen(chu->desc[i]) +1;  // +1 for termination character
-            descriptors_offset += strlen(chu->desc[i])  +1;
-
-            *((int32_t *) descriptors_pointer) = chu->taxid[i];
-            descriptors_pointer += sizeof(int32_t);
-            descriptors_offset += sizeof(int32_t);
-
-            // done with this sequence, on to the next one
-            my_sequences++;
-          }
-          sequence_count++;
+          // there isn't enough space in the buffer for this sequence, so re-allocate
+          ESL_REALLOC(the_shard->descriptors, (descriptors_buffer_size + trial_size));
+          descriptors_buffer_size += trial_size;
+          descriptors_pointer = the_shard->descriptors + descriptors_offset;
         }
 
-        esl_dsqdata_Recycle(dd, chu);
+        // now, copy the descriptors 
+        strcpy(descriptors_pointer, chu->name[i]);
+        descriptors_pointer += strlen(chu->name[i]) +1;  // +1 for termination character
+        descriptors_offset += strlen(chu->name[i])  +1;
+
+        strcpy(descriptors_pointer, chu->acc[i]);
+        descriptors_pointer += strlen(chu->acc[i]) +1;  // +1 for termination character
+        descriptors_offset += strlen(chu->acc[i])  +1;
+
+        strcpy(descriptors_pointer, chu->desc[i]);
+        descriptors_pointer += strlen(chu->desc[i]) +1;  // +1 for termination character
+        descriptors_offset += strlen(chu->desc[i])  +1;
+
+        *((int32_t *) descriptors_pointer) = chu->taxid[i];
+        descriptors_pointer += sizeof(int32_t);
+        descriptors_offset += sizeof(int32_t);
+
+        // done with this sequence, on to the next one
+        my_sequences++;
+      }
+      sequence_count++;
+    }
+
+    esl_dsqdata_Recycle(dd, chu);
   } 
-  //printf("Sequences took %lu bytes\n", contents_offset);
+
   // Check that we got as many sequences as we expected
   if (my_sequences != the_shard->num_objects){
     p7_Fail("Mis-match between expected sequence count of %d and actual sequence count of %d in p7_shard_Create_dsqdata", the_shard->num_objects, my_sequences);
@@ -288,6 +303,7 @@ P7_SHARD *p7_shard_Create_dsqdata(char *basename, uint32_t num_shards, uint32_t 
     ESL_REALLOC(the_shard->descriptors, descriptors_offset);
   }
 
+  // close the dsqdata file 
   esl_dsqdata_Close(dd);
   return(the_shard);
 
@@ -296,20 +312,28 @@ P7_SHARD *p7_shard_Create_dsqdata(char *basename, uint32_t num_shards, uint32_t 
     p7_Fail("Unable to allocate memory in p7_shard_Create_dsqdata");
 }
 
-/* frees memory allocated to a shard */
+
+
+// p7_shard_Destroy
+/*! \brief Frees all memory allocated by the shard.
+ *  \param [in] the_shard A pointer to the shard to be freed.
+ *  \returns Nothing
+ */
 void p7_shard_Destroy(P7_SHARD *the_shard){
 
   esl_alphabet_Destroy(the_shard->abc);  // free the shard's alphabet
-  // free all of the heap-allocated sub-objects
 
+  // free all of the heap-allocated sub-objects
   if(the_shard->data_type == HMM){
-    // contents and descriptors are arrays of pointers to structures, need to free the pointed-to structures
+    // Contents and descriptors are arrays of pointers to structures, need to free the pointed-to structures
+    // For sequence shards, the contents and descriptors are flat arrays of bytes, so can just be freed
     int i;
     for(i = 0; i< the_shard->num_objects; i++){
       p7_oprofile_Destroy(((P7_OPROFILE **)the_shard->contents)[i]);
       p7_profile_Destroy(((P7_PROFILE **) the_shard->descriptors)[i]);
     }
   }
+
   free(the_shard->directory);
   free(the_shard->contents);
   free(the_shard->descriptors);
@@ -318,9 +342,18 @@ void p7_shard_Destroy(P7_SHARD *the_shard){
   free(the_shard);
 }
 
-/* Does a binary search on the shard's directory to find the object with the specified id.  If it finds it, returns eslOK and a pointer to the 
-   start of the object in ret_object.  If not, returns eslENORESULT and a pointer to the object with the next-lowest id in ret_object.  If id
-   is less than the id of the first object in the shard, returns eslFAIL and NULL in ret_object */ 
+
+//p7_shard_Find_Contents_Nextlow
+/*! \brief Finds the start of the contents field for the object with the specified ID, rounding down to the next lower ID if the specified ID is not in the shard
+ * \details Does a binary search on the shard's directory, looking for an object with the specified ID.  If it finds the ID, sets
+ * *ret_object to the start of the object's portion of the contents array.  If not, finds the object with the ID that is closest to but
+ * smaller than the specified ID and sets *ret_object to the start of that object's part of the contents array.
+ * \param [in] the_shard The shard to be searched.
+ * \param [in] id The ID of the object whose contents we want.
+ * \param [out] ret_object A pointer that will be set to point to the located object's portion of the contents array.
+ * \returns eslOK if the requested ID is present in the shard, eslENORESULT if the requested ID is not present in the shard but there 
+ * was at least one object with a smaller ID in the shard, and eslFAIL if the requested ID was less than the ID of any object in the shard.
+ */ 
 int p7_shard_Find_Contents_Nextlow(P7_SHARD *the_shard, uint64_t id, char **ret_object){
   /* binary search on id */
   uint64_t top, bottom, middle;
@@ -329,7 +362,7 @@ int p7_shard_Find_Contents_Nextlow(P7_SHARD *the_shard, uint64_t id, char **ret_
   top = the_shard->num_objects-1;
   middle = top/2;
 
-  if(id > the_shard->directory[top].id){ // the specified id is bigger than the id of any object in the shard
+  if(id < the_shard->directory[bottom].id){ // the specified id is bigger than the id of any object in the shard
     ret_object = NULL;
     return eslFAIL;
   }
@@ -345,8 +378,8 @@ int p7_shard_Find_Contents_Nextlow(P7_SHARD *the_shard, uint64_t id, char **ret_
       top = middle -1;
       middle = bottom + (top-bottom)/2;
     }
-
   }
+
   if(the_shard->directory[middle].id == id){
     // we've found what we're looking for
     *ret_object = the_shard->contents + the_shard->directory[middle].contents_offset;
@@ -359,10 +392,6 @@ int p7_shard_Find_Contents_Nextlow(P7_SHARD *the_shard, uint64_t id, char **ret_
     return eslENORESULT;
   }
   else{
-    // test code, take out when verified
-    if (middle == 0){
-      p7_Fail("search error in p7_shard_Find_Contents_Nextlow");
-    }
     if(the_shard->directory[middle-1].id < id){
       *ret_object = the_shard->contents + the_shard->directory[middle-1].contents_offset;
       return eslENORESULT;
@@ -373,7 +402,16 @@ int p7_shard_Find_Contents_Nextlow(P7_SHARD *the_shard, uint64_t id, char **ret_
   }
 }
 
-/* Does a binary search on the shard's directory to find the object with the specified id.  If it finds it, returns the ID.  If not, returns the ID of the  object with the next-lower ID.  If there is no object with an ID less than or equal to the specified ID, returns all ones*/ 
+
+
+// p7_shard_Find_ID_Nextlow
+/*! \brief If an object with the specified ID is in the shard, returns its ID.
+ * \details Does a binary search on the shard's directory, looking for an object with the specified ID.  If it finds the ID, returns that ID
+ * If not, finds the object with the ID that is closest to but smaller than the specified ID and returns its ID.
+ * \param [in] the_shard The shard to be searched.
+ * \param [in] id The ID of the object whose contents we want.
+ * \returns All ones if the requested ID is smaller than the ID of any object in the shard, the ID of the object it finds otherwise.
+ */ 
 uint64_t p7_shard_Find_Id_Nextlow(P7_SHARD *the_shard, uint64_t id){
   /* binary search on id */
   uint64_t top, bottom, middle;
@@ -382,7 +420,7 @@ uint64_t p7_shard_Find_Id_Nextlow(P7_SHARD *the_shard, uint64_t id){
   top = the_shard->num_objects-1;
   middle = top/2;
 
-  if(id > the_shard->directory[top].id){ // the specified id is bigger than the id of any object in the shard
+  if(id < the_shard->directory[bottom].id){ // the specified id is smaller than the id of any object in the shard
     return((uint64_t) -1);
   }
 
@@ -409,10 +447,6 @@ uint64_t p7_shard_Find_Id_Nextlow(P7_SHARD *the_shard, uint64_t id){
     return the_shard->directory[middle].id;
   }
   else{
-    // test code, take out when verified
-    if (middle == 0){
-      p7_Fail("search error in p7_shard_Find_Contents_Nextlow");
-    }
     if(the_shard->directory[middle-1].id < id){
       return the_shard->directory[middle-1].id;
     
@@ -422,9 +456,18 @@ uint64_t p7_shard_Find_Id_Nextlow(P7_SHARD *the_shard, uint64_t id){
     }
   }
 }
-/* Does a binary search on the shard's directory to find the object with the specified id.  If it finds it, returns eslOK and a pointer to the 
-   start of the object in ret_object.  If not, returns eslENORESULT and a pointer to the object with the next-highest id in ret_object.  If id
-   is greater than the id of the last object in the shard, returns eslENORESULT and NULL in ret_object */ 
+
+//p7_shard_Find_Contents_Nexthigh
+/*! \brief Finds the start of the contents field for the object with the specified ID, rounding up to the next higher ID if the specified ID is not in the shard
+ * \details Does a binary search on the shard's directory, looking for an object with the specified ID.  If it finds the ID, sets
+ * *ret_object to the start of the object's portion of the contents array.  If not, finds the object with the ID that is closest to but
+ * larger than the specified ID and sets *ret_object to the start of that object's part of the contents array.
+ * \param [in] the_shard The shard to be searched.
+ * \param [in] id The ID of the object whose contents we want.
+ * \param [out] ret_object A pointer that will be set to point to the located object's portion of the contents array.
+ * \returns eslOK if the requested ID is present in the shard, eslENORESULT if the requested ID is not present in the shard but there 
+ * was at least one object with a larger ID in the shard, and eslFAIL if the requested ID was greater than the ID of any object in the shard.
+ */ 
 int p7_shard_Find_Contents_Nexthigh(P7_SHARD *the_shard, uint64_t id, char **ret_object){
   /* binary search on id */
   uint64_t top, bottom, middle;
@@ -463,10 +506,6 @@ int p7_shard_Find_Contents_Nexthigh(P7_SHARD *the_shard, uint64_t id, char **ret
     return eslENORESULT;
   }
   else{
-    // test code, take out when verified
-    if (middle == the_shard->num_objects-1){
-      p7_Fail("search error in p7_shard_Find_Contents_Nexthigh");
-    }
     if(the_shard->directory[middle+1].id > id){
       *ret_object = the_shard->contents + the_shard->directory[middle+1].contents_offset;
       return eslENORESULT;
@@ -477,8 +516,14 @@ int p7_shard_Find_Contents_Nexthigh(P7_SHARD *the_shard, uint64_t id, char **ret
   }
 }
 
-/* Does a binary search on the shard's directory to find the object with the specified id.  If it finds it, returns the id.  
-If not, returns the id of the object with the next higher ID.  if there is no such object, returns all ones  */ 
+// p7_shard_Find_ID_Nexthigh
+/*! \brief If an object with the specified ID is in the shard, returns its ID.
+ * \details Does a binary search on the shard's directory, looking for an object with the specified ID.  If it finds the ID, returns that ID
+ * If not, finds the object with the ID that is closest to but larger than the specified ID and returns its ID.
+ * \param [in] the_shard The shard to be searched.
+ * \param [in] id The ID of the object whose contents we want.
+ * \returns All ones if the requested ID is larger than the ID of any object in the shard, the ID of the object it finds otherwise.
+ */ 
 uint64_t p7_shard_Find_Id_Nexthigh(P7_SHARD *the_shard, uint64_t id){
   /* binary search on id */
   uint64_t top, bottom, middle;
@@ -514,10 +559,6 @@ uint64_t p7_shard_Find_Id_Nexthigh(P7_SHARD *the_shard, uint64_t id){
     return the_shard->directory[middle].id;
   }
   else{
-    // test code, take out when verified
-    if (middle == the_shard->num_objects-1){
-      p7_Fail("search error in p7_shard_Find_Contents_Nexthigh");
-    }
     if(the_shard->directory[middle+1].id > id){
       return the_shard->directory[middle+1].id;
     }
@@ -527,8 +568,15 @@ uint64_t p7_shard_Find_Id_Nexthigh(P7_SHARD *the_shard, uint64_t id){
   }
 }
 
-/* Does a binary search on the shard's directory to find the object with the specified id.  If it finds it, returns the corresponding index into the.  
-shard's directory. If not, returns the index of the object with the next higher ID.  if there is no such object, returns all ones  */ 
+// p7_shard_Find_Index_Nexthigh
+/*! \brief If an object with the specified ID is in the shard, returns its index in the directory array.
+ * \details Does a binary search on the shard's directory, looking for an object with the specified ID.  If it finds the ID, returns the index
+ * of that directory entry.
+ * If not, finds the object with the ID that is closest to but larger than the specified ID and returns its index.
+ * \param [in] the_shard The shard to be searched.
+ * \param [in] id The ID of the object whose contents we want.
+ * \returns All ones if the requested ID is larger than the ID of any object in the shard, the index of the object it finds otherwise.
+ */ 
 uint64_t p7_shard_Find_Index_Nexthigh(P7_SHARD *the_shard, uint64_t id){
   /* binary search on id */
   uint64_t top, bottom, middle;
@@ -564,10 +612,6 @@ uint64_t p7_shard_Find_Index_Nexthigh(P7_SHARD *the_shard, uint64_t id){
     return middle;
   }
   else{
-    // test code, take out when verified
-    if (middle == the_shard->num_objects-1){
-      p7_Fail("search error in p7_shard_Find_Contents_Nexthigh");
-    }
     if(the_shard->directory[middle+1].id > id){
       return middle+1;
     }
@@ -577,8 +621,17 @@ uint64_t p7_shard_Find_Index_Nexthigh(P7_SHARD *the_shard, uint64_t id){
   }
 }
 
-/* Does a binary search on the shard's directory to find the descriptors of the  with the specified id.  If it finds it, returns eslOK and a pointer to the  start of the object in ret_object.  If not, returns eslENORESULT and a pointer to the object with the next-highest id in ret_object.  If id
-   is greater than the id of the last object in the shard, returns eslENORESULT and NULL in ret_object */ 
+//p7_shard_Find_Descriptor_Nexthigh
+/*! \brief Finds the start of the descriptors field for the object with the specified ID, rounding up to the next higher ID if the specified ID is not in the shard
+ * \details Does a binary search on the shard's directory, looking for an object with the specified ID.  If it finds the ID, sets
+ * *ret_object to the start of the object's portion of the descriptors array.  If not, finds the object with the ID that is closest to but
+ * larger than the specified ID and sets *ret_object to the start of that object's part of the descriptors array.
+ * \param [in] the_shard The shard to be searched.
+ * \param [in] id The ID of the object whose contents we want.
+ * \param [out] ret_object A pointer that will be set to point to the located object's portion of the contents array.
+ * \returns eslOK if the requested ID is present in the shard, eslENORESULT if the requested ID is not present in the shard but there 
+ * was at least one object with a larger ID in the shard, and eslFAIL if the requested ID was greater than the ID of any object in the shard.
+ */ 
 int p7_shard_Find_Descriptor_Nexthigh(P7_SHARD *the_shard, uint64_t id, char **ret_object){
   /* binary search on id */
   uint64_t top, bottom, middle;
@@ -634,7 +687,6 @@ int p7_shard_Find_Descriptor_Nexthigh(P7_SHARD *the_shard, uint64_t id, char **r
 /******************************************************************************************************************************/
 /*                                                                                      Tests                                                                                                     */
 /******************************************************************************************************************************/
-// SRE FIXME: utests take no argument; only one utest driver per file
 #ifdef p7SHARD_TESTDRIVE
 #include "esl_randomseq.h"
 
