@@ -1,15 +1,12 @@
 MODULE = daemon
 
-OBJS = worker_node.o \
-	master_node.o \
-	shard.o \
-	p7_hitlist.o
+OBJS = 
 
 HDRS =  
 
-PROGS = hmmpgmd2
+PROGS = 
 
-UTESTS = shard_utest
+UTESTS = 
 
 STATS  = 
 

@@ -1,4 +1,4 @@
-/*! Data structures and function declarations for the Daemon version of HMMER 4 */
+/*! Data structures and function declarations for the server version of HMMER 4 */
 #ifndef p7HMMPGMD2_INCLUDED
 #define p7HMMPGMD2_INCLUDED
 
@@ -17,13 +17,13 @@
 // The db field tells the worker which database to search and has range 0 .. <number of databases loaded -1 >
 // The compare_obj_length is the length (in bytes) of the HMM or sequence we'll be comparing the database to
 
-typedef struct p7_daemon_command{
+typedef struct p7_server_command{
 	uint32_t type; // What type of operation are we telling the workers to start?
 	uint32_t db; // Which database will the search reference
 	uint64_t compare_obj_length; // How long (in bytes) is the object we'll be comparing against (sequence or HMM)?
 } P7_DAEMON_COMMAND;
 
-typedef struct p7_daemon_chunk_reply{
+typedef struct p7_server_chunk_reply{
 	uint64_t start;
 	uint64_t end;
 } P7_DAEMON_CHUNK_REPLY;
