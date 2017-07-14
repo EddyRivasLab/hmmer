@@ -5,7 +5,13 @@
 #include "p7_config.h"
 #include "base/p7_tophits.h"
 #include "esl_red_black.h"
-
+// This is a hack to get the code to compile if we aren't building with MPI support
+// Without this, functions that have MPI_Comm parameters cause errors even though we #define out any code 
+// that calls MPI routines
+#ifndef HAVE_MPI
+//! This is only used when HMMER is built without MPI support, and is a hack to get functions with MPI_Comm parameters to compile.
+typedef char MPI_Comm;
+#endif
 //#define HITLIST_SANITY_CHECK  // conditionally compiles code to check the hitlist every time it's modified.  
 // don't define for releases, will be slow
 
