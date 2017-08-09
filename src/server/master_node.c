@@ -335,8 +335,8 @@ void p7_server_master_node_main(int argc, char ** argv, MPI_Datatype *server_mpi
   P7_SHARD *database_shard = masternode->database_shards[1];
   P7_SHARD *hmm_shard = masternode->database_shards[0];
  
-  search_start = database_shard->directory[0].id;
-  search_end = database_shard->directory[database_shard->num_objects -1].id;
+  search_start = database_shard->directory[0].index;
+  search_end = database_shard->directory[database_shard->num_objects -1].index;
 
 // Temp code to generate a random list of sequence names out of the sequence database
   
@@ -392,8 +392,8 @@ void p7_server_master_node_main(int argc, char ** argv, MPI_Datatype *server_mpi
     uint64_t search_start, search_end, chunk_size;
     
     // For now_search the entire database
-    search_start = database_shard->directory[0].id;
-    search_end = database_shard->directory[database_shard->num_objects -1].id;
+    search_start = database_shard->directory[0].index;
+    search_end = database_shard->directory[database_shard->num_objects -1].index;
 
 
     chunk_size = ((search_end - search_start) / (masternode->num_worker_nodes * 128 )) +1; // round this up to avoid small amount of leftover work at the end

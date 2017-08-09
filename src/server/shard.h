@@ -10,7 +10,7 @@ typedef enum P7_shard_data_type {AMINO, DNA, RNA, HMM} P7_SHARD_DATA_TYPE;
 typedef struct p7_shard_directory_entry{
 
 	//! ID number of the object
-	uint64_t id;
+	uint64_t index;
 
 	//! Offset from the start of the contents field to the start of the data portion of the object
 	uint64_t contents_offset; 
@@ -54,10 +54,10 @@ typedef struct p7_shard{
 	uint64_t num_objects;
 
 	//! Blob of memory that the shard contents go in.
-	char *contents;
+	void *contents;
 
 	//! Separate blob for the descriptive data
-	char *descriptors;
+	void *descriptors;
 
 	/*! Array of directory entries that allows searching the shard by object ID.  Entries must be stored in ascending order of object
 	ID to allow fast searches

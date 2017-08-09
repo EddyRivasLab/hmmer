@@ -9,6 +9,7 @@
 #include <inttypes.h>
 #include <math.h>
 #include <float.h>
+#include <syslog.h>
 #include "misc/logsum.h"
 #ifdef HAVE_MPI
 #include <mpi.h>
@@ -265,14 +266,27 @@ void
 p7_Fail(char *format, ...)
 {
   va_list  argp;
+
+  /* Check whether we are running as a daemon so we can do the right thing about logging instead of printing errors */
+  int parent_pid;
+  parent_pid = getppid();
+
+
+  if(parent_pid != 1){ // We are not running as a daemon, so just print the error message
                                 /* format the error mesg */
-  fprintf(stderr, "\nError: ");
-  va_start(argp, format);
-  vfprintf(stderr, format, argp);
-  va_end(argp);
-  fprintf(stderr, "\n");
-  fflush(stderr);
-  exit(1);
+    fprintf(stderr, "\nError: ");
+    va_start(argp, format);
+    vfprintf(stderr, format, argp);
+    va_end(argp);
+    fprintf(stderr, "\n");
+    fflush(stderr);
+    exit(1);
+  }
+  else{ // I am running as a daemon, so log the error to /sys/log
+    vsyslog(LOG_ERR, format, argp);
+    exit(1);
+  }
+
 }
 
 

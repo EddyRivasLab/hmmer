@@ -1,5 +1,9 @@
 #include <stdio.h>
-
+#include <sys/types.h>
+#include <syslog.h>
+#include <fcntl.h>
+#include <sys/resource.h>
+#include <signal.h>
 #include "p7_config.h"
 #ifdef HAVE_MPI
 #include <mpi.h>
@@ -10,6 +14,8 @@
 #include "server/hmmserver.h"
 
 
+// Take this out when done debugging the server
+#define SERVER_DEBUG
 
 
 #ifdef HAVE_MPI
@@ -21,16 +27,92 @@ static ESL_OPTIONS options[] = {
 };
 
 static char usage[]  = "[-options] <hmmfile> <seqence database>";
-static char banner[] = "hmmpgmd2, the server version of HMMER 4";
+static char banner[] = "hmmserver, the server version of HMMER 4";
 #endif
 
-//! Main function for the hmmpgmd2 program
+//! Main function for the hmmserver program
 int main(int argc, char **argv){
 
 #ifndef HAVE_MPI
-	printf("Hmmpgmd2 was compiled without MPI support, and does nothing without that support\n");
+	printf("Hmmserver was compiled without MPI support, and does nothing without that support\n");
 #endif	
 #ifdef HAVE_MPI
+
+	// Do the correct magic so that the server behaves as a proper UNIX daemon
+	// See chapter 13 of "Advanced Programming in the UNIX Environment" for an explanation of this
+
+	// Get maximum number of file descriptors 
+	struct rlimit rl;
+	if(getrlimit(RLIMIT_NOFILE, &rl) <0){
+		p7_Fail("Couldn't get file limit");
+	}
+
+	umask(0);  // 1) reset file creation parameters so that we don't inherit anything from our caller.  
+				// This should be a non-issue for hmmserver, because we don't write any files
+
+	// 2) Fork a child process that will run the actual server code and have the parent exit, so that our invoking command returns
+	pid_t pid;
+	pid = fork();
+
+	if(pid != 0){ // I'm the parent process
+		exit(0);
+	}
+
+	// 3) Call setsid to create a new session
+	setsid();
+
+	//recommended magic to make sure that we don't somehow acquire a TTY somewhere.  
+	struct sigaction sa;
+	sa.sa_handler = SIG_IGN;
+	sigemptyset(&sa.sa_mask);
+	sa.sa_flags = 0;
+	if(sigaction(SIGHUP, &sa, NULL) < 0){
+		p7_Fail("attempt to ignore SIGHUP failed");
+	}
+	if((pid = fork()) < 0){
+		p7_Fail("couldn't fork in startup");
+	}
+	else if (pid != 0){
+		exit(0);
+	}
+
+	// 3.5) Set up our connection to the logger
+	const char program_name[10] = "HMMserver";
+	openlog((const char *) &program_name, LOG_PID, LOG_USER);
+
+	// 4) Change working directory to /
+	if(chdir("/") < 0){
+		p7_Fail("Couldn't change working directory to /");
+	}
+
+	// 5) Close all open file descriptors
+	if (rl.rlim_max == RLIM_INFINITY){
+		// pick a saner upper limit on the file descriptors
+		rl.rlim_max = 1024;
+	}
+
+	#ifndef SERVER_DEBUG  // leave these steps out to simplify debugging
+	int i;
+	for(i= 2; i < rl.rlim_max; i++){
+		close(i);
+	} 
+
+	// 6) map stdin, stdout, stderr to /dev/null to prevent any access to these streams 
+	int fd0, fd1, fd2;
+
+	fd0 = open("/dev/null", O_RDWR);
+	fd1 = dup(0);
+	fd2 = dup(0);
+	if (fd0 != 0 || fd1 != 1 || fd2 !=2){
+		p7_Fail("Unexpected file descriptors in re-mapping stdin, stdout, stderr to /dev/null")
+	}
+	#endif
+
+	// 7) open the connection to the logging daemon so that mwe 
+	sleep(1);
+	
+	// If we get this far, we're the child process that was forked, so start the actual server
+
 	int provided;
 	MPI_Init_thread(NULL, NULL, MPI_THREAD_FUNNELED, &provided);
 

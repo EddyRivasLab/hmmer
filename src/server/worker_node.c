@@ -448,7 +448,7 @@ int p7_server_workernode_start_hmm_vs_amino_db(P7_DAEMON_WORKERNODE_STATE *worke
   uint64_t real_start, real_end;
   char *sequence_pointer;
   //bounds-check the start and end parameters
-  if((start_object > the_shard->directory[the_shard->num_objects -1].id) || (end_object > the_shard->directory[the_shard->num_objects-1].id)){
+  if((start_object > the_shard->directory[the_shard->num_objects -1].index) || (end_object > the_shard->directory[the_shard->num_objects-1].index)){
     p7_Fail("Attempt to reference out-of-bound object id in p7_server_workernode_start_hmm_vs_amino_db.  Start object = %lu, end object = %lu\n", start_object, end_object);
   }
   if(start_object > end_object){
@@ -457,7 +457,7 @@ int p7_server_workernode_start_hmm_vs_amino_db(P7_DAEMON_WORKERNODE_STATE *worke
 
   // figure out where to start and end the search
   if(start_object == 0){ // implicit "start at first object"
-    real_start = the_shard->directory[0].id;
+    real_start = the_shard->directory[0].index;
   }
   else{
     p7_shard_Find_Contents_Nexthigh(the_shard, start_object, &(sequence_pointer));
@@ -465,7 +465,7 @@ int p7_server_workernode_start_hmm_vs_amino_db(P7_DAEMON_WORKERNODE_STATE *worke
       // start_object
   }
   if(end_object == 0){ // implicit "start at last object"
-    real_end =the_shard->directory[workernode->database_shards[database]->num_objects -1].id;
+    real_end =the_shard->directory[workernode->database_shards[database]->num_objects -1].index;
   }
   else{
     p7_shard_Find_Contents_Nextlow(the_shard, end_object, &(sequence_pointer));
@@ -637,7 +637,7 @@ int p7_server_workernode_start_amino_vs_hmm_db(P7_DAEMON_WORKERNODE_STATE *worke
 
   uint64_t real_start, real_end;
   //bounds-check the start and end parameters
-  if((start_object >= the_shard->directory[the_shard->num_objects -1].id) || (end_object >= the_shard->directory[the_shard->num_objects-1].id)){
+  if((start_object >= the_shard->directory[the_shard->num_objects -1].index) || (end_object >= the_shard->directory[the_shard->num_objects-1].index)){
     p7_Fail("Attempt to reference out-of-bound object id in p7_server_workernode_start_amino_vs_hmm_db");
   }
   if(start_object > end_object){
@@ -646,7 +646,7 @@ int p7_server_workernode_start_amino_vs_hmm_db(P7_DAEMON_WORKERNODE_STATE *worke
 
   // figure out where to start and end the search
   if(start_object == 0){ // implicit "start at first object"
-    real_start = the_shard->directory[0].id;
+    real_start = the_shard->directory[0].index;
   }
   else{
     real_start = p7_shard_Find_Id_Nexthigh(the_shard, start_object);
@@ -654,7 +654,7 @@ int p7_server_workernode_start_amino_vs_hmm_db(P7_DAEMON_WORKERNODE_STATE *worke
       // start_object
   }
   if(end_object == 0){ // implicit "start at last object"
-    real_end =the_shard->directory[workernode->database_shards[database]->num_objects -1].id;
+    real_end =the_shard->directory[workernode->database_shards[database]->num_objects -1].index;
   }
   else{
     real_end = p7_shard_Find_Id_Nextlow(the_shard, end_object);
