@@ -245,6 +245,12 @@ p7_Die(char *format, ...)
 #ifdef HAVE_MPI
   int      mpiflag;
 #endif
+
+   /* Check whether we are running as a daemon so we can do the right thing about logging instead of printing errors */
+  int parent_pid;
+  parent_pid = getppid();
+
+  if(parent_pid != 1){ // we are not running as a daemon, so print the error message normally
                                 /* format the error mesg */
   fprintf(stderr, "\nFATAL: ");
   va_start(argp, format);
@@ -252,6 +258,11 @@ p7_Die(char *format, ...)
   va_end(argp);
   fprintf(stderr, "\n");
   fflush(stderr);
+  }
+  else{ // log the error 
+    vsyslog(LOG_ERR, format, argp);
+  }
+
 #ifdef HAVE_MPI
   MPI_Initialized(&mpiflag);
   if (mpiflag) MPI_Abort(MPI_COMM_WORLD, 1);
@@ -280,13 +291,17 @@ p7_Fail(char *format, ...)
     va_end(argp);
     fprintf(stderr, "\n");
     fflush(stderr);
-    exit(1);
   }
   else{ // I am running as a daemon, so log the error to /sys/log
     vsyslog(LOG_ERR, format, argp);
-    exit(1);
   }
 
+#ifdef HAVE_MPI
+  int mpiflag;
+  MPI_Initialized(&mpiflag);
+  if (mpiflag) MPI_Abort(MPI_COMM_WORLD, 1);
+#endif
+  exit(1);
 }
 
 
