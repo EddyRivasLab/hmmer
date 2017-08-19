@@ -166,11 +166,10 @@ The format of a substitution matrix
 .I <mxfile>
 is the standard format accepted by BLAST, FASTA, and other sequence 
 analysis software.
-Only one of the
-.B --mx 
-and
-.B --mxfile
-options may be used.
+See ftp.ncbi.nlm.nih.gov/blast/matrices/ for example files. (The only
+exception: we require matrices to be square, so for DNA, use files
+like NCBI's NUC.4.4, not NUC.4.2.)
+
 
 
 .SH OPTIONS CONTROLLING REPORTING THRESHOLDS
