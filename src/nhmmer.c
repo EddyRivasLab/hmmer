@@ -194,7 +194,7 @@ static ESL_OPTIONS options[] = {
 
 
 #ifdef HMMER_THREADS 
-  { "--cpu",        eslARG_INT, NULL,"HMMER_NCPU","n>=0",NULL,  NULL,  CPUOPTS,         "number of parallel CPU workers to use for multithreads",      12 },
+  { "--cpu",        eslARG_INT, p7_NCPU,"HMMER_NCPU","n>=0",NULL,  NULL,  CPUOPTS,         "number of parallel CPU workers to use for multithreads",      12 },
 #endif
   {  0, 0, 0, 0, 0, 0, 0, 0, 0, 0 },
 };
@@ -760,9 +760,7 @@ serial_master(ESL_GETOPTS *go, struct cfg_s *cfg)
 
 #ifdef HMMER_THREADS
   /* initialize thread data */
-  if (esl_opt_IsOn(go, "--cpu")) ncpus = esl_opt_GetInteger(go, "--cpu");
-  else                                   esl_threads_CPUCount(&ncpus);
-
+  ncpus = ESL_MIN(esl_opt_GetInteger(go, "--cpu"), esl_threads_GetCPUCount());
 
   if (ncpus > 0) {
 #if defined (eslENABLE_SSE)

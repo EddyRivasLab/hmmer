@@ -444,18 +444,16 @@ the location parameter tau for Forward evalues. Default is 0.04.
 .BI --cpu " <n>"
 Set the number of parallel worker threads to 
 .IR <n> .
-By default, HMMER sets this to the number of CPU cores it detects in
-your machine - that is, it tries to maximize the use of your available
-processor cores. Setting 
-.I <n>
-higher than the number of available cores is of little if any value,
-but you may want to set it to something less. You can also control
-this number by setting an environment variable, 
+On multicore machines, the default is 2.
+You can also control this number by setting an environment variable, 
 .IR HMMER_NCPU .
+There is also a master thread, so the actual number of threads that
+HMMER spawns is
+.IR <n> +1.
 
-This option is only available if HMMER was compiled with POSIX threads
-support. This is the default, but it may have been turned off for your
-site or machine for some reason.
+This option is not available if HMMER was compiled with POSIX threads
+support turned off.
+
 
 
 .TP 

@@ -122,7 +122,7 @@ hedge your bets and install up-to-date versions of GNU tools such as
 GNU make and GNU grep.
 
 
-\subsection{Multithreaded parallelization for multicores is the default}
+\subsection{Multithreaded parallelization for multicores is default}
 
 The six search programs and \prog{hmmbuild} support multicore
 parallelization using POSIX threads. By default, the configure script
@@ -130,21 +130,29 @@ will identify whether your platform supports POSIX threads (almost all
 platforms do), and will automatically compile in multithreading
 support.
 
-If you want to disable multithreading at compile time, recompile from
-source after giving the \ccode{--disable-threads} flag to
-\ccode{./configure}.
+If you want to disable multithreading at compile time, compile from
+source with the \ccode{--disable-threads} flag to \ccode{./configure}.
 
-By default, our multithreaded programs will use all available cores on
-your machine. You can control the number of cores each HMMER process
-will use for computation with the \ccode{--cpu <x>} command line
-option or the \ccode{HMMER\_NCPU} environment variable. Even with a
-single processing thread (\ccode{--cpu 1}), HMMER will devote a second
-execution thread to database input, resulting in possible speedup
-over serial execution.
+Multithreaded HMMER programs use master/worker parallelization, with
+\ccode{<n>} worker threads and one master thread. When HMMER is run on
+a machine with multiple available cores, the default number of worker
+threads is two\footnote{Set by a compile-time configuration option,
+  \ccode{P7\_NCPU}, in \ccode{p7\_config.h.in}.}. You can control the
+number of cores each HMMER process will use for computation with the
+\ccode{--cpu <n>} command line option or the \ccode{HMMER\_NCPU}
+environment variable.
 
 If you specify \ccode{--cpu 0}, the program will run in serial-only
 mode, with no threads. This might be useful if you suspect something
-is awry with the threaded parallel implementation.
+is awry with the threaded parallel implementation.  Even with a single
+worker thread (\ccode{--cpu 1}), HMMER will be faster than serial-only
+mode, because the master thread handles input and output.
+
+If you are running HMMER on a cluster that enforces policy on the
+number of cores a process can use, you need to count both the workers
+and the master: you want to tell your cluster management software that
+HMMER needs \ccode{<n>}+1 cores.
+
 
 \subsection{MPI parallelization for clusters is optional}
 
