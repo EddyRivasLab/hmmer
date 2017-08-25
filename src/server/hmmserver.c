@@ -1,5 +1,6 @@
 #include <stdio.h>
 #include <sys/types.h>
+#include <sys/stat.h>
 #include <syslog.h>
 #include <fcntl.h>
 #include <sys/resource.h>
@@ -21,8 +22,8 @@
 #ifdef HAVE_MPI
 static ESL_OPTIONS options[] = {
   /* name           type      default  env  range  toggles reqs incomp  help                               docgroup*/
-  { "-h",        eslARG_NONE,  FALSE,  NULL, NULL,   NULL,  NULL, NULL, "show brief help on version and usage",  0 },
-   { "--seed",       eslARG_INT,    "42",  NULL, "n>=0",  NULL,  NULL,  NULL,            "set RNG seed to <n> (if 0: one-time arbitrary seed)",          12 },
+  { (char *) "-h",        eslARG_NONE,  FALSE,  NULL, NULL,   NULL,  NULL, NULL, (char *) "show brief help on version and usage",  0 },
+   {(char *)  "--seed",       eslARG_INT,    (char *) "42",  NULL, (char *) "n>=0",  NULL,  NULL,  NULL,          (char *)   "set RNG seed to <n> (if 0: one-time arbitrary seed)",          12 },
   {  0, 0, 0, 0, 0, 0, 0, 0, 0, 0 },
 };
 
@@ -44,7 +45,7 @@ int main(int argc, char **argv){
 	// Get maximum number of file descriptors 
 	struct rlimit rl;
 	if(getrlimit(RLIMIT_NOFILE, &rl) <0){
-		p7_Fail("Couldn't get file limit");
+		p7_Fail((char *) "Couldn't get file limit");
 	}
 
 	umask(0);  // 1) reset file creation parameters so that we don't inherit anything from our caller.  
@@ -67,10 +68,10 @@ int main(int argc, char **argv){
 	sigemptyset(&sa.sa_mask);
 	sa.sa_flags = 0;
 	if(sigaction(SIGHUP, &sa, NULL) < 0){
-		p7_Fail("attempt to ignore SIGHUP failed");
+		p7_Fail((char *) "attempt to ignore SIGHUP failed");
 	}
 	if((pid = fork()) < 0){
-		p7_Fail("couldn't fork in startup");
+		p7_Fail((char *) "couldn't fork in startup");
 	}
 	else if (pid != 0){
 		exit(0);
@@ -82,7 +83,7 @@ int main(int argc, char **argv){
 
 	// 4) Change working directory to /
 	if(chdir("/") < 0){
-		p7_Fail("Couldn't change working directory to /");
+		p7_Fail((char *) "Couldn't change working directory to /");
 	}
 
 	// 5) Close all open file descriptors

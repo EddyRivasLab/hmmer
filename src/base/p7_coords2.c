@@ -706,8 +706,8 @@ p7_coords2_hash_Dump(FILE *ofp, const P7_COORDS2_HASH *ch)
 
 static ESL_OPTIONS options[] = {
   /* name           type         default   env  range   toggles   reqs   incomp   help                                    docgroup*/
-  { "-h",           eslARG_NONE,   FALSE, NULL, NULL,      NULL,  NULL,  NULL,   "show brief help on version and usage",        0 },
-  { "-s",           eslARG_INT,      "0", NULL, NULL,      NULL,  NULL,  NULL,   "set random number seed to <n>",               0 },
+  { (char *)"-h",           eslARG_NONE,   FALSE, NULL, NULL,      NULL,  NULL,  NULL,  (char *) "show brief help on version and usage",        0 },
+  { (char *)"-s",           eslARG_INT,      (char *)"0", NULL, NULL,      NULL,  NULL,  NULL,  (char *) "set random number seed to <n>",               0 },
   {  0, 0, 0, 0, 0, 0, 0, 0, 0, 0 },
 };
 static char usage[]  = "[-options]";
@@ -717,7 +717,7 @@ int
 main(int argc, char **argv)
 {
   ESL_GETOPTS    *go       = p7_CreateDefaultApp(options, 0, argc, argv, banner, usage);
-  ESL_RANDOMNESS *rng      = esl_randomness_Create(esl_opt_GetInteger(go, "-s"));
+  ESL_RANDOMNESS *rng      = esl_randomness_Create(esl_opt_GetInteger(go, (char *)"-s"));
   P7_COORDS2     *c2       = p7_coords2_Create(0, 0);
   P7_COORDS2_HASH *hash    = p7_coords2_hash_Create(0, 0, 0);
   int             L        = 20;

@@ -470,17 +470,17 @@ char *
 p7_refmx_DecodeSpecial(int type)
 {
   switch (type) {
-  case p7R_E:  return "E";
-  case p7R_N:  return "N";
-  case p7R_J:  return "J";
-  case p7R_B:  return "B";
-  case p7R_L:  return "L";
-  case p7R_G:  return "G";
-  case p7R_C:  return "C";
-  case p7R_JJ: return "JJ";
-  case p7R_CC: return "CC";
+  case p7R_E:  return (char *)"E";
+  case p7R_N:  return (char *)"N";
+  case p7R_J:  return (char *)"J";
+  case p7R_B:  return (char *)"B";
+  case p7R_L:  return (char *)"L";
+  case p7R_G:  return (char *)"G";
+  case p7R_C:  return (char *)"C";
+  case p7R_JJ: return (char *)"JJ";
+  case p7R_CC: return (char *)"CC";
   }
-  esl_exception(eslEINVAL, FALSE, __FILE__, __LINE__, "no such P7_REFMX special state code %d\n", type);
+  esl_exception(eslEINVAL, FALSE, (char *)__FILE__, __LINE__, (char *)"no such P7_REFMX special state code %d\n", type);
   return NULL;
 }
 
@@ -499,14 +499,14 @@ char *
 p7_refmx_DecodeState(int type)
 {
   switch (type) {
-  case p7R_ML: return "ML";
-  case p7R_MG: return "MG";
-  case p7R_IL: return "IL";
-  case p7R_IG: return "IG";
-  case p7R_DL: return "DL";
-  case p7R_DG: return "DG";
+  case p7R_ML: return (char *)"ML";
+  case p7R_MG: return (char *)"MG";
+  case p7R_IL: return (char *)"IL";
+  case p7R_IG: return (char *)"IG";
+  case p7R_DL: return (char *)"DL";
+  case p7R_DG: return (char *)"DG";
   }
-  esl_exception(eslEINVAL, FALSE, __FILE__, __LINE__, "no such P7_REFMX main state code %d\n", type);
+  esl_exception(eslEINVAL, FALSE, (char *)__FILE__, __LINE__, (char *)"no such P7_REFMX main state code %d\n", type);
   return NULL;
 }
     

@@ -557,16 +557,16 @@ char *
 p7_profile_DecodeT(int tidx)
 {
   switch (tidx) {
-  case p7P_MM:  return "tMM";
-  case p7P_IM:  return "tIM";
-  case p7P_DM:  return "tDM";
-  case p7P_LM:  return "tLMk";
-  case p7P_GM:  return "tGMk";
-  case p7P_MD:  return "tMD";
-  case p7P_DD:  return "tDD";
-  case p7P_MI:  return "tMI";
-  case p7P_II:  return "tII";   
-  case p7P_DGE: return "tDgE";
+  case p7P_MM:  return (char *)"tMM";
+  case p7P_IM:  return (char *)"tIM";
+  case p7P_DM:  return (char *)"tDM";
+  case p7P_LM:  return (char *)"tLMk";
+  case p7P_GM:  return (char *)"tGMk";
+  case p7P_MD:  return (char *)"tMD";
+  case p7P_DD:  return (char *)"tDD";
+  case p7P_MI:  return (char *)"tMI";
+  case p7P_II:  return (char *)"tII";   
+  case p7P_DGE: return (char *)"tDgE";
   }
   return NULL;
 }
@@ -895,7 +895,7 @@ utest_Compare(void)
   p7_profile_SetLength(gm,  L);
   p7_profile_SetLength(gm2, L);
 
-  if (p7_profile_Compare(gm, gm2, 0.001) != eslOK) p7_Die("identical profile comparison failed");
+  if (p7_profile_Compare(gm, gm2, 0.001) != eslOK) p7_Die((char *)"identical profile comparison failed");
   
   p7_profile_Destroy(gm);
   p7_profile_Destroy(gm2);
@@ -919,7 +919,7 @@ utest_Compare(void)
 
 static ESL_OPTIONS options[] = {
   /* name           type      default  env  range toggles reqs incomp  help                                       docgroup*/
-  { "-h",        eslARG_NONE,   FALSE, NULL, NULL, NULL, NULL, NULL, "show brief help on version and usage",              0 },
+  { (char *)"-h",        eslARG_NONE,   FALSE, NULL, NULL, NULL, NULL, NULL, (char *)"show brief help on version and usage",              0 },
   {  0, 0, 0, 0, 0, 0, 0, 0, 0, 0 },
 };
 static char usage[]  = "[-options]";
@@ -959,8 +959,8 @@ main(int argc, char **argv)
 
 static ESL_OPTIONS options[] = {
   /* name           type      default  env  range  toggles reqs incomp  help                                       docgroup*/
-  { "-h",        eslARG_NONE,   FALSE, NULL, NULL,   NULL,  NULL, NULL, "show brief help on version and usage",             0 },
-  { "--vv",      eslARG_NONE,   FALSE, NULL, NULL,   NULL,  NULL, NULL, "very verbose: dump profile object",                0 },
+  { (char *)"-h",        eslARG_NONE,   FALSE, NULL, NULL,   NULL,  NULL, NULL, (char *)"show brief help on version and usage",             0 },
+  {(char *) "--vv",      eslARG_NONE,   FALSE, NULL, NULL,   NULL,  NULL, NULL, (char *)"very verbose: dump profile object",                0 },
   {  0, 0, 0, 0, 0, 0, 0, 0, 0, 0 },
 };
 static char usage[]  = "[-options] <hmmfile>";
@@ -980,8 +980,8 @@ main(int argc, char **argv)
   char            errbuf[eslERRBUFSIZE];
 
   /* Read in one HMM; sets alphabet to the HMM's alphabet */
-  if (p7_hmmfile_OpenE(hmmfile, NULL, &hfp, NULL) != eslOK) p7_Fail("Failed to open HMM file %s", hmmfile);
-  if (p7_hmmfile_Read(hfp, &abc, &hmm)            != eslOK) p7_Fail("Failed to read HMM");
+  if (p7_hmmfile_OpenE(hmmfile, NULL, &hfp, NULL) != eslOK) p7_Fail((char *)"Failed to open HMM file %s", hmmfile);
+  if (p7_hmmfile_Read(hfp, &abc, &hmm)            != eslOK) p7_Fail((char *)"Failed to read HMM");
   p7_hmmfile_Close(hfp);
 
   /* Set up a null model */
@@ -995,9 +995,9 @@ main(int argc, char **argv)
   printf("profile memory consumed: %" PRId64 " bytes\n", (int64_t) p7_profile_Sizeof(gm));
 
   /* Debugging tools allow dumping, validating the object */
-  if (p7_profile_Validate(gm, errbuf, ftol) != eslOK) p7_Fail("profile validation failed\n  %s\n", errbuf);
+  if (p7_profile_Validate(gm, errbuf, ftol) != eslOK) p7_Fail((char *)"profile validation failed\n  %s\n", errbuf);
   
-  if (esl_opt_GetBoolean(go, "--vv"))
+  if (esl_opt_GetBoolean(go, (char *)"--vv"))
     p7_profile_Dump(stdout, gm);
 
   p7_profile_Destroy(gm);

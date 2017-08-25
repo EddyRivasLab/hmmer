@@ -19,12 +19,18 @@
 P7_SHARD *p7_shard_Create_hmmfile(char *filename, uint32_t num_shards, uint32_t my_shard){
   // return value used to tell if many ESL routines completed successfully
   int status;
-
+  ESL_ALPHABET   *abc     = NULL;
+  P7_HMMFILE     *hfp     = NULL;
+  P7_BG          *bg      = NULL;
+  P7_HMM         *hmm     = NULL;
+  P7_PROFILE     *gm      = NULL;
+  P7_OPROFILE    *om      = NULL;
+   uint64_t contents_offset = 0;
+  uint64_t descriptors_offset = 0;
   // allocate the base shard object
   P7_SHARD *the_shard;
-  ESL_ALLOC(the_shard, sizeof(P7_SHARD));
 
-  the_shard->data_type = HMM; // Only one possible data type for an HMM file
+  
 
   uint64_t num_hmms= 0; // Number of HMMs we've put in the database
   uint64_t hmms_in_file = 0; // Number of HMMs we've seen in the file
@@ -34,26 +40,19 @@ P7_SHARD *p7_shard_Create_hmmfile(char *filename, uint32_t num_shards, uint32_t 
    * re-allocation of many of the shard's data structures.  
    */
   uint64_t directory_size =100; // Number of HMMs we've allocated directory space for
-  ESL_ALLOC(the_shard->directory, (directory_size * sizeof(P7_SHARD_DIRECTORY_ENTRY)));
+ 
 
   uint64_t contents_buffer_size = 100 * sizeof(P7_OPROFILE *); // track how much space we've allocated for contents,
   // start with space for 100 pointers
   
   uint64_t descriptors_buffer_size = 100 * sizeof(P7_PROFILE *); // and for descriptors
+  ESL_ALLOC(the_shard, sizeof(P7_SHARD));
+
+  ESL_ALLOC(the_shard->directory, (directory_size * sizeof(P7_SHARD_DIRECTORY_ENTRY)));
   ESL_ALLOC(the_shard->contents, contents_buffer_size);
   ESL_ALLOC(the_shard->descriptors, descriptors_buffer_size);
-
-  uint64_t contents_offset = 0;
-  uint64_t descriptors_offset = 0;
-
-  ESL_ALPHABET   *abc     = NULL;
-  P7_HMMFILE     *hfp     = NULL;
-  P7_BG          *bg      = NULL;
-  P7_HMM         *hmm     = NULL;
-  P7_PROFILE     *gm      = NULL;
-  P7_OPROFILE    *om      = NULL;
-
-  if (p7_hmmfile_OpenE(filename, NULL, &hfp, NULL) != eslOK) p7_Fail("Failed to open HMM file %s", filename);
+  the_shard->data_type = HMM; // Only one possible data type for an HMM file
+  if (p7_hmmfile_OpenE(filename, NULL, &hfp, NULL) != eslOK) p7_Fail((char *) "Failed to open HMM file %s", filename);
 
   // iterate through the HMMs in the file
   while(p7_hmmfile_Read(hfp, &abc, &hmm) == eslOK){
@@ -65,12 +64,12 @@ P7_SHARD *p7_shard_Create_hmmfile(char *filename, uint32_t num_shards, uint32_t 
       bg = p7_bg_Create(abc);
       gm = p7_profile_Create (hmm->M, abc);
       if(gm == NULL){
-        p7_Fail("Unable to allocate memory in p7_shard_Create_hmmfile");
+        p7_Fail((char *) "Unable to allocate memory in p7_shard_Create_hmmfile");
       }
 
       om = p7_oprofile_Create(hmm->M, abc);
       if(om == NULL){
-        p7_Fail("Unable to allocate memory in p7_shard_Create_hmmfile");
+        p7_Fail((char *) "Unable to allocate memory in p7_shard_Create_hmmfile");
       }
 
       p7_profile_Config   (gm, hmm, bg);
@@ -124,7 +123,7 @@ P7_SHARD *p7_shard_Create_hmmfile(char *filename, uint32_t num_shards, uint32_t 
 
   // GOTO target used to catch error cases from ESL_ALLOC
   ERROR:
-    p7_Fail("Unable to allocate memory in p7_shard_Create_hmmfile");
+    p7_Fail((char *)"Unable to allocate memory in p7_shard_Create_hmmfile");
 }
 
 // p7_shard_Create_dsqdata
@@ -145,23 +144,34 @@ P7_SHARD *p7_shard_Create_dsqdata(char *basename, uint32_t num_shards, uint32_t 
   int status;
 
   int i;
+  uint64_t trial_size;
+ 
+  uint64_t contents_buffer_size;
+  uint64_t descriptors_buffer_size;
 
+  uint64_t contents_offset = 0;
+  uint64_t descriptors_offset = 0;
+  char *contents_pointer;
+  char *descriptors_pointer;
+    // counter to check that number of sequences we put in the shard matches what the database says should go there
+  uint64_t sequence_count;
+  uint64_t my_sequences;
   // Will point to chunks of dsq data that have been read out of the files
   ESL_DSQDATA_CHUNK *chu = NULL;
 
   // allocate the base shard object
   P7_SHARD *the_shard;
-  ESL_ALLOC(the_shard, sizeof(P7_SHARD));
+ 
 
   ESL_ALPHABET *abc = NULL;
   //! dsqdata object
   ESL_DSQDATA    *dd      = NULL;
-
+  ESL_ALLOC(the_shard, sizeof(P7_SHARD));
   // pass NULL to the byp_alphabet input of esl_dsqdata_Open to have it get its alphabet from the dsqdata files
   // only configure for one reader thread
   status = esl_dsqdata_Open(&abc, basename, 1, &dd);
   if(status != eslOK){
-    p7_Fail("Unable to open dsqdata database %s\n", basename);
+    p7_Fail((char *)"Unable to open dsqdata database %s\n", basename);
   }
   /* set the type of data in the database based on the alphabet in the dsqdata file.
    * dsqdata files can't contain HMM objects, which is why there's no case for that
@@ -180,7 +190,7 @@ P7_SHARD *p7_shard_Create_dsqdata(char *basename, uint32_t num_shards, uint32_t 
     break;  
 
     default:
-      p7_Fail("Unsupported alphabet type found in dsqdata file");
+      p7_Fail((char *)"Unsupported alphabet type found in dsqdata file");
   }
 
   the_shard->abc = abc;  // save the alphabet in the shard so we can free it when the server exits
@@ -192,28 +202,29 @@ P7_SHARD *p7_shard_Create_dsqdata(char *basename, uint32_t num_shards, uint32_t 
         the_shard->num_objects += 1;
     }
 
-  // allocate space for the directory now that we know how big it needs to be
-  ESL_ALLOC(the_shard->directory, (the_shard->num_objects * sizeof(P7_SHARD_DIRECTORY_ENTRY)));
+ 
 
   // take a guess at how big the contents and descriptor buffers need to be.  Should be reasonably accurate for the contents,
   // could be wildly inaccurate for the descriptors
   // These buffers will be realloced as needed if our guess is too small
-  uint64_t trial_size = dd->nres/num_shards + (the_shard->num_objects * 16); // 8 bytes/object for length, 8 bytes/object for id
+  trial_size = dd->nres/num_shards + (the_shard->num_objects * 16); // 8 bytes/object for length, 8 bytes/object for id
+ 
+  contents_buffer_size = trial_size; // track how much space we've allocated for contents
+  descriptors_buffer_size = trial_size; // and for descriptors
+
+  contents_offset = 0;
+  descriptors_offset = 0;
+
+ 
+    // counter to check that number of sequences we put in the shard matches what the database says should go there
+  sequence_count = 0; 
+  my_sequences = 0;
   ESL_ALLOC(the_shard->contents, trial_size);
   ESL_ALLOC(the_shard->descriptors, trial_size);
-
-  uint64_t contents_buffer_size = trial_size; // track how much space we've allocated for contents
-  uint64_t descriptors_buffer_size = trial_size; // and for descriptors
-
-  uint64_t contents_offset = 0;
-  uint64_t descriptors_offset = 0;
-
-  char *contents_pointer = the_shard->contents;
-  char *descriptors_pointer = the_shard->descriptors;
-    // counter to check that number of sequences we put in the shard matches what the database says should go there
-  uint64_t sequence_count = 0; 
-  uint64_t my_sequences = 0;
-
+  contents_pointer = (char *) the_shard->contents;
+  descriptors_pointer = (char *) the_shard->descriptors;
+ // allocate space for the directory now that we know how big it needs to be
+  ESL_ALLOC(the_shard->directory, (the_shard->num_objects * sizeof(P7_SHARD_DIRECTORY_ENTRY)));
   // process each of the sequences in the file
   while (( status = esl_dsqdata_Read(dd, &chu)) == eslOK)  {
     for (i = 0; i < chu->N; i++) {
@@ -221,7 +232,7 @@ P7_SHARD *p7_shard_Create_dsqdata(char *basename, uint32_t num_shards, uint32_t 
         // I have to care about this sequence
 
         if(my_sequences >= the_shard->num_objects){  // we've found more sequences than we expected
-          p7_Fail("Exceeded allocated number of sequences in p7_shard_Create_dsqdata");
+          p7_Fail((char *)"Exceeded allocated number of sequences in p7_shard_Create_dsqdata");
           }
 
         // create the entry for this sequence in the directory
@@ -236,7 +247,7 @@ P7_SHARD *p7_shard_Create_dsqdata(char *basename, uint32_t num_shards, uint32_t 
         // there isn't enough space in the buffer for this sequence, so re-allocate
         ESL_REALLOC(the_shard->contents, (contents_buffer_size + trial_size));
           contents_buffer_size += trial_size;
-          contents_pointer = the_shard->contents + contents_offset;
+          contents_pointer = (char *) the_shard->contents + contents_offset;
         }
 
         // copy this sequence into the contents buffer
@@ -258,7 +269,7 @@ P7_SHARD *p7_shard_Create_dsqdata(char *basename, uint32_t num_shards, uint32_t 
           // there isn't enough space in the buffer for this sequence, so re-allocate
           ESL_REALLOC(the_shard->descriptors, (descriptors_buffer_size + trial_size));
           descriptors_buffer_size += trial_size;
-          descriptors_pointer = the_shard->descriptors + descriptors_offset;
+          descriptors_pointer = (char *) the_shard->descriptors + descriptors_offset;
         }
 
         // now, copy the descriptors 
@@ -289,7 +300,7 @@ P7_SHARD *p7_shard_Create_dsqdata(char *basename, uint32_t num_shards, uint32_t 
 
   // Check that we got as many sequences as we expected
   if (my_sequences != the_shard->num_objects){
-    p7_Fail("Mis-match between expected sequence count of %d and actual sequence count of %d in p7_shard_Create_dsqdata", the_shard->num_objects, my_sequences);
+    p7_Fail((char *)"Mis-match between expected sequence count of %d and actual sequence count of %d in p7_shard_Create_dsqdata", the_shard->num_objects, my_sequences);
   }
   
 
@@ -309,7 +320,7 @@ P7_SHARD *p7_shard_Create_dsqdata(char *basename, uint32_t num_shards, uint32_t 
 
   // GOTO target used to catch error cases from ESL_ALLOC because we're too low-tech to write in C++
   ERROR:
-    p7_Fail("Unable to allocate memory in p7_shard_Create_dsqdata");
+    p7_Fail((char *)"Unable to allocate memory in p7_shard_Create_dsqdata");
 }
 
 
@@ -382,22 +393,22 @@ int p7_shard_Find_Contents_Nextlow(P7_SHARD *the_shard, uint64_t id, char **ret_
 
   if(the_shard->directory[middle].index == id){
     // we've found what we're looking for
-    *ret_object = the_shard->contents + the_shard->directory[middle].contents_offset;
+    *ret_object = (char *) the_shard->contents + the_shard->directory[middle].contents_offset;
     return eslOK;
   }
 
   // if we get here, we didn't find a match
   if(the_shard->directory[middle].index < id){
-    *ret_object = the_shard->contents + the_shard->directory[middle].contents_offset;
+    *ret_object = (char *) the_shard->contents + the_shard->directory[middle].contents_offset;
     return eslENORESULT;
   }
   else{
     if(the_shard->directory[middle-1].index < id){
-      *ret_object = the_shard->contents + the_shard->directory[middle-1].contents_offset;
+      *ret_object = (char *) the_shard->contents + the_shard->directory[middle-1].contents_offset;
       return eslENORESULT;
     }
     else{
-      p7_Fail("search error in p7_shard_Find_Contents_Nextlow");
+      p7_Fail((char *)"search error in p7_shard_Find_Contents_Nextlow");
     }
   }
 }
@@ -452,7 +463,7 @@ uint64_t p7_shard_Find_Id_Nextlow(P7_SHARD *the_shard, uint64_t id){
     
     }
     else{
-      p7_Fail("search error in p7_shard_Find_Contents_Nextlow");
+      p7_Fail((char *)"search error in p7_shard_Find_Contents_Nextlow");
     }
   }
 }
@@ -496,22 +507,22 @@ int p7_shard_Find_Contents_Nexthigh(P7_SHARD *the_shard, uint64_t id, char **ret
   }
   if(the_shard->directory[middle].index == id){
     // we've found what we're looking for
-    *ret_object = the_shard->contents + the_shard->directory[middle].contents_offset;
+    *ret_object = (char *) the_shard->contents + the_shard->directory[middle].contents_offset;
     return eslOK;
   }
 
   // if we get here, we didn't find a match
   if(the_shard->directory[middle].index > id){
-    *ret_object = the_shard->contents + the_shard->directory[middle].contents_offset;
+    *ret_object = (char *) the_shard->contents + the_shard->directory[middle].contents_offset;
     return eslENORESULT;
   }
   else{
     if(the_shard->directory[middle+1].index > id){
-      *ret_object = the_shard->contents + the_shard->directory[middle+1].contents_offset;
+      *ret_object = (char *) the_shard->contents + the_shard->directory[middle+1].contents_offset;
       return eslENORESULT;
     }
     else{
-      p7_Fail("search error in p7_shard_Find_Contents_Nexthigh");
+      p7_Fail((char *)"search error in p7_shard_Find_Contents_Nexthigh");
     }
   }
 }
@@ -563,7 +574,7 @@ uint64_t p7_shard_Find_Id_Nexthigh(P7_SHARD *the_shard, uint64_t id){
       return the_shard->directory[middle+1].index;
     }
     else{
-      p7_Fail("search error in p7_shard_Find_Contents_Nexthigh");
+      p7_Fail((char *)"search error in p7_shard_Find_Contents_Nexthigh");
     }
   }
 }
@@ -616,7 +627,7 @@ uint64_t p7_shard_Find_Index_Nexthigh(P7_SHARD *the_shard, uint64_t id){
       return middle+1;
     }
     else{
-      p7_Fail("search error in p7_shard_Find_Contents_Nexthigh");
+      p7_Fail((char *)"search error in p7_shard_Find_Contents_Nexthigh");
     }
   }
 }
@@ -660,26 +671,26 @@ int p7_shard_Find_Descriptor_Nexthigh(P7_SHARD *the_shard, uint64_t id, char **r
   }
   if(the_shard->directory[middle].index == id){
     // we've found what we're looking for
-    *ret_object = the_shard->descriptors + the_shard->directory[middle].descriptor_offset;
+    *ret_object = (char *) the_shard->descriptors + the_shard->directory[middle].descriptor_offset;
     return eslOK;
   }
 
   // if we get here, we didn't find a match
   if(the_shard->directory[middle].index > id){
-    *ret_object = the_shard->descriptors + the_shard->directory[middle].descriptor_offset;
+    *ret_object = (char *) the_shard->descriptors + the_shard->directory[middle].descriptor_offset;
     return eslENORESULT;
   }
   else{
     // test code, take out when verified
     if (middle == the_shard->num_objects-1){
-      p7_Fail("search error in p7_shard_Find_Descriptor_Nexthigh");
+      p7_Fail((char *)"search error in p7_shard_Find_Descriptor_Nexthigh");
     }
     if(the_shard->directory[middle+1].index > id){
-      *ret_object = the_shard->descriptors + the_shard->directory[middle+1].descriptor_offset;
+      *ret_object = (char *) the_shard->descriptors + the_shard->directory[middle+1].descriptor_offset;
       return eslENORESULT;
     }
     else{
-      p7_Fail("search error in p7_shard_Find_Descriptor_Nexthigh");
+      p7_Fail((char *)"search error in p7_shard_Find_Descriptor_Nexthigh");
     }
   }
 }
@@ -704,36 +715,36 @@ int shard_compare_dsqdata(P7_SHARD *the_shard, char *basename, uint32_t num_shar
   // only configure for one reader thread
   status = esl_dsqdata_Open(&abc, basename, 1, &dd);
   if(status != eslOK){
-    p7_Fail("Unable to open dsqdata database %s\n", basename);
+    p7_Fail((char *) "Unable to open dsqdata database %s\n", basename);
   }
   
   // First, check that the alphabet types match
   switch(dd->abc_r->type){
     case eslRNA:
       if(the_shard->data_type != RNA){
-        p7_Fail("Alphabet in shard doesn't match dsqdata file");
+        p7_Fail((char *) "Alphabet in shard doesn't match dsqdata file");
       }
       break;
 
     case eslDNA:
       if(the_shard->data_type != DNA){
-        p7_Fail("Alphabet in shard doesn't match dsqdata file");
+        p7_Fail((char *) "Alphabet in shard doesn't match dsqdata file");
       }
       break;
 
     case eslAMINO:
       if(the_shard->data_type != AMINO){
-        p7_Fail("Alphabet in shard doesn't match dsqdata file");
+        p7_Fail((char *) "Alphabet in shard doesn't match dsqdata file");
       }
       break;  
 
     default:
-      p7_Fail("Unsupported alphabet type found in dsqdata file");
+      p7_Fail((char *) "Unsupported alphabet type found in dsqdata file");
   }
 
   // types match, so compare sequences
-  char *contents_pointer = the_shard->contents;
-  char *descriptors_pointer = the_shard->descriptors;
+  char *contents_pointer = (char *) the_shard->contents;
+  char *descriptors_pointer = (char *) the_shard->descriptors;
 
   char *test_pointer;
   uint64_t sequence_count = 0;
@@ -749,21 +760,21 @@ int shard_compare_dsqdata(P7_SHARD *the_shard, char *basename, uint32_t num_shar
             // see if the directory is correct
             status = p7_shard_Find_Contents_Nexthigh(the_shard, sequence_count, &(test_pointer));
             if (status != eslOK){
-              p7_Fail("Couldn't find contents of object id %lu in directory", sequence_count);
+              p7_Fail((char *) "Couldn't find contents of object id %lu in directory", sequence_count);
             }
 
             if(test_pointer != contents_pointer){
-              p7_Fail("contents pointer mis-match at object id %llu", sequence_count);
+              p7_Fail((char *) "Contents pointer mis-match at object id %llu", sequence_count);
             }
 
         // see if the directory is correct
             status = p7_shard_Find_Descriptor_Nexthigh(the_shard, sequence_count, &(test_pointer));
             if (status != eslOK){
-              p7_Fail("Couldn't find descriptor of object id %lu in directory", sequence_count);
+              p7_Fail((char *) "Couldn't find descriptor of object id %lu in directory", sequence_count);
             }
 
             if(test_pointer != descriptors_pointer){
-              p7_Fail("descriptors pointer mis-match at object id %llu", sequence_count);
+              p7_Fail((char *) "descriptors pointer mis-match at object id %llu", sequence_count);
             }
 
             // Directory matches, verify that contents and descriptors match
@@ -772,7 +783,7 @@ int shard_compare_dsqdata(P7_SHARD *the_shard, char *basename, uint32_t num_shar
 
             contents_pointer += sizeof(uint64_t);
         if (sequence_count != test_id){
-              p7_Fail("Sequence ID mismatch at ID %llu", sequence_count);
+              p7_Fail((char *) "Sequence ID mismatch at ID %llu", sequence_count);
             }
 
             // Then, the contents pointer
@@ -781,13 +792,13 @@ int shard_compare_dsqdata(P7_SHARD *the_shard, char *basename, uint32_t num_shar
             contents_pointer += sizeof(int64_t);
 
             if (chu->L[i] != L){
-              p7_Fail("Length mismatch at sequence %llu", sequence_count);
+              p7_Fail((char *) "Length mismatch at sequence %llu", sequence_count);
             }
 
             if(memcmp(contents_pointer, chu->dsq[i], L+2)){
               // +2 for begin-of-sequence and end-of-sequence sentinels around dsq
               //sequences don't match
-              p7_Fail("Sequence mismatch at sequence %llu", sequence_count);
+              p7_Fail((char *) "Sequence mismatch at sequence %llu", sequence_count);
             }
 
             contents_pointer += L+2;
@@ -795,7 +806,7 @@ int shard_compare_dsqdata(P7_SHARD *the_shard, char *basename, uint32_t num_shar
             // Now, the descriptors
             if(strcmp(chu->name[i], descriptors_pointer)){
               // Name doesn't match
-              p7_Fail("Name mismatch at sequence %llu", sequence_count);
+              p7_Fail((char *) "Name mismatch at sequence %llu", sequence_count);
             }
 
             descriptors_pointer += strlen(chu->name[i]) + 1;
@@ -803,21 +814,21 @@ int shard_compare_dsqdata(P7_SHARD *the_shard, char *basename, uint32_t num_shar
 
             if(strcmp(chu->acc[i], descriptors_pointer)){
               // Accession doesn't match
-              p7_Fail("Accession mismatch at sequence %llu", sequence_count);
+              p7_Fail((char *) "Accession mismatch at sequence %llu", sequence_count);
             }
 
             descriptors_pointer += strlen(chu->acc[i]) + 1;
  
           if(strcmp(chu->desc[i], descriptors_pointer)){
               // Description doesn't match
-              p7_Fail("Description mismatch at sequence %llu", sequence_count);
+              p7_Fail((char *) "Description mismatch at sequence %llu", sequence_count);
             }
 
             descriptors_pointer += strlen(chu->desc[i]) + 1;
 
             int32_t taxid = *((int32_t *) descriptors_pointer);
             if(taxid != chu->taxid[i]){
-               p7_Fail("Taxid mismatch at sequence %llu", sequence_count);
+               p7_Fail((char *) "Taxid mismatch at sequence %llu", sequence_count);
             }
 
             descriptors_pointer += sizeof(int32_t);
@@ -832,15 +843,15 @@ int shard_compare_dsqdata(P7_SHARD *the_shard, char *basename, uint32_t num_shar
 
   // see if we matched the number of objects in the file
   if(my_sequences != the_shard->num_objects){
-    p7_Fail("mis-match between number of sequences in the shard and the database %lu vs %lu", my_sequences, the_shard->num_objects);
+    p7_Fail((char *) "mis-match between number of sequences in the shard and the database %lu vs %lu", my_sequences, the_shard->num_objects);
   }
   return eslOK;
 }
 
 static ESL_OPTIONS options[] = {
   /* name           type      default  env  range toggles reqs incomp  help                                       docgroup*/
-  { "-h",        eslARG_NONE,   FALSE, NULL, NULL,  NULL,  NULL, NULL, "show brief help on version and usage",           0 },
-  { "-s",        eslARG_INT,      "0", NULL, NULL,  NULL,  NULL, NULL, "set random number seed to <n>",                  0 },
+  { (char *) "-h",        eslARG_NONE,   FALSE, NULL, NULL,  NULL,  NULL, NULL, (char *) "show brief help on version and usage",           0 },
+  {(char *) "-s",        eslARG_INT,     (char *)  "0", NULL, NULL,  NULL,  NULL, NULL, (char *) "set random number seed to <n>",                  0 },
   {  0, 0, 0, 0, 0, 0, 0, 0, 0, 0 },
 };
 
@@ -861,7 +872,7 @@ main(int argc, char **argv)
   ESL_SQ           **sqarr         = NULL;
   FILE              *tmpfp         = NULL;
   ESL_SQFILE        *sqfp          = NULL;
-  ESL_RANDOMNESS *rng      = esl_randomness_Create(esl_opt_GetInteger(go, "-s"));
+  ESL_RANDOMNESS *rng      = esl_randomness_Create(esl_opt_GetInteger(go, (char *) "-s"));
   int               nseq           = 1 + esl_rnd_Roll(rng, 20000);  // 1..20000
   int               maxL           = 100;
   ESL_ALPHABET   *abc    = esl_alphabet_Create(eslAMINO);
@@ -873,7 +884,7 @@ main(int argc, char **argv)
    *    for FASTA format), so blank the accession to avoid confusion.
    */
   if (( status = esl_tmpfile_named(tmpfile, &tmpfp)) != eslOK) esl_fatal(msg);
-  if (( sqarr = malloc(sizeof(ESL_SQ *) * nseq))      == NULL) esl_fatal(msg);
+  if (( sqarr = (ESL_SQ **) malloc(sizeof(ESL_SQ *) * nseq))      == NULL) esl_fatal(msg);
   for (i = 0; i < nseq; i++)   
     {
       sqarr[i] = NULL;
@@ -900,7 +911,7 @@ main(int argc, char **argv)
   // only configure for one reader thread
   status = esl_dsqdata_Open(&abc, basename, 1, &dd);
   if(status != eslOK){
-    p7_Fail("Unable to open dsqdata database %s\n", basename);
+    p7_Fail((char *) "Unable to open dsqdata database %s\n", basename);
   }
 
   status = shard_compare_dsqdata(shard1, basename, 1, 0);
@@ -912,7 +923,7 @@ main(int argc, char **argv)
     shard1 = p7_shard_Create_dsqdata(basename, 2, i);
     status = esl_dsqdata_Open(&abc, basename, 1, &dd);
     if(status != eslOK){
-      p7_Fail("Unable to open dsqdata database %s\n", basename);
+      p7_Fail((char *) "Unable to open dsqdata database %s\n", basename);
     }
 
     status = shard_compare_dsqdata(shard1, basename, 2, i);
@@ -954,7 +965,7 @@ main(int argc, char **argv)
   shard1 = p7_shard_Create_hmmfile(tmpfile2, 1, 0);
   int shard_count = 0;
 
-  if (p7_hmmfile_OpenE(tmpfile2, NULL, &hfp, NULL) != eslOK) p7_Fail("Failed to open HMM file %s", tmpfile);
+  if (p7_hmmfile_OpenE(tmpfile2, NULL, &hfp, NULL) != eslOK) p7_Fail((char *) "Failed to open HMM file %s", tmpfile);
 
   P7_OPROFILE **shard_oprofiles = (P7_OPROFILE **) shard1->contents;
   P7_PROFILE **shard_profiles = (P7_PROFILE **) shard1->descriptors;
@@ -970,16 +981,16 @@ main(int argc, char **argv)
     p7_oprofile_Convert (gm, om);
 
     if(shard_count >= shard1->num_objects){
-      p7_Fail("More HMMs found in hmmfile than in shard");
+      p7_Fail((char *) "More HMMs found in hmmfile than in shard");
     }
     P7_PROFILE *shard_profile =  *(shard_profiles + (shard1->directory[shard_count].descriptor_offset / sizeof(P7_PROFILE *)));
     P7_OPROFILE *shard_oprofile =  *(shard_oprofiles + (shard1->directory[shard_count].contents_offset / sizeof(P7_OPROFILE *)));
-    p7_oprofile_Compare(shard_oprofile, om, 0.01, "Shard oprofile failed to match HMM oprofile");
+    p7_oprofile_Compare(shard_oprofile, om, 0.01, (char *) "Shard oprofile failed to match HMM oprofile");
     p7_profile_Compare(shard_profile, gm, 0.01);
     shard_count++;
   }
   if(shard_count != shard1->num_objects){
-    p7_Fail("Object number mis-match between shard and hmmfile %d vs %d", shard_count, shard1->num_objects);
+    p7_Fail((char *) "Object number mis-match between shard and hmmfile %d vs %d", shard_count, shard1->num_objects);
   }
    remove(tmpfile2);
   fprintf(stderr, "#  status = ok\n");

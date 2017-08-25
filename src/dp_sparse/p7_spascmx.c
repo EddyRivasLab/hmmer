@@ -800,7 +800,7 @@ decoding_colsums(const P7_SPARSEMX *asx, const P7_ANCHOR *anch, int D)
   const float         *dpc      = asx->dp;
   const float         *xc       = asx->xmx;
   int                  M        = sm->M;
-  float               *colsum   = malloc(sizeof(float) * (M+1));
+  float               *colsum   = (float *) malloc(sizeof(float) * (M+1));
   float                tol      = 0.01;
   float                xsum[p7S_NXCELLS];
   int   k,s,d,i,z,g;

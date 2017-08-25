@@ -38,35 +38,35 @@ typedef struct {
 
 static ESL_OPTIONS options[] = {
   /* name           type      default  env  range     toggles      reqs   incomp  help   docgroup*/
-  { "-h",        eslARG_NONE,   FALSE, NULL, NULL,      NULL,      NULL,    NULL, "show brief help on version and usage",                  1 },
-  { "-o",        eslARG_OUTFILE,FALSE, NULL, NULL,      NULL,      NULL,    NULL, "direct summary output to file <f>, not stdout",         1 },
+  { (char *) "-h",        eslARG_NONE,   FALSE, NULL, NULL,      NULL,      NULL,    NULL, (char *) "show brief help on version and usage",                  1 },
+  { (char *) "-o",        eslARG_OUTFILE,FALSE, NULL, NULL,      NULL,      NULL,    NULL, (char *) "direct summary output to file <f>, not stdout",         1 },
 /* Selecting the alphabet rather than autoguessing it */
-  { "--amino",   eslARG_NONE,   FALSE, NULL, NULL,   ALPHOPTS,    NULL,     NULL, "input alignment is protein sequence data",              2 },
-  { "--dna",     eslARG_NONE,   FALSE, NULL, NULL,   ALPHOPTS,    NULL,     NULL, "input alignment is DNA sequence data",                  2 },
-  { "--rna",     eslARG_NONE,   FALSE, NULL, NULL,   ALPHOPTS,    NULL,     NULL, "input alignment is RNA sequence data",                  2 },
+  { (char *) "--amino",   eslARG_NONE,   FALSE, NULL, NULL,  (char *)  ALPHOPTS,    NULL,     NULL, (char *) "input alignment is protein sequence data",              2 },
+  { (char *) "--dna",     eslARG_NONE,   FALSE, NULL, NULL,  (char *)  ALPHOPTS,    NULL,     NULL, (char *) "input alignment is DNA sequence data",                  2 },
+  {(char *)  "--rna",     eslARG_NONE,   FALSE, NULL, NULL,  (char *)  ALPHOPTS,    NULL,     NULL, (char *) "input alignment is RNA sequence data",                  2 },
 /* Alternate model construction strategies */
-  { "--fast",    eslARG_NONE,"default",NULL, NULL,    CONOPTS,    NULL,     NULL, "assign cols w/ >= symfrac residues as consensus",       3 },
-  { "--hand",    eslARG_NONE,   FALSE, NULL, NULL,    CONOPTS,    NULL,     NULL, "manual construction (requires reference annotation)",   3 },
-  { "--symfrac", eslARG_REAL,   "0.5", NULL, "0<=x<=1", NULL,   "--fast",   NULL, "sets sym fraction controlling --fast construction",     3 },
-  { "--fragthresh",eslARG_REAL, "0.5", NULL, "0<=x<=1", NULL,     NULL,     NULL, "if L <= x*alen, tag sequence as a fragment",            3 },
+  { (char *) "--fast",    eslARG_NONE,(char *) "default",NULL, NULL,   (char *)  CONOPTS,    NULL,     NULL, (char *) "assign cols w/ >= symfrac residues as consensus",       3 },
+  { (char *) "--hand",    eslARG_NONE,   FALSE, NULL, NULL,    (char *) CONOPTS,    NULL,     NULL, (char *) "manual construction (requires reference annotation)",   3 },
+  { (char *) "--symfrac", eslARG_REAL,  (char *)  "0.5", NULL,(char *)  "0<=x<=1", NULL,  (char *)  "--fast",   NULL, (char *) "sets sym fraction controlling --fast construction",     3 },
+  {(char *)  "--fragthresh",eslARG_REAL,(char *) "0.5", NULL, (char *) "0<=x<=1", NULL,     NULL,     NULL, (char *) "if L <= x*alen, tag sequence as a fragment",            3 },
 /* Alternate relative sequence weighting strategies */
   /* --wme not implemented in HMMER3 yet */
-  { "--wpb",     eslARG_NONE,"default",NULL, NULL,    WGTOPTS,    NULL,      NULL, "Henikoff position-based weights",                      4 },
-  { "--wgsc",    eslARG_NONE,   NULL,  NULL, NULL,    WGTOPTS,    NULL,      NULL, "Gerstein/Sonnhammer/Chothia tree weights",             4 },
-  { "--wblosum", eslARG_NONE,   NULL,  NULL, NULL,    WGTOPTS,    NULL,      NULL, "Henikoff simple filter weights",                       4 },
-  { "--wnone",   eslARG_NONE,   NULL,  NULL, NULL,    WGTOPTS,    NULL,      NULL, "don't do any relative weighting; set all to 1",        4 },
-  { "--wgiven",  eslARG_NONE,   NULL,  NULL, NULL,    WGTOPTS,    NULL,      NULL, "use weights as given in MSA file",                     4 },
-  { "--wid",     eslARG_REAL, "0.62",  NULL,"0<=x<=1",   NULL,"--wblosum",   NULL, "for --wblosum: set identity cutoff",                   4 },
+  {(char *)  "--wpb",     eslARG_NONE,(char *) "default",NULL, NULL,  (char *)   WGTOPTS,    NULL,      NULL, (char *) "Henikoff position-based weights",                      4 },
+  { (char *) "--wgsc",    eslARG_NONE,   NULL,  NULL, NULL,  (char *)   WGTOPTS,    NULL,      NULL, (char *) "Gerstein/Sonnhammer/Chothia tree weights",             4 },
+  { (char *) "--wblosum", eslARG_NONE,   NULL,  NULL, NULL,  (char *)   WGTOPTS,    NULL,      NULL, (char *) "Henikoff simple filter weights",                       4 },
+  { (char *) "--wnone",   eslARG_NONE,   NULL,  NULL, NULL,   (char *)  WGTOPTS,    NULL,      NULL, (char *) "don't do any relative weighting; set all to 1",        4 },
+  { (char *) "--wgiven",  eslARG_NONE,   NULL,  NULL, NULL,   (char *)  WGTOPTS,    NULL,      NULL, (char *) "use weights as given in MSA file",                     4 },
+  { (char *) "--wid",     eslARG_REAL, (char *) "0.62",  NULL,(char *) "0<=x<=1",   NULL,(char *) "--wblosum",   NULL, (char *) "for --wblosum: set identity cutoff",                   4 },
 /* mask ranges */
-  { "--modelrange", eslARG_STRING, NULL, NULL, NULL,  NULL,    NULL,     RANGEOPTS,  "range(s) for mask(s) in model coordinates", 5 },
-  { "--alirange",   eslARG_STRING, NULL, NULL, NULL,  NULL,    NULL,     RANGEOPTS,  "range(s) for mask(s) in alignment coordinates", 5 },
-  { "--apendmask",    eslARG_NONE, NULL,  NULL, NULL, NULL,  WGTOPTS,         NULL,  "add to existing mask (default ignores to existing mask)",    5 },
-  { "--model2ali",  eslARG_STRING, NULL, NULL, NULL,  NULL,    NULL,     RANGEOPTS,  "print model ranges corresponding to input alignment ranges", 5 },
-  { "--ali2model",  eslARG_STRING, NULL, NULL, NULL,  NULL,    NULL,     RANGEOPTS,  "print alignment ranges corresponding to input model ranges", 5 },
+  { (char *) "--modelrange", eslARG_STRING, NULL, NULL, NULL,  NULL,    NULL,    (char *)  RANGEOPTS,  (char *) "range(s) for mask(s) in model coordinates", 5 },
+  {(char *)  "--alirange",   eslARG_STRING, NULL, NULL, NULL,  NULL,    NULL,    (char *)  RANGEOPTS,  (char *) "range(s) for mask(s) in alignment coordinates", 5 },
+  {(char *)  "--apendmask",    eslARG_NONE, NULL,  NULL, NULL, NULL, (char *)  WGTOPTS,         NULL,  (char *) "add to existing mask (default ignores to existing mask)",    5 },
+  {(char *) "--model2ali",  eslARG_STRING, NULL, NULL, NULL,  NULL,    NULL,    (char *)  RANGEOPTS,  (char *) "print model ranges corresponding to input alignment ranges", 5 },
+  { (char *) "--ali2model",  eslARG_STRING, NULL, NULL, NULL,  NULL,    NULL,    (char *)  RANGEOPTS,  (char *) "print alignment ranges corresponding to input model ranges", 5 },
 
 /* Other options */
-  { "--informat", eslARG_STRING, NULL, NULL, NULL,      NULL,      NULL,    NULL, "assert input alifile is in format <s> (no autodetect)", 8 },
-  { "--seed",     eslARG_INT,   "42", NULL, "n>=0",     NULL,      NULL,    NULL, "set RNG seed to <n> (if 0: one-time arbitrary seed)",   8 },
+  { (char *) "--informat", eslARG_STRING, NULL, NULL, NULL,      NULL,      NULL,    NULL, (char *) "assert input alifile is in format <s> (no autodetect)", 8 },
+  { (char *) "--seed",     eslARG_INT,   (char *) "42", NULL, (char *) "n>=0",     NULL,      NULL,    NULL, (char *) "set RNG seed to <n> (if 0: one-time arbitrary seed)",   8 },
   {  0, 0, 0, 0, 0, 0, 0, 0, 0, 0 },
 };
 
@@ -88,7 +88,7 @@ process_commandline(int argc, char **argv, ESL_GETOPTS **ret_go, char **ret_alif
   if (esl_opt_VerifyConfig(go)               != eslOK) { if (printf("Failed to parse command line:\n%s\n",  go->errbuf) < 0) ESL_XEXCEPTION_SYS(eslEWRITE, "write failed"); goto FAILURE; }
 
   /* help format: */
-  if (esl_opt_GetBoolean(go, "-h") == TRUE) 
+  if (esl_opt_GetBoolean(go, (char *) "-h") == TRUE) 
     {
       p7_banner(stdout, argv[0], banner);
       esl_usage(stdout, argv[0], usage);
@@ -115,11 +115,11 @@ process_commandline(int argc, char **argv, ESL_GETOPTS **ret_go, char **ret_alif
 
   if (esl_opt_ArgNumber(go)                  > 2)    { if (puts("Incorrect number of command line arguments.")          < 0) ESL_XEXCEPTION_SYS(eslEWRITE, "write failed"); goto FAILURE; }
   if ((*ret_alifile     = esl_opt_GetArg(go, 1)) == NULL) { if (puts("Failed to get <msafile> argument on command line")     < 0) ESL_XEXCEPTION_SYS(eslEWRITE, "write failed"); goto FAILURE; }
-  if (esl_opt_IsUsed(go, "--alirange") || esl_opt_IsUsed(go, "--modelrange") ) {
+  if (esl_opt_IsUsed(go, (char *) "--alirange") || esl_opt_IsUsed(go,(char *)  "--modelrange") ) {
     if ((*ret_postalifile = esl_opt_GetArg(go, 2)) == NULL) { if (puts("Failed to get <postmsafile> argument on command line")     < 0) ESL_XEXCEPTION_SYS(eslEWRITE, "write failed"); goto FAILURE; }
   }
 
-  if (strcmp(*ret_alifile, "-") == 0 && ! esl_opt_IsOn(go, "--informat"))
+  if (strcmp(*ret_alifile, "-") == 0 && ! esl_opt_IsOn(go,(char *)  "--informat"))
     { if (puts("Must specify --informat to read <alifile> from stdin ('-')") < 0) ESL_XEXCEPTION_SYS(eslEWRITE, "write failed"); goto FAILURE; }
 
 
@@ -146,34 +146,34 @@ output_header(const ESL_GETOPTS *go, FILE *ofp, char *alifile, char *postmsafile
 
   if (fprintf(ofp, "# input alignment file:             %s\n", alifile) < 0)     ESL_EXCEPTION_SYS(eslEWRITE, "write failed");
 
-  if (esl_opt_IsUsed(go, "--alirange") || esl_opt_IsUsed(go, "--modelrange") ) {
+  if (esl_opt_IsUsed(go,(char *)  "--alirange") || esl_opt_IsUsed(go, (char *) "--modelrange") ) {
     if (fprintf(ofp, "# output alignment file:            %s\n", postmsafile) < 0) ESL_EXCEPTION_SYS(eslEWRITE, "write failed");
   }
 
-  if (esl_opt_IsUsed(go, "--alirange")   && fprintf(ofp, "# alignment range:                  %s\n",        esl_opt_GetString(go, "--alirange"))  < 0) ESL_EXCEPTION_SYS(eslEWRITE, "write failed");
-  if (esl_opt_IsUsed(go, "--modelrange") && fprintf(ofp, "# model range:                      %s\n",        esl_opt_GetString(go, "--modelrange"))< 0) ESL_EXCEPTION_SYS(eslEWRITE, "write failed");
-  if (esl_opt_IsUsed(go, "--apendmask")  && fprintf(ofp, "# add to existing mask:             [on]\n"                                            )< 0) ESL_EXCEPTION_SYS(eslEWRITE, "write failed");
+  if (esl_opt_IsUsed(go, (char *) "--alirange")   && fprintf(ofp, "# alignment range:                  %s\n",        esl_opt_GetString(go,(char *)  "--alirange"))  < 0) ESL_EXCEPTION_SYS(eslEWRITE, "write failed");
+  if (esl_opt_IsUsed(go, (char *) "--modelrange") && fprintf(ofp, "# model range:                      %s\n",        esl_opt_GetString(go,(char *)  "--modelrange"))< 0) ESL_EXCEPTION_SYS(eslEWRITE, "write failed");
+  if (esl_opt_IsUsed(go, (char *) "--apendmask")  && fprintf(ofp, "# add to existing mask:             [on]\n"                                            )< 0) ESL_EXCEPTION_SYS(eslEWRITE, "write failed");
 
-  if (esl_opt_IsUsed(go, "--model2ali")   && fprintf(ofp, "# ali ranges for model range:      %s\n",        esl_opt_GetString(go, "--model2ali"))  < 0) ESL_EXCEPTION_SYS(eslEWRITE, "write failed");
-  if (esl_opt_IsUsed(go, "--ali2model")   && fprintf(ofp, "# model ranges for ali range:      %s\n",        esl_opt_GetString(go, "--ali2model"))  < 0) ESL_EXCEPTION_SYS(eslEWRITE, "write failed");
+  if (esl_opt_IsUsed(go, (char *) "--model2ali")   && fprintf(ofp, "# ali ranges for model range:      %s\n",        esl_opt_GetString(go, (char *) "--model2ali"))  < 0) ESL_EXCEPTION_SYS(eslEWRITE, "write failed");
+  if (esl_opt_IsUsed(go, (char *) "--ali2model")   && fprintf(ofp, "# model ranges for ali range:      %s\n",        esl_opt_GetString(go, (char *) "--ali2model"))  < 0) ESL_EXCEPTION_SYS(eslEWRITE, "write failed");
 
 
-  if (esl_opt_IsUsed(go, "-o")           && fprintf(ofp, "# output directed to file:          %s\n",        esl_opt_GetString(go, "-o"))         < 0) ESL_EXCEPTION_SYS(eslEWRITE, "write failed");
-  if (esl_opt_IsUsed(go, "--amino")      && fprintf(ofp, "# input alignment is asserted as:   protein\n")                                        < 0) ESL_EXCEPTION_SYS(eslEWRITE, "write failed");
-  if (esl_opt_IsUsed(go, "--dna")        && fprintf(ofp, "# input alignment is asserted as:   DNA\n")                                            < 0) ESL_EXCEPTION_SYS(eslEWRITE, "write failed");
-  if (esl_opt_IsUsed(go, "--rna")        && fprintf(ofp, "# input alignment is asserted as:   RNA\n")                                            < 0) ESL_EXCEPTION_SYS(eslEWRITE, "write failed");
-  if (esl_opt_IsUsed(go, "--fast")       && fprintf(ofp, "# model architecture construction:  fast/heuristic\n")                                 < 0) ESL_EXCEPTION_SYS(eslEWRITE, "write failed");
-  if (esl_opt_IsUsed(go, "--hand")       && fprintf(ofp, "# model architecture construction:  hand-specified by RF annotation\n")                < 0) ESL_EXCEPTION_SYS(eslEWRITE, "write failed");
-  if (esl_opt_IsUsed(go, "--symfrac")    && fprintf(ofp, "# sym fraction for model structure: %.3f\n",      esl_opt_GetReal(go, "--symfrac"))    < 0) ESL_EXCEPTION_SYS(eslEWRITE, "write failed");
-  if (esl_opt_IsUsed(go, "--fragthresh") && fprintf(ofp, "# seq called frag if L <= x*alen:   %.3f\n",      esl_opt_GetReal(go, "--fragthresh")) < 0) ESL_EXCEPTION_SYS(eslEWRITE, "write failed");
-  if (esl_opt_IsUsed(go, "--wpb")        && fprintf(ofp, "# relative weighting scheme:        Henikoff PB\n")                                    < 0) ESL_EXCEPTION_SYS(eslEWRITE, "write failed");
-  if (esl_opt_IsUsed(go, "--wgsc")       && fprintf(ofp, "# relative weighting scheme:        G/S/C\n")                                          < 0) ESL_EXCEPTION_SYS(eslEWRITE, "write failed");
-  if (esl_opt_IsUsed(go, "--wblosum")    && fprintf(ofp, "# relative weighting scheme:        BLOSUM filter\n")                                  < 0) ESL_EXCEPTION_SYS(eslEWRITE, "write failed");
-  if (esl_opt_IsUsed(go, "--wnone")      && fprintf(ofp, "# relative weighting scheme:        none\n")                                           < 0) ESL_EXCEPTION_SYS(eslEWRITE, "write failed");
-  if (esl_opt_IsUsed(go, "--wid")        && fprintf(ofp, "# frac id cutoff for BLOSUM wgts:   %f\n",        esl_opt_GetReal(go, "--wid"))        < 0) ESL_EXCEPTION_SYS(eslEWRITE, "write failed");
-  if (esl_opt_IsUsed(go, "--seed"))  {
-    if (esl_opt_GetInteger(go, "--seed") == 0  && fprintf(ofp,"# random number seed:               one-time arbitrary\n")                        < 0) ESL_EXCEPTION_SYS(eslEWRITE, "write failed");
-    else if                              (  fprintf(ofp,"# random number seed set to:        %d\n",         esl_opt_GetInteger(go, "--seed"))    < 0) ESL_EXCEPTION_SYS(eslEWRITE, "write failed");
+  if (esl_opt_IsUsed(go, (char *) "-o")           && fprintf(ofp, "# output directed to file:          %s\n",        esl_opt_GetString(go, (char *) "-o"))         < 0) ESL_EXCEPTION_SYS(eslEWRITE, "write failed");
+  if (esl_opt_IsUsed(go, (char *) "--amino")      && fprintf(ofp, "# input alignment is asserted as:   protein\n")                                        < 0) ESL_EXCEPTION_SYS(eslEWRITE, "write failed");
+  if (esl_opt_IsUsed(go, (char *) "--dna")        && fprintf(ofp, "# input alignment is asserted as:   DNA\n")                                            < 0) ESL_EXCEPTION_SYS(eslEWRITE, "write failed");
+  if (esl_opt_IsUsed(go, (char *) "--rna")        && fprintf(ofp, "# input alignment is asserted as:   RNA\n")                                            < 0) ESL_EXCEPTION_SYS(eslEWRITE, "write failed");
+  if (esl_opt_IsUsed(go, (char *) "--fast")       && fprintf(ofp, "# model architecture construction:  fast/heuristic\n")                                 < 0) ESL_EXCEPTION_SYS(eslEWRITE, "write failed");
+  if (esl_opt_IsUsed(go, (char *) "--hand")       && fprintf(ofp, "# model architecture construction:  hand-specified by RF annotation\n")                < 0) ESL_EXCEPTION_SYS(eslEWRITE, "write failed");
+  if (esl_opt_IsUsed(go, (char *) "--symfrac")    && fprintf(ofp, "# sym fraction for model structure: %.3f\n",      esl_opt_GetReal(go, (char *) "--symfrac"))    < 0) ESL_EXCEPTION_SYS(eslEWRITE, "write failed");
+  if (esl_opt_IsUsed(go, (char *) "--fragthresh") && fprintf(ofp, "# seq called frag if L <= x*alen:   %.3f\n",      esl_opt_GetReal(go, (char *) "--fragthresh")) < 0) ESL_EXCEPTION_SYS(eslEWRITE, "write failed");
+  if (esl_opt_IsUsed(go, (char *) "--wpb")        && fprintf(ofp, "# relative weighting scheme:        Henikoff PB\n")                                    < 0) ESL_EXCEPTION_SYS(eslEWRITE, "write failed");
+  if (esl_opt_IsUsed(go, (char *) "--wgsc")       && fprintf(ofp, "# relative weighting scheme:        G/S/C\n")                                          < 0) ESL_EXCEPTION_SYS(eslEWRITE, "write failed");
+  if (esl_opt_IsUsed(go, (char *) "--wblosum")    && fprintf(ofp, "# relative weighting scheme:        BLOSUM filter\n")                                  < 0) ESL_EXCEPTION_SYS(eslEWRITE, "write failed");
+  if (esl_opt_IsUsed(go, (char *) "--wnone")      && fprintf(ofp, "# relative weighting scheme:        none\n")                                           < 0) ESL_EXCEPTION_SYS(eslEWRITE, "write failed");
+  if (esl_opt_IsUsed(go, (char *) "--wid")        && fprintf(ofp, "# frac id cutoff for BLOSUM wgts:   %f\n",        esl_opt_GetReal(go, (char *) "--wid"))        < 0) ESL_EXCEPTION_SYS(eslEWRITE, "write failed");
+  if (esl_opt_IsUsed(go, (char *) "--seed"))  {
+    if (esl_opt_GetInteger(go, (char *) "--seed") == 0  && fprintf(ofp,"# random number seed:               one-time arbitrary\n")                        < 0) ESL_EXCEPTION_SYS(eslEWRITE, "write failed");
+    else if                              (  fprintf(ofp,"# random number seed set to:        %d\n",         esl_opt_GetInteger(go, (char *) "--seed"))    < 0) ESL_EXCEPTION_SYS(eslEWRITE, "write failed");
   }
 
   if (fprintf(ofp, "# - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -\n\n") < 0) ESL_EXCEPTION_SYS(eslEWRITE, "write failed");
@@ -241,7 +241,7 @@ main(int argc, char **argv)
   /* Parse the command line
    */
   process_commandline(argc, argv, &go, &alifile, &postmsafile);
-  keep_mm = esl_opt_IsUsed(go, "--apendmask");
+  keep_mm = esl_opt_IsUsed(go, (char *)  "--apendmask");
 
   /* Initialize what we can in the config structure (without knowing the alphabet yet).
    * Fields controlled by masters are set up in usual_master() or mpi_master()
@@ -252,27 +252,27 @@ main(int argc, char **argv)
   afp         = NULL;
   abc         = NULL;
 
-  if (esl_opt_IsOn(go, "--informat")) {
-    fmt = esl_msafile_EncodeFormat(esl_opt_GetString(go, "--informat"));
-    if (fmt == eslMSAFILE_UNKNOWN) p7_Fail("%s is not a recognized input sequence file format\n", esl_opt_GetString(go, "--informat"));
+  if (esl_opt_IsOn(go, (char *) "--informat")) {
+    fmt = esl_msafile_EncodeFormat(esl_opt_GetString(go, (char *) "--informat"));
+    if (fmt == eslMSAFILE_UNKNOWN) p7_Fail((char *)  "%s is not a recognized input sequence file format\n", esl_opt_GetString(go, (char *) "--informat"));
   }
 
 
   /* Parse the ranges */
 
-  if (esl_opt_IsUsed(go, "--alirange")) {
-    esl_strdup(esl_opt_GetString(go, "--alirange"), -1, &rangestr) ;
-  } else if (esl_opt_IsUsed(go, "--modelrange")) {
-    esl_strdup(esl_opt_GetString(go, "--modelrange"), -1, &rangestr) ;
-  } else if (esl_opt_IsUsed(go, "--model2ali")) {
-    esl_strdup(esl_opt_GetString(go, "--model2ali"), -1, &rangestr) ;
-  } else if (esl_opt_IsUsed(go, "--ali2model")) {
-    esl_strdup(esl_opt_GetString(go, "--ali2model"), -1, &rangestr) ;
+  if (esl_opt_IsUsed(go,(char *)  "--alirange")) {
+    esl_strdup(esl_opt_GetString(go,(char *)  "--alirange"), -1, &rangestr) ;
+  } else if (esl_opt_IsUsed(go, (char *) "--modelrange")) {
+    esl_strdup(esl_opt_GetString(go,(char *)  "--modelrange"), -1, &rangestr) ;
+  } else if (esl_opt_IsUsed(go, (char *) "--model2ali")) {
+    esl_strdup(esl_opt_GetString(go,(char *)  "--model2ali"), -1, &rangestr) ;
+  } else if (esl_opt_IsUsed(go, (char *) "--ali2model")) {
+    esl_strdup(esl_opt_GetString(go, (char *) "--ali2model"), -1, &rangestr) ;
   } else {
     if (puts("Must specify mask range with --modelrange, --alirange, --model2ali, or --ali2model\n") < 0) ESL_XEXCEPTION_SYS(eslEWRITE, "write failed"); goto ERROR;
   }
 
-  while ( (status = esl_strtok(&rangestr, ",", &range) ) == eslOK) {
+  while ( (status = esl_strtok(&rangestr, (char *)  ",",  &range) ) == eslOK) {
     parse_coord_string(range, mask_starts + mask_range_cnt, mask_ends + mask_range_cnt );
     mask_range_cnt++;
   }
@@ -290,23 +290,23 @@ main(int argc, char **argv)
    *   postmsafp - open MSA output file
    *   ofp       - optional open output file, or stdout
    */
-  if      (esl_opt_GetBoolean(go, "--amino"))   abc = esl_alphabet_Create(eslAMINO);
-  else if (esl_opt_GetBoolean(go, "--dna"))     abc = esl_alphabet_Create(eslDNA);
-  else if (esl_opt_GetBoolean(go, "--rna"))     abc = esl_alphabet_Create(eslRNA);
+  if      (esl_opt_GetBoolean(go, (char *) "--amino"))   abc = esl_alphabet_Create(eslAMINO);
+  else if (esl_opt_GetBoolean(go, (char *) "--dna"))     abc = esl_alphabet_Create(eslDNA);
+  else if (esl_opt_GetBoolean(go, (char *) "--rna"))     abc = esl_alphabet_Create(eslRNA);
   else                                          abc = NULL;
   
   status = esl_msafile_Open(&abc, alifile, NULL, fmt, NULL, &afp);
   if (status != eslOK) esl_msafile_OpenFailure(afp, status);
 
-  if (esl_opt_IsUsed(go, "--alirange") || esl_opt_IsUsed(go, "--modelrange") ) {
+  if (esl_opt_IsUsed(go,(char *)  "--alirange") || esl_opt_IsUsed(go, (char *) "--modelrange") ) {
     postmsafp = fopen(postmsafile, "w");
-    if (postmsafp == NULL) p7_Fail("Failed to MSA output file %s for writing", postmsafile);
+    if (postmsafp == NULL) p7_Fail((char *)  "Failed to MSA output file %s for writing", postmsafile);
   }
 
-  if (esl_opt_IsUsed(go, "-o")) 
+  if (esl_opt_IsUsed(go, (char *) "-o")) 
     {
-      ofp = fopen(esl_opt_GetString(go, "-o"), "w");
-      if (ofp == NULL) p7_Fail("Failed to open -o output file %s\n", esl_opt_GetString(go, "-o"));
+      ofp = fopen(esl_opt_GetString(go,(char *)  "-o"), "w");
+      if (ofp == NULL) p7_Fail((char *)  "Failed to open -o output file %s\n", esl_opt_GetString(go, (char *) "-o"));
     } 
   else ofp = stdout;
 
@@ -320,7 +320,7 @@ main(int argc, char **argv)
   if ((status = esl_msafile_Read(afp, &msa)) != eslOK)  esl_msafile_ReadFailure(afp, status);
 
 
-  if (esl_opt_IsUsed(go, "--alirange") || esl_opt_IsUsed(go, "--modelrange") ) {
+  if (esl_opt_IsUsed(go,(char *)  "--alirange") || esl_opt_IsUsed(go,(char *)  "--modelrange") ) {
     /* add/modify mmline for the mask */
     if (msa->mm == NULL) {
       ESL_ALLOC(msa->mm, msa->alen);
@@ -333,29 +333,29 @@ main(int argc, char **argv)
   }
 
   // convert model coordinates to alignment coordinates, if necessary
-  if (esl_opt_IsUsed(go, "--modelrange") || esl_opt_IsUsed(go, "--model2ali") || esl_opt_IsUsed(go, "--ali2model") ) {
+  if (esl_opt_IsUsed(go, (char *) "--modelrange") || esl_opt_IsUsed(go, (char *) "--model2ali") || esl_opt_IsUsed(go, (char *) "--ali2model") ) {
     int      apos, idx;
     float    r;            /* weighted residue count              */
     float    totwgt;       /* weighted residue+gap count          */
     float    symfrac;
 
     //same as p7_builder relative_weights
-    if      (esl_opt_IsOn(go, "--wnone")  )                  { esl_vec_DSet(msa->wgt, msa->nseq, 1.); }
-    else if (esl_opt_IsOn(go, "--wgiven") )                  ;
-    else if (esl_opt_IsOn(go, "--wpb")    )                  esl_msaweight_PB(msa);
-    else if (esl_opt_IsOn(go, "--wgsc")   )                  esl_msaweight_GSC(msa);
-    else if (esl_opt_IsOn(go, "--wblosum"))                  esl_msaweight_BLOSUM(msa, esl_opt_GetReal(go, "--wid"));
+    if      (esl_opt_IsOn(go,(char *)  "--wnone")  )                  { esl_vec_DSet(msa->wgt, msa->nseq, 1.); }
+    else if (esl_opt_IsOn(go, (char *) "--wgiven") )                  ;
+    else if (esl_opt_IsOn(go,(char *)  "--wpb")    )                  esl_msaweight_PB(msa);
+    else if (esl_opt_IsOn(go, (char *) "--wgsc")   )                  esl_msaweight_GSC(msa);
+    else if (esl_opt_IsOn(go,(char *)  "--wblosum"))                  esl_msaweight_BLOSUM(msa, esl_opt_GetReal(go, (char *) "--wid"));
 
-    symfrac = esl_opt_GetReal(go, "--symfrac");
+    symfrac = esl_opt_GetReal(go, (char *) "--symfrac");
 
-    if ((status =  esl_msa_MarkFragments(msa, esl_opt_GetReal(go, "--fragthresh")))           != eslOK) goto ERROR;
+    if ((status =  esl_msa_MarkFragments(msa, esl_opt_GetReal(go,(char *)  "--fragthresh")))           != eslOK) goto ERROR;
 
     // Determine weighted sym freq in each column, build a map of model mask coordinates to alignment coords
     ESL_ALLOC(map, sizeof(int)     * (msa->alen+1));
     i = 0;
 
-    if ( esl_opt_IsOn(go, "--hand")) {
-      if (msa->rf == NULL)      p7_Fail("Model file doe not contain an RF line, required for --hand.\n");
+    if ( esl_opt_IsOn(go, (char *) "--hand")) {
+      if (msa->rf == NULL)      p7_Fail((char *) "Model file doe not contain an RF line, required for --hand.\n");
         /* Watch for off-by-one. rf is [0..alen-1]*/
        for (apos = 1; apos <= msa->alen; apos++) {
          if (!esl_abc_CIsGap(msa->abc, msa->rf[apos-1]) ) {
@@ -385,12 +385,12 @@ main(int argc, char **argv)
     }
 
 
-    if ( esl_opt_IsUsed(go, "--model2ali") ) {
+    if ( esl_opt_IsUsed(go, (char *) "--model2ali") ) {
       //print mapping
       printf ("model coordinates     alignment coordinates\n");
       for (i=0; i<mask_range_cnt; i++)
         printf ("%8d..%-8d -> %8d..%-8d\n", mask_starts[i], mask_ends[i], map[mask_starts[i]-1], map[mask_ends[i]-1]);
-    } else if ( esl_opt_IsUsed(go, "--ali2model") ) {
+    } else if ( esl_opt_IsUsed(go,(char *)  "--ali2model") ) {
       //print mapping  (requires scanning the inverted map
       int alistart = 0;
       int aliend = 0;
@@ -414,7 +414,7 @@ main(int argc, char **argv)
     }
   }
 
-  if (esl_opt_IsUsed(go, "--alirange") || esl_opt_IsUsed(go, "--modelrange") ) {
+  if (esl_opt_IsUsed(go,(char *)   "--alirange") || esl_opt_IsUsed(go, (char *)  "--modelrange") ) {
     //overwrite '.' with 'm' everywhere the range says to do it
     for (i=0; i<mask_range_cnt; i++)
       for (j=mask_starts[i]; j<=mask_ends[i]; j++)
@@ -425,7 +425,7 @@ main(int argc, char **argv)
 
   esl_stopwatch_Stop(w);
   free(map);
-  if (esl_opt_IsOn(go, "-o"))  fclose(ofp);
+  if (esl_opt_IsOn(go, (char *)  "-o"))  fclose(ofp);
   if (postmsafp) fclose(postmsafp);
   if (afp)       esl_msafile_Close(afp);
   if (abc)       esl_alphabet_Destroy(abc);

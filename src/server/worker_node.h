@@ -336,4 +336,7 @@ void p7_server_workernode_main(int argc, char **argv, int my_rank, MPI_Datatype 
 // Top-level function for the worker threads (all threads on a worker node except the main thread)
 void *p7_server_worker_thread(void *worker_argument);
 
+// assign a populated shard to a slot in a workernode
+int p7_server_set_shard(P7_DAEMON_WORKERNODE_STATE *workernode, P7_SHARD *the_shard, uint32_t database_id);
+
 #endif

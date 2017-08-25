@@ -424,7 +424,7 @@ annotate_model(P7_HMM *hmm, int *matassign, ESL_MSA *msa)
 static void
 utest_basic(void)
 {
-  char         *failmsg      = "failure in build.c::utest_basic() unit test";
+  char         *failmsg      = (char *)"failure in build.c::utest_basic() unit test";
   char          msafile[16]  = "p7tmpXXXXXX"; /* tmpfile name template */
   FILE         *ofp          = NULL;
   ESL_ALPHABET *abc          = esl_alphabet_Create(eslAMINO);
@@ -466,7 +466,7 @@ utest_basic(void)
 static void
 utest_fragments(void)
 {
-  char         *failmsg      = "failure in build.c::utest_fragments() unit test";
+  char         *failmsg      = (char *)"failure in build.c::utest_fragments() unit test";
   char          msafile[16]  = "p7tmpXXXXXX"; /* tmpfile name template */
   FILE         *ofp          = NULL;
   ESL_ALPHABET *abc          = esl_alphabet_Create(eslAMINO);
@@ -555,7 +555,7 @@ utest_fragments(void)
 
 static ESL_OPTIONS options[] = {
    /* name  type         default  env   range togs  reqs  incomp  help                docgrp */
-  {"-h",  eslARG_NONE,    FALSE, NULL, NULL, NULL, NULL, NULL, "show help and usage",                            0},
+  {(char *)"-h",  eslARG_NONE,    FALSE, NULL, NULL, NULL, NULL, NULL, (char *)"show help and usage",                            0},
   { 0,0,0,0,0,0,0,0,0,0},
 };
 static char usage[]  = "[-options]";
@@ -595,10 +595,10 @@ main(int argc, char **argv)
 
 static ESL_OPTIONS options[] = {
   /* name           type      default  env  range toggles reqs incomp  help                                       docgroup*/
-  { "-h",        eslARG_NONE,   FALSE,  NULL, NULL,  NULL,  NULL, NULL, "show brief help on version and usage",    0 },
-  { "--dna",     eslARG_NONE,   FALSE,  NULL, NULL,  NULL,  NULL, NULL, "use DNA alphabet",                        0 },
-  { "--rna",     eslARG_NONE,   FALSE,  NULL, NULL,  NULL,  NULL, NULL, "use RNA alphabet",                        0 },
-  { "--amino",   eslARG_NONE,   FALSE,  NULL, NULL,  NULL,  NULL, NULL, "use protein alphabet",                    0 },
+  { (char *)"-h",        eslARG_NONE,   FALSE,  NULL, NULL,  NULL,  NULL, NULL, (char *)"show brief help on version and usage",    0 },
+  { (char *)"--dna",     eslARG_NONE,   FALSE,  NULL, NULL,  NULL,  NULL, NULL, (char *)"use DNA alphabet",                        0 },
+  { (char *)"--rna",     eslARG_NONE,   FALSE,  NULL, NULL,  NULL,  NULL, NULL, (char *)"use RNA alphabet",                        0 },
+  { (char *)"--amino",   eslARG_NONE,   FALSE,  NULL, NULL,  NULL,  NULL, NULL, (char *)"use protein alphabet",                    0 },
   {  0, 0, 0, 0, 0, 0, 0, 0, 0, 0 },
 };
 static char usage[]  = "[-options] <msafile>";
@@ -623,9 +623,9 @@ main(int argc, char **argv)
   int           status;
   
   /* Standard idioms for opening and reading a digital MSA. (See esl_msafile.c example). */
-  if      (esl_opt_GetBoolean(go, "--rna"))   abc = esl_alphabet_Create(eslRNA);
-  else if (esl_opt_GetBoolean(go, "--dna"))   abc = esl_alphabet_Create(eslDNA);
-  else if (esl_opt_GetBoolean(go, "--amino")) abc = esl_alphabet_Create(eslAMINO);
+  if      (esl_opt_GetBoolean(go, (char *)"--rna"))   abc = esl_alphabet_Create(eslRNA);
+  else if (esl_opt_GetBoolean(go, (char *)"--dna"))   abc = esl_alphabet_Create(eslDNA);
+  else if (esl_opt_GetBoolean(go, (char *)"--amino")) abc = esl_alphabet_Create(eslAMINO);
 
   if ((status = esl_msafile_Open(&abc, msafile, NULL, fmt, NULL, &afp)) != eslOK)
     esl_msafile_OpenFailure(afp, status);

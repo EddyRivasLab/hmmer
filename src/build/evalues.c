@@ -493,20 +493,20 @@ p7_Tau(ESL_RANDOMNESS *r, P7_OPROFILE *om, P7_BG *bg, int L, int N, double lambd
 
 static ESL_OPTIONS options[] = {
   /* name           type      default  env  range toggles reqs incomp   help                                       docgroup*/
-  { "-h",        eslARG_NONE,   FALSE, NULL, NULL,  NULL,  NULL, NULL,  "show brief help on version and usage",            0 },
-  { "-s",        eslARG_INT,      "0", NULL, NULL,  NULL,  NULL, NULL,  "set random number generator seed to <n>",         0 },
-  { "--EmL",     eslARG_INT,    "200", NULL,"n>0",  NULL,  NULL, NULL,  "length of sequences for MSV Gumbel mu fit",       0 },   
-  { "--EmN",     eslARG_INT,    "200", NULL,"n>0",  NULL,  NULL, NULL,  "number of sequences for MSV Gumbel mu fit",       0 },   
-  { "--EvL",     eslARG_INT,    "200", NULL,"n>0",  NULL,  NULL, NULL,  "length of sequences for Viterbi Gumbel mu fit",   0 },   
-  { "--EvN",     eslARG_INT,    "200", NULL,"n>0",  NULL,  NULL, NULL,  "number of sequences for Viterbi Gumbel mu fit",   0 },   
-  { "--EfL",     eslARG_INT,    "100", NULL,"n>0",  NULL,  NULL, NULL,  "length of sequences for Forward exp tail tau fit",0 },   
-  { "--EfN",     eslARG_INT,    "200", NULL,"n>0",  NULL,  NULL, NULL,  "number of sequences for Forward exp tail tau fit",0 },   
-  { "--Eft",     eslARG_REAL,  "0.04", NULL,"0<x<1",NULL,  NULL, NULL,  "tail mass for Forward exponential tail tau fit",  0 },   
-  { "-Z",        eslARG_INT,      "1", NULL, NULL,  NULL,  NULL, NULL,  "set number of iterations per model to <n>",       0 },
-  { "--lambda",  eslARG_REAL,    NULL, NULL, NULL,  NULL,  NULL, NULL,  "set lambda param to <x>",                         0 },
-  { "--msvonly", eslARG_NONE,   FALSE, NULL, NULL,  NULL,  NULL,BMARKS, "only run MSV mu calibration (for benchmarking)",  0 },
-  { "--vitonly", eslARG_NONE,   FALSE, NULL, NULL,  NULL,  NULL,BMARKS, "only run Vit mu calibration (for benchmarking)",  0 },
-  { "--fwdonly", eslARG_NONE,   FALSE, NULL, NULL,  NULL,  NULL,BMARKS, "only run Fwd tau calibration (for benchmarking)", 0 },
+  { (char *)"-h",        eslARG_NONE,   FALSE, NULL, NULL,  NULL,  NULL, NULL,  (char *)"show brief help on version and usage",            0 },
+  { (char *)"-s",        eslARG_INT,  (char *)    "0", NULL, NULL,  NULL,  NULL, NULL,  (char *)"set random number generator seed to <n>",         0 },
+  { (char *)"--EmL",     eslARG_INT,  (char *)  "200", NULL,(char *)"n>0",  NULL,  NULL, NULL,  (char *)"length of sequences for MSV Gumbel mu fit",       0 },   
+  { (char *)"--EmN",     eslARG_INT,  (char *)  "200", NULL,(char *)"n>0",  NULL,  NULL, NULL,  (char *)"number of sequences for MSV Gumbel mu fit",       0 },   
+  { (char *)"--EvL",     eslARG_INT,  (char *)  "200", NULL,(char *)"n>0",  NULL,  NULL, NULL,  (char *)"length of sequences for Viterbi Gumbel mu fit",   0 },   
+  { (char *)"--EvN",     eslARG_INT,  (char *)  "200", NULL,(char *)"n>0",  NULL,  NULL, NULL,  (char *)"number of sequences for Viterbi Gumbel mu fit",   0 },   
+  { (char *)"--EfL",     eslARG_INT,  (char *)  "100", NULL,(char *)"n>0",  NULL,  NULL, NULL,  (char *)"length of sequences for Forward exp tail tau fit",0 },   
+  { (char *)"--EfN",     eslARG_INT,  (char *)  "200", NULL,(char *)"n>0",  NULL,  NULL, NULL,  (char *)"number of sequences for Forward exp tail tau fit",0 },   
+  { (char *)"--Eft",     eslARG_REAL, (char *) "0.04", NULL,(char *)"0<x<1",NULL,  NULL, NULL,  (char *)"tail mass for Forward exponential tail tau fit",  0 },   
+  { (char *)"-Z",        eslARG_INT,   (char *)   "1", NULL, NULL,  NULL,  NULL, NULL,  (char *)"set number of iterations per model to <n>",       0 },
+  { (char *)"--lambda",  eslARG_REAL,    NULL, NULL, NULL,  NULL,  NULL, NULL,  (char *)"set lambda param to <x>",                         0 },
+  { (char *)"--msvonly", eslARG_NONE,   FALSE, NULL, NULL,  NULL,  NULL,(char *) BMARKS, (char *)"only run MSV mu calibration (for benchmarking)",  0 },
+  { (char *)"--vitonly", eslARG_NONE,   FALSE, NULL, NULL,  NULL,  NULL,(char *) BMARKS, (char *)"only run Vit mu calibration (for benchmarking)",  0 },
+  { (char *)"--fwdonly", eslARG_NONE,   FALSE, NULL, NULL,  NULL,  NULL,(char *) BMARKS, (char *)"only run Fwd tau calibration (for benchmarking)", 0 },
   {  0, 0, 0, 0, 0, 0, 0, 0, 0, 0 },
 };
 static char usage[]  = "[-options] <hmmfile>";
@@ -517,7 +517,7 @@ main(int argc, char **argv)
 {
   ESL_GETOPTS    *go      = p7_CreateDefaultApp(options, 1, argc, argv, banner, usage);
   char           *hmmfile = esl_opt_GetArg(go, 1);
-  ESL_RANDOMNESS *r       = esl_randomness_CreateFast(esl_opt_GetInteger(go, "-s"));
+  ESL_RANDOMNESS *r       = esl_randomness_CreateFast(esl_opt_GetInteger(go, (char *)"-s"));
   ESL_ALPHABET   *abc     = NULL;
   P7_HMMFILE     *hfp     = NULL;
   P7_HMM         *hmm     = NULL;
@@ -528,24 +528,24 @@ main(int argc, char **argv)
   double          smu     = 0.0;
   double          vmu     = 0.0;
   double          ftau    = 0.0;
-  int             Z       = esl_opt_GetInteger(go, "-Z");
-  int             EmL     = esl_opt_GetInteger(go, "--EmL");
-  int             EmN     = esl_opt_GetInteger(go, "--EmN");
-  int             EvL     = esl_opt_GetInteger(go, "--EvL");
-  int             EvN     = esl_opt_GetInteger(go, "--EvN");
-  int             EfL     = esl_opt_GetInteger(go, "--EfL");
-  int             EfN     = esl_opt_GetInteger(go, "--EfN");
-  int             Eft     = esl_opt_GetReal   (go, "--Eft");
+  int             Z       = esl_opt_GetInteger(go, (char *)"-Z");
+  int             EmL     = esl_opt_GetInteger(go,(char *) "--EmL");
+  int             EmN     = esl_opt_GetInteger(go, (char *)"--EmN");
+  int             EvL     = esl_opt_GetInteger(go, (char *)"--EvL");
+  int             EvN     = esl_opt_GetInteger(go, (char *)"--EvN");
+  int             EfL     = esl_opt_GetInteger(go, (char *)"--EfL");
+  int             EfN     = esl_opt_GetInteger(go, (char *)"--EfN");
+  int             Eft     = esl_opt_GetReal   (go, (char *)"--Eft");
   int             iteration;
   int             do_msv, do_vit, do_fwd;
   int             status;
 
-  if      (esl_opt_GetBoolean(go, "--msvonly") == TRUE) { do_msv =  TRUE; do_vit = FALSE; do_fwd = FALSE; }
-  else if (esl_opt_GetBoolean(go, "--vitonly") == TRUE) { do_msv = FALSE; do_vit =  TRUE; do_fwd = FALSE; }
-  else if (esl_opt_GetBoolean(go, "--fwdonly") == TRUE) { do_msv = FALSE; do_vit = FALSE; do_fwd =  TRUE; }
+  if      (esl_opt_GetBoolean(go, (char *)"--msvonly") == TRUE) { do_msv =  TRUE; do_vit = FALSE; do_fwd = FALSE; }
+  else if (esl_opt_GetBoolean(go, (char *)"--vitonly") == TRUE) { do_msv = FALSE; do_vit =  TRUE; do_fwd = FALSE; }
+  else if (esl_opt_GetBoolean(go, (char *)"--fwdonly") == TRUE) { do_msv = FALSE; do_vit = FALSE; do_fwd =  TRUE; }
   else                                                  { do_msv =  TRUE; do_vit =  TRUE; do_fwd =  TRUE; }
 
-  if (p7_hmmfile_OpenE(hmmfile, NULL, &hfp, NULL) != eslOK) p7_Fail("Failed to open HMM file %s", hmmfile);
+  if (p7_hmmfile_OpenE(hmmfile, NULL, &hfp, NULL) != eslOK) p7_Fail((char *) "Failed to open HMM file %s", hmmfile);
   while ((status = p7_hmmfile_Read(hfp, &abc, &hmm)) != eslEOF) 
     {
       if (bg == NULL) bg = p7_bg_Create(abc);
@@ -555,7 +555,7 @@ main(int argc, char **argv)
       om = p7_oprofile_Create(hmm->M, abc);
       p7_oprofile_Convert(gm, om);
 
-      if (esl_opt_IsOn(go, "--lambda"))	lambda = esl_opt_GetReal(go, "--lambda"); 
+      if (esl_opt_IsOn(go, (char *)"--lambda"))	lambda = esl_opt_GetReal(go, (char *)"--lambda"); 
       else p7_Lambda(hmm, bg, &lambda);	  
 
       for (iteration = 0; iteration < Z; iteration++)
@@ -605,8 +605,8 @@ main(int argc, char **argv)
 
 static ESL_OPTIONS options[] = {
   /* name           type      default  env  range toggles reqs incomp  help                                       docgroup*/
-  { "-h",        eslARG_NONE,   FALSE, NULL, NULL,  NULL,  NULL, NULL, "show brief help on version and usage",             0 },
-  { "-N",        eslARG_INT,    "100", NULL, "n>0", NULL,  NULL, NULL, "number of calibrations to do",                     0 },
+  { (char *)"-h",        eslARG_NONE,   FALSE, NULL, NULL,  NULL,  NULL, NULL, (char *)"show brief help on version and usage",             0 },
+  {(char *) "-N",        eslARG_INT,    (char *)"100", NULL, (char *)"n>0", NULL,  NULL, NULL, (char *)"number of calibrations to do",                     0 },
    {  0, 0, 0, 0, 0, 0, 0, 0, 0, 0 },
 };
 static char usage[]  = "[-options] <hmmfile>";
@@ -617,14 +617,14 @@ main(int argc, char **argv)
 {
   ESL_GETOPTS    *go      = p7_CreateDefaultApp(options, 1, argc, argv, banner, usage);
   char           *hmmfile = esl_opt_GetArg(go, 1);
-  int             N       = esl_opt_GetInteger(go, "-N");
+  int             N       = esl_opt_GetInteger(go, (char *)"-N");
   ESL_STOPWATCH  *w       = esl_stopwatch_Create();
   ESL_ALPHABET   *abc     = NULL;
   P7_HMMFILE     *hfp     = NULL;
   P7_HMM         *hmm     = NULL;
 
-  if (p7_hmmfile_OpenE(hmmfile, NULL, &hfp, NULL) != eslOK) p7_Fail("Failed to open HMM file %s", hmmfile);
-  if (p7_hmmfile_Read(hfp, &abc, &hmm)            != eslOK) p7_Fail("Failed to read HMM");
+  if (p7_hmmfile_OpenE(hmmfile, NULL, &hfp, NULL) != eslOK) p7_Fail((char *)"Failed to open HMM file %s", hmmfile);
+  if (p7_hmmfile_Read(hfp, &abc, &hmm)            != eslOK) p7_Fail((char *)"Failed to read HMM");
   p7_hmmfile_Close(hfp);
 
   esl_stopwatch_Start(w);
@@ -633,7 +633,7 @@ main(int argc, char **argv)
       p7_Calibrate(hmm, NULL, NULL, NULL, NULL, NULL);
     }
   esl_stopwatch_Stop(w);
-  esl_stopwatch_Display(stdout, w, "# CPU time: ");
+  esl_stopwatch_Display(stdout, w,(char *) "# CPU time: ");
 
   p7_hmm_Destroy(hmm);
   esl_alphabet_Destroy(abc);

@@ -294,12 +294,12 @@ p7_logsum_exact(float a, float b)
 
 static ESL_OPTIONS options[] = {
   /* name           type      default  env  range toggles reqs incomp  help                                       docgroup*/
-  { "-h",        eslARG_NONE,    NULL, NULL, NULL,  NULL,  NULL, NULL, "show brief help on version and usage",    0 },
-  { "-n",        eslARG_NONE,    NULL, NULL, NULL,  NULL,  NULL, NULL, "naive time: A + log(1+exp(-(A-B)))",      0 },
-  { "-r",        eslARG_NONE,    NULL, NULL, NULL,  NULL,  NULL, NULL, "really naive time: log(exp(A)+exp(B))",   0 },
-  { "-s",        eslARG_INT,     "42", NULL, NULL,  NULL,  NULL, NULL, "set random number seed to <n>",           0 },
-  { "-v",        eslARG_NONE,    NULL, NULL, NULL,  NULL,  NULL, NULL, "be verbose: show individual results",     0 },
-  { "-N",        eslARG_INT,"100000000",NULL,"n>0", NULL,  NULL, NULL, "number of trials",                        0 },
+  { (char *) "-h",        eslARG_NONE,    NULL, NULL, NULL,  NULL,  NULL, NULL, (char *) "show brief help on version and usage",    0 },
+  { (char *) "-n",        eslARG_NONE,    NULL, NULL, NULL,  NULL,  NULL, NULL, (char *) "naive time: A + log(1+exp(-(A-B)))",      0 },
+  { (char *) "-r",        eslARG_NONE,    NULL, NULL, NULL,  NULL,  NULL, NULL, (char *) "really naive time: log(exp(A)+exp(B))",   0 },
+  { (char *) "-s",        eslARG_INT,    (char *)  "42", NULL, NULL,  NULL,  NULL, NULL, (char *) "set random number seed to <n>",           0 },
+  { (char *) "-v",        eslARG_NONE,    NULL, NULL, NULL,  NULL,  NULL, NULL, (char *) "be verbose: show individual results",     0 },
+  { (char *) "-N",        eslARG_INT,(char *) "100000000",NULL,(char *) "n>0", NULL,  NULL, NULL, (char *) "number of trials",                        0 },
   {  0, 0, 0, 0, 0, 0, 0, 0, 0, 0 },
 };
 static char usage[]  = "[-options]";
@@ -322,16 +322,16 @@ int
 main(int argc, char **argv)
 {
   ESL_GETOPTS    *go      = p7_CreateDefaultApp(options, 0, argc, argv, banner, usage);
-  ESL_RANDOMNESS *r       = esl_randomness_CreateFast(esl_opt_GetInteger(go, "-s"));
+  ESL_RANDOMNESS *r       = esl_randomness_CreateFast(esl_opt_GetInteger(go, (char *) "-s"));
   ESL_STOPWATCH  *w       = esl_stopwatch_Create();
-  int             N       = esl_opt_GetInteger(go, "-N");
+  int             N       = esl_opt_GetInteger(go, (char *) "-N");
   int             i;
   float          *A, *B, *C;
 
   /* Create the problem: sample N values A,B on interval -1000,1000: about the range of H3 scores */
-  A = malloc(sizeof(float) * N);
-  B = malloc(sizeof(float) * N);
-  C = malloc(sizeof(float) * N);
+  A = (float *) malloc(sizeof(float) * N);
+  B = (float *) malloc(sizeof(float) * N);
+  C = (float *) malloc(sizeof(float) * N);
   for (i = 0; i < N; i++)
     {
       A[i] = esl_random(r) * 2000. - 1000.;
@@ -341,12 +341,12 @@ main(int argc, char **argv)
   /* Run */
   esl_stopwatch_Start(w);
 
-  if (esl_opt_GetBoolean(go, "-n"))
+  if (esl_opt_GetBoolean(go, (char *) "-n"))
     {
       for (i = 0; i < N; i++)
 	C[i] = naive2(A[i], B[i]);
     }
-  else if (esl_opt_GetBoolean(go, "-r"))
+  else if (esl_opt_GetBoolean(go,(char *)  "-r"))
     {
       for (i = 0; i < N; i++)
 	C[i] = naive1(A[i], B[i]);
@@ -358,7 +358,7 @@ main(int argc, char **argv)
     }
 
   esl_stopwatch_Stop(w);
-  esl_stopwatch_Display(stdout, w, "# CPU time: ");
+  esl_stopwatch_Display(stdout, w, (char *) "# CPU time: ");
 
   esl_stopwatch_Destroy(w);
   esl_randomness_Destroy(r);
@@ -386,9 +386,9 @@ main(int argc, char **argv)
 static void
 utest_FLogsumError(ESL_GETOPTS *go, ESL_RANDOMNESS *r)
 {
-  int     N          = esl_opt_GetInteger(go, "-N");
-  float   maxval     = esl_opt_GetReal(go, "-S");
-  int     be_verbose = esl_opt_GetBoolean(go, "-v");
+  int     N          = esl_opt_GetInteger(go,(char *)  "-N");
+  float   maxval     = esl_opt_GetReal(go, (char *) "-S");
+  int     be_verbose = esl_opt_GetBoolean(go,(char *)  "-v");
   float   maxerr = 0.0;
   float   avgerr = 0.0;
   int     i;
@@ -423,7 +423,7 @@ utest_FLogsumError(ESL_GETOPTS *go, ESL_RANDOMNESS *r)
 static void
 utest_FLogsumSpecials(void)
 {
-  char *msg = "logsum specials unit test failed";
+  char *msg = (char *) "logsum specials unit test failed";
 
   if (p7_FLogsum(0.0,          -eslINFINITY) !=          0.0) esl_fatal(msg);
   if (p7_FLogsum(-eslINFINITY,          0.0) !=          0.0) esl_fatal(msg);
@@ -451,11 +451,11 @@ utest_FLogsumSpecials(void)
 
 static ESL_OPTIONS options[] = {
   /* name  type         default  env   range togs  reqs  incomp  help                docgrp */
-  {"-h",  eslARG_NONE,    FALSE, NULL, NULL, NULL, NULL, NULL, "show help and usage",               0},
-  {"-N",  eslARG_INT,    "1000", NULL, "n>0",NULL, NULL, NULL, "number of samples",                 0},
-  {"-S",  eslARG_REAL,   "20.0", NULL, "x>0",NULL, NULL, NULL, "maximum operand value",             0},
-  {"-s",  eslARG_INT,      "42", NULL,"n>=0",NULL, NULL, NULL, "random number seed",                0},
-  {"-v",  eslARG_NONE,    FALSE, NULL, NULL, NULL, NULL, NULL, "show verbose output",               0},
+  {(char *) "-h",  eslARG_NONE,    FALSE, NULL, NULL, NULL, NULL, NULL, (char *) "show help and usage",               0},
+  {(char *) "-N",  eslARG_INT,    (char *) "1000", NULL, (char *) "n>0",NULL, NULL, NULL, (char *) "number of samples",                 0},
+  {(char *) "-S",  eslARG_REAL,  (char *)  "20.0", NULL, (char *) "x>0",NULL, NULL, NULL, (char *) "maximum operand value",             0},
+  {(char *) "-s",  eslARG_INT,    (char *)   "42", NULL,(char *) "n>=0",NULL, NULL, NULL, (char *) "random number seed",                0},
+  {(char *) "-v",  eslARG_NONE,    FALSE, NULL, NULL, NULL, NULL, NULL, (char *) "show verbose output",               0},
   { 0,0,0,0,0,0,0,0,0,0},
 };
 static char usage[]  = "[-options]";
@@ -465,7 +465,7 @@ int
 main(int argc, char **argv)
 {
   ESL_GETOPTS    *go     = p7_CreateDefaultApp(options, 0, argc, argv, banner, usage);
-  ESL_RANDOMNESS *r      = esl_randomness_CreateFast(esl_opt_GetInteger(go, "-s"));
+  ESL_RANDOMNESS *r      = esl_randomness_CreateFast(esl_opt_GetInteger(go, (char *) "-s"));
 
   fprintf(stderr, "## %s\n", argv[0]);
   fprintf(stderr, "#  rng seed = %" PRIu32 "\n", esl_randomness_GetSeed(r));

@@ -499,24 +499,24 @@ char *
 p7_trace_DecodeStatetype(char st)
 {
   switch (st) {
-  case p7T_ML: return "ML";
-  case p7T_MG: return "MG";
-  case p7T_IL: return "IL";
-  case p7T_IG: return "IG";
-  case p7T_DL: return "DL";
-  case p7T_DG: return "DG";
-  case p7T_S:  return "S";
-  case p7T_N:  return "N";
-  case p7T_B:  return "B";
-  case p7T_L:  return "L";
-  case p7T_G:  return "G";
-  case p7T_E:  return "E";
-  case p7T_C:  return "C";
-  case p7T_J:  return "J";
-  case p7T_T:  return "T";
+  case p7T_ML: return (char *)"ML";
+  case p7T_MG: return (char *)"MG";
+  case p7T_IL: return (char *)"IL";
+  case p7T_IG: return (char *)"IG";
+  case p7T_DL: return (char *)"DL";
+  case p7T_DG: return (char *)"DG";
+  case p7T_S:  return (char *)"S";
+  case p7T_N:  return (char *)"N";
+  case p7T_B:  return (char *)"B";
+  case p7T_L:  return (char *)"L";
+  case p7T_G:  return (char *)"G";
+  case p7T_E:  return (char *)"E";
+  case p7T_C:  return (char *)"C";
+  case p7T_J:  return (char *)"J";
+  case p7T_T:  return (char *)"T";
   default:     break;
   }
-  esl_exception(eslEINVAL, FALSE, __FILE__, __LINE__, "no such statetype code %d", st);
+  esl_exception(eslEINVAL, FALSE, (char *)__FILE__, __LINE__, (char *)"no such statetype code %d", st);
   return NULL;
 }
 
@@ -1951,7 +1951,7 @@ p7_trace_Count(P7_HMM *hmm, ESL_DSQ *dsq, float wt, P7_TRACE *tr)
 static void
 utest_create_msa(ESL_ALPHABET **ret_abc, ESL_MSA **ret_msa, int **ret_matassign, ESL_SQ ***ret_sq)
 {
-  char         *msg       = "p7_trace.c:: create_msa failed";
+  char         *msg       = (char *)"p7_trace.c:: create_msa failed";
   int          *matassign = NULL;
   ESL_ALPHABET *abc       = esl_alphabet_Create(eslAMINO);
   ESL_MSA      *msa       = esl_msa_CreateFromString("\
@@ -1971,13 +1971,13 @@ seq7    ..A.C*.EF.G..\n\
 
   if (msa == NULL)                                                esl_fatal(msg);
   if (esl_msa_Digitize(abc, msa, /*errbuf=*/ NULL )     != eslOK) esl_fatal(msg);
-  if (( matassign = malloc(sizeof(int) * (msa->alen+2))) == NULL) esl_fatal("malloc");
+  if (( matassign = (int *) malloc(sizeof(int) * (msa->alen+2))) == NULL) esl_fatal((char *)"malloc");
 
   matassign[0] = matassign[msa->alen+1] = 0;
   for (apos = 1; apos <= msa->alen; apos++)
     matassign[apos] = (esl_abc_CIsGap(msa->abc, msa->rf[apos-1])? FALSE : TRUE);
 
-  sq = malloc(sizeof(ESL_SQ *)   * msa->nseq);
+  sq = (ESL_SQ **) malloc(sizeof(ESL_SQ *)   * msa->nseq);
   for (idx = 0; idx < msa->nseq; idx++)
     if (esl_sq_FetchFromMSA(msa, idx, &(sq[idx]))  != eslOK) esl_fatal(msg);
 
@@ -1990,12 +1990,12 @@ seq7    ..A.C*.EF.G..\n\
 static void
 utest_FauxFromMSA_seqcoords(ESL_MSA *msa, int *matassign, P7_TRACE ***ret_tr)
 {
-  char      *msg       = "p7_trace.c:: FauxFromMSA, seqcoords unit test failed";
+  char      *msg       = (char *) "p7_trace.c:: FauxFromMSA, seqcoords unit test failed";
   P7_TRACE **tr        = NULL;
   int        optflags  = p7_DEFAULT;
 
 
-  if (( tr     = malloc(sizeof(P7_TRACE *) * msa->nseq))  == NULL)  esl_fatal("malloc");
+  if (( tr     = (P7_TRACE **) malloc(sizeof(P7_TRACE *) * msa->nseq))  == NULL)  esl_fatal((char *)"malloc");
   if ( p7_trace_FauxFromMSA(msa, matassign, optflags, tr) != eslOK) esl_fatal(msg);
   
   /* Spotchecks of the trickiest bits of those traces. They'll also be Validate()'ed later. */
@@ -2067,11 +2067,11 @@ utest_FauxFromMSA_seqcoords(ESL_MSA *msa, int *matassign, P7_TRACE ***ret_tr)
 static void
 utest_FauxFromMSA_msacoords(ESL_MSA *msa, int *matassign, P7_TRACE ***ret_tr)
 {
-  char      *msg       = "p7_trace.c:: FauxFromMSA, MSA coords unit test failed";
+  char      *msg       = (char *)"p7_trace.c:: FauxFromMSA, MSA coords unit test failed";
   P7_TRACE **tr        = NULL;
   int        optflags  = p7_MSA_COORDS;
 
-  if (( tr     = malloc(sizeof(P7_TRACE *) * msa->nseq))  == NULL)  esl_fatal("malloc");
+  if (( tr     = (P7_TRACE **) malloc(sizeof(P7_TRACE *) * msa->nseq))  == NULL)  esl_fatal("malloc");
   if ( p7_trace_FauxFromMSA(msa, matassign, optflags, tr) != eslOK) esl_fatal(msg);
   
   if (! P7_TRACE_SPOTCHECK(tr[0], 9, p7T_MG, 6, 11))     esl_fatal(msg);
@@ -2119,7 +2119,7 @@ utest_FauxFromMSA_msacoords(ESL_MSA *msa, int *matassign, P7_TRACE ***ret_tr)
 static void
 utest_Doctor(ESL_SQ **sq, P7_TRACE **tr)
 {
-  char *msg          = "p7_trace.c:: Doctor unit test failed";
+  char *msg          =(char *) "p7_trace.c:: Doctor unit test failed";
   int   preresult[8] = { eslOK, eslOK, eslOK, eslFAIL, eslFAIL, eslFAIL, eslFAIL, eslOK };
   int   ndi, nid;
   int   idx;
@@ -2150,7 +2150,7 @@ utest_Doctor(ESL_SQ **sq, P7_TRACE **tr)
 static void
 utest_check_counts_are_zero(P7_HMM *hmm)
 {
- char   *msg = "p7_trace.c:: zero count check failed";
+ char   *msg =(char *) "p7_trace.c:: zero count check failed";
  int k,x,z;
 
   /* now all emissions should be zero, including the mat[0] state */
@@ -2169,7 +2169,7 @@ utest_check_counts_are_zero(P7_HMM *hmm)
 static void 
 utest_check_counts_undoctored(P7_HMM *hmm)
 {
-  char   *msg = "p7_trace.c:: count check (undoctored version) failed";
+  char   *msg =(char *) "p7_trace.c:: count check (undoctored version) failed";
   int     k, sym;
   ESL_DSQ x;
   float   ct;
@@ -2219,7 +2219,7 @@ utest_check_counts_undoctored(P7_HMM *hmm)
 static void 
 utest_check_counts_doctored(P7_HMM *hmm)
 {
-  char   *msg = "p7_trace.c:: count check (doctored version) failed";
+  char   *msg = (char *)"p7_trace.c:: count check (doctored version) failed";
   int     k, sym;
   ESL_DSQ x;
   float   ct;
@@ -2269,7 +2269,7 @@ utest_check_counts_doctored(P7_HMM *hmm)
 static void
 utest_Count(ESL_MSA *msa, int *matassign, P7_TRACE **trm)
 {
-  char   *msg = "p7_trace.c:: Count unit test failed";
+  char   *msg = (char *)"p7_trace.c:: Count unit test failed";
   P7_HMM *hmm = NULL;
   int     M;
   int     apos,idx;
@@ -2352,7 +2352,7 @@ utest_faux_tracealign(ESL_MSA *msa, int *matassign, int M)
 
 static ESL_OPTIONS options[] = {
   /* name           type      default  env  range toggles reqs incomp  help                                       docgroup*/
-  { "-h",        eslARG_NONE,   FALSE, NULL, NULL,  NULL,  NULL, NULL, "show brief help on version and usage",             0 },
+  {(char *) "-h",        eslARG_NONE,   FALSE, NULL, NULL,  NULL,  NULL, NULL, (char *)"show brief help on version and usage",             0 },
   {  0, 0, 0, 0, 0, 0, 0, 0, 0, 0 },
 };
 static char usage[]  = "[-options]";
@@ -2414,9 +2414,9 @@ main(int argc, char **argv)
 
 static ESL_OPTIONS options[] = {
   /* name           type         default   env  range   toggles   reqs   incomp   help                                    docgroup*/
-  { "-h",           eslARG_NONE,   FALSE, NULL, NULL,      NULL,  NULL,  NULL,   "show brief help on version and usage",        0 },
-  { "-d",           eslARG_NONE,   FALSE, NULL, NULL,      NULL,  NULL,  NULL,   "doctor traces",                               0 },
-  { "-m",           eslARG_NONE,   FALSE, NULL, NULL,      NULL,  NULL,  NULL,   "use msa coords, not unaligned seq coords",    0 },
+  { (char *)"-h",           eslARG_NONE,   FALSE, NULL, NULL,      NULL,  NULL,  NULL,   (char *)"show brief help on version and usage",        0 },
+  { (char *)"-d",           eslARG_NONE,   FALSE, NULL, NULL,      NULL,  NULL,  NULL,   (char *)"doctor traces",                               0 },
+  { (char *)"-m",           eslARG_NONE,   FALSE, NULL, NULL,      NULL,  NULL,  NULL,   (char *)"use msa coords, not unaligned seq coords",    0 },
   {  0, 0, 0, 0, 0, 0, 0, 0, 0, 0 },
 };
 static char usage[]  = "[-options] <msafile> <seqfile>";
@@ -2432,7 +2432,7 @@ main(int argc, char **argv)
   ESL_MSAFILE    *afp       = NULL;
   ESL_MSA        *msa       = NULL;
   int            *matassign = NULL;
-  int             optflags  = (esl_opt_GetBoolean(go, "-m") ? p7_MSA_COORDS : p7_DEFAULT);
+  int             optflags  = (esl_opt_GetBoolean(go, (char *)"-m") ? p7_MSA_COORDS : p7_DEFAULT);
   P7_TRACE      **trarr     = NULL;
   int             apos,idx;
   int             status;
@@ -2446,8 +2446,8 @@ main(int argc, char **argv)
   if (! msa->rf)
     esl_fatal("MSA must have #=GC RF consensus column annotation line for this example to work.");
 
-  if (( matassign = malloc(sizeof(int) *        (msa->alen+2))) == NULL) esl_fatal("malloc failed");
-  if (( trarr     = malloc(sizeof(P7_TRACE *) * msa->nseq))     == NULL) esl_fatal("malloc failed");
+  if (( matassign = (int *) malloc(sizeof(int) *        (msa->alen+2))) == NULL) esl_fatal((char *)"malloc failed");
+  if (( trarr     = (P7_TRACE **) malloc(sizeof(P7_TRACE *) * msa->nseq))     == NULL) esl_fatal((char *)"malloc failed");
 
   matassign[0] = matassign[msa->alen+1] = 0;
   for (apos = 1; apos <= msa->alen; apos++)
@@ -2456,7 +2456,7 @@ main(int argc, char **argv)
   if ( (status = p7_trace_FauxFromMSA(msa, matassign, optflags, trarr)) != eslOK)
     esl_fatal("FauxFromMSA() failed");
 
-  if (esl_opt_GetBoolean(go, "-d")) {
+  if (esl_opt_GetBoolean(go, (char *)"-d")) {
     for (idx = 0; idx < msa->nseq; idx++)
       p7_trace_Doctor(trarr[idx], NULL, NULL);
   }

@@ -507,8 +507,8 @@ p7_bg_FilterScore(P7_BG *bg, const ESL_DSQ *dsq, int L, float *ret_sc)
 
 static ESL_OPTIONS options[] = {
   /* name           type      default  env  range     toggles      reqs   incomp  help   docgroup*/
-  { "-h",        eslARG_NONE,   FALSE, NULL, NULL,      NULL,      NULL,    NULL, "show brief help on version and usage",      0 },
-  { "-N",        eslARG_INT,    "100", NULL, "n>0",     NULL,      NULL,    NULL, "number of random target seqs",              0 },
+  {(char *) "-h",        eslARG_NONE,   FALSE, NULL, NULL,      NULL,      NULL,    NULL, (char *)"show brief help on version and usage",      0 },
+  { (char *)"-N",        eslARG_INT,    (char *)"100", NULL, (char *)"n>0",     NULL,      NULL,    NULL, (char *)"number of random target seqs",              0 },
   {  0, 0, 0, 0, 0, 0, 0, 0, 0, 0 },
 };
 static char usage[]  = "[-options] <hmmfile>";
@@ -524,12 +524,12 @@ main(int argc, char **argv)
   P7_HMMFILE     *hfp     = NULL;
   P7_HMM         *hmm     = NULL;
   P7_BG          *bg      = NULL;
-  int             N       = esl_opt_GetInteger(go, "-N");
+  int             N       = esl_opt_GetInteger(go, (char *)"-N");
   int             i;
  
   /* Read one HMM from <hmmfile> */
-  if (p7_hmmfile_OpenE(hmmfile, NULL, &hfp, NULL) != eslOK) p7_Fail("Failed to open HMM file %s", hmmfile);
-  if (p7_hmmfile_Read(hfp, &abc, &hmm)            != eslOK) p7_Fail("Failed to read HMM");
+  if (p7_hmmfile_OpenE(hmmfile, NULL, &hfp, NULL) != eslOK) p7_Fail((char *)"Failed to open HMM file %s", hmmfile);
+  if (p7_hmmfile_Read(hfp, &abc, &hmm)            != eslOK) p7_Fail((char *)"Failed to read HMM");
   p7_hmmfile_Close(hfp);
 
   bg = p7_bg_Create(abc);
@@ -538,7 +538,7 @@ main(int argc, char **argv)
   for (i = 0; i < N; i++)
     p7_bg_SetFilter(bg, hmm->M, hmm->compo);
   esl_stopwatch_Stop(w);
-  esl_stopwatch_Display(stdout, w, "# CPU time: ");
+  esl_stopwatch_Display(stdout, w, (char *)"# CPU time: ");
 
   p7_bg_Destroy(bg);
   p7_hmm_Destroy(hmm);
@@ -581,7 +581,7 @@ utest_ReadWrite(ESL_RANDOMNESS *rng)
 
   if ((abc = esl_alphabet_Create(esl_rnd_Roll(rng, 5) + 1)) == NULL)  esl_fatal(msg);
   if (( bg = p7_bg_Create(abc))                             == NULL)  esl_fatal(msg);
-  if (( fq = malloc(sizeof(float) * abc->K))                == NULL)  esl_fatal(msg);                 
+  if (( fq = (float *) malloc(sizeof(float) * abc->K))                == NULL)  esl_fatal(msg);                 
   do {
     if (esl_dirichlet_FSampleUniform(rng, abc->K, fq)      != eslOK) esl_fatal(msg);
   } while (esl_vec_FMin(fq, abc->K) < 0.001); /* small p's will get rounded off and fail FCompare() */
@@ -620,8 +620,8 @@ utest_ReadWrite(ESL_RANDOMNESS *rng)
 
 static ESL_OPTIONS options[] = {
    /* name  type         default  env   range togs  reqs  incomp  help                docgrp */
-  {"-h",  eslARG_NONE,    FALSE, NULL, NULL, NULL, NULL, NULL, "show help and usage",                            0},
-  {"-s",  eslARG_INT,       "0", NULL, NULL, NULL, NULL, NULL, "set random number seed to <n>",                  0},
+  {(char *)"-h",  eslARG_NONE,    FALSE, NULL, NULL, NULL, NULL, NULL, (char *)"show help and usage",                            0},
+  {(char *)"-s",  eslARG_INT,      (char *) "0", NULL, NULL, NULL, NULL, NULL, (char *)"set random number seed to <n>",                  0},
   { 0,0,0,0,0,0,0,0,0,0},
 };
 static char usage[]  = "[-options]";
@@ -631,7 +631,7 @@ int
 main(int argc, char **argv)
 {
   ESL_GETOPTS    *go          = p7_CreateDefaultApp(options, 0, argc, argv, banner, usage);
-  ESL_RANDOMNESS *rng         = esl_randomness_CreateFast(esl_opt_GetInteger(go, "-s"));
+  ESL_RANDOMNESS *rng         = esl_randomness_CreateFast(esl_opt_GetInteger(go,(char *) "-s"));
 
   fprintf(stderr, "## %s\n", argv[0]);
   fprintf(stderr, "#  rng seed = %" PRIu32 "\n", esl_randomness_GetSeed(rng));
@@ -673,7 +673,7 @@ main(int argc, char **argv)
 
 static ESL_OPTIONS options[] = {
   /* name           type      default  env  range     toggles      reqs   incomp  help   docgroup*/
-  { "-h",        eslARG_NONE,   FALSE, NULL, NULL,      NULL,      NULL,    NULL, "show brief help on version and usage",      0 },
+  { (char *)"-h",        eslARG_NONE,   FALSE, NULL, NULL,      NULL,      NULL,    NULL, (char *)"show brief help on version and usage",      0 },
   {  0, 0, 0, 0, 0, 0, 0, 0, 0, 0 },
 };
 static char usage[]  = "[-options] <hmmfile> <seqfile>";
@@ -696,8 +696,8 @@ main(int argc, char **argv)
   int             status;
  
   /* Read one HMM from <hmmfile> */
-  if (p7_hmmfile_OpenE(hmmfile, NULL, &hfp, NULL) != eslOK) p7_Fail("Failed to open HMM file %s", hmmfile);
-  if (p7_hmmfile_Read(hfp, &abc, &hmm)            != eslOK) p7_Fail("Failed to read HMM");
+  if (p7_hmmfile_OpenE(hmmfile, NULL, &hfp, NULL) != eslOK) p7_Fail((char *)"Failed to open HMM file %s", hmmfile);
+  if (p7_hmmfile_Read(hfp, &abc, &hmm)            != eslOK) p7_Fail((char *)"Failed to read HMM");
   p7_hmmfile_Close(hfp);
 
   /* Open <seqfile> for reading */

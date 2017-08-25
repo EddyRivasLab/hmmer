@@ -265,43 +265,43 @@ P7_HMM *
 p7_hmm_Clone(const P7_HMM *hmm)
 {
   int     status;
-  P7_HMM *new = NULL;
+  P7_HMM *new_hmm = NULL;
   int     z;
 
-  if ((new = p7_hmm_Create(hmm->M, hmm->abc)) == NULL) goto ERROR;
-  p7_hmm_CopyParameters(hmm, new);
+  if ((new_hmm = p7_hmm_Create(hmm->M, hmm->abc)) == NULL) goto ERROR;
+  p7_hmm_CopyParameters(hmm, new_hmm);
   
-  if ((status = esl_strdup(hmm->name,   -1, &(new->name)))   != eslOK) goto ERROR;
-  if ((status = esl_strdup(hmm->acc,    -1, &(new->acc)))    != eslOK) goto ERROR;
-  if ((status = esl_strdup(hmm->desc,   -1, &(new->desc)))   != eslOK) goto ERROR;
+  if ((status = esl_strdup(hmm->name,   -1, &(new_hmm->name)))   != eslOK) goto ERROR;
+  if ((status = esl_strdup(hmm->acc,    -1, &(new_hmm->acc)))    != eslOK) goto ERROR;
+  if ((status = esl_strdup(hmm->desc,   -1, &(new_hmm->desc)))   != eslOK) goto ERROR;
 
-  if ((hmm->flags & p7H_RF)    && (status = esl_strdup(hmm->rf,        -1, &(new->rf)))        != eslOK) goto ERROR;
-  if ((hmm->flags & p7H_MMASK) && (status = esl_strdup(hmm->mm,        -1, &(new->mm)))        != eslOK) goto ERROR;
-  if ((hmm->flags & p7H_CONS)  && (status = esl_strdup(hmm->consensus, -1, &(new->consensus))) != eslOK) goto ERROR;
-  if ((hmm->flags & p7H_CS)    && (status = esl_strdup(hmm->cs,        -1, &(new->cs)))        != eslOK) goto ERROR;
-  if ((hmm->flags & p7H_CA)    && (status = esl_strdup(hmm->ca,        -1, &(new->ca)))        != eslOK) goto ERROR;
-  if ((hmm->comlog != NULL)    && (status = esl_strdup(hmm->comlog,    -1, &(new->comlog)))    != eslOK) goto ERROR;
-  if ((hmm->ctime  != NULL)    && (status = esl_strdup(hmm->ctime,     -1, &(new->ctime)))     != eslOK) goto ERROR;
+  if ((hmm->flags & p7H_RF)    && (status = esl_strdup(hmm->rf,        -1, &(new_hmm->rf)))        != eslOK) goto ERROR;
+  if ((hmm->flags & p7H_MMASK) && (status = esl_strdup(hmm->mm,        -1, &(new_hmm->mm)))        != eslOK) goto ERROR;
+  if ((hmm->flags & p7H_CONS)  && (status = esl_strdup(hmm->consensus, -1, &(new_hmm->consensus))) != eslOK) goto ERROR;
+  if ((hmm->flags & p7H_CS)    && (status = esl_strdup(hmm->cs,        -1, &(new_hmm->cs)))        != eslOK) goto ERROR;
+  if ((hmm->flags & p7H_CA)    && (status = esl_strdup(hmm->ca,        -1, &(new_hmm->ca)))        != eslOK) goto ERROR;
+  if ((hmm->comlog != NULL)    && (status = esl_strdup(hmm->comlog,    -1, &(new_hmm->comlog)))    != eslOK) goto ERROR;
+  if ((hmm->ctime  != NULL)    && (status = esl_strdup(hmm->ctime,     -1, &(new_hmm->ctime)))     != eslOK) goto ERROR;
   if (hmm->flags & p7H_MAP) {
-    ESL_ALLOC(new->map, sizeof(int) * (hmm->M+1));
-    esl_vec_ICopy(hmm->map, hmm->M+1, new->map);
+    ESL_ALLOC(new_hmm->map, sizeof(int) * (hmm->M+1));
+    esl_vec_ICopy(hmm->map, hmm->M+1, new_hmm->map);
   }
-  new->nseq       = hmm->nseq;
-  new->eff_nseq   = hmm->eff_nseq;
-  new->max_length = hmm->max_length;
-  new->checksum   = hmm->checksum;
+  new_hmm->nseq       = hmm->nseq;
+  new_hmm->eff_nseq   = hmm->eff_nseq;
+  new_hmm->max_length = hmm->max_length;
+  new_hmm->checksum   = hmm->checksum;
 
-  for (z = 0; z < p7_NEVPARAM; z++) new->evparam[z] = hmm->evparam[z];
-  for (z = 0; z < p7_NCUTOFFS; z++) new->cutoff[z]  = hmm->cutoff[z];
-  for (z = 0; z < p7_MAXABET;  z++) new->compo[z]   = hmm->compo[z];
+  for (z = 0; z < p7_NEVPARAM; z++) new_hmm->evparam[z] = hmm->evparam[z];
+  for (z = 0; z < p7_NCUTOFFS; z++) new_hmm->cutoff[z]  = hmm->cutoff[z];
+  for (z = 0; z < p7_MAXABET;  z++) new_hmm->compo[z]   = hmm->compo[z];
 
-  new->offset   = hmm->offset;
-  new->flags    = hmm->flags;
-  new->abc      = hmm->abc;
-  return new;
+  new_hmm->offset   = hmm->offset;
+  new_hmm->flags    = hmm->flags;
+  new_hmm->abc      = hmm->abc;
+  return new_hmm;
 
  ERROR:
-  if (new != NULL) p7_hmm_Destroy(new);
+  if (new_hmm != NULL) p7_hmm_Destroy(new_hmm);
   return NULL;
 }
 
@@ -1006,17 +1006,17 @@ p7_hmm_CalculateOccupancy(const P7_HMM *hmm, float *mocc, float *iocc)
 static void
 utest_occupancy(ESL_GETOPTS *go, ESL_RANDOMNESS *r, ESL_ALPHABET *abc)
 {
-  char    *msg = "p7_hmm.c:: occupancy unit test failed";
+  char    *msg = (char *)"p7_hmm.c:: occupancy unit test failed";
   P7_HMM  *hmm = NULL;
   int        M = 200;
-  float   *occ = malloc(sizeof(float) * (M+1));
+  float   *occ = (float *) malloc(sizeof(float) * (M+1));
   float      x;
 
   if (p7_modelsample(r, M, abc, &hmm)           != eslOK) esl_fatal(msg);
   if (p7_hmm_CalculateOccupancy(hmm, occ, NULL) != eslOK) esl_fatal(msg);
   x = esl_vec_FSum(occ+1, hmm->M) / (float) hmm->M;
 
-  if (esl_opt_GetBoolean(go, "-v") == TRUE)
+  if (esl_opt_GetBoolean(go, (char *)"-v") == TRUE)
     {
       printf("occupancy unit test:\n");
       printf("expected 0.6; got %.3f\n\n", x);
@@ -1039,12 +1039,12 @@ utest_occupancy(ESL_GETOPTS *go, ESL_RANDOMNESS *r, ESL_ALPHABET *abc)
 static void
 utest_composition(ESL_GETOPTS *go, ESL_RANDOMNESS *r, ESL_ALPHABET *abc)
 {
-  char           *msg  = "p7_hmm.c:: composition unit test failed";
+  char           *msg  = (char *)"p7_hmm.c:: composition unit test failed";
   P7_HMM         *hmm  = NULL;
   ESL_SQ         *sq   = esl_sq_CreateDigital(abc);
   int             M    = 3;
   int             N    = 100000;
-  float          *fq   = malloc(sizeof(float) * abc->K);
+  float          *fq   = (float *) malloc(sizeof(float) * abc->K);
   int             i,pos;
 
   if (p7_modelsample(r, M, abc, &hmm) != eslOK)  esl_fatal(msg);
@@ -1062,7 +1062,7 @@ utest_composition(ESL_GETOPTS *go, ESL_RANDOMNESS *r, ESL_ALPHABET *abc)
     }  
   esl_vec_FNorm(fq, abc->K);
 
-  if (esl_opt_GetBoolean(go, "-v") == TRUE)
+  if (esl_opt_GetBoolean(go, (char *)"-v") == TRUE)
     {
       printf("composition unit test:\n");
       printf("  %6s %6s\n", "calced", "sample");
@@ -1100,9 +1100,9 @@ utest_composition(ESL_GETOPTS *go, ESL_RANDOMNESS *r, ESL_ALPHABET *abc)
 
 static ESL_OPTIONS options[] = {
   /* name           type      default  env  range toggles reqs incomp  help                                       docgroup*/
-  { "-h",        eslARG_NONE,   FALSE, NULL, NULL,  NULL,  NULL, NULL, "show brief help on version and usage",           0 },
-  { "-s",        eslARG_INT,     "41", NULL, NULL,  NULL,  NULL, NULL, "set random number seed to <n>",                  0 },
-  { "-v",        eslARG_NONE,   FALSE, NULL, NULL,  NULL,  NULL, NULL, "be verbose",                                     0 },
+  { (char *)"-h",        eslARG_NONE,   FALSE, NULL, NULL,  NULL,  NULL, NULL, (char *)"show brief help on version and usage",           0 },
+  { (char *)"-s",        eslARG_INT,     (char *)"41", NULL, NULL,  NULL,  NULL, NULL, (char *)"set random number seed to <n>",                  0 },
+  { (char *)"-v",        eslARG_NONE,   FALSE, NULL, NULL,  NULL,  NULL, NULL, (char *)"be verbose",                                     0 },
   {  0, 0, 0, 0, 0, 0, 0, 0, 0, 0 },
 };
 static char usage[]  = "[-options]";
@@ -1112,7 +1112,7 @@ int
 main(int argc, char **argv)
 {
   ESL_GETOPTS    *go   = p7_CreateDefaultApp(options, 0, argc, argv, banner, usage);
-  ESL_RANDOMNESS *r    = esl_randomness_CreateFast(esl_opt_GetInteger(go, "-s"));
+  ESL_RANDOMNESS *r    = esl_randomness_CreateFast(esl_opt_GetInteger(go, (char *)"-s"));
   ESL_ALPHABET   *abc  = esl_alphabet_Create(eslAMINO);
 
   fprintf(stderr, "## %s\n", argv[0]);

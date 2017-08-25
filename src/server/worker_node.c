@@ -111,7 +111,7 @@ P7_DAEMON_WORKERNODE_STATE *p7_server_workernode_Create(uint32_t num_databases, 
     workernode->work[i].start = 0;
     workernode->work[i].end = 0;
     if(pthread_mutex_init(&(workernode->work[i].lock), NULL)){
-      p7_Fail("Unable to create mutex in p7_server_workernode_Create");
+      p7_Fail((char *)"Unable to create mutex in p7_server_workernode_Create");
     }
   }
 
@@ -122,13 +122,13 @@ P7_DAEMON_WORKERNODE_STATE *p7_server_workernode_Create(uint32_t num_databases, 
     workernode->thread_state[i].my_hits = NULL;
     workernode->thread_state[i].comparisons_queued = 0;
     if(pthread_mutex_init(&(workernode->thread_state[i].hits_lock), NULL)){
-      p7_Fail("Unable to create mutex in p7_server_workernode_Create");
+      p7_Fail((char *)"Unable to create mutex in p7_server_workernode_Create");
     }
   }
 
   // initialize the waiter lock
   if(pthread_mutex_init(&(workernode->wait_lock), NULL)){
-    p7_Fail("Unable to create mutex in p7_server_workernode_Create");
+    p7_Fail((char *)"Unable to create mutex in p7_server_workernode_Create");
   }
 
   // start out with no threads waiting, 
@@ -159,7 +159,7 @@ P7_DAEMON_WORKERNODE_STATE *p7_server_workernode_Create(uint32_t num_databases, 
 
   // initialize the lock on the hitlist
   if(pthread_mutex_init(&(workernode->hit_list_lock), NULL)){
-    p7_Fail("Unable to create mutex in p7_server_workernode_Create");
+    p7_Fail((char *)"Unable to create mutex in p7_server_workernode_Create");
   }
   
   // hitlist starts out empty
@@ -167,13 +167,13 @@ P7_DAEMON_WORKERNODE_STATE *p7_server_workernode_Create(uint32_t num_databases, 
   workernode->hits_in_list = 0;
   // initialize the empty hit pool lock
   if(pthread_mutex_init(&(workernode->empty_hit_pool_lock), NULL)){
-    p7_Fail("Unable to create mutex in p7_server_workernode_Create");
+    p7_Fail((char *)"Unable to create mutex in p7_server_workernode_Create");
   }
   
   // Create enough hit objects for a large search
   workernode->empty_hit_pool = p7_hitlist_entry_pool_Create(500000);
   if(workernode->empty_hit_pool == NULL){
-    p7_Fail("Unable to allocate memory in p7_server_workernode_Create\n");
+    p7_Fail((char *)"Unable to allocate memory in p7_server_workernode_Create\n");
   }
   // allocate the work chunk descriptors we'll need
   workernode->global_chunk_pool = (P7_WORK_CHUNK *) malloc((num_threads +1) * sizeof(P7_WORK_CHUNK));
@@ -196,28 +196,28 @@ P7_DAEMON_WORKERNODE_STATE *p7_server_workernode_Create(uint32_t num_databases, 
   workernode->global_queue->next = NULL;
 
   if(pthread_mutex_init(&(workernode->global_queue_lock), NULL)){
-    p7_Fail("Unable to create mutex in p7_server_workernode_Create");
+    p7_Fail((char *)"Unable to create mutex in p7_server_workernode_Create");
   }
 
   // initialize the empty hit pool lock
   if(pthread_mutex_init(&(workernode->backend_pool_lock), NULL)){
-    p7_Fail("Unable to create mutex in p7_server_workernode_Create");
+    p7_Fail((char *)"Unable to create mutex in p7_server_workernode_Create");
   }
 
   // initialize the empty hit pool lock
   if(pthread_mutex_init(&(workernode->backend_queue_lock), NULL)){
-    p7_Fail("Unable to create mutex in p7_server_workernode_Create");
+    p7_Fail((char *)"Unable to create mutex in p7_server_workernode_Create");
   }
   // initialize the lock on the count of threads processing backend actions
   if(pthread_mutex_init(&(workernode->backend_threads_lock), NULL)){
-    p7_Fail("Unable to create mutex in p7_server_workernode_Create");
+    p7_Fail((char *)"Unable to create mutex in p7_server_workernode_Create");
   }
 
   // Create a base pool of backend queue entries
   workernode->backend_pool = workernode_backend_pool_Create(workernode->num_threads *10);
   
   if(workernode->backend_pool == NULL){
-    p7_Fail("Unable to allocate memory in p7_server_workernode_Create\n");
+    p7_Fail((char *)"Unable to allocate memory in p7_server_workernode_Create\n");
   }
 
   workernode->backend_queue = NULL;
@@ -227,13 +227,13 @@ P7_DAEMON_WORKERNODE_STATE *p7_server_workernode_Create(uint32_t num_databases, 
   workernode->request_work =0;
   workernode->master_queue_empty =0;
   if(pthread_mutex_init(&(workernode->work_request_lock), NULL)){
-    p7_Fail("Unable to create mutex in p7_server_workernode_Create");
+    p7_Fail((char *)"Unable to create mutex in p7_server_workernode_Create");
   }
   return(workernode); // If we make it this far, we've succeeeded
 
   // GOTO target used to catch error cases from ESL_ALLOC
 ERROR:
-  p7_Fail("Unable to allocate memory in p7_server_workernode_Create");
+  p7_Fail((char *)"Unable to allocate memory in p7_server_workernode_Create");
 }
 
 
@@ -349,46 +349,46 @@ int p7_server_workernode_Setup(uint32_t num_databases, char **database_names, ui
   // Then, create the workernode object
   *workernode = p7_server_workernode_Create(num_databases, num_shards, my_shard, worker_threads);
   if(workernode == NULL){
-    p7_Fail("Unable to allocate memory in p7_server_workernode_Setup\n");
+    p7_Fail((char *)"Unable to allocate memory in p7_server_workernode_Setup\n");
   }
   // Next, read databases from disk and install shards in the workernode
   for(i = 0; i < num_databases; i++){
     P7_SHARD *current_shard;
 
     datafile = fopen(database_names[i], "r");
-    fread(id_string, 13, 1, datafile); //grab the first 13 characters of the file to determine the type of database it holds
+    int suppress_warning = fread(id_string, 13, 1, datafile); //grab the first 13 characters of the file to determine the type of database it holds
     fclose(datafile);
         
     if(!strncmp(id_string, "HMMER3", 5)){
       // This is an HMM file
       current_shard = p7_shard_Create_hmmfile(database_names[i], num_shards, my_shard);
       if(current_shard == NULL){
-        p7_Fail("Unable to allocate memory in p7_server_workernode_Setup\n");
+        p7_Fail((char *)"Unable to allocate memory in p7_server_workernode_Setup\n");
       }
     }
     else if(!strncmp(id_string, "Easel dsqdata", 13)){
       // its a dsqdata file
       current_shard = p7_shard_Create_dsqdata(database_names[i], num_shards, my_shard);
       if(current_shard == NULL){
-        p7_Fail("Unable to allocate memory in p7_server_workernode_Setup\n");
+        p7_Fail((char *)"Unable to allocate memory in p7_server_workernode_Setup\n");
       }
     }
     else{
-      p7_Fail("Couldn't determine type of datafile for database %s in p7_server_workernode_setup\n", database_names[i]);
+      p7_Fail((char *)"Couldn't determine type of datafile for database %s in p7_server_workernode_setup\n", database_names[i]);
     }
 
     if(current_shard == NULL){
-      p7_Fail("Couldn't read shard from disk in p7_server_workernode_Start");
+      p7_Fail((char *)"Couldn't read shard from disk in p7_server_workernode_Start");
     }
 
     if(p7_server_set_shard(*workernode, current_shard, i) != eslOK){
-      p7_Fail("Failed to install shard in workernode");
+      p7_Fail((char *)"Failed to install shard in workernode");
     }
   }
 
   // create the worker threads
   if(p7_server_workernode_create_threads(*workernode) != eslOK){
-    p7_Fail("Failed to start threads in p7_server_workernode_Start");
+    p7_Fail((char *)"Failed to start threads in p7_server_workernode_Start");
   }
 
   return eslOK;  // if we get this far, everything went ok.
@@ -421,7 +421,7 @@ int p7_server_workernode_Setup(uint32_t num_databases, char **database_names, ui
 int p7_server_workernode_start_hmm_vs_amino_db(P7_DAEMON_WORKERNODE_STATE *workernode, uint32_t database, uint64_t start_object, uint64_t end_object, P7_PROFILE *compare_model){
 
   if(workernode->search_type != IDLE){
-    p7_Fail("p7_server_workernode_start_hmm_vs_amino_db attempted to set up a new operation on a worker node while an old one was still in progress");
+    p7_Fail((char *) "p7_server_workernode_start_hmm_vs_amino_db attempted to set up a new operation on a worker node while an old one was still in progress");
   }
   int i;
 
@@ -433,12 +433,12 @@ int p7_server_workernode_start_hmm_vs_amino_db(P7_DAEMON_WORKERNODE_STATE *worke
   workernode->search_type = SEQUENCE_SEARCH;
 
   if(database >= workernode->num_databases){
-    p7_Fail("Attempt to compare against non-existent database %d in p7_server_workernode_start_hmm_vs_amino_db", database);
+    p7_Fail((char *) "Attempt to compare against non-existent database %d in p7_server_workernode_start_hmm_vs_amino_db", database);
   }
   
   // set the database we'll compare against.
   if(workernode->database_shards[database]->data_type != AMINO){
-    p7_Fail("Attempt to set up amino acid comparision against non-amino database in p7_server_workernode_start_hmm_vs_amino_db");
+    p7_Fail((char *) "Attempt to set up amino acid comparision against non-amino database in p7_server_workernode_start_hmm_vs_amino_db");
   }
   workernode->compare_database = database;
 
@@ -449,10 +449,10 @@ int p7_server_workernode_start_hmm_vs_amino_db(P7_DAEMON_WORKERNODE_STATE *worke
   char *sequence_pointer;
   //bounds-check the start and end parameters
   if((start_object > the_shard->directory[the_shard->num_objects -1].index) || (end_object > the_shard->directory[the_shard->num_objects-1].index)){
-    p7_Fail("Attempt to reference out-of-bound object id in p7_server_workernode_start_hmm_vs_amino_db.  Start object = %lu, end object = %lu\n", start_object, end_object);
+    p7_Fail((char *) "Attempt to reference out-of-bound object id in p7_server_workernode_start_hmm_vs_amino_db.  Start object = %lu, end object = %lu\n", start_object, end_object);
   }
   if(start_object > end_object){
-    p7_Fail("Attempt to create search with start id greater than end id in p7_server_workernode_start_hmm_vs_amino_db");
+    p7_Fail((char *) "Attempt to create search with start id greater than end id in p7_server_workernode_start_hmm_vs_amino_db");
   }
 
   // figure out where to start and end the search
@@ -614,7 +614,7 @@ int p7_server_workernode_start_amino_vs_hmm_db(P7_DAEMON_WORKERNODE_STATE *worke
 
   printf("Calling workernode_start_amino_vs_hmm_db\n");
   if(workernode->search_type != IDLE){
-    p7_Fail("p7_server_workernode_start_amino_vs_hmm_db attempted to set up a new operation on a worker node while an old one was still in progress");
+    p7_Fail((char *) "p7_server_workernode_start_amino_vs_hmm_db attempted to set up a new operation on a worker node while an old one was still in progress");
   }
 
   workernode->no_steal = 0;  // reset this to allow stealing work for the new search
@@ -624,11 +624,11 @@ int p7_server_workernode_start_amino_vs_hmm_db(P7_DAEMON_WORKERNODE_STATE *worke
   workernode->search_type = HMM_SEARCH;
 
   if(database >= workernode->num_databases){
-    p7_Fail("Attempt to compare against non-existent database %d in p7_server_workernode_start_amino_vs_hmm_db", database);
+    p7_Fail((char *) "Attempt to compare against non-existent database %d in p7_server_workernode_start_amino_vs_hmm_db", database);
   }
   // set the database we'll compare against.
   if(workernode->database_shards[database]->data_type != HMM){
-    p7_Fail("Attempt to set up amino acid comparision against non-HMM database in p7_server_workernode_start_amino_vs_hmm_db");
+    p7_Fail((char *) "Attempt to set up amino acid comparision against non-HMM database in p7_server_workernode_start_amino_vs_hmm_db");
   }
   workernode->compare_database = database;
 
@@ -638,10 +638,10 @@ int p7_server_workernode_start_amino_vs_hmm_db(P7_DAEMON_WORKERNODE_STATE *worke
   uint64_t real_start, real_end;
   //bounds-check the start and end parameters
   if((start_object >= the_shard->directory[the_shard->num_objects -1].index) || (end_object >= the_shard->directory[the_shard->num_objects-1].index)){
-    p7_Fail("Attempt to reference out-of-bound object id in p7_server_workernode_start_amino_vs_hmm_db");
+    p7_Fail((char *) "Attempt to reference out-of-bound object id in p7_server_workernode_start_amino_vs_hmm_db");
   }
   if(start_object > end_object){
-    p7_Fail("Attempt to create search with start id greater than end id in p7_server_workernode_start_amino_vs_hmm_db");
+    p7_Fail((char *) "Attempt to create search with start id greater than end id in p7_server_workernode_start_amino_vs_hmm_db");
   }
 
   // figure out where to start and end the search
@@ -724,7 +724,7 @@ int p7_server_workernode_create_threads(P7_DAEMON_WORKERNODE_STATE *workernode){
   pthread_attr_t attr;
   //create pthread attribute structure
   if(pthread_attr_init(&attr)){
-    p7_Fail("Couldn't create pthread attr structure in p7_server_workernode_create_threads");
+    p7_Fail((char *) "Couldn't create pthread attr structure in p7_server_workernode_create_threads");
   }
 
   for(i = 0; i < workernode->num_threads; i++){
@@ -736,7 +736,7 @@ int p7_server_workernode_create_threads(P7_DAEMON_WORKERNODE_STATE *workernode){
     the_argument->workernode = workernode;
 
     if(pthread_create(&(workernode->thread_objs[i]), &attr, p7_server_worker_thread, (void *) the_argument)){
-      p7_Fail("Unable to create thread %d in p7_server_workernode_create_threads", i);
+      p7_Fail((char *) "Unable to create thread %d in p7_server_workernode_create_threads", i);
     }
     pthread_attr_destroy(&attr);
   }
@@ -744,7 +744,7 @@ int p7_server_workernode_create_threads(P7_DAEMON_WORKERNODE_STATE *workernode){
   return eslOK;
 // GOTO target used to catch error cases from ESL_ALLOC because we're too low-tech to write in C++
 ERROR:
-  p7_Fail("Unable to allocate memory in p7_server_workernode_create_threads");
+  p7_Fail((char *) "Unable to allocate memory in p7_server_workernode_create_threads");
 }
 
 
@@ -770,7 +770,7 @@ int p7_server_workernode_release_threads(P7_DAEMON_WORKERNODE_STATE *workernode)
   pthread_cond_broadcast(&(workernode->start)); // signal all threads to start
 
   if(pthread_mutex_unlock(&(workernode->wait_lock))){
-    p7_Fail("Couldn't unlock wait_lock mutex in p7_server_release_threads;");
+    p7_Fail((char *) "Couldn't unlock wait_lock mutex in p7_server_release_threads;");
   }
 
   return eslOK;
@@ -846,26 +846,26 @@ void *p7_server_worker_thread(void *worker_argument){
   // wrkKp field, so use the biggest alphabet 
 
   if(temp_abc == NULL){
-    p7_Fail("Unable to allocate memory in p7_server_worker_thread\n");
+    p7_Fail((char *) "Unable to allocate memory in p7_server_worker_thread\n");
   }
   P7_ENGINE_STATS *engine_stats = p7_engine_stats_Create();
   if(engine_stats == NULL){
-    p7_Fail("Unable to allocate memory in p7_server_worker_thread\n");
+    p7_Fail((char *) "Unable to allocate memory in p7_server_worker_thread\n");
   }
   workernode->thread_state[my_id].engine = p7_engine_Create(temp_abc, NULL, engine_stats, 400, 400);
   if(workernode->thread_state[my_id].engine == NULL){
-    p7_Fail("Unable to allocate memory in p7_server_worker_thread\n");
+    p7_Fail((char *) "Unable to allocate memory in p7_server_worker_thread\n");
   }
 
   // Allocate a pool of empty hit objects
   workernode->thread_state[my_id].empty_hit_pool = p7_hitlist_entry_pool_Create(HITLIST_POOL_SIZE);
    if(workernode->thread_state[my_id].empty_hit_pool == NULL){
-    p7_Fail("Unable to allocate memory in p7_server_worker_thread\n");
+    p7_Fail((char *) "Unable to allocate memory in p7_server_worker_thread\n");
   }
 
   // Tell the master thread that we're awake and ready to go
   if(pthread_mutex_lock(&(workernode->wait_lock))){  // Use blocking lock here because we may be waiting a while
-    p7_Fail("Couldn't acquire wait_lock mutex in p7_server_worker_thread");
+    p7_Fail((char *) "Couldn't acquire wait_lock mutex in p7_server_worker_thread");
   }
 
   workernode->num_waiting +=1;  //mark that we're now waiting for the go signal
@@ -897,20 +897,20 @@ void *p7_server_worker_thread(void *worker_argument){
         if(workernode->thread_state[my_id].bg == NULL){
           workernode->thread_state[my_id].bg = p7_bg_Create(workernode->compare_model->abc);
           if(workernode->thread_state[my_id].bg == NULL){
-            p7_Fail("Unable to allocate memory in p7_server_worker_thread\n");
+            p7_Fail((char *) "Unable to allocate memory in p7_server_worker_thread\n");
           }
         }
         if(workernode->thread_state[my_id].gm == NULL){
           workernode->thread_state[my_id].gm = p7_profile_Create (workernode->compare_model->M, workernode->compare_model->abc);
           if(workernode->thread_state[my_id].gm == NULL){
-            p7_Fail("Unable to allocate memory in p7_server_worker_thread\n");
+            p7_Fail((char *) "Unable to allocate memory in p7_server_worker_thread\n");
           }
           p7_profile_Copy(workernode->compare_model, workernode->thread_state[my_id].gm);
         }
         if(workernode->thread_state[my_id].om == NULL){
           workernode->thread_state[my_id].om = p7_oprofile_Create(workernode->thread_state[my_id].gm->M, workernode->thread_state[my_id].gm->abc);      
           if(workernode->thread_state[my_id].om == NULL){
-            p7_Fail("Unable to allocate memory in p7_server_worker_thread\n");
+            p7_Fail((char *) "Unable to allocate memory in p7_server_worker_thread\n");
           }
 
           p7_oprofile_Convert (workernode->thread_state[my_id].gm, workernode->thread_state[my_id].om);
@@ -936,11 +936,11 @@ void *p7_server_worker_thread(void *worker_argument){
         break;
       
       case HMM_SEARCH:
-       p7_Fail("Hmmscan functionality disabled in this version\n");
+       p7_Fail((char *) "Hmmscan functionality disabled in this version\n");
 
         break;
       case IDLE:
-        p7_Fail("Workernode told to start search of type IDLE");
+        p7_Fail((char *) "Workernode told to start search of type IDLE");
         break;
     }
     while(pthread_mutex_trylock(&(workernode->wait_lock))){
@@ -963,9 +963,9 @@ void *p7_server_worker_thread(void *worker_argument){
 // Set up variables required by Easel's argument processor.  These are used by p7_server_workernode_main
 static ESL_OPTIONS options[] = {
   /* name           type      default  env  range  toggles reqs incomp  help                               docgroup*/
-  { "-h",        eslARG_NONE,  FALSE,  NULL, NULL,   NULL,  NULL, NULL, "show brief help on version and usage",  0 },
-    { "-n",       eslARG_INT,    "1",   NULL, NULL,  NULL,  NULL, NULL, "number of searches to run (default 1)", 0 },
-   { "-c",       eslARG_INT,    "0",   NULL, NULL,  NULL,  NULL, NULL, "number of compute cores to use per node (default = all of them)", 0 },
+  { (char *) "-h",        eslARG_NONE,  FALSE,  NULL, NULL,   NULL,  NULL, NULL, (char *) "show brief help on version and usage",  0 },
+    {(char *)  "-n",       eslARG_INT,   (char *)  "1",   NULL, NULL,  NULL,  NULL, NULL, (char *) "number of searches to run (default 1)", 0 },
+   { (char *) "-c",       eslARG_INT,    (char *) "0",   NULL, NULL,  NULL,  NULL, NULL, (char *) "number of compute cores to use per node (default = all of them)", 0 },
   {  0, 0, 0, 0, 0, 0, 0, 0, 0, 0 },
 };
 
@@ -988,26 +988,29 @@ static char banner[] = "hmmpgmd2, the server version of HMMER 4";
 void p7_server_workernode_main(int argc, char **argv, int my_rank, MPI_Datatype *server_mpitypes){
 
 #ifndef HAVE_MPI
-      p7_Fail("Attempt to start workernode_main when HMMER was compiled without MPI support");
+      p7_Fail((char *) "Attempt to start workernode_main when HMMER was compiled without MPI support");
 #endif
 #ifdef HAVE_MPI
 
   int status; // return code from ESL routines
   char *send_buf; // MPI buffer used to send hits to master
   int send_buf_length = 100 * 1024; // size of the send buffer. Default to 100kB, send code will resize as necessary
-  ESL_ALLOC(send_buf, send_buf_length * sizeof(char));
-
-  ESL_GETOPTS    *go      = p7_CreateDefaultApp(options, 2, argc, argv, banner, usage);
+  char *hmmfile;
+  char *seqfile;
+    ESL_GETOPTS    *go      = p7_CreateDefaultApp(options, 2, argc, argv, banner, usage);
   if(go == NULL){
-    p7_Fail("Unable to allocate memory in workernode_main\n");
+    p7_Fail((char *) "Unable to allocate memory in workernode_main\n");
   }
 
+  ESL_ALLOC(send_buf, send_buf_length * sizeof(char));
+
+
   // FIXME: change this to handle variable numbers of databases once we specify the server UI
-  char           *hmmfile = esl_opt_GetArg(go, 1);
-  char           *seqfile = esl_opt_GetArg(go, 2);
+  hmmfile = esl_opt_GetArg(go, 1);
+  seqfile = esl_opt_GetArg(go, 2);
   uint32_t num_worker_cores;
-  if(esl_opt_IsUsed(go, "-c")){
-    num_worker_cores = esl_opt_GetInteger(go, "-c");
+  if(esl_opt_IsUsed(go, (char *) "-c")){
+    num_worker_cores = esl_opt_GetInteger(go, (char *) "-c");
   }
   else{
     num_worker_cores = 0;  // default to the number that the hardware reports
@@ -1099,7 +1102,7 @@ void p7_server_workernode_main(int argc, char **argv, int my_rank, MPI_Datatype 
             
 
               if(MPI_Iprobe(MPI_ANY_SOURCE, HMMER_WORK_REPLY_TAG, MPI_COMM_WORLD, &found_message, &(temp_status)) != MPI_SUCCESS){
-                p7_Fail("MPI_Iprobe failed in p7_workernode_main\n");
+                p7_Fail((char *) "MPI_Iprobe failed in p7_workernode_main\n");
               }
               if(found_message){ // we have some work to receive
 
@@ -1159,7 +1162,7 @@ void p7_server_workernode_main(int argc, char **argv, int my_rank, MPI_Datatype 
             }
             if(workernode->hits_in_list > 1000){ // Arbitrary number, but seems to work fine
               if(p7_mpi_send_and_recycle_unsorted_hits(workernode->hit_list, 0, HMMER_HIT_MPI_TAG, MPI_COMM_WORLD, &send_buf, &send_buf_length, workernode) != eslOK){
-                p7_Fail("Failed to send hit messages to master\n");
+                p7_Fail((char *) "Failed to send hit messages to master\n");
               }
               workernode->hit_list = NULL;
               workernode->hits_in_list = 0;
@@ -1231,7 +1234,7 @@ void p7_server_workernode_main(int argc, char **argv, int my_rank, MPI_Datatype 
           }
         }
         if(p7_mpi_send_and_recycle_unsorted_hits(workernode->hit_list, 0, HMMER_HIT_FINAL_MPI_TAG, MPI_COMM_WORLD, &send_buf, &send_buf_length, workernode) != eslOK){
-          p7_Fail("Failed to send hit messages to master\n");
+          p7_Fail((char *) "Failed to send hit messages to master\n");
         }
         workernode->hit_list = NULL;
         workernode->hits_in_list = 0;
@@ -1249,12 +1252,12 @@ void p7_server_workernode_main(int argc, char **argv, int my_rank, MPI_Datatype 
         exit(0);
         break;
       default:  // Unrecognized command code
-        p7_Fail("Worker_node_main received unrecognized command code %d from master", the_command.type);
+        p7_Fail((char *) "Worker_node_main received unrecognized command code %d from master", the_command.type);
     }
   }
 
 ERROR:
-  p7_Fail("Unable to allocate memory in workernode_main");
+  p7_Fail((char *) "Unable to allocate memory in workernode_main");
 #endif
 }
 
@@ -1268,7 +1271,7 @@ ERROR:
 P7_ENGINE_STATS *p7_server_workernode_aggregate_stats(P7_DAEMON_WORKERNODE_STATE *workernode){
   P7_ENGINE_STATS *combined_stats = p7_engine_stats_Create();
   if(combined_stats == NULL){
-    p7_Fail("Unable to allocate memory in p7_workernode_aggregate_stats\n");
+    p7_Fail((char *) "Unable to allocate memory in p7_workernode_aggregate_stats\n");
   }
   int i;
   for(i = 0; i < workernode->num_threads; i++){
@@ -1640,7 +1643,7 @@ static void workernode_increase_backend_threads(P7_DAEMON_WORKERNODE_STATE *work
  */
 static P7_BACKEND_QUEUE_ENTRY *workernode_backend_pool_Create(int num_entries){
   if(num_entries == 0){
-    p7_Fail("Requesting the allocation of 0 P7_BACKEND_QUEUE_ENTRY objects is not allowed\n");
+    p7_Fail((char *) "Requesting the allocation of 0 P7_BACKEND_QUEUE_ENTRY objects is not allowed\n");
   }
   int status;  // secret return code used inside ESL_ALLOC;
   P7_BACKEND_QUEUE_ENTRY *the_entry, *prev;
@@ -1656,7 +1659,7 @@ static P7_BACKEND_QUEUE_ENTRY *workernode_backend_pool_Create(int num_entries){
     // allocate a sparse mask to go in the entry
     the_entry->sm = p7_sparsemask_Create(400, 400);
     if(the_entry->sm == NULL){
-      p7_Fail("Unable to allocate memory in p7_server_workernode_Create\n");
+      p7_Fail((char *) "Unable to allocate memory in p7_server_workernode_Create\n");
     }
     prev = the_entry;
   }
@@ -1664,7 +1667,7 @@ static P7_BACKEND_QUEUE_ENTRY *workernode_backend_pool_Create(int num_entries){
   return the_entry;
   // GOTO target used to catch error cases from ESL_ALLOC
 ERROR:
-  p7_Fail("Unable to allocate memory in p7_backend_pool_Create");  
+  p7_Fail((char *) "Unable to allocate memory in p7_backend_pool_Create");  
 }
 
 
@@ -1686,7 +1689,7 @@ static P7_BACKEND_QUEUE_ENTRY *workernode_get_backend_queue_entry_from_pool(P7_D
     workernode->backend_pool = workernode_backend_pool_Create(workernode->num_threads * 10);
   
     if(workernode->backend_pool == NULL){
-      p7_Fail("Unable to allocate memory in p7_server_get_backend_queue_entry_from_pool\n");
+      p7_Fail((char *) "Unable to allocate memory in p7_server_get_backend_queue_entry_from_pool\n");
     }   
   }
 
@@ -1694,7 +1697,7 @@ static P7_BACKEND_QUEUE_ENTRY *workernode_get_backend_queue_entry_from_pool(P7_D
   workernode->backend_pool = workernode->backend_pool->next;
 
    if(pthread_mutex_unlock(&(workernode->backend_pool_lock))){
-    p7_Fail("Couldn't unlock work mutex in p7_get_backend_queue_entry_from_pool");
+    p7_Fail((char *) "Couldn't unlock work mutex in p7_get_backend_queue_entry_from_pool");
   }
   return(the_entry);
 }
@@ -1716,7 +1719,7 @@ static P7_BACKEND_QUEUE_ENTRY *workernode_get_backend_queue_entry_from_queue(P7_
 
   // Sanity check
   if((the_entry == NULL) && (workernode->backend_queue_depth != 0)){
-    p7_Fail("Inconsistent empty queue state found in workernode_get_backend_queue_entry_from_queue.\n");
+    p7_Fail((char *) "Inconsistent empty queue state found in workernode_get_backend_queue_entry_from_queue.\n");
   }
 
 
@@ -1726,7 +1729,7 @@ static P7_BACKEND_QUEUE_ENTRY *workernode_get_backend_queue_entry_from_queue(P7_
     workernode->backend_queue_depth -= 1;  // if there was a valid entry in the queue, decrement the count of operations in the queue
   }
   if(pthread_mutex_unlock(&(workernode->backend_queue_lock))){
-    p7_Fail("Couldn't unlock work mutex in p7_get_backend_queue_entry_from_queue");
+    p7_Fail((char *) "Couldn't unlock work mutex in p7_get_backend_queue_entry_from_queue");
   }
 
   return(the_entry);
@@ -1748,7 +1751,7 @@ static void workernode_put_backend_queue_entry_in_pool(P7_DAEMON_WORKERNODE_STAT
   the_entry->next = workernode->backend_pool;
   workernode->backend_pool = the_entry;
   if(pthread_mutex_unlock(&(workernode->backend_pool_lock))){
-    p7_Fail("Couldn't unlock work mutex in p7_get_backend_queue_entry_in_pool");
+    p7_Fail((char *) "Couldn't unlock work mutex in p7_get_backend_queue_entry_in_pool");
   }
 }
 
@@ -1769,7 +1772,7 @@ static void workernode_put_backend_queue_entry_in_queue(P7_DAEMON_WORKERNODE_STA
   workernode->backend_queue = the_entry;
   workernode->backend_queue_depth +=1 ; // increment the count of operations in the queue
   if(pthread_mutex_unlock(&(workernode->backend_queue_lock))){
-    p7_Fail("Couldn't unlock work mutex in p7_put_backend_queue_entry_in_queue");
+    p7_Fail((char *) "Couldn't unlock work mutex in p7_put_backend_queue_entry_in_queue");
   }
 }
  
@@ -1817,7 +1820,7 @@ static ESL_RED_BLACK_DOUBLEKEY *workernode_get_hit_list_entry_from_pool(P7_DAEMO
         // When this happens, just allocate more entries into our local pool.
         workernode->thread_state[my_id].empty_hit_pool = p7_hitlist_entry_pool_Create(HITLIST_POOL_SIZE);
         if(workernode->thread_state[my_id].empty_hit_pool == NULL){
-          p7_Fail("Unable to allocate memory in p7_get_hit_tree_entry_from_pool");
+          p7_Fail((char *) "Unable to allocate memory in p7_get_hit_tree_entry_from_pool");
         }
       }
     }
@@ -1826,7 +1829,7 @@ static ESL_RED_BLACK_DOUBLEKEY *workernode_get_hit_list_entry_from_pool(P7_DAEMO
       workernode->thread_state[my_id].empty_hit_pool = p7_hitlist_entry_pool_Create(HITLIST_POOL_SIZE);
 
       if(workernode->thread_state[my_id].empty_hit_pool == NULL){
-        p7_Fail("Unable to allocate memory in p7_get_hit_tree_entry_from_pool");
+        p7_Fail((char *) "Unable to allocate memory in p7_get_hit_tree_entry_from_pool");
       }
     }
   }
@@ -1860,7 +1863,7 @@ static uint64_t worker_thread_get_chunk(P7_DAEMON_WORKERNODE_STATE *workernode, 
 
   // sanity check
   if(workernode->global_queue == NULL){
-    p7_Fail("Found NULL global queue in worker_thread_get_chunk\n");
+    p7_Fail((char *) "Found NULL global queue in worker_thread_get_chunk\n");
   }
 
   // See if there's any work in the queue
@@ -1973,7 +1976,7 @@ int32_t worker_thread_steal(P7_DAEMON_WORKERNODE_STATE *workernode, uint32_t my_
   int i;
 
   if(workernode->work[my_id].start <= workernode->work[my_id].end){
-    p7_Fail("Thread %d tried to steal when it still had work on its queue\n", my_id);
+    p7_Fail((char *) "Thread %d tried to steal when it still had work on its queue\n", my_id);
   }
 
   if(workernode->no_steal){
@@ -2008,7 +2011,7 @@ int32_t worker_thread_steal(P7_DAEMON_WORKERNODE_STATE *workernode, uint32_t my_
   if((workernode->work[victim_id].start >= workernode->work[victim_id].end) || workernode->work[victim_id].start == (uint64_t) -1){
     // there was no stealable work left by the time we decided who to steal from, so release the lock and try again
     if(pthread_mutex_unlock(&(workernode->work[victim_id].lock))){
-      p7_Fail("Couldn't unlock work mutex in worker_thread_steal");
+      p7_Fail((char *) "Couldn't unlock work mutex in worker_thread_steal");
     }
     return(worker_thread_steal(workernode, my_id));  
   }
@@ -2034,7 +2037,7 @@ int32_t worker_thread_steal(P7_DAEMON_WORKERNODE_STATE *workernode, uint32_t my_
 
   // unlock the victim's work queue so it can proceed
   if(pthread_mutex_unlock(&(workernode->work[victim_id].lock))){
-    p7_Fail("Couldn't unlock work mutex in worker_thread_steal");
+    p7_Fail((char *) "Couldn't unlock work mutex in worker_thread_steal");
   }
 
   // Now, update my work queue with the stolen work
@@ -2049,7 +2052,7 @@ int32_t worker_thread_steal(P7_DAEMON_WORKERNODE_STATE *workernode, uint32_t my_
 
   // release the lock on my local queue
   if(pthread_mutex_unlock(&(workernode->work[my_id].lock))){
-    p7_Fail("Couldn't unlock work mutex in worker_thread_steal");
+    p7_Fail((char *) "Couldn't unlock work mutex in worker_thread_steal");
   }
 
   return 1;
@@ -2067,14 +2070,14 @@ int32_t worker_thread_steal(P7_DAEMON_WORKERNODE_STATE *workernode, uint32_t my_
  */
 static void workernode_request_Work(uint32_t my_shard){
 #ifndef HAVE_MPI
-      p7_Fail("Attempt to call workernode_request_Work when HMMER was compiled without MPI support");
+      p7_Fail((char *) "Attempt to call workernode_request_Work when HMMER was compiled without MPI support");
 #endif
 #ifdef HAVE_MPI
   uint32_t buf=0;
   buf = my_shard;  // copy this into a place we can take the address of
 
   if ( MPI_Send(&buf, 1, MPI_UNSIGNED, 0, HMMER_WORK_REQUEST_TAG, MPI_COMM_WORLD) != MPI_SUCCESS){
-    p7_Fail("MPI send failed in workernode_request_Work");
+    p7_Fail((char *) "MPI send failed in workernode_request_Work");
   }
 #endif
 }
@@ -2096,13 +2099,13 @@ static void workernode_request_Work(uint32_t my_shard){
  */
 static void workernode_wait_for_Work(P7_DAEMON_CHUNK_REPLY *the_reply, MPI_Datatype *server_mpitypes){
 #ifndef HAVE_MPI
-      p7_Fail("Attempt to call workernode_wait_for_Work when HMMER was compiled without MPI support");
+      p7_Fail((char *) "Attempt to call workernode_wait_for_Work when HMMER was compiled without MPI support");
 #endif
 #ifdef HAVE_MPI
   MPI_Status status;
   // Wait for a reply message from the master node
   if(MPI_Recv(the_reply, 1, server_mpitypes[P7_DAEMON_CHUNK_REPLY_MPITYPE], 0, HMMER_WORK_REPLY_TAG, MPI_COMM_WORLD, &status) != MPI_SUCCESS){
-          p7_Fail("MPI_Recv failed in p7_masternode_message_handler\n");
+          p7_Fail((char *) "MPI_Recv failed in p7_masternode_message_handler\n");
         }
   return; // return data gets passed through the_reply
 #endif

@@ -18,10 +18,10 @@
 
 static ESL_OPTIONS options[] = {
   /* name           type           default  env  range  toggles reqs incomp  help                                       docgroup*/
-  { "-h",          eslARG_NONE,   FALSE,  NULL, NULL,   NULL,  NULL, NULL, "show brief help on version and usage",                   0 },
-  { "-Z",          eslARG_INT,      "1",  NULL, NULL,   NULL,  NULL, NULL, "set sequence # to <n>, for E-value calculations",        0 },
-  { "--histplot",  eslARG_OUTFILE, NULL,  NULL, NULL,   NULL,  NULL, NULL, "output histograms to <f> (xmgrace format)",              0 },
-  { "--lhistplot", eslARG_OUTFILE, NULL,  NULL, NULL,   NULL,  NULL, NULL, "output local-only histograms to <f> (xmgrace format)",   0 },
+  { (char *) "-h",          eslARG_NONE,   FALSE,  NULL, NULL,   NULL,  NULL, NULL,(char *)  "show brief help on version and usage",                   0 },
+  { (char *) "-Z",          eslARG_INT,     (char *)  "1",  NULL, NULL,   NULL,  NULL, NULL,(char *)  "set sequence # to <n>, for E-value calculations",        0 },
+  { (char *) "--histplot",  eslARG_OUTFILE, NULL,  NULL, NULL,   NULL,  NULL, NULL,(char *)  "output histograms to <f> (xmgrace format)",              0 },
+  {(char *)  "--lhistplot", eslARG_OUTFILE, NULL,  NULL, NULL,   NULL,  NULL, NULL, (char *) "output local-only histograms to <f> (xmgrace format)",   0 },
   {  0, 0, 0, 0, 0, 0, 0, 0, 0, 0 },
 };
 static char usage[]  = "[-options] <hmmfile> <seqfile>";
@@ -60,7 +60,7 @@ main(int argc, char **argv)
   P7_COORD2      *dom        = NULL;
   ESL_HISTOGRAM  *invit      = NULL;
   ESL_HISTOGRAM  *outvit     = NULL;
-  char           *histfile   = esl_opt_GetString(go, "--histplot");
+  char           *histfile   = esl_opt_GetString(go, (char *) "--histplot");
   FILE           *histfp     = NULL;
   P7_REFMX       *vit_l      = p7_refmx_Create(100, 100);
   P7_REFMX       *fwd_l      = p7_refmx_Create(100, 100);
@@ -71,9 +71,9 @@ main(int argc, char **argv)
   P7_COORD2      *dom_l      = NULL;
   ESL_HISTOGRAM  *invit_l    = NULL;
   ESL_HISTOGRAM  *outvit_l   = NULL;
-  char           *histfile_l = esl_opt_GetString(go, "--lhistplot");
+  char           *histfile_l = esl_opt_GetString(go, (char *) "--lhistplot");
   FILE           *histfp_l   = NULL;
-  int             Z          = esl_opt_GetInteger(go, "-Z");
+  int             Z          = esl_opt_GetInteger(go, (char *) "-Z");
   float           fsc,   vsc,   bsc;
   float           fsc_l, vsc_l, bsc_l;
   int             nintotal,   nin90,   nout90,   nin50,   nout50,   nin0;
@@ -83,8 +83,8 @@ main(int argc, char **argv)
   int             status;
  
   /* Read in one HMM. Set alphabet to whatever the HMM's alphabet is. */
-  if (p7_hmmfile_OpenE(hmmfile, NULL, &hfp, NULL) != eslOK) p7_Fail("Failed to open HMM file %s", hmmfile);
-  if (p7_hmmfile_Read(hfp, &abc, &hmm)            != eslOK) p7_Fail("Failed to read HMM");
+  if (p7_hmmfile_OpenE(hmmfile, NULL, &hfp, NULL) != eslOK) p7_Fail((char *) "Failed to open HMM file %s", hmmfile);
+  if (p7_hmmfile_Read(hfp, &abc, &hmm)            != eslOK) p7_Fail((char *) "Failed to read HMM");
   p7_hmmfile_Close(hfp);
 
   /* Configure vector, dual-mode, and local-only profiles from HMM */
@@ -102,19 +102,19 @@ main(int argc, char **argv)
   /* Open sequence file */
   sq     = esl_sq_CreateDigital(abc);
   status = esl_sqfile_Open(seqfile, format, NULL, &sqfp);
-  if      (status == eslENOTFOUND) p7_Fail("No such file.");
-  else if (status == eslEFORMAT)   p7_Fail("Format unrecognized.");
-  else if (status == eslEINVAL)    p7_Fail("Can't autodetect stdin or .gz.");
-  else if (status != eslOK)        p7_Fail("Open failed, code %d.", status);
+  if      (status == eslENOTFOUND) p7_Fail((char *) "No such file.");
+  else if (status == eslEFORMAT)   p7_Fail((char *) "Format unrecognized.");
+  else if (status == eslEINVAL)    p7_Fail((char *) "Can't autodetect stdin or .gz.");
+  else if (status != eslOK)        p7_Fail((char *) "Open failed, code %d.", status);
 
   /* Histograms for results */
   invit  = esl_histogram_Create(0.0, 1.0, 0.1);
   outvit = esl_histogram_Create(0.0, 1.0, 0.1);
-  if (histfile && (histfp = fopen(histfile, "w")) == NULL) p7_Fail("Failed to open histogram file %s for writing.", histfile);
+  if (histfile && (histfp = fopen(histfile, "w")) == NULL) p7_Fail((char *) "Failed to open histogram file %s for writing.", histfile);
 
   invit_l  = esl_histogram_Create(0.0, 1.0, 0.1);
   outvit_l = esl_histogram_Create(0.0, 1.0, 0.1);
-  if (histfile_l && (histfp_l = fopen(histfile_l, "w")) == NULL) p7_Fail("Failed to open local histogram file %s for writing.", histfile_l);
+  if (histfile_l && (histfp_l = fopen(histfile_l, "w")) == NULL) p7_Fail((char *) "Failed to open local histogram file %s for writing.", histfile_l);
 
   eng  = p7_engine_Create(abc, /*params=*/NULL, /*stats=*/NULL, gm->M, /*L_hint=*/400);
 
@@ -227,8 +227,8 @@ main(int argc, char **argv)
       p7_engine_Reuse(eng);
       esl_sq_Reuse(sq);
     }
-  if      (status == eslEFORMAT) p7_Fail("Parse failed (sequence file %s)\n%s\n", sqfp->filename, sqfp->get_error(sqfp));
-  else if (status != eslEOF)     p7_Fail("Unexpected error %d reading sequence file %s", status, sqfp->filename);
+  if      (status == eslEFORMAT) p7_Fail((char *) "Parse failed (sequence file %s)\n%s\n", sqfp->filename, sqfp->get_error(sqfp));
+  else if (status != eslEOF)     p7_Fail((char *) "Unexpected error %d reading sequence file %s", status, sqfp->filename);
 
 
   /* Results output

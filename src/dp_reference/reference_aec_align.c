@@ -653,8 +653,8 @@ utest_singlemulti(ESL_RANDOMNESS *rng, int M, const ESL_ALPHABET *abc, int N)
 
 static ESL_OPTIONS options[] = {
   /* name           type      default  env  range toggles reqs incomp  help                                       docgroup*/
-  { "-h",        eslARG_NONE,   FALSE, NULL, NULL,  NULL,  NULL, NULL, "show brief help on version and usage",           0 },
-  { "-s",        eslARG_INT,      "0", NULL, NULL,  NULL,  NULL, NULL, "set random number seed to <n>",                  0 },
+  { (char *) "-h",        eslARG_NONE,   FALSE, NULL, NULL,  NULL,  NULL, NULL, (char *) "show brief help on version and usage",           0 },
+  { (char *) "-s",        eslARG_INT,     (char *)  "0", NULL, NULL,  NULL,  NULL, NULL, (char *) "set random number seed to <n>",                  0 },
   {  0, 0, 0, 0, 0, 0, 0, 0, 0, 0 },
 };
 static char usage[]  = "[-options]";
@@ -664,7 +664,7 @@ int
 main(int argc, char **argv)
 {
   ESL_GETOPTS    *go   = p7_CreateDefaultApp(options, 0, argc, argv, banner, usage);
-  ESL_RANDOMNESS *rng  = esl_randomness_Create(esl_opt_GetInteger(go, "-s"));
+  ESL_RANDOMNESS *rng  = esl_randomness_Create(esl_opt_GetInteger(go,(char *)  "-s"));
   ESL_ALPHABET   *abc  = esl_alphabet_Create(eslAMINO);
   int             M    = 20;
 
@@ -703,8 +703,8 @@ main(int argc, char **argv)
 
 static ESL_OPTIONS options[] = {
   /* name           type      default  env  range  toggles reqs incomp  help                                       docgroup*/
-  { "-h",        eslARG_NONE,   FALSE, NULL, NULL,   NULL,  NULL, NULL, "show brief help on version and usage",             0 },
-  { "-s",        eslARG_INT,      "0", NULL, NULL,   NULL,  NULL, NULL, "set random number seed to <n>",                    0 },
+  { (char *) "-h",        eslARG_NONE,   FALSE, NULL, NULL,   NULL,  NULL, NULL, (char *) "show brief help on version and usage",             0 },
+  { (char *) "-s",        eslARG_INT,     (char *)  "0", NULL, NULL,   NULL,  NULL, NULL, (char *) "set random number seed to <n>",                    0 },
   {  0, 0, 0, 0, 0, 0, 0, 0, 0, 0 },
 };
 static char usage[]  = "[-options] <hmmfile> <seqfile>";
@@ -714,7 +714,7 @@ int
 main(int argc, char **argv)
 {
   ESL_GETOPTS    *go      = p7_CreateDefaultApp(options, 2, argc, argv, banner, usage);
-  ESL_RANDOMNESS *rng     = esl_randomness_Create(esl_opt_GetInteger(go, "-s"));
+  ESL_RANDOMNESS *rng     = esl_randomness_Create(esl_opt_GetInteger(go, (char *) "-s"));
   char           *hmmfile = esl_opt_GetArg(go, 1);
   char           *seqfile = esl_opt_GetArg(go, 2);
   ESL_ALPHABET   *abc     = NULL;
@@ -740,22 +740,22 @@ main(int argc, char **argv)
   int             status;
 
   /* Read in one HMM */
-  if (p7_hmmfile_OpenE(hmmfile, NULL, &hfp, NULL) != eslOK) p7_Fail("Failed to open HMM file %s", hmmfile);
-  if (p7_hmmfile_Read(hfp, &abc, &hmm)            != eslOK) p7_Fail("Failed to read HMM");
+  if (p7_hmmfile_OpenE(hmmfile, NULL, &hfp, NULL) != eslOK) p7_Fail((char *) "Failed to open HMM file %s", hmmfile);
+  if (p7_hmmfile_Read(hfp, &abc, &hmm)            != eslOK) p7_Fail((char *) "Failed to read HMM");
   p7_hmmfile_Close(hfp);
  
   /* Open sequence file */
   sq     = esl_sq_CreateDigital(abc);
   status = esl_sqfile_Open(seqfile, format, NULL, &sqfp);
-  if      (status == eslENOTFOUND) p7_Fail("No such file.");
-  else if (status == eslEFORMAT)   p7_Fail("Format unrecognized.");
-  else if (status == eslEINVAL)    p7_Fail("Can't autodetect stdin or .gz.");
-  else if (status != eslOK)        p7_Fail("Open failed, code %d.", status);
+  if      (status == eslENOTFOUND) p7_Fail((char *) "No such file.");
+  else if (status == eslEFORMAT)   p7_Fail((char *) "Format unrecognized.");
+  else if (status == eslEINVAL)    p7_Fail((char *) "Can't autodetect stdin or .gz.");
+  else if (status != eslOK)        p7_Fail((char *) "Open failed, code %d.", status);
  
   /* Read one sequence */
   status = esl_sqio_Read(sqfp, sq);
-  if      (status == eslEFORMAT) p7_Fail("Parse failed (sequence file %s)\n%s\n", sqfp->filename, sqfp->get_error(sqfp));     
-  else if (status != eslOK)      p7_Fail("Unexpected error %d reading sequence file %s", status, sqfp->filename);
+  if      (status == eslEFORMAT) p7_Fail((char *) "Parse failed (sequence file %s)\n%s\n", sqfp->filename, sqfp->get_error(sqfp));     
+  else if (status != eslOK)      p7_Fail((char *) "Unexpected error %d reading sequence file %s", status, sqfp->filename);
   esl_sqfile_Close(sqfp);
 
   /* Configure a profile from the HMM */

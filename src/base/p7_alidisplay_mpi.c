@@ -249,9 +249,9 @@ utest_PackUnpack(ESL_RANDOMNESS *rng, int alen)
 
 static ESL_OPTIONS options[] = {
   /* name           type      default  env  range toggles reqs incomp  help                                        docgroup*/
-  { "-h",        eslARG_NONE,   FALSE, NULL, NULL,  NULL,  NULL, NULL, "show brief help on version and usage",            0 },
-  { "-s",        eslARG_INT,      "0", NULL, NULL,  NULL,  NULL, NULL, "set random number seed to <n>",                   0 },
-  { "--stall",   eslARG_NONE,   FALSE, NULL, NULL,  NULL,  NULL, NULL, "arrest after start: for debugging MPI under gdb", 0 },  
+  { (char *) "-h",        eslARG_NONE,   FALSE, NULL, NULL,  NULL,  NULL, NULL, (char *) "show brief help on version and usage",            0 },
+  { (char *) "-s",        eslARG_INT,     (char *)  "0", NULL, NULL,  NULL,  NULL, NULL, (char *) "set random number seed to <n>",                   0 },
+  { (char *) "--stall",   eslARG_NONE,   FALSE, NULL, NULL,  NULL,  NULL, NULL, (char *) "arrest after start: for debugging MPI under gdb", 0 },  
   {  0, 0, 0, 0, 0, 0, 0, 0, 0, 0 },
 };
 static char usage[]  = "[-options]";
@@ -262,7 +262,7 @@ main(int argc, char **argv)
 {
   ESL_GETOPTS    *go       = p7_CreateDefaultApp(options, 0, argc, argv, banner, usage);
   ESL_RANDOMNESS *rng      = NULL;
-  int             stalling = esl_opt_GetBoolean(go, "--stall");
+  int             stalling = esl_opt_GetBoolean(go, (char *) "--stall");
   int             my_rank;
   int             nproc;
 
@@ -270,7 +270,7 @@ main(int argc, char **argv)
   MPI_Comm_rank(MPI_COMM_WORLD, &my_rank);
   MPI_Comm_size(MPI_COMM_WORLD, &nproc);
   if (my_rank == 0) {
-    rng = esl_randomness_CreateFast(esl_opt_GetInteger(go, "-s"));
+    rng = esl_randomness_CreateFast(esl_opt_GetInteger(go, (char *) "-s"));
     fprintf(stderr, "## %s\n", argv[0]);
     fprintf(stderr, "#  rng seed  = %" PRIu32 "\n", esl_randomness_GetSeed(rng));
     fprintf(stderr, "#  MPI nproc = %d\n", nproc);

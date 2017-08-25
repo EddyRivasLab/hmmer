@@ -124,7 +124,7 @@ vitfilter_dispatcher(const ESL_DSQ *dsq, int L, const P7_OPROFILE *om, P7_FILTER
   return p7_ViterbiFilter_vmx(dsq, L, om, ox, ret_sc);
 #endif
 
-  p7_Die("vitfilter_dispatcher found no vector implementation - that shouldn't happen.");
+  p7_Die((char *) "vitfilter_dispatcher found no vector implementation - that shouldn't happen.");
 }
 
 
@@ -147,12 +147,12 @@ vitfilter_dispatcher(const ESL_DSQ *dsq, int L, const P7_OPROFILE *om, P7_FILTER
 
 static ESL_OPTIONS options[] = {
   /* name           type      default  env  range toggles reqs incomp  help                                       docgroup*/
-  { "-h",        eslARG_NONE,   FALSE, NULL, NULL,  NULL,  NULL, NULL, "show brief help on version and usage",             0 },
-  { "-c",        eslARG_NONE,   FALSE, NULL, NULL,  NULL,  NULL, "-x", "compare scores to generic implementation (debug)", 0 }, 
-  { "-s",        eslARG_INT,      "0", NULL, NULL,  NULL,  NULL, NULL, "set random number seed to <n>",                    0 },
-  { "-x",        eslARG_NONE,   FALSE, NULL, NULL,  NULL,  NULL, "-c", "equate scores to trusted implementation (debug)",  0 },
-  { "-L",        eslARG_INT,    "400", NULL, "n>0", NULL,  NULL, NULL, "length of random target seqs",                     0 },
-  { "-N",        eslARG_INT,  "50000", NULL, "n>0", NULL,  NULL, NULL, "number of random target seqs",                     0 },
+  { (char *) "-h",        eslARG_NONE,   FALSE, NULL, NULL,  NULL,  NULL, NULL, (char *) "show brief help on version and usage",             0 },
+  { (char *) "-c",        eslARG_NONE,   FALSE, NULL, NULL,  NULL,  NULL, (char *) "-x", (char *) "compare scores to generic implementation (debug)", 0 }, 
+  { (char *) "-s",        eslARG_INT,      (char *) "0", NULL, NULL,  NULL,  NULL, NULL, (char *) "set random number seed to <n>",                    0 },
+  { (char *) "-x",        eslARG_NONE,   FALSE, NULL, NULL,  NULL,  NULL, (char *) "-c", (char *) "equate scores to trusted implementation (debug)",  0 },
+  { (char *) "-L",        eslARG_INT,    (char *) "400", NULL, (char *) "n>0", NULL,  NULL, NULL, (char *) "length of random target seqs",                     0 },
+  { (char *) "-N",        eslARG_INT,  (char *) "50000", NULL, (char *) "n>0", NULL,  NULL, NULL, (char *) "number of random target seqs",                     0 },
   {  0, 0, 0, 0, 0, 0, 0, 0, 0, 0 },
 };
 static char usage[]  = "[-options] <hmmfile>";
@@ -164,7 +164,7 @@ main(int argc, char **argv)
   ESL_GETOPTS    *go      = p7_CreateDefaultApp(options, 1, argc, argv, banner, usage);
   char           *hmmfile = esl_opt_GetArg(go, 1);
   ESL_STOPWATCH  *w       = esl_stopwatch_Create();
-  ESL_RANDOMNESS *r       = esl_randomness_CreateFast(esl_opt_GetInteger(go, "-s"));
+  ESL_RANDOMNESS *r       = esl_randomness_CreateFast(esl_opt_GetInteger(go, (char *) "-s"));
   ESL_ALPHABET   *abc     = NULL;
   P7_HMMFILE     *hfp     = NULL;
   P7_HMM         *hmm     = NULL;
@@ -173,15 +173,15 @@ main(int argc, char **argv)
   P7_OPROFILE    *om      = NULL;
   P7_FILTERMX    *ox      = NULL;
   P7_REFMX       *gx      = NULL;
-  int             L       = esl_opt_GetInteger(go, "-L");
-  int             N       = esl_opt_GetInteger(go, "-N");
-  ESL_DSQ       **dsq     = malloc(N * sizeof(ESL_DSQ *));
+  int             L       = esl_opt_GetInteger(go, (char *) "-L");
+  int             N       = esl_opt_GetInteger(go,(char *)  "-N");
+  ESL_DSQ       **dsq     = (ESL_DSQ **) malloc(N * sizeof(ESL_DSQ *));
   int             i;
   float           sc1, sc2;
   double          Mcs;
 
-  if (p7_hmmfile_OpenE(hmmfile, NULL, &hfp, NULL) != eslOK) p7_Fail("Failed to open HMM file %s", hmmfile);
-  if (p7_hmmfile_Read(hfp, &abc, &hmm)            != eslOK) p7_Fail("Failed to read HMM");
+  if (p7_hmmfile_OpenE(hmmfile, NULL, &hfp, NULL) != eslOK) p7_Fail((char *) "Failed to open HMM file %s", hmmfile);
+  if (p7_hmmfile_Read(hfp, &abc, &hmm)            != eslOK) p7_Fail((char *) "Failed to read HMM");
 
   bg = p7_bg_Create(abc);
   p7_bg_SetLength(bg, L);
@@ -191,7 +191,7 @@ main(int argc, char **argv)
   p7_oprofile_Convert(gm, om);
   p7_oprofile_ReconfigLength(om, L);
 
-  if (esl_opt_GetBoolean(go, "-x")) p7_profile_SameAsVF(gm, om->scale_w);
+  if (esl_opt_GetBoolean(go, (char *) "-x")) p7_profile_SameAsVF(gm, om->scale_w);
 
   ox = p7_filtermx_Create(om->M);
   gx = p7_refmx_Create(gm->M, L);
@@ -199,7 +199,7 @@ main(int argc, char **argv)
 
   for (i = 0; i < N; i++)
     {
-      dsq[i] = malloc(sizeof(ESL_DSQ) * (L+2));
+      dsq[i] = (ESL_DSQ *) malloc(sizeof(ESL_DSQ) * (L+2));
       esl_rsq_xfIID(r, bg->f, abc->K, L, dsq[i]);
     }
 
@@ -209,13 +209,13 @@ main(int argc, char **argv)
     {
       p7_ViterbiFilter(dsq[i], L, om, ox, &sc1);   
 
-      if (esl_opt_GetBoolean(go, "-c")) 
+      if (esl_opt_GetBoolean(go, (char *) "-c")) 
 	{
 	  p7_ReferenceViterbi(dsq[i], L, gm, gx, NULL, &sc2); 
 	  printf("%.4f %.4f\n", sc1, sc2);  
 	}
 
-      if (esl_opt_GetBoolean(go, "-x"))
+      if (esl_opt_GetBoolean(go, (char *) "-x"))
 	{
 	  p7_ReferenceViterbi(dsq[i], L, gm, gx, NULL, &sc2); 
 	  sc2 /= om->scale_w;
@@ -227,7 +227,7 @@ main(int argc, char **argv)
   esl_stopwatch_Stop(w);
   Mcs        = (double) N * (double) L * (double) gm->M * 1e-6 / (double) w->elapsed;
   printf("# implementation: %s\n", esl_cpu_Get());
-  esl_stopwatch_Display(stdout, w, "# CPU time: ");
+  esl_stopwatch_Display(stdout, w, (char *) "# CPU time: ");
   printf("# M    = %d\n", gm->M);
   printf("# %.1f Mc/s\n", Mcs);
 
@@ -281,7 +281,7 @@ utest_comparison(ESL_RANDOMNESS *r, ESL_ALPHABET *abc, P7_BG *bg, int M, int L, 
   P7_HMM      *hmm = NULL;
   P7_PROFILE  *gm  = NULL;
   P7_OPROFILE *om  = NULL;
-  ESL_DSQ     *dsq = malloc(sizeof(ESL_DSQ) * (L+2));
+  ESL_DSQ     *dsq = (ESL_DSQ *) malloc(sizeof(ESL_DSQ) * (L+2));
   P7_FILTERMX *ox  = p7_filtermx_Create(M);
   P7_REFMX    *gx  = p7_refmx_Create(M, L);
   float sc1, sc2;
@@ -340,12 +340,12 @@ utest_comparison(ESL_RANDOMNESS *r, ESL_ALPHABET *abc, P7_BG *bg, int M, int L, 
 
 static ESL_OPTIONS options[] = {
   /* name           type      default  env  range toggles reqs incomp  help                                       docgroup*/
-  { "-h",        eslARG_NONE,   FALSE, NULL, NULL,  NULL,  NULL, NULL, "show brief help on version and usage",           0 },
-  { "-s",        eslARG_INT,      "0", NULL, NULL,  NULL,  NULL, NULL, "set random number seed to <n>",                  0 },
-  { "-v",        eslARG_NONE,   FALSE, NULL, NULL,  NULL,  NULL, NULL, "be verbose",                                     0 },
-  { "-L",        eslARG_INT,    "200", NULL, NULL,  NULL,  NULL, NULL, "size of random sequences to sample",             0 },
-  { "-M",        eslARG_INT,    "145", NULL, NULL,  NULL,  NULL, NULL, "size of random models to sample",                0 },
-  { "-N",        eslARG_INT,    "100", NULL, NULL,  NULL,  NULL, NULL, "number of random sequences to sample",           0 },
+  { (char *) "-h",        eslARG_NONE,   FALSE, NULL, NULL,  NULL,  NULL, NULL,(char *)  "show brief help on version and usage",           0 },
+  { (char *) "-s",        eslARG_INT,     (char *)  "0", NULL, NULL,  NULL,  NULL, NULL, (char *) "set random number seed to <n>",                  0 },
+  { (char *) "-v",        eslARG_NONE,   FALSE, NULL, NULL,  NULL,  NULL, NULL, (char *) "be verbose",                                     0 },
+  { (char *) "-L",        eslARG_INT,    (char *) "200", NULL, NULL,  NULL,  NULL, NULL, (char *) "size of random sequences to sample",             0 },
+  {(char *)  "-M",        eslARG_INT,    (char *) "145", NULL, NULL,  NULL,  NULL, NULL, (char *) "size of random models to sample",                0 },
+  { (char *) "-N",        eslARG_INT,    (char *) "100", NULL, NULL,  NULL,  NULL, NULL, (char *) "number of random sequences to sample",           0 },
   {  0, 0, 0, 0, 0, 0, 0, 0, 0, 0 },
 };
 static char usage[]  = "[-options]";
@@ -355,12 +355,12 @@ int
 main(int argc, char **argv)
 {
   ESL_GETOPTS    *go   = p7_CreateDefaultApp(options, 0, argc, argv, banner, usage);
-  ESL_RANDOMNESS *r    = esl_randomness_CreateFast(esl_opt_GetInteger(go, "-s"));
+  ESL_RANDOMNESS *r    = esl_randomness_CreateFast(esl_opt_GetInteger(go, (char *) "-s"));
   ESL_ALPHABET   *abc  = NULL;
   P7_BG          *bg   = NULL;
-  int             M    = esl_opt_GetInteger(go, "-M");
-  int             L    = esl_opt_GetInteger(go, "-L");
-  int             N    = esl_opt_GetInteger(go, "-N");
+  int             M    = esl_opt_GetInteger(go, (char *) "-M");
+  int             L    = esl_opt_GetInteger(go, (char *) "-L");
+  int             N    = esl_opt_GetInteger(go, (char *) "-N");
 
   fprintf(stderr, "## %s\n", argv[0]);
   fprintf(stderr, "#  rng seed = %" PRIu32 "\n", esl_randomness_GetSeed(r));
@@ -369,7 +369,7 @@ main(int argc, char **argv)
   if ((abc = esl_alphabet_Create(eslDNA)) == NULL)  esl_fatal("failed to create alphabet");
   if ((bg = p7_bg_Create(abc))            == NULL)  esl_fatal("failed to create null model");
 
-  if (esl_opt_GetBoolean(go, "-v")) printf("ViterbiFilter() tests, DNA\n");
+  if (esl_opt_GetBoolean(go, (char *) "-v")) printf("ViterbiFilter() tests, DNA\n");
   utest_comparison(r, abc, bg, M, L, N);   
   utest_comparison(r, abc, bg, 1, L, 10);  
   utest_comparison(r, abc, bg, M, 1, 10);  
@@ -381,7 +381,7 @@ main(int argc, char **argv)
   if ((abc = esl_alphabet_Create(eslAMINO)) == NULL)  esl_fatal("failed to create alphabet");
   if ((bg = p7_bg_Create(abc))              == NULL)  esl_fatal("failed to create null model");
 
-  if (esl_opt_GetBoolean(go, "-v")) printf("ViterbiFilter() tests, protein\n");
+  if (esl_opt_GetBoolean(go,(char *)  "-v")) printf("ViterbiFilter() tests, protein\n");
   utest_comparison(r, abc, bg, M, L, N); 
   utest_comparison(r, abc, bg, 1, L, 10);
   utest_comparison(r, abc, bg, M, 1, 10);
@@ -421,11 +421,11 @@ main(int argc, char **argv)
 
 static ESL_OPTIONS options[] = {
   /* name           type      default  env  range toggles reqs incomp  help                                       docgroup*/
-  { "-h",        eslARG_NONE,   FALSE, NULL, NULL,  NULL,  NULL, NULL, "show brief help on version and usage",             0 },
-  { "-1",        eslARG_NONE,   FALSE, NULL, NULL,  NULL,  NULL, NULL, "output in one line awkable format",                0 },
-  { "-P",        eslARG_NONE,   FALSE, NULL, NULL,  NULL,  NULL, NULL, "output in profmark format",                        0 },
+  { (char *) "-h",        eslARG_NONE,   FALSE, NULL, NULL,  NULL,  NULL, NULL,(char *)  "show brief help on version and usage",             0 },
+  { (char *) "-1",        eslARG_NONE,   FALSE, NULL, NULL,  NULL,  NULL, NULL, (char *) "output in one line awkable format",                0 },
+  { (char *) "-P",        eslARG_NONE,   FALSE, NULL, NULL,  NULL,  NULL, NULL, (char *) "output in profmark format",                        0 },
 #if eslDEBUGLEVEL > 0
-  { "-D",        eslARG_NONE,   FALSE, NULL, NULL,   NULL,  NULL, NULL, "dump vector DP matrix for examination (verbose)", 0 },
+  { (char *) "-D",        eslARG_NONE,   FALSE, NULL, NULL,   NULL,  NULL, NULL, (char *) "dump vector DP matrix for examination (verbose)", 0 },
 #endif
   {  0, 0, 0, 0, 0, 0, 0, 0, 0, 0 },
 };
@@ -453,16 +453,16 @@ main(int argc, char **argv)
   int             status;
 
   /* Read in one HMM */
-  if (p7_hmmfile_OpenE(hmmfile, NULL, &hfp, NULL) != eslOK) p7_Fail("Failed to open HMM file %s", hmmfile);
-  if (p7_hmmfile_Read(hfp, &abc, &hmm)            != eslOK) p7_Fail("Failed to read HMM");
+  if (p7_hmmfile_OpenE(hmmfile, NULL, &hfp, NULL) != eslOK) p7_Fail((char *) "Failed to open HMM file %s", hmmfile);
+  if (p7_hmmfile_Read(hfp, &abc, &hmm)            != eslOK) p7_Fail((char *) "Failed to read HMM");
 
   /* Read in one sequence */
   sq     = esl_sq_CreateDigital(abc);
   status = esl_sqfile_Open(seqfile, format, NULL, &sqfp);
-  if      (status == eslENOTFOUND) p7_Fail("No such file.");
-  else if (status == eslEFORMAT)   p7_Fail("Format unrecognized.");
-  else if (status == eslEINVAL)    p7_Fail("Can't autodetect stdin or .gz.");
-  else if (status != eslOK)        p7_Fail("Open failed, code %d.", status);
+  if      (status == eslENOTFOUND) p7_Fail((char *) "No such file.");
+  else if (status == eslEFORMAT)   p7_Fail((char *) "Format unrecognized.");
+  else if (status == eslEINVAL)    p7_Fail((char *) "Can't autodetect stdin or .gz.");
+  else if (status != eslOK)        p7_Fail((char *) "Open failed, code %d.", status);
 
   /* create default null model, then create and optimize profile */
   bg = p7_bg_Create(abc);
@@ -474,7 +474,7 @@ main(int argc, char **argv)
 
   ox = p7_filtermx_Create(gm->M);
 #if eslDEBUGLEVEL > 0
-  if (esl_opt_GetBoolean(go, "-D"))
+  if (esl_opt_GetBoolean(go, (char *) "-D"))
       p7_filtermx_SetDumpMode(ox, stdout, TRUE);         // makes VF dump its DP matrix rows as it goes
 #endif
   
@@ -489,11 +489,11 @@ main(int argc, char **argv)
       vfscore = (vfraw - nullsc) / eslCONST_LOG2;
       P        = esl_gumbel_surv(vfscore,  om->evparam[p7_VMU],  om->evparam[p7_VLAMBDA]);
 
-      if (esl_opt_GetBoolean(go, "-1"))
+      if (esl_opt_GetBoolean(go, (char *) "-1"))
 	{
 	  printf("%-30s\t%-20s\t%9.2g\t%7.2f\n", sq->name, hmm->name, P, vfscore);
 	}
-      else if (esl_opt_GetBoolean(go, "-P"))
+      else if (esl_opt_GetBoolean(go, (char *) "-P"))
 	{ /* output suitable for direct use in profmark benchmark postprocessors: */
 	  printf("%g\t%.2f\t%s\t%s\n", P, vfscore, sq->name, hmm->name);
 	}

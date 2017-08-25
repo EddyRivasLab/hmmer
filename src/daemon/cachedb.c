@@ -143,7 +143,7 @@ p7_seqcache_Open(char *seqfile, P7_SEQCACHE **ret_cache, char *errbuf)
   cache->count       = seq_cnt;
 
   hdr_ptr = cache->header_mem;
-  res_ptr = cache->residue_mem;
+  res_ptr = (char *) cache->residue_mem;
   for (i = 0; i < db_cnt; ++i) db_inx[i] = 0;
 
   strcpy(buffer, "000000001");
@@ -318,8 +318,8 @@ p7_seqcache_Close(P7_SEQCACHE *cache)
 
 static ESL_OPTIONS options[] = {
   /* name           type      default  env  range toggles reqs incomp  help                                       docgroup*/
-  { "-h",        eslARG_NONE,   FALSE, NULL, NULL,  NULL,  NULL, NULL, "show brief help on version and usage",             0 },
-  { "-o",        eslARG_OUTFILE, NULL, NULL, NULL,  NULL,  NULL, NULL, "direct output to file <f>, not stdout",            2 },
+  { (char *)"-h",        eslARG_NONE,   FALSE, NULL, NULL,  NULL,  NULL, NULL, (char *)"show brief help on version and usage",             0 },
+  { (char *)"-o",        eslARG_OUTFILE, NULL, NULL, NULL,  NULL,  NULL, NULL, (char *)"direct output to file <f>, not stdout",            2 },
   {  0, 0, 0, 0, 0, 0, 0, 0, 0, 0 },
 };
 
@@ -378,9 +378,9 @@ main(int argc, char **argv)
     return 0;
   }
 
-  if (esl_opt_IsOn(go, "-o")) { 
-    if ((ofp = fopen(esl_opt_GetString(go, "-o"), "w")) == NULL) {
-      printf("Failed to open output database %s for writing\n", esl_opt_GetString(go, "-o"));
+  if (esl_opt_IsOn(go, (char *)"-o")) { 
+    if ((ofp = fopen(esl_opt_GetString(go, (char *)"-o"), "w")) == NULL) {
+      printf("Failed to open output database %s for writing\n", esl_opt_GetString(go, (char *)"-o"));
       return 0;
     }
   }
@@ -459,7 +459,7 @@ main(int argc, char **argv)
     printf("\n");
   }
 
-  printf("Writing cache %s\n", esl_opt_GetString(go, "-o"));
+  printf("Writing cache %s\n", esl_opt_GetString(go, (char *)"-o"));
 
   timep = time(NULL);
   fprintf(ofp, "# %" PRId64 " %d %d", res_cnt, seq_cnt, db_inx - 1);
@@ -511,10 +511,10 @@ main(int argc, char **argv)
 
   if (ofp != stdout) fclose(ofp);
 
-  if (esl_opt_IsOn(go, "-o")) { 
+  if (esl_opt_IsOn(go, (char *)"-o")) { 
     P7_SEQCACHE *cache = NULL;
-    printf("Reading cache %s\n", esl_opt_GetString(go, "-o"));
-    if ((status = p7_seqcache_Open(esl_opt_GetString(go, "-o"), &cache, NULL)) != eslOK) {
+    printf("Reading cache %s\n", esl_opt_GetString(go, (char *)"-o"));
+    if ((status = p7_seqcache_Open(esl_opt_GetString(go, (char *)"-o"), &cache, NULL)) != eslOK) {
       printf("ERROR %d\n", status);
       return 0;
     }

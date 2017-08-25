@@ -14,11 +14,11 @@
 
 static ESL_OPTIONS options[] = {
   /* name           type      default  env  range     toggles      reqs   incomp  help   docgroup*/
-  { "-h",        eslARG_NONE,   FALSE, NULL, NULL,      NULL,       NULL,    NULL, "show brief help on version and usage",                             0 },
-  { "-a",        eslARG_NONE,"default",NULL, NULL, "-a,-b,-2",      NULL,    NULL, "ascii:  output models in HMMER3 ASCII format",                     0 },
-  { "-b",        eslARG_NONE,   FALSE, NULL, NULL, "-a,-b,-2",      NULL,    NULL, "binary: output models in HMMER3 binary format",                    0 },
-  { "-2",        eslARG_NONE,   FALSE, NULL, NULL, "-a,-b,-2",      NULL,    NULL, "HMMER2: output backward compatible HMMER2 ASCII format (ls mode)", 0 },
-  { "--outfmt",  eslARG_STRING, NULL,  NULL, NULL,      NULL,       NULL,    "-2", "choose output legacy 3.x file formats by name, such as '3/a'",     0 },
+  { (char *) "-h",        eslARG_NONE,   FALSE, NULL, NULL,      NULL,       NULL,    NULL,(char *)  "show brief help on version and usage",                             0 },
+  { (char *) "-a",        eslARG_NONE,(char *) "default",NULL, NULL,(char *)  "-a,-b,-2",      NULL,    NULL, (char *) "ascii:  output models in HMMER3 ASCII format",                     0 },
+  { (char *) "-b",        eslARG_NONE,   FALSE, NULL, NULL,(char *)  "-a,-b,-2",      NULL,    NULL,(char *)  "binary: output models in HMMER3 binary format",                    0 },
+  { (char *) "-2",        eslARG_NONE,   FALSE, NULL, NULL,(char *)  "-a,-b,-2",      NULL,    NULL, (char *) "HMMER2: output backward compatible HMMER2 ASCII format (ls mode)", 0 },
+  {(char *)  "--outfmt",  eslARG_STRING, NULL,  NULL, NULL,      NULL,       NULL,  (char *)   "-2", (char *) "choose output legacy 3.x file formats by name, such as '3/a'",     0 },
   {  0, 0, 0, 0, 0, 0, 0, 0, 0, 0 },
 };
 static char usage[]  = "[-options] <hmmfile>";
@@ -34,7 +34,7 @@ main(int argc, char **argv)
   P7_HMMFILE    *hfp     = NULL;
   P7_HMM        *hmm     = NULL;
   FILE          *ofp     = stdout;
-  char          *outfmt  = esl_opt_GetString(go, "--outfmt");
+  char          *outfmt  = esl_opt_GetString(go, (char *) "--outfmt");
   int            fmtcode = -1;	/* -1 = write the current default format */
   int            status;
   char           errbuf[eslERRBUFSIZE];
@@ -43,25 +43,25 @@ main(int argc, char **argv)
     if      (strcmp(outfmt, "3/a") == 0) fmtcode = p7_HMMFILE_3a;
     else if (strcmp(outfmt, "3/b") == 0) fmtcode = p7_HMMFILE_3b;
     else if (strcmp(outfmt, "3/c") == 0) fmtcode = p7_HMMFILE_3c;
-    else    p7_Fail("No such 3.x output format code %s.\n", outfmt);
+    else    p7_Fail((char *)  "No such 3.x output format code %s.\n", outfmt);
   }
 
   status = p7_hmmfile_OpenE(hmmfile, NULL, &hfp, errbuf);
-  if      (status == eslENOTFOUND) p7_Fail("File existence/permissions problem in trying to open HMM file %s.\n%s\n", hmmfile, errbuf);
-  else if (status == eslEFORMAT)   p7_Fail("File format problem in trying to open HMM file %s.\n%s\n",                hmmfile, errbuf);
-  else if (status != eslOK)        p7_Fail("Unexpected error %d in opening HMM file %s.\n%s\n",                       status, hmmfile, errbuf);  
+  if      (status == eslENOTFOUND) p7_Fail((char *) "File existence/permissions problem in trying to open HMM file %s.\n%s\n", hmmfile, errbuf);
+  else if (status == eslEFORMAT)   p7_Fail((char *) "File format problem in trying to open HMM file %s.\n%s\n",                hmmfile, errbuf);
+  else if (status != eslOK)        p7_Fail((char *) "Unexpected error %d in opening HMM file %s.\n%s\n",                       status, hmmfile, errbuf);  
 
   while ((status = p7_hmmfile_Read(hfp, &abc, &hmm)) == eslOK)
     {
-      if      (esl_opt_GetBoolean(go, "-a") == TRUE) p7_hmmfile_WriteASCII (ofp, fmtcode, hmm);
-      else if (esl_opt_GetBoolean(go, "-b") == TRUE) p7_hmmfile_WriteBinary(ofp, fmtcode, hmm);
-      else if (esl_opt_GetBoolean(go, "-2") == TRUE) p7_h2io_WriteASCII    (ofp, hmm);
+      if      (esl_opt_GetBoolean(go,(char *)  "-a") == TRUE) p7_hmmfile_WriteASCII (ofp, fmtcode, hmm);
+      else if (esl_opt_GetBoolean(go,(char *)  "-b") == TRUE) p7_hmmfile_WriteBinary(ofp, fmtcode, hmm);
+      else if (esl_opt_GetBoolean(go,(char *)  "-2") == TRUE) p7_h2io_WriteASCII    (ofp, hmm);
 
       p7_hmm_Destroy(hmm);
     }
-  if      (status == eslEFORMAT)   p7_Fail("bad file format in HMM file %s",             hmmfile);
-  else if (status == eslEINCOMPAT) p7_Fail("HMM file %s contains different alphabets",   hmmfile);
-  else if (status != eslEOF)       p7_Fail("Unexpected error in reading HMMs from %s",   hmmfile);
+  if      (status == eslEFORMAT)   p7_Fail((char *) "bad file format in HMM file %s",             hmmfile);
+  else if (status == eslEINCOMPAT) p7_Fail((char *) "HMM file %s contains different alphabets",   hmmfile);
+  else if (status != eslEOF)       p7_Fail((char *) "Unexpected error in reading HMMs from %s",   hmmfile);
 
   p7_hmmfile_Close(hfp);
   esl_alphabet_Destroy(abc);

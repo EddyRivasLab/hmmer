@@ -141,7 +141,7 @@ fwdfilter_dispatcher(const ESL_DSQ *dsq, int L, const P7_OPROFILE *om, P7_CHECKP
   return p7_ForwardFilter_vmx(dsq, L, om, ox, opt_sc);
 #endif
 
-  p7_Die("fwdfilter_dispatcher found no vector implementation - that shouldn't happen.");
+  p7_Die((char *)"fwdfilter_dispatcher found no vector implementation - that shouldn't happen.");
 }
 
 
@@ -184,7 +184,7 @@ bckfilter_dispatcher(const ESL_DSQ *dsq, int L, const P7_OPROFILE *om, P7_CHECKP
   return p7_BackwardFilter_vmx(dsq, L, om, ox, sm, sm_thresh);
 #endif
 
-  p7_Die("bckfilter_dispatcher found no vector implementation - that shouldn't happen.");
+  p7_Die((char *)"bckfilter_dispatcher found no vector implementation - that shouldn't happen.");
 }
 
 
@@ -398,11 +398,11 @@ main(int argc, char **argv)
 
 static ESL_OPTIONS options[] = {
   /* name           type      default  env  range toggles reqs incomp  help                                       docgroup*/
-  { "-h",        eslARG_NONE,   FALSE, NULL, NULL,  NULL,  NULL, NULL, "show brief help on version and usage",           0 },
-  { "-s",        eslARG_INT,      "0", NULL, NULL,  NULL,  NULL, NULL, "set random number seed to <n>",                  0 },
-  { "-F",        eslARG_NONE,   FALSE, NULL, NULL,  NULL,  NULL, NULL, "only benchmark Forward",                         0 },
-  { "-L",        eslARG_INT,    "400", NULL, "n>0", NULL,  NULL, NULL, "length of random target seqs",                   0 },
-  { "-N",        eslARG_INT,   "2000", NULL, "n>0", NULL,  NULL, NULL, "number of random target seqs",                   0 },
+  { (char *) "-h",        eslARG_NONE,   FALSE, NULL, NULL,  NULL,  NULL, NULL, (char *) "show brief help on version and usage",           0 },
+  {(char *) "-s",        eslARG_INT,     (char *)  "0", NULL, NULL,  NULL,  NULL, NULL, (char *) "set random number seed to <n>",                  0 },
+  { (char *) "-F",        eslARG_NONE,   FALSE, NULL, NULL,  NULL,  NULL, NULL, (char *) "only benchmark Forward",                         0 },
+  { (char *) "-L",        eslARG_INT,   (char *)  "400", NULL, (char *) "n>0", NULL,  NULL, NULL, (char *) "length of random target seqs",                   0 },
+  {(char *)  "-N",        eslARG_INT,  (char *)  "2000", NULL, (char *) "n>0", NULL,  NULL, NULL, (char *) "number of random target seqs",                   0 },
   {  0, 0, 0, 0, 0, 0, 0, 0, 0, 0 },
 };
 static char usage[]  = "[-options] <hmmfile>";
@@ -414,7 +414,7 @@ main(int argc, char **argv)
   ESL_GETOPTS    *go      = p7_CreateDefaultApp(options, 1, argc, argv, banner, usage);
   char           *hmmfile = esl_opt_GetArg(go, 1);
   ESL_STOPWATCH  *w       = esl_stopwatch_Create();
-  ESL_RANDOMNESS *r       = esl_randomness_CreateFast(esl_opt_GetInteger(go, "-s"));
+  ESL_RANDOMNESS *r       = esl_randomness_CreateFast(esl_opt_GetInteger(go,(char *)  "-s"));
   ESL_ALPHABET   *abc     = NULL;
   P7_HMMFILE     *hfp     = NULL;
   P7_HMM         *hmm     = NULL;
@@ -423,15 +423,15 @@ main(int argc, char **argv)
   P7_OPROFILE    *om      = NULL;
   P7_CHECKPTMX   *ox      = NULL;
   P7_SPARSEMASK  *sm      = NULL;
-  int             L       = esl_opt_GetInteger(go, "-L");
-  int             N       = esl_opt_GetInteger(go, "-N");
-  ESL_DSQ       **dsq     = malloc(N * sizeof(ESL_DSQ *));
+  int             L       = esl_opt_GetInteger(go,(char *)  "-L");
+  int             N       = esl_opt_GetInteger(go,(char *)  "-N");
+  ESL_DSQ       **dsq     = (ESL_DSQ **) malloc(N * sizeof(ESL_DSQ *));
   int             i;
   float           sc;
   double          Mcs;
 
-  if (p7_hmmfile_OpenE(hmmfile, NULL, &hfp, NULL) != eslOK) p7_Fail("Failed to open HMM file %s", hmmfile);
-  if (p7_hmmfile_Read(hfp, &abc, &hmm)            != eslOK) p7_Fail("Failed to read HMM");
+  if (p7_hmmfile_OpenE(hmmfile, NULL, &hfp, NULL) != eslOK) p7_Fail((char *) "Failed to open HMM file %s", hmmfile);
+  if (p7_hmmfile_Read(hfp, &abc, &hmm)            != eslOK) p7_Fail((char *) "Failed to read HMM");
 
   bg = p7_bg_Create(abc);
   p7_bg_SetLength(bg, L);
@@ -448,7 +448,7 @@ main(int argc, char **argv)
 
   for (i = 0; i < N; i++) 
     {
-      dsq[i] = malloc(sizeof(ESL_DSQ) * (L+2));
+      dsq[i] = (ESL_DSQ *) malloc(sizeof(ESL_DSQ) * (L+2));
       esl_rsq_xfIID(r, bg->f, abc->K, L, dsq[i]);
     }
 
@@ -457,7 +457,7 @@ main(int argc, char **argv)
   for (i = 0; i < N; i++)
     {
       p7_ForwardFilter(dsq[i], L, om, ox, &sc);
-      if (! esl_opt_GetBoolean(go, "-F"))                             // Backward filter depends on having run Forward first.
+      if (! esl_opt_GetBoolean(go, (char *) "-F"))                             // Backward filter depends on having run Forward first.
         {                                                             // You can't run it separately.
 	  p7_BackwardFilter(dsq[i], L, om, ox, sm, p7_SPARSIFY_THRESH);
 	  esl_vec_IReverse(sm->kmem, sm->kmem, sm->ncells);
@@ -469,7 +469,7 @@ main(int argc, char **argv)
 
   Mcs        = (double) N * (double) L * (double) gm->M * 1e-6 / (double) w->elapsed;
   printf("# implementation: %s\n", esl_cpu_Get());
-  esl_stopwatch_Display(stdout, w, "# CPU time: ");
+  esl_stopwatch_Display(stdout, w, (char *) "# CPU time: ");
   printf("# M    = %d\n", gm->M);
   printf("# %.1f Mc/s\n", Mcs);
 
@@ -518,7 +518,7 @@ utest_scores(ESL_RANDOMNESS *r, ESL_ALPHABET *abc, P7_BG *bg, int M, int L, int 
   P7_HMM        *hmm    = NULL;
   P7_PROFILE    *gm     = NULL;
   P7_OPROFILE   *om     = NULL;
-  ESL_DSQ       *dsqmem = malloc(sizeof(ESL_DSQ) * (L+2));
+  ESL_DSQ       *dsqmem = (ESL_DSQ *) malloc(sizeof(ESL_DSQ) * (L+2));
   ESL_DSQ       *dsq    = NULL;
   int            tL     = 0;
   ESL_SQ        *sq     = esl_sq_CreateDigital(abc);
@@ -649,11 +649,11 @@ utest_scores(ESL_RANDOMNESS *r, ESL_ALPHABET *abc, P7_BG *bg, int M, int L, int 
 
 static ESL_OPTIONS options[] = {
   /* name           type      default  env  range toggles reqs incomp  help                                       docgroup*/
-  { "-h",        eslARG_NONE,   FALSE, NULL, NULL,  NULL,  NULL, NULL, "show brief help on version and usage",           0 },
-  { "-s",        eslARG_INT,      "0", NULL, NULL,  NULL,  NULL, NULL, "set random number seed to <n>",                  0 },
-  { "-L",        eslARG_INT,    "200", NULL, NULL,  NULL,  NULL, NULL, "size of random sequences to sample",             0 },
-  { "-M",        eslARG_INT,    "145", NULL, NULL,  NULL,  NULL, NULL, "size of random models to sample",                0 },
-  { "-N",        eslARG_INT,    "100", NULL, NULL,  NULL,  NULL, NULL, "number of random sequences to sample",           0 },
+  { (char *) "-h",        eslARG_NONE,   FALSE, NULL, NULL,  NULL,  NULL, NULL, (char *) "show brief help on version and usage",           0 },
+  { (char *) "-s",        eslARG_INT,   (char *)    "0", NULL, NULL,  NULL,  NULL, NULL, (char *) "set random number seed to <n>",                  0 },
+  { (char *) "-L",        eslARG_INT,   (char *)  "200", NULL, NULL,  NULL,  NULL, NULL, (char *) "size of random sequences to sample",             0 },
+  { (char *) "-M",        eslARG_INT,   (char *)  "145", NULL, NULL,  NULL,  NULL, NULL, (char *) "size of random models to sample",                0 },
+  { (char *) "-N",        eslARG_INT,   (char *)  "100", NULL, NULL,  NULL,  NULL, NULL, (char *) "number of random sequences to sample",           0 },
   {  0, 0, 0, 0, 0, 0, 0, 0, 0, 0 },
 };
 static char usage[]  = "[-options]";
@@ -663,12 +663,12 @@ int
 main(int argc, char **argv)
 {
   ESL_GETOPTS    *go   = p7_CreateDefaultApp(options, 0, argc, argv, banner, usage);
-  ESL_RANDOMNESS *r    = esl_randomness_CreateFast(esl_opt_GetInteger(go, "-s"));
+  ESL_RANDOMNESS *r    = esl_randomness_CreateFast(esl_opt_GetInteger(go, (char *) "-s"));
   ESL_ALPHABET   *abc  = NULL;
   P7_BG          *bg   = NULL;
-  int             M    = esl_opt_GetInteger(go, "-M");
-  int             L    = esl_opt_GetInteger(go, "-L");
-  int             N    = esl_opt_GetInteger(go, "-N");
+  int             M    = esl_opt_GetInteger(go, (char *) "-M");
+  int             L    = esl_opt_GetInteger(go,(char *)  "-L");
+  int             N    = esl_opt_GetInteger(go, (char *) "-N");
 
   fprintf(stderr, "## %s\n", argv[0]);
   fprintf(stderr, "#  rng seed = %" PRIu32 "\n", esl_randomness_GetSeed(r));
@@ -725,14 +725,14 @@ main(int argc, char **argv)
 
 static ESL_OPTIONS options[] = {
   /* name           type      default  env  range  toggles reqs incomp  help                                       docgroup*/
-  { "-h",        eslARG_NONE,   FALSE, NULL, NULL,   NULL,  NULL, NULL, "show brief help on version and usage",             0 },
-  { "-1",        eslARG_NONE,   FALSE, NULL, NULL,   NULL,  NULL, NULL, "output in one line awkable format",                0 },
+  { (char *) "-h",        eslARG_NONE,   FALSE, NULL, NULL,   NULL,  NULL, NULL, (char *) "show brief help on version and usage",             0 },
+  {(char *)  "-1",        eslARG_NONE,   FALSE, NULL, NULL,   NULL,  NULL, NULL, (char *) "output in one line awkable format",                0 },
 #if eslDEBUGLEVEL > 0
-  { "-D",        eslARG_NONE,   FALSE, NULL, NULL,   NULL,  NULL, NULL, "dump vector DP matrices for examination (verbose)",0 },
-  { "-F",        eslARG_NONE,   FALSE, NULL, NULL,   NULL,  NULL, NULL, "dump recorded forward matrix",                     0 },
-  { "-B",        eslARG_NONE,   FALSE, NULL, NULL,   NULL,  NULL, NULL, "dump recorded backward matrix",                    0 },
-  { "-P",        eslARG_NONE,   FALSE, NULL, NULL,   NULL,  NULL, NULL, "dump recorded posterior prob matrix",              0 },
-  { "--diplot",  eslARG_OUTFILE, NULL, NULL, NULL,   NULL,  NULL, NULL, "save domain inference plot to <f>",                0 },
+  {(char *)  "-D",        eslARG_NONE,   FALSE, NULL, NULL,   NULL,  NULL, NULL, (char *) "dump vector DP matrices for examination (verbose)",0 },
+  { (char *) "-F",        eslARG_NONE,   FALSE, NULL, NULL,   NULL,  NULL, NULL, (char *) "dump recorded forward matrix",                     0 },
+  { (char *) "-B",        eslARG_NONE,   FALSE, NULL, NULL,   NULL,  NULL, NULL, (char *) "dump recorded backward matrix",                    0 },
+  { (char *) "-P",        eslARG_NONE,   FALSE, NULL, NULL,   NULL,  NULL, NULL, (char *) "dump recorded posterior prob matrix",              0 },
+  { (char *) "--diplot",  eslARG_OUTFILE, NULL, NULL, NULL,   NULL,  NULL, NULL, (char *) "save domain inference plot to <f>",                0 },
 #endif
   {  0, 0, 0, 0, 0, 0, 0, 0, 0, 0 },
 };
@@ -764,25 +764,25 @@ main(int argc, char **argv)
   int             status;
 #if eslDEBUGLEVEL > 0
   int             store_pp   = FALSE;
-  char           *diplotfile = esl_opt_GetString(go, "--diplot");
+  char           *diplotfile = esl_opt_GetString(go, (char *) "--diplot");
   FILE           *difp       = NULL;
 #endif
 
   /* Read in one HMM */
-  if (p7_hmmfile_OpenE(hmmfile, NULL, &hfp, NULL) != eslOK) p7_Fail("Failed to open HMM file %s", hmmfile);
-  if (p7_hmmfile_Read(hfp, &abc, &hmm)            != eslOK) p7_Fail("Failed to read HMM");
+  if (p7_hmmfile_OpenE(hmmfile, NULL, &hfp, NULL) != eslOK) p7_Fail((char *) "Failed to open HMM file %s", hmmfile);
+  if (p7_hmmfile_Read(hfp, &abc, &hmm)            != eslOK) p7_Fail((char *) "Failed to read HMM");
 
   /* Open sequence file for reading */
   sq     = esl_sq_CreateDigital(abc);
   status = esl_sqfile_Open(seqfile, format, NULL, &sqfp);
-  if      (status == eslENOTFOUND) p7_Fail("No such file.");
-  else if (status == eslEFORMAT)   p7_Fail("Format unrecognized.");
-  else if (status == eslEINVAL)    p7_Fail("Can't autodetect stdin or .gz.");
-  else if (status != eslOK)        p7_Fail("Open failed, code %d.", status);
+  if      (status == eslENOTFOUND) p7_Fail((char *) "No such file.");
+  else if (status == eslEFORMAT)   p7_Fail((char *) "Format unrecognized.");
+  else if (status == eslEINVAL)    p7_Fail((char *) "Can't autodetect stdin or .gz.");
+  else if (status != eslOK)        p7_Fail((char *) "Open failed, code %d.", status);
 
 #if eslDEBUGLEVEL > 0
-  if (diplotfile && (difp = fopen(diplotfile, "w")) == NULL) p7_Fail("couldn't open %s for writing", diplotfile);
-  if (difp || esl_opt_GetBoolean(go, "-P")) store_pp = TRUE;
+  if (diplotfile && (difp = fopen(diplotfile, "w")) == NULL) p7_Fail((char *) "couldn't open %s for writing", diplotfile);
+  if (difp || esl_opt_GetBoolean(go, (char *) "-P")) store_pp = TRUE;
 #endif
 
   /* create default null model, then create and optimize profile */
@@ -805,9 +805,9 @@ main(int argc, char **argv)
    * record generic, complete <fwd>, <bck>, and <pp> matrices, for
    * comparison to reference implementation, even when checkpointing.
    */
-  if (esl_opt_GetBoolean(go, "-D")) p7_checkptmx_SetDumpMode(ox, stdout, TRUE);
-  if (esl_opt_GetBoolean(go, "-F")) ox->fwd = p7_refmx_Create(gm->M, 100);
-  if (esl_opt_GetBoolean(go, "-B")) ox->bck = p7_refmx_Create(gm->M, 100);
+  if (esl_opt_GetBoolean(go,(char *)  "-D")) p7_checkptmx_SetDumpMode(ox, stdout, TRUE);
+  if (esl_opt_GetBoolean(go,(char *)  "-F")) ox->fwd = p7_refmx_Create(gm->M, 100);
+  if (esl_opt_GetBoolean(go,(char *)  "-B")) ox->bck = p7_refmx_Create(gm->M, 100);
   if (store_pp)                     ox->pp  = p7_refmx_Create(gm->M, 100);
 #endif
 
@@ -828,9 +828,9 @@ main(int argc, char **argv)
 
       bsc = 0.0;		/* Backward score only available in debugging mode */
 #if eslDEBUGLEVEL > 0
-      if (esl_opt_GetBoolean(go, "-F")) p7_refmx_Dump(stdout, ox->fwd);
-      if (esl_opt_GetBoolean(go, "-B")) p7_refmx_Dump(stdout, ox->bck);
-      if (esl_opt_GetBoolean(go, "-P")) p7_refmx_Dump(stdout, ox->pp);
+      if (esl_opt_GetBoolean(go,(char *)  "-F")) p7_refmx_Dump(stdout, ox->fwd);
+      if (esl_opt_GetBoolean(go, (char *) "-B")) p7_refmx_Dump(stdout, ox->bck);
+      if (esl_opt_GetBoolean(go, (char *) "-P")) p7_refmx_Dump(stdout, ox->pp);
       if (difp)                         p7_refmx_PlotDomainInference(difp, ox->pp, 1, sq->n, NULL);
       bsc  =  (ox->bcksc-nullsc) / eslCONST_LOG2;
 #endif
@@ -844,7 +844,7 @@ main(int argc, char **argv)
       cmem = (float) p7_checkptmx_Sizeof(ox) / 1024 / 1024;
       bmem = (float) sm->ncells * 6. * sizeof(float) / 1024 / 1024;
 
-      if (esl_opt_GetBoolean(go, "-1")) 
+      if (esl_opt_GetBoolean(go, (char *) "-1")) 
 	printf("%-30s\t%-20s\t%9.2g\t%7.4f\t%7.4f\t%9.2g\t%6.1f\t%6.2fM\t%6.2fM\t%6.2fM\n", sq->name, hmm->name, P, fsc, bsc, gP, gfsc, gmem, cmem, bmem);
       else
 	{

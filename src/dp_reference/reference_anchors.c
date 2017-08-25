@@ -426,12 +426,12 @@ p7_reference_anchors_SetFromTrace(const P7_REFMX *pp, const P7_TRACE *tr, P7_ANC
 
 static ESL_OPTIONS options[] = {
   /* name           type           default  env  range  toggles reqs incomp  help                                       docgroup*/
-  { "-h",          eslARG_NONE,   FALSE,  NULL, NULL,   NULL,  NULL, NULL, "show brief help on version and usage",                   0 },
-  { "-k",          eslARG_NONE,   FALSE,  NULL, NULL,   NULL,  NULL, NULL, "keep sampling until n_max: test termination conditions", 0 },
-  { "-n",          eslARG_INT,   "1000",  NULL, NULL,   NULL,  NULL, NULL, "maximum number of samples (n_max)",                      0 },
-  { "-s",          eslARG_INT,      "0",  NULL, NULL,   NULL,  NULL, NULL, "set random number seed to <n>",                          0 },
-  { "-t",         eslARG_REAL,  "0.001",  NULL, NULL,   NULL,  NULL, NULL, "loss threshold",                                         0 },
-  { "-Z",          eslARG_INT,      "1",  NULL, NULL,   NULL,  NULL, NULL, "set sequence # to <n>, for E-value calculations",        0 },
+  { (char *)"-h",          eslARG_NONE,   FALSE,  NULL, NULL,   NULL,  NULL, NULL, (char *)"show brief help on version and usage",                   0 },
+  { (char *)"-k",          eslARG_NONE,   FALSE,  NULL, NULL,   NULL,  NULL, NULL, (char *)"keep sampling until n_max: test termination conditions", 0 },
+  { (char *)"-n",          eslARG_INT,  (char *) "1000",  NULL, NULL,   NULL,  NULL, NULL, (char *)"maximum number of samples (n_max)",                      0 },
+  { (char *)"-s",          eslARG_INT,  (char *)    "0",  NULL, NULL,   NULL,  NULL, NULL, (char *)"set random number seed to <n>",                          0 },
+  { (char *)"-t",         eslARG_REAL,  (char *)"0.001",  NULL, NULL,   NULL,  NULL, NULL, (char *)"loss threshold",                                         0 },
+  { (char *)"-Z",          eslARG_INT,   (char *)   "1",  NULL, NULL,   NULL,  NULL, NULL, (char *)"set sequence # to <n>, for E-value calculations",        0 },
   {  0, 0, 0, 0, 0, 0, 0, 0, 0, 0 },
 };
 static char usage[]  = "[-options] <hmmfile> <seqfile>";
@@ -441,7 +441,7 @@ int
 main(int argc, char **argv)
 {
   ESL_GETOPTS    *go      = p7_CreateDefaultApp(options, 2, argc, argv, banner, usage);
-  ESL_RANDOMNESS *rng     = esl_randomness_Create( esl_opt_GetInteger(go, "-s"));
+  ESL_RANDOMNESS *rng     = esl_randomness_Create( esl_opt_GetInteger(go, (char *)"-s"));
   char           *hmmfile = esl_opt_GetArg(go, 1);
   P7_HMMFILE     *hfp     = NULL;
   ESL_ALPHABET   *abc     = NULL;
@@ -465,21 +465,21 @@ main(int argc, char **argv)
   P7_TRACE       *vtr     = p7_trace_Create();
   P7_ANCHORHASH  *ah      = p7_anchorhash_Create();
   float          *wrk     = NULL;
-  int             Z       = esl_opt_GetInteger(go, "-Z");
+  int             Z       = esl_opt_GetInteger(go, (char *)"-Z");
   P7_MPAS_PARAMS  prm;
   P7_MPAS_STATS   stats;
   float           nullsc, vsc, fsc, asc;
   int             status;
 
   /* Customize MPAS algorithm parameters */
-  prm.max_iterations = esl_opt_GetInteger(go, "-n");
-  prm.loss_threshold = esl_opt_GetReal   (go, "-t");
-  prm.nmax_sampling  = esl_opt_GetBoolean(go, "-k");
+  prm.max_iterations = esl_opt_GetInteger(go, (char *)"-n");
+  prm.loss_threshold = esl_opt_GetReal   (go, (char *)"-t");
+  prm.nmax_sampling  = esl_opt_GetBoolean(go, (char *)"-k");
   prm.be_verbose     = FALSE;
 
   /* Read in one HMM. Set alphabet to whatever the HMM's alphabet is. */
-  if (p7_hmmfile_OpenE(hmmfile, NULL, &hfp, NULL) != eslOK) p7_Fail("Failed to open HMM file %s", hmmfile);
-  if (p7_hmmfile_Read(hfp, &abc, &hmm)            != eslOK) p7_Fail("Failed to read HMM");
+  if (p7_hmmfile_OpenE(hmmfile, NULL, &hfp, NULL) != eslOK) p7_Fail((char *)"Failed to open HMM file %s", hmmfile);
+  if (p7_hmmfile_Read(hfp, &abc, &hmm)            != eslOK) p7_Fail((char *)"Failed to read HMM");
   p7_hmmfile_Close(hfp);
 
   /* Configure vector, dual-mode, and local-only profiles from HMM */
@@ -493,10 +493,10 @@ main(int argc, char **argv)
   /* Open sequence file */
   sq     = esl_sq_CreateDigital(abc);
   status = esl_sqfile_Open(seqfile, format, NULL, &sqfp);
-  if      (status == eslENOTFOUND) p7_Fail("No such file.");
-  else if (status == eslEFORMAT)   p7_Fail("Format unrecognized.");
-  else if (status == eslEINVAL)    p7_Fail("Can't autodetect stdin or .gz.");
-  else if (status != eslOK)        p7_Fail("Open failed, code %d.", status);
+  if      (status == eslENOTFOUND) p7_Fail((char *)"No such file.");
+  else if (status == eslEFORMAT)   p7_Fail((char *)"Format unrecognized.");
+  else if (status == eslEINVAL)    p7_Fail((char *)"Can't autodetect stdin or .gz.");
+  else if (status != eslOK)        p7_Fail((char *)"Open failed, code %d.", status);
 
   esl_dataheader(stdout, 
 		 -15, "hmm", -30, "seq",
@@ -583,8 +583,8 @@ main(int argc, char **argv)
       p7_sparsemask_Reuse(sm);
       esl_sq_Reuse(sq);
     }
-  if      (status == eslEFORMAT) p7_Fail("Parse failed (sequence file %s)\n%s\n", sqfp->filename, sqfp->get_error(sqfp));
-  else if (status != eslEOF)     p7_Fail("Unexpected error %d reading sequence file %s", status, sqfp->filename);
+  if      (status == eslEFORMAT) p7_Fail((char *)"Parse failed (sequence file %s)\n%s\n", sqfp->filename, sqfp->get_error(sqfp));
+  else if (status != eslEOF)     p7_Fail((char *)"Unexpected error %d reading sequence file %s", status, sqfp->filename);
 
   printf("# rng seed = %u\n", esl_randomness_GetSeed(rng));
 
@@ -635,12 +635,12 @@ main(int argc, char **argv)
 
 static ESL_OPTIONS options[] = {
   /* name           type      default  env  range  toggles reqs incomp  help                                       docgroup*/
-  { "-a",      eslARG_NONE,   FALSE, NULL, NULL,   NULL,  NULL, NULL, "dump report on all sampled anchorsets",            0 },
-  { "-h",      eslARG_NONE,   FALSE, NULL, NULL,   NULL,  NULL, NULL, "show brief help on version and usage",             0 },
-  { "-k",      eslARG_NONE,   FALSE, NULL, NULL,   NULL,  NULL, NULL, "keep sampling until n_max: test termination conditions", 0 },
-  { "-n",      eslARG_INT,   "1000", NULL, NULL,   NULL,  NULL, NULL, "maximum number of samples (n_max)",                      0 },
-  { "-s",      eslARG_INT,      "0", NULL, NULL,   NULL,  NULL, NULL, "set random number seed to <n>",                    0 },
-  { "-t",      eslARG_REAL, "0.001", NULL, NULL,   NULL,  NULL, NULL, "loss threshold",                                         0 },
+  { (char *)"-a",      eslARG_NONE,   FALSE, NULL, NULL,   NULL,  NULL, NULL, (char *)"dump report on all sampled anchorsets",            0 },
+  { (char *)"-h",      eslARG_NONE,   FALSE, NULL, NULL,   NULL,  NULL, NULL, (char *)"show brief help on version and usage",             0 },
+  { (char *)"-k",      eslARG_NONE,   FALSE, NULL, NULL,   NULL,  NULL, NULL, (char *)"keep sampling until n_max: test termination conditions", 0 },
+  { (char *)"-n",      eslARG_INT,   (char *)"1000", NULL, NULL,   NULL,  NULL, NULL, (char *)"maximum number of samples (n_max)",                      0 },
+  { (char *)"-s",      eslARG_INT,   (char *)   "0", NULL, NULL,   NULL,  NULL, NULL, (char *)"set random number seed to <n>",                    0 },
+  { (char *)"-t",      eslARG_REAL, (char *)"0.001", NULL, NULL,   NULL,  NULL, NULL, (char *)"loss threshold",                                         0 },
   {  0, 0, 0, 0, 0, 0, 0, 0, 0, 0 },
 };
 static char usage[]  = "[-options] <hmmfile> <seqfile>";
@@ -650,7 +650,7 @@ int
 main(int argc, char **argv)
 {
   ESL_GETOPTS    *go      = p7_CreateDefaultApp(options, 2, argc, argv, banner, usage);
-  ESL_RANDOMNESS *rng     = esl_randomness_Create(esl_opt_GetInteger(go, "-s"));
+  ESL_RANDOMNESS *rng     = esl_randomness_Create(esl_opt_GetInteger(go, (char *)"-s"));
   char           *hmmfile = esl_opt_GetArg(go, 1);
   char           *seqfile = esl_opt_GetArg(go, 2);
   ESL_ALPHABET   *abc     = NULL;
@@ -676,28 +676,28 @@ main(int argc, char **argv)
   int             status;
 
   /* Customize MPAS algorithm parameters */
-  prm.max_iterations = esl_opt_GetInteger(go, "-n");
-  prm.loss_threshold = esl_opt_GetReal   (go, "-t");
-  prm.nmax_sampling  = esl_opt_GetBoolean(go, "-k");
+  prm.max_iterations = esl_opt_GetInteger(go, (char *)"-n");
+  prm.loss_threshold = esl_opt_GetReal   (go, (char *)"-t");
+  prm.nmax_sampling  = esl_opt_GetBoolean(go, (char *)"-k");
   prm.be_verbose     = TRUE;
 
   /* Read in one HMM */
-  if (p7_hmmfile_OpenE(hmmfile, NULL, &hfp, NULL) != eslOK) p7_Fail("Failed to open HMM file %s", hmmfile);
-  if (p7_hmmfile_Read(hfp, &abc, &hmm)            != eslOK) p7_Fail("Failed to read HMM");
+  if (p7_hmmfile_OpenE(hmmfile, NULL, &hfp, NULL) != eslOK) p7_Fail((char *)"Failed to open HMM file %s", hmmfile);
+  if (p7_hmmfile_Read(hfp, &abc, &hmm)            != eslOK) p7_Fail((char *)"Failed to read HMM");
   p7_hmmfile_Close(hfp);
  
   /* Open sequence file */
   sq     = esl_sq_CreateDigital(abc);
   status = esl_sqfile_Open(seqfile, format, NULL, &sqfp);
-  if      (status == eslENOTFOUND) p7_Fail("No such file.");
-  else if (status == eslEFORMAT)   p7_Fail("Format unrecognized.");
-  else if (status == eslEINVAL)    p7_Fail("Can't autodetect stdin or .gz.");
-  else if (status != eslOK)        p7_Fail("Open failed, code %d.", status);
+  if      (status == eslENOTFOUND) p7_Fail((char *)"No such file.");
+  else if (status == eslEFORMAT)   p7_Fail((char *)"Format unrecognized.");
+  else if (status == eslEINVAL)    p7_Fail((char *)"Can't autodetect stdin or .gz.");
+  else if (status != eslOK)        p7_Fail((char *)"Open failed, code %d.", status);
  
   /* Read one sequence */
   status = esl_sqio_Read(sqfp, sq);
-  if      (status == eslEFORMAT) p7_Fail("Parse failed (sequence file %s)\n%s\n", sqfp->filename, sqfp->get_error(sqfp));     
-  else if (status != eslOK)      p7_Fail("Unexpected error %d reading sequence file %s", status, sqfp->filename);
+  if      (status == eslEFORMAT) p7_Fail((char *)"Parse failed (sequence file %s)\n%s\n", sqfp->filename, sqfp->get_error(sqfp));     
+  else if (status != eslOK)      p7_Fail((char *)"Unexpected error %d reading sequence file %s", status, sqfp->filename);
   esl_sqfile_Close(sqfp);
 
   /* Configure a profile from the HMM */
@@ -734,7 +734,7 @@ main(int argc, char **argv)
   p7_mpas_stats_CompareAS2Trace(&stats, anch, vtr);
   p7_mpas_stats_Dump(stdout, &stats);
 
-  if (esl_opt_GetBoolean(go, "-a"))
+  if (esl_opt_GetBoolean(go, (char *)"-a"))
     {
       int key;
 

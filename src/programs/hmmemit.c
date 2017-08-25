@@ -24,25 +24,25 @@
 
 static ESL_OPTIONS options[] = {
   /* name           type      default  env  range     toggles      reqs   incomp  help   docgroup*/
-  { "-h",          eslARG_NONE,   FALSE, NULL, NULL,      NULL,      NULL,    NULL,  "show brief help on version and usage",                   1 },
-  { "-o",          eslARG_OUTFILE,FALSE, NULL, NULL,      NULL,      NULL,    NULL,  "send sequence output to file <f>, not stdout",           1 },
-  { "-N",          eslARG_INT,      "1", NULL, "n>0",     NULL,      NULL,  "-c,-C", "number of seqs to sample",                               1 },
+  {(char *) "-h",          eslARG_NONE,   FALSE, NULL, NULL,      NULL,      NULL,    NULL, (char *)  "show brief help on version and usage",                   1 },
+  { (char *) "-o",          eslARG_OUTFILE,FALSE, NULL, NULL,      NULL,      NULL,    NULL,  (char *) "send sequence output to file <f>, not stdout",           1 },
+  { (char *) "-N",          eslARG_INT,      (char *) "1", NULL, (char *) "n>0",     NULL,      NULL, (char *)  "-c,-C",(char *)  "number of seqs to sample",                               1 },
 /* options controlling what to emit */
-  { "-a",          eslARG_NONE,   FALSE, NULL, NULL,      NULL,      NULL, EMITOPTS, "emit alignment",                                         2 },
-  { "-c",          eslARG_NONE,   FALSE, NULL, NULL,      NULL,      NULL, EMITOPTS, "emit simple majority-rule consensus sequence",           2 },
-  { "-C",          eslARG_NONE,   FALSE, NULL, NULL,      NULL,      NULL, EMITOPTS, "emit fancier consensus sequence (req's --minl, --minu)", 2 },
-  { "-p",          eslARG_NONE,   FALSE, NULL, NULL,      NULL,      NULL, EMITOPTS, "sample sequences from profile, not core model",          2 },
+  { (char *) "-a",          eslARG_NONE,   FALSE, NULL, NULL,      NULL,      NULL, (char *) EMITOPTS, (char *) "emit alignment",                                         2 },
+  { (char *) "-c",          eslARG_NONE,   FALSE, NULL, NULL,      NULL,      NULL, (char *) EMITOPTS, (char *) "emit simple majority-rule consensus sequence",           2 },
+  { (char *) "-C",          eslARG_NONE,   FALSE, NULL, NULL,      NULL,      NULL, (char *) EMITOPTS,(char *)  "emit fancier consensus sequence (req's --minl, --minu)", 2 },
+  { (char *) "-p",          eslARG_NONE,   FALSE, NULL, NULL,      NULL,      NULL, (char *) EMITOPTS, (char *) "sample sequences from profile, not core model",          2 },
 /* options controlling emission from profiles with -p  */
-  { "-L",          eslARG_INT,    "400", NULL, NULL,      NULL,      "-p",    NULL, "set expected length from profile to <n>",               3 },
-  { "--local",     eslARG_NONE,"default",NULL, NULL,    MODEOPTS,    "-p",    NULL, "configure profile in multihit local mode",              3 }, 
-  { "--unilocal",  eslARG_NONE,  FALSE,  NULL, NULL,    MODEOPTS,    "-p",    NULL, "configure profile in unilocal mode",                    3 }, 
-  { "--glocal",    eslARG_NONE,  FALSE,  NULL, NULL,    MODEOPTS,    "-p",    NULL, "configure profile in multihit glocal mode",             3 }, 
-  { "--uniglocal", eslARG_NONE,  FALSE,  NULL, NULL,    MODEOPTS,    "-p",    NULL, "configure profile in unihit glocal mode",               3 }, 
+  { (char *) "-L",          eslARG_INT,   (char *)  "400", NULL, NULL,      NULL,    (char *)   "-p",    NULL, (char *) "set expected length from profile to <n>",               3 },
+  { (char *) "--local",     eslARG_NONE,(char *) "default",NULL, NULL,    (char *) MODEOPTS,  (char *)   "-p",    NULL, (char *) "configure profile in multihit local mode",              3 }, 
+  { (char *) "--unilocal",  eslARG_NONE,  FALSE,  NULL, NULL,    (char *) MODEOPTS,  (char *)   "-p",    NULL, (char *) "configure profile in unilocal mode",                    3 }, 
+  {(char *) "--glocal",    eslARG_NONE,  FALSE,  NULL, NULL,   (char *)  MODEOPTS,  (char *)   "-p",    NULL, (char *) "configure profile in multihit glocal mode",             3 }, 
+  { (char *) "--uniglocal", eslARG_NONE,  FALSE,  NULL, NULL,   (char *)  MODEOPTS,  (char *)   "-p",    NULL,(char *)  "configure profile in unihit glocal mode",               3 }, 
 /* options controlling fancy consensus emission with -C */
-  { "--minl",      eslARG_REAL,  "0.0",  NULL, "0<=x<=1", NULL,      "-C",    NULL, "show consensus as 'any' (X/N) unless >= this fraction", 4 },
-  { "--minu",      eslARG_REAL,  "0.0",  NULL, "0<=x<=1", NULL,      "-C",    NULL, "show consensus as upper case if >= this fraction",      4 },
+  { (char *) "--minl",      eslARG_REAL, (char *)  "0.0",  NULL, (char *) "0<=x<=1", NULL,   (char *)    "-C",    NULL, (char *) "show consensus as 'any' (X/N) unless >= this fraction", 4 },
+  { (char *) "--minu",      eslARG_REAL, (char *)  "0.0",  NULL, (char *) "0<=x<=1", NULL,   (char *)    "-C",    NULL, (char *) "show consensus as upper case if >= this fraction",      4 },
 /* other options */
-  { "--seed",      eslARG_INT,      "0", NULL, "n>=0",    NULL,      NULL,    NULL, "set RNG seed to <n>",                                    5 },
+  { (char *) "--seed",      eslARG_INT,    (char *)   "0", NULL, (char *) "n>=0",    NULL,      NULL,    NULL, (char *) "set RNG seed to <n>",                                    5 },
   {  0, 0, 0, 0, 0, 0, 0, 0, 0, 0 },
 };
 
@@ -74,37 +74,37 @@ main(int argc, char **argv)
   char             errbuf[eslERRBUFSIZE];
 
   go = esl_getopts_Create(options);
-  if (esl_opt_ProcessCmdline(go, argc, argv) != eslOK) cmdline_failure(argv[0], "Failed to parse command line: %s\n", go->errbuf);
-  if (esl_opt_VerifyConfig(go)               != eslOK) cmdline_failure(argv[0], "Error in configuration: %s\n",       go->errbuf);
-  if (esl_opt_GetBoolean(go, "-h"))                    cmdline_help   (argv[0], go);      
-  if (esl_opt_ArgNumber(go) != 1)                      cmdline_failure(argv[0], "Incorrect number of command line arguments.\n");        
+  if (esl_opt_ProcessCmdline(go, argc, argv) != eslOK) cmdline_failure(argv[0], (char *) "Failed to parse command line: %s\n", go->errbuf);
+  if (esl_opt_VerifyConfig(go)               != eslOK) cmdline_failure(argv[0],(char *)  "Error in configuration: %s\n",       go->errbuf);
+  if (esl_opt_GetBoolean(go, (char *) "-h"))                    cmdline_help   (argv[0], go);      
+  if (esl_opt_ArgNumber(go) != 1)                      cmdline_failure(argv[0], (char *) "Incorrect number of command line arguments.\n");        
 
-  if ((hmmfile = esl_opt_GetArg(go, 1)) == NULL)       cmdline_failure(argv[0], "Failed to get <hmmfile> on cmdline: %s\n", go->errbuf);
+  if ((hmmfile = esl_opt_GetArg(go, 1)) == NULL)       cmdline_failure(argv[0], (char *) "Failed to get <hmmfile> on cmdline: %s\n", go->errbuf);
 
-  if ( esl_opt_IsOn(go, "-o") ) {
-    if ((ofp = fopen(esl_opt_GetString(go, "-o"), "w")) == NULL) esl_fatal("Failed to open output file %s", esl_opt_GetString(go, "-o"));
+  if ( esl_opt_IsOn(go, (char *) "-o") ) {
+    if ((ofp = fopen(esl_opt_GetString(go, (char *) "-o"), "w")) == NULL) esl_fatal("Failed to open output file %s", esl_opt_GetString(go,(char *)  "-o"));
   } else ofp = stdout;
 
-  if (esl_opt_GetBoolean(go, "-a"))  outfmt = eslMSAFILE_STOCKHOLM;
+  if (esl_opt_GetBoolean(go, (char *) "-a"))  outfmt = eslMSAFILE_STOCKHOLM;
   else                               outfmt = eslSQFILE_FASTA;
 
-  r = esl_randomness_CreateFast(esl_opt_GetInteger(go, "--seed"));
+  r = esl_randomness_CreateFast(esl_opt_GetInteger(go, (char *) "--seed"));
 
   status = p7_hmmfile_OpenE(hmmfile, NULL, &hfp, errbuf);
-  if      (status == eslENOTFOUND) p7_Fail("File existence/permissions problem in trying to open HMM file %s.\n%s\n", hmmfile, errbuf);
-  else if (status == eslEFORMAT)   p7_Fail("File format problem in trying to open HMM file %s.\n%s\n",                hmmfile, errbuf);
-  else if (status != eslOK)        p7_Fail("Unexpected error %d in opening HMM file %s.\n%s\n",                       status, hmmfile, errbuf);  
+  if      (status == eslENOTFOUND) p7_Fail((char *) "File existence/permissions problem in trying to open HMM file %s.\n%s\n", hmmfile, errbuf);
+  else if (status == eslEFORMAT)   p7_Fail((char *) "File format problem in trying to open HMM file %s.\n%s\n",                hmmfile, errbuf);
+  else if (status != eslOK)        p7_Fail((char *) "Unexpected error %d in opening HMM file %s.\n%s\n",                       status, hmmfile, errbuf);  
 
   while ((status = p7_hmmfile_Read(hfp, &abc, &hmm)) != eslEOF)
     {
-      if      (status == eslEFORMAT)    esl_fatal("Bad file format in HMM file %s:\n%s\n",          hfp->fname, hfp->errbuf);
-      else if (status == eslEINCOMPAT)  esl_fatal("HMM in %s is not in the expected %s alphabet\n", hfp->fname, esl_abc_DecodeType(abc->type));
-      else if (status != eslOK)         esl_fatal("Unexpected error in reading HMMs from %s\n",     hfp->fname);
+      if      (status == eslEFORMAT)    esl_fatal((char *) "Bad file format in HMM file %s:\n%s\n",          hfp->fname, hfp->errbuf);
+      else if (status == eslEINCOMPAT)  esl_fatal((char *) "HMM in %s is not in the expected %s alphabet\n", hfp->fname, esl_abc_DecodeType(abc->type));
+      else if (status != eslOK)         esl_fatal((char *) "Unexpected error in reading HMMs from %s\n",     hfp->fname);
       nhmms++;
 
-      if      (esl_opt_GetBoolean(go, "-c"))  emit_consensus(go, ofp, outfmt,    hmm);
-      else if (esl_opt_GetBoolean(go, "-C"))  emit_fancycons(go, ofp, outfmt,    hmm);
-      else if (esl_opt_GetBoolean(go, "-a"))  emit_alignment(go, ofp, outfmt, r, hmm);
+      if      (esl_opt_GetBoolean(go,(char *)  "-c"))  emit_consensus(go, ofp, outfmt,    hmm);
+      else if (esl_opt_GetBoolean(go,(char *)  "-C"))  emit_fancycons(go, ofp, outfmt,    hmm);
+      else if (esl_opt_GetBoolean(go, (char *) "-a"))  emit_alignment(go, ofp, outfmt, r, hmm);
       else                                    emit_sequences(go, ofp, outfmt, r, hmm);
 
 
@@ -113,7 +113,7 @@ main(int argc, char **argv)
     }
   if (nhmms == 0) esl_fatal("Empty HMM file %s? No HMM data found.\n"); 
 
-  if (esl_opt_IsOn(go, "-o")) { fclose(ofp); }
+  if (esl_opt_IsOn(go, (char *) "-o")) { fclose(ofp); }
   esl_randomness_Destroy(r);
   esl_alphabet_Destroy(abc);
   esl_getopts_Destroy(go);
@@ -172,8 +172,8 @@ static void
 emit_fancycons(ESL_GETOPTS *go, FILE *ofp, int outfmt, P7_HMM *hmm)
 {
   ESL_SQ  *sq   = NULL;
-  float    minl = esl_opt_GetReal(go, "--minl");
-  float    minu = esl_opt_GetReal(go, "--minu");
+  float    minl = esl_opt_GetReal(go,(char *)  "--minl");
+  float    minu = esl_opt_GetReal(go, (char *) "--minu");
 
   if ((sq = esl_sq_Create()) == NULL) esl_fatal("failed to allocate sequence");
 
@@ -191,12 +191,12 @@ emit_alignment(ESL_GETOPTS *go, FILE *ofp, int outfmt, ESL_RANDOMNESS *r, P7_HMM
   ESL_MSA   *msa       = NULL;
   ESL_SQ   **sq        = NULL;
   P7_TRACE **tr        = NULL;
-  int         N        = esl_opt_GetInteger(go, "-N");
+  int         N        = esl_opt_GetInteger(go,(char *)  "-N");
   int         optflags = p7_ALL_CONSENSUS_COLS;
   int         i;
   
-  if ((tr = malloc(sizeof(P7_TRACE *) * N)) == NULL) esl_fatal("failed to allocate trace array");
-  if ((sq = malloc(sizeof(ESL_SQ   *) * N)) == NULL) esl_fatal("failed to allocate seq array");
+  if ((tr = (P7_TRACE  **) malloc(sizeof(P7_TRACE *) * N)) == NULL) esl_fatal("failed to allocate trace array");
+  if ((sq = (ESL_SQ **) malloc(sizeof(ESL_SQ   *) * N)) == NULL) esl_fatal("failed to allocate seq array");
   for (i = 0; i < N; i++) 
     {
       if ((sq[i] = esl_sq_CreateDigital(hmm->abc)) == NULL) esl_fatal("failed to allocate seq");
@@ -227,9 +227,9 @@ emit_sequences(ESL_GETOPTS *go, FILE *ofp, int outfmt, ESL_RANDOMNESS *r, P7_HMM
   P7_TRACE   *tr           = NULL;
   P7_BG      *bg           = NULL;
   P7_PROFILE *gm           = NULL;
-  int         do_profile   = esl_opt_GetBoolean(go, "-p");
-  int         N            = esl_opt_GetInteger(go, "-N");
-  int         L            = esl_opt_GetInteger(go, "-L");
+  int         do_profile   = esl_opt_GetBoolean(go, (char *) "-p");
+  int         N            = esl_opt_GetInteger(go, (char *) "-N");
+  int         L            = esl_opt_GetInteger(go, (char *) "-L");
   int         nseq;
   int         status;
 
@@ -238,10 +238,10 @@ emit_sequences(ESL_GETOPTS *go, FILE *ofp, int outfmt, ESL_RANDOMNESS *r, P7_HMM
   if ((bg = p7_bg_Create(hmm->abc))              == NULL)  esl_fatal("failed to create null model");
   if ((gm = p7_profile_Create(hmm->M, hmm->abc)) == NULL)  esl_fatal("failed to create profile");
 
-  if      (esl_opt_GetBoolean(go, "--local"))     { if (p7_profile_ConfigLocal    (gm, hmm, bg, L) != eslOK) esl_fatal("failed to configure profile"); }
-  else if (esl_opt_GetBoolean(go, "--unilocal"))  { if (p7_profile_ConfigUnilocal (gm, hmm, bg, L) != eslOK) esl_fatal("failed to configure profile"); }
-  else if (esl_opt_GetBoolean(go, "--glocal"))    { if (p7_profile_ConfigGlocal   (gm, hmm, bg, L) != eslOK) esl_fatal("failed to configure profile"); }
-  else if (esl_opt_GetBoolean(go, "--uniglocal")) { if (p7_profile_ConfigUniglocal(gm, hmm, bg, L) != eslOK) esl_fatal("failed to configure profile"); }
+  if      (esl_opt_GetBoolean(go, (char *) "--local"))     { if (p7_profile_ConfigLocal    (gm, hmm, bg, L) != eslOK) esl_fatal("failed to configure profile"); }
+  else if (esl_opt_GetBoolean(go, (char *) "--unilocal"))  { if (p7_profile_ConfigUnilocal (gm, hmm, bg, L) != eslOK) esl_fatal("failed to configure profile"); }
+  else if (esl_opt_GetBoolean(go, (char *) "--glocal"))    { if (p7_profile_ConfigGlocal   (gm, hmm, bg, L) != eslOK) esl_fatal("failed to configure profile"); }
+  else if (esl_opt_GetBoolean(go, (char *) "--uniglocal")) { if (p7_profile_ConfigUniglocal(gm, hmm, bg, L) != eslOK) esl_fatal("failed to configure profile"); }
 
   if (p7_bg_SetLength(bg, L)                     != eslOK) esl_fatal("failed to reconfig null model length");
   if (p7_hmm_Validate    (hmm, NULL, 0.0001)     != eslOK) esl_fatal("whoops, HMM is bad!");

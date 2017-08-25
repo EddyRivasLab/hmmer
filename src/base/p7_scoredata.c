@@ -209,64 +209,64 @@ ERROR:
  */
 P7_SCOREDATA *
 p7_hmm_ScoreDataClone(P7_SCOREDATA *src, int Kp) {
-  P7_SCOREDATA *new;
+  P7_SCOREDATA *new_score;
   int status;
   int i;
 
   if (src == NULL)
     return NULL;
 
-  ESL_ALLOC(new, sizeof(P7_SCOREDATA));
-  new->M = src->M;
-  new->msv_scores         = NULL;
-  new->opt_ext_fwd    = NULL;
-  new->opt_ext_rev    = NULL;
-  new->prefix_lengths = NULL;
-  new->suffix_lengths = NULL;
-  new->fwd_scores      = NULL;
-  new->fwd_transitions = NULL;
+  ESL_ALLOC(new_score, sizeof(P7_SCOREDATA));
+  new_score->M = src->M;
+  new_score->msv_scores         = NULL;
+  new_score->opt_ext_fwd    = NULL;
+  new_score->opt_ext_rev    = NULL;
+  new_score->prefix_lengths = NULL;
+  new_score->suffix_lengths = NULL;
+  new_score->fwd_scores      = NULL;
+  new_score->fwd_transitions = NULL;
 
   if (src->msv_scores != NULL) {
-    ESL_ALLOC(new->msv_scores, (src->M + 1) * Kp * sizeof(uint8_t));
-    memcpy(new->msv_scores, src->msv_scores, (src->M + 1) * Kp * sizeof(uint8_t)  );
+    ESL_ALLOC(new_score->msv_scores, (src->M + 1) * Kp * sizeof(uint8_t));
+    memcpy(new_score->msv_scores, src->msv_scores, (src->M + 1) * Kp * sizeof(uint8_t)  );
   }
   if (src->prefix_lengths != NULL) {
-     ESL_ALLOC(new->prefix_lengths, (src->M+1) * sizeof(float));
-     memcpy(new->prefix_lengths, src->prefix_lengths, (src->M+1) * sizeof(float));
+     ESL_ALLOC(new_score->prefix_lengths, (src->M+1) * sizeof(float));
+     memcpy(new_score->prefix_lengths, src->prefix_lengths, (src->M+1) * sizeof(float));
   }
   if (src->suffix_lengths != NULL) {
-     ESL_ALLOC(new->suffix_lengths, (src->M+1) * sizeof(float));
-     memcpy(new->suffix_lengths, src->suffix_lengths, (src->M+1) * sizeof(float));
+     ESL_ALLOC(new_score->suffix_lengths, (src->M+1) * sizeof(float));
+     memcpy(new_score->suffix_lengths, src->suffix_lengths, (src->M+1) * sizeof(float));
   }
   if (src->fwd_scores != NULL) {
-     ESL_ALLOC(new->fwd_scores, (src->M+1) * sizeof(float));
-     memcpy(new->fwd_scores, src->fwd_scores, (src->M+1) * sizeof(float));
+     ESL_ALLOC(new_score->fwd_scores, (src->M+1) * sizeof(float));
+     memcpy(new_score->fwd_scores, src->fwd_scores, (src->M+1) * sizeof(float));
   }
 
 
   if (src->opt_ext_fwd != NULL) {
-     ESL_ALLOC(new->opt_ext_fwd, (src->M + 1) * sizeof(uint8_t*));
+     ESL_ALLOC(new_score->opt_ext_fwd, (src->M + 1) * sizeof(uint8_t*));
      for (i=1; i<=src->M; i++) {
-       ESL_ALLOC(new->opt_ext_fwd[i], 10 * sizeof(uint8_t));
-       memcpy(new->opt_ext_fwd+i, src->opt_ext_fwd+i, 10 * sizeof(uint8_t));
+       ESL_ALLOC(new_score->opt_ext_fwd[i], 10 * sizeof(uint8_t));
+       memcpy(new_score->opt_ext_fwd+i, src->opt_ext_fwd+i, 10 * sizeof(uint8_t));
      }
   }
   if (src->opt_ext_rev != NULL) {
-     ESL_ALLOC(new->opt_ext_rev, (src->M + 1) * sizeof(uint8_t*));
+     ESL_ALLOC(new_score->opt_ext_rev, (src->M + 1) * sizeof(uint8_t*));
      for (i=1; i<=src->M; i++) {
-       ESL_ALLOC(new->opt_ext_rev[i], 10 * sizeof(uint8_t));
-       memcpy(new->opt_ext_rev+i, src->opt_ext_rev+i, 10 * sizeof(uint8_t));
+       ESL_ALLOC(new_score->opt_ext_rev[i], 10 * sizeof(uint8_t));
+       memcpy(new_score->opt_ext_rev+i, src->opt_ext_rev+i, 10 * sizeof(uint8_t));
      }
   }
   if (src->fwd_transitions != NULL) {
-     ESL_ALLOC(new->fwd_transitions, p7O_NTRANS * sizeof(float*));
+     ESL_ALLOC(new_score->fwd_transitions, p7O_NTRANS * sizeof(float*));
      for (i=0; i<p7O_NTRANS; i++) {
-       ESL_ALLOC(new->fwd_transitions[i], (src->M+1)* sizeof(float));
-       memcpy(new->fwd_transitions+i, src->fwd_transitions+i, (src->M+1) * sizeof(uint8_t));
+       ESL_ALLOC(new_score->fwd_transitions[i], (src->M+1)* sizeof(float));
+       memcpy(new_score->fwd_transitions+i, src->fwd_transitions+i, (src->M+1) * sizeof(uint8_t));
      }
   }
 
-  return new;
+  return new_score;
 
 ERROR:
   return NULL;
@@ -404,9 +404,9 @@ utest_createScoreData(ESL_GETOPTS *go, ESL_RANDOMNESS *r )
 
 static ESL_OPTIONS options[] = {
    /* name  type         default  env   range togs  reqs  incomp  help                docgrp */
-  {"-h",  eslARG_NONE,    FALSE, NULL, NULL, NULL, NULL, NULL, "show help and usage",                            0},
-  {"-s",  eslARG_INT,       "0", NULL, NULL, NULL, NULL, NULL, "set random number seed to <n>",                  0},
-  {"-v",  eslARG_NONE,    FALSE, NULL, NULL, NULL, NULL, NULL, "show verbose commentary/output",                 0},
+  {(char *)"-h",  eslARG_NONE,    FALSE, NULL, NULL, NULL, NULL, NULL, (char *)"show help and usage",                            0},
+  {(char *)"-s",  eslARG_INT,       (char *)"0", NULL, NULL, NULL, NULL, NULL, (char *)"set random number seed to <n>",                  0},
+  {(char *)"-v",  eslARG_NONE,    FALSE, NULL, NULL, NULL, NULL, NULL, (char *)"show verbose commentary/output",                 0},
   { 0,0,0,0,0,0,0,0,0,0},
 };
 static char usage[]  = "[-options]";
@@ -416,7 +416,7 @@ int
 main(int argc, char **argv)
 {
   ESL_GETOPTS    *go   = p7_CreateDefaultApp(options, 0, argc, argv, banner, usage);
-  ESL_RANDOMNESS *rng  = esl_randomness_CreateFast(esl_opt_GetInteger(go, "-s"));
+  ESL_RANDOMNESS *rng  = esl_randomness_CreateFast(esl_opt_GetInteger(go, (char *)"-s"));
 
   fprintf(stderr, "## %s\n", argv[0]);
   fprintf(stderr, "#  rng seed = %" PRIu32 "\n", esl_randomness_GetSeed(rng));

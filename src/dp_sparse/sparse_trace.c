@@ -767,14 +767,14 @@ p7_sparse_trace_StochasticSeg(ESL_RANDOMNESS *rng, float **wrk_byp, const P7_PRO
 
 static ESL_OPTIONS options[] = {
   /* name           type      default  env  range  toggles reqs incomp  help                                       docgroup*/
-  { "-h",        eslARG_NONE,   FALSE, NULL, NULL,   NULL,  NULL, NULL, "show brief help on version and usage",              0 },
-  { "-a",        eslARG_NONE,   FALSE, NULL, NULL,   NULL,  NULL, NULL, "include all cells in sparse mx",                    0 },
-  { "-n",        eslARG_INT,   "1000", NULL, NULL,   NULL,  NULL, NULL, "number of stochastic traces to sample",             0 },
-  { "-s",        eslARG_INT,     "42", NULL, NULL,   NULL,  NULL, NULL, "set random number seed to <n>",                     0 },
-  { "-D",        eslARG_NONE,   FALSE, NULL, NULL,   NULL,  NULL, NULL, "dump posterior decoding matrix for examination",    0 },
-  { "-F",        eslARG_NONE,   FALSE, NULL, NULL,   NULL,  NULL, NULL, "dump Forward DP matrix for examination",            0 },
-  { "-M",        eslARG_NONE,   FALSE, NULL, NULL,   NULL,  NULL, NULL, "dump sparse mask for examination",                  0 },
-  { "-S",        eslARG_NONE,   FALSE, NULL, NULL,   NULL,  NULL, NULL, "dump stochastic traces for examination",            0 },
+  { (char *) "-h",        eslARG_NONE,   FALSE, NULL, NULL,   NULL,  NULL, NULL, (char *) "show brief help on version and usage",              0 },
+  { (char *) "-a",        eslARG_NONE,   FALSE, NULL, NULL,   NULL,  NULL, NULL, (char *) "include all cells in sparse mx",                    0 },
+  { (char *) "-n",        eslARG_INT,  (char *)  "1000", NULL, NULL,   NULL,  NULL, NULL, (char *) "number of stochastic traces to sample",             0 },
+  { (char *) "-s",        eslARG_INT,   (char *)   "42", NULL, NULL,   NULL,  NULL, NULL, (char *) "set random number seed to <n>",                     0 },
+  { (char *) "-D",        eslARG_NONE,   FALSE, NULL, NULL,   NULL,  NULL, NULL, (char *) "dump posterior decoding matrix for examination",    0 },
+  {(char *) "-F",        eslARG_NONE,   FALSE, NULL, NULL,   NULL,  NULL, NULL, (char *) "dump Forward DP matrix for examination",            0 },
+  { (char *) "-M",        eslARG_NONE,   FALSE, NULL, NULL,   NULL,  NULL, NULL, (char *) "dump sparse mask for examination",                  0 },
+  { (char *) "-S",        eslARG_NONE,   FALSE, NULL, NULL,   NULL,  NULL, NULL, (char *) "dump stochastic traces for examination",            0 },
   {  0, 0, 0, 0, 0, 0, 0, 0, 0, 0 },
 };
 static char usage[]  = "[-options] <hmmfile> <seqfile>";
@@ -784,7 +784,7 @@ int
 main(int argc, char **argv)
 {
   ESL_GETOPTS    *go      = p7_CreateDefaultApp(options, 2, argc, argv, banner, usage);
-  ESL_RANDOMNESS *rng     = esl_randomness_Create(esl_opt_GetInteger(go, "-s"));
+  ESL_RANDOMNESS *rng     = esl_randomness_Create(esl_opt_GetInteger(go, (char *) "-s"));
   char           *hmmfile = esl_opt_GetArg(go, 1);
   char           *seqfile = esl_opt_GetArg(go, 2);
   ESL_ALPHABET   *abc     = NULL;
@@ -804,28 +804,28 @@ main(int argc, char **argv)
   P7_SPARSEMX    *sxd2    = NULL;
   P7_TRACE       *tr      = p7_trace_Create();
   float          *wrk     = NULL;
-  int             N       = esl_opt_GetInteger(go, "-n");
+  int             N       = esl_opt_GetInteger(go, (char *) "-n");
   int             idx;
   float           fsc;
   int             status;
 
   /* Read in one HMM */
-  if (p7_hmmfile_OpenE(hmmfile, NULL, &hfp, NULL) != eslOK) p7_Fail("Failed to open HMM file %s", hmmfile);
-  if (p7_hmmfile_Read(hfp, &abc, &hmm)            != eslOK) p7_Fail("Failed to read HMM");
+  if (p7_hmmfile_OpenE(hmmfile, NULL, &hfp, NULL) != eslOK) p7_Fail((char *) "Failed to open HMM file %s", hmmfile);
+  if (p7_hmmfile_Read(hfp, &abc, &hmm)            != eslOK) p7_Fail((char *) "Failed to read HMM");
   p7_hmmfile_Close(hfp);
  
   /* Open sequence database */
   sq     = esl_sq_CreateDigital(abc);
   status = esl_sqfile_Open(seqfile, format, NULL, &sqfp);
-  if      (status == eslENOTFOUND) p7_Fail("No such file.");
-  else if (status == eslEFORMAT)   p7_Fail("Format unrecognized.");
-  else if (status == eslEINVAL)    p7_Fail("Can't autodetect stdin or .gz.");
-  else if (status != eslOK)        p7_Fail("Open failed, code %d.", status);
+  if      (status == eslENOTFOUND) p7_Fail((char *) "No such file.");
+  else if (status == eslEFORMAT)   p7_Fail((char *) "Format unrecognized.");
+  else if (status == eslEINVAL)    p7_Fail((char *) "Can't autodetect stdin or .gz.");
+  else if (status != eslOK)        p7_Fail((char *) "Open failed, code %d.", status);
  
   /* Read in one sequence */
   status = esl_sqio_Read(sqfp, sq);
-  if      (status == eslEFORMAT) p7_Fail("Parse failed (sequence file %s)\n%s\n", sqfp->filename, sqfp->get_error(sqfp));     
-  else if (status != eslOK)      p7_Fail("Unexpected error %d reading sequence file %s", status, sqfp->filename);
+  if      (status == eslEFORMAT) p7_Fail((char *) "Parse failed (sequence file %s)\n%s\n", sqfp->filename, sqfp->get_error(sqfp));     
+  else if (status != eslOK)      p7_Fail((char *) "Unexpected error %d reading sequence file %s", status, sqfp->filename);
   esl_sqfile_Close(sqfp);
 
   /* Configure a profile from the HMM */
@@ -843,7 +843,7 @@ main(int argc, char **argv)
   /* Use f/b filter to create sparse mask */
   ox = p7_checkptmx_Create(hmm->M, sq->n, ESL_MBYTES(32));
   sm  = p7_sparsemask_Create(gm->M, sq->n);
-  if (esl_opt_GetBoolean(go, "-a"))  
+  if (esl_opt_GetBoolean(go, (char *) "-a"))  
     p7_sparsemask_AddAll(sm);
   else {
     p7_ForwardFilter (sq->dsq, sq->n, om, ox, /*fsc=*/NULL);
@@ -855,8 +855,8 @@ main(int argc, char **argv)
   p7_SparseBackward(sq->dsq, sq->n, gm, sm, sxb,  NULL);
   p7_SparseDecoding(sq->dsq, sq->n, gm, sxf, sxb, sxd);
 
-  if (esl_opt_GetBoolean(go, "-M")) p7_sparsemask_Dump(stdout, sm);
-  if (esl_opt_GetBoolean(go, "-F")) p7_sparsemx_Dump(stdout, sxf);
+  if (esl_opt_GetBoolean(go, (char *) "-M")) p7_sparsemask_Dump(stdout, sm);
+  if (esl_opt_GetBoolean(go, (char *) "-F")) p7_sparsemx_Dump(stdout, sxf);
 
   /* Collect N stochastic traces, count them into <sxd> */
   sxd2 = p7_sparsemx_Create(sm);
@@ -864,7 +864,7 @@ main(int argc, char **argv)
   for (idx = 0; idx < N; idx++)
     {
       p7_sparse_trace_Stochastic(rng, &wrk, gm, sxf, tr);
-      if (esl_opt_GetBoolean(go, "-S")) p7_trace_DumpAnnotated(stdout, tr, gm, sq->dsq);
+      if (esl_opt_GetBoolean(go, (char *) "-S")) p7_trace_DumpAnnotated(stdout, tr, gm, sq->dsq);
 
       p7_sparsemx_CountTrace(tr, sxd2);
 
@@ -875,7 +875,7 @@ main(int argc, char **argv)
   esl_vec_FScale(sxd2->dp,   sxd2->sm->ncells*p7S_NSCELLS,            1./(float)N);
   esl_vec_FScale(sxd2->xmx, (sxd2->sm->nrow+sxd2->sm->S)*p7S_NXCELLS, 1./(float)N);
   
-  if (esl_opt_GetBoolean(go, "-D")) p7_sparsemx_Dump(stdout, sxd2);
+  if (esl_opt_GetBoolean(go, (char *) "-D")) p7_sparsemx_Dump(stdout, sxd2);
 
   p7_sparsemx_CompareDecoding(sxd, sxd2, 0.01);
 

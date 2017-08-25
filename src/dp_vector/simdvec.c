@@ -71,7 +71,7 @@ p7_simdvec_Width(void)
     }
 
  DONE:
-  if (V == -1) p7_Die("found no vector implementation - this shouldn't happen");
+  if (V == -1) p7_Die((char *)"found no vector implementation - this shouldn't happen");
   return V;
 }
 

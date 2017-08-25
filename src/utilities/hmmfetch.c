@@ -48,11 +48,11 @@ cmdline_help(char *argv0, ESL_GETOPTS *go)
 
 static ESL_OPTIONS options[] = {
   /* name       type        default env   range togs  reqs  incomp      help                                                   docgroup */
-  { "-h",       eslARG_NONE,  FALSE, NULL, NULL, NULL, NULL, NULL,          "help; show brief info on version and usage",        0 },
-  { "-f",       eslARG_NONE,  FALSE, NULL, NULL, NULL, NULL,"--index",      "second cmdline arg is a file of names to retrieve", 0 },
-  { "-o",       eslARG_OUTFILE,FALSE,NULL, NULL, NULL, NULL,"-O,--index",   "output HMM to file <f> instead of stdout",          0 },
-  { "-O",       eslARG_NONE,  FALSE, NULL, NULL, NULL, NULL,"-o,-f,--index","output HMM to file named <key>",                    0 },
-  { "--index",  eslARG_NONE,  FALSE, NULL, NULL, NULL, NULL, NULL,          "index the <hmmfile>, creating <hmmfile>.ssi",       0 },
+  { (char *)  "-h",       eslARG_NONE,  FALSE, NULL, NULL, NULL, NULL, NULL,         (char *)   "help; show brief info on version and usage",        0 },
+  { (char *)  "-f",       eslARG_NONE,  FALSE, NULL, NULL, NULL, NULL,(char *)  "--index",     (char *)   "second cmdline arg is a file of names to retrieve", 0 },
+  { (char *)  "-o",       eslARG_OUTFILE,FALSE,NULL, NULL, NULL, NULL,(char *)  "-O,--index",   (char *)  "output HMM to file <f> instead of stdout",          0 },
+  { (char *)  "-O",       eslARG_NONE,  FALSE, NULL, NULL, NULL, NULL,(char *)  "-o,-f,--index",(char *)  "output HMM to file named <key>",                    0 },
+  { (char *)  "--index",  eslARG_NONE,  FALSE, NULL, NULL, NULL, NULL, NULL,         (char *)   "index the <hmmfile>, creating <hmmfile>.ssi",       0 },
   { 0,0,0,0,0,0,0,0,0,0 },
 };
 
@@ -78,38 +78,38 @@ main(int argc, char **argv)
    * Parse command line
    ***********************************************/
   go = esl_getopts_Create(options);
-  if (esl_opt_ProcessCmdline(go, argc, argv) != eslOK) cmdline_failure(argv[0], "Failed to parse command line: %s\n", go->errbuf);
-  if (esl_opt_VerifyConfig(go)               != eslOK) cmdline_failure(argv[0], "Error in configuration: %s\n",       go->errbuf);
-  if (esl_opt_GetBoolean(go, "-h") )                   cmdline_help   (argv[0], go);
-  if (esl_opt_ArgNumber(go) < 1)                       cmdline_failure(argv[0], "Incorrect number of command line arguments.\n");        
+  if (esl_opt_ProcessCmdline(go, argc, argv) != eslOK) cmdline_failure(argv[0], (char *)  "Failed to parse command line: %s\n", go->errbuf);
+  if (esl_opt_VerifyConfig(go)               != eslOK) cmdline_failure(argv[0], (char *)  "Error in configuration: %s\n",       go->errbuf);
+  if (esl_opt_GetBoolean(go, (char *)  "-h") )                   cmdline_help   (argv[0], go);
+  if (esl_opt_ArgNumber(go) < 1)                       cmdline_failure(argv[0], (char *)  "Incorrect number of command line arguments.\n");        
   
   /* Check arguments. Consider three modes separately.
    */
-  if (esl_opt_GetBoolean(go, "--index")) 
+  if (esl_opt_GetBoolean(go, (char *)  "--index")) 
     {
-      if (esl_opt_ArgNumber(go) != 1) cmdline_failure(argv[0], "Incorrect number of command line arguments.\n");        
+      if (esl_opt_ArgNumber(go) != 1) cmdline_failure(argv[0], (char *)  "Incorrect number of command line arguments.\n");        
 
       hmmfile = esl_opt_GetArg(go, 1);
       keyfile = NULL;
       keyname = NULL;
 
-      if (strcmp(hmmfile, "-") == 0) cmdline_failure(argv[0], "Can't use - with --index, can't index <stdin>.\n");
+      if (strcmp(hmmfile, "-") == 0) cmdline_failure(argv[0], (char *)  "Can't use - with --index, can't index <stdin>.\n");
     }
 
-  else if (esl_opt_GetBoolean(go, "-f"))
+  else if (esl_opt_GetBoolean(go, (char *)  "-f"))
     {
-      if (esl_opt_ArgNumber(go) != 2) cmdline_failure(argv[0], "Incorrect number of command line arguments.\n");        
+      if (esl_opt_ArgNumber(go) != 2) cmdline_failure(argv[0], (char *)  "Incorrect number of command line arguments.\n");        
 
       hmmfile = esl_opt_GetArg(go, 1);
       keyfile = esl_opt_GetArg(go, 2);
       keyname = NULL;
 
       if (strcmp(hmmfile, "-") == 0 && strcmp(keyfile, "-") == 0) 
-	cmdline_failure(argv[0], "Either <hmmfile> or <keyfile> can be - but not both.\n");
+	cmdline_failure(argv[0], (char *)  "Either <hmmfile> or <keyfile> can be - but not both.\n");
     }
   else
     {
-      if (esl_opt_ArgNumber(go) != 2) cmdline_failure(argv[0], "Incorrect number of command line arguments.\n");        
+      if (esl_opt_ArgNumber(go) != 2) cmdline_failure(argv[0], (char *)  "Incorrect number of command line arguments.\n");        
 
       hmmfile = esl_opt_GetArg(go, 1);
       keyfile = NULL;
@@ -118,34 +118,34 @@ main(int argc, char **argv)
     
   /* Open the HMM file.  */
   status  = p7_hmmfile_OpenE(hmmfile, NULL, &hfp, errbuf);
-  if      (status == eslENOTFOUND) p7_Fail("File existence/permissions problem in trying to open HMM file %s.\n%s\n", hmmfile, errbuf);
-  else if (status == eslEFORMAT)   p7_Fail("File format problem in trying to open HMM file %s.\n%s\n",                hmmfile, errbuf);
-  else if (status != eslOK)        p7_Fail("Unexpected error %d in opening HMM file %s.\n%s\n",                       status, hmmfile, errbuf);  
+  if      (status == eslENOTFOUND) p7_Fail((char *)  "File existence/permissions problem in trying to open HMM file %s.\n%s\n", hmmfile, errbuf);
+  else if (status == eslEFORMAT)   p7_Fail((char *)  "File format problem in trying to open HMM file %s.\n%s\n",                hmmfile, errbuf);
+  else if (status != eslOK)        p7_Fail((char *)  "Unexpected error %d in opening HMM file %s.\n%s\n",                       status, hmmfile, errbuf);  
 
  /* Open the output file, if any  */
-  if (esl_opt_GetBoolean(go, "-O")) 
+  if (esl_opt_GetBoolean(go,(char *)   "-O")) 
     {
-      if (! keyname)                            p7_Fail("No key name? Can't use -O\n"); 
-      if ((ofp = fopen(keyname, "w")) == NULL)	p7_Fail("Failed to open output file %s\n", keyname);
+      if (! keyname)                            p7_Fail((char *)  "No key name? Can't use -O\n"); 
+      if ((ofp = fopen(keyname, "w")) == NULL)	p7_Fail((char *)  "Failed to open output file %s\n", keyname);
     }
-  else if (esl_opt_GetString(go, "-o") != NULL)
+  else if (esl_opt_GetString(go, (char *)  "-o") != NULL)
     {
-      if ((ofp = fopen(esl_opt_GetString(go, "-o"), "w")) == NULL)
-	esl_fatal("Failed to open output file %s\n", esl_opt_GetString(go, "-o"));
+      if ((ofp = fopen(esl_opt_GetString(go, (char *)  "-o"), "w")) == NULL)
+	esl_fatal("Failed to open output file %s\n", esl_opt_GetString(go, (char *)  "-o"));
     }
   else ofp = stdout;
 
   
   /* Hand off to the appropriate routine */
-  if     (esl_opt_GetBoolean(go, "--index"))  create_ssi_index(go, hfp);
-  else if (esl_opt_GetBoolean(go, "-f"))      multifetch(go, ofp, keyfile, hfp);
+  if     (esl_opt_GetBoolean(go, (char *)  "--index"))  create_ssi_index(go, hfp);
+  else if (esl_opt_GetBoolean(go, (char *)  "-f"))      multifetch(go, ofp, keyfile, hfp);
   else 
     {
       onefetch(go, ofp, keyname, hfp);
       if (ofp != stdout) printf("\n\nRetrieved HMM %s.\n",  keyname);
     }
 
-  if (esl_opt_GetBoolean(go, "-O") || esl_opt_GetString(go, "-o") != NULL) fclose(ofp);
+  if (esl_opt_GetBoolean(go, (char *)  "-O") || esl_opt_GetString(go, (char *)  "-o") != NULL) fclose(ofp);
   p7_hmmfile_Close(hfp);
   esl_getopts_Destroy(go);
   exit(0);
@@ -166,7 +166,7 @@ create_ssi_index(ESL_GETOPTS *go, P7_HMMFILE *hfp)
   uint16_t      fh;
   int           status;
 
-  if (esl_sprintf(&ssifile, "%s.ssi", hfp->fname) != eslOK) p7_Die("esl_sprintf() failed");
+  if (esl_sprintf(&ssifile, "%s.ssi", hfp->fname) != eslOK) p7_Die((char *)  "esl_sprintf() failed");
 
   status = esl_newssi_Open(ssifile, FALSE, &ns);
   if      (status == eslENOTFOUND)   esl_fatal("failed to open SSI index %s", ssifile);
@@ -181,26 +181,26 @@ create_ssi_index(ESL_GETOPTS *go, P7_HMMFILE *hfp)
   
   while ((status = p7_hmmfile_Read(hfp, &abc, &hmm)) != eslEOF)
     {
-      if      (status == eslEOD)       p7_Fail("read failed, HMM file %s may be truncated?", hfp->fname);
-      else if (status == eslEFORMAT)   p7_Fail("bad file format in HMM file %s",             hfp->fname);
-      else if (status == eslEINCOMPAT) p7_Fail("HMM file %s contains different alphabets",   hfp->fname);
-      else if (status != eslOK)        p7_Fail("Unexpected error in reading HMMs from %s",   hfp->fname);
+      if      (status == eslEOD)       p7_Fail((char *)  "read failed, HMM file %s may be truncated?", hfp->fname);
+      else if (status == eslEFORMAT)   p7_Fail((char *)  "bad file format in HMM file %s",             hfp->fname);
+      else if (status == eslEINCOMPAT) p7_Fail((char *)  "HMM file %s contains different alphabets",   hfp->fname);
+      else if (status != eslOK)        p7_Fail((char *)  "Unexpected error in reading HMMs from %s",   hfp->fname);
       nhmm++;
 
-      if (hmm->name == NULL)           p7_Fail("Every HMM must have a name to be indexed. Failed to find name of HMM #%d\n", nhmm);
+      if (hmm->name == NULL)           p7_Fail((char *)  "Every HMM must have a name to be indexed. Failed to find name of HMM #%d\n", nhmm);
 
       if (esl_newssi_AddKey(ns, hmm->name, fh, hmm->offset, 0, 0) != eslOK)
-	p7_Fail("Failed to add key %s to SSI index", hmm->name);
+	p7_Fail((char *)  "Failed to add key %s to SSI index", hmm->name);
 
       if (hmm->acc) {
 	if (esl_newssi_AddAlias(ns, hmm->acc, hmm->name) != eslOK)
-	  p7_Fail("Failed to add secondary key %s to SSI index", hmm->acc);
+	  p7_Fail((char *)  "Failed to add secondary key %s to SSI index", hmm->acc);
       }
       p7_hmm_Destroy(hmm);
     }
   
   if (esl_newssi_Write(ns) != eslOK) 
-    p7_Fail("Failed to write keys to ssi file %s\n", ssifile);
+    p7_Fail((char *)  "Failed to write keys to ssi file %s\n", ssifile);
 
   printf("done.\n");
   if (ns->nsecondary > 0) 
@@ -242,16 +242,16 @@ multifetch(ESL_GETOPTS *go, FILE *ofp, char *keyfile, P7_HMMFILE *hfp)
   int             keyidx;
   int             status;
   
-  if (esl_fileparser_Open(keyfile, NULL, &efp) != eslOK)  p7_Fail("Failed to open key file %s\n", keyfile);
+  if (esl_fileparser_Open(keyfile, NULL, &efp) != eslOK)  p7_Fail((char *)  "Failed to open key file %s\n", keyfile);
   esl_fileparser_SetCommentChar(efp, '#');
 
   while (esl_fileparser_NextLine(efp) == eslOK)
     {
       if (esl_fileparser_GetTokenOnLine(efp, &key, &keylen) != eslOK)
-	p7_Fail("Failed to read HMM name on line %d of file %s\n", efp->linenumber, keyfile);
+	p7_Fail((char *)  "Failed to read HMM name on line %d of file %s\n", efp->linenumber, keyfile);
       
       status = esl_keyhash_Store(keys, key, -1, &keyidx);
-      if (status == eslEDUP) p7_Fail("HMM key %s occurs more than once in file %s\n", key, keyfile);
+      if (status == eslEDUP) p7_Fail((char *)  "HMM key %s occurs more than once in file %s\n", key, keyfile);
 	
       if (hfp->ssi != NULL) { onefetch(go, ofp, key, hfp);  nhmm++; }
     }
@@ -260,10 +260,10 @@ multifetch(ESL_GETOPTS *go, FILE *ofp, char *keyfile, P7_HMMFILE *hfp)
     {
       while ((status = p7_hmmfile_Read(hfp, &abc, &hmm)) != eslEOF)
 	{
-	  if      (status == eslEOD)       p7_Fail("read failed, HMM file %s may be truncated?", hfp->fname);
-	  else if (status == eslEFORMAT)   p7_Fail("bad file format in HMM file %s",             hfp->fname);
-	  else if (status == eslEINCOMPAT) p7_Fail("HMM file %s contains different alphabets",   hfp->fname);
-	  else if (status != eslOK)        p7_Fail("Unexpected error in reading HMMs from %s",   hfp->fname);
+	  if      (status == eslEOD)       p7_Fail((char *)  "read failed, HMM file %s may be truncated?", hfp->fname);
+	  else if (status == eslEFORMAT)   p7_Fail((char *)  "bad file format in HMM file %s",             hfp->fname);
+	  else if (status == eslEINCOMPAT) p7_Fail((char *)  "HMM file %s contains different alphabets",   hfp->fname);
+	  else if (status != eslOK)        p7_Fail((char *)  "Unexpected error in reading HMMs from %s",   hfp->fname);
 
 	  if (esl_keyhash_Lookup(keys, hmm->name, -1, &keyidx) == eslOK || 
 	      ((hmm->acc) && esl_keyhash_Lookup(keys, hmm->acc, -1, &keyidx) == eslOK))
@@ -301,17 +301,17 @@ onefetch(ESL_GETOPTS *go, FILE *ofp, char *key, P7_HMMFILE *hfp)
   if (hfp->ssi != NULL)
     {
       status = p7_hmmfile_PositionByKey(hfp, key);
-      if      (status == eslENOTFOUND) p7_Fail("HMM %s not found in SSI index for file %s\n", key, hfp->fname);
-      else if (status == eslEFORMAT)   p7_Fail("Failed to parse SSI index for %s\n", hfp->fname);
-      else if (status != eslOK)        p7_Fail("Failed to look up location of HMM %s in SSI index of file %s\n", key, hfp->fname);
+      if      (status == eslENOTFOUND) p7_Fail((char *)  "HMM %s not found in SSI index for file %s\n", key, hfp->fname);
+      else if (status == eslEFORMAT)   p7_Fail((char *)  "Failed to parse SSI index for %s\n", hfp->fname);
+      else if (status != eslOK)        p7_Fail((char *)  "Failed to look up location of HMM %s in SSI index of file %s\n", key, hfp->fname);
     }
 
   while ((status = p7_hmmfile_Read(hfp, &abc, &hmm)) != eslEOF)
     {
-      if      (status == eslEOD)       p7_Fail("read failed, HMM file %s may be truncated?", hfp->fname);
-      else if (status == eslEFORMAT)   p7_Fail("bad file format in HMM file %s",             hfp->fname);
-      else if (status == eslEINCOMPAT) p7_Fail("HMM file %s contains different alphabets",   hfp->fname);
-      else if (status != eslOK)        p7_Fail("Unexpected error in reading HMMs from %s",   hfp->fname);
+      if      (status == eslEOD)       p7_Fail((char *)  "read failed, HMM file %s may be truncated?", hfp->fname);
+      else if (status == eslEFORMAT)   p7_Fail((char *)  "bad file format in HMM file %s",             hfp->fname);
+      else if (status == eslEINCOMPAT) p7_Fail((char *)  "HMM file %s contains different alphabets",   hfp->fname);
+      else if (status != eslOK)        p7_Fail((char *)  "Unexpected error in reading HMMs from %s",   hfp->fname);
 
       if (strcmp(key, hmm->name) == 0 || (hmm->acc && strcmp(key, hmm->acc) == 0)) break;
       p7_hmm_Destroy(hmm);
@@ -323,7 +323,7 @@ onefetch(ESL_GETOPTS *go, FILE *ofp, char *key, P7_HMMFILE *hfp)
       p7_hmmfile_WriteASCII(ofp, -1, hmm);
       p7_hmm_Destroy(hmm);
     }
-  else p7_Fail("HMM %s not found in file %s\n", key, hfp->fname);
+  else p7_Fail((char *)  "HMM %s not found in file %s\n", key, hfp->fname);
 
   esl_alphabet_Destroy(abc);
 }

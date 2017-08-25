@@ -688,15 +688,15 @@ create_envdoctored_dsq(const ESL_SQ *sq, int iae, int ibe, ESL_DSQ **ret_dsq)
 static void
 create_envdoctored_profile(const P7_HMM *ohmm, const P7_PROFILE *ogm, const P7_BG *bg, int kae, int kbe, P7_PROFILE **ret_gm)
 {
-  P7_HMM     *new = p7_hmm_Clone(ohmm);
+  P7_HMM     *new_hmm = p7_hmm_Clone(ohmm);
   P7_PROFILE *gm  = p7_profile_Create(ogm->M, ogm->abc);
   int     k;
 
-  for (k = 1;     k < kae;     k++) { esl_vec_FSet(new->mat[k], new->abc->K, 0.0); new->mat[k][1] = 1.0; }
-  for (k = kbe+1; k <= new->M; k++) { esl_vec_FSet(new->mat[k], new->abc->K, 0.0); new->mat[k][1] = 1.0; }
+  for (k = 1;     k < kae;     k++) { esl_vec_FSet(new_hmm->mat[k], new_hmm->abc->K, 0.0); new_hmm->mat[k][1] = 1.0; }
+  for (k = kbe+1; k <= new_hmm->M; k++) { esl_vec_FSet(new_hmm->mat[k], new_hmm->abc->K, 0.0); new_hmm->mat[k][1] = 1.0; }
   
-  p7_profile_ConfigCustom(gm, new, bg, ogm->L, ogm->nj, ogm->pglocal);
-  p7_hmm_Destroy(new);
+  p7_profile_ConfigCustom(gm, new_hmm, bg, ogm->L, ogm->nj, ogm->pglocal);
+  p7_hmm_Destroy(new_hmm);
   *ret_gm = gm;
 }
 
@@ -898,11 +898,11 @@ utest_zeroed_emissions(ESL_RANDOMNESS *rng, ESL_ALPHABET *abc, P7_BG *bg, int M,
 
 static ESL_OPTIONS options[] = {
   /* name           type      default  env  range toggles reqs incomp  help                                       docgroup*/
-  { "-h",        eslARG_NONE,   FALSE, NULL, NULL,  NULL,  NULL, NULL, "show brief help on version and usage",           0 },
-  { "-s",        eslARG_INT,      "0", NULL, NULL,  NULL,  NULL, NULL, "set random number seed to <n>",                  0 },
-  { "-L",        eslARG_INT,     "70", NULL, NULL,  NULL,  NULL, NULL, "size of random sequences to sample",             0 },
-  { "-M",        eslARG_INT,     "35", NULL, NULL,  NULL,  NULL, NULL, "size of random models to sample",                0 },
-  { "-N",        eslARG_INT,      "5", NULL, NULL,  NULL,  NULL, NULL, "number of random sequences to sample",           0 },
+  { (char *) "-h",        eslARG_NONE,   FALSE, NULL, NULL,  NULL,  NULL, NULL, (char *) "show brief help on version and usage",           0 },
+  { (char *) "-s",        eslARG_INT,    (char *)   "0", NULL, NULL,  NULL,  NULL, NULL, (char *) "set random number seed to <n>",                  0 },
+  { (char *) "-L",        eslARG_INT,    (char *)  "70", NULL, NULL,  NULL,  NULL, NULL, (char *) "size of random sequences to sample",             0 },
+  { (char *) "-M",        eslARG_INT,    (char *)  "35", NULL, NULL,  NULL,  NULL, NULL, (char *) "size of random models to sample",                0 },
+  { (char *) "-N",        eslARG_INT,    (char *)   "5", NULL, NULL,  NULL,  NULL, NULL, (char *) "number of random sequences to sample",           0 },
   {  0, 0, 0, 0, 0, 0, 0, 0, 0, 0 },
 };
 static char usage[]  = "[-options]";
@@ -912,12 +912,12 @@ int
 main(int argc, char **argv)
 {
   ESL_GETOPTS    *go   = p7_CreateDefaultApp(options, 0, argc, argv, banner, usage);
-  ESL_RANDOMNESS *r    = esl_randomness_CreateFast(esl_opt_GetInteger(go, "-s"));
+  ESL_RANDOMNESS *r    = esl_randomness_CreateFast(esl_opt_GetInteger(go, (char *) "-s"));
   ESL_ALPHABET   *abc  = esl_alphabet_Create(eslAMINO);
   P7_BG          *bg   = p7_bg_Create(abc);
-  int             M    = esl_opt_GetInteger(go, "-M");
-  int             L    = esl_opt_GetInteger(go, "-L");
-  int             N    = esl_opt_GetInteger(go, "-N");
+  int             M    = esl_opt_GetInteger(go,(char *)  "-M");
+  int             L    = esl_opt_GetInteger(go, (char *) "-L");
+  int             N    = esl_opt_GetInteger(go, (char *) "-N");
 
   fprintf(stderr, "## %s\n", argv[0]);
   fprintf(stderr, "#  rng seed = %" PRIu32 "\n", esl_randomness_GetSeed(r));
@@ -961,8 +961,8 @@ main(int argc, char **argv)
 
 static ESL_OPTIONS options[] = {
   /* name           type      default  env  range  toggles reqs incomp  help                                       docgroup*/
-  { "-h",        eslARG_NONE,   FALSE, NULL, NULL,   NULL,  NULL, NULL, "show brief help on version and usage",              0 },
-  { "-s",        eslARG_INT,      "0", NULL, NULL,   NULL,  NULL, NULL, "set random number seed to <n>",                     0 },
+  {(char *)  "-h",        eslARG_NONE,   FALSE, NULL, NULL,   NULL,  NULL, NULL,(char *)  "show brief help on version and usage",              0 },
+  {(char *)  "-s",        eslARG_INT,     (char *)  "0", NULL, NULL,   NULL,  NULL, NULL,(char *)  "set random number seed to <n>",                     0 },
   {  0, 0, 0, 0, 0, 0, 0, 0, 0, 0 },
 };
 static char usage[]  = "[-options] <hmmfile> <seqfile>";
@@ -972,7 +972,7 @@ int
 main(int argc, char **argv)
 {
   ESL_GETOPTS    *go      = p7_CreateDefaultApp(options, 2, argc, argv, banner, usage);
-  ESL_RANDOMNESS *rng     = esl_randomness_Create(esl_opt_GetInteger(go, "-s"));
+  ESL_RANDOMNESS *rng     = esl_randomness_Create(esl_opt_GetInteger(go, (char *) "-s"));
   char           *hmmfile = esl_opt_GetArg(go, 1);
   char           *seqfile = esl_opt_GetArg(go, 2);
   ESL_ALPHABET   *abc     = NULL;
@@ -1000,22 +1000,22 @@ main(int argc, char **argv)
   int             status;
 
   /* Read in one HMM */
-  if (p7_hmmfile_OpenE(hmmfile, NULL, &hfp, NULL) != eslOK) p7_Fail("Failed to open HMM file %s", hmmfile);
-  if (p7_hmmfile_Read(hfp, &abc, &hmm)            != eslOK) p7_Fail("Failed to read HMM");
+  if (p7_hmmfile_OpenE(hmmfile, NULL, &hfp, NULL) != eslOK) p7_Fail((char *) "Failed to open HMM file %s", hmmfile);
+  if (p7_hmmfile_Read(hfp, &abc, &hmm)            != eslOK) p7_Fail((char *) "Failed to read HMM");
   p7_hmmfile_Close(hfp);
  
   /* Open sequence database */
   sq     = esl_sq_CreateDigital(abc);
   status = esl_sqfile_Open(seqfile, format, NULL, &sqfp);
-  if      (status == eslENOTFOUND) p7_Fail("No such file.");
-  else if (status == eslEFORMAT)   p7_Fail("Format unrecognized.");
-  else if (status == eslEINVAL)    p7_Fail("Can't autodetect stdin or .gz.");
-  else if (status != eslOK)        p7_Fail("Open failed, code %d.", status);
+  if      (status == eslENOTFOUND) p7_Fail((char *) "No such file.");
+  else if (status == eslEFORMAT)   p7_Fail((char *) "Format unrecognized.");
+  else if (status == eslEINVAL)    p7_Fail((char *) "Can't autodetect stdin or .gz.");
+  else if (status != eslOK)        p7_Fail((char *) "Open failed, code %d.", status);
  
   /* Read in one sequence */
   status = esl_sqio_Read(sqfp, sq);
-  if      (status == eslEFORMAT) p7_Fail("Parse failed (sequence file %s)\n%s\n", sqfp->filename, sqfp->get_error(sqfp));     
-  else if (status != eslOK)      p7_Fail("Unexpected error %d reading sequence file %s", status, sqfp->filename);
+  if      (status == eslEFORMAT) p7_Fail((char *) "Parse failed (sequence file %s)\n%s\n", sqfp->filename, sqfp->get_error(sqfp));     
+  else if (status != eslOK)      p7_Fail((char *) "Unexpected error %d reading sequence file %s", status, sqfp->filename);
   esl_sqfile_Close(sqfp);
 
   /* Configure a profile from the HMM */

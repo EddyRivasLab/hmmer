@@ -784,7 +784,7 @@ utest_singlepath(FILE *diagfp, ESL_RANDOMNESS *rng, int M, const ESL_ALPHABET *a
   ESL_SQ     *sq        = esl_sq_CreateDigital(bg->abc);
   P7_TRACE   *tr        = p7_trace_Create();
   P7_TRACE   *vtr       = p7_trace_Create();
-  P7_ANCHOR  *anch      = malloc(sizeof(P7_ANCHOR)* 3);   // utest is uniglocal, so it will have D=1 and only one anchor; +2 for sentinels
+  P7_ANCHOR  *anch      = (P7_ANCHOR *) malloc(sizeof(P7_ANCHOR)* 3);   // utest is uniglocal, so it will have D=1 and only one anchor; +2 for sentinels
   P7_REFMX   *rxv       = p7_refmx_Create(M, 20);          // 20 is arbitrary; all DP routines will reallocate as needed.
   P7_REFMX   *rxf       = p7_refmx_Create(M, 20);
   P7_REFMX   *rxb       = p7_refmx_Create(M, 20);
@@ -1435,10 +1435,10 @@ utest_multimulti(FILE *diagfp, ESL_RANDOMNESS *rng, int M, const ESL_ALPHABET *a
 
 static ESL_OPTIONS options[] = {
   /* name           type      default  env  range toggles reqs incomp  help                                       docgroup*/
-  { "-h",     eslARG_NONE,      FALSE, NULL, NULL,  NULL,  NULL, NULL, "show brief help on version and usage",           0 },
-  { "-s",     eslARG_INT,  p7_RNGSEED, NULL, NULL,  NULL,  NULL, NULL, "set random number seed to <n>",                  0 },
-  { "-N",     eslARG_INT,       "100", NULL, NULL,  NULL,  NULL, NULL, "number of times to run utest for --diag",        0 },
-  { "--diag", eslARG_STRING,     NULL, NULL, NULL,  NULL,  NULL, NULL, "dump data on a utest's chance failure rate",     0 },
+  { (char *) "-h",     eslARG_NONE,      FALSE, NULL, NULL,  NULL,  NULL, NULL,(char *)  "show brief help on version and usage",           0 },
+  { (char *) "-s",     eslARG_INT,  (char *) p7_RNGSEED, NULL, NULL,  NULL,  NULL, NULL, (char *) "set random number seed to <n>",                  0 },
+  { (char *) "-N",     eslARG_INT,      (char *)  "100", NULL, NULL,  NULL,  NULL, NULL,(char *)  "number of times to run utest for --diag",        0 },
+  {(char *)  "--diag", eslARG_STRING,     NULL, NULL, NULL,  NULL,  NULL, NULL, (char *) "dump data on a utest's chance failure rate",     0 },
   {  0, 0, 0, 0, 0, 0, 0, 0, 0, 0 },
 };
 static char usage[]  = "[-options]";
@@ -1448,14 +1448,14 @@ int
 main(int argc, char **argv)
 {
   ESL_GETOPTS    *go   = p7_CreateDefaultApp(options, 0, argc, argv, banner, usage);
-  ESL_RANDOMNESS *rng  = esl_randomness_Create(esl_opt_GetInteger(go, "-s"));
+  ESL_RANDOMNESS *rng  = esl_randomness_Create(esl_opt_GetInteger(go, (char *) "-s"));
   ESL_ALPHABET   *abc  = esl_alphabet_Create(eslAMINO);
   int             M    = 10;
-  int             N    = esl_opt_GetInteger(go, "-N");
+  int             N    = esl_opt_GetInteger(go, (char *) "-N");
 
-  if (esl_opt_IsOn(go, "--diag"))
+  if (esl_opt_IsOn(go, (char *) "--diag"))
     {  // --diag is for studying chance failure rates, error distributions
-      char *which = esl_opt_GetString(go, "--diag");
+      char *which = esl_opt_GetString(go, (char *) "--diag");
 
       if      (strcmp(which, "overwrite")       == 0) while (N--) utest_overwrite      (stdout, rng, M, abc);
       else if (strcmp(which, "singlepath")      == 0) while (N--) utest_singlepath     (stdout, rng, M, abc);

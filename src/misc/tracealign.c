@@ -489,7 +489,7 @@ map_new_msa(P7_TRACE **tr, int nseq, int M, int optflags, int **ret_inscount,
 	  case p7T_N:               if (tr[idx]->st[z-1] == p7T_N) insnum[0]++; break;
 	  case p7T_C:               if (tr[idx]->st[z-1] == p7T_C) insnum[M]++; break;
 	  case p7T_ML: case p7T_MG: matuse[tr[idx]->k[z]] = TRUE;               break;
-	  case p7T_J: p7_Die("J state unsupported");
+	  case p7T_J: p7_Die((char *)"J state unsupported");
 	  default:                                                              break;
 	  }
 	}
@@ -1090,14 +1090,14 @@ mark_fragments_text(ESL_MSA *msa, P7_TRACE **tr)
 
 static ESL_OPTIONS options[] = {
   /* name             type        default      env  range   toggles   reqs  incomp               help                                          docgroup*/
-  { "-h",          eslARG_NONE,     FALSE,     NULL, NULL,   NULL,    NULL,  NULL, "show brief help on version and usage",                              1 },
-  { "-o",          eslARG_OUTFILE,   NULL,     NULL, NULL,   NULL,    NULL,  NULL, "output alignment to file <f>, not stdout",                          1 },
-  { "--trim",      eslARG_NONE,     FALSE,     NULL, NULL,   NULL,    NULL,  NULL, "trim terminal tails of nonaligned residues from alignment",         2 },
-  { "--amino",     eslARG_NONE,     FALSE,     NULL, NULL,   NULL,    NULL,  NULL, "assert <seqfile>, <hmmfile> both protein: no autodetection",  2 },
-  { "--dna",       eslARG_NONE,     FALSE,     NULL, NULL,   NULL,    NULL,  NULL, "assert <seqfile>, <hmmfile> both DNA: no autodetection",      2 },
-  { "--rna",       eslARG_NONE,     FALSE,     NULL, NULL,   NULL,    NULL,  NULL, "assert <seqfile>, <hmmfile> both RNA: no autodetection",      2 },
-  { "--informat",  eslARG_STRING,    NULL,     NULL, NULL,   NULL,    NULL,  NULL, "assert <seqfile> is in format <s>: no autodetection",            2 },
-  { "--outformat", eslARG_STRING, "Stockholm", NULL, NULL,   NULL,    NULL,  NULL, "output alignment in format <s>",                                    2 },
+  { (char *) "-h",          eslARG_NONE,     FALSE,     NULL, NULL,   NULL,    NULL,  NULL, (char *) "show brief help on version and usage",                              1 },
+  {(char *)  "-o",          eslARG_OUTFILE,   NULL,     NULL, NULL,   NULL,    NULL,  NULL, (char *) "output alignment to file <f>, not stdout",                          1 },
+  { (char *) "--trim",      eslARG_NONE,     FALSE,     NULL, NULL,   NULL,    NULL,  NULL, (char *) "trim terminal tails of nonaligned residues from alignment",         2 },
+  { (char *) "--amino",     eslARG_NONE,     FALSE,     NULL, NULL,   NULL,    NULL,  NULL, (char *) "assert <seqfile>, <hmmfile> both protein: no autodetection",  2 },
+  { (char *) "--dna",       eslARG_NONE,     FALSE,     NULL, NULL,   NULL,    NULL,  NULL, (char *) "assert <seqfile>, <hmmfile> both DNA: no autodetection",      2 },
+  { (char *) "--rna",       eslARG_NONE,     FALSE,     NULL, NULL,   NULL,    NULL,  NULL, (char *) "assert <seqfile>, <hmmfile> both RNA: no autodetection",      2 },
+  { (char *) "--informat",  eslARG_STRING,    NULL,     NULL, NULL,   NULL,    NULL,  NULL, (char *) "assert <seqfile> is in format <s>: no autodetection",            2 },
+  { (char *) "--outformat", eslARG_STRING, (char *) "Stockholm", NULL, NULL,   NULL,    NULL,  NULL, (char *) "output alignment in format <s>",                                    2 },
   {  0, 0, 0, 0, 0, 0, 0, 0, 0, 0 },
 };
 static char usage[]  = "[-options] <hmmfile> <seqfile>";
@@ -1141,7 +1141,7 @@ main(int argc, char **argv)
 
   if (esl_opt_VerifyConfig(go)               != eslOK) esl_fatal(argv[0], "Error in configuration: %s\n",       go->errbuf);
 
-  if (esl_opt_GetBoolean(go, "-h") )  {
+  if (esl_opt_GetBoolean(go, (char *) "-h") )  {
     p7_banner (stdout, argv[0], banner);
     esl_usage (stdout, argv[0], usage);
     puts("\nBasic options:");
@@ -1162,21 +1162,21 @@ main(int argc, char **argv)
     esl_fatal(argv[0], "Either <hmmfile> or <seqfile> may be '-' (to read from stdin), but not both.\n");
 
   msaopts |= p7_ALL_CONSENSUS_COLS; /* default as of 3.1 */
-  if (esl_opt_GetBoolean(go, "--trim"))    msaopts |= p7_TRIM;
+  if (esl_opt_GetBoolean(go,(char *)  "--trim"))    msaopts |= p7_TRIM;
 
   /* If caller declared an input format, decode it
    */
-  if (esl_opt_IsOn(go, "--informat")) {
-    infmt = esl_sqio_EncodeFormat(esl_opt_GetString(go, "--informat"));
-    if (infmt == eslSQFILE_UNKNOWN) esl_fatal(argv[0], "%s is not a recognized input sequence file format\n", esl_opt_GetString(go, "--informat"));
+  if (esl_opt_IsOn(go, (char *) "--informat")) {
+    infmt = esl_sqio_EncodeFormat(esl_opt_GetString(go,(char *)  (char *) "--informat"));
+    if (infmt == eslSQFILE_UNKNOWN) esl_fatal(argv[0], "%s is not a recognized input sequence file format\n", esl_opt_GetString(go, (char *) "--informat"));
   }
 
   /* Determine output alignment file format */
-  outfmt = esl_msafile_EncodeFormat(esl_opt_GetString(go, "--outformat"));
-  if (outfmt == eslMSAFILE_UNKNOWN)    esl_fatal(argv[0], "%s is not a recognized output MSA file format\n", esl_opt_GetString(go, "--outformat"));
+  outfmt = esl_msafile_EncodeFormat(esl_opt_GetString(go,(char *)  (char *) "--outformat"));
+  if (outfmt == eslMSAFILE_UNKNOWN)    esl_fatal(argv[0], "%s is not a recognized output MSA file format\n", esl_opt_GetString(go, (char *) "--outformat"));
 
   /* Open output stream */
-  if ( (outfile = esl_opt_GetString(go, "-o")) != NULL)
+  if ( (outfile = esl_opt_GetString(go,(char *)  "-o")) != NULL)
   {
     if ((ofp = fopen(outfile, "w")) == NULL)
       esl_fatal(argv[0], "failed to open -o output file %s for writing\n", outfile);
@@ -1185,25 +1185,25 @@ main(int argc, char **argv)
 
   /* If caller forced an alphabet on us, create the one the caller wants
    */
-  if      (esl_opt_GetBoolean(go, "--amino")) abc = esl_alphabet_Create(eslAMINO);
-  else if (esl_opt_GetBoolean(go, "--dna"))   abc = esl_alphabet_Create(eslDNA);
-  else if (esl_opt_GetBoolean(go, "--rna"))   abc = esl_alphabet_Create(eslRNA);
+  if      (esl_opt_GetBoolean(go, (char *) "--amino")) abc = esl_alphabet_Create(eslAMINO);
+  else if (esl_opt_GetBoolean(go, (char *) "--dna"))   abc = esl_alphabet_Create(eslDNA);
+  else if (esl_opt_GetBoolean(go, (char *) "--rna"))   abc = esl_alphabet_Create(eslRNA);
 
   /* Read one HMM, and make sure there's only one.
    */
   status = p7_hmmfile_OpenE(hmmfile, NULL, &hfp, errbuf);
-  if      (status == eslENOTFOUND) p7_Fail("File existence/permissions problem in trying to open HMM file %s.\n%s\n", hmmfile, errbuf);
-  else if (status == eslEFORMAT)   p7_Fail("File format problem in trying to open HMM file %s.\n%s\n",                hmmfile, errbuf);
-  else if (status != eslOK)        p7_Fail("Unexpected error %d in opening HMM file %s.\n%s\n",                       status, hmmfile, errbuf);
+  if      (status == eslENOTFOUND) p7_Fail((char *) "File existence/permissions problem in trying to open HMM file %s.\n%s\n", hmmfile, errbuf);
+  else if (status == eslEFORMAT)   p7_Fail((char *) "File format problem in trying to open HMM file %s.\n%s\n",                hmmfile, errbuf);
+  else if (status != eslOK)        p7_Fail((char *) "Unexpected error %d in opening HMM file %s.\n%s\n",                       status, hmmfile, errbuf);
 
   status = p7_hmmfile_Read(hfp, &abc, &hmm);
-  if      (status == eslEFORMAT)   p7_Fail("Bad file format in HMM file %s:\n%s\n",          hfp->fname, hfp->errbuf);
-  else if (status == eslEINCOMPAT) p7_Fail("HMM in %s is not in the expected %s alphabet\n", hfp->fname, esl_abc_DecodeType(abc->type));
-  else if (status == eslEOF)       p7_Fail("Empty HMM file %s? No HMM data found.\n",        hfp->fname);
-  else if (status != eslOK)        p7_Fail("Unexpected error in reading HMMs from %s\n",     hfp->fname);
+  if      (status == eslEFORMAT)   p7_Fail((char *) "Bad file format in HMM file %s:\n%s\n",          hfp->fname, hfp->errbuf);
+  else if (status == eslEINCOMPAT) p7_Fail((char *) "HMM in %s is not in the expected %s alphabet\n", hfp->fname, esl_abc_DecodeType(abc->type));
+  else if (status == eslEOF)       p7_Fail((char *) "Empty HMM file %s? No HMM data found.\n",        hfp->fname);
+  else if (status != eslOK)        p7_Fail((char *) "Unexpected error in reading HMMs from %s\n",     hfp->fname);
 
   status = p7_hmmfile_Read(hfp, &abc, NULL);
-  if      (status != eslEOF)       p7_Fail("HMM file %s does not contain just one HMM\n",    hfp->fname);
+  if      (status != eslEOF)       p7_Fail((char *) "HMM file %s does not contain just one HMM\n",    hfp->fname);
   p7_hmmfile_Close(hfp);
 
 
@@ -1211,9 +1211,9 @@ main(int argc, char **argv)
   /* Read digital sequences into an array (possibly concat'ed onto mapped seqs)
    */
   status = esl_sqfile_OpenDigital(abc, seqfile, infmt, NULL, &sqfp);
-  if      (status == eslENOTFOUND) p7_Fail("Failed to open sequence file %s for reading\n",          seqfile);
-  else if (status == eslEFORMAT)   p7_Fail("Sequence file %s is empty or misformatted\n",            seqfile);
-  else if (status != eslOK)        p7_Fail("Unexpected error %d opening sequence file %s\n", status, seqfile);
+  if      (status == eslENOTFOUND) p7_Fail((char *) "Failed to open sequence file %s for reading\n",          seqfile);
+  else if (status == eslEFORMAT)   p7_Fail((char *) "Sequence file %s is empty or misformatted\n",            seqfile);
+  else if (status != eslOK)        p7_Fail((char *) "Unexpected error %d opening sequence file %s\n", status, seqfile);
 
   ESL_RALLOC(sq, p, sizeof(ESL_SQ *) * (totseq + 1));
   sq[totseq] = esl_sq_CreateDigital(abc);

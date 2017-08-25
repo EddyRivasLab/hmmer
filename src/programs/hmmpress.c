@@ -14,8 +14,8 @@
 #include "hardware/hardware.h"
 static ESL_OPTIONS options[] = {
   /* name           type      default  env  range     toggles      reqs   incomp  help   docgroup*/
-  { "-h",        eslARG_NONE,   FALSE, NULL, NULL,      NULL,      NULL,    NULL, "show brief help on version and usage",          0 },
-  { "-f",        eslARG_NONE,   FALSE, NULL, NULL,      NULL,      NULL,    NULL, "force: overwrite any previous pressed files",   0 },
+  {(char *)  "-h",        eslARG_NONE,   FALSE, NULL, NULL,      NULL,      NULL,    NULL, (char *) "show brief help on version and usage",          0 },
+  {(char *)  "-f",        eslARG_NONE,   FALSE, NULL, NULL,      NULL,      NULL,    NULL, (char *) "force: overwrite any previous pressed files",   0 },
   {  0, 0, 0, 0, 0, 0, 0, 0, 0, 0 },
 };
 static char usage[]  = "[-options] <hmmfile>";
@@ -44,26 +44,26 @@ main(int argc, char **argv)
   int            status;
   char           errbuf[eslERRBUFSIZE];
 
-  if (strcmp(hmmfile, "-") == 0) p7_Fail("Can't use - for <hmmfile> argument: can't index standard input\n");
+  if (strcmp(hmmfile, "-") == 0) p7_Fail((char *) "Can't use - for <hmmfile> argument: can't index standard input\n");
 
   status = p7_hmmfile_OpenENoDB(hmmfile, NULL, &hfp, errbuf);
-  if      (status == eslENOTFOUND) p7_Fail("File existence/permissions problem in trying to open HMM file %s.\n%s\n", hmmfile, errbuf);
-  else if (status == eslEFORMAT)   p7_Fail("File format problem in trying to open HMM file %s.\n%s\n",                hmmfile, errbuf);
-  else if (status != eslOK)        p7_Fail("Unexpected error %d in opening HMM file %s.\n%s\n",                       status, hmmfile, errbuf);  
+  if      (status == eslENOTFOUND) p7_Fail((char *) "File existence/permissions problem in trying to open HMM file %s.\n%s\n", hmmfile, errbuf);
+  else if (status == eslEFORMAT)   p7_Fail((char *) "File format problem in trying to open HMM file %s.\n%s\n",                hmmfile, errbuf);
+  else if (status != eslOK)        p7_Fail((char *) "Unexpected error %d in opening HMM file %s.\n%s\n",                       status, hmmfile, errbuf);  
 
-  if (hfp->do_stdin || hfp->do_gzip) p7_Fail("HMM file %s must be a normal file, not gzipped or a stdin pipe", hmmfile);
+  if (hfp->do_stdin || hfp->do_gzip) p7_Fail((char *) "HMM file %s must be a normal file, not gzipped or a stdin pipe", hmmfile);
 
   open_db_files(go, hmmfile, &mfp, &ffp, &pfp, &nssi);
 
   if (esl_newssi_AddFile(nssi, hfp->fname, 0, &fh) != eslOK) /* 0 = format code (HMMs don't have any yet) */
-    p7_Die("Failed to add HMM file %s to new SSI index\n", hfp->fname);
+    p7_Die((char *) "Failed to add HMM file %s to new SSI index\n", hfp->fname);
 
   printf("Working...    "); 
   fflush(stdout);
 
   while ((status = p7_hmmfile_Read(hfp, &abc, &hmm)) == eslOK)
     {
-     if (hmm->name == NULL) p7_Fail("Every HMM must have a name to be indexed. Failed to find name of HMM #%d\n", nmodel+1);
+     if (hmm->name == NULL) p7_Fail((char *) "Every HMM must have a name to be indexed. Failed to find name of HMM #%d\n", nmodel+1);
 
      if (nmodel == 0) { 	/* first time initialization, now that alphabet known */
 	bg = p7_bg_Create(abc);
@@ -78,13 +78,13 @@ main(int argc, char **argv)
       om = p7_oprofile_Create(gm->M, abc);
       p7_oprofile_Convert(gm, om);
       
-      if ((om->offs[p7_MOFFSET] = ftello(mfp)) == -1) p7_Fail("Failed to ftello() current disk position of HMM db file");
-      if ((om->offs[p7_FOFFSET] = ftello(ffp)) == -1) p7_Fail("Failed to ftello() current disk position of MSV db file");
-      if ((om->offs[p7_POFFSET] = ftello(pfp)) == -1) p7_Fail("Failed to ftello() current disk position of profile db file");
+      if ((om->offs[p7_MOFFSET] = ftello(mfp)) == -1) p7_Fail((char *) "Failed to ftello() current disk position of HMM db file");
+      if ((om->offs[p7_FOFFSET] = ftello(ffp)) == -1) p7_Fail((char *) "Failed to ftello() current disk position of MSV db file");
+      if ((om->offs[p7_POFFSET] = ftello(pfp)) == -1) p7_Fail((char *) "Failed to ftello() current disk position of profile db file");
 
-      if (esl_newssi_AddKey(nssi, hmm->name, fh, om->offs[p7_MOFFSET], 0, 0) != eslOK)	p7_Fail("Failed to add key %s to SSI index", hmm->name);
+      if (esl_newssi_AddKey(nssi, hmm->name, fh, om->offs[p7_MOFFSET], 0, 0) != eslOK)	p7_Fail((char *) "Failed to add key %s to SSI index", hmm->name);
       if (hmm->acc) {
-	if (esl_newssi_AddAlias(nssi, hmm->acc, hmm->name) != eslOK) p7_Fail("Failed to add secondary key %s to SSI index", hmm->acc);
+	if (esl_newssi_AddAlias(nssi, hmm->acc, hmm->name) != eslOK) p7_Fail((char *) "Failed to add secondary key %s to SSI index", hmm->acc);
       }
 
       p7_hmmfile_WriteBinary(mfp, -1, hmm);
@@ -94,11 +94,11 @@ main(int argc, char **argv)
       p7_oprofile_Destroy(om);
       p7_hmm_Destroy(hmm);
     }
-  if      (status == eslEFORMAT)   p7_Fail("bad file format in HMM file %s",             hmmfile);
-  else if (status == eslEINCOMPAT) p7_Fail("HMM file %s contains different alphabets",   hmmfile);
-  else if (status != eslEOF)       p7_Fail("Unexpected error in reading HMMs from %s",   hmmfile);
+  if      (status == eslEFORMAT)   p7_Fail((char *) "bad file format in HMM file %s",             hmmfile);
+  else if (status == eslEINCOMPAT) p7_Fail((char *) "HMM file %s contains different alphabets",   hmmfile);
+  else if (status != eslEOF)       p7_Fail((char *) "Unexpected error in reading HMMs from %s",   hmmfile);
 
-  if (esl_newssi_Write(nssi) != eslOK) p7_Fail("Failed to write keys to ssi file\n");
+  if (esl_newssi_Write(nssi) != eslOK) p7_Fail((char *) "Failed to write keys to ssi file\n");
   
   printf("done.\n");
   if (nssi->nsecondary > 0) 
@@ -133,26 +133,26 @@ open_db_files(ESL_GETOPTS *go, char *basename, FILE **ret_mfp,  FILE **ret_ffp, 
   FILE       *ffp             = NULL;
   FILE       *pfp             = NULL;
   ESL_NEWSSI *nssi            = NULL;
-  int         allow_overwrite = esl_opt_GetBoolean(go, "-f");
+  int         allow_overwrite = esl_opt_GetBoolean(go, (char *) "-f");
   int         status;
 
-  if (esl_sprintf(&ssifile, "%s.h3i", basename) != eslOK) p7_Die("esl_sprintf() failed");
+  if (esl_sprintf(&ssifile, "%s.h3i", basename) != eslOK) p7_Die((char *) "esl_sprintf() failed");
   status = esl_newssi_Open(ssifile, allow_overwrite, &nssi);
-  if      (status == eslENOTFOUND)   p7_Fail("failed to open SSI index %s", ssifile);
-  else if (status == eslEOVERWRITE)  p7_Fail("Looks like %s is already pressed (.h3i file present, anyway):\nDelete old hmmpress indices first", basename);
-  else if (status != eslOK)          p7_Fail("failed to create a new SSI index");
+  if      (status == eslENOTFOUND)   p7_Fail((char *) "failed to open SSI index %s", ssifile);
+  else if (status == eslEOVERWRITE)  p7_Fail((char *) "Looks like %s is already pressed (.h3i file present, anyway):\nDelete old hmmpress indices first", basename);
+  else if (status != eslOK)          p7_Fail((char *) "failed to create a new SSI index");
 
-  if (esl_sprintf(&mfile, "%s.h3m", basename) != eslOK) p7_Die("esl_sprintf() failed");
-  if (! allow_overwrite && esl_FileExists(mfile))       p7_Fail("Binary HMM file %s already exists;\nDelete old hmmpress indices first", mfile);
-  if ((mfp = fopen(mfile, "wb"))              == NULL)  p7_Fail("Failed to open binary HMM file %s for writing", mfile);
+  if (esl_sprintf(&mfile, "%s.h3m", basename) != eslOK) p7_Die((char *) "esl_sprintf() failed");
+  if (! allow_overwrite && esl_FileExists(mfile))       p7_Fail((char *) "Binary HMM file %s already exists;\nDelete old hmmpress indices first", mfile);
+  if ((mfp = fopen(mfile, "wb"))              == NULL)  p7_Fail((char *) "Failed to open binary HMM file %s for writing", mfile);
 
-  if (esl_sprintf(&ffile, "%s.h3f", basename) != eslOK) p7_Die("esl_sprintf() failed");
-  if (! allow_overwrite && esl_FileExists(ffile))       p7_Fail("Binary MSV filter file %s already exists\nDelete old hmmpress indices first", ffile);
-  if ((ffp = fopen(ffile, "wb"))              == NULL)  p7_Fail("Failed to open binary MSV filter file %s for writing", ffile);
+  if (esl_sprintf(&ffile, "%s.h3f", basename) != eslOK) p7_Die((char *) "esl_sprintf() failed");
+  if (! allow_overwrite && esl_FileExists(ffile))       p7_Fail((char *) "Binary MSV filter file %s already exists\nDelete old hmmpress indices first", ffile);
+  if ((ffp = fopen(ffile, "wb"))              == NULL)  p7_Fail((char *) "Failed to open binary MSV filter file %s for writing", ffile);
 
-  if (esl_sprintf(&pfile, "%s.h3p", basename) != eslOK) p7_Die("esl_sprintf() failed");
-  if (! allow_overwrite && esl_FileExists(pfile))       p7_Fail("Binary profile file %s already exists\nDelete old hmmpress indices first", pfile);
-  if ((pfp = fopen(pfile, "wb"))              == NULL)  p7_Fail("Failed to open binary profile file %s for writing", pfile);
+  if (esl_sprintf(&pfile, "%s.h3p", basename) != eslOK) p7_Die((char *) "esl_sprintf() failed");
+  if (! allow_overwrite && esl_FileExists(pfile))       p7_Fail((char *) "Binary profile file %s already exists\nDelete old hmmpress indices first", pfile);
+  if ((pfp = fopen(pfile, "wb"))              == NULL)  p7_Fail((char *) "Failed to open binary profile file %s for writing", pfile);
 
   free(mfile);     free(ffile);     free(pfile);      free(ssifile);
   *ret_mfp = mfp;  *ret_ffp = ffp;  *ret_pfp = pfp;   *ret_nssi = nssi;

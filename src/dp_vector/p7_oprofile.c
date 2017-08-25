@@ -70,11 +70,11 @@ p7_oprofile_Create(int allocM, const ESL_ALPHABET *abc)
   /* level 1 */
   /* Vector memory has to be aligned. */
   /* Knudsen SSV implementation requires p7O_EXTRA_SB vectors slop at end of rbv */
-  om->rbv_mem = esl_alloc_aligned( abc->Kp *  (maxQb+p7O_EXTRA_SB)  * p7_VWIDTH,  p7_VALIGN);
-  om->rwv_mem = esl_alloc_aligned( abc->Kp *     maxQw              * p7_VWIDTH,  p7_VALIGN);
-  om->twv     = esl_alloc_aligned( p7O_NTRANS *  maxQw              * p7_VWIDTH,  p7_VALIGN);
-  om->rfv_mem = esl_alloc_aligned( abc->Kp *     maxQf              * p7_VWIDTH,  p7_VALIGN);
-  om->tfv     = esl_alloc_aligned( p7O_NTRANS *  maxQf              * p7_VWIDTH,  p7_VALIGN);
+  om->rbv_mem = (int8_t *) esl_alloc_aligned( abc->Kp *  (maxQb+p7O_EXTRA_SB)  * p7_VWIDTH,  p7_VALIGN);
+  om->rwv_mem = (int16_t *) esl_alloc_aligned( abc->Kp *     maxQw              * p7_VWIDTH,  p7_VALIGN);
+  om->twv     = (int16_t *) esl_alloc_aligned( p7O_NTRANS *  maxQw              * p7_VWIDTH,  p7_VALIGN);
+  om->rfv_mem = (float *) esl_alloc_aligned( abc->Kp *     maxQf              * p7_VWIDTH,  p7_VALIGN);
+  om->tfv     = (float *) esl_alloc_aligned( p7O_NTRANS *  maxQf              * p7_VWIDTH,  p7_VALIGN);
 
   /* Arrays of pointers into that aligned memory don't themselves need to be aligned  */
   ESL_ALLOC(om->rbv, sizeof(float *) * abc->Kp); 
@@ -867,16 +867,16 @@ static char *
 oprofile_decode_t(int t)
 {
   switch (t) {
-  case p7O_BM: return "t_BM";
-  case p7O_MM: return "t_MM";
-  case p7O_IM: return "t_IM";
-  case p7O_DM: return "t_DM";
-  case p7O_MD: return "t_MD";
-  case p7O_MI: return "t_MI";
-  case p7O_II: return "t_II";
-  case p7O_DD: return "t_DD";
+  case p7O_BM: return (char *)"t_BM";
+  case p7O_MM: return (char *)"t_MM";
+  case p7O_IM: return (char *)"t_IM";
+  case p7O_DM: return (char *)"t_DM";
+  case p7O_MD: return (char *)"t_MD";
+  case p7O_MI: return (char *)"t_MI";
+  case p7O_II: return (char *)"t_II";
+  case p7O_DD: return (char *)"t_DD";
   }
-  esl_exception(eslEINVAL, FALSE, __FILE__, __LINE__, "no such oprofile transition type code %d", t);
+  esl_exception(eslEINVAL, FALSE, (char *)__FILE__, __LINE__, (char *)"no such oprofile transition type code %d", t);
   return NULL;
 }
 
@@ -1284,9 +1284,9 @@ p7_oprofile_Compare(const P7_OPROFILE *om1, const P7_OPROFILE *om2, float tol, c
 
 static ESL_OPTIONS options[] = {
   /* name           type      default  env  range toggles reqs incomp  help                                       docgroup*/
-  { "-h",        eslARG_NONE,   FALSE, NULL, NULL,  NULL,  NULL, NULL, "show brief help on version and usage",             0 },
-  { "-L",        eslARG_INT,    "400", NULL, NULL,  NULL,  NULL, NULL, "length of target sequence",                        0 },
-  { "-N",        eslARG_INT, "100000", NULL, NULL,  NULL,  NULL, NULL, "number of conversions to time",                    0 },
+  { (char *) "-h",        eslARG_NONE,   FALSE, NULL, NULL,  NULL,  NULL, NULL, (char *) "show brief help on version and usage",             0 },
+  { (char *) "-L",        eslARG_INT,   (char *) "400", NULL, NULL,  NULL,  NULL, NULL, (char *) "length of target sequence",                        0 },
+  { (char *) "-N",        eslARG_INT,(char *)  "100000", NULL, NULL,  NULL,  NULL, NULL, (char *) "number of conversions to time",                    0 },
   {  0, 0, 0, 0, 0, 0, 0, 0, 0, 0 },
 };
 static char usage[]  = "[-options] <hmmfile>";
@@ -1304,12 +1304,12 @@ main(int argc, char **argv)
   P7_BG          *bg      = NULL;
   P7_PROFILE     *gm      = NULL;
   P7_OPROFILE    *om      = NULL;
-  int             L       = esl_opt_GetInteger(go, "-L");
-  int             N       = esl_opt_GetInteger(go, "-N");
+  int             L       = esl_opt_GetInteger(go,(char *)  "-L");
+  int             N       = esl_opt_GetInteger(go, (char *) "-N");
   int             i;
 
-  if (p7_hmmfile_OpenE(hmmfile, NULL, &hfp, NULL) != eslOK) p7_Fail("Failed to open HMM file %s", hmmfile);
-  if (p7_hmmfile_Read(hfp, &abc, &hmm)            != eslOK) p7_Fail("Failed to read HMM");
+  if (p7_hmmfile_OpenE(hmmfile, NULL, &hfp, NULL) != eslOK) p7_Fail((char *) "Failed to open HMM file %s", hmmfile);
+  if (p7_hmmfile_Read(hfp, &abc, &hmm)            != eslOK) p7_Fail((char *) "Failed to read HMM");
 
   bg = p7_bg_Create(abc);
   p7_bg_SetLength(bg, L);
@@ -1321,7 +1321,7 @@ main(int argc, char **argv)
   for (i = 0; i < N; i++)
     p7_oprofile_Convert(gm, om);
   esl_stopwatch_Stop(w);
-  esl_stopwatch_Display(stdout, w, "# CPU time: ");
+  esl_stopwatch_Display(stdout, w,(char *)  "# CPU time: ");
   printf("# M = %d\n", gm->M);
 
   p7_oprofile_Destroy(om);
@@ -1358,7 +1358,7 @@ main(int argc, char **argv)
 
 static ESL_OPTIONS options[] = {
    /* name  type         default  env   range togs  reqs  incomp  help                docgrp */
-  {"-h",  eslARG_NONE,    FALSE, NULL, NULL, NULL, NULL, NULL, "show help and usage",                            0},
+  {(char *) "-h",  eslARG_NONE,    FALSE, NULL, NULL, NULL, NULL, NULL, (char *) "show help and usage",                            0},
   { 0,0,0,0,0,0,0,0,0,0},
 };
 static char usage[]  = "[-options] <hmmfile>";
@@ -1380,15 +1380,15 @@ main(int argc, char **argv)
   char          errbuf[eslERRBUFSIZE];
 
   status = p7_hmmfile_OpenE(hmmfile, NULL, &hfp, errbuf);
-  if      (status == eslENOTFOUND) p7_Fail("File existence/permissions problem in trying to open HMM file %s.\n%s\n", hmmfile, errbuf);
-  else if (status == eslEFORMAT)   p7_Fail("File format problem in trying to open HMM file %s.\n%s\n",                hmmfile, errbuf);
-  else if (status != eslOK)        p7_Fail("Unexpected error %d in opening HMM file %s.\n%s\n",               status, hmmfile, errbuf);  
+  if      (status == eslENOTFOUND) p7_Fail((char *) "File existence/permissions problem in trying to open HMM file %s.\n%s\n", hmmfile, errbuf);
+  else if (status == eslEFORMAT)   p7_Fail((char *) "File format problem in trying to open HMM file %s.\n%s\n",                hmmfile, errbuf);
+  else if (status != eslOK)        p7_Fail((char *) "Unexpected error %d in opening HMM file %s.\n%s\n",               status, hmmfile, errbuf);  
 
   status = p7_hmmfile_Read(hfp, &abc, &hmm);
-  if      (status == eslEFORMAT)   p7_Fail("Bad file format in HMM file %s:\n%s\n",          hfp->fname, hfp->errbuf);
-  else if (status == eslEINCOMPAT) p7_Fail("HMM in %s is not in the expected %s alphabet\n", hfp->fname, esl_abc_DecodeType(abc->type));
-  else if (status == eslEOF)       p7_Fail("Empty HMM file %s? No HMM data found.\n",        hfp->fname);
-  else if (status != eslOK)        p7_Fail("Unexpected error in reading HMMs from %s\n",     hfp->fname);
+  if      (status == eslEFORMAT)   p7_Fail((char *) "Bad file format in HMM file %s:\n%s\n",          hfp->fname, hfp->errbuf);
+  else if (status == eslEINCOMPAT) p7_Fail((char *) "HMM in %s is not in the expected %s alphabet\n", hfp->fname, esl_abc_DecodeType(abc->type));
+  else if (status == eslEOF)       p7_Fail((char *) "Empty HMM file %s? No HMM data found.\n",        hfp->fname);
+  else if (status != eslOK)        p7_Fail((char *) "Unexpected error in reading HMMs from %s\n",     hfp->fname);
 
   bg  = p7_bg_Create(abc);
   gm  = p7_profile_Create(hmm->M, abc);   

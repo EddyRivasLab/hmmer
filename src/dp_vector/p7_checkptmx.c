@@ -223,7 +223,7 @@ p7_checkptmx_Create(int M, int L, int64_t redline)
 
   /* Level 2 allocations: row pointers and dp cell memory */
   ox->allocN = ox->allocR * ox->allocW; 
-  ox->dp_mem = esl_alloc_aligned(sizeof(float) * ox->allocN, p7_VALIGN);  // dp_mem is aligned vector memory
+  ox->dp_mem = (float *) esl_alloc_aligned(sizeof(float) * ox->allocN, p7_VALIGN);  // dp_mem is aligned vector memory
   if (ox->dp_mem == NULL) { status = eslEMEM; goto ERROR; }
 
   ESL_ALLOC( ox->dpf, sizeof(float **) * ox->allocR);    
@@ -355,7 +355,7 @@ p7_checkptmx_Reinit(P7_CHECKPTMX *ox, int M, int L)
       ox->allocN = ox->validR * ox->allocW;
 
       esl_alloc_free(ox->dp_mem);
-      ox->dp_mem = esl_alloc_aligned(sizeof(float) * ox->allocN, p7_VALIGN);
+      ox->dp_mem = (float *) esl_alloc_aligned(sizeof(float) * ox->allocN, p7_VALIGN);
       if (ox->dp_mem == NULL) { status = eslEMEM; goto ERROR; }
 
       reset_dp_ptrs = TRUE;

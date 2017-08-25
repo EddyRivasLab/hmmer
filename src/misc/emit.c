@@ -563,8 +563,8 @@ main(int argc, char **argv)
 
   r  = esl_randomness_CreateFast(0);
   tr = p7_trace_Create();
-  if (p7_hmmfile_OpenE(hmmfile, NULL, &hfp, NULL) != eslOK) p7_Fail("failed to open %s", hmmfile);
-  if (p7_hmmfile_Read(hfp, &abc, &hmm)            != eslOK) p7_Fail("failed to read HMM");
+  if (p7_hmmfile_OpenE(hmmfile, NULL, &hfp, NULL) != eslOK) p7_Fail((char *) "failed to open %s", hmmfile);
+  if (p7_hmmfile_Read(hfp, &abc, &hmm)            != eslOK) p7_Fail((char *) "failed to read HMM");
   sq = esl_sq_CreateDigital(abc);
   bg = p7_bg_Create(abc);
   gm = p7_profile_Create(hmm->M, abc);
@@ -669,10 +669,10 @@ utest_profile_emit(ESL_RANDOMNESS *rng, P7_HMM *hmm, P7_PROFILE *gm, P7_BG *bg, 
 
 static ESL_OPTIONS options[] = {
   /* name           type      default  env  range toggles reqs incomp  help                                       docgroup*/
-  { "-h",        eslARG_NONE,   FALSE, NULL, NULL,  NULL,  NULL, NULL, "show brief help on version and usage",           0 },
-  { "-s",        eslARG_INT,     "42", NULL, NULL,  NULL,  NULL, NULL, "set random number seed to <n>",                  0 },
-  { "-M",        eslARG_INT,    "145", NULL, NULL,  NULL,  NULL, NULL, "size of random models to sample",                0 },
-  { "-N",        eslARG_INT,    "100", NULL, NULL,  NULL,  NULL, NULL, "number of random sequences to sample",           0 },
+  { (char *) "-h",        eslARG_NONE,   FALSE, NULL, NULL,  NULL,  NULL, NULL, (char *) "show brief help on version and usage",           0 },
+  { (char *) "-s",        eslARG_INT,     (char *) "42", NULL, NULL,  NULL,  NULL, NULL, (char *) "set random number seed to <n>",                  0 },
+  { (char *) "-M",        eslARG_INT,    (char *) "145", NULL, NULL,  NULL,  NULL, NULL, (char *) "size of random models to sample",                0 },
+  { (char *) "-N",        eslARG_INT,    (char *) "100", NULL, NULL,  NULL,  NULL, NULL, (char *) "number of random sequences to sample",           0 },
   {  0, 0, 0, 0, 0, 0, 0, 0, 0, 0 },
 };
 static char usage[]  = "[-options]";
@@ -682,10 +682,10 @@ int
 main(int argc, char **argv)
 {
   ESL_GETOPTS    *go           = p7_CreateDefaultApp(options, 0, argc, argv, banner, usage);
-  int             M            = esl_opt_GetInteger(go, "-M");
+  int             M            = esl_opt_GetInteger(go, (char *) "-M");
   int             L            = M; /* configured length model for profile. arbitrarily set to M, same as profile length */
-  int             N            = esl_opt_GetInteger(go, "-N");
-  ESL_RANDOMNESS *rng          = esl_randomness_CreateFast(esl_opt_GetInteger(go, "-s"));
+  int             N            = esl_opt_GetInteger(go, (char *) "-N");
+  ESL_RANDOMNESS *rng          = esl_randomness_CreateFast(esl_opt_GetInteger(go, (char *) "-s"));
   ESL_ALPHABET   *abc          = esl_alphabet_Create(eslAMINO);
   P7_BG          *bg           = p7_bg_Create(abc);
   P7_HMM         *hmm          = NULL;
@@ -732,10 +732,10 @@ main(int argc, char **argv)
 
 static ESL_OPTIONS options[] = {
   /* name           type      default  env  range toggles reqs incomp  help                                       docgroup*/
-  { "-h",        eslARG_NONE,   FALSE, NULL, NULL,  NULL,  NULL, NULL, "show brief help on version and usage",             0 },
-  { "-s",        eslARG_INT,     "42", NULL, NULL,  NULL,  NULL, NULL, "set random number seed to <n>",                    0 },
-  { "-L",        eslARG_INT,    "100", NULL, NULL,  NULL,  NULL, NULL, "configured mean seq length for profile",           0 },
-  { "-N",        eslARG_INT,     "10", NULL, NULL,  NULL,  NULL, NULL, "number of traces to emit",                         0 },
+  { (char *) "-h",        eslARG_NONE,   FALSE, NULL, NULL,  NULL,  NULL, NULL,(char *)  "show brief help on version and usage",             0 },
+  { (char *) "-s",        eslARG_INT,    (char *)  "42", NULL, NULL,  NULL,  NULL, NULL, (char *) "set random number seed to <n>",                    0 },
+  { (char *) "-L",        eslARG_INT,   (char *) "100", NULL, NULL,  NULL,  NULL, NULL, (char *) "configured mean seq length for profile",           0 },
+  { (char *) "-N",        eslARG_INT,   (char *)   "10", NULL, NULL,  NULL,  NULL, NULL, (char *) "number of traces to emit",                         0 },
   {  0, 0, 0, 0, 0, 0, 0, 0, 0, 0 },
 };
 static char usage[]  = "[-options] <hmmfile>";
@@ -745,10 +745,10 @@ int
 main(int argc, char **argv)
 {
   ESL_GETOPTS    *go      = p7_CreateDefaultApp(options, 1, argc, argv, banner, usage);
-  ESL_RANDOMNESS *rng     = esl_randomness_CreateFast(esl_opt_GetInteger(go, "-s"));
+  ESL_RANDOMNESS *rng     = esl_randomness_CreateFast(esl_opt_GetInteger(go, (char *) "-s"));
   char           *hmmfile = esl_opt_GetArg(go, 1);
-  int             L       = esl_opt_GetInteger(go, "-L");
-  int             N       = esl_opt_GetInteger(go, "-N");
+  int             L       = esl_opt_GetInteger(go, (char *) "-L");
+  int             N       = esl_opt_GetInteger(go, (char *) "-N");
   ESL_ALPHABET   *abc     = NULL;
   P7_HMMFILE     *hfp     = NULL;
   P7_HMM         *hmm     = NULL;
@@ -761,15 +761,15 @@ main(int argc, char **argv)
   int             status;
 
   status = p7_hmmfile_OpenE(hmmfile, NULL, &hfp, errbuf);
-  if      (status == eslENOTFOUND) p7_Fail("File existence/permissions problem in trying to open HMM file %s.\n%s\n", hmmfile, errbuf);
-  else if (status == eslEFORMAT)   p7_Fail("File format problem in trying to open HMM file %s.\n%s\n",                hmmfile, errbuf);
-  else if (status != eslOK)        p7_Fail("Unexpected error %d in opening HMM file %s.\n%s\n",                       status, hmmfile, errbuf);  
+  if      (status == eslENOTFOUND) p7_Fail((char *) "File existence/permissions problem in trying to open HMM file %s.\n%s\n", hmmfile, errbuf);
+  else if (status == eslEFORMAT)   p7_Fail((char *) "File format problem in trying to open HMM file %s.\n%s\n",                hmmfile, errbuf);
+  else if (status != eslOK)        p7_Fail((char *) "Unexpected error %d in opening HMM file %s.\n%s\n",                       status, hmmfile, errbuf);  
 
   status = p7_hmmfile_Read(hfp, &abc, &hmm);
-  if      (status == eslEFORMAT)   p7_Fail("Bad file format in HMM file %s:\n%s\n",          hfp->fname, hfp->errbuf);
-  else if (status == eslEINCOMPAT) p7_Fail("HMM in %s is not in the expected %s alphabet\n", hfp->fname, esl_abc_DecodeType(abc->type));
-  else if (status == eslEOF)       p7_Fail("Empty HMM file %s? No HMM data found.\n",        hfp->fname);
-  else if (status != eslOK)        p7_Fail("Unexpected error in reading HMMs from %s\n",     hfp->fname);
+  if      (status == eslEFORMAT)   p7_Fail((char *) "Bad file format in HMM file %s:\n%s\n",          hfp->fname, hfp->errbuf);
+  else if (status == eslEINCOMPAT) p7_Fail((char *) "HMM in %s is not in the expected %s alphabet\n", hfp->fname, esl_abc_DecodeType(abc->type));
+  else if (status == eslEOF)       p7_Fail((char *) "Empty HMM file %s? No HMM data found.\n",        hfp->fname);
+  else if (status != eslOK)        p7_Fail((char *) "Unexpected error in reading HMMs from %s\n",     hfp->fname);
 
   p7_hmmfile_Close(hfp);
 

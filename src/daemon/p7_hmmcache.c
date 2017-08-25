@@ -236,7 +236,7 @@ p7_hmmcache_Close(P7_HMMCACHE *cache)
 
 static ESL_OPTIONS options[] = {
   /* name           type      default  env  range toggles reqs incomp  help                                  docgroup*/
-  { "-h",        eslARG_NONE,   FALSE, NULL, NULL,  NULL,  NULL, NULL, "show brief help on version and usage",      0 },
+  {(char *) "-h",        eslARG_NONE,   FALSE, NULL, NULL,  NULL,  NULL, NULL, (char *)"show brief help on version and usage",      0 },
   {  0, 0, 0, 0, 0, 0, 0, 0, 0, 0 },
 };
 static char usage[]  = "[-options] <HMM file>";
@@ -256,16 +256,16 @@ main(int argc, char **argv)
   esl_stopwatch_Start(w);
 
   status = p7_hmmcache_Open(hmmfile, &hcache, errbuf);
-  if      (status == eslENOTFOUND) p7_Fail("Failed to read %s\n  %s\n",           hmmfile, errbuf);
-  else if (status == eslEFORMAT)   p7_Fail("Failed to parse %s\n  %s\n",          hmmfile, errbuf);
-  else if (status == eslEINCOMPAT) p7_Fail("Mixed profile types in %s\n  %s\n",   hmmfile, errbuf);
-  else if (status != eslOK)        p7_Fail("Failed to cache %s: error code %d\n", hmmfile, status);
+  if      (status == eslENOTFOUND) p7_Fail((char *)"Failed to read %s\n  %s\n",           hmmfile, errbuf);
+  else if (status == eslEFORMAT)   p7_Fail((char *)"Failed to parse %s\n  %s\n",          hmmfile, errbuf);
+  else if (status == eslEINCOMPAT) p7_Fail((char *)"Mixed profile types in %s\n  %s\n",   hmmfile, errbuf);
+  else if (status != eslOK)        p7_Fail((char *)"Failed to cache %s: error code %d\n", hmmfile, status);
 
   p7_hmmcache_SetNumericNames(hcache);
   tot_mem = p7_hmmcache_Sizeof(hcache);
 
   esl_stopwatch_Stop(w);
-  esl_stopwatch_Display(stdout, w, "# CPU time: ");
+  esl_stopwatch_Display(stdout, w, (char *)"# CPU time: ");
   printf("models     = %d\n",          hcache->n);
   printf("tot memory = %" PRIu64 "\n", (uint64_t) tot_mem);
   

@@ -10,6 +10,7 @@
 #include <math.h>
 #include <float.h>
 #include <syslog.h>
+#include <unistd.h>
 #include "misc/logsum.h"
 #ifdef HAVE_MPI
 #include <mpi.h>
@@ -165,7 +166,7 @@ p7_CreateDefaultApp(ESL_OPTIONS *options, int nargs, int argc, char **argv, char
       printf("\nTo see more help on available options, do %s -h\n\n", argv[0]);
       exit(1);
     }
-  if (esl_opt_GetBoolean(go, "-h") == TRUE) 
+  if (esl_opt_GetBoolean(go, (char *)"-h") == TRUE) 
     {
       if (banner != NULL) p7_banner(stdout, argv[0], banner);
       if (usage  != NULL) esl_usage (stdout, argv[0], usage);

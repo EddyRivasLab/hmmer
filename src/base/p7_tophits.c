@@ -890,10 +890,10 @@ p7_hit_Compare(const P7_HIT *h1, const P7_HIT *h2, float tol)
 
 static ESL_OPTIONS options[] = {
   /* name           type      default  env  range toggles reqs incomp  help                                       docgroup*/
-  { "-h",        eslARG_NONE,   FALSE, NULL, NULL,  NULL,  NULL, NULL, "show brief help on version and usage",             0 },
-  { "-s",        eslARG_INT,     "42", NULL, NULL,  NULL,  NULL, NULL, "set random number seed to <n>",                    0 },
-  { "-M",        eslARG_INT,     "10", NULL, NULL,  NULL,  NULL, NULL, "number of top hits lists to simulate and merge",   0 },
-  { "-N",        eslARG_INT,  "10000", NULL, NULL,  NULL,  NULL, NULL, "number of top hits to simulate",                   0 },
+  { (char *)"-h",        eslARG_NONE,   FALSE, NULL, NULL,  NULL,  NULL, NULL, (char *)"show brief help on version and usage",             0 },
+  { (char *)"-s",        eslARG_INT,    (char *) "42", NULL, NULL,  NULL,  NULL, NULL, (char *)"set random number seed to <n>",                    0 },
+  { (char *)"-M",        eslARG_INT,    (char *) "10", NULL, NULL,  NULL,  NULL, NULL, (char *)"number of top hits lists to simulate and merge",   0 },
+  { (char *)"-N",        eslARG_INT,  (char *)"10000", NULL, NULL,  NULL,  NULL, NULL, (char *)"number of top hits to simulate",                   0 },
   {  0, 0, 0, 0, 0, 0, 0, 0, 0, 0 },
 };
 static char usage[]  = "[-options]";
@@ -904,9 +904,9 @@ main(int argc, char **argv)
 {
   ESL_GETOPTS    *go       = p7_CreateDefaultApp(options, 0, argc, argv, banner, usage);
   ESL_STOPWATCH  *w        = esl_stopwatch_Create();
-  ESL_RANDOMNESS *r        = esl_randomness_CreateFast(esl_opt_GetInteger(go, "-s"));
-  int             N        = esl_opt_GetInteger(go, "-N");
-  int             M        = esl_opt_GetInteger(go, "-M");
+  ESL_RANDOMNESS *r        = esl_randomness_CreateFast(esl_opt_GetInteger(go, (char *)"-s"));
+  int             N        = esl_opt_GetInteger(go,(char *) "-N");
+  int             M        = esl_opt_GetInteger(go, (char *)"-M");
   P7_TOPHITS    **h        = NULL;
   P7_HIT         *hit      = NULL;
   double         *sortkeys = NULL;
@@ -989,9 +989,9 @@ main(int argc, char **argv)
 
 static ESL_OPTIONS options[] = {
   /* name           type      default  env  range toggles reqs incomp  help                                       docgroup*/
-  { "-h",        eslARG_NONE,   FALSE, NULL, NULL,  NULL,  NULL, NULL, "show brief help on version and usage",             0 },
-  { "-s",        eslARG_INT,     "42", NULL, NULL,  NULL,  NULL, NULL, "set random number seed to <n>",                    0 },
-  { "-N",        eslARG_INT,    "100", NULL, NULL,  NULL,  NULL, NULL, "number of top hits to simulate",                   0 },
+  {(char *) "-h",        eslARG_NONE,   FALSE, NULL, NULL,  NULL,  NULL, NULL, (char *)"show brief help on version and usage",             0 },
+  { (char *)"-s",        eslARG_INT,     (char *)"42", NULL, NULL,  NULL,  NULL, NULL, (char *)"set random number seed to <n>",                    0 },
+  {(char *) "-N",        eslARG_INT,    (char *)"100", NULL, NULL,  NULL,  NULL, NULL, (char *)"number of top hits to simulate",                   0 },
   {  0, 0, 0, 0, 0, 0, 0, 0, 0, 0 },
 };
 
@@ -1022,8 +1022,8 @@ int
 main(int argc, char **argv)
 {
   ESL_GETOPTS    *go       = p7_CreateDefaultApp(options, 0, argc, argv, banner, usage);
-  ESL_RANDOMNESS *r        = esl_randomness_CreateFast(esl_opt_GetInteger(go, "-s"));
-  int             N        = esl_opt_GetInteger(go, "-N");
+  ESL_RANDOMNESS *r        = esl_randomness_CreateFast(esl_opt_GetInteger(go, (char *)"-s"));
+  int             N        = esl_opt_GetInteger(go, (char *)"-N");
   P7_TOPHITS     *h1       = NULL;
   P7_TOPHITS     *h2       = NULL;
   P7_TOPHITS     *h3       = NULL;
@@ -1049,22 +1049,22 @@ main(int argc, char **argv)
       key = 0.1 * esl_random(r);
       tophits_Add(h3, name, acc, desc, key);
   }
-  tophits_Add(h1, "last",  NULL, NULL, -1.0);
-  tophits_Add(h1, "first", NULL, NULL, 20.0);
+  tophits_Add(h1, (char *)"last",  NULL, NULL, -1.0);
+  tophits_Add(h1,(char *) "first", NULL, NULL, 20.0);
 
   p7_tophits_SortBySortkey(h1);
-  if (strcmp(h1->hit[0]->name,   "first") != 0) esl_fatal("sort failed (top is %s = %f)", h1->hit[0]->name,   h1->hit[0]->sortkey);
-  if (strcmp(h1->hit[N+1]->name, "last")  != 0) esl_fatal("sort failed (last is %s = %f)", h1->hit[N+1]->name, h1->hit[N+1]->sortkey);
+  if (strcmp(h1->hit[0]->name,   "first") != 0) esl_fatal((char *)"sort failed (top is %s = %f)", h1->hit[0]->name,   h1->hit[0]->sortkey);
+  if (strcmp(h1->hit[N+1]->name, "last")  != 0) esl_fatal((char *)"sort failed (last is %s = %f)", h1->hit[N+1]->name, h1->hit[N+1]->sortkey);
 
   p7_tophits_Merge(h1, h2);
-  if (strcmp(h1->hit[0]->name,     "first") != 0) esl_fatal("after merge 1, sort failed (top is %s = %f)", h1->hit[0]->name,     h1->hit[0]->sortkey);
-  if (strcmp(h1->hit[2*N+1]->name, "last")  != 0) esl_fatal("after merge 1, sort failed (last is %s = %f)", h1->hit[2*N+1]->name, h1->hit[2*N+1]->sortkey);
+  if (strcmp(h1->hit[0]->name,     "first") != 0) esl_fatal((char *)"after merge 1, sort failed (top is %s = %f)", h1->hit[0]->name,     h1->hit[0]->sortkey);
+  if (strcmp(h1->hit[2*N+1]->name, "last")  != 0) esl_fatal((char *)"after merge 1, sort failed (last is %s = %f)", h1->hit[2*N+1]->name, h1->hit[2*N+1]->sortkey);
 
   p7_tophits_Merge(h3, h1);
-  if (strcmp(h3->hit[0]->name,     "first") != 0) esl_fatal("after merge 2, sort failed (top is %s = %f)", h3->hit[0]->name,     h3->hit[0]->sortkey);
-  if (strcmp(h3->hit[3*N+1]->name, "last")  != 0) esl_fatal("after merge 2, sort failed (last is %s = %f)", h3->hit[3*N+1]->name,     h3->hit[3*N+1]->sortkey);
+  if (strcmp(h3->hit[0]->name,     "first") != 0) esl_fatal((char *)"after merge 2, sort failed (top is %s = %f)", h3->hit[0]->name,     h3->hit[0]->sortkey);
+  if (strcmp(h3->hit[3*N+1]->name, "last")  != 0) esl_fatal((char *)"after merge 2, sort failed (last is %s = %f)", h3->hit[3*N+1]->name,     h3->hit[3*N+1]->sortkey);
   
-  if (p7_tophits_GetMaxNameLength(h3) != strlen(name)) esl_fatal("GetMaxNameLength() failed");
+  if (p7_tophits_GetMaxNameLength(h3) != strlen(name)) esl_fatal((char *)"GetMaxNameLength() failed");
 
   p7_tophits_Destroy(h1);
   p7_tophits_Destroy(h2);

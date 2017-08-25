@@ -476,10 +476,10 @@ p7_ReferenceBackward(const ESL_DSQ *dsq, int L, const P7_PROFILE *gm, P7_REFMX *
 
 static ESL_OPTIONS options[] = {
   /* name           type      default  env  range toggles reqs incomp  help                                       docgroup*/
-  { "-h",        eslARG_NONE,   FALSE, NULL, NULL,  NULL,  NULL, NULL, "show brief help on version and usage",           0 },
-  { "-s",        eslARG_INT,     "42", NULL, NULL,  NULL,  NULL, NULL, "set random number seed to <n>",                  0 },
-  { "-L",        eslARG_INT,    "400", NULL, "n>0", NULL,  NULL, NULL, "length of random target seqs",                   0 },
-  { "-N",        eslARG_INT,   "2000", NULL, "n>0", NULL,  NULL, NULL, "number of random target seqs",                   0 },
+  { (char *) "-h",        eslARG_NONE,   FALSE, NULL, NULL,  NULL,  NULL, NULL, (char *) "show brief help on version and usage",           0 },
+  { (char *) "-s",        eslARG_INT, (char *)     "42", NULL, NULL,  NULL,  NULL, NULL, (char *) "set random number seed to <n>",                  0 },
+  { (char *) "-L",        eslARG_INT, (char *)    "400", NULL, (char *) "n>0", NULL,  NULL, NULL, (char *) "length of random target seqs",                   0 },
+  { (char *) "-N",        eslARG_INT,  (char *)  "2000", NULL, (char *) "n>0", NULL,  NULL, NULL, (char *) "number of random target seqs",                   0 },
   {  0, 0, 0, 0, 0, 0, 0, 0, 0, 0 },
 };
 static char usage[]  = "[-options] <hmmfile>";
@@ -491,7 +491,7 @@ main(int argc, char **argv)
   ESL_GETOPTS    *go      = p7_CreateDefaultApp(options, 1, argc, argv, banner, usage);
   char           *hmmfile = esl_opt_GetArg(go, 1);
   ESL_STOPWATCH  *w       = esl_stopwatch_Create();
-  ESL_RANDOMNESS *r       = esl_randomness_CreateFast(esl_opt_GetInteger(go, "-s"));
+  ESL_RANDOMNESS *r       = esl_randomness_CreateFast(esl_opt_GetInteger(go, (char *) "-s"));
   ESL_ALPHABET   *abc     = NULL;
   P7_HMMFILE     *hfp     = NULL;
   P7_HMM         *hmm     = NULL;
@@ -499,16 +499,16 @@ main(int argc, char **argv)
   P7_PROFILE     *gm      = NULL;
   P7_REFMX       *rx      = NULL;
   P7_TRACE       *tr      = p7_trace_Create();
-  int             L       = esl_opt_GetInteger(go, "-L");
-  int             N       = esl_opt_GetInteger(go, "-N");
-  ESL_DSQ        *dsq     = malloc(sizeof(ESL_DSQ) * (L+2));
+  int             L       = esl_opt_GetInteger(go,(char *)  "-L");
+  int             N       = esl_opt_GetInteger(go, (char *) "-N");
+  ESL_DSQ        *dsq     = (ESL_DSQ *) malloc(sizeof(ESL_DSQ) * (L+2));
   int             i;
   float           sc;
   double          base_time, F_time, B_time, V_time;
   double          F_speed, B_speed, V_speed;
 
-  if (p7_hmmfile_OpenE(hmmfile, NULL, &hfp, NULL) != eslOK) p7_Fail("Failed to open HMM file %s", hmmfile);
-  if (p7_hmmfile_Read(hfp, &abc, &hmm)            != eslOK) p7_Fail("Failed to read HMM");
+  if (p7_hmmfile_OpenE(hmmfile, NULL, &hfp, NULL) != eslOK) p7_Fail((char *) "Failed to open HMM file %s", hmmfile);
+  if (p7_hmmfile_Read(hfp, &abc, &hmm)            != eslOK) p7_Fail((char *) "Failed to read HMM");
 
   bg = p7_bg_Create(abc);
   p7_bg_SetLength(bg, L);
@@ -638,7 +638,7 @@ utest_randomseq(FILE *diagfp, ESL_RANDOMNESS *rng, int alphatype, int M, int L, 
 {
   char          msg[] = "reference fwdback randomseq unit test failed";
   ESL_ALPHABET *abc   = esl_alphabet_Create(alphatype);
-  ESL_DSQ      *dsq   = malloc(sizeof(ESL_DSQ) * (L+2));
+  ESL_DSQ      *dsq   = (ESL_DSQ *) malloc(sizeof(ESL_DSQ) * (L+2));
   P7_BG        *bg    = p7_bg_Create(abc);
   P7_HMM       *hmm   = NULL;
   P7_PROFILE   *gm    = p7_profile_Create(M, abc);
@@ -862,7 +862,7 @@ utest_duality(FILE *diagfp, ESL_RANDOMNESS *rng, int alphatype, int M, int L, in
   if ( p7_profile_ConfigCustom(gml, hmm, bg, L, 0.0, 0.0)   != eslOK) esl_fatal(msg); /* unihit, local-only mode  */
   if ( p7_profile_ConfigCustom(gmg, hmm, bg, L, 0.0, 1.0)   != eslOK) esl_fatal(msg); /* unihit, glocal-only mode */
 
-  if (( dsq = malloc(sizeof(ESL_DSQ) * (L+2))) == NULL)  esl_fatal(msg);
+  if (( dsq = (ESL_DSQ *) malloc(sizeof(ESL_DSQ) * (L+2))) == NULL)  esl_fatal(msg);
   if (( rmx = p7_refmx_Create(hmm->M, L))      == NULL)  esl_fatal(msg);
 
   for (idx = 0; idx < N; idx++)
@@ -984,7 +984,7 @@ utest_enumeration(FILE *diagfp, ESL_RANDOMNESS *rng, int M)
                                          /* L, nj,  pglocal:  L=0 unihit dual-mode */
   if ( p7_profile_ConfigCustom(gm, hmm, bg, 0, 0.0, 0.5) != eslOK) esl_fatal(msg);
 
-  if (( dsq = malloc(sizeof(ESL_DSQ) * (maxL+3))) == NULL)  esl_fatal(msg); /* 1..2*M-1, +2 for sentinels at 0, 2*M, +1 for the maxL+1 test seq */
+  if (( dsq = (ESL_DSQ *) malloc(sizeof(ESL_DSQ) * (maxL+3))) == NULL)  esl_fatal(msg); /* 1..2*M-1, +2 for sentinels at 0, 2*M, +1 for the maxL+1 test seq */
   if (( rmx = p7_refmx_Create(hmm->M, maxL+1))     == NULL)  esl_fatal(msg); /* +1 because of the maxL+1 final test */
 
   /* By design, the profile neglects a small amount of probability
@@ -1316,7 +1316,7 @@ create_brute_models(struct p7_brute_utest_s *prm, ESL_ALPHABET *abc, P7_BG *bg, 
   int         M   = 3;
   P7_HMM     *hmm = p7_hmm_Create    (M, abc);
   P7_PROFILE *gm  = p7_profile_Create(M, abc);
-  char       *logmsg = "[created by brute test]";
+  char       *logmsg = (char *)"[created by brute test]";
   int         k;
 
   hmm->t[0][p7H_MM] = prm->a;
@@ -1358,7 +1358,7 @@ create_brute_models(struct p7_brute_utest_s *prm, ESL_ALPHABET *abc, P7_BG *bg, 
   }
   
   /* Add mandatory annotation */
-  p7_hmm_SetName(hmm, "brute-utest");
+  p7_hmm_SetName(hmm, (char *)"brute-utest");
   p7_hmm_AppendComlog(hmm, 1, &logmsg);
   hmm->nseq     = 0;
   hmm->eff_nseq = 0;
@@ -1693,15 +1693,15 @@ utest_brute(FILE *diagfp, ESL_RANDOMNESS *rng, int N)
 
 static ESL_OPTIONS options[] = {
   /* name           type      default  env  range toggles reqs incomp  help                                             docgroup*/
-  { "-h",      eslARG_NONE,     FALSE, NULL, NULL,  NULL,  NULL, NULL, "show brief help on version and usage",                0 },
-  { "-s",      eslARG_INT, p7_RNGSEED, NULL, NULL,  NULL,  NULL, NULL, "set random number seed to <n>",                       0 },
-  { "-v",      eslARG_NONE,     FALSE, NULL, NULL,  NULL,  NULL, NULL, "be verbose",                                          0 },
-  { "--vv",    eslARG_NONE,     FALSE, NULL, NULL,  NULL,  NULL, NULL, "be very verbose",                                     0 },
-  { "-L",      eslARG_INT,      "100", NULL, NULL,  NULL,  NULL, NULL, "size of random sequences to sample",                  0 },
-  { "-M",      eslARG_INT,       "50", NULL, NULL,  NULL,  NULL, NULL, "size of random models to sample",                     0 },
-  { "-m",      eslARG_INT,        "8", NULL, NULL,  NULL,  NULL, NULL, "size of random model in enumeration test",            0 },
-  { "-N",      eslARG_INT,      "100", NULL, NULL,  NULL,  NULL, NULL, "number of random sequences to sample",                0 },
-  { "--diag",  eslARG_STRING,    NULL, NULL, NULL,  NULL,  NULL, NULL, "dump data on a utest's chance failure rate",          0 },
+  { (char *)"-h",      eslARG_NONE,     FALSE, NULL, NULL,  NULL,  NULL, NULL, (char *)"show brief help on version and usage",                0 },
+  { (char *)"-s",      eslARG_INT,(char *)  p7_RNGSEED, NULL, NULL,  NULL,  NULL, NULL, (char *)"set random number seed to <n>",                       0 },
+  {(char *) "-v",      eslARG_NONE,     FALSE, NULL, NULL,  NULL,  NULL, NULL, (char *)"be verbose",                                          0 },
+  { (char *)"--vv",    eslARG_NONE,     FALSE, NULL, NULL,  NULL,  NULL, NULL, (char *)"be very verbose",                                     0 },
+  { (char *)"-L",      eslARG_INT,     (char *) "100", NULL, NULL,  NULL,  NULL, NULL, (char *)"size of random sequences to sample",                  0 },
+  {(char *) "-M",      eslARG_INT,     (char *)  "50", NULL, NULL,  NULL,  NULL, NULL, (char *)"size of random models to sample",                     0 },
+  { (char *)"-m",      eslARG_INT,     (char *)   "8", NULL, NULL,  NULL,  NULL, NULL, (char *)"size of random model in enumeration test",            0 },
+  { (char *)"-N",      eslARG_INT,     (char *) "100", NULL, NULL,  NULL,  NULL, NULL, (char *)"number of random sequences to sample",                0 },
+  { (char *)"--diag",  eslARG_STRING,    NULL, NULL, NULL,  NULL,  NULL, NULL, (char *)"dump data on a utest's chance failure rate",          0 },
   {  0, 0, 0, 0, 0, 0, 0, 0, 0, 0 },
 };
 static char usage[]  = "[-options]";
@@ -1711,15 +1711,15 @@ int
 main(int argc, char **argv)
 {
   ESL_GETOPTS    *go   = p7_CreateDefaultApp(options, 0, argc, argv, banner, usage);
-  ESL_RANDOMNESS *r    = esl_randomness_CreateFast(esl_opt_GetInteger(go, "-s"));
-  int             M    = esl_opt_GetInteger(go, "-M");
-  int             L    = esl_opt_GetInteger(go, "-L");
-  int             N    = esl_opt_GetInteger(go, "-N");
-  int         enumM    = esl_opt_GetInteger(go, "-m");
+  ESL_RANDOMNESS *r    = esl_randomness_CreateFast(esl_opt_GetInteger(go, (char *)"-s"));
+  int             M    = esl_opt_GetInteger(go, (char *)"-M");
+  int             L    = esl_opt_GetInteger(go, (char *)"-L");
+  int             N    = esl_opt_GetInteger(go, (char *)"-N");
+  int         enumM    = esl_opt_GetInteger(go, (char *)"-m");
 
-  if (esl_opt_IsOn(go, "--diag"))  // --diag is for studying error distributions, to set tolerances
+  if (esl_opt_IsOn(go, (char *)"--diag"))  // --diag is for studying error distributions, to set tolerances
     {                              // passing an open <FILE> as first arg to unit test toggles diagnostics mode
-      char *which = esl_opt_GetString(go, "--diag");
+      char *which = esl_opt_GetString(go,(char *) "--diag");
 
       if      (strcmp(which, "randomseq")   == 0) utest_randomseq (stdout, r, eslAMINO, M, L, N);
       else if (strcmp(which, "generation")  == 0) utest_generation(stdout, r, eslAMINO, M, L, N);
@@ -1727,7 +1727,7 @@ main(int argc, char **argv)
       else if (strcmp(which, "enumeration") == 0) { while (N--) utest_enumeration(stdout, r, enumM);       }
       else if (strcmp(which, "singlepath")  == 0) { while (N--) utest_singlepath (stdout, r, eslAMINO, M); }
       else if (strcmp(which, "brute")       == 0) utest_brute     (stdout, r, N);
-      else esl_fatal("--diag takes: randomseq, generation, duality, enumeration, singlepath, brute");
+      else esl_fatal((char *)"--diag takes: randomseq, generation, duality, enumeration, singlepath, brute");
     }
   else // running the unit tests is what we usually do:
     {
@@ -1776,21 +1776,21 @@ static int parse_coord_string(const char *cstring, int *ret_start, int *ret_end)
 
 static ESL_OPTIONS options[] = {
   /* name           type      default  env  range  toggles reqs incomp  help                                       docgroup*/
-  { "-h",        eslARG_NONE,   FALSE, NULL, NULL,   NULL,  NULL, NULL, "show brief help on version and usage",             0 },
-  { "-i",        eslARG_STRING, FALSE, NULL, NULL,   NULL,  NULL, NULL, "when dumping, restrict dump to seq <i1>..<i2>",    0 },
-  { "-k",        eslARG_STRING, FALSE, NULL, NULL,   NULL,  NULL, NULL, "when dumping, restrict dump to model <k1>..<k2>",  0 },
-  { "-s",        eslARG_INT,      "0", NULL, NULL,   NULL,  NULL, NULL, "set random number seed to <n>",                    0 },
-  { "--fs",      eslARG_NONE,   FALSE, NULL, NULL, STYLES,  NULL, NULL, "multihit local alignment",                         0 },
-  { "--sw",      eslARG_NONE,   FALSE, NULL, NULL, STYLES,  NULL, NULL, "unihit local alignment",                           0 },
-  { "--ls",      eslARG_NONE,   FALSE, NULL, NULL, STYLES,  NULL, NULL, "multihit glocal alignment",                        0 },
-  { "--s",       eslARG_NONE,   FALSE, NULL, NULL, STYLES,  NULL, NULL, "unihit glocal alignment",                          0 },
-  { "-A",        eslARG_NONE,   FALSE, NULL, NULL,   NULL,  NULL, NULL, "dump OA alignment DP matrix for examination",      0 },
-  { "-B",        eslARG_NONE,   FALSE, NULL, NULL,   NULL,  NULL, NULL, "dump Backward DP matrix for examination",          0 },
-  { "-D",        eslARG_NONE,   FALSE, NULL, NULL,   NULL,  NULL, NULL, "dump posterior Decoding matrix for examination",   0 },
-  { "-F",        eslARG_NONE,   FALSE, NULL, NULL,   NULL,  NULL, NULL, "dump Forward DP matrix for examination",           0 },
-  { "-S",        eslARG_NONE,   FALSE, NULL, NULL,   NULL,  NULL, NULL, "dump stochastic trace for examination",            0 },
-  { "-T",        eslARG_NONE,   FALSE, NULL, NULL,   NULL,  NULL, NULL, "dump OA traceback for examination",                0 },
-  { "--csv",  eslARG_OUTFILE,   NULL,  NULL, NULL,   NULL,  NULL, NULL, "output CSV file of decoding matrix, for heat map", 0 },
+  { (char *)"-h",        eslARG_NONE,   FALSE, NULL, NULL,   NULL,  NULL, NULL,(char *) "show brief help on version and usage",             0 },
+  { (char *)"-i",        eslARG_STRING, FALSE, NULL, NULL,   NULL,  NULL, NULL, (char *)"when dumping, restrict dump to seq <i1>..<i2>",    0 },
+  { (char *)"-k",        eslARG_STRING, FALSE, NULL, NULL,   NULL,  NULL, NULL, (char *)"when dumping, restrict dump to model <k1>..<k2>",  0 },
+  { (char *)"-s",        eslARG_INT,      (char *)"0", NULL, NULL,   NULL,  NULL, NULL, (char *)"set random number seed to <n>",                    0 },
+  { (char *)"--fs",      eslARG_NONE,   FALSE, NULL, NULL, (char *) STYLES,  NULL, NULL, (char *)"multihit local alignment",                         0 },
+  { (char *)"--sw",      eslARG_NONE,   FALSE, NULL, NULL, (char *) STYLES,  NULL, NULL, (char *)"unihit local alignment",                           0 },
+  { (char *)"--ls",      eslARG_NONE,   FALSE, NULL, NULL,(char *)  STYLES,  NULL, NULL, (char *)"multihit glocal alignment",                        0 },
+  { (char *)"--s",       eslARG_NONE,   FALSE, NULL, NULL, (char *) STYLES,  NULL, NULL, (char *)"unihit glocal alignment",                          0 },
+  { (char *)"-A",        eslARG_NONE,   FALSE, NULL, NULL,   NULL,  NULL, NULL, (char *)"dump OA alignment DP matrix for examination",      0 },
+  { (char *)"-B",        eslARG_NONE,   FALSE, NULL, NULL,   NULL,  NULL, NULL, (char *)"dump Backward DP matrix for examination",          0 },
+  { (char *)"-D",        eslARG_NONE,   FALSE, NULL, NULL,   NULL,  NULL, NULL, (char *)"dump posterior Decoding matrix for examination",   0 },
+  { (char *)"-F",        eslARG_NONE,   FALSE, NULL, NULL,   NULL,  NULL, NULL, (char *)"dump Forward DP matrix for examination",           0 },
+  { (char *)"-S",        eslARG_NONE,   FALSE, NULL, NULL,   NULL,  NULL, NULL, (char *)"dump stochastic trace for examination",            0 },
+  { (char *)"-T",        eslARG_NONE,   FALSE, NULL, NULL,   NULL,  NULL, NULL, (char *)"dump OA traceback for examination",                0 },
+  { (char *)"--csv",  eslARG_OUTFILE,   NULL,  NULL, NULL,   NULL,  NULL, NULL, (char *)"output CSV file of decoding matrix, for heat map", 0 },
   {  0, 0, 0, 0, 0, 0, 0, 0, 0, 0 },
 };
 static char usage[]  = "[-options] <hmmfile> <seqfile>";
@@ -1800,10 +1800,10 @@ int
 main(int argc, char **argv)
 {
   ESL_GETOPTS    *go      = p7_CreateDefaultApp(options, 2, argc, argv, banner, usage);
-  ESL_RANDOMNESS *rng     = esl_randomness_Create(esl_opt_GetInteger(go, "-s"));
+  ESL_RANDOMNESS *rng     = esl_randomness_Create(esl_opt_GetInteger(go, (char *)"-s"));
   char           *hmmfile = esl_opt_GetArg(go, 1);
   char           *seqfile = esl_opt_GetArg(go, 2);
-  char           *csvfile = esl_opt_GetString(go, "--csv");
+  char           *csvfile = esl_opt_GetString(go, (char *)"--csv");
   ESL_ALPHABET   *abc     = NULL;
   P7_HMMFILE     *hfp     = NULL;
   P7_HMM         *hmm     = NULL;
@@ -1827,37 +1827,37 @@ main(int argc, char **argv)
  /* Determine coords of dump windows, if any */
   istart = iend = 0;
   kstart = kend = 0;
-  if ( esl_opt_IsOn(go, "-i")) {
-    cstring = esl_opt_GetString(go, "-i");
+  if ( esl_opt_IsOn(go, (char *)"-i")) {
+    cstring = esl_opt_GetString(go, (char *)"-i");
     parse_coord_string(cstring, &istart, &iend);
   }
-  if ( esl_opt_IsOn(go, "-k")) {
-    cstring = esl_opt_GetString(go, "-k");
+  if ( esl_opt_IsOn(go, (char *)"-k")) {
+    cstring = esl_opt_GetString(go, (char *)"-k");
     parse_coord_string(cstring, &kstart, &kend);
   }
 
   /* Read in one HMM */
-  if (p7_hmmfile_OpenE(hmmfile, NULL, &hfp, NULL) != eslOK) p7_Fail("Failed to open HMM file %s", hmmfile);
-  if (p7_hmmfile_Read(hfp, &abc, &hmm)            != eslOK) p7_Fail("Failed to read HMM");
+  if (p7_hmmfile_OpenE(hmmfile, NULL, &hfp, NULL) != eslOK) p7_Fail((char *)"Failed to open HMM file %s", hmmfile);
+  if (p7_hmmfile_Read(hfp, &abc, &hmm)            != eslOK) p7_Fail((char *)"Failed to read HMM");
   p7_hmmfile_Close(hfp);
  
   /* Open sequence file */
   sq     = esl_sq_CreateDigital(abc);
   status = esl_sqfile_Open(seqfile, format, NULL, &sqfp);
-  if      (status == eslENOTFOUND) p7_Fail("No such file.");
-  else if (status == eslEFORMAT)   p7_Fail("Format unrecognized.");
-  else if (status == eslEINVAL)    p7_Fail("Can't autodetect stdin or .gz.");
-  else if (status != eslOK)        p7_Fail("Open failed, code %d.", status);
+  if      (status == eslENOTFOUND) p7_Fail((char *)"No such file.");
+  else if (status == eslEFORMAT)   p7_Fail((char *)"Format unrecognized.");
+  else if (status == eslEINVAL)    p7_Fail((char *)"Can't autodetect stdin or .gz.");
+  else if (status != eslOK)        p7_Fail((char *)"Open failed, code %d.", status);
  
   /* Configure a profile from the HMM */
   bg = p7_bg_Create(abc);
   gm = p7_profile_Create(hmm->M, abc);
 
   /* Now reconfig the models however we were asked to */
-  if      (esl_opt_GetBoolean(go, "--fs"))  p7_profile_ConfigLocal    (gm, hmm, bg, sq->n);
-  else if (esl_opt_GetBoolean(go, "--sw"))  p7_profile_ConfigUnilocal (gm, hmm, bg, sq->n);
-  else if (esl_opt_GetBoolean(go, "--ls"))  p7_profile_ConfigGlocal   (gm, hmm, bg, sq->n);
-  else if (esl_opt_GetBoolean(go, "--s"))   p7_profile_ConfigUniglocal(gm, hmm, bg, sq->n);
+  if      (esl_opt_GetBoolean(go, (char *)"--fs"))  p7_profile_ConfigLocal    (gm, hmm, bg, sq->n);
+  else if (esl_opt_GetBoolean(go, (char *)"--sw"))  p7_profile_ConfigUnilocal (gm, hmm, bg, sq->n);
+  else if (esl_opt_GetBoolean(go, (char *)"--ls"))  p7_profile_ConfigGlocal   (gm, hmm, bg, sq->n);
+  else if (esl_opt_GetBoolean(go, (char *)"--s"))   p7_profile_ConfigUniglocal(gm, hmm, bg, sq->n);
   else                                      p7_profile_Config         (gm, hmm, bg);
 
   printf("%-30s   %-10s %-10s   %-10s %-10s\n", "# seq name",      "fwd (raw)",   "bck (raw) ",  "fwd (bits)",  "bck (bits)");
@@ -1865,8 +1865,8 @@ main(int argc, char **argv)
 
   while ( (status = esl_sqio_Read(sqfp, sq)) != eslEOF)
     {
-      if      (status == eslEFORMAT) p7_Fail("Parse failed (sequence file %s)\n%s\n", sqfp->filename, sqfp->get_error(sqfp));     
-      else if (status != eslOK)      p7_Fail("Unexpected error %d reading sequence file %s", status, sqfp->filename);
+      if      (status == eslEFORMAT) p7_Fail((char *)"Parse failed (sequence file %s)\n%s\n", sqfp->filename, sqfp->get_error(sqfp));     
+      else if (status != eslOK)      p7_Fail((char *)"Unexpected error %d reading sequence file %s", status, sqfp->filename);
 
       /* Set the profile and null model's target length models */
       p7_bg_SetLength     (bg, sq->n);
@@ -1878,21 +1878,21 @@ main(int argc, char **argv)
        * after decoding, <bck> becomes the pp matrix;
        * after alignment, <fwd> becomes the OA alignment DP matrix
        */
-      p7_ReferenceForward (sq->dsq, sq->n, gm, fwd, &fsc);            if (esl_opt_GetBoolean(go, "-F")) p7_refmx_DumpWindow(stdout, fwd, (istart ? istart: 0), (iend ? iend: sq->n), (kstart? kstart : 0), (kend? kend:gm->M));
-      p7_ReferenceBackward(sq->dsq, sq->n, gm, bck, &bsc);            if (esl_opt_GetBoolean(go, "-B")) p7_refmx_DumpWindow(stdout, bck, (istart ? istart: 0), (iend ? iend: sq->n), (kstart? kstart : 0), (kend? kend:gm->M));
-      p7_ReferenceDecoding(sq->dsq, sq->n, gm, fwd, bck, pp);         if (esl_opt_GetBoolean(go, "-D")) p7_refmx_DumpWindow(stdout, pp,  (istart ? istart: 0), (iend ? iend: sq->n), (kstart? kstart : 0), (kend? kend:gm->M));
+      p7_ReferenceForward (sq->dsq, sq->n, gm, fwd, &fsc);            if (esl_opt_GetBoolean(go, (char *)"-F")) p7_refmx_DumpWindow(stdout, fwd, (istart ? istart: 0), (iend ? iend: sq->n), (kstart? kstart : 0), (kend? kend:gm->M));
+      p7_ReferenceBackward(sq->dsq, sq->n, gm, bck, &bsc);            if (esl_opt_GetBoolean(go, (char *)"-B")) p7_refmx_DumpWindow(stdout, bck, (istart ? istart: 0), (iend ? iend: sq->n), (kstart? kstart : 0), (kend? kend:gm->M));
+      p7_ReferenceDecoding(sq->dsq, sq->n, gm, fwd, bck, pp);         if (esl_opt_GetBoolean(go, (char *)"-D")) p7_refmx_DumpWindow(stdout, pp,  (istart ? istart: 0), (iend ? iend: sq->n), (kstart? kstart : 0), (kend? kend:gm->M));
 
-      if (esl_opt_GetBoolean(go, "-S")) 
+      if (esl_opt_GetBoolean(go, (char *)"-S")) 
 	{
 	  p7_trace_Reuse(tr);
 	  p7_reference_trace_Stochastic(rng, &wrk, gm, fwd, tr);
-	  if ( p7_trace_Validate(tr, abc, sq->dsq, errbuf) != eslOK) esl_fatal("stochastic trace validation failed: %s", errbuf);
+	  if ( p7_trace_Validate(tr, abc, sq->dsq, errbuf) != eslOK) esl_fatal((char *)"stochastic trace validation failed: %s", errbuf);
 	  p7_trace_DumpAnnotated(stdout, tr, gm, sq->dsq);
 	}
 
 
       if (csvfile) {
-	FILE *csvfp = fopen(csvfile, "w");
+	FILE *csvfp = fopen(csvfile, (char *)"w");
 	p7_refmx_DumpCSV(csvfp, pp, istart ? istart : 1, iend ? iend : sq->n, kstart ? kstart : 1, kend ? kend : gm->M);
 	fclose(csvfp);
       }
@@ -1940,9 +1940,9 @@ parse_coord_string(const char *cstring, int *ret_start, int *ret_end)
   char        tok1[32];
   char        tok2[32];
 
-  if (esl_regexp_Match(re, "^(\\d+)\\D+(\\d*)$", cstring) != eslOK) esl_fatal("-c takes arg of subseq coords <from>..<to>; %s not recognized", cstring);
-  if (esl_regexp_SubmatchCopy(re, 1, tok1, 32)            != eslOK) esl_fatal("Failed to find <from> coord in %s", cstring);
-  if (esl_regexp_SubmatchCopy(re, 2, tok2, 32)            != eslOK) esl_fatal("Failed to find <to> coord in %s",   cstring);
+  if (esl_regexp_Match(re, "^(\\d+)\\D+(\\d*)$", cstring) != eslOK) esl_fatal((char *)"-c takes arg of subseq coords <from>..<to>; %s not recognized", cstring);
+  if (esl_regexp_SubmatchCopy(re, 1, tok1, 32)            != eslOK) esl_fatal((char *)"Failed to find <from> coord in %s", cstring);
+  if (esl_regexp_SubmatchCopy(re, 2, tok2, 32)            != eslOK) esl_fatal((char *)"Failed to find <to> coord in %s",   cstring);
   
   *ret_start = atol(tok1);
   *ret_end   = (tok2[0] == '\0') ? 0 : atol(tok2);

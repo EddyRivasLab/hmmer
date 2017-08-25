@@ -4,7 +4,7 @@
 #include <stdio.h>
 #include <string.h>
 #include <time.h>
-
+#include <sys/time.h>
 #include "easel.h"
 #include "hmmer.h"
 
@@ -15,6 +15,7 @@
 #ifdef HAVE_MPI
 #include <mpi.h>
 #include "esl_mpi.h"
+#include "base/p7_tophits_mpi.h"
 #endif /*HAVE_MPI*/
 
 #include <unistd.h> // for testing
@@ -53,7 +54,7 @@ P7_DAEMON_MASTERNODE_STATE *p7_server_masternode_Create(uint32_t num_shards, int
   // pool exactly right
   the_node->empty_hit_pool = p7_hitlist_entry_pool_Create(500000);
   if(the_node->empty_hit_pool == NULL){
-    p7_Fail("Unable to allocate memory in p7_server_masternode_Create\n");
+    p7_Fail((char *) "Unable to allocate memory in p7_server_masternode_Create\n");
   }
   the_node->hit_tree = NULL; // starts out empty
 
@@ -69,7 +70,7 @@ P7_DAEMON_MASTERNODE_STATE *p7_server_masternode_Create(uint32_t num_shards, int
     P7_DAEMON_MESSAGE *the_message;
     the_message = p7_server_message_Create();
     if(the_message == NULL){
-      p7_Fail("Unable to allocate memory in p7_server_masternode_Create\n");
+      p7_Fail((char *) "Unable to allocate memory in p7_server_masternode_Create\n");
     }
     the_message->next = (P7_DAEMON_MESSAGE *) the_node->empty_hit_message_pool;
     the_node->empty_hit_message_pool = the_message;
@@ -79,15 +80,15 @@ P7_DAEMON_MASTERNODE_STATE *p7_server_masternode_Create(uint32_t num_shards, int
   the_node->full_hit_message_pool = NULL;
 
   if(pthread_mutex_init(&(the_node->hit_wait_lock), NULL)){
-      p7_Fail("Unable to create mutex in p7_server_masternode_Create");
+      p7_Fail((char *) "Unable to create mutex in p7_server_masternode_Create");
     }
 
   if(pthread_mutex_init(&(the_node->empty_hit_message_pool_lock), NULL)){
-      p7_Fail("Unable to create mutex in p7_server_masternode_Create");
+      p7_Fail((char *) "Unable to create mutex in p7_server_masternode_Create");
     }
 
   if(pthread_mutex_init(&(the_node->full_hit_message_pool_lock), NULL)){
-      p7_Fail("Unable to create mutex in p7_server_masternode_Create");
+      p7_Fail((char *) "Unable to create mutex in p7_server_masternode_Create");
     }
 
   // Hit thread starts out not ready.
@@ -100,7 +101,7 @@ P7_DAEMON_MASTERNODE_STATE *p7_server_masternode_Create(uint32_t num_shards, int
 
   // GOTO target used to catch error cases from ESL_ALLOC
 ERROR:
-  p7_Fail("Unable to allocate memory in p7_server_masternode_Create");  
+  p7_Fail((char *) "Unable to allocate memory in p7_server_masternode_Create");  
 }
 
 
@@ -176,29 +177,29 @@ void p7_server_masternode_Setup(uint32_t num_shards, uint32_t num_databases, cha
     P7_SHARD *current_shard;
 
     datafile = fopen(database_names[i], "r");
-    fread(id_string, 13, 1, datafile); //grab the first 13 characters of the file to determine the type of database it holds
+    int stop_warning = fread(id_string, 13, 1, datafile); //grab the first 13 characters of the file to determine the type of database it holds
     fclose(datafile);
         
     if(!strncmp(id_string, "HMMER3", 5)){
       // This is an HMM file
       current_shard = p7_shard_Create_hmmfile(database_names[i], 1, 0);
       if(current_shard == NULL){
-        p7_Fail("Unable to allocate memory in p7_server_masternode_Create\n");
+        p7_Fail((char *) "Unable to allocate memory in p7_server_masternode_Create\n");
       }
     }
     else if(!strncmp(id_string, "Easel dsqdata", 13)){
       // its a dsqdata file
       current_shard = p7_shard_Create_dsqdata(database_names[i], 1, 0);
       if(current_shard == NULL){
-        p7_Fail("Unable to allocate memory in p7_server_masternode_Create\n");
+        p7_Fail((char *) "Unable to allocate memory in p7_server_masternode_Create\n");
       }
     }
     else{
-      p7_Fail("Couldn't determine type of datafile for database %s in p7_server_workernode_setup\n", database_names[i]);
+      p7_Fail((char *) "Couldn't determine type of datafile for database %s in p7_server_workernode_setup\n", database_names[i]);
     }
 
     if(i > masternode->num_databases){
-      p7_Fail("Attempted to install shard into non-existent database slot in masternode\n");
+      p7_Fail((char *) "Attempted to install shard into non-existent database slot in masternode\n");
     }
     else{
       masternode->database_shards[i] = current_shard;
@@ -208,7 +209,7 @@ void p7_server_masternode_Setup(uint32_t num_shards, uint32_t num_databases, cha
   return;
 
 ERROR:
-  p7_Fail("Unable to allocate memory in p7_server_masternode_Setup");  
+  p7_Fail((char *)"Unable to allocate memory in p7_server_masternode_Setup");  
 }
 
 // p7_server_message_Create
@@ -229,16 +230,16 @@ P7_DAEMON_MESSAGE *p7_server_message_Create(){
     the_message->length = 200000;
     return the_message;
 ERROR:
-  p7_Fail("Unable to allocate memory in p7_server_message_Create");  
+  p7_Fail((char *) "Unable to allocate memory in p7_server_message_Create");  
 }
 
 // ESL setup for the p7_master_node_main function
 #ifdef HAVE_MPI
 static ESL_OPTIONS options[] = {
   /* name           type      default  env  range  toggles reqs incomp  help                               docgroup*/
-  { "-h",        eslARG_NONE,  FALSE, NULL, NULL,  NULL,  NULL, NULL, "show brief help on version and usage",  0 },
-  { "-n",       eslARG_INT,    "1",   NULL, NULL,  NULL,  NULL, NULL, "number of searches to run (default 1)", 0 },
-  { "-c",       eslARG_INT,    "0",   NULL, NULL,  NULL,  NULL, NULL, "number of worker cores to use per node (default all)", 0 },
+  { (char *) "-h",        eslARG_NONE,  FALSE, NULL, NULL,  NULL,  NULL, NULL, (char *) "show brief help on version and usage",  0 },
+  { (char *) "-n",       eslARG_INT,    (char *) "1",   NULL, NULL,  NULL,  NULL, NULL, (char *) "number of searches to run (default 1)", 0 },
+  { (char *) "-c",       eslARG_INT,    (char *) "0",   NULL, NULL,  NULL,  NULL, NULL, (char *) "number of worker cores to use per node (default all)", 0 },
   {  0, 0, 0, 0, 0, 0, 0, 0, 0, 0 },
 };
 
@@ -260,7 +261,7 @@ static char banner[] = "hmmpgmd2, the server version of HMMER 4";
  */
 void p7_server_master_node_main(int argc, char ** argv, MPI_Datatype *server_mpitypes){
 #ifndef HAVE_MPI
-  p7_Fail("P7_master_node_main requires MPI and HMMER was compiled without MPI support");
+  p7_Fail((char *)"P7_master_node_main requires MPI and HMMER was compiled without MPI support");
 #endif
 
 #ifdef HAVE_MPI
@@ -270,12 +271,12 @@ void p7_server_master_node_main(int argc, char ** argv, MPI_Datatype *server_mpi
   // Get the command-line options
   ESL_GETOPTS    *go      = p7_CreateDefaultApp(options, 2, argc, argv, banner, usage);
   if(go == NULL){
-    p7_Fail("Unable to allocate memory in master_node_main\n");
+    p7_Fail((char *)"Unable to allocate memory in master_node_main\n");
   }
   char           *hmmfile = esl_opt_GetArg(go, 1);
   char           *seqfile = esl_opt_GetArg(go, 2);
 
-  uint64_t num_searches = esl_opt_GetInteger(go, "-n");
+  uint64_t num_searches = esl_opt_GetInteger(go, (char *) "-n");
   esl_getopts_Destroy(go); // done with the options now
 
   ESL_ALPHABET   *abc     = NULL;
@@ -293,14 +294,14 @@ void p7_server_master_node_main(int argc, char ** argv, MPI_Datatype *server_mpi
   MPI_Comm_size(MPI_COMM_WORLD, &num_nodes);
 
   if(num_nodes < 2){
-    p7_Fail("Found 0 worker ranks.  Please re-run with at least 2 MPI ranks so that there can be a master and at least one worker rank.");
+    p7_Fail((char *)"Found 0 worker ranks.  Please re-run with at least 2 MPI ranks so that there can be a master and at least one worker rank.");
   }
 
   // Set up the masternode state object for this node
   P7_DAEMON_MASTERNODE_STATE *masternode;
   masternode = p7_server_masternode_Create(num_shards, num_nodes -1);
   if(masternode == NULL){
-    p7_Fail("Unable to allocate memory in master_node_main\n");
+    p7_Fail((char *)"Unable to allocate memory in master_node_main\n");
   }
 
   // load the databases.  To be removed when we implement the UI
@@ -321,6 +322,7 @@ void p7_server_master_node_main(int argc, char ** argv, MPI_Datatype *server_mpi
   uint64_t search_increment = num_hmms/num_searches;
 
   char *hmmbuffer;
+  P7_SHARD *hmm_shard, *database_shard;
   ESL_ALLOC(hmmbuffer, 100000* sizeof(char));  // take a wild guess at a buffer that will hold most hmms
   
   int hmm_buffer_size;
@@ -332,8 +334,8 @@ void p7_server_master_node_main(int argc, char ** argv, MPI_Datatype *server_mpi
   uint64_t search_start, search_end;
 
   // For testing, search the entire database
-  P7_SHARD *database_shard = masternode->database_shards[1];
-  P7_SHARD *hmm_shard = masternode->database_shards[0];
+  database_shard = masternode->database_shards[1];
+  hmm_shard = masternode->database_shards[0];
  
   search_start = database_shard->directory[0].index;
   search_end = database_shard->directory[database_shard->num_objects -1].index;
@@ -359,13 +361,13 @@ void p7_server_master_node_main(int argc, char ** argv, MPI_Datatype *server_mpi
 
   //create pthread attribute structure
   if(pthread_attr_init(&attr)){
-    p7_Fail("Couldn't create pthread attr structure in master_node_main");
+    p7_Fail((char *) "Couldn't create pthread attr structure in master_node_main");
   }
   if(pthread_create(&(masternode->hit_thread_object), &attr, p7_server_master_hit_thread, (void *) &hit_argument)){
-    p7_Fail("Unable to create hit thread in master_node_main");
+    p7_Fail((char *)"Unable to create hit thread in master_node_main");
   }
   if(pthread_attr_destroy(&attr)){
-    p7_Fail("Couldn't destroy pthread attr structure in master_node_main");
+    p7_Fail((char *)"Couldn't destroy pthread attr structure in master_node_main");
   }
 
   while(!masternode->hit_thread_ready){
@@ -431,7 +433,7 @@ void p7_server_master_node_main(int argc, char ** argv, MPI_Datatype *server_mpi
     pack_position = 0; // initialize this to the start of the buffer 
 
     if(p7_profile_mpi_Pack    (hmm, hmmbuffer, hmm_length, &pack_position, MPI_COMM_WORLD) != eslOK){
-      p7_Fail("Packing profile failed in master_node_main\n");
+      p7_Fail((char *) "Packing profile failed in master_node_main\n");
     }    // pack the hmm for sending
   
 
@@ -484,7 +486,7 @@ void p7_server_master_node_main(int argc, char ** argv, MPI_Datatype *server_mpi
   exit(0);
   // GOTO target used to catch error cases from ESL_ALLOC
   ERROR:
-    p7_Fail("Unable to allocate memory in master_node_main");
+    p7_Fail((char *) "Unable to allocate memory in master_node_main");
 #endif
 }
 
@@ -558,7 +560,7 @@ void *p7_server_master_hit_thread(void *argument){
       }
     }
   }
-  p7_Fail("Master node hit thread somehow reached unreachable end point\n");
+  p7_Fail((char *) "Master node hit thread somehow reached unreachable end point\n");
 }
 
 //p7_masternode_sort_hits
@@ -569,7 +571,7 @@ void *p7_server_master_hit_thread(void *argument){
  */
 int p7_masternode_sort_hits(P7_DAEMON_MESSAGE *the_message, P7_DAEMON_MASTERNODE_STATE *masternode){
 #ifndef HAVE_MPI
-  p7_Fail("Attempt to call p7_masternode_sort_hits when HMMER was compiled without MPI support");
+  p7_Fail((char *) "Attempt to call p7_masternode_sort_hits when HMMER was compiled without MPI support");
   return 0;
 #endif
 #ifdef HAVE_MPI
@@ -630,7 +632,7 @@ int p7_masternode_sort_hits(P7_DAEMON_MESSAGE *the_message, P7_DAEMON_MASTERNODE
  */ 
 void p7_masternode_message_handler(P7_DAEMON_MASTERNODE_STATE *masternode, P7_DAEMON_MESSAGE **buffer_handle, MPI_Datatype *server_mpitypes){
 #ifndef HAVE_MPI
-  p7_Fail("Attempt to call p7_masternode_message_handler when HMMER was compiled without MPI support");
+  p7_Fail((char *) "Attempt to call p7_masternode_message_handler when HMMER was compiled without MPI support");
 #endif
 
 #ifdef HAVE_MPI
@@ -648,7 +650,7 @@ void p7_masternode_message_handler(P7_DAEMON_MASTERNODE_STATE *masternode, P7_DA
     else{ // need to create a new message buffer because they're all full.  THis should be rare
       *buffer_handle = (P7_DAEMON_MESSAGE *) p7_server_message_Create();
       if(buffer_handle == NULL){
-        p7_Fail("Unable to allocate memory in p7_masternode_message_handler\n");
+        p7_Fail((char *) "Unable to allocate memory in p7_masternode_message_handler\n");
       }
     }
     pthread_mutex_unlock(&(masternode->empty_hit_message_pool_lock));
@@ -658,7 +660,7 @@ void p7_masternode_message_handler(P7_DAEMON_MASTERNODE_STATE *masternode, P7_DA
   int found_message = 0;
   MPI_Status temp_status;
   if(MPI_Iprobe(MPI_ANY_SOURCE, MPI_ANY_TAG, MPI_COMM_WORLD, &found_message, &((*buffer_handle)->status)) != MPI_SUCCESS){
-    p7_Fail("MPI_Iprobe failed in p7_masternode_message_handler\n");
+    p7_Fail((char *) "MPI_Iprobe failed in p7_masternode_message_handler\n");
   }
 
   int message_length;
@@ -674,7 +676,7 @@ void p7_masternode_message_handler(P7_DAEMON_MASTERNODE_STATE *masternode, P7_DA
         masternode->hit_messages_received++;
 
         if(MPI_Get_count(&(*buffer_handle)->status, MPI_PACKED, &message_length) != MPI_SUCCESS){
-          p7_Fail("MPI_Get_count failed in p7_masternode_message_handler\n");
+          p7_Fail((char *) "MPI_Get_count failed in p7_masternode_message_handler\n");
         }
         
         if(message_length > (*buffer_handle)->length){
@@ -686,7 +688,7 @@ void p7_masternode_message_handler(P7_DAEMON_MASTERNODE_STATE *masternode, P7_DA
         // Technically, there's a vulnerability in that some other thread could grab the message between
         // probe and recv, but we only allow the master thread to make MPI calls
         if(MPI_Recv((*buffer_handle)->buffer, message_length, MPI_PACKED, (*buffer_handle)->status.MPI_SOURCE, (*buffer_handle)->status.MPI_TAG, MPI_COMM_WORLD, &((*buffer_handle)->status)) != MPI_SUCCESS){
-          p7_Fail("MPI_Recv failed in p7_masternode_message_handler\n");
+          p7_Fail((char *) "MPI_Recv failed in p7_masternode_message_handler\n");
         }
 
         //Put the message in the list for the hit thread to process
@@ -704,12 +706,12 @@ void p7_masternode_message_handler(P7_DAEMON_MASTERNODE_STATE *masternode, P7_DA
         
         // Get the shard that the requestor wants work for
         if(MPI_Recv(&requester_shard, 1, MPI_UNSIGNED, (*buffer_handle)->status.MPI_SOURCE, (*buffer_handle)->status.MPI_TAG, MPI_COMM_WORLD, &((*buffer_handle)->status)) != MPI_SUCCESS){
-          p7_Fail("MPI_Recv failed in p7_masternode_message_handler\n");
+          p7_Fail((char *) "MPI_Recv failed in p7_masternode_message_handler\n");
         }
 
         if(requester_shard >= masternode->num_shards){
           // The requestor asked for a non-existent shard
-          p7_Fail("Out-of-range shard %d sent in work request", requester_shard);
+          p7_Fail((char *) "Out-of-range shard %d sent in work request", requester_shard);
         }
 
         // Get some work out of the appropriate queue
@@ -735,18 +737,18 @@ void p7_masternode_message_handler(P7_DAEMON_MASTERNODE_STATE *masternode, P7_DA
         }
 
         //send the reply
-        if ( MPI_Send(&the_reply, 1, server_mpitypes[P7_DAEMON_COMMAND_MPITYPE],  (*buffer_handle)->status.MPI_SOURCE, HMMER_WORK_REPLY_TAG, MPI_COMM_WORLD) != MPI_SUCCESS) p7_Fail("MPI send failed in p7_masternode_message_handler");
+        if ( MPI_Send(&the_reply, 1, server_mpitypes[P7_DAEMON_COMMAND_MPITYPE],  (*buffer_handle)->status.MPI_SOURCE, HMMER_WORK_REPLY_TAG, MPI_COMM_WORLD) != MPI_SUCCESS) p7_Fail((char *) "MPI send failed in p7_masternode_message_handler");
 
         break;
       default:
         // If we get here, someone's sent us a message of an unknown type
-        p7_Fail("Unexpected message tag found in p7_masternode_message_handler");
+        p7_Fail((char *) "Unexpected message tag found in p7_masternode_message_handler");
     }
   }
 
   return;
   ERROR:  // handle errors in ESL_REALLOC
-    p7_Fail("Couldn't realloc memory in p7_masternode_message_handler");  
+    p7_Fail((char *) "Couldn't realloc memory in p7_masternode_message_handler");  
     return;
 #endif    
 }

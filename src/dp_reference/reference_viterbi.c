@@ -231,7 +231,7 @@ p7_ReferenceViterbi(const ESL_DSQ *dsq, int L, const P7_PROFILE *gm, P7_REFMX *r
 static void
 stats_randomseq(FILE *ofp, ESL_RANDOMNESS *rng, P7_PROFILE *gm, P7_BG *bg, int nseq, int L)
 {
-  ESL_DSQ   *dsq    = malloc(sizeof(ESL_DSQ) * (L+2));
+  ESL_DSQ   *dsq    = (ESL_DSQ *) malloc(sizeof(ESL_DSQ) * (L+2));
   P7_REFMX  *rmx    = p7_refmx_Create(gm->M, L);
   P7_TRACE  *tr     = p7_trace_Create(); 
   int        idx;
@@ -316,11 +316,11 @@ stats_generation(FILE *ofp, ESL_RANDOMNESS *rng, P7_HMM *hmm, P7_PROFILE *gm, P7
 
 static ESL_OPTIONS options[] = {
   /* name           type      default  env  range toggles reqs incomp  help                                       docgroup*/
-  { "-h",        eslARG_NONE,   FALSE, NULL, NULL,  NULL,  NULL, NULL, "show brief help on version and usage",           0 },
-  { "-s",        eslARG_INT,      "0", NULL, NULL,  NULL,  NULL, NULL, "set random number seed to <n>",                  0 }, 
-  { "-L",        eslARG_INT,    "200", NULL, NULL,  NULL,  NULL, NULL, "size of random sequences to sample",             0 },
-  { "-M",        eslARG_INT,    "145", NULL, NULL,  NULL,  NULL, NULL, "size of random models to sample",                0 },
-  { "-N",        eslARG_INT,    "100", NULL, NULL,  NULL,  NULL, NULL, "number of random sequences to sample",           0 },
+  { (char *)"-h",        eslARG_NONE,   FALSE, NULL, NULL,  NULL,  NULL, NULL, (char *)"show brief help on version and usage",           0 },
+  { (char *)"-s",        eslARG_INT,     (char *) "0", NULL, NULL,  NULL,  NULL, NULL, (char *)"set random number seed to <n>",                  0 }, 
+  {(char *)"-L",        eslARG_INT,   (char *) "200", NULL, NULL,  NULL,  NULL, NULL, (char *)"size of random sequences to sample",             0 },
+  { (char *)"-M",        eslARG_INT,  (char *) "145", NULL, NULL,  NULL,  NULL, NULL, (char *)"size of random models to sample",                0 },
+  {(char *) "-N",        eslARG_INT,   (char *) "100", NULL, NULL,  NULL,  NULL, NULL, (char *)"number of random sequences to sample",           0 },
   {  0, 0, 0, 0, 0, 0, 0, 0, 0, 0 },
 };
 static char usage[]  = "[-options]";
@@ -330,10 +330,10 @@ int
 main(int argc, char **argv)
 {
   ESL_GETOPTS    *go            = p7_CreateDefaultApp(options, 0, argc, argv, banner, usage);
-  int             M             = esl_opt_GetInteger(go, "-M");
-  int             L             = esl_opt_GetInteger(go, "-L");
-  int             N             = esl_opt_GetInteger(go, "-N");
-  ESL_RANDOMNESS *rng           = esl_randomness_Create(esl_opt_GetInteger(go, "-s"));
+  int             M             = esl_opt_GetInteger(go, (char *)"-M");
+  int             L             = esl_opt_GetInteger(go, (char *)"-L");
+  int             N             = esl_opt_GetInteger(go, (char *)"-N");
+  ESL_RANDOMNESS *rng           = esl_randomness_Create(esl_opt_GetInteger(go, (char *)"-s"));
   ESL_ALPHABET   *abc           = esl_alphabet_Create(eslAMINO);
   P7_BG          *bg            = p7_bg_Create(abc);
   P7_HMM         *hmm           = NULL;
@@ -395,7 +395,7 @@ utest_randomseq(ESL_RANDOMNESS *rng, P7_PROFILE *gm, P7_BG *bg, int nseq, int L)
   float      tol    = 1e-4;            // actually we expect sc1,sc2 to be exactly identical [SRE:J13/121]
   char       errbuf[eslERRBUFSIZE];
 
-  if (( dsq = malloc(sizeof(ESL_DSQ) * (L+2))) == NULL) esl_fatal(msg);
+  if (( dsq = (ESL_DSQ *) malloc(sizeof(ESL_DSQ) * (L+2))) == NULL) esl_fatal(msg);
   if (( tr  = p7_trace_Create())               == NULL) esl_fatal(msg);
   if (( rmx = p7_refmx_Create(gm->M, L))       == NULL) esl_fatal(msg);
   
@@ -487,11 +487,11 @@ utest_generation(ESL_RANDOMNESS *rng, P7_HMM *hmm, P7_PROFILE *gm, P7_BG *bg, in
 
 static ESL_OPTIONS options[] = {
   /* name           type      default  env  range toggles reqs incomp  help                                       docgroup*/
-  { "-h",        eslARG_NONE,   FALSE, NULL, NULL,  NULL,  NULL, NULL, "show brief help on version and usage",           0 },
-  { "-s",        eslARG_INT,      "0", NULL, NULL,  NULL,  NULL, NULL, "set random number seed to <n>",                  0 }, 
-  { "-L",        eslARG_INT,    "200", NULL, NULL,  NULL,  NULL, NULL, "size of random sequences to sample",             0 },
-  { "-M",        eslARG_INT,    "145", NULL, NULL,  NULL,  NULL, NULL, "size of random models to sample",                0 },
-  { "-N",        eslARG_INT,    "100", NULL, NULL,  NULL,  NULL, NULL, "number of random sequences to sample",           0 },
+  { (char *)"-h",        eslARG_NONE,   FALSE, NULL, NULL,  NULL,  NULL, NULL, (char *)"show brief help on version and usage",           0 },
+  {(char *) "-s",        eslARG_INT,    (char *)  "0", NULL, NULL,  NULL,  NULL, NULL, (char *)"set random number seed to <n>",                  0 }, 
+  { (char *)"-L",        eslARG_INT,    (char *)"200", NULL, NULL,  NULL,  NULL, NULL, (char *)"size of random sequences to sample",             0 },
+  { (char *)"-M",        eslARG_INT,    (char *)"145", NULL, NULL,  NULL,  NULL, NULL, (char *)"size of random models to sample",                0 },
+  { (char *)"-N",        eslARG_INT,    (char *)"100", NULL, NULL,  NULL,  NULL, NULL, (char *)"number of random sequences to sample",           0 },
   {  0, 0, 0, 0, 0, 0, 0, 0, 0, 0 },
 };
 static char usage[]  = "[-options]";
@@ -501,10 +501,10 @@ int
 main(int argc, char **argv)
 {
   ESL_GETOPTS    *go           = p7_CreateDefaultApp(options, 0, argc, argv, banner, usage);
-  int             M            = esl_opt_GetInteger(go, "-M");
-  int             L            = esl_opt_GetInteger(go, "-L");
-  int             N            = esl_opt_GetInteger(go, "-N");
-  ESL_RANDOMNESS *rng          = esl_randomness_CreateFast(esl_opt_GetInteger(go, "-s"));
+  int             M            = esl_opt_GetInteger(go, (char *)"-M");
+  int             L            = esl_opt_GetInteger(go, (char *)"-L");
+  int             N            = esl_opt_GetInteger(go, (char *)"-N");
+  ESL_RANDOMNESS *rng          = esl_randomness_CreateFast(esl_opt_GetInteger(go, (char *)"-s"));
   ESL_ALPHABET   *abc          = esl_alphabet_Create(eslAMINO);
   P7_BG          *bg           = p7_bg_Create(abc);
   P7_HMM         *hmm          = NULL;
@@ -551,13 +551,13 @@ main(int argc, char **argv)
 
 static ESL_OPTIONS options[] = {
   /* name           type      default  env  range  toggles reqs incomp  help                                       docgroup*/
-  { "-h",        eslARG_NONE,   FALSE, NULL, NULL,   NULL,  NULL, NULL, "show brief help on version and usage",             0 },
-  { "--fs",      eslARG_NONE,   FALSE, NULL, NULL, STYLES,  NULL, NULL, "multihit local alignment",                         0 },
-  { "--sw",      eslARG_NONE,   FALSE, NULL, NULL, STYLES,  NULL, NULL, "unihit local alignment",                           0 },
-  { "--ls",      eslARG_NONE,   FALSE, NULL, NULL, STYLES,  NULL, NULL, "multihit glocal alignment",                        0 },
-  { "--s",       eslARG_NONE,   FALSE, NULL, NULL, STYLES,  NULL, NULL, "unihit glocal alignment",                          0 },
-  { "-D",        eslARG_NONE,   FALSE, NULL, NULL,   NULL,  NULL, NULL, "dump Viterbi matrix for inspection",               0 },
-  { "-T",        eslARG_NONE,   FALSE, NULL, NULL,   NULL,  NULL, NULL, "dump optimal Viterbi trace for inspection",        0 },
+  { (char *)"-h",        eslARG_NONE,   FALSE, NULL, NULL,   NULL,  NULL, NULL, (char *)"show brief help on version and usage",             0 },
+  { (char *)"--fs",      eslARG_NONE,   FALSE, NULL, NULL, (char *) STYLES,  NULL, NULL, (char *)"multihit local alignment",                         0 },
+  { (char *)"--sw",      eslARG_NONE,   FALSE, NULL, NULL, (char *) STYLES,  NULL, NULL, (char *)"unihit local alignment",                           0 },
+  { (char *)"--ls",      eslARG_NONE,   FALSE, NULL, NULL,(char *)  STYLES,  NULL, NULL, (char *)"multihit glocal alignment",                        0 },
+  { (char *)"--s",       eslARG_NONE,   FALSE, NULL, NULL,(char *)  STYLES,  NULL, NULL, (char *)"unihit glocal alignment",                          0 },
+  { (char *)"-D",        eslARG_NONE,   FALSE, NULL, NULL,   NULL,  NULL, NULL, (char *)"dump Viterbi matrix for inspection",               0 },
+  { (char *)"-T",        eslARG_NONE,   FALSE, NULL, NULL,   NULL,  NULL, NULL, (char *)"dump optimal Viterbi trace for inspection",        0 },
   {  0, 0, 0, 0, 0, 0, 0, 0, 0, 0 },
 };
 static char usage[]  = "[-options] <hmmfile> <seqfile>";
@@ -584,31 +584,31 @@ main(int argc, char **argv)
   int             status;
 
   /* Read in one HMM */
-  if (p7_hmmfile_OpenE(hmmfile, NULL, &hfp, NULL) != eslOK) p7_Fail("Failed to open HMM file %s", hmmfile);
-  if (p7_hmmfile_Read(hfp, &abc, &hmm)            != eslOK) p7_Fail("Failed to read HMM");
+  if (p7_hmmfile_OpenE(hmmfile, NULL, &hfp, NULL) != eslOK) p7_Fail((char *)"Failed to open HMM file %s", hmmfile);
+  if (p7_hmmfile_Read(hfp, &abc, &hmm)            != eslOK) p7_Fail((char *)"Failed to read HMM");
   p7_hmmfile_Close(hfp);
  
   /* Open sequence file */
   sq     = esl_sq_CreateDigital(abc);
   status = esl_sqfile_Open(seqfile, format, NULL, &sqfp);
-  if      (status == eslENOTFOUND) p7_Fail("No such file.");
-  else if (status == eslEFORMAT)   p7_Fail("Format unrecognized.");
-  else if (status == eslEINVAL)    p7_Fail("Can't autodetect stdin or .gz.");
-  else if (status != eslOK)        p7_Fail("Open failed, code %d.", status);
+  if      (status == eslENOTFOUND) p7_Fail((char *)"No such file.");
+  else if (status == eslEFORMAT)   p7_Fail((char *)"Format unrecognized.");
+  else if (status == eslEINVAL)    p7_Fail((char *)"Can't autodetect stdin or .gz.");
+  else if (status != eslOK)        p7_Fail((char *)"Open failed, code %d.", status);
  
   /* Configure a profile from the HMM */
   bg = p7_bg_Create(abc);
   gm = p7_profile_Create(hmm->M, abc);
-  if      (esl_opt_GetBoolean(go, "--fs"))  p7_profile_ConfigLocal    (gm, hmm, bg, 400);
-  else if (esl_opt_GetBoolean(go, "--sw"))  p7_profile_ConfigUnilocal (gm, hmm, bg, 400);
-  else if (esl_opt_GetBoolean(go, "--ls"))  p7_profile_ConfigGlocal   (gm, hmm, bg, 400);
-  else if (esl_opt_GetBoolean(go, "--s"))   p7_profile_ConfigUniglocal(gm, hmm, bg, 400);
+  if      (esl_opt_GetBoolean(go, (char *)"--fs"))  p7_profile_ConfigLocal    (gm, hmm, bg, 400);
+  else if (esl_opt_GetBoolean(go, (char *)"--sw"))  p7_profile_ConfigUnilocal (gm, hmm, bg, 400);
+  else if (esl_opt_GetBoolean(go, (char *)"--ls"))  p7_profile_ConfigGlocal   (gm, hmm, bg, 400);
+  else if (esl_opt_GetBoolean(go, (char *)"--s"))   p7_profile_ConfigUniglocal(gm, hmm, bg, 400);
   else                                      p7_profile_Config         (gm, hmm, bg);
 
   while ( (status = esl_sqio_Read(sqfp, sq)) != eslEOF)
     {
-      if      (status == eslEFORMAT) p7_Fail("Parse failed (sequence file %s)\n%s\n", sqfp->filename, sqfp->get_error(sqfp));     
-      else if (status != eslOK)      p7_Fail("Unexpected error %d reading sequence file %s", status, sqfp->filename);
+      if      (status == eslEFORMAT) p7_Fail((char *)"Parse failed (sequence file %s)\n%s\n", sqfp->filename, sqfp->get_error(sqfp));     
+      else if (status != eslOK)      p7_Fail((char *)"Unexpected error %d reading sequence file %s", status, sqfp->filename);
 
       /* Set the profile and null model's target length models */
       p7_bg_SetLength     (bg, sq->n);
@@ -616,8 +616,8 @@ main(int argc, char **argv)
 
       /* Run Viterbi - get raw score and optimal trace */
       p7_ReferenceViterbi(sq->dsq, sq->n, gm, vit, tr, &vsc);    
-      if (esl_opt_GetBoolean(go, "-D")) p7_refmx_Dump(stdout, vit);
-      if (esl_opt_GetBoolean(go, "-T")) p7_trace_DumpAnnotated(stdout, tr, gm, sq->dsq);
+      if (esl_opt_GetBoolean(go, (char *)"-D")) p7_refmx_Dump(stdout, vit);
+      if (esl_opt_GetBoolean(go, (char *)"-T")) p7_trace_DumpAnnotated(stdout, tr, gm, sq->dsq);
       
       /* Those scores are partial log-odds likelihoods in nats.
        * Subtract off the rest of the null model, convert to bits.

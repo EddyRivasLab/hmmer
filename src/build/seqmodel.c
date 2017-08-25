@@ -63,7 +63,7 @@ p7_Seqmodel(const ESL_ALPHABET *abc, ESL_DSQ *dsq, int M, char *name,
 {
   int     status;
   P7_HMM *hmm    = NULL;
-  char   *logmsg = "[HMM created from a query sequence]";
+  char   *logmsg = (char *)"[HMM created from a query sequence]";
   int     k;
 
   if ((hmm = p7_hmm_Create(M, abc)) == NULL) { status = eslEMEM; goto ERROR; }
@@ -254,9 +254,9 @@ main(int argc, char **argv)
 static void 
 utest_normalization(ESL_GETOPTS *go)
 {
-  char         *msg     = "seqmodel normalization utest failed";
+  char         *msg     = (char *) "seqmodel normalization utest failed";
   ESL_ALPHABET *abc     = esl_alphabet_Create(eslAMINO);
-  char         *seq     = "ACDEFGHIKLMNPQRSTVWYBJZOUX";
+  char         *seq     = (char *)"ACDEFGHIKLMNPQRSTVWYBJZOUX";
   int           L       = strlen(seq);
   ESL_DSQ      *dsq     = NULL;
   float         popen   = 0.1;
@@ -269,9 +269,9 @@ utest_normalization(ESL_GETOPTS *go)
   if ( esl_abc_CreateDsq(abc, seq, &dsq)                                                 != eslOK) esl_fatal(msg);
   if ( (bld = p7_builder_Create(NULL, abc))                                              == NULL)  esl_fatal(msg);
   if ( p7_builder_LoadScoreSystem(bld, "BLOSUM62", popen, pextend, bg)                   != eslOK) esl_fatal(msg); 
-  if ( p7_Seqmodel(abc, dsq, L, "aatest", bld->Q, bg->f, bld->popen, bld->pextend, &hmm) != eslOK) esl_fatal(msg);
+  if ( p7_Seqmodel(abc, dsq, L, (char *)"aatest", bld->Q, bg->f, bld->popen, bld->pextend, &hmm) != eslOK) esl_fatal(msg);
 
-  if (p7_hmm_Validate(hmm, errbuf, 0.0001) != eslOK) esl_fatal("normalization utest failed\n%s\n", errbuf);
+  if (p7_hmm_Validate(hmm, errbuf, 0.0001) != eslOK) esl_fatal((char *)"normalization utest failed\n%s\n", errbuf);
 
   free(dsq);
   p7_bg_Destroy(bg);
@@ -295,7 +295,7 @@ utest_normalization(ESL_GETOPTS *go)
 
 static ESL_OPTIONS options[] = {
   /* name           type      default  env  range toggles reqs incomp  help                                       docgroup*/
-  { "-h",        eslARG_NONE,   FALSE, NULL, NULL,  NULL,  NULL, NULL, "show brief help on version and usage",           0 },
+  { (char *)"-h",        eslARG_NONE,   FALSE, NULL, NULL,  NULL,  NULL, NULL, (char *)"show brief help on version and usage",           0 },
   {  0, 0, 0, 0, 0, 0, 0, 0, 0, 0 },
 };
 static char usage[]  = "[-options]";
@@ -337,7 +337,7 @@ main(int argc, char **argv)
 
 static ESL_OPTIONS options[] = {
   /* name           type      default  env  range toggles reqs incomp  help                                       docgroup*/
-  { "-h",        eslARG_NONE,   FALSE, NULL, NULL,      NULL,  NULL, NULL, "show brief help on version and usage",           0 },
+  { (char *)"-h",        eslARG_NONE,   FALSE, NULL, NULL,      NULL,  NULL, NULL, (char *)"show brief help on version and usage",           0 },
   {  0, 0, 0, 0, 0, 0, 0, 0, 0, 0 },
 };
 static char usage[]  = "[-options] <query FASTA file> <target FASTA file>";
@@ -360,7 +360,7 @@ main(int argc, char **argv)
   P7_HMM          *hmm    = NULL;
   P7_PROFILE      *gm     = NULL;
   P7_REFMX        *vit    = p7_refmx_Create(200, 400); /* will grow as needed */
-  double          *fa     = malloc(sizeof(double) * abc->K);
+  double          *fa     = (double *) malloc(sizeof(double) * abc->K);
   double          popen   = 0.02;
   double          pextend = 0.4;
   double          lambda;

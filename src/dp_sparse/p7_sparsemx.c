@@ -1159,14 +1159,14 @@ char *
 p7_sparsemx_DecodeState(int type)
 {
   switch (type) {
-  case p7S_ML: return "ML";
-  case p7S_MG: return "MG";
-  case p7S_IL: return "IL";
-  case p7S_IG: return "IG";
-  case p7S_DL: return "DL";
-  case p7S_DG: return "DG";
+  case p7S_ML: return (char *)"ML";
+  case p7S_MG: return (char *)"MG";
+  case p7S_IL: return (char *)"IL";
+  case p7S_IG: return (char *)"IG";
+  case p7S_DL: return (char *)"DL";
+  case p7S_DG: return (char *)"DG";
   }
-  esl_exception(eslEINVAL, FALSE, __FILE__, __LINE__, "no such P7_SPARSEMX main state code %d\n", type);
+  esl_exception(eslEINVAL, FALSE, (char *)__FILE__, __LINE__, (char *)"no such P7_SPARSEMX main state code %d\n", type);
   return NULL;
 }
 
@@ -1174,18 +1174,18 @@ char *
 p7_sparsemx_DecodeSpecial(int type)
 {
   switch (type) {
-  case p7S_E:  return "E";
-  case p7S_N:  return "N";
-  case p7S_J:  return "J";
-  case p7S_B:  return "B";
-  case p7S_L:  return "L";
-  case p7S_G:  return "G";
-  case p7S_C:  return "C";
-  case p7S_JJ: return "JJ";
-  case p7S_CC: return "CC";
+  case p7S_E:  return (char *)"E";
+  case p7S_N:  return (char *)"N";
+  case p7S_J:  return (char *)"J";
+  case p7S_B:  return (char *)"B";
+  case p7S_L:  return (char *)"L";
+  case p7S_G:  return (char *)"G";
+  case p7S_C:  return (char *)"C";
+  case p7S_JJ: return (char *)"JJ";
+  case p7S_CC: return (char *)"CC";
   default:     break;
   }
-  esl_exception(eslEINVAL, FALSE, __FILE__, __LINE__, "no such P7_SPARSEMX special state type code %d\n", type);
+  esl_exception(eslEINVAL, FALSE, (char *)__FILE__, __LINE__, (char *)"no such P7_SPARSEMX special state type code %d\n", type);
   return NULL;
 }
 

@@ -755,7 +755,7 @@ utest_singlepath(FILE *diagfp, ESL_RANDOMNESS *rng, int M, const ESL_ALPHABET *a
   ESL_SQ     *sq        = esl_sq_CreateDigital(bg->abc);
   P7_TRACE   *tr        = p7_trace_Create();
   P7_TRACE   *vtr       = p7_trace_Create();
-  P7_ANCHOR  *anch      = malloc(sizeof(P7_ANCHOR) * 3);  // *3, because of sentinels
+  P7_ANCHOR  *anch      = (P7_ANCHOR *) malloc(sizeof(P7_ANCHOR) * 3);  // *3, because of sentinels
   P7_REFMX   *rxv       = p7_refmx_Create(M, 20);
   P7_REFMX   *rxf       = p7_refmx_Create(M, 20);
   P7_REFMX   *rxb       = p7_refmx_Create(M, 20);
@@ -1415,10 +1415,10 @@ utest_multimulti(FILE *diagfp, ESL_RANDOMNESS *rng, int M, const ESL_ALPHABET *a
 
 static ESL_OPTIONS options[] = {
   /* name           type      default  env  range toggles reqs incomp  help                                       docgroup*/
-  { "-h",     eslARG_NONE,        FALSE, NULL, NULL,  NULL,  NULL, NULL, "show brief help on version and usage",           0 },
-  { "-s",     eslARG_INT,    p7_RNGSEED, NULL, NULL,  NULL,  NULL, NULL, "set random number seed to <n>",                  0 },
-  { "-N",     eslARG_INT,         "100", NULL, NULL,  NULL,  NULL, NULL, "number of times to run utest for --diag",        0 },
-  { "--diag", eslARG_STRING,       NULL, NULL, NULL,  NULL,  NULL, NULL, "dump data on a utest's chance failure rate",     0 },
+  { (char *)"-h",     eslARG_NONE,        FALSE, NULL, NULL,  NULL,  NULL, NULL, (char *)"show brief help on version and usage",           0 },
+  { (char *)"-s",     eslARG_INT,    (char *) p7_RNGSEED, NULL, NULL,  NULL,  NULL, NULL, (char *)"set random number seed to <n>",                  0 },
+  { (char *)"-N",     eslARG_INT,         (char *)"100", NULL, NULL,  NULL,  NULL, NULL, (char *)"number of times to run utest for --diag",        0 },
+  { (char *)"--diag", eslARG_STRING,       NULL, NULL, NULL,  NULL,  NULL, NULL, (char *)"dump data on a utest's chance failure rate",     0 },
   {  0, 0, 0, 0, 0, 0, 0, 0, 0, 0 },
 };
 static char usage[]  = "[-options]";
@@ -1428,14 +1428,14 @@ int
 main(int argc, char **argv)
 {
   ESL_GETOPTS    *go   = p7_CreateDefaultApp(options, 0, argc, argv, banner, usage);
-  ESL_RANDOMNESS *rng  = esl_randomness_Create(esl_opt_GetInteger(go, "-s"));
+  ESL_RANDOMNESS *rng  = esl_randomness_Create(esl_opt_GetInteger(go, (char *)"-s"));
   ESL_ALPHABET   *abc  = esl_alphabet_Create(eslAMINO);
   int             M    = 10;
-  int             N    = esl_opt_GetInteger(go, "-N");
+  int             N    = esl_opt_GetInteger(go, (char *)"-N");
 
-  if (esl_opt_IsOn(go, "--diag"))
+  if (esl_opt_IsOn(go, (char *)"--diag"))
     {  // --diag is for studying chance failure rates, error distributions
-      char *which = esl_opt_GetString(go, "--diag");
+      char *which = esl_opt_GetString(go, (char *)"--diag");
 
       if      (strcmp(which, "singlepath")      == 0) while (N--) utest_singlepath     (stdout, rng, M, abc);
       else if (strcmp(which, "singlesingle")    == 0) while (N--) utest_singlesingle   (stdout, rng, M, abc);
@@ -1443,7 +1443,7 @@ main(int argc, char **argv)
       else if (strcmp(which, "multisingle")     == 0) while (N--) utest_multisingle    (stdout, rng, M, abc);
       else if (strcmp(which, "multipath_local") == 0) while (N--) utest_multipath_local(stdout, rng, M, abc);
       else if (strcmp(which, "multimulti")      == 0) while (N--) utest_multimulti     (stdout, rng, M, abc);
-      else esl_fatal("--diag takes: singlepath, singlesingle, singlemulti, multisingle, multipath_local, multimulti");
+      else esl_fatal((char *)"--diag takes: singlepath, singlesingle, singlemulti, multisingle, multipath_local, multimulti");
     }
   else  // Running the unit tests is what we usually do:
     {
@@ -1486,8 +1486,8 @@ main(int argc, char **argv)
 
 static ESL_OPTIONS options[] = {
   /* name           type      default  env  range  toggles reqs incomp  help                                       docgroup*/
-  { "-h",        eslARG_NONE,   FALSE, NULL, NULL,   NULL,  NULL, NULL, "show brief help on version and usage",             0 },
-  { "-v",        eslARG_NONE,   FALSE, NULL, NULL,   NULL,  NULL, NULL, "stop after doing the Viterbi anchors, no manual",  0 },
+  { (char *)"-h",        eslARG_NONE,   FALSE, NULL, NULL,   NULL,  NULL, NULL, (char *)"show brief help on version and usage",             0 },
+  { (char *)"-v",        eslARG_NONE,   FALSE, NULL, NULL,   NULL,  NULL, NULL, (char *)"stop after doing the Viterbi anchors, no manual",  0 },
   {  0, 0, 0, 0, 0, 0, 0, 0, 0, 0 },
 };
 static char usage[]  = "[-options] <hmmfile> <seqfile> <ndom> [<i0> <k0>]...";
@@ -1522,22 +1522,22 @@ main(int argc, char **argv)
   int             status;
 
   /* Read in one HMM */
-  if (p7_hmmfile_OpenE(hmmfile, NULL, &hfp, NULL) != eslOK) p7_Fail("Failed to open HMM file %s", hmmfile);
-  if (p7_hmmfile_Read(hfp, &abc, &hmm)            != eslOK) p7_Fail("Failed to read HMM");
+  if (p7_hmmfile_OpenE(hmmfile, NULL, &hfp, NULL) != eslOK) p7_Fail((char *) "Failed to open HMM file %s", hmmfile);
+  if (p7_hmmfile_Read(hfp, &abc, &hmm)            != eslOK) p7_Fail((char *) "Failed to read HMM");
   p7_hmmfile_Close(hfp);
  
   /* Open sequence file */
   sq     = esl_sq_CreateDigital(abc);
   status = esl_sqfile_Open(seqfile, format, NULL, &sqfp);
-  if      (status == eslENOTFOUND) p7_Fail("No such file.");
-  else if (status == eslEFORMAT)   p7_Fail("Format unrecognized.");
-  else if (status == eslEINVAL)    p7_Fail("Can't autodetect stdin or .gz.");
-  else if (status != eslOK)        p7_Fail("Open failed, code %d.", status);
+  if      (status == eslENOTFOUND) p7_Fail((char *)"No such file.");
+  else if (status == eslEFORMAT)   p7_Fail((char *)"Format unrecognized.");
+  else if (status == eslEINVAL)    p7_Fail((char *)"Can't autodetect stdin or .gz.");
+  else if (status != eslOK)        p7_Fail((char *)"Open failed, code %d.", status);
  
   /* Get a sequence */
   status = esl_sqio_Read(sqfp, sq);
-  if      (status == eslEFORMAT) p7_Fail("Parse failed (sequence file %s)\n%s\n", sqfp->filename, sqfp->get_error(sqfp));     
-  else if (status != eslOK)      p7_Fail("Unexpected error %d reading sequence file %s", status, sqfp->filename);
+  if      (status == eslEFORMAT) p7_Fail((char *)"Parse failed (sequence file %s)\n%s\n", sqfp->filename, sqfp->get_error(sqfp));     
+  else if (status != eslOK)      p7_Fail((char *)"Unexpected error %d reading sequence file %s", status, sqfp->filename);
 
   /* Configure a profile from the HMM */
   bg = p7_bg_Create(abc);
@@ -1585,7 +1585,7 @@ main(int argc, char **argv)
 
 
 
-  if (! esl_opt_GetBoolean(go, "-v")) 
+  if (! esl_opt_GetBoolean(go, (char *) "-v")) 
     {
       p7_refmx_Reuse(mxu);
       p7_refmx_Reuse(mxd);

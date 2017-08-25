@@ -163,12 +163,12 @@ hmmlogo_IndelValues (P7_HMM *hmm, float *insert_P, float *insert_expL, float *de
 
 static ESL_OPTIONS options[] = {
   /* name                           type        defaul  env  range   toggles   reqs   incomp              help                                                      docgroup*/
-  { "-h",                        eslARG_NONE,   FALSE, NULL, NULL,    NULL,  NULL,  NULL,             "show brief help on version and usage",                         1 },
+  {(char *)  "-h",                        eslARG_NONE,   FALSE, NULL, NULL,    NULL,  NULL,  NULL,          (char *)    "show brief help on version and usage",                         1 },
   /* Control of output */
-  { "--height_emission",         eslARG_NONE,    NULL, NULL, NULL,    NULL,  NULL,  HMMLOGO_OPTS,     "total height = relative entropy ; residue height = emission  (default)",     1 },
-  { "--height_positive_score",   eslARG_NONE,    NULL, NULL, NULL,    NULL,  NULL,  HMMLOGO_OPTS,     "total height = relative entropy ; residue height = % of positive score ",    1 },
-  { "--height_bits",                    eslARG_NONE,    NULL, NULL, NULL,    NULL,  NULL,  HMMLOGO_OPTS,     "total height = sums of (pos|neg) scores; residue height = score",            1 },
-  { "--no_indel",                eslARG_NONE,    NULL, NULL, NULL,    NULL,  NULL,  NULL,             "don't provide indel rate values",                                            1 },
+  { (char *) "--height_emission",         eslARG_NONE,    NULL, NULL, NULL,    NULL,  NULL, (char *)  HMMLOGO_OPTS,   (char *)   "total height = relative entropy ; residue height = emission  (default)",     1 },
+  { (char *) "--height_positive_score",   eslARG_NONE,    NULL, NULL, NULL,    NULL,  NULL, (char *)  HMMLOGO_OPTS,    (char *)  "total height = relative entropy ; residue height = % of positive score ",    1 },
+  { (char *) "--height_bits",                    eslARG_NONE,    NULL, NULL, NULL,    NULL,  NULL, (char *)  HMMLOGO_OPTS,   (char *)   "total height = sums of (pos|neg) scores; residue height = score",            1 },
+  { (char *) "--no_indel",                eslARG_NONE,    NULL, NULL, NULL,    NULL,  NULL,  NULL,          (char *)    "don't provide indel rate values",                                            1 },
 
   {  0, 0, 0, 0, 0, 0, 0, 0, 0, 0 },
 };
@@ -203,7 +203,7 @@ main(int argc, char **argv)
   if (esl_opt_ProcessCmdline(go, argc, argv) != eslOK) esl_fatal(argv[0], "Failed to parse command line: %s\n", go->errbuf);
   if (esl_opt_VerifyConfig(go)               != eslOK) esl_fatal(argv[0], "Error in configuration: %s\n",       go->errbuf);
 
-  if (esl_opt_GetBoolean(go, "-h") )  {
+  if (esl_opt_GetBoolean(go, (char *)  "-h") )  {
    p7_banner (stdout, argv[0], banner);
    esl_usage (stdout, argv[0], usage);
    puts("\nOptions:");
@@ -214,26 +214,26 @@ main(int argc, char **argv)
 
   hmmfile = esl_opt_GetArg(go, 1);
 
-  if (esl_opt_IsOn(go, "--height_emission"))
+  if (esl_opt_IsOn(go,(char *)  "--height_emission"))
     mode = HMMLOGO_HEIGHT_EMISSION;
-  else if (esl_opt_IsOn(go, "--height_positive_score"))
+  else if (esl_opt_IsOn(go,(char *)  "--height_positive_score"))
     mode = HMMLOGO_HEIGHT_POS_SCORE;
-  else if (esl_opt_IsOn(go, "--height_bits"))
+  else if (esl_opt_IsOn(go, (char *) "--height_bits"))
     mode = HMMLOGO_HEIGHT_BITS;
 
 
 
   /* Open the query profile HMM file */
   status = p7_hmmfile_OpenE(hmmfile, NULL, &hfp, errbuf);
-  if      (status == eslENOTFOUND) p7_Fail("File existence/permissions problem in trying to open HMM file %s.\n%s\n", hmmfile, errbuf);
-  else if (status == eslEFORMAT)   p7_Fail("File format problem in trying to open HMM file %s.\n%s\n",                hmmfile, errbuf);
-  else if (status != eslOK)        p7_Fail("Unexpected error %d in opening HMM file %s.\n%s\n",               status, hmmfile, errbuf);
+  if      (status == eslENOTFOUND) p7_Fail((char *) "File existence/permissions problem in trying to open HMM file %s.\n%s\n", hmmfile, errbuf);
+  else if (status == eslEFORMAT)   p7_Fail((char *) "File format problem in trying to open HMM file %s.\n%s\n",                hmmfile, errbuf);
+  else if (status != eslOK)        p7_Fail((char *) "Unexpected error %d in opening HMM file %s.\n%s\n",               status, hmmfile, errbuf);
 
   status = p7_hmmfile_Read(hfp, &abc, &hmm);
-  if      (status == eslEFORMAT)   p7_Fail("Bad file format in HMM file %s:\n%s\n",          hfp->fname, hfp->errbuf);
-  else if (status == eslEINCOMPAT) p7_Fail("HMM in %s is not in the expected %s alphabet\n", hfp->fname, esl_abc_DecodeType(abc->type));
-  else if (status == eslEOF)       p7_Fail("Empty HMM file %s? No HMM data found.\n",        hfp->fname);
-  else if (status != eslOK)        p7_Fail("Unexpected error in reading HMMs from %s\n",     hfp->fname);
+  if      (status == eslEFORMAT)   p7_Fail((char *) "Bad file format in HMM file %s:\n%s\n",          hfp->fname, hfp->errbuf);
+  else if (status == eslEINCOMPAT) p7_Fail((char *) "HMM in %s is not in the expected %s alphabet\n", hfp->fname, esl_abc_DecodeType(abc->type));
+  else if (status == eslEOF)       p7_Fail((char *) "Empty HMM file %s? No HMM data found.\n",        hfp->fname);
+  else if (status != eslOK)        p7_Fail((char *) "Unexpected error in reading HMMs from %s\n",     hfp->fname);
 
   bg     = p7_bg_Create(abc);
 
@@ -275,7 +275,7 @@ main(int argc, char **argv)
   }
 
   /* indel values */
-  if (! esl_opt_IsOn(go, "--no_indel")) {
+  if (! esl_opt_IsOn(go, (char *)  "--no_indel")) {
 
     ESL_ALLOC(ins_P,    (hmm->M+1) * sizeof(float));
     ESL_ALLOC(ins_expL, (hmm->M+1) * sizeof(float));

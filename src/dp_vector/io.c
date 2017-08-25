@@ -722,7 +722,7 @@ p7_oprofile_Position(P7_HMMFILE *hfp, off_t offset)
 
 static ESL_OPTIONS options[] = {
   /* name           type      default  env  range toggles reqs incomp  help                                  docgroup*/
-  { "-h",        eslARG_NONE,   FALSE, NULL, NULL,  NULL,  NULL, NULL, "show brief help on version and usage",  0 },
+  { (char *) "-h",        eslARG_NONE,   FALSE, NULL, NULL,  NULL,  NULL, NULL, (char *) "show brief help on version and usage",  0 },
   {  0, 0, 0, 0, 0, 0, 0, 0, 0, 0 },
 };
 static char usage[]  = "[-options] <HMM SSV profile file>";
@@ -745,9 +745,9 @@ main(int argc, char **argv)
   esl_stopwatch_Start(w);
 
   status = p7_hmmfile_OpenE(hmmfile, NULL, &hfp, errbuf);
-  if      (status == eslENOTFOUND) p7_Fail("File existence/permissions problem in trying to open HMM file %s.\n%s\n", hmmfile, errbuf);
-  else if (status == eslEFORMAT)   p7_Fail("File format problem in trying to open HMM file %s.\n%s\n",                hmmfile, errbuf);
-  else if (status != eslOK)        p7_Fail("Unexpected error %d in opening HMM file %s.\n%s\n",               status, hmmfile, errbuf);  
+  if      (status == eslENOTFOUND) p7_Fail((char *) "File existence/permissions problem in trying to open HMM file %s.\n%s\n", hmmfile, errbuf);
+  else if (status == eslEFORMAT)   p7_Fail((char *) "File format problem in trying to open HMM file %s.\n%s\n",                hmmfile, errbuf);
+  else if (status != eslOK)        p7_Fail((char *) "Unexpected error %d in opening HMM file %s.\n%s\n",               status, hmmfile, errbuf);  
 
   while ((status = p7_oprofile_ReadSSV(hfp, &abc, &om)) == eslOK)
     {
@@ -756,12 +756,12 @@ main(int argc, char **argv)
 
       p7_oprofile_Destroy(om);
     }
-  if      (status == eslEFORMAT)   p7_Fail("bad file format in profile file %s",           hmmfile);
-  else if (status == eslEINCOMPAT) p7_Fail("profile file %s contains different alphabets", hmmfile);
-  else if (status != eslEOF)       p7_Fail("Unexpected error in reading profiles from %s", hmmfile);
+  if      (status == eslEFORMAT)   p7_Fail((char *) "bad file format in profile file %s",           hmmfile);
+  else if (status == eslEINCOMPAT) p7_Fail((char *) "profile file %s contains different alphabets", hmmfile);
+  else if (status != eslEOF)       p7_Fail((char *) "Unexpected error in reading profiles from %s", hmmfile);
 
   esl_stopwatch_Stop(w);
-  esl_stopwatch_Display(stdout, w, "# CPU time: ");
+  esl_stopwatch_Display(stdout, w, (char *) "# CPU time: ");
   printf("# number of models: %d\n", nmodel);
   printf("# total M:          %" PRId64 "\n", totM);
   
@@ -783,7 +783,7 @@ main(int argc, char **argv)
 static void
 utest_ReadWrite(P7_HMM *hmm, P7_OPROFILE *om)
 {
-  char        *msg         = "oprofile read/write unit test failure";
+  char        *msg         = (char *) "oprofile read/write unit test failure";
   ESL_ALPHABET *abc        = NULL;
   P7_OPROFILE *om2         = NULL;
   char         tmpfile[16] = "esltmpXXXXXX";
@@ -878,10 +878,10 @@ utest_ReadWrite(P7_HMM *hmm, P7_OPROFILE *om)
 
 static ESL_OPTIONS options[] = {
   /* name           type      default  env  range toggles reqs incomp  help                                       docgroup*/
-  { "-h",        eslARG_NONE,   FALSE, NULL, NULL,  NULL,  NULL, NULL, "show brief help on version and usage",           0 },
-  { "-s",        eslARG_INT,     "42", NULL, NULL,  NULL,  NULL, NULL, "set random number seed to <n>",                  0 },
-  { "-M",        eslARG_INT,     "45", NULL, NULL,  NULL,  NULL, NULL, "size of random model to sample",                 0 },
-  { "-L",        eslARG_INT,     "45", NULL, NULL,  NULL,  NULL, NULL, "configure model for length <n>",                 0 },
+  { (char *) "-h",        eslARG_NONE,   FALSE, NULL, NULL,  NULL,  NULL, NULL, (char *) "show brief help on version and usage",           0 },
+  { (char *) "-s",        eslARG_INT,    (char *)  "42", NULL, NULL,  NULL,  NULL, NULL,(char *)  "set random number seed to <n>",                  0 },
+  { (char *) "-M",        eslARG_INT,    (char *)  "45", NULL, NULL,  NULL,  NULL, NULL, (char *) "size of random model to sample",                 0 },
+  { (char *) "-L",        eslARG_INT,    (char *)  "45", NULL, NULL,  NULL,  NULL, NULL, (char *) "configure model for length <n>",                 0 },
   {  0, 0, 0, 0, 0, 0, 0, 0, 0, 0 },
 };
 static char usage[]  = "[-options]";
@@ -891,13 +891,13 @@ int
 main(int argc, char **argv)
 {
   ESL_GETOPTS    *go   = p7_CreateDefaultApp(options, 0, argc, argv, banner, usage);
-  ESL_RANDOMNESS *r    = esl_randomness_CreateFast(esl_opt_GetInteger(go, "-s"));
+  ESL_RANDOMNESS *r    = esl_randomness_CreateFast(esl_opt_GetInteger(go,(char *)  "-s"));
   ESL_ALPHABET   *abc  = NULL;
   P7_BG          *bg   = NULL;
   P7_HMM         *hmm  = NULL;
   P7_OPROFILE    *om   = NULL;
-  int             M    = esl_opt_GetInteger(go, "-M");
-  int             L    = esl_opt_GetInteger(go, "-L");
+  int             M    = esl_opt_GetInteger(go, (char *) "-M");
+  int             L    = esl_opt_GetInteger(go, (char *) "-L");
   
   fprintf(stderr, "## %s\n", argv[0]);
   fprintf(stderr, "#  rng seed = %" PRIu32 "\n", esl_randomness_GetSeed(r));
@@ -945,8 +945,8 @@ main(int argc, char **argv)
 
 static ESL_OPTIONS options[] = {
   /* name           type      default  env  range toggles reqs incomp  help                                  docgroup*/
-  { "-h",        eslARG_NONE,   FALSE, NULL, NULL,  NULL,  NULL, NULL, "show brief help on version and usage",      0 },
-  { "-v",        eslARG_NONE,   FALSE, NULL, NULL,  NULL,  NULL, NULL, "verbose: print model info as they're read", 0 }, 
+  { (char *) "-h",        eslARG_NONE,   FALSE, NULL, NULL,  NULL,  NULL, NULL, (char *) "show brief help on version and usage",      0 },
+  { (char *) "-v",        eslARG_NONE,   FALSE, NULL, NULL,  NULL,  NULL, NULL, (char *) "verbose: print model info as they're read", 0 }, 
   {  0, 0, 0, 0, 0, 0, 0, 0, 0, 0 },
 };
 static char usage[]  = "[-options] <HMM file>";
@@ -973,14 +973,14 @@ main(int argc, char **argv)
   char           errbuf[eslERRBUFSIZE];
 
   status = p7_hmmfile_OpenE(hmmfile, NULL, &hfp, errbuf);
-  if      (status == eslENOTFOUND) p7_Fail("File existence/permissions problem in trying to open HMM file %s.\n%s\n", hmmfile, errbuf);
-  else if (status == eslEFORMAT)   p7_Fail("File format problem in trying to open HMM file %s.\n%s\n",                hmmfile, errbuf);
-  else if (status != eslOK)        p7_Fail("Unexpected error %d in opening HMM file %s.\n%s\n",               status, hmmfile, errbuf);  
+  if      (status == eslENOTFOUND) p7_Fail((char *) "File existence/permissions problem in trying to open HMM file %s.\n%s\n", hmmfile, errbuf);
+  else if (status == eslEFORMAT)   p7_Fail((char *) "File format problem in trying to open HMM file %s.\n%s\n",                hmmfile, errbuf);
+  else if (status != eslOK)        p7_Fail((char *) "Unexpected error %d in opening HMM file %s.\n%s\n",               status, hmmfile, errbuf);  
 
   esl_sprintf(&fname, "%s.h3f", hmmfile);  
   esl_sprintf(&pname, "%s.h3f", hmmfile);  
-  if ((ffp = fopen(fname, "wb")) == NULL) p7_Fail("failed to open %s\n", fname);
-  if ((pfp = fopen(pname, "wb")) == NULL) p7_Fail("failed to open %s\n", pname);
+  if ((ffp = fopen(fname, "wb")) == NULL) p7_Fail((char *) "failed to open %s\n", fname);
+  if ((pfp = fopen(pname, "wb")) == NULL) p7_Fail((char *) "failed to open %s\n", pname);
   free(fname);
   free(pname);
 
@@ -991,7 +991,7 @@ main(int argc, char **argv)
 	p7_bg_SetLength(bg, 400);
       }
 
-      if (esl_opt_GetBoolean(go, "-v")) printf("%s\n", hmm->name);
+      if (esl_opt_GetBoolean(go, (char *) "-v")) printf("%s\n", hmm->name);
       nmodel++;
       totM += hmm->M;
 
@@ -1006,9 +1006,9 @@ main(int argc, char **argv)
       p7_oprofile_Destroy(om);
       p7_hmm_Destroy(hmm);
     }
-  if      (status == eslEFORMAT)   p7_Fail("bad file format in HMM file %s",             hmmfile);
-  else if (status == eslEINCOMPAT) p7_Fail("HMM file %s contains different alphabets",   hmmfile);
-  else if (status != eslEOF)       p7_Fail("Unexpected error in reading HMMs from %s",   hmmfile);
+  if      (status == eslEFORMAT)   p7_Fail((char *) "bad file format in HMM file %s",             hmmfile);
+  else if (status == eslEINCOMPAT) p7_Fail((char *) "HMM file %s contains different alphabets",   hmmfile);
+  else if (status != eslEOF)       p7_Fail((char *) "Unexpected error in reading HMMs from %s",   hmmfile);
 
   fclose(ffp);
   fclose(pfp);

@@ -86,28 +86,28 @@ p7_builder_Create(const ESL_GETOPTS *go, const ESL_ALPHABET *abc)
     }
   else 
     {
-      if      (esl_opt_GetBoolean(go, "--fast"))    bld->arch_strategy = p7_ARCH_FAST;
-      else if (esl_opt_GetBoolean(go, "--hand"))    bld->arch_strategy = p7_ARCH_HAND;
+      if      (esl_opt_GetBoolean(go, (char *) "--fast"))    bld->arch_strategy = p7_ARCH_FAST;
+      else if (esl_opt_GetBoolean(go, (char *)"--hand"))    bld->arch_strategy = p7_ARCH_HAND;
 
-      if      (esl_opt_GetBoolean(go, "--wpb"))     bld->wgt_strategy = p7_WGT_PB;
-      else if (esl_opt_GetBoolean(go, "--wgsc"))    bld->wgt_strategy = p7_WGT_GSC;
-      else if (esl_opt_GetBoolean(go, "--wblosum")) bld->wgt_strategy = p7_WGT_BLOSUM;
-      else if (esl_opt_GetBoolean(go, "--wnone"))   bld->wgt_strategy = p7_WGT_NONE;
-      else if (esl_opt_GetBoolean(go, "--wgiven"))  bld->wgt_strategy = p7_WGT_GIVEN;
+      if      (esl_opt_GetBoolean(go, (char *)"--wpb"))     bld->wgt_strategy = p7_WGT_PB;
+      else if (esl_opt_GetBoolean(go, (char *)"--wgsc"))    bld->wgt_strategy = p7_WGT_GSC;
+      else if (esl_opt_GetBoolean(go, (char *)"--wblosum")) bld->wgt_strategy = p7_WGT_BLOSUM;
+      else if (esl_opt_GetBoolean(go, (char *)"--wnone"))   bld->wgt_strategy = p7_WGT_NONE;
+      else if (esl_opt_GetBoolean(go, (char *)"--wgiven"))  bld->wgt_strategy = p7_WGT_GIVEN;
 
-      if      (esl_opt_GetBoolean(go, "--eent"))    bld->effn_strategy = p7_EFFN_ENTROPY;
-      else if (esl_opt_GetBoolean(go, "--eclust"))  bld->effn_strategy = p7_EFFN_CLUST;
-      else if (esl_opt_GetBoolean(go, "--enone"))   bld->effn_strategy = p7_EFFN_NONE;
-      else if (esl_opt_IsOn      (go, "--eset"))  { bld->effn_strategy = p7_EFFN_SET;      bld->eset = esl_opt_GetReal(go, "--eset"); }
+      if      (esl_opt_GetBoolean(go, (char *)"--eent"))    bld->effn_strategy = p7_EFFN_ENTROPY;
+      else if (esl_opt_GetBoolean(go, (char *)"--eclust"))  bld->effn_strategy = p7_EFFN_CLUST;
+      else if (esl_opt_GetBoolean(go, (char *)"--enone"))   bld->effn_strategy = p7_EFFN_NONE;
+      else if (esl_opt_IsOn      (go, (char *)"--eset"))  { bld->effn_strategy = p7_EFFN_SET;      bld->eset = esl_opt_GetReal(go, (char *)"--eset"); }
 
-      seed = esl_opt_GetInteger(go, "--seed");
+      seed = esl_opt_GetInteger(go, (char *)"--seed");
     }
 
   bld->max_insert_len = 0;
 
   /* The default RE target is alphabet dependent. */
-  if (go != NULL &&  esl_opt_IsOn (go, "--ere")) 
-    bld->re_target = esl_opt_GetReal(go, "--ere");
+  if (go != NULL &&  esl_opt_IsOn (go, (char *)"--ere")) 
+    bld->re_target = esl_opt_GetReal(go, (char *)"--ere");
   else {
     switch (abc->type) {
     case eslAMINO:  bld->re_target = p7_ETARGET_AMINO; break;
@@ -117,18 +117,18 @@ p7_builder_Create(const ESL_GETOPTS *go, const ESL_ALPHABET *abc)
     }
   }
 
-  bld->symfrac    = (go != NULL) ?  esl_opt_GetReal   (go, "--symfrac")    : 0.5; 
-  bld->fragthresh = (go != NULL) ?  esl_opt_GetReal   (go, "--fragthresh") : 0.5; 
-  bld->wid        = (go != NULL) ?  esl_opt_GetReal   (go, "--wid")        : 0.62;
-  bld->esigma     = (go != NULL) ?  esl_opt_GetReal   (go, "--esigma")     : 45.0;
-  bld->eid        = (go != NULL) ?  esl_opt_GetReal   (go, "--eid")        : 0.62;
-  bld->EmL        = (go != NULL) ?  esl_opt_GetInteger(go, "--EmL")        : 200;
-  bld->EmN        = (go != NULL) ?  esl_opt_GetInteger(go, "--EmN")        : 200;
-  bld->EvL        = (go != NULL) ?  esl_opt_GetInteger(go, "--EvL")        : 200;
-  bld->EvN        = (go != NULL) ?  esl_opt_GetInteger(go, "--EvN")        : 200;
-  bld->EfL        = (go != NULL) ?  esl_opt_GetInteger(go, "--EfL")        : 100;
-  bld->EfN        = (go != NULL) ?  esl_opt_GetInteger(go, "--EfN")        : 200;
-  bld->Eft        = (go != NULL) ?  esl_opt_GetReal   (go, "--Eft")        : 0.04;
+  bld->symfrac    = (go != NULL) ?  esl_opt_GetReal   (go, (char *)"--symfrac")    : 0.5; 
+  bld->fragthresh = (go != NULL) ?  esl_opt_GetReal   (go, (char *)"--fragthresh") : 0.5; 
+  bld->wid        = (go != NULL) ?  esl_opt_GetReal   (go, (char *)"--wid")        : 0.62;
+  bld->esigma     = (go != NULL) ?  esl_opt_GetReal   (go, (char *)"--esigma")     : 45.0;
+  bld->eid        = (go != NULL) ?  esl_opt_GetReal   (go, (char *)"--eid")        : 0.62;
+  bld->EmL        = (go != NULL) ?  esl_opt_GetInteger(go, (char *)"--EmL")        : 200;
+  bld->EmN        = (go != NULL) ?  esl_opt_GetInteger(go, (char *)"--EmN")        : 200;
+  bld->EvL        = (go != NULL) ?  esl_opt_GetInteger(go, (char *)"--EvL")        : 200;
+  bld->EvN        = (go != NULL) ?  esl_opt_GetInteger(go, (char *)"--EvN")        : 200;
+  bld->EfL        = (go != NULL) ?  esl_opt_GetInteger(go, (char *)"--EfL")        : 100;
+  bld->EfN        = (go != NULL) ?  esl_opt_GetInteger(go, (char *)"--EfN")        : 200;
+  bld->Eft        = (go != NULL) ?  esl_opt_GetReal   (go, (char *)"--Eft")        : 0.04;
 
   /* Normally we reinitialize the RNG to original seed before calibrating each model.
    * This eliminates run-to-run variation.
@@ -138,8 +138,8 @@ p7_builder_Create(const ESL_GETOPTS *go, const ESL_ALPHABET *abc)
   bld->r            = esl_randomness_CreateFast(seed);
   bld->do_reseeding = (seed == 0) ? FALSE : TRUE;
 
-  if      (go && esl_opt_GetBoolean(go, "--pnone") )     bld->prior = NULL;
-  else if (go && esl_opt_GetBoolean(go, "--plaplace") )  bld->prior = p7_prior_CreateLaplace(abc);
+  if      (go && esl_opt_GetBoolean(go, (char *)"--pnone") )     bld->prior = NULL;
+  else if (go && esl_opt_GetBoolean(go, (char *)"--plaplace") )  bld->prior = p7_prior_CreateLaplace(abc);
   else
     {
       switch (abc->type) {

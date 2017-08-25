@@ -67,7 +67,7 @@ p7_filtermx_Create(int allocM)
   
   if (allocM) {
     /* VF needs, in bytes:         3 MDI cells *     maxQw vectors        * bytes/vector; (aligned) */
-    fx->dp     = esl_alloc_aligned(p7F_NSCELLS * P7_Q(allocM, p7_VMAX_VF) * p7_VWIDTH,    p7_VALIGN);
+    fx->dp     = (int16_t *) esl_alloc_aligned(p7F_NSCELLS * P7_Q(allocM, p7_VMAX_VF) * p7_VWIDTH,    p7_VALIGN);
     if (fx->dp == NULL) goto ERROR;
     fx->allocM = allocM;
   }
@@ -121,7 +121,7 @@ p7_filtermx_Reinit(P7_FILTERMX *fx, int allocM)
   if (allocM > fx->allocM) {
     free(fx->dp);
     /*                             3 MDI cells *   maxQw vectors/row      * bytes/vector; aligned */ 
-    fx->dp     = esl_alloc_aligned(p7F_NSCELLS * P7_Q(allocM, p7_VMAX_VF) * p7_VWIDTH,    p7_VALIGN);
+    fx->dp     = (int16_t *) esl_alloc_aligned(p7F_NSCELLS * P7_Q(allocM, p7_VMAX_VF) * p7_VWIDTH,    p7_VALIGN);
     if (fx->dp == NULL) { status = eslEMEM; goto ERROR; }
     fx->allocM = allocM;
   }

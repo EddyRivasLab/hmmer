@@ -4,8 +4,9 @@
 #ifdef HAVE_MPI
 #include <mpi.h>
 #include "esl_mpi.h"
-#endif /*HAVE_MPI*/
 
+#endif /*HAVE_MPI*/
+#include "base/p7_tophits_mpi.h"
 #include "easel.h"
 #include "server/p7_hitlist.h"
 #include "esl_red_black.h"
@@ -21,20 +22,20 @@
  */
 ESL_RED_BLACK_DOUBLEKEY *p7_hitlist_entry_pool_Create(uint32_t num_entries){
   if(num_entries == 0){
-    p7_Fail("Creating 0 entries in p7_hitlist_entry_pool_Create is not allowed\n");
+    p7_Fail((char *) "Creating 0 entries in p7_hitlist_entry_pool_Create is not allowed\n");
   }
 
   // allocate all the hits in one big lump
   P7_HIT *hits = p7_hit_Create(num_entries);
 
   if(hits == NULL){
-    p7_Fail("Unable to allocate memory in p7_hitlist_entry_pool_Create");
+    p7_Fail((char *) "Unable to allocate memory in p7_hitlist_entry_pool_Create");
   }
 
   // create the list of tree nodes
   ESL_RED_BLACK_DOUBLEKEY *pool = esl_red_black_doublekey_pool_Create(num_entries);
   if(pool == NULL){
-    p7_Fail("Unable to allocate memory in p7_hitlist_entry_pool_Create");
+    p7_Fail((char *) "Unable to allocate memory in p7_hitlist_entry_pool_Create");
   }
 
   // make the hits the contents of the tree nodes
@@ -85,7 +86,7 @@ ESL_RED_BLACK_DOUBLEKEY *p7_get_hit_tree_entry_from_masternode_pool(P7_DAEMON_MA
     masternode->empty_hit_pool = p7_hitlist_entry_pool_Create(HITLIST_POOL_SIZE);
 
     if(masternode->empty_hit_pool == NULL){
-      p7_Fail("Unable to allocate memory in p7_get_hit_tree_entry_from_masternode_pool");
+      p7_Fail((char *) "Unable to allocate memory in p7_get_hit_tree_entry_from_masternode_pool");
     }
   }  
 
@@ -133,7 +134,7 @@ void p7_print_and_recycle_hit_tree(char *filename, ESL_RED_BLACK_DOUBLEKEY *tree
   if(tree != NULL){  // There were hits to print
     // turn the tree into a sorted list
     if(esl_red_black_doublekey_convert_to_sorted_linked(tree, head, tail) != eslOK){
-      p7_Fail("Conversion of tree to linked list failed\n");
+      p7_Fail((char *) "Conversion of tree to linked list failed\n");
     }
     
     // Then, iterate over the list, writing each hit to the file in sequence
@@ -174,7 +175,7 @@ void p7_print_and_recycle_hit_tree(char *filename, ESL_RED_BLACK_DOUBLEKEY *tree
  */
 int p7_mpi_send_and_recycle_unsorted_hits(ESL_RED_BLACK_DOUBLEKEY *hits, int dest, int tag, MPI_Comm comm, char **buf, int *nalloc, struct p7_server_workernode_state *workernode){
 #ifndef HAVE_MPI
-  p7_Fail("Attempt to call p7_mpi_send_and_recycle_unsorted_hits when HMMER was compiled without MPI support");
+  p7_Fail((char *) "Attempt to call p7_mpi_send_and_recycle_unsorted_hits when HMMER was compiled without MPI support");
   return 0;
 #endif
 #ifdef HAVE_MPI 
@@ -191,7 +192,7 @@ int p7_mpi_send_and_recycle_unsorted_hits(ESL_RED_BLACK_DOUBLEKEY *hits, int des
     // The hit list was empty, which is an error unless we're sending an empty hit message to indicate that
     // the worker node has finished its part of the search but had no hits to send.
     if(tag != HMMER_HIT_FINAL_MPI_TAG){
-      p7_Fail("p7_mpi_send_and_recycle_unsorted_hits called on empty hitlist when we weren't at the end of a search\n");
+      p7_Fail((char *) "p7_mpi_send_and_recycle_unsorted_hits called on empty hitlist when we weren't at the end of a search\n");
     }
     else{
       // Prepare and send empty message with final hit tag so that masternode knows we're done
@@ -237,7 +238,7 @@ int p7_mpi_send_and_recycle_unsorted_hits(ESL_RED_BLACK_DOUBLEKEY *hits, int des
     while((sendsize < HIT_MESSAGE_LIMIT) && current2 != NULL){
       // compute the amount of space required to hold the current hit
       if(p7_hit_mpi_PackSize((const P7_HIT *) current2->contents, 1, comm, &my_size) != eslOK){
-        p7_Fail("p7_hit_mpi_PackSize failed to complete when called from p7_mpi_send_and_recycle_unsorted_hits");
+        p7_Fail((char *) "p7_hit_mpi_PackSize failed to complete when called from p7_mpi_send_and_recycle_unsorted_hits");
       }
       sendsize += my_size;
       current2 = current2->large;
@@ -284,7 +285,7 @@ int p7_mpi_send_and_recycle_unsorted_hits(ESL_RED_BLACK_DOUBLEKEY *hits, int des
   return eslOK;  // We haven't failed, therefore have succeeded
 
 ERROR: 
-  p7_Fail("Unable to allocate memory in p7_mpi_send_and_recycle_unsorted_hits");
+  p7_Fail((char *) "Unable to allocate memory in p7_mpi_send_and_recycle_unsorted_hits");
   return eslFAIL;
 #endif
 }

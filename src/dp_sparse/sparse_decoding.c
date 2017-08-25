@@ -551,12 +551,12 @@ utest_approx_decoding(ESL_RANDOMNESS *rng, ESL_ALPHABET *abc, P7_BG *bg, int M, 
  */
 static ESL_OPTIONS options[] = {
   /* name           type      default  env  range toggles reqs incomp  help                                       docgroup*/
-  { "-h",        eslARG_NONE,   FALSE, NULL, NULL,  NULL,  NULL, NULL, "show brief help on version and usage",           0 },
-  { "-s",        eslARG_INT,     "42", NULL, NULL,  NULL,  NULL, NULL, "set random number seed to <n>",                  0 },
-  { "-L",        eslARG_INT,    "200", NULL, NULL,  NULL,  NULL, NULL, "size of random sequences to sample",             0 },
-  { "-M",        eslARG_INT,    "145", NULL, NULL,  NULL,  NULL, NULL, "size of random models to sample",                0 },
-  { "-N",        eslARG_INT,     "20", NULL, NULL,  NULL,  NULL, NULL, "number of random sequences to sample",           0 },
-  { "-n",        eslARG_INT, "100000", NULL, NULL,  NULL,  NULL, NULL, "number of stochastic traces in approx_decoding", 0 },
+  { (char *) "-h",        eslARG_NONE,   FALSE, NULL, NULL,  NULL,  NULL, NULL, (char *) "show brief help on version and usage",           0 },
+  { (char *) "-s",        eslARG_INT,    (char *)  "42", NULL, NULL,  NULL,  NULL, NULL, (char *) "set random number seed to <n>",                  0 },
+  { (char *) "-L",        eslARG_INT,  (char *)   "200", NULL, NULL,  NULL,  NULL, NULL, (char *) "size of random sequences to sample",             0 },
+  { (char *) "-M",        eslARG_INT,  (char *)   "145", NULL, NULL,  NULL,  NULL, NULL, (char *) "size of random models to sample",                0 },
+  { (char *) "-N",        eslARG_INT,   (char *)   "20", NULL, NULL,  NULL,  NULL, NULL, (char *) "number of random sequences to sample",           0 },
+  {(char *)  "-n",        eslARG_INT, (char *) "100000", NULL, NULL,  NULL,  NULL, NULL, (char *) "number of stochastic traces in approx_decoding", 0 },
   {  0, 0, 0, 0, 0, 0, 0, 0, 0, 0 },
 };
 static char usage[]  = "[-options]";
@@ -566,13 +566,13 @@ int
 main(int argc, char **argv)
 {
   ESL_GETOPTS    *go   = p7_CreateDefaultApp(options, 0, argc, argv, banner, usage);
-  ESL_RANDOMNESS *r    = esl_randomness_CreateFast(esl_opt_GetInteger(go, "-s"));
+  ESL_RANDOMNESS *r    = esl_randomness_CreateFast(esl_opt_GetInteger(go, (char *) "-s"));
   ESL_ALPHABET   *abc  = esl_alphabet_Create(eslAMINO);
   P7_BG          *bg   = p7_bg_Create(abc);
-  int             M    = esl_opt_GetInteger(go, "-M");
-  int             L    = esl_opt_GetInteger(go, "-L");
-  int             N    = esl_opt_GetInteger(go, "-N");
-  int             ntr  = esl_opt_GetInteger(go, "-n");
+  int             M    = esl_opt_GetInteger(go, (char *) "-M");
+  int             L    = esl_opt_GetInteger(go,(char *)  "-L");
+  int             N    = esl_opt_GetInteger(go, (char *) "-N");
+  int             ntr  = esl_opt_GetInteger(go,(char *)  "-n");
 
   fprintf(stderr, "## %s\n", argv[0]);
   fprintf(stderr, "#  rng seed = %" PRIu32 "\n", esl_randomness_GetSeed(r));

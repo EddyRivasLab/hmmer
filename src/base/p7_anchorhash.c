@@ -518,8 +518,8 @@ utest_sampling(ESL_RANDOMNESS *rng)
   int            maxD     = 50;  
   P7_ANCHORHASH *ah       = p7_anchorhash_Create();
   P7_ANCHORS    *anch     = p7_anchors_Create();
-  P7_ANCHORS   **aarr     = malloc(sizeof(P7_ANCHORS *) * nsamples);
-  int32_t       *keys     = malloc(sizeof(int32_t) * nsamples);
+  P7_ANCHORS   **aarr     = (P7_ANCHORS **) malloc(sizeof(P7_ANCHORS *) * nsamples);
+  int32_t       *keys     = (int32_t *) malloc(sizeof(int32_t) * nsamples);
   int32_t        keyidx;        
   int32_t        nk;
   int            iteration;
@@ -589,8 +589,8 @@ utest_sampling(ESL_RANDOMNESS *rng)
 
 static ESL_OPTIONS options[] = {
   /* name           type      default  env  range toggles reqs incomp  help                                       docgroup*/
-  { "-h",        eslARG_NONE,   FALSE, NULL, NULL,  NULL,  NULL, NULL, "show brief help on version and usage",           0 },
-  { "-s",        eslARG_INT,      "0", NULL, NULL,  NULL,  NULL, NULL, "set random number seed to <n>",                  0 },
+  { (char *)"-h",        eslARG_NONE,   FALSE, NULL, NULL,  NULL,  NULL, NULL, (char *)"show brief help on version and usage",           0 },
+  { (char *)"-s",        eslARG_INT,     (char *) "0", NULL, NULL,  NULL,  NULL, NULL, (char *)"set random number seed to <n>",                  0 },
   {  0, 0, 0, 0, 0, 0, 0, 0, 0, 0 },
 };
 static char usage[]  = "[-options]";
@@ -600,7 +600,7 @@ int
 main(int argc, char **argv)
 {
   ESL_GETOPTS    *go   = p7_CreateDefaultApp(options, 0, argc, argv, banner, usage);
-  ESL_RANDOMNESS *rng  = esl_randomness_CreateFast(esl_opt_GetInteger(go, "-s"));
+  ESL_RANDOMNESS *rng  = esl_randomness_CreateFast(esl_opt_GetInteger(go,(char *) "-s"));
 
   fprintf(stderr, "## %s\n", argv[0]);
   fprintf(stderr, "#  rng seed = %" PRIu32 "\n", esl_randomness_GetSeed(rng));
@@ -632,8 +632,8 @@ main(int argc, char **argv)
 
 static ESL_OPTIONS options[] = {
   /* name           type         default   env  range   toggles   reqs   incomp   help                                    docgroup*/
-  { "-h",           eslARG_NONE,   FALSE, NULL, NULL,      NULL,  NULL,  NULL,   "show brief help on version and usage",        0 },
-  { "-s",           eslARG_INT,      "0", NULL, NULL,      NULL,  NULL,  NULL,   "set random number seed to <n>",               0 },
+  { (char *)"-h",           eslARG_NONE,   FALSE, NULL, NULL,      NULL,  NULL,  NULL,   (char *)"show brief help on version and usage",        0 },
+  { (char *)"-s",           eslARG_INT,     (char *) "0", NULL, NULL,      NULL,  NULL,  NULL,  (char *) "set random number seed to <n>",               0 },
   {  0, 0, 0, 0, 0, 0, 0, 0, 0, 0 },
 };
 static char usage[]  = "[-options]";
@@ -643,7 +643,7 @@ int
 main(int argc, char **argv)
 {
   ESL_GETOPTS    *go       = p7_CreateDefaultApp(options, 0, argc, argv, banner, usage);
-  ESL_RANDOMNESS *rng      = esl_randomness_Create(esl_opt_GetInteger(go, "-s"));
+  ESL_RANDOMNESS *rng      = esl_randomness_Create(esl_opt_GetInteger(go, (char *)"-s"));
   P7_ANCHORS     *anch     = p7_anchors_Create();
   P7_ANCHORHASH  *ah       = p7_anchorhash_Create();
   int             L        = 400;

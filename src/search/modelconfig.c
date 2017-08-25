@@ -421,7 +421,7 @@ set_glocal_exit(P7_PROFILE *gm, const P7_HMM *hmm)
 static void
 utest_config(P7_HMM *hmm, P7_BG *bg)
 {
-  char       *msg = "modelconfig.c::p7_profile_Config() unit test failed";
+  char       *msg = (char *) "modelconfig.c::p7_profile_Config() unit test failed";
   P7_PROFILE *gm  = NULL;
 
   if ((gm = p7_profile_Create(hmm->M, hmm->abc))    == NULL)   esl_fatal(msg);
@@ -439,11 +439,11 @@ utest_config(P7_HMM *hmm, P7_BG *bg)
 static void
 utest_occupancy(P7_HMM *hmm)
 {
-  char  *msg = "modelconfig.c::calculate_occupancy() unit test failed";
+  char  *msg = (char *) "modelconfig.c::calculate_occupancy() unit test failed";
   float *occ;
   float  x;
 
-  occ = malloc(sizeof(float) * (hmm->M+1));
+  occ = (float *) malloc(sizeof(float) * (hmm->M+1));
   p7_hmm_CalculateOccupancy(hmm, occ, NULL);
   x = esl_vec_FSum(occ+1, hmm->M) / (float) hmm->M;
   if (esl_FCompare(x, 0.6, 0.1) != eslOK)           esl_fatal(msg);
@@ -468,8 +468,8 @@ utest_occupancy(P7_HMM *hmm)
 
 static ESL_OPTIONS options[] = {
    /* name  type         default  env   range togs  reqs  incomp  help                docgrp */
-  {"-h",  eslARG_NONE,    FALSE, NULL, NULL, NULL, NULL, NULL, "show help and usage",                            0},
-  {"-s",  eslARG_INT,       "0", NULL, NULL, NULL, NULL, NULL, "set random number seed to <n>",                  0},
+  {(char *) "-h",  eslARG_NONE,    FALSE, NULL, NULL, NULL, NULL, NULL, (char *) "show help and usage",                            0},
+  {(char *) "-s",  eslARG_INT,       (char *) "0", NULL, NULL, NULL, NULL, NULL, (char *) "set random number seed to <n>",                  0},
   { 0,0,0,0,0,0,0,0,0,0},
 };
 static char usage[]  = "[-options]";
@@ -479,7 +479,7 @@ int
 main(int argc, char **argv)
 {  
   ESL_GETOPTS    *go     = p7_CreateDefaultApp(options, 0, argc, argv, banner, usage);
-  ESL_RANDOMNESS *rng    = esl_randomness_CreateFast(esl_opt_GetInteger(go, "-s"));
+  ESL_RANDOMNESS *rng    = esl_randomness_CreateFast(esl_opt_GetInteger(go, (char *) "-s"));
   ESL_ALPHABET   *abc    = NULL;
   P7_HMM         *hmm    = NULL;
   P7_BG          *bg     = NULL;

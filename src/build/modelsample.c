@@ -72,13 +72,13 @@ int
 p7_modelsample(ESL_RANDOMNESS *r, int M, const ESL_ALPHABET *abc, P7_HMM **ret_hmm)
 {
   P7_HMM *hmm    = NULL;
-  char   *logmsg = "[random HMM created by uniform sampling]";
+  char   *logmsg = (char *)"[random HMM created by uniform sampling]";
   int     status;
 
   if (( status = modelsample_engine(r, M, abc, &hmm) ) != eslOK) goto ERROR;
 
   /* Add mandatory annotation, and some relevant optional annotation  */
-  p7_hmm_SetName(hmm, "sampled-hmm");
+  p7_hmm_SetName(hmm, (char *)"sampled-hmm");
   p7_hmm_AppendComlog(hmm, 1, &logmsg);
   p7_hmm_SetCtime(hmm);
   p7_hmm_SetConsensus(hmm, NULL);
@@ -125,7 +125,7 @@ int
 p7_modelsample_Prior(ESL_RANDOMNESS *r, int M, const ESL_ALPHABET *abc, const P7_PRIOR *pri, P7_HMM **ret_hmm)
 {
   P7_HMM *hmm      = NULL;
-  char   *logmsg   = "[random HMM created by sampling prior]";
+  char   *logmsg   = (char *)"[random HMM created by sampling prior]";
   double  ep[p7_MAXABET];	/* tmp storage for sampled emission parameters as doubles */
   double  tp[p7H_NTMAX];	/* tmp storage, transitions */
   int     q,k;
@@ -176,7 +176,7 @@ p7_modelsample_Prior(ESL_RANDOMNESS *r, int M, const ESL_ALPHABET *abc, const P7
   hmm->t[M][p7H_DM] = 1.0;
 
   /* Add mandatory annotation, and some relevant optional annotation  */
-  p7_hmm_SetName(hmm, "sampled-hmm");
+  p7_hmm_SetName(hmm, (char *)"sampled-hmm");
   p7_hmm_AppendComlog(hmm, 1, &logmsg);
   p7_hmm_SetCtime(hmm);
   p7_hmm_SetConsensus(hmm, NULL);
@@ -211,7 +211,7 @@ int
 p7_modelsample_Ungapped(ESL_RANDOMNESS *r, int M, const ESL_ALPHABET *abc, P7_HMM **ret_hmm)
 {
   P7_HMM *hmm    = NULL;
-  char   *logmsg = "[ungapped HMM sample]";
+  char   *logmsg = (char *)"[ungapped HMM sample]";
   int     k;
   int     status;
 
@@ -224,7 +224,7 @@ p7_modelsample_Ungapped(ESL_RANDOMNESS *r, int M, const ESL_ALPHABET *abc, P7_HM
   }
 
   /* Add mandatory annotation, and some relevant optional annotation  */
-  p7_hmm_SetName(hmm, "sampled-ungapped-hmm");
+  p7_hmm_SetName(hmm, (char *)"sampled-ungapped-hmm");
   p7_hmm_AppendComlog(hmm, 1, &logmsg);
   p7_hmm_SetCtime(hmm);
   p7_hmm_SetConsensus(hmm, NULL);
@@ -266,7 +266,7 @@ p7_modelsample_Uniform(ESL_RANDOMNESS *r, int M, const ESL_ALPHABET *abc,
 		       P7_HMM **ret_hmm)
 {
   P7_HMM *hmm    = NULL;
-  char   *logmsg = "[HMM with uniform transitions, random emissions]";
+  char   *logmsg = (char *)"[HMM with uniform transitions, random emissions]";
   int     k;
   int     status;
 
@@ -295,7 +295,7 @@ p7_modelsample_Uniform(ESL_RANDOMNESS *r, int M, const ESL_ALPHABET *abc,
   
   /* Add mandatory annotation
    */
-  p7_hmm_SetName(hmm, "sampled-hmm");
+  p7_hmm_SetName(hmm, (char *)"sampled-hmm");
   p7_hmm_AppendComlog(hmm, 1, &logmsg);
   p7_hmm_SetCtime(hmm);
   p7_hmm_SetConsensus(hmm, NULL);
@@ -351,7 +351,7 @@ int
 p7_modelsample_Enumerable(ESL_RANDOMNESS *r, int M, const ESL_ALPHABET *abc, P7_HMM **ret_hmm)
 {
   P7_HMM *hmm    = NULL;
-  char   *logmsg = "[random enumerable HMM created by sampling]";
+  char   *logmsg = (char *)"[random enumerable HMM created by sampling]";
   int     k;
   float   tmp[2];
   int     status;
@@ -382,7 +382,7 @@ p7_modelsample_Enumerable(ESL_RANDOMNESS *r, int M, const ESL_ALPHABET *abc, P7_
   
   /* Add mandatory annotation
    */
-  p7_hmm_SetName(hmm, "sampled-hmm");
+  p7_hmm_SetName(hmm, (char *)"sampled-hmm");
   p7_hmm_AppendComlog(hmm, 1, &logmsg);
   p7_hmm_SetCtime(hmm);
   p7_hmm_SetConsensus(hmm, NULL);
@@ -435,7 +435,7 @@ int
 p7_modelsample_Enumerable2(ESL_RANDOMNESS *r, int M, const ESL_ALPHABET *abc, P7_HMM **ret_hmm)
 {
   P7_HMM *hmm    = NULL;
-  char   *logmsg = "[random enumerable HMM, all II=0, created by sampling]";
+  char   *logmsg = (char *)"[random enumerable HMM, all II=0, created by sampling]";
   int     k;
   int     status;
   
@@ -464,7 +464,7 @@ p7_modelsample_Enumerable2(ESL_RANDOMNESS *r, int M, const ESL_ALPHABET *abc, P7
   hmm->t[M][p7H_DD] = 0.;
   
   /* Add mandatory annotation */
-  p7_hmm_SetName(hmm, "sampled-hmm");
+  p7_hmm_SetName(hmm, (char *)"sampled-hmm");
   p7_hmm_AppendComlog(hmm, 1, &logmsg);
   p7_hmm_SetCtime(hmm);
   p7_hmm_SetConsensus(hmm, NULL);
@@ -510,7 +510,7 @@ int
 p7_modelsample_SinglePathed(ESL_RANDOMNESS *r, int M, const ESL_ALPHABET *abc, P7_HMM **ret_hmm)
 {
   P7_HMM *hmm    = NULL;
-  char   *logmsg = "[random single-pathed HMM, all t/e probs 0 or 1, created by sampling]";
+  char   *logmsg = (char *)"[random single-pathed HMM, all t/e probs 0 or 1, created by sampling]";
   int     nm     = 0;		/* make sure the HMM uses at least one M state */
   int     k;
   int     status;
@@ -560,7 +560,7 @@ p7_modelsample_SinglePathed(ESL_RANDOMNESS *r, int M, const ESL_ALPHABET *abc, P
 
 
   /* Add mandatory annotation */
-  p7_hmm_SetName(hmm, "single-pathed-hmm");
+  p7_hmm_SetName(hmm, (char *)"single-pathed-hmm");
   p7_hmm_AppendComlog(hmm, 1, &logmsg);
   p7_hmm_SetCtime(hmm);
   p7_hmm_SetConsensus(hmm, NULL);
@@ -789,8 +789,8 @@ p7_modelsample_AnchoredUni(ESL_RANDOMNESS *rng, int M, const P7_BG *bg,
 			   P7_HMM **opt_hmm, P7_PROFILE **opt_gm, ESL_DSQ **opt_dsq, int *opt_L, 
 			   P7_TRACE **opt_tr, P7_ANCHOR **opt_anch, int *opt_D, float *opt_sc)
 {
-  char       *hmmname   = "anchored_uni";
-  char       *logmsg    = "[Test model produced by p7_modelsample_AnchoredUni()]";
+  char       *hmmname   = (char *)"anchored_uni";
+  char       *logmsg    = (char *)"[Test model produced by p7_modelsample_AnchoredUni()]";
   P7_HMM     *hmm       = NULL;
   P7_PROFILE *gm        = NULL;
   P7_TRACE   *tr        = NULL;
@@ -1135,8 +1135,8 @@ sample_single_pathed_seq_engine(ESL_RANDOMNESS *rng, int M, const P7_BG *bg,
 				P7_TRACE **opt_tr, P7_ANCHOR **opt_anch, int *opt_D, float *opt_sc,
 				int do_asc_version)
 {
-  char       *hmmname   = (do_asc_version ? "single_pathed_asc" : "single_pathed_seq");
-  char       *logmsg    = (do_asc_version ? "[Test model produced by p7_modelsample_SinglePathedASC()]" : "[Test model produced by p7_modelsample_SinglePathedSeq()]");
+  char       *hmmname   = (char *) (do_asc_version ? "single_pathed_asc" : "single_pathed_seq");
+  char       *logmsg    = (char *) (do_asc_version ? "[Test model produced by p7_modelsample_SinglePathedASC()]" : "[Test model produced by p7_modelsample_SinglePathedSeq()]");
   P7_HMM     *hmm       = NULL;
   P7_PROFILE *gm        = NULL;
   ESL_SQ     *sq        = NULL;
@@ -1318,8 +1318,8 @@ sample_anchored_engine(ESL_RANDOMNESS *rng, int M, const P7_BG *bg,
 		       P7_TRACE **opt_tr, P7_ANCHOR **opt_anch, int *opt_D, float *opt_sc,
 		       int do_local_version)
 {
-  char       *hmmname   = (do_local_version ? "anchored_local" : "anchored_multihit");
-  char       *logmsg    = (do_local_version ? "[Test model produced by p7_modelsample_AnchoredLocal()]" : "[Test model produced by p7_modelsample_AnchoredMulti()]");
+  char       *hmmname   = (char *)(do_local_version ? "anchored_local" : "anchored_multihit");
+  char       *logmsg    = (char *)(do_local_version ? "[Test model produced by p7_modelsample_AnchoredLocal()]" : "[Test model produced by p7_modelsample_AnchoredMulti()]");
   P7_HMM     *hmm       = NULL;
   P7_PROFILE *gm        = NULL;
   P7_TRACE   *tr        = NULL;
@@ -1751,8 +1751,8 @@ utest_singlepathed_seq(ESL_RANDOMNESS *rng, int M, const ESL_ALPHABET *abc, int 
   float       sc1;
   int         nhmm      = 10;
   int         ntrace    = 10;
-  int        *observ    = malloc(sizeof(int) * (M+1));
-  int        *expect    = malloc(sizeof(int) * (M+1));
+  int        *observ    = (int *) malloc(sizeof(int) * (M+1));
+  int        *expect    = (int *) malloc(sizeof(int) * (M+1));
   int         h,t,z,k;
   char        errmsg[eslERRBUFSIZE];
   int         status;
@@ -2064,8 +2064,8 @@ utest_anchored_multi(ESL_RANDOMNESS *rng, int M, const ESL_ALPHABET *abc)
 
 static ESL_OPTIONS options[] = {
   /* name           type      default  env  range toggles reqs incomp  help                                       docgroup*/
-  { "-h",        eslARG_NONE,   FALSE, NULL, NULL,  NULL,  NULL, NULL, "show brief help on version and usage",           0 },
-  { "-s",        eslARG_INT,      "0", NULL, NULL,  NULL,  NULL, NULL, "set random number seed to <n>",                  0 },
+  {(char *)"-h",        eslARG_NONE,   FALSE, NULL, NULL,  NULL,  NULL, NULL, (char *)"show brief help on version and usage",           0 },
+  { (char *)"-s",        eslARG_INT,     (char *) "0", NULL, NULL,  NULL,  NULL, NULL, (char *)"set random number seed to <n>",                  0 },
   {  0, 0, 0, 0, 0, 0, 0, 0, 0, 0 },
 };
 static char usage[]  = "[-options]";
@@ -2075,7 +2075,7 @@ int
 main(int argc, char **argv)
 {
   ESL_GETOPTS    *go   = p7_CreateDefaultApp(options, 0, argc, argv, banner, usage);
-  ESL_RANDOMNESS *rng  = esl_randomness_Create(esl_opt_GetInteger(go, "-s"));
+  ESL_RANDOMNESS *rng  = esl_randomness_Create(esl_opt_GetInteger(go, (char *)"-s"));
   ESL_ALPHABET   *abc  = esl_alphabet_Create(eslAMINO);
   int             M    = 10;
 
@@ -2126,8 +2126,8 @@ main(int argc, char **argv)
 
 static ESL_OPTIONS options[] = {
   /* name           type      default  env  range toggles reqs incomp  help                                       docgroup*/
-  { "-h",        eslARG_NONE,   FALSE, NULL, NULL,  NULL,  NULL, NULL, "show brief help on version and usage",             0 },
-  { "-s",        eslARG_INT,      "0", NULL, NULL,  NULL,  NULL, NULL, "set random number seed to <n>",                    0 },
+  { (char *)"-h",        eslARG_NONE,   FALSE, NULL, NULL,  NULL,  NULL, NULL, (char *)"show brief help on version and usage",             0 },
+  {(char *) "-s",        eslARG_INT,     (char *) "0", NULL, NULL,  NULL,  NULL, NULL, (char *)"set random number seed to <n>",                    0 },
   {  0, 0, 0, 0, 0, 0, 0, 0, 0, 0 },
 };
 static char usage[]  = "[-options] <hmmfile>";
@@ -2137,7 +2137,7 @@ int
 main(int argc, char **argv)
 {
   ESL_GETOPTS    *go      = p7_CreateDefaultApp(options, 0, argc, argv, banner, usage);
-  ESL_RANDOMNESS *rng     = esl_randomness_Create(esl_opt_GetInteger(go, "-s"));
+  ESL_RANDOMNESS *rng     = esl_randomness_Create(esl_opt_GetInteger(go, (char *) "-s"));
   int             M       = 10;
   ESL_ALPHABET   *abc     = esl_alphabet_Create(eslAMINO);
   P7_BG          *bg      = p7_bg_Create(abc);
