@@ -14,7 +14,10 @@
 #include "dp_sparse/p7_sparsemx.h"
 
 #include "search/p7_mpas.h"
-
+#ifdef __cplusplus // magic to make C++ compilers happy
+extern "C" {
+#endif
+	
 extern int p7_sparse_Anchors(ESL_RANDOMNESS *rng, const ESL_DSQ *dsq, int L, const P7_PROFILE *gm,
 			     float vsc, float fsc, const P7_SPARSEMX *sxf, const P7_SPARSEMX *sxd, const P7_ANCHORS *vanch,
 			     P7_TRACE *tr, float **byp_wrk, P7_ANCHORHASH *ah, 
@@ -29,5 +32,7 @@ extern int p7_sparse_AnchorsGlobal(ESL_RANDOMNESS *rng, const ESL_DSQ *dsq, int 
 
 
 extern int p7_sparse_anchors_SetFromTrace(const P7_SPARSEMX *sxd, const P7_TRACE *tr, P7_ANCHORS *anch);
-
+#ifdef __cplusplus // magic to make C++ compilers happy
+}
+#endif
 #endif /*p7SPARSE_ANCHORS_INCLUDED*/

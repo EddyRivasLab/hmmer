@@ -7,6 +7,9 @@
 #include "dp_vector/p7_oprofile.h"
 #include "dp_vector/p7_checkptmx.h"
 #include "dp_sparse/p7_sparsemx.h"
+#ifdef __cplusplus // magic to make C++ compilers happy
+extern "C" {
+#endif
 
 extern int (*p7_ForwardFilter) (const ESL_DSQ *dsq, int L, const P7_OPROFILE *om, P7_CHECKPTMX *ox, float *opt_sc);
 extern int (*p7_BackwardFilter)(const ESL_DSQ *dsq, int L, const P7_OPROFILE *om, P7_CHECKPTMX *ox, P7_SPARSEMASK *sm, float sm_thresh);
@@ -34,6 +37,10 @@ extern int p7_BackwardFilter_neon(const ESL_DSQ *dsq, int L, const P7_OPROFILE *
 #ifdef eslENABLE_VMX
 extern int p7_ForwardFilter_vmx (const ESL_DSQ *dsq, int L, const P7_OPROFILE *om, P7_CHECKPTMX *ox, float *opt_sc);
 extern int p7_BackwardFilter_vmx(const ESL_DSQ *dsq, int L, const P7_OPROFILE *om, P7_CHECKPTMX *ox, P7_SPARSEMASK *sm, float sm_thresh);
+#endif
+
+#ifdef __cplusplus // magic to make C++ compilers happy
+}
 #endif
 #endif /*p7FWDFILTER_INCLUDED*/
 

@@ -39,7 +39,9 @@
 
 #include "base/p7_hmm.h"
 #include "base/p7_profile.h"
-
+#ifdef __cplusplus // magic to make C++ compilers happy
+extern "C" {
+#endif
 /* State types */
 enum p7t_statetype_e {
   p7T_BOGUS =  0,	/* only needed once: in _EncodeStatetype() as an error code  */
@@ -133,6 +135,8 @@ extern int  p7_trace_Doctor(P7_TRACE *tr, int *opt_ndi, int *opt_nid);
 
 /* 7. Counting traces into new HMMs */
 extern int  p7_trace_Count(P7_HMM *hmm, ESL_DSQ *dsq, float wt, P7_TRACE *tr);
-
+#ifdef __cplusplus // magic to make C++ compilers happy
+}
+#endif
 #endif /*p7TRACE_INCLUDED*/
 

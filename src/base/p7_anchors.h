@@ -17,6 +17,9 @@
 #include "base/p7_trace.h"
 
 #include "esl_random.h"
+#ifdef __cplusplus // magic to make C++ compilers happy
+extern "C" {
+#endif
 
 /* P7_ANCHOR
  *    Is just an integer pair, usually used in an array.
@@ -71,7 +74,9 @@ extern int  p7_anchors_Compare(P7_ANCHORS *anch1, P7_ANCHORS *anch2);
 extern int  p7_anchors_Validate(P7_ANCHORS *anch, int L, int M, char *errbuf);
 extern int  p7_anchors_Sample(ESL_RANDOMNESS *rng, int L, int M, int maxD, P7_ANCHORS *anch);
 extern int  p7_anchors_SampleFromTrace(P7_ANCHORS *anch, ESL_RANDOMNESS *rng, const P7_TRACE *tr);
-
+#ifdef __cplusplus // magic to make C++ compilers happy
+}
+#endif
 #endif /* p7ANCHORS_INCLUDED */
 
   

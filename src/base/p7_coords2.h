@@ -6,7 +6,9 @@
 #include "base/p7_trace.h"
 
 #include "esl_random.h"
-
+#ifdef __cplusplus // magic to make C++ compilers happy
+extern "C" {
+#endif
 /* P7_COORD2 
  *    Is just an integer pair, usually used in an array.
  *    Doesn't need Create/Destroy; arrays of these are just
@@ -114,6 +116,9 @@ extern int              p7_coords2_hash_Get    (const P7_COORDS2_HASH *ch, int32
 extern int              p7_coords2_hash_Dump   (FILE *ofp, const P7_COORDS2_HASH *ch);
 
 extern int p7_coords2_Sample(ESL_RANDOMNESS *rng, P7_COORDS2 *c2, int32_t maxseg, int32_t L, int32_t **byp_wrk);
+#ifdef __cplusplus // magic to make C++ compilers happy
+}
+#endif
 
 #endif /*p7COORDS2_INCLUDED*/
 

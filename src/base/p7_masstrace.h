@@ -4,6 +4,9 @@
 #include <stdio.h>
 
 #include "base/p7_trace.h"
+#ifdef __cplusplus // magic to make C++ compilers happy
+extern "C" {
+#endif
 
 typedef struct {
   float *kmass;	   /* Cumulative mass for ka,kb endpoints on either side of k0. k<=k0: P(ka <= k). k>=k0: P(kb >= k). [k0] = 1. [0]=[M+1]=0. */
@@ -135,6 +138,8 @@ extern int   p7_masstrace_Validate(const P7_MASSTRACE *mt, char *errbuf);
  * distributions (for example by a stochastic trace ensemble) are
  * used, and P7_MASSTRACE objects are compared.
  */
-
+#ifdef __cplusplus // magic to make C++ compilers happy
+}
+#endif
 #endif /*p7MASSTRACE_INCLUDED*/
 

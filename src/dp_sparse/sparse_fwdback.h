@@ -5,9 +5,14 @@
 
 #include "base/p7_profile.h"
 #include "dp_sparse/p7_sparsemx.h"
-
+#ifdef __cplusplus // magic to make C++ compilers happy
+extern "C" {
+#endif
+	
 /* Sparse DP routines {sparse_fwdback.c} */
 extern int p7_SparseForward (const ESL_DSQ *dsq, int L, const P7_PROFILE *gm, const P7_SPARSEMASK *sm, P7_SPARSEMX *sxf, float *opt_sc);
 extern int p7_SparseBackward(const ESL_DSQ *dsq, int L, const P7_PROFILE *gm, const P7_SPARSEMASK *sm, P7_SPARSEMX *sxb, float *opt_sc);
-
+#ifdef __cplusplus // magic to make C++ compilers happy
+}
+#endif
 #endif /*p7SPARSE_FWDBACK_INCLUDED*/

@@ -12,7 +12,9 @@
 #include "base/p7_anchors.h"
 #include "base/p7_trace.h"
 
-
+#ifdef __cplusplus // magic to make C++ compilers happy
+extern "C" {
+#endif
 typedef struct {
   int     max_iterations;   // limit on # of sampled paths in MPAS (typically ~1000)
   float   loss_threshold;   // max acceptable probability of missing better solution (typical: ~0.001)
@@ -54,6 +56,8 @@ extern void            p7_mpas_params_Destroy(P7_MPAS_PARAMS *params);
 extern int p7_mpas_stats_Init(P7_MPAS_STATS *stats);
 extern int p7_mpas_stats_Dump(FILE *ofp, P7_MPAS_STATS *stats);
 extern int p7_mpas_stats_CompareAS2Trace(P7_MPAS_STATS *stats, const P7_ANCHORS *anch, const P7_TRACE *tr);
-
+#ifdef __cplusplus // magic to make C++ compilers happy
+}
+#endif
 #endif /*p7MPAS_INCLUDED*/
 

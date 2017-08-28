@@ -6,7 +6,9 @@
 
 #include "dp_vector/p7_filtermx.h"
 #include "dp_vector/p7_oprofile.h"
-
+#ifdef __cplusplus // magic to make C++ compilers happy
+extern "C" {
+#endif
 extern int (*p7_SSVFilter)(const ESL_DSQ *dsq, int L, const P7_OPROFILE *om, float *ret_sc);
 
 #ifdef eslENABLE_SSE
@@ -29,5 +31,7 @@ extern int p7_SSVFilter_neon(const ESL_DSQ *dsq, int L, const P7_OPROFILE *om, f
 #ifdef eslENABLE_VMX
 extern int p7_SSVFilter_vmx(const ESL_DSQ *dsq, int L, const P7_OPROFILE *om, float *ret_sc); 
 #endif
-
+#ifdef __cplusplus // magic to make C++ compilers happy
+}
+#endif
 #endif /*p7SSVFILTER_INCLUDED*/

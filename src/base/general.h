@@ -66,13 +66,17 @@ enum p7_strands_e {    p7_STRAND_TOPONLY  = 0, p7_STRAND_BOTTOMONLY = 1,  p7_STR
 #define p7_HIDE_SPECIALS (1<<0)
 #define p7_SHOW_LOG      (1<<1)
 
-
+#ifdef __cplusplus // magic to make C++ compilers happy
+extern "C" {
+#endif
 extern int          p7_Init(void);
 extern void         p7_banner(FILE *fp, char *progname, char *banner);
 extern void         p7_Die (char *format, ...) ESL_ATTRIBUTE_NORETURN;
 extern void         p7_Fail(char *format, ...) ESL_ATTRIBUTE_NORETURN;
 extern ESL_GETOPTS *p7_CreateDefaultApp(ESL_OPTIONS *options, int nargs, int argc, char **argv, char *banner, char *usage);
 extern int          p7_AminoFrequencies(float *f);
-
+#ifdef __cplusplus // magic to make C++ compilers happy
+}
+#endif
 #endif /*p7GENERAL_INCLUDED*/
 

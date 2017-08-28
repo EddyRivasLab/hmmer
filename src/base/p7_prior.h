@@ -8,6 +8,9 @@
 #include "esl_dirichlet.h"
 
 #include "base/p7_hmm.h"
+#ifdef __cplusplus // magic to make C++ compilers happy
+extern "C" {
+#endif
 
 typedef struct p7_prior_s {
   ESL_MIXDCHLET *tm;		/*  match transitions */
@@ -23,6 +26,8 @@ extern P7_PRIOR  *p7_prior_CreateLaplace(const ESL_ALPHABET *abc);
 extern void       p7_prior_Destroy(P7_PRIOR *pri);
 
 extern int        p7_ParameterEstimation(P7_HMM *hmm, const P7_PRIOR *pri);
-
+#ifdef __cplusplus // magic to make C++ compilers happy
+}
+#endif
 #endif /*p7PRIOR_INCLUDED*/
 

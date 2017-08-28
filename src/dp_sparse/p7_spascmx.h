@@ -10,7 +10,9 @@
 #include "base/p7_anchors.h"
 #include "base/p7_profile.h"
 #include "dp_sparse/p7_sparsemx.h"
-
+#ifdef __cplusplus // magic to make C++ compilers happy
+extern "C" {
+#endif
 
 /* To create a sparse ASC matrix: see p7_sparsemx_Create()
  * To reuse it:                   see p7_sparsemx_Reuse()
@@ -147,6 +149,8 @@ extern int    p7_spascmx_Validate(const P7_SPARSEMX *asx, const P7_ANCHOR *anch,
  * kinks).
  */
 
-
+#ifdef __cplusplus // magic to make C++ compilers happy
+}
+#endif
 #endif /*p7SPASCMX_INCLUDED*/
 

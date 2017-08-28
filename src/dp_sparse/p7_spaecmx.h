@@ -8,11 +8,16 @@
 #include "base/p7_envelopes.h"
 
 #include "dp_sparse/p7_sparsemx.h"
-
+#ifdef __cplusplus // magic to make C++ compilers happy
+extern "C" {
+#endif
+	
 extern int p7_spaecmx_Dump(FILE *fp, const P7_SPARSEMX *aec, const P7_ENVELOPES *env);
 extern int p7_spaecmx_Validate(const P7_SPARSEMX *aec, const P7_ENVELOPES *env, char *errbuf);
 
-
+#ifdef __cplusplus // magic to make C++ compilers happy
+}
+#endif
 /*****************************************************************
  * 2. Footnotes
  *****************************************************************

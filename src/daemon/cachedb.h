@@ -5,7 +5,9 @@
 
 #include "easel.h"
 #include "esl_alphabet.h"
-
+#ifdef __cplusplus // magic to make C++ compilers happy
+extern "C" {
+#endif
 typedef struct {
   char    *name;                   /* name; ("\0" if no name)               */
   ESL_DSQ *dsq;                    /* digitized sequence [1..n]             */
@@ -42,6 +44,8 @@ typedef struct {
 
 extern int    p7_seqcache_Open(char *seqfile, P7_SEQCACHE **ret_cache, char *errbuf);
 extern void   p7_seqcache_Close(P7_SEQCACHE *cache);
-
+#ifdef __cplusplus // magic to make C++ compilers happy
+}
+#endif
 #endif /*p7CACHEDB_INCLUDED*/
 

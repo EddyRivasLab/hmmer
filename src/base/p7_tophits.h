@@ -22,7 +22,9 @@
 #define p7_IS_NEW           (1<<2)
 #define p7_IS_DROPPED       (1<<3)
 #define p7_IS_DUPLICATE     (1<<4)
-
+#ifdef __cplusplus // magic to make C++ compilers happy
+extern "C" {
+#endif
 
 /* Structure: P7_HIT
  * 
@@ -115,5 +117,8 @@ extern int p7_hit_TestSample(ESL_RANDOMNESS *rng, P7_HIT *hit);
 extern int p7_hit_Validate(const P7_HIT *hit, char *errbuf);
 extern int p7_hit_Compare(const P7_HIT *h1, const P7_HIT *h2, float tol);
 
+#ifdef __cplusplus // magic to make C++ compilers happy
+}
+#endif
 
 #endif /*p7TOPHITS_INCLUDED*/

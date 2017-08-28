@@ -27,7 +27,9 @@
 #include "dp_vector/p7_checkptmx.h"
 #include "dp_vector/p7_filtermx.h"
 
-
+#ifdef __cplusplus // magic to make C++ compilers happy
+extern "C" {
+#endif
 enum p7_pipemodes_e { p7_SEARCH_SEQS = 0, p7_SCAN_MODELS = 1 };
 enum p7_zsetby_e    { p7_ZSETBY_NTARGETS = 0, p7_ZSETBY_OPTION = 1, p7_ZSETBY_FILEINFO = 2 };
 enum p7_complementarity_e { p7_NOCOMPLEMENT    = 0, p7_COMPLEMENT   = 1 };
@@ -153,6 +155,8 @@ extern int p7_Pipeline_LongTarget   (P7_PIPELINE *pli, P7_PROFILE *gm, P7_OPROFI
 
 extern int p7_pipeline_AccelerationFilter(ESL_DSQ *dsq, int L, P7_OPROFILE *om, P7_BG *bg,
 					  P7_FILTERMX *fx, P7_CHECKPTMX *cx, P7_SPARSEMASK *sm);
-
+#ifdef __cplusplus // magic to make C++ compilers happy
+}
+#endif
 #endif /*p7PIPELINE_INCLUDED*/
 

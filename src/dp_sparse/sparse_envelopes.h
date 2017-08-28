@@ -9,6 +9,9 @@
 #include "base/p7_anchors.h"
 #include "base/p7_envelopes.h"
 #include "dp_sparse/p7_sparsemx.h"
+#ifdef __cplusplus // magic to make C++ compilers happy
+extern "C" {
+#endif
 
 
 extern int p7_sparse_Envelopes(const ESL_DSQ *dsq, int L, const P7_PROFILE *gm,
@@ -16,7 +19,9 @@ extern int p7_sparse_Envelopes(const ESL_DSQ *dsq, int L, const P7_PROFILE *gm,
 			       P7_SPARSEMX *asf, const P7_SPARSEMX *asd,
 			       P7_ENVELOPES *env);
 
-
+#ifdef __cplusplus // magic to make C++ compilers happy
+}
+#endif
 
 #endif /*p7SPARSE_AEC_ALIGN_INCLUDED*/
 

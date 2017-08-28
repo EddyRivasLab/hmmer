@@ -11,7 +11,9 @@
 #include "base/p7_hmm.h"
 
 #include "search/p7_pipeline.h"  
-
+#ifdef __cplusplus // magic to make C++ compilers happy
+extern "C" {
+#endif
 
 typedef struct {
   uint32_t   status;            /* error status                             */
@@ -138,5 +140,7 @@ extern void p7_closelog(void);
 extern int  process_searchopts(int fd, char *cmdstr, ESL_GETOPTS **ret_opts);
 
 extern void free_QueueData(QUEUE_DATA *data);
-
+#ifdef __cplusplus // magic to make C++ compilers happy
+}
+#endif
 #endif /*p7HMMDUTILS_INCLUDED*/

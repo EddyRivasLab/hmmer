@@ -10,7 +10,9 @@
 #include <stdio.h>
 
 #include "base/p7_trace.h"
-
+#ifdef __cplusplus // magic to make C++ compilers happy
+extern "C" {
+#endif
 typedef struct {
   int state_tp;
   int state_fp;
@@ -37,7 +39,9 @@ extern void              p7_trace_metrics_Destroy(P7_TRACE_METRICS *tm);
 extern int               p7_trace_metrics(const P7_TRACE *reftr, const P7_TRACE *testtr, P7_TRACE_METRICS *tm);
 
 extern int               p7_trace_metrics_Dump(FILE *ofp, P7_TRACE_METRICS *tm);
-
+#ifdef __cplusplus // magic to make C++ compilers happy
+}
+#endif
 
 #endif /*p7TRACE_METRICS_INCLUDED*/
 

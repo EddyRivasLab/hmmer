@@ -12,6 +12,9 @@
 #include "dp_reference/p7_refmx.h"
 #include "dp_vector/simdvec.h"
 
+#ifdef __cplusplus // magic to make C++ compilers happy
+extern "C" {
+#endif
 
 #define p7C_NSCELLS 3
 enum p7c_scells_e { p7C_M = 0,  p7C_D = 1,  p7C_I = 2 };
@@ -87,6 +90,8 @@ extern int   p7_checkptmx_SetDumpMode (P7_CHECKPTMX *ox, FILE *dfp, int true_or_
 extern int   p7_checkptmx_DumpFBHeader(P7_CHECKPTMX *ox);
 extern int   p7_checkptmx_DumpFBRow   (P7_CHECKPTMX *ox, int rowi, float *dpc, char *pfx);
 #endif  // esl_DEBUGLEVEL
-
+#ifdef __cplusplus // magic to make C++ compilers happy
+}
+#endif
 #endif /*p7CHECKPTMX_INCLUDED*/
 

@@ -72,6 +72,9 @@
 #include "p7_config.h"
 
 #include "base/p7_anchors.h"
+#ifdef __cplusplus // magic to make C++ compilers happy
+extern "C" {
+#endif
 
 typedef struct {
   int32_t   L;            // trailing sentinel i0(D+1) of all anchor sets = L+1
@@ -99,7 +102,9 @@ extern void           p7_anchorhash_Destroy(P7_ANCHORHASH *ah);
 extern int            p7_anchorhash_Store  (P7_ANCHORHASH *ah, const P7_ANCHORS *anch, int D0, int32_t *opt_index);
 extern int            p7_anchorhash_Get    (const P7_ANCHORHASH *ah, int32_t keyidx, int D0, P7_ANCHORS *anch);
 extern int            p7_anchorhash_Dump   (FILE *ofp, const P7_ANCHORHASH *ah);
-
+#ifdef __cplusplus // magic to make C++ compilers happy
+}
+#endif
 #endif /*p7ANCHORHASH_INCLUDED*/
 
   

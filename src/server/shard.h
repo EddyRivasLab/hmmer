@@ -2,7 +2,9 @@
 
 #ifndef SHARD_INCLUDED
 #define SHARD_INCLUDED
-
+#ifdef __cplusplus // magic to make C++ compilers happy
+extern "C" {
+#endif
 //! Enum that defines the type of data in the database
 typedef enum P7_shard_data_type {AMINO, DNA, RNA, HMM} P7_SHARD_DATA_TYPE;
 
@@ -103,5 +105,7 @@ uint64_t p7_shard_Find_Index_Nexthigh(P7_SHARD *the_shard, uint64_t id);
 
 // Frees the shard and its enclosed data structures
 void p7_shard_Destroy(P7_SHARD *the_shard);
-
+#ifdef __cplusplus // magic to make C++ compilers happy
+}
+#endif
 #endif

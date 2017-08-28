@@ -2,7 +2,9 @@
 #include "esl_red_black.h"
 #include "shard.h"
 #include "p7_config.h"
-
+#ifdef __cplusplus // magic to make C++ compilers happy
+extern "C" {
+#endif
 // This is a hack to get the code to compile if we aren't building with MPI support
 // Without this, functions that have MPI parameters cause errors
 #ifndef HAVE_MPI
@@ -141,3 +143,7 @@ int p7_masternode_sort_hits(P7_DAEMON_MESSAGE *the_message, P7_DAEMON_MASTERNODE
 
 // handles incoming messages to the master node
 void p7_masternode_message_handler(P7_DAEMON_MASTERNODE_STATE *masternode, P7_DAEMON_MESSAGE **buffer_handle, MPI_Datatype *server_mpitypes);
+
+#ifdef __cplusplus // magic to make C++ compilers happy
+}
+#endif

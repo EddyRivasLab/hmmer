@@ -24,7 +24,9 @@
 
 #include "base/p7_trace.h"
 #include "base/p7_profile.h"
-
+#ifdef __cplusplus // magic to make C++ compilers happy
+extern "C" {
+#endif
 /*****************************************************************
  * 1. The P7_REFMX object and its access macros
  *****************************************************************/
@@ -180,7 +182,9 @@ extern int   p7_refmx_Validate(P7_REFMX *rmx, char *errbuf);
  *  Main state s at node k={0..M}: dpc[k*p7R_NSCELLS+s]   
  *  Special state s={ENJBLGC}:     dpc[(M+1)*p7R_NSCELLS+s]
  */
-
+#ifdef __cplusplus // magic to make C++ compilers happy
+}
+#endif
 
 #endif /*p7REFMX_INCLUDED*/
 

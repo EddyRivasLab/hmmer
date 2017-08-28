@@ -21,7 +21,10 @@
 #define p7O_NXSTATES  4    // special states stored: ENJC
 #define p7O_NXTRANS   2    // special states all have 2 transitions: move, loop
 #define p7O_NTRANS    8    // 7 core transitions + BMk entry
-
+#ifdef __cplusplus // magic to make C++ compilers happy
+extern "C" {
+#endif
+  
 enum p7o_xstates_e      { p7O_E    = 0, p7O_N    = 1,  p7O_J  = 2,  p7O_C  = 3 };
 enum p7o_xtransitions_e { p7O_MOVE = 0, p7O_LOOP = 1 };
 enum p7o_tsc_e          { p7O_BM   = 0, p7O_MM   = 1,  p7O_IM = 2,  p7O_DM = 3, p7O_MD   = 4, p7O_MI   = 5,  p7O_II = 6,  p7O_DD = 7 };
@@ -129,5 +132,7 @@ extern int          p7_oprofile_Dump(FILE *fp, const P7_OPROFILE *om);
 extern int          p7_oprofile_Sample(ESL_RANDOMNESS *r, const ESL_ALPHABET *abc, const P7_BG *bg, int M, int L,
 				       P7_HMM **opt_hmm, P7_PROFILE **opt_gm, P7_OPROFILE **ret_om);
 extern int          p7_oprofile_Compare(const P7_OPROFILE *om1, const P7_OPROFILE *om2, float tol, char *errmsg);
-
+#ifdef __cplusplus // magic to make C++ compilers happy
+}
+#endif
 #endif /*p7OPROFILE_INCLUDED*/

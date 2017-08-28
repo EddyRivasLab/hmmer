@@ -12,7 +12,9 @@
 
 #include "base/p7_tophits.h"
 #include "search/p7_pipeline.h"
-
+#ifdef __cplusplus // magic to make C++ compilers happy
+extern "C" {
+#endif
 extern int p7_tophits_ComputeNhmmerEvalues(P7_TOPHITS *th, double N, int W);
 extern int p7_tophits_RemoveDuplicates(P7_TOPHITS *th, int using_bit_cutoffs);
 extern int p7_tophits_Threshold(P7_TOPHITS *th, P7_PIPELINE *pli);
@@ -24,5 +26,7 @@ extern int p7_tophits_Alignment(const P7_TOPHITS *th, const ESL_ALPHABET *abc,
 				ESL_MSA **ret_msa);
 extern int p7_tophits_AliScores(FILE *ofp, char *qname, P7_TOPHITS *th );
 
-
+#ifdef __cplusplus // magic to make C++ compilers happy
+}
+#endif
 #endif /*p7TOPHITS_OUTPUT_INCLUDED*/

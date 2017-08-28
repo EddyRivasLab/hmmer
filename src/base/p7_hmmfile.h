@@ -18,7 +18,9 @@
 
 #include "base/general.h"
 #include "base/p7_hmm.h"
-
+#ifdef __cplusplus // magic to make C++ compilers happy
+extern "C" {
+#endif
 /* These tags need to be in temporal order, so we can do tests
  * like "if (format >= p7_HMMFILE_3b) ..."
  */
@@ -85,5 +87,8 @@ extern int  p7_hmmfile_WriteToString (char **s, int format, P7_HMM *hmm);
 extern int  p7_hmmfile_Read(P7_HMMFILE *hfp, ESL_ALPHABET **ret_abc,  P7_HMM **opt_hmm);
 extern int  p7_hmmfile_PositionByKey(P7_HMMFILE *hfp, const char *key);
 extern int  p7_hmmfile_Position(P7_HMMFILE *hfp, const off_t offset);
+#ifdef __cplusplus // magic to make C++ compilers happy
+}
+#endif
 
 #endif /*p7HMMFILE_INCLUDED*/

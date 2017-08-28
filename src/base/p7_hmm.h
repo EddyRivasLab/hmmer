@@ -12,7 +12,9 @@
 #include "esl_sq.h"
 
 #include "base/general.h"
-
+#ifdef __cplusplus // magic to make C++ compilers happy
+extern "C" {
+#endif
 /* Bit flags used in <hmm->flags>: optional annotation in an HMM
  * 
  * Flags marked with ! may not be changed nor used for other meanings,
@@ -149,7 +151,9 @@ extern int     p7_hmm_Validate(P7_HMM *hmm, char *errbuf, float tol);
 /*      5. Other routines in the API */
 extern int     p7_hmm_CalculateOccupancy(const P7_HMM *hmm, float *mocc, float *iocc);
 
-
+#ifdef __cplusplus // magic to make C++ compilers happy
+}
+#endif
 #endif /*p7HMM_INCLUDED*/
 
 

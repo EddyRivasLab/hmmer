@@ -9,7 +9,9 @@
 #include <stdio.h>
 
 #include "simdvec.h"
-
+#ifdef __cplusplus // magic to make C++ compilers happy
+extern "C" {
+#endif
 enum p7f_mxtype_e { p7F_NONE = 0, p7F_SSVFILTER = 1, p7F_VITFILTER = 2 };
                                 
 typedef struct p7_filtermx_s {  
@@ -49,7 +51,9 @@ extern int p7_filtermx_SetDumpMode(P7_FILTERMX *fx, FILE *dfp, int truefalse);
 extern int p7_filtermx_DumpSSVRow(const P7_FILTERMX *fx, int rowi, uint8_t xE, uint8_t xN, uint8_t xJ, uint8_t xB, uint8_t xC);
 extern int p7_filtermx_DumpVFRow (const P7_FILTERMX *fx, int rowi, int16_t xE, int16_t xN, int16_t xJ, int16_t xB, int16_t xC);
 #endif
-
+#ifdef __cplusplus // magic to make C++ compilers happy
+}
+#endif
 #endif /*p7FILTERMX_INCLUDED*/
 
 

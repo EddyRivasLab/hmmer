@@ -1,6 +1,8 @@
 #ifndef p7HARDWARE_INCLUDED
 #define p7HARDWARE_INCLUDED
-
+#ifdef __cplusplus // magic to make C++ compilers happy
+extern "C" {
+#endif
 /* This file contains data structures and function prototypes that query the state of the machine
 that HMMER is running on and tune its configuration for optimal performace on that particular
 machine */
@@ -42,7 +44,9 @@ int isCPUIDsupported (void);
 int isGenuineIntel (void);
 int isSSE41andSSE42Supported (void);
 
-
+#ifdef __cplusplus // magic to make C++ compilers happy
+}
+#endif
 #endif //ifndef p7HARWARE_INCLUDED
 
 

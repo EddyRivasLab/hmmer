@@ -10,6 +10,9 @@
 #include "esl_alphabet.h"
 
 #include "base/general.h"
+#ifdef __cplusplus // magic to make C++ compilers happy
+extern "C" {
+#endif
 
 /* Indices for six special state types x that have transition parameters
  * in gm->xsc[x][y], where all of them have two choices y.
@@ -254,6 +257,9 @@ extern int         p7_profile_SameAsVF (P7_PROFILE *gm, float scale_w);
  *   implementations, on both the local and glocal paths, its
  *   parameterization is still present in the P7_PROFILE.
  */
+#ifdef __cplusplus // magic to make C++ compilers happy
+}
+#endif
 
 #endif /*p7PROFILE_INCLUDED*/
 

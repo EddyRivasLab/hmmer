@@ -5,6 +5,10 @@
 #include "p7_config.h"
 #include "base/p7_tophits.h"
 #include "esl_red_black.h"
+
+#ifdef __cplusplus // magic to make C++ compilers happy
+extern "C" {
+#endif
 // This is a hack to get the code to compile if we aren't building with MPI support
 // Without this, functions that have MPI_Comm parameters cause errors even though we #define out any code 
 // that calls MPI routines
@@ -43,5 +47,7 @@ void p7_print_and_recycle_hit_tree(char *filename, ESL_RED_BLACK_DOUBLEKEY *tree
 
 // Packages a list of hits up in MPI messages and sends them to the master node, placing the hits back on the free pool when done
 int p7_mpi_send_and_recycle_unsorted_hits(ESL_RED_BLACK_DOUBLEKEY *hits, int dest, int tag, MPI_Comm comm, char **buf, int *nalloc, struct p7_server_workernode_state *workernode);
-
+#ifdef __cplusplus // magic to make C++ compilers happy
+}
+#endif
 #endif // p7HITLIST_INCLUDED

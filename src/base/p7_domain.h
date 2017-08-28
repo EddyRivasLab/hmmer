@@ -4,7 +4,10 @@
 #include "p7_config.h"
 
 #include "base/p7_alidisplay.h"
-
+#ifdef __cplusplus // magic to make C++ compilers happy
+extern "C" {
+#endif
+  
 typedef struct p7_dom_s { 
   int            iae, ibe;	/* Envelope coords on sequence: iae..ibe in 1..L                              */
   int            kae, kbe;	/* Envelope coords on model:    kae..kbe in 1..M                              */
@@ -31,6 +34,9 @@ extern void       p7_domain_Destroy(P7_DOMAIN *dcl, int ndom);
 extern int        p7_domain_TestSample(ESL_RANDOMNESS *rng, int alen, P7_DOMAIN *dcl);
 extern int        p7_domain_Validate(const P7_DOMAIN *dcl, char *errbuf);
 extern int        p7_domain_Compare(const P7_DOMAIN *dcl1, const P7_DOMAIN *dcl2, float tol);
+#ifdef __cplusplus // magic to make C++ compilers happy
+}
+#endif
 
 #endif /*p7DOMAIN_INCLUDED*/
 

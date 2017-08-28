@@ -24,7 +24,9 @@
 
 #include "search/p7_mpas.h"
 
-
+#ifdef __cplusplus // magic to make C++ compilers happy
+extern "C" {
+#endif
 /* P7_ENGINE_PARAMS 
  * Configuration/control settings for the Engine.
  */
@@ -107,6 +109,8 @@ extern void       p7_engine_Destroy(P7_ENGINE *eng);
 
 extern int p7_engine_Overthruster(P7_ENGINE *eng, ESL_DSQ *dsq, int L, P7_OPROFILE *om, P7_BG *bg);
 extern int p7_engine_Main        (P7_ENGINE *eng, ESL_DSQ *dsq, int L, P7_PROFILE  *gm);
-
+#ifdef __cplusplus // magic to make C++ compilers happy
+}
+#endif
 #endif /*p7ENGINE_INCLUDED*/
 

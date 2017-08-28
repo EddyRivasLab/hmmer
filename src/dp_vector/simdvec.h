@@ -10,7 +10,9 @@
 #define p7SIMDVEC_INCLUDED
 #include "easel.h"
 
-
+#ifdef __cplusplus // magic to make C++ compilers happy
+extern "C" {
+#endif
 /* Actual vector widths (in # of elements) that our SSV, VF, and F/B
  * filters use. These are runtime queries, using cpu dispatching.
  *  
@@ -121,6 +123,8 @@ extern void p7_restripe_float(float *source, float *dest, int length, int source
 
 extern void p7_simdvec_Init(void);
 extern int  p7_simdvec_Width(void);
-
+#ifdef __cplusplus // magic to make C++ compilers happy
+}
+#endif
 #endif  /*p7SIMDVEC_INCLUDED*/
 

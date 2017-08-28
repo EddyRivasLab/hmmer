@@ -3,6 +3,9 @@
 
 #include "p7_config.h"
 #include "easel.h"		/* Easel handles portable declaration of int32_t, etc. */
+#ifdef __cplusplus // magic to make C++ compilers happy
+extern "C" {
+#endif
 
 typedef struct p7_hmm_window_s {
   float      score;
@@ -24,5 +27,8 @@ typedef struct p7_hmm_window_list_s {
 
 extern int           p7_hmmwindow_init (P7_HMM_WINDOWLIST *list);
 extern P7_HMM_WINDOW *p7_hmmwindow_new (P7_HMM_WINDOWLIST *list, uint32_t id, uint32_t pos, uint32_t fm_pos, uint16_t k, uint32_t length, float score, uint8_t complementarity);
+#ifdef __cplusplus // magic to make C++ compilers happy
+}
+#endif
 
 #endif /*p7HMMWINDOW_INCLUDED*/

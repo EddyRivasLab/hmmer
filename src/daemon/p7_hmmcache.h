@@ -10,7 +10,10 @@
 
 #include "base/p7_profile.h"
 #include "dp_vector/p7_oprofile.h"
-
+#ifdef __cplusplus // magic to make C++ compilers happy
+extern "C" {
+#endif
+	
 typedef struct {
   char               *name;        /* name of the hmm database              */
   ESL_ALPHABET       *abc;         /* alphabet for database                 */
@@ -27,5 +30,8 @@ extern size_t p7_hmmcache_Sizeof         (P7_HMMCACHE *cache);
 extern int    p7_hmmcache_SetNumericNames(P7_HMMCACHE *cache);
 extern void   p7_hmmcache_Close          (P7_HMMCACHE *cache);
 
+#ifdef __cplusplus // magic to make C++ compilers happy
+}
+#endif
 #endif /*p7HMMCACHE_INCLUDED*/
 

@@ -29,7 +29,9 @@
 #include "easel.h"
 #include "esl_alphabet.h"
 #include "esl_hmm.h"
-
+#ifdef __cplusplus // magic to make C++ compilers happy
+extern "C" {
+#endif
 
 typedef struct p7_bg_s {
   float   *f;		/* null1 background residue frequencies [0..K-1]: set at initialization    */
@@ -57,7 +59,9 @@ extern int    p7_bg_Write(FILE *fp, P7_BG *bg);
 
 extern int    p7_bg_SetFilter  (P7_BG *bg, int M, const float *compo);
 extern int    p7_bg_FilterScore(P7_BG *bg, const ESL_DSQ *dsq, int L, float *ret_sc);
-
+#ifdef __cplusplus // magic to make C++ compilers happy
+}
+#endif
 
 #endif /*p7BG_INCLUDED*/
 

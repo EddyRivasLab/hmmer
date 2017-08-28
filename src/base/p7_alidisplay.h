@@ -49,6 +49,9 @@
 
 #include "base/p7_trace.h"
 #include "base/p7_profile.h"
+#ifdef __cplusplus // magic to make C++ compilers happy
+extern "C" {
+#endif
 
 typedef struct p7_alidisplay_s {
   char *rfline;                 /* reference coord info; or NULL        */
@@ -101,6 +104,8 @@ extern int            p7_alidisplay_Dump(FILE *fp, const P7_ALIDISPLAY *ad);
 extern int            p7_alidisplay_Validate(const P7_ALIDISPLAY *ad, char *errbuf);
 extern int            p7_alidisplay_Compare(const P7_ALIDISPLAY *ad1, const P7_ALIDISPLAY *ad2);
 
-
+#ifdef __cplusplus // magic to make C++ compilers happy
+}
+#endif
 #endif /*p7ALIDISPLAY_INCLUDED*/
 

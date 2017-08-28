@@ -13,6 +13,9 @@
 #include "dp_reference/p7_refmx.h"
 
 #include "search/p7_mpas.h"
+#ifdef __cplusplus // magic to make C++ compilers happy
+extern "C" {
+#endif
 
 extern int p7_reference_Anchors(ESL_RANDOMNESS *rng, const ESL_DSQ *dsq, int L, const P7_PROFILE *gm, 
 				const P7_REFMX *rxf, const P7_REFMX *rxd,
@@ -21,6 +24,10 @@ extern int p7_reference_Anchors(ESL_RANDOMNESS *rng, const ESL_DSQ *dsq, int L, 
 				P7_MPAS_PARAMS *prm, P7_MPAS_STATS *stats);
 
 extern int p7_reference_anchors_SetFromTrace(const P7_REFMX *pp, const P7_TRACE *tr, P7_ANCHORS *anch);
+
+#ifdef __cplusplus // magic to make C++ compilers happy
+}
+#endif
 
 #endif /*p7REFERENCE_ANCHORS_INCLUDED*/
 

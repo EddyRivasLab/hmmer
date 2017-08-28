@@ -16,7 +16,9 @@
 
 // The db field tells the worker which database to search and has range 0 .. <number of databases loaded -1 >
 // The compare_obj_length is the length (in bytes) of the HMM or sequence we'll be comparing the database to
-
+#ifdef __cplusplus // magic to make C++ compilers happy
+extern "C" {
+#endif
 typedef struct p7_server_command{
 	uint32_t type; // What type of operation are we telling the workers to start?
 	uint32_t db; // Which database will the search reference
@@ -27,7 +29,9 @@ typedef struct p7_server_chunk_reply{
 	uint64_t start;
 	uint64_t end;
 } P7_DAEMON_CHUNK_REPLY;
-
+#ifdef __cplusplus // magic to make C++ compilers happy
+}
+#endif
 // Constants used for defining custom MPI types
 
 // the number of custom types we use

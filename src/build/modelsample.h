@@ -13,7 +13,9 @@
 #include "base/p7_prior.h"
 #include "base/p7_profile.h"
 #include "base/p7_trace.h"
-
+#ifdef __cplusplus // magic to make C++ compilers happy
+extern "C" {
+#endif
 /* 1. Model sampling routines */
 extern int     p7_modelsample            (ESL_RANDOMNESS *r, int M, const ESL_ALPHABET *abc,                      P7_HMM **ret_hmm);
 extern int     p7_modelsample_Prior      (ESL_RANDOMNESS *r, int M, const ESL_ALPHABET *abc, const P7_PRIOR *pri, P7_HMM **ret_hmm);
@@ -44,5 +46,10 @@ extern int     p7_modelsample_AnchoredLocal(ESL_RANDOMNESS *rng, int M, const P7
 extern int     p7_modelsample_AnchoredMulti(ESL_RANDOMNESS *rng, int M, const P7_BG *bg,
 					    P7_HMM **opt_hmm, P7_PROFILE **opt_gm, ESL_DSQ **opt_dsq, int *opt_L, 
 					    P7_TRACE **opt_tr, P7_ANCHOR **opt_anch, int *opt_D, float *opt_sc);
+
+#ifdef __cplusplus // magic to make C++ compilers happy
+}
+#endif
+
 #endif /*p7MODELSAMPLE_INCLUDED*/
 

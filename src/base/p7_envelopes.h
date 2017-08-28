@@ -16,7 +16,9 @@
 #include "p7_config.h"
 
 #include "easel.h"       // Needed for int32_t
-
+#ifdef __cplusplus // magic to make C++ compilers happy
+extern "C" {
+#endif
 /* P7_ENVELOPE
  *    Contains information about a domain's "envelope",
  *    as calculated from an anchor set. Doesn't need
@@ -70,6 +72,9 @@ extern int           p7_envelopes_Reuse  (P7_ENVELOPES *envs);
 extern void          p7_envelopes_Destroy(P7_ENVELOPES *envs);
 
 extern int p7_envelopes_Dump(FILE *ofp, P7_ENVELOPES *env);
+#ifdef __cplusplus // magic to make C++ compilers happy
+}
+#endif
 
 
 #endif /*p7ENVELOPES_INCLUDED*/

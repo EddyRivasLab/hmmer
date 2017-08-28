@@ -19,7 +19,9 @@
 #include "base/p7_trace.h"
 #include "dp_reference/p7_refmx.h"
 #include "dp_vector/simdvec.h"
-
+#ifdef __cplusplus // magic to make C++ compilers happy
+extern "C" {
+#endif
 /*****************************************************************
  * 1. The P7_SPARSEMASK structure
  *****************************************************************/
@@ -177,5 +179,7 @@ extern int   p7_sparsemx_Validate(const P7_SPARSEMX *sx, char *errbuf);
 
 
 extern int   p7_sparsemx_PlotDomainInference(FILE *ofp, const P7_SPARSEMX *sxd, int ia, int ib, const P7_TRACE *tr);
-
+#ifdef __cplusplus // magic to make C++ compilers happy
+}
+#endif
 #endif /*p7SPARSEMX_INCLUDED*/ 

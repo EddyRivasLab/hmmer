@@ -8,7 +8,9 @@
 #include "base/p7_profile.h"
 #include "base/p7_anchors.h"
 #include "dp_sparse/p7_sparsemx.h"
-
+#ifdef __cplusplus // magic to make C++ compilers happy
+extern "C" {
+#endif
 
 extern int p7_sparse_asc_Forward(const ESL_DSQ *dsq, int L, const P7_PROFILE *gm, const P7_ANCHOR *anch, int D, 
 				 const P7_SPARSEMASK *sm, P7_SPARSEMX *asf, float *opt_sc);
@@ -28,5 +30,7 @@ extern int p7_sparse_asc_Decoding(const ESL_DSQ *dsq, int L, const P7_PROFILE *g
 				  float totsc, const P7_SPARSEMX *asf, P7_SPARSEMX *asb, P7_SPARSEMX *asd);
 
 
-
+#ifdef __cplusplus // magic to make C++ compilers happy
+}
+#endif
 #endif /*p7SPARSE_ASC_FWDBACK_INCLUDED*/
