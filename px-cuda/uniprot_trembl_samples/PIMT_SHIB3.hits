@@ -1,0 +1,520 @@
+16676 sp|Q582G4|ANM7_TRYB2  Protein arginine N-methyltransferase 7 OS=Trypanosoma brucei brucei (strain 927/4 GUTat10.1) GN=PRMT7 PE=1 SV=1
+43534 sp|B7GHW9|BIOC_ANOFW  Malonyl-[acyl-carrier protein] O-methyltransferase OS=Anoxybacillus flavithermus (strain DSM 21510 / WK1) GN=bioC PE=3 SV=1
+43537 sp|Q818X2|BIOC_BACCR  Malonyl-[acyl-carrier protein] O-methyltransferase OS=Bacillus cereus (strain ATCC 14579 / DSM 31 / JCM 2152 / NBRC 15305 / NCIMB 9373 / NRRL B-3711) GN=bioC PE=3 SV=1
+43571 sp|Q2Y9Y6|BIOC_NITMU  Malonyl-[acyl-carrier protein] O-methyltransferase OS=Nitrosospira multiformis (strain ATCC 25196 / NCIMB 11849) GN=bioC PE=3 SV=1
+46627 sp|P25627|BUD23_YEAST  18S rRNA (guanine(1575)-N(7))-methyltransferase OS=Saccharomyces cerevisiae (strain ATCC 204508 / S288c) GN=BUD23 PE=1 SV=1
+52896 sp|A4FWV6|CBIT_METM5  Probable cobalt-precorrin-6B C(15)-methyltransferase (decarboxylating) OS=Methanococcus maripaludis (strain C5 / ATCC BAA-1333) GN=cbiT PE=3 SV=1
+52897 sp|A9AA91|CBIT_METM6  Probable cobalt-precorrin-6B C(15)-methyltransferase (decarboxylating) OS=Methanococcus maripaludis (strain C6 / ATCC BAA-1332) GN=cbiT PE=3 SV=1
+52900 sp|P61820|CBIT_METMP  Probable cobalt-precorrin-6B C(15)-methyltransferase (decarboxylating) OS=Methanococcus maripaludis (strain S2 / LL) GN=cbiT PE=3 SV=1
+52903 sp|A6UPM1|CBIT_METVS  Probable cobalt-precorrin-6B C(15)-methyltransferase (decarboxylating) OS=Methanococcus vannielii (strain SB / ATCC 35089 / DSM 1224) GN=cbiT PE=3 SV=1
+97759 sp|Q9FK02|DIM1B_ARATH  Ribosomal RNA small subunit methyltransferase, mitochondrial OS=Arabidopsis thaliana GN=DIM1B PE=1 SV=1
+97762 sp|Q2KHT8|DIM1_BOVIN  Probable dimethyladenosine transferase OS=Bos taurus GN=DIMT1 PE=2 SV=1
+97771 sp|Q95KJ0|DIM1_MACFA  Probable dimethyladenosine transferase OS=Macaca fascicularis GN=DIMT1 PE=2 SV=1
+97772 sp|Q9D0D4|DIM1_MOUSE  Probable dimethyladenosine transferase OS=Mus musculus GN=Dimt1 PE=2 SV=1
+119421 sp|P0A4D6|ERM1_CLOPF  rRNA adenine N-6-methyltransferase OS=Clostridium perfringens GN=ermBP PE=3 SV=1
+119422 sp|P0A4D5|ERM1_ENTFL  rRNA adenine N-6-methyltransferase OS=Enterococcus faecalis GN=ermBP PE=3 SV=1
+119431 sp|P10738|ERMB_ECOLX  rRNA adenine N-6-methyltransferase OS=Escherichia coli GN=ermBC PE=3 SV=1
+119432 sp|P20173|ERMB_ENTFA  rRNA adenine N-6-methyltransferase OS=Enterococcus faecalis (strain ATCC 700802 / V583) GN=ermB PE=3 SV=2
+119437 sp|P07287|ERME_SACEN  rRNA adenine N-6-methyltransferase OS=Saccharopolyspora erythraea (strain ATCC 11635 / DSM 40517 / JCM 4748 / NBRC 13426 / NCIMB 8594 / NRRL 2338) GN=ermE PE=3 SV=2
+119438 sp|P10337|ERMF_BACFG  rRNA adenine N-6-methyltransferase OS=Bacteroides fragilis GN=ermF PE=3 SV=1
+119440 sp|P06571|ERMG_LYSSH  rRNA adenine N-6-methyltransferase OS=Lysinibacillus sphaericus GN=ermG PE=3 SV=1
+119455 sp|Q02607|ERMU_BACFG  rRNA adenine N-6-methyltransferase OS=Bacteroides fragilis GN=ermFU PE=3 SV=1
+119457 sp|P21236|ERM_STREE  rRNA adenine N-6-methyltransferase OS=Streptococcus pneumoniae GN=erm PE=1 SV=1
+119458 sp|P06573|ERM_STRSA  rRNA adenine N-6-methyltransferase OS=Streptococcus sanguinis PE=3 SV=1
+132807 sp|A3CSX5|FLPA_METMJ  Fibrillarin-like rRNA/tRNA 2'-O-methyltransferase OS=Methanoculleus marisnigri (strain ATCC 35101 / DSM 1498 / JR1) GN=flpA PE=3 SV=1
+137853 sp|Q8P3K2|FUCD_XANCP  L-fuconate dehydratase OS=Xanthomonas campestris pv. campestris (strain ATCC 33913 / DSM 3586 / NCPPB 528 / LMG 568 / P 25) GN=XCC4069 PE=1 SV=1
+160126 sp|Q8ZYW1|GSA_PYRAE  Glutamate-1-semialdehyde 2,1-aminomutase OS=Pyrobaculum aerophilum (strain ATCC 51768 / IM2 / DSM 7523 / JCM 9630 / NBRC 100827) GN=hemL PE=3 SV=1
+160129 sp|A1RQR5|GSA_PYRIL  Glutamate-1-semialdehyde 2,1-aminomutase OS=Pyrobaculum islandicum (strain DSM 4184 / JCM 9189 / GEO3) GN=hemL PE=3 SV=1
+160130 sp|B1YBL3|GSA_PYRNV  Glutamate-1-semialdehyde 2,1-aminomutase OS=Pyrobaculum neutrophilum (strain DSM 2338 / JCM 9278 / V24Sta) GN=hemL PE=3 SV=1
+160322 sp|Q9KJ20|GSDMT_ACTHA  Glycine/sarcosine/dimethylglycine N-methyltransferase OS=Actinopolyspora halophila PE=1 SV=1
+212301 sp|B6JG34|LEXA_OLICO  LexA repressor OS=Oligotropha carboxidovorans (strain ATCC 49405 / DSM 1227 / OM5) GN=lexA PE=3 SV=1
+212343 sp|Q2IW99|LEXA_RHOP2  LexA repressor OS=Rhodopseudomonas palustris (strain HaA2) GN=lexA PE=3 SV=1
+212344 sp|Q07NH5|LEXA_RHOP5  LexA repressor OS=Rhodopseudomonas palustris (strain BisA53) GN=lexA PE=3 SV=1
+212345 sp|P61614|LEXA_RHOPA  LexA repressor OS=Rhodopseudomonas palustris (strain ATCC BAA-98 / CGA009) GN=lexA PE=3 SV=1
+212346 sp|Q215D1|LEXA_RHOPB  LexA repressor OS=Rhodopseudomonas palustris (strain BisB18) GN=lexA PE=3 SV=1
+212348 sp|B3Q6P2|LEXA_RHOPT  LexA repressor OS=Rhodopseudomonas palustris (strain TIE-1) GN=lexA PE=3 SV=1
+212352 sp|A4WX64|LEXA_RHOS5  LexA repressor OS=Rhodobacter sphaeroides (strain ATCC 17025 / ATH 2.4.3) GN=lexA PE=3 SV=1
+290921 sp|A2VDP2|PCMD1_BOVIN  Protein-L-isoaspartate O-methyltransferase domain-containing protein 1 OS=Bos taurus GN=PCMTD1 PE=2 SV=1
+290922 sp|Q5ZMR3|PCMD1_CHICK  Protein-L-isoaspartate O-methyltransferase domain-containing protein 1 OS=Gallus gallus GN=PCMTD1 PE=2 SV=1
+290923 sp|Q96MG8|PCMD1_HUMAN  Protein-L-isoaspartate O-methyltransferase domain-containing protein 1 OS=Homo sapiens GN=PCMTD1 PE=1 SV=2
+290924 sp|P59913|PCMD1_MOUSE  Protein-L-isoaspartate O-methyltransferase domain-containing protein 1 OS=Mus musculus GN=Pcmtd1 PE=1 SV=1
+290925 sp|Q5R7E5|PCMD1_PONAB  Protein-L-isoaspartate O-methyltransferase domain-containing protein 1 OS=Pongo abelii GN=PCMTD1 PE=2 SV=1
+290926 sp|Q58CZ2|PCMD2_BOVIN  Protein-L-isoaspartate O-methyltransferase domain-containing protein 2 OS=Bos taurus GN=PCMTD2 PE=2 SV=1
+290927 sp|Q9NV79|PCMD2_HUMAN  Protein-L-isoaspartate O-methyltransferase domain-containing protein 2 OS=Homo sapiens GN=PCMTD2 PE=2 SV=2
+290928 sp|Q8BHD8|PCMD2_MOUSE  Protein-L-isoaspartate O-methyltransferase domain-containing protein 2 OS=Mus musculus GN=Pcmtd2 PE=2 SV=1
+290929 sp|Q5R7K4|PCMD2_PONAB  Protein-L-isoaspartate O-methyltransferase domain-containing protein 2 OS=Pongo abelii GN=PCMTD2 PE=2 SV=1
+300586 sp|A7HC32|PIMT1_ANADF  Protein-L-isoaspartate O-methyltransferase 1 OS=Anaeromyxobacter sp. (strain Fw109-5) GN=pcm1 PE=3 SV=1
+300587 sp|Q42539|PIMT1_ARATH  Protein-L-isoaspartate O-methyltransferase 1 OS=Arabidopsis thaliana GN=PIMT1 PE=1 SV=3
+300588 sp|O30199|PIMT1_ARCFU  Protein-L-isoaspartate O-methyltransferase 1 OS=Archaeoglobus fulgidus (strain ATCC 49558 / VC-16 / DSM 4304 / JCM 9628 / NBRC 100126) GN=pcm1 PE=3 SV=1
+300589 sp|Q0KB67|PIMT1_CUPNH  Protein-L-isoaspartate O-methyltransferase 1 OS=Cupriavidus necator (strain ATCC 17699 / H16 / DSM 428 / Stanier 337) GN=pcm1 PE=3 SV=1
+300590 sp|A5GEF7|PIMT1_GEOUR  Protein-L-isoaspartate O-methyltransferase 1 OS=Geobacter uraniireducens (strain Rf4) GN=pcm1 PE=3 SV=1
+300591 sp|A1TZ54|PIMT1_MARHV  Protein-L-isoaspartate O-methyltransferase 1 OS=Marinobacter hydrocarbonoclasticus (strain ATCC 700491 / DSM 11845 / VT8) GN=pcm1 PE=3 SV=1
+300592 sp|Q8TT93|PIMT1_METAC  Protein-L-isoaspartate O-methyltransferase 1 OS=Methanosarcina acetivorans (strain ATCC 35395 / DSM 2834 / JCM 12185 / C2A) GN=pcm1 PE=3 SV=1
+300593 sp|Q2YCR1|PIMT1_NITMU  Protein-L-isoaspartate O-methyltransferase 1 OS=Nitrosospira multiformis (strain ATCC 25196 / NCIMB 11849) GN=pcm1 PE=3 SV=1
+300594 sp|Q3JCZ3|PIMT1_NITOC  Protein-L-isoaspartate O-methyltransferase 1 OS=Nitrosococcus oceani (strain ATCC 19707 / NCIMB 11848) GN=pcm1 PE=3 SV=1
+300595 sp|A1ASL8|PIMT1_PELPD  Protein-L-isoaspartate O-methyltransferase 1 OS=Pelobacter propionicus (strain DSM 2379) GN=pcm1 PE=3 SV=1
+300596 sp|Q12A85|PIMT1_POLSJ  Protein-L-isoaspartate O-methyltransferase 1 OS=Polaromonas sp. (strain JS666 / ATCC BAA-500) GN=pcm1 PE=3 SV=1
+300597 sp|Q2J302|PIMT1_RHOP2  Protein-L-isoaspartate O-methyltransferase 1 OS=Rhodopseudomonas palustris (strain HaA2) GN=pcm1 PE=3 SV=1
+300598 sp|A8FST4|PIMT1_SHESH  Protein-L-isoaspartate O-methyltransferase 1 OS=Shewanella sediminis (strain HAW-EB3) GN=pcm1 PE=3 SV=1
+300599 sp|A0LL58|PIMT1_SYNFM  Protein-L-isoaspartate O-methyltransferase 1 OS=Syntrophobacter fumaroxidans (strain DSM 10017 / MPOB) GN=pcm1 PE=3 SV=1
+300600 sp|A7HHV3|PIMT2_ANADF  Protein-L-isoaspartate O-methyltransferase 2 OS=Anaeromyxobacter sp. (strain Fw109-5) GN=pcm2 PE=3 SV=2
+300601 sp|Q64J17|PIMT2_ARATH  Protein-L-isoaspartate O-methyltransferase 2 OS=Arabidopsis thaliana GN=PIMT2 PE=1 SV=1
+300602 sp|O27962|PIMT2_ARCFU  Protein-L-isoaspartate O-methyltransferase 2 OS=Archaeoglobus fulgidus (strain ATCC 49558 / VC-16 / DSM 4304 / JCM 9628 / NBRC 100126) GN=pcm2 PE=3 SV=1
+300603 sp|Q0K951|PIMT2_CUPNH  Protein-L-isoaspartate O-methyltransferase 2 OS=Cupriavidus necator (strain ATCC 17699 / H16 / DSM 428 / Stanier 337) GN=pcm2 PE=3 SV=1
+300604 sp|A5G4S7|PIMT2_GEOUR  Protein-L-isoaspartate O-methyltransferase 2 OS=Geobacter uraniireducens (strain Rf4) GN=pcm2 PE=3 SV=1
+300605 sp|A1U4P7|PIMT2_MARHV  Protein-L-isoaspartate O-methyltransferase 2 OS=Marinobacter hydrocarbonoclasticus (strain ATCC 700491 / DSM 11845 / VT8) GN=pcm2 PE=3 SV=1
+300606 sp|Q8TT94|PIMT2_METAC  Protein-L-isoaspartate O-methyltransferase 2 OS=Methanosarcina acetivorans (strain ATCC 35395 / DSM 2834 / JCM 12185 / C2A) GN=pcm2 PE=3 SV=1
+300607 sp|Q2YBR7|PIMT2_NITMU  Protein-L-isoaspartate O-methyltransferase 2 OS=Nitrosospira multiformis (strain ATCC 25196 / NCIMB 11849) GN=pcm2 PE=3 SV=1
+300608 sp|Q3JAW6|PIMT2_NITOC  Protein-L-isoaspartate O-methyltransferase 2 OS=Nitrosococcus oceani (strain ATCC 19707 / NCIMB 11848) GN=pcm2 PE=3 SV=1
+300609 sp|A1ASW6|PIMT2_PELPD  Protein-L-isoaspartate O-methyltransferase 2 OS=Pelobacter propionicus (strain DSM 2379) GN=pcm2 PE=3 SV=1
+300610 sp|Q123X2|PIMT2_POLSJ  Protein-L-isoaspartate O-methyltransferase 2 OS=Polaromonas sp. (strain JS666 / ATCC BAA-500) GN=pcm2 PE=3 SV=1
+300611 sp|Q2IWH1|PIMT2_RHOP2  Protein-L-isoaspartate O-methyltransferase 2 OS=Rhodopseudomonas palustris (strain HaA2) GN=pcm2 PE=3 SV=1
+300612 sp|A8FX24|PIMT2_SHESH  Protein-L-isoaspartate O-methyltransferase 2 OS=Shewanella sediminis (strain HAW-EB3) GN=pcm2 PE=3 SV=1
+300613 sp|A0LM89|PIMT2_SYNFM  Protein-L-isoaspartate O-methyltransferase 2 OS=Syntrophobacter fumaroxidans (strain DSM 10017 / MPOB) GN=pcm2 PE=3 SV=1
+300614 sp|A5G6S0|PIMT3_GEOUR  Protein-L-isoaspartate O-methyltransferase 3 OS=Geobacter uraniireducens (strain Rf4) GN=pcm3 PE=3 SV=1
+300615 sp|A0KGH9|PIMT_AERHH  Protein-L-isoaspartate O-methyltransferase OS=Aeromonas hydrophila subsp. hydrophila (strain ATCC 7966 / DSM 30187 / JCM 1027 / KCTC 2358 / NCIMB 9240) GN=pcm PE=3 SV=1
+300616 sp|Q9YDA1|PIMT_AERPE  Protein-L-isoaspartate O-methyltransferase OS=Aeropyrum pernix (strain ATCC 700893 / DSM 11879 / JCM 9820 / NBRC 100138 / K1) GN=pcm PE=3 SV=2
+300617 sp|A4SRB5|PIMT_AERS4  Protein-L-isoaspartate O-methyltransferase OS=Aeromonas salmonicida (strain A449) GN=pcm PE=3 SV=1
+300618 sp|Q0VQD1|PIMT_ALCBS  Protein-L-isoaspartate O-methyltransferase OS=Alcanivorax borkumensis (strain ATCC 700651 / DSM 11573 / NCIMB 13689 / SK2) GN=pcm PE=3 SV=1
+300619 sp|B6EKL2|PIMT_ALISL  Protein-L-isoaspartate O-methyltransferase OS=Aliivibrio salmonicida (strain LFI1238) GN=pcm PE=3 SV=1
+300620 sp|Q0A7L5|PIMT_ALKEH  Protein-L-isoaspartate O-methyltransferase OS=Alkalilimnicola ehrlichii (strain ATCC BAA-1101 / DSM 17681 / MLHE-1) GN=pcm PE=3 SV=1
+300621 sp|B4RZG8|PIMT_ALTMD  Protein-L-isoaspartate O-methyltransferase OS=Alteromonas mediterranea (strain DSM 17117 / CIP 110805 / LMG 28347 / Deep ecotype) GN=pcm1 PE=3 SV=1
+300622 sp|B8J9E3|PIMT_ANAD2  Protein-L-isoaspartate O-methyltransferase OS=Anaeromyxobacter dehalogenans (strain 2CP-1 / ATCC BAA-258) GN=pcm PE=3 SV=1
+300623 sp|Q2IIL9|PIMT_ANADE  Protein-L-isoaspartate O-methyltransferase OS=Anaeromyxobacter dehalogenans (strain 2CP-C) GN=pcm PE=3 SV=1
+300624 sp|Q5P833|PIMT_AROAE  Protein-L-isoaspartate O-methyltransferase OS=Aromatoleum aromaticum (strain EbN1) GN=pcm PE=3 SV=1
+300625 sp|A8I4G3|PIMT_AZOC5  Protein-L-isoaspartate O-methyltransferase OS=Azorhizobium caulinodans (strain ATCC 43989 / DSM 5975 / JCM 20966 / NBRC 14845 / NCIMB 13405 / ORS 571) GN=pcm PE=3 SV=2
+300626 sp|A1K4F0|PIMT_AZOSB  Protein-L-isoaspartate O-methyltransferase OS=Azoarcus sp. (strain BH72) GN=pcm PE=3 SV=2
+300627 sp|Q2L008|PIMT_BORA1  Protein-L-isoaspartate O-methyltransferase OS=Bordetella avium (strain 197N) GN=pcm PE=3 SV=1
+300628 sp|Q7WI37|PIMT_BORBR  Protein-L-isoaspartate O-methyltransferase OS=Bordetella bronchiseptica (strain ATCC BAA-588 / NCTC 13252 / RB50) GN=pcm PE=3 SV=2
+300629 sp|Q7W671|PIMT_BORPA  Protein-L-isoaspartate O-methyltransferase OS=Bordetella parapertussis (strain 12822 / ATCC BAA-587 / NCTC 13253) GN=pcm PE=3 SV=1
+300630 sp|A9IP04|PIMT_BORPD  Protein-L-isoaspartate O-methyltransferase OS=Bordetella petrii (strain ATCC BAA-461 / DSM 12804 / CCUG 43448) GN=pcm PE=3 SV=1
+300631 sp|P15246|PIMT_BOVIN  Protein-L-isoaspartate(D-aspartate) O-methyltransferase OS=Bos taurus GN=PCMT1 PE=1 SV=2
+300632 sp|A5EJV5|PIMT_BRASB  Protein-L-isoaspartate O-methyltransferase OS=Bradyrhizobium sp. (strain BTAi1 / ATCC BAA-1182) GN=pcm PE=3 SV=1
+300633 sp|A4YV66|PIMT_BRASO  Protein-L-isoaspartate O-methyltransferase OS=Bradyrhizobium sp. (strain ORS278) GN=pcm PE=3 SV=1
+300634 sp|B1YRE4|PIMT_BURA4  Protein-L-isoaspartate O-methyltransferase OS=Burkholderia ambifaria (strain MC40-6) GN=pcm PE=3 SV=1
+300635 sp|Q1BGY4|PIMT_BURCA  Protein-L-isoaspartate O-methyltransferase OS=Burkholderia cenocepacia (strain AU 1054) GN=pcm PE=3 SV=1
+300636 sp|B1JTA2|PIMT_BURCC  Protein-L-isoaspartate O-methyltransferase OS=Burkholderia cenocepacia (strain MC0-3) GN=pcm PE=3 SV=1
+300637 sp|A0K7U6|PIMT_BURCH  Protein-L-isoaspartate O-methyltransferase OS=Burkholderia cenocepacia (strain HI2424) GN=pcm PE=3 SV=1
+300638 sp|Q0BEV7|PIMT_BURCM  Protein-L-isoaspartate O-methyltransferase OS=Burkholderia ambifaria (strain ATCC BAA-244 / AMMD) GN=pcm PE=3 SV=1
+300639 sp|Q39FP9|PIMT_BURL3  Protein-L-isoaspartate O-methyltransferase OS=Burkholderia lata (strain ATCC 17760 / LMG 22485 / NCIMB 9086 / R18194 / 383) GN=pcm PE=3 SV=1
+300640 sp|A3MK86|PIMT_BURM7  Protein-L-isoaspartate O-methyltransferase OS=Burkholderia mallei (strain NCTC 10247) GN=pcm PE=3 SV=2
+300641 sp|A2S291|PIMT_BURM9  Protein-L-isoaspartate O-methyltransferase OS=Burkholderia mallei (strain NCTC 10229) GN=pcm PE=3 SV=1
+300642 sp|Q62JV3|PIMT_BURMA  Protein-L-isoaspartate O-methyltransferase OS=Burkholderia mallei (strain ATCC 23344) GN=pcm PE=3 SV=1
+300643 sp|A1V4L2|PIMT_BURMS  Protein-L-isoaspartate O-methyltransferase OS=Burkholderia mallei (strain SAVP1) GN=pcm PE=3 SV=1
+300644 sp|A3NVY1|PIMT_BURP0  Protein-L-isoaspartate O-methyltransferase OS=Burkholderia pseudomallei (strain 1106a) GN=pcm PE=3 SV=1
+300645 sp|Q3JRP1|PIMT_BURP1  Protein-L-isoaspartate O-methyltransferase OS=Burkholderia pseudomallei (strain 1710b) GN=pcm PE=3 SV=1
+300646 sp|A3NA64|PIMT_BURP6  Protein-L-isoaspartate O-methyltransferase OS=Burkholderia pseudomallei (strain 668) GN=pcm PE=3 SV=1
+300647 sp|B2JG67|PIMT_BURP8  Protein-L-isoaspartate O-methyltransferase OS=Burkholderia phymatum (strain DSM 17167 / STM815) GN=pcm PE=3 SV=1
+300648 sp|Q63UU3|PIMT_BURPS  Protein-L-isoaspartate O-methyltransferase OS=Burkholderia pseudomallei (strain K96243) GN=pcm PE=3 SV=1
+300649 sp|Q2SWF4|PIMT_BURTA  Protein-L-isoaspartate O-methyltransferase OS=Burkholderia thailandensis (strain E264 / ATCC 700388 / DSM 13276 / CIP 106301) GN=pcm PE=3 SV=1
+300650 sp|A4JEQ0|PIMT_BURVG  Protein-L-isoaspartate O-methyltransferase OS=Burkholderia vietnamiensis (strain G4 / LMG 22486) GN=pcm PE=3 SV=1
+300651 sp|Q27873|PIMT_CAEEL  Protein-L-isoaspartate O-methyltransferase OS=Caenorhabditis elegans GN=pcm-1 PE=2 SV=1
+300652 sp|B8GX51|PIMT_CAUCN  Protein-L-isoaspartate O-methyltransferase OS=Caulobacter crescentus (strain NA1000 / CB15N) GN=pcm PE=3 SV=1
+300653 sp|Q9A6T6|PIMT_CAUCR  Protein-L-isoaspartate O-methyltransferase OS=Caulobacter crescentus (strain ATCC 19089 / CB15) GN=pcm PE=3 SV=1
+300654 sp|B0T1Q1|PIMT_CAUSK  Protein-L-isoaspartate O-methyltransferase OS=Caulobacter sp. (strain K31) GN=pcm PE=3 SV=1
+300655 sp|B3PJA8|PIMT_CELJU  Protein-L-isoaspartate O-methyltransferase OS=Cellvibrio japonicus (strain Ueda107) GN=pcm PE=3 SV=1
+300656 sp|Q5F3N1|PIMT_CHICK  Protein-L-isoaspartate(D-aspartate) O-methyltransferase OS=Gallus gallus GN=PCMT1 PE=2 SV=3
+300657 sp|B3EEX3|PIMT_CHLL2  Protein-L-isoaspartate O-methyltransferase OS=Chlorobium limicola (strain DSM 245 / NBRC 103803) GN=pcm PE=3 SV=1
+300658 sp|Q3B1L6|PIMT_CHLL7  Protein-L-isoaspartate O-methyltransferase OS=Chlorobium luteolum (strain DSM 273 / 2530) GN=pcm PE=3 SV=1
+300659 sp|B3QQM1|PIMT_CHLP8  Protein-L-isoaspartate O-methyltransferase OS=Chlorobaculum parvum (strain NCIB 8327) GN=pcm PE=3 SV=1
+300660 sp|B3ELJ9|PIMT_CHLPB  Protein-L-isoaspartate O-methyltransferase OS=Chlorobium phaeobacteroides (strain BS1) GN=pcm PE=3 SV=1
+300661 sp|A1BDC1|PIMT_CHLPD  Protein-L-isoaspartate O-methyltransferase OS=Chlorobium phaeobacteroides (strain DSM 266) GN=pcm PE=3 SV=1
+300662 sp|A4SGH4|PIMT_CHLPM  Protein-L-isoaspartate O-methyltransferase OS=Chlorobium phaeovibrioides (strain DSM 265 / 1930) GN=pcm PE=3 SV=1
+300663 sp|Q8KFW8|PIMT_CHLTE  Protein-L-isoaspartate O-methyltransferase OS=Chlorobium tepidum (strain ATCC 49652 / DSM 12025 / NBRC 103806 / TLS) GN=pcm PE=3 SV=1
+300664 sp|Q1QU77|PIMT_CHRSD  Protein-L-isoaspartate O-methyltransferase OS=Chromohalobacter salexigens (strain DSM 3043 / ATCC BAA-138 / NCIMB 13768) GN=pcm PE=3 SV=1
+300665 sp|Q7NRV0|PIMT_CHRVO  Protein-L-isoaspartate O-methyltransferase OS=Chromobacterium violaceum (strain ATCC 12472 / DSM 30191 / JCM 1249 / NBRC 12614 / NCIMB 9131 / NCTC 9757) GN=pcm PE=3 SV=1
+300666 sp|A8ANV7|PIMT_CITK8  Protein-L-isoaspartate O-methyltransferase OS=Citrobacter koseri (strain ATCC BAA-895 / CDC 4225-83 / SGSC4696) GN=pcm PE=3 SV=1
+300667 sp|Q487E5|PIMT_COLP3  Protein-L-isoaspartate O-methyltransferase OS=Colwellia psychrerythraea (strain 34H / ATCC BAA-681) GN=pcm PE=3 SV=1
+300668 sp|A7MJ61|PIMT_CROS8  Protein-L-isoaspartate O-methyltransferase OS=Cronobacter sakazakii (strain ATCC BAA-894) GN=pcm PE=3 SV=1
+300669 sp|Q46ZH2|PIMT_CUPPJ  Protein-L-isoaspartate O-methyltransferase OS=Cupriavidus pinatubonensis (strain JMP 134 / LMG 1197) GN=pcm PE=3 SV=1
+300670 sp|Q11TS0|PIMT_CYTH3  Protein-L-isoaspartate O-methyltransferase OS=Cytophaga hutchinsonii (strain ATCC 33406 / NCIMB 9469) GN=pcm PE=3 SV=1
+300671 sp|Q92047|PIMT_DANRE  Protein-L-isoaspartate(D-aspartate) O-methyltransferase OS=Danio rerio GN=pcmt PE=2 SV=3
+300672 sp|Q47D25|PIMT_DECAR  Protein-L-isoaspartate O-methyltransferase OS=Dechloromonas aromatica (strain RCB) GN=pcm PE=3 SV=1
+300673 sp|C6BTT9|PIMT_DESAD  Protein-L-isoaspartate O-methyltransferase OS=Desulfovibrio salexigens (strain ATCC 14822 / DSM 2638 / NCIB 8403 / VKM B-1763) GN=pcm PE=3 SV=1
+300674 sp|Q30ZM2|PIMT_DESAG  Protein-L-isoaspartate O-methyltransferase OS=Desulfovibrio alaskensis (strain G20) GN=pcm PE=3 SV=1
+300675 sp|B8J017|PIMT_DESDA  Protein-L-isoaspartate O-methyltransferase OS=Desulfovibrio desulfuricans (strain ATCC 27774 / DSM 6949) GN=pcm PE=3 SV=1
+300676 sp|A8ZXR8|PIMT_DESOH  Protein-L-isoaspartate O-methyltransferase OS=Desulfococcus oleovorans (strain DSM 6200 / Hxd3) GN=pcm PE=3 SV=1
+300677 sp|Q6ARM1|PIMT_DESPS  Protein-L-isoaspartate O-methyltransferase OS=Desulfotalea psychrophila (strain LSv54 / DSM 12343) GN=pcm PE=3 SV=1
+300678 sp|Q72AZ1|PIMT_DESVH  Protein-L-isoaspartate O-methyltransferase OS=Desulfovibrio vulgaris (strain Hildenborough / ATCC 29579 / NCIMB 8303) GN=pcm PE=3 SV=1
+300679 sp|B8DJP7|PIMT_DESVM  Protein-L-isoaspartate O-methyltransferase OS=Desulfovibrio vulgaris (strain Miyazaki F / DSM 19637) GN=pcm PE=3 SV=1
+300680 sp|A1VD15|PIMT_DESVV  Protein-L-isoaspartate O-methyltransferase OS=Desulfovibrio vulgaris subsp. vulgaris (strain DP4) GN=pcm PE=3 SV=2
+300681 sp|Q9GPS6|PIMT_DICDI  Probable protein-L-isoaspartate O-methyltransferase OS=Dictyostelium discoideum GN=pcmA PE=3 SV=1
+300682 sp|B5YF00|PIMT_DICT6  Protein-L-isoaspartate O-methyltransferase OS=Dictyoglomus thermophilum (strain ATCC 35947 / DSM 3960 / H-6-12) GN=pcm PE=3 SV=1
+300683 sp|B8E0T1|PIMT_DICTD  Protein-L-isoaspartate O-methyltransferase OS=Dictyoglomus turgidum (strain Z-1310 / DSM 6724) GN=pcm PE=3 SV=1
+300684 sp|A8LQK6|PIMT_DINSH  Protein-L-isoaspartate O-methyltransferase OS=Dinoroseobacter shibae (strain DSM 16493 / NCIMB 14021 / DFL 12) GN=pcm PE=3 SV=1
+300685 sp|Q27869|PIMT_DROME  Protein-L-isoaspartate(D-aspartate) O-methyltransferase OS=Drosophila melanogaster GN=Pcmt PE=1 SV=2
+300686 sp|A7ZQI7|PIMT_ECO24  Protein-L-isoaspartate O-methyltransferase OS=Escherichia coli O139:H28 (strain E24377A / ETEC) GN=pcm PE=3 SV=1
+300687 sp|B7UHG2|PIMT_ECO27  Protein-L-isoaspartate O-methyltransferase OS=Escherichia coli O127:H6 (strain E2348/69 / EPEC) GN=pcm PE=3 SV=1
+300688 sp|B7MKL7|PIMT_ECO45  Protein-L-isoaspartate O-methyltransferase OS=Escherichia coli O45:K1 (strain S88 / ExPEC) GN=pcm PE=3 SV=1
+300689 sp|B7LEG1|PIMT_ECO55  Protein-L-isoaspartate O-methyltransferase OS=Escherichia coli (strain 55989 / EAEC) GN=pcm PE=3 SV=1
+300690 sp|P0A7A6|PIMT_ECO57  Protein-L-isoaspartate O-methyltransferase OS=Escherichia coli O157:H7 GN=pcm PE=3 SV=2
+300691 sp|B5Z3A5|PIMT_ECO5E  Protein-L-isoaspartate O-methyltransferase OS=Escherichia coli O157:H7 (strain EC4115 / EHEC) GN=pcm PE=3 SV=1
+300692 sp|B7NT87|PIMT_ECO7I  Protein-L-isoaspartate O-methyltransferase OS=Escherichia coli O7:K1 (strain IAI39 / ExPEC) GN=pcm PE=3 SV=1
+300693 sp|B7MZ44|PIMT_ECO81  Protein-L-isoaspartate O-methyltransferase OS=Escherichia coli O81 (strain ED1a) GN=pcm PE=3 SV=1
+300694 sp|B7LXF5|PIMT_ECO8A  Protein-L-isoaspartate O-methyltransferase OS=Escherichia coli O8 (strain IAI1) GN=pcm PE=3 SV=1
+300695 sp|C4ZZP7|PIMT_ECOBW  Protein-L-isoaspartate O-methyltransferase OS=Escherichia coli (strain K12 / MC4100 / BW2952) GN=pcm PE=3 SV=1
+300696 sp|B1XCR9|PIMT_ECODH  Protein-L-isoaspartate O-methyltransferase OS=Escherichia coli (strain K12 / DH10B) GN=pcm PE=3 SV=1
+300697 sp|A8A3M2|PIMT_ECOHS  Protein-L-isoaspartate O-methyltransferase OS=Escherichia coli O9:H4 (strain HS) GN=pcm PE=3 SV=1
+300698 sp|A1AET7|PIMT_ECOK1  Protein-L-isoaspartate O-methyltransferase OS=Escherichia coli O1:K1 / APEC GN=pcm PE=3 SV=1
+300699 sp|Q8FEJ8|PIMT_ECOL6  Protein-L-isoaspartate O-methyltransferase OS=Escherichia coli O6:H1 (strain CFT073 / ATCC 700928 / UPEC) GN=pcm PE=3 SV=3
+300700 sp|B1IUT6|PIMT_ECOLC  Protein-L-isoaspartate O-methyltransferase OS=Escherichia coli (strain ATCC 8739 / DSM 1576 / Crooks) GN=pcm PE=3 SV=1
+300701 sp|P0A7A5|PIMT_ECOLI  Protein-L-isoaspartate O-methyltransferase OS=Escherichia coli (strain K12) GN=pcm PE=1 SV=2
+300702 sp|B7N6X3|PIMT_ECOLU  Protein-L-isoaspartate O-methyltransferase OS=Escherichia coli O17:K52:H18 (strain UMN026 / ExPEC) GN=pcm PE=3 SV=1
+300703 sp|B6I6D3|PIMT_ECOSE  Protein-L-isoaspartate O-methyltransferase OS=Escherichia coli (strain SE11) GN=pcm PE=3 SV=1
+300704 sp|B1LQ63|PIMT_ECOSM  Protein-L-isoaspartate O-methyltransferase OS=Escherichia coli (strain SMS-3-5 / SECEC) GN=pcm PE=3 SV=1
+300705 sp|Q1R7U8|PIMT_ECOUT  Protein-L-isoaspartate O-methyltransferase OS=Escherichia coli (strain UTI89 / UPEC) GN=pcm PE=3 SV=1
+300706 sp|A4WDU8|PIMT_ENT38  Protein-L-isoaspartate O-methyltransferase OS=Enterobacter sp. (strain 638) GN=pcm PE=3 SV=1
+300707 sp|B2VG25|PIMT_ERWT9  Protein-L-isoaspartate O-methyltransferase OS=Erwinia tasmaniensis (strain DSM 17950 / Et1/99) GN=pcm PE=3 SV=1
+300708 sp|B7LWJ2|PIMT_ESCF3  Protein-L-isoaspartate O-methyltransferase OS=Escherichia fergusonii (strain ATCC 35469 / DSM 13698 / CDC 0568-73) GN=pcm PE=3 SV=1
+300709 sp|A7HL14|PIMT_FERNB  Protein-L-isoaspartate O-methyltransferase OS=Fervidobacterium nodosum (strain ATCC 35602 / DSM 5306 / Rt17-B1) GN=pcm PE=3 SV=1
+300710 sp|A5FEA5|PIMT_FLAJ1  Protein-L-isoaspartate O-methyltransferase OS=Flavobacterium johnsoniae (strain ATCC 17061 / DSM 2064 / UW101) GN=pcm PE=3 SV=1
+300711 sp|A6H0V1|PIMT_FLAPJ  Protein-L-isoaspartate O-methyltransferase OS=Flavobacterium psychrophilum (strain JIP02/86 / ATCC 49511) GN=pcm PE=3 SV=1
+300712 sp|B3E6I4|PIMT_GEOLS  Protein-L-isoaspartate O-methyltransferase OS=Geobacter lovleyi (strain ATCC BAA-1151 / DSM 17278 / SZ) GN=pcm PE=3 SV=1
+300713 sp|Q39VS0|PIMT_GEOMG  Protein-L-isoaspartate O-methyltransferase OS=Geobacter metallireducens (strain GS-15 / ATCC 53774 / DSM 7210) GN=pcm PE=3 SV=1
+300714 sp|Q74CZ5|PIMT_GEOSL  Protein-L-isoaspartate O-methyltransferase OS=Geobacter sulfurreducens (strain ATCC 51573 / DSM 12127 / PCA) GN=pcm PE=3 SV=2
+300715 sp|Q7NJY2|PIMT_GLOVI  Protein-L-isoaspartate O-methyltransferase OS=Gloeobacter violaceus (strain PCC 7421) GN=pcm PE=3 SV=2
+300716 sp|A0LZ51|PIMT_GRAFK  Protein-L-isoaspartate O-methyltransferase OS=Gramella forsetii (strain KT0803) GN=pcm PE=3 SV=1
+300717 sp|Q2SKW3|PIMT_HAHCH  Protein-L-isoaspartate O-methyltransferase OS=Hahella chejuensis (strain KCTC 2396) GN=pcm PE=3 SV=1
+300718 sp|A1WWY5|PIMT_HALHL  Protein-L-isoaspartate O-methyltransferase OS=Halorhodospira halophila (strain DSM 244 / SL1) GN=pcm PE=3 SV=1
+300719 sp|B6JMT1|PIMT_HELP2  Protein-L-isoaspartate O-methyltransferase OS=Helicobacter pylori (strain P12) GN=pcm PE=3 SV=1
+300720 sp|B5Z887|PIMT_HELPG  Protein-L-isoaspartate O-methyltransferase OS=Helicobacter pylori (strain G27) GN=pcm PE=3 SV=1
+300721 sp|Q9ZKC2|PIMT_HELPJ  Protein-L-isoaspartate O-methyltransferase OS=Helicobacter pylori (strain J99 / ATCC 700824) GN=pcm PE=3 SV=1
+300722 sp|P56133|PIMT_HELPY  Protein-L-isoaspartate O-methyltransferase OS=Helicobacter pylori (strain ATCC 700392 / 26695) GN=pcm PE=3 SV=1
+300723 sp|A9AUP1|PIMT_HERA2  Protein-L-isoaspartate O-methyltransferase OS=Herpetosiphon aurantiacus (strain ATCC 23779 / DSM 785) GN=pcm PE=3 SV=1
+300724 sp|A4G4J3|PIMT_HERAR  Protein-L-isoaspartate O-methyltransferase OS=Herminiimonas arsenicoxydans GN=pcm PE=3 SV=1
+300725 sp|P22061|PIMT_HUMAN  Protein-L-isoaspartate(D-aspartate) O-methyltransferase OS=Homo sapiens GN=PCMT1 PE=1 SV=4
+300726 sp|A2BKH8|PIMT_HYPBU  Protein-L-isoaspartate O-methyltransferase OS=Hyperthermus butylicus (strain DSM 5456 / JCM 9403 / PLM1-5) GN=pcm PE=3 SV=1
+300727 sp|Q5QUB2|PIMT_IDILO  Protein-L-isoaspartate O-methyltransferase OS=Idiomarina loihiensis (strain ATCC BAA-735 / DSM 15497 / L2-TR) GN=pcm PE=3 SV=1
+300728 sp|A8AAV7|PIMT_IGNH4  Protein-L-isoaspartate O-methyltransferase OS=Ignicoccus hospitalis (strain KIN4/I / DSM 18386 / JCM 14125) GN=pcm PE=3 SV=1
+300729 sp|A6SZX9|PIMT_JANMA  Protein-L-isoaspartate O-methyltransferase OS=Janthinobacterium sp. (strain Marseille) GN=pcm PE=3 SV=1
+300730 sp|Q28TH8|PIMT_JANSC  Protein-L-isoaspartate O-methyltransferase OS=Jannaschia sp. (strain CCS1) GN=pcm PE=3 SV=1
+300731 sp|B5XV38|PIMT_KLEP3  Protein-L-isoaspartate O-methyltransferase OS=Klebsiella pneumoniae (strain 342) GN=pcm PE=3 SV=1
+300732 sp|A6TD35|PIMT_KLEP7  Protein-L-isoaspartate O-methyltransferase OS=Klebsiella pneumoniae subsp. pneumoniae (strain ATCC 700721 / MGH 78578) GN=pcm PE=3 SV=1
+300733 sp|B1L6T9|PIMT_KORCO  Protein-L-isoaspartate O-methyltransferase OS=Korarchaeum cryptofilum (strain OPF8) GN=pcm PE=3 SV=1
+300734 sp|Q1INS6|PIMT_KORVE  Protein-L-isoaspartate O-methyltransferase OS=Koribacter versatilis (strain Ellin345) GN=pcm PE=3 SV=1
+300735 sp|Q1MRE5|PIMT_LAWIP  Protein-L-isoaspartate O-methyltransferase OS=Lawsonia intracellularis (strain PHE/MN1-00) GN=pcm PE=3 SV=1
+300736 sp|B1Y0T0|PIMT_LEPCP  Protein-L-isoaspartate O-methyltransferase OS=Leptothrix cholodnii (strain ATCC 51168 / LMG 8142 / SP-6) GN=pcm PE=3 SV=1
+300737 sp|Q4R5H0|PIMT_MACFA  Protein-L-isoaspartate(D-aspartate) O-methyltransferase OS=Macaca fascicularis GN=PCMT1 PE=2 SV=3
+300738 sp|A0L4K5|PIMT_MAGMM  Protein-L-isoaspartate O-methyltransferase OS=Magnetococcus marinus (strain ATCC BAA-1437 / JCM 17883 / MC-1) GN=pcm PE=3 SV=1
+300739 sp|Q2W4A2|PIMT_MAGSA  Protein-L-isoaspartate O-methyltransferase OS=Magnetospirillum magneticum (strain AMB-1 / ATCC 700264) GN=pcm PE=3 SV=1
+300740 sp|Q0ANE2|PIMT_MARMM  Protein-L-isoaspartate O-methyltransferase OS=Maricaulis maris (strain MCS10) GN=pcm PE=3 SV=1
+300741 sp|A6UWM1|PIMT_META3  Protein-L-isoaspartate O-methyltransferase OS=Methanococcus aeolicus (strain Nankai-3 / ATCC BAA-1280) GN=pcm PE=3 SV=1
+300742 sp|Q0W2W0|PIMT_METAR  Protein-L-isoaspartate O-methyltransferase OS=Methanocella arvoryzae (strain DSM 22066 / NBRC 105507 / MRE50) GN=pcm PE=3 SV=1
+300743 sp|A7I4W9|PIMT_METB6  Protein-L-isoaspartate O-methyltransferase OS=Methanoregula boonei (strain 6A8) GN=pcm PE=3 SV=1
+300744 sp|Q12UV0|PIMT_METBU  Protein-L-isoaspartate O-methyltransferase OS=Methanococcoides burtonii (strain DSM 6242 / NBRC 107633 / OCM 468 / ACE-M) GN=pcm PE=3 SV=1
+300745 sp|A9VY77|PIMT_METEP  Protein-L-isoaspartate O-methyltransferase OS=Methylobacterium extorquens (strain PA1) GN=pcm PE=3 SV=1
+300746 sp|Q1H095|PIMT_METFK  Protein-L-isoaspartate O-methyltransferase OS=Methylobacillus flagellatus (strain KT / ATCC 51484 / DSM 6875) GN=pcm PE=3 SV=1
+300747 sp|Q2FRW3|PIMT_METHJ  Protein-L-isoaspartate O-methyltransferase OS=Methanospirillum hungatei JF-1 (strain ATCC 27890 / DSM 864 / NBRC 100397 / JF-1) GN=pcm PE=3 SV=1
+300748 sp|Q57636|PIMT_METJA  Protein-L-isoaspartate O-methyltransferase OS=Methanocaldococcus jannaschii (strain ATCC 43067 / DSM 2661 / JAL-1 / JCM 10045 / NBRC 100440) GN=pcm PE=1 SV=1
+300749 sp|Q8TYL4|PIMT_METKA  Protein-L-isoaspartate O-methyltransferase OS=Methanopyrus kandleri (strain AV19 / DSM 6324 / JCM 9639 / NBRC 100938) GN=pcm PE=3 SV=1
+300750 sp|A4G087|PIMT_METM5  Protein-L-isoaspartate O-methyltransferase OS=Methanococcus maripaludis (strain C5 / ATCC BAA-1333) GN=pcm PE=3 SV=1
+300751 sp|A9A8I9|PIMT_METM6  Protein-L-isoaspartate O-methyltransferase OS=Methanococcus maripaludis (strain C6 / ATCC BAA-1332) GN=pcm PE=3 SV=1
+300752 sp|A6VI91|PIMT_METM7  Protein-L-isoaspartate O-methyltransferase OS=Methanococcus maripaludis (strain C7 / ATCC BAA-1331) GN=pcm PE=3 SV=1
+300753 sp|Q8PW90|PIMT_METMA  Protein-L-isoaspartate O-methyltransferase OS=Methanosarcina mazei (strain ATCC BAA-159 / DSM 3647 / Goe1 / Go1 / JCM 11833 / OCM 88) GN=pcm PE=3 SV=1
+300754 sp|A3CXP8|PIMT_METMJ  Protein-L-isoaspartate O-methyltransferase OS=Methanoculleus marisnigri (strain ATCC 35101 / DSM 1498 / JR1) GN=pcm PE=3 SV=1
+300755 sp|Q6M116|PIMT_METMP  Protein-L-isoaspartate O-methyltransferase OS=Methanococcus maripaludis (strain S2 / LL) GN=pcm PE=3 SV=1
+300756 sp|B1ZJW1|PIMT_METPB  Protein-L-isoaspartate O-methyltransferase OS=Methylobacterium populi (strain ATCC BAA-705 / NCIMB 13946 / BJ001) GN=pcm PE=3 SV=1
+300757 sp|A2SF76|PIMT_METPP  Protein-L-isoaspartate O-methyltransferase OS=Methylibium petroleiphilum (strain PM1) GN=pcm PE=3 SV=1
+300758 sp|O26915|PIMT_METTH  Protein-L-isoaspartate O-methyltransferase OS=Methanothermobacter thermautotrophicus (strain ATCC 29096 / DSM 1053 / JCM 10044 / NBRC 100330 / Delta H) GN=pcm PE=3 SV=1
+300759 sp|A0B9U1|PIMT_METTP  Protein-L-isoaspartate O-methyltransferase OS=Methanosaeta thermophila (strain DSM 6194 / JCM 14653 / NBRC 101360 / PT) GN=pcm PE=3 SV=1
+300760 sp|A6UR90|PIMT_METVS  Protein-L-isoaspartate O-methyltransferase OS=Methanococcus vannielii (strain SB / ATCC 35089 / DSM 1224) GN=pcm PE=3 SV=1
+300761 sp|P23506|PIMT_MOUSE  Protein-L-isoaspartate(D-aspartate) O-methyltransferase OS=Mus musculus GN=Pcmt1 PE=1 SV=3
+300762 sp|Q1D6W9|PIMT_MYXXD  Protein-L-isoaspartate O-methyltransferase OS=Myxococcus xanthus (strain DK 1622) GN=pcm PE=3 SV=1
+300763 sp|B2A578|PIMT_NATTJ  Protein-L-isoaspartate O-methyltransferase OS=Natranaerobius thermophilus (strain ATCC BAA-1301 / DSM 18059 / JW/NM-WN-LF) GN=pcm PE=3 SV=1
+300764 sp|Q0ADP2|PIMT_NITEC  Protein-L-isoaspartate O-methyltransferase OS=Nitrosomonas eutropha (strain C91) GN=pcm PE=3 SV=1
+300765 sp|Q82VW0|PIMT_NITEU  Protein-L-isoaspartate O-methyltransferase OS=Nitrosomonas europaea (strain ATCC 19718 / NBRC 14298) GN=pcm PE=3 SV=1
+300766 sp|Q3SRQ7|PIMT_NITWN  Protein-L-isoaspartate O-methyltransferase OS=Nitrobacter winogradskyi (strain Nb-255 / ATCC 25391) GN=pcm PE=3 SV=1
+300767 sp|A6X6Y1|PIMT_OCHA4  Protein-L-isoaspartate O-methyltransferase OS=Ochrobactrum anthropi (strain ATCC 49188 / DSM 6882 / NCTC 12168) GN=pcm PE=3 SV=1
+300768 sp|B6JFP0|PIMT_OLICO  Protein-L-isoaspartate O-methyltransferase OS=Oligotropha carboxidovorans (strain ATCC 49405 / DSM 1227 / OM5) GN=pcm PE=3 SV=1
+300769 sp|B1ZPF0|PIMT_OPITP  Protein-L-isoaspartate O-methyltransferase OS=Opitutus terrae (strain DSM 11246 / PB90-1) GN=pcm PE=3 SV=1
+300770 sp|A1B5M0|PIMT_PARDP  Protein-L-isoaspartate O-methyltransferase OS=Paracoccus denitrificans (strain Pd 1222) GN=pcm PE=3 SV=1
+300771 sp|A7HXK6|PIMT_PARL1  Protein-L-isoaspartate O-methyltransferase OS=Parvibaculum lavamentivorans (strain DS-1 / DSM 13023 / NCIMB 13966) GN=pcm PE=3 SV=1
+300772 sp|Q6MCW9|PIMT_PARUW  Protein-L-isoaspartate O-methyltransferase OS=Protochlamydia amoebophila (strain UWE25) GN=pcm PE=3 SV=1
+300773 sp|Q6D1B6|PIMT_PECAS  Protein-L-isoaspartate O-methyltransferase OS=Pectobacterium atrosepticum (strain SCRI 1043 / ATCC BAA-672) GN=pcm PE=3 SV=1
+300774 sp|C6DDF9|PIMT_PECCP  Protein-L-isoaspartate O-methyltransferase OS=Pectobacterium carotovorum subsp. carotovorum (strain PC1) GN=pcm PE=3 SV=1
+300775 sp|Q3A4N4|PIMT_PELCD  Protein-L-isoaspartate O-methyltransferase OS=Pelobacter carbinolicus (strain DSM 2380 / Gra Bd 1) GN=pcm PE=3 SV=1
+300776 sp|B4SFU3|PIMT_PELPB  Protein-L-isoaspartate O-methyltransferase OS=Pelodictyon phaeoclathratiforme (strain DSM 5477 / BU-1) GN=pcm PE=3 SV=1
+300777 sp|A5CYQ6|PIMT_PELTS  Protein-L-isoaspartate O-methyltransferase OS=Pelotomaculum thermopropionicum (strain DSM 13744 / JCM 10971 / SI) GN=pcm PE=3 SV=1
+300778 sp|A9BH07|PIMT_PETMO  Protein-L-isoaspartate O-methyltransferase OS=Petrotoga mobilis (strain DSM 10674 / SJ95) GN=pcm PE=3 SV=1
+300779 sp|Q7N8K3|PIMT_PHOLL  Protein-L-isoaspartate O-methyltransferase OS=Photorhabdus luminescens subsp. laumondii (strain DSM 15139 / CIP 105565 / TT01) GN=pcm PE=3 SV=1
+300780 sp|Q6LMT7|PIMT_PHOPR  Protein-L-isoaspartate O-methyltransferase OS=Photobacterium profundum GN=pcm PE=3 SV=1
+300781 sp|P80895|PIMT_PIG  Protein-L-isoaspartate(D-aspartate) O-methyltransferase OS=Sus scrofa GN=PCMT1 PE=1 SV=3
+300782 sp|Q5RA89|PIMT_PONAB  Protein-L-isoaspartate(D-aspartate) O-methyltransferase OS=Pongo abelii GN=PCMT1 PE=2 SV=3
+300783 sp|B4F223|PIMT_PROMH  Protein-L-isoaspartate O-methyltransferase OS=Proteus mirabilis (strain HI4320) GN=pcm PE=3 SV=1
+300784 sp|Q48F88|PIMT_PSE14  Protein-L-isoaspartate O-methyltransferase OS=Pseudomonas savastanoi pv. phaseolicola (strain 1448A / Race 6) GN=pcm PE=3 SV=2
+300785 sp|Q15P27|PIMT_PSEA6  Protein-L-isoaspartate O-methyltransferase OS=Pseudoalteromonas atlantica (strain T6c / ATCC BAA-1087) GN=pcm PE=3 SV=1
+300786 sp|A6V1G4|PIMT_PSEA7  Protein-L-isoaspartate O-methyltransferase OS=Pseudomonas aeruginosa (strain PA7) GN=pcm PE=3 SV=2
+300787 sp|B7V8C3|PIMT_PSEA8  Protein-L-isoaspartate O-methyltransferase OS=Pseudomonas aeruginosa (strain LESB58) GN=pcm PE=3 SV=1
+300788 sp|Q02R96|PIMT_PSEAB  Protein-L-isoaspartate O-methyltransferase OS=Pseudomonas aeruginosa (strain UCBPP-PA14) GN=pcm PE=3 SV=1
+300789 sp|P45683|PIMT_PSEAE  Protein-L-isoaspartate O-methyltransferase OS=Pseudomonas aeruginosa (strain ATCC 15692 / PAO1 / 1C / PRS 101 / LMG 12228) GN=pcm PE=3 SV=2
+300790 sp|Q1I655|PIMT_PSEE4  Protein-L-isoaspartate O-methyltransferase OS=Pseudomonas entomophila (strain L48) GN=pcm PE=3 SV=2
+300791 sp|Q4KHE7|PIMT_PSEF5  Protein-L-isoaspartate O-methyltransferase OS=Pseudomonas fluorescens (strain Pf-5 / ATCC BAA-477) GN=pcm PE=3 SV=2
+300792 sp|C3K706|PIMT_PSEFS  Protein-L-isoaspartate O-methyltransferase OS=Pseudomonas fluorescens (strain SBW25) GN=pcm PE=3 SV=1
+300793 sp|Q3IDD2|PIMT_PSEHT  Protein-L-isoaspartate O-methyltransferase OS=Pseudoalteromonas haloplanktis (strain TAC 125) GN=pcm PE=3 SV=1
+300794 sp|A4XWR1|PIMT_PSEMY  Protein-L-isoaspartate O-methyltransferase OS=Pseudomonas mendocina (strain ymp) GN=pcm PE=3 SV=2
+300795 sp|A5W820|PIMT_PSEP1  Protein-L-isoaspartate O-methyltransferase OS=Pseudomonas putida (strain F1 / ATCC 700007) GN=pcm PE=3 SV=2
+300796 sp|Q3KH83|PIMT_PSEPF  Protein-L-isoaspartate O-methyltransferase OS=Pseudomonas fluorescens (strain Pf0-1) GN=pcm PE=3 SV=2
+300797 sp|B0KSC8|PIMT_PSEPG  Protein-L-isoaspartate O-methyltransferase OS=Pseudomonas putida (strain GB-1) GN=pcm PE=3 SV=2
+300798 sp|Q88MF0|PIMT_PSEPK  Protein-L-isoaspartate O-methyltransferase OS=Pseudomonas putida (strain KT2440) GN=pcm PE=3 SV=2
+300799 sp|B1JB29|PIMT_PSEPW  Protein-L-isoaspartate O-methyltransferase OS=Pseudomonas putida (strain W619) GN=pcm PE=3 SV=2
+300800 sp|Q886L4|PIMT_PSESM  Protein-L-isoaspartate O-methyltransferase OS=Pseudomonas syringae pv. tomato (strain DC3000) GN=pcm PE=3 SV=1
+300801 sp|Q4ZWP9|PIMT_PSEU2  Protein-L-isoaspartate O-methyltransferase OS=Pseudomonas syringae pv. syringae (strain B728a) GN=pcm PE=3 SV=2
+300802 sp|A4VJV3|PIMT_PSEU5  Protein-L-isoaspartate O-methyltransferase OS=Pseudomonas stutzeri (strain A1501) GN=pcm PE=3 SV=2
+300803 sp|Q9UXX0|PIMT_PYRAB  Protein-L-isoaspartate O-methyltransferase OS=Pyrococcus abyssi (strain GE5 / Orsay) GN=pcm PE=3 SV=2
+300804 sp|Q8ZYN0|PIMT_PYRAE  Protein-L-isoaspartate O-methyltransferase OS=Pyrobaculum aerophilum (strain ATCC 51768 / IM2 / DSM 7523 / JCM 9630 / NBRC 100827) GN=pcm PE=1 SV=1
+300805 sp|A4WNC5|PIMT_PYRAR  Protein-L-isoaspartate O-methyltransferase OS=Pyrobaculum arsenaticum (strain DSM 13514 / JCM 11321) GN=pcm PE=3 SV=1
+300806 sp|A3MY16|PIMT_PYRCJ  Protein-L-isoaspartate O-methyltransferase OS=Pyrobaculum calidifontis (strain JCM 11548 / VA1) GN=pcm PE=3 SV=1
+300807 sp|Q8TZR3|PIMT_PYRFU  Protein-L-isoaspartate O-methyltransferase OS=Pyrococcus furiosus (strain ATCC 43587 / DSM 3638 / JCM 8422 / Vc1) GN=pcm PE=1 SV=2
+300808 sp|O59534|PIMT_PYRHO  Protein-L-isoaspartate O-methyltransferase OS=Pyrococcus horikoshii (strain ATCC 700860 / DSM 12428 / JCM 9974 / NBRC 100139 / OT-3) GN=pcm PE=3 SV=2
+300809 sp|A1RSC6|PIMT_PYRIL  Protein-L-isoaspartate O-methyltransferase OS=Pyrobaculum islandicum (strain DSM 4184 / JCM 9189 / GEO3) GN=pcm PE=3 SV=1
+300810 sp|B1YC47|PIMT_PYRNV  Protein-L-isoaspartate O-methyltransferase OS=Pyrobaculum neutrophilum (strain DSM 2338 / JCM 9278 / V24Sta) GN=pcm PE=3 SV=1
+300811 sp|Q8Y039|PIMT_RALSO  Protein-L-isoaspartate O-methyltransferase OS=Ralstonia solanacearum (strain GMI1000) GN=pcm PE=3 SV=1
+300812 sp|P22062|PIMT_RAT  Protein-L-isoaspartate(D-aspartate) O-methyltransferase OS=Rattus norvegicus GN=Pcmt1 PE=1 SV=2
+300813 sp|O08249|PIMT_RHIME  Protein-L-isoaspartate O-methyltransferase OS=Rhizobium meliloti (strain 1021) GN=pcm PE=3 SV=2
+300814 sp|B6ISM3|PIMT_RHOCS  Protein-L-isoaspartate O-methyltransferase OS=Rhodospirillum centenum (strain ATCC 51521 / SW) GN=pcm PE=3 SV=1
+300815 sp|Q07N42|PIMT_RHOP5  Protein-L-isoaspartate O-methyltransferase OS=Rhodopseudomonas palustris (strain BisA53) GN=pcm PE=3 SV=1
+300816 sp|Q6NCU3|PIMT_RHOPA  Protein-L-isoaspartate O-methyltransferase OS=Rhodopseudomonas palustris (strain ATCC BAA-98 / CGA009) GN=pcm PE=3 SV=2
+300817 sp|Q214W4|PIMT_RHOPB  Protein-L-isoaspartate O-methyltransferase OS=Rhodopseudomonas palustris (strain BisB18) GN=pcm PE=3 SV=1
+300818 sp|Q136H9|PIMT_RHOPS  Protein-L-isoaspartate O-methyltransferase OS=Rhodopseudomonas palustris (strain BisB5) GN=pcm PE=3 SV=1
+300819 sp|Q2RTH7|PIMT_RHORT  Protein-L-isoaspartate O-methyltransferase OS=Rhodospirillum rubrum (strain ATCC 11170 / ATH 1.1.1 / DSM 467 / LMG 4362 / NCIB 8255 / S1) GN=pcm PE=3 SV=1
+300820 sp|A3PIZ8|PIMT_RHOS1  Protein-L-isoaspartate O-methyltransferase OS=Rhodobacter sphaeroides (strain ATCC 17029 / ATH 2.4.9) GN=pcm PE=3 SV=1
+300821 sp|Q3J3D1|PIMT_RHOS4  Protein-L-isoaspartate O-methyltransferase OS=Rhodobacter sphaeroides (strain ATCC 17023 / 2.4.1 / NCIB 8253 / DSM 158) GN=pcm PE=3 SV=1
+300822 sp|A4WU05|PIMT_RHOS5  Protein-L-isoaspartate O-methyltransferase OS=Rhodobacter sphaeroides (strain ATCC 17025 / ATH 2.4.3) GN=pcm PE=3 SV=1
+300823 sp|B9KQZ1|PIMT_RHOSK  Protein-L-isoaspartate O-methyltransferase OS=Rhodobacter sphaeroides (strain KD131 / KCTC 12085) GN=pcm PE=3 SV=1
+300824 sp|A7NI01|PIMT_ROSCS  Protein-L-isoaspartate O-methyltransferase OS=Roseiflexus castenholzii (strain DSM 13941 / HLO8) GN=pcm PE=3 SV=1
+300825 sp|Q163U2|PIMT_ROSDO  Protein-L-isoaspartate O-methyltransferase OS=Roseobacter denitrificans (strain ATCC 33942 / OCh 114) GN=pcm PE=3 SV=1
+300826 sp|A5UZW2|PIMT_ROSS1  Protein-L-isoaspartate O-methyltransferase OS=Roseiflexus sp. (strain RS-1) GN=pcm PE=3 SV=1
+300827 sp|Q5LQ09|PIMT_RUEPO  Protein-L-isoaspartate O-methyltransferase OS=Ruegeria pomeroyi (strain ATCC 700808 / DSM 15171 / DSS-3) GN=pcm PE=3 SV=1
+300828 sp|Q1GFP1|PIMT_RUEST  Protein-L-isoaspartate O-methyltransferase OS=Ruegeria sp. (strain TM1040) GN=pcm PE=3 SV=1
+300829 sp|Q21LB7|PIMT_SACD2  Protein-L-isoaspartate O-methyltransferase OS=Saccharophagus degradans (strain 2-40 / ATCC 43961 / DSM 17024) GN=pcm PE=3 SV=1
+300830 sp|B5F407|PIMT_SALA4  Protein-L-isoaspartate O-methyltransferase OS=Salmonella agona (strain SL483) GN=pcm PE=3 SV=1
+300831 sp|A9MF32|PIMT_SALAR  Protein-L-isoaspartate O-methyltransferase OS=Salmonella arizonae (strain ATCC BAA-731 / CDC346-86 / RSK2980) GN=pcm PE=3 SV=1
+300832 sp|Q57KJ8|PIMT_SALCH  Protein-L-isoaspartate O-methyltransferase OS=Salmonella choleraesuis (strain SC-B67) GN=pcm PE=3 SV=1
+300833 sp|B5FTS1|PIMT_SALDC  Protein-L-isoaspartate O-methyltransferase OS=Salmonella dublin (strain CT_02021853) GN=pcm PE=3 SV=1
+300834 sp|B5QW14|PIMT_SALEP  Protein-L-isoaspartate O-methyltransferase OS=Salmonella enteritidis PT4 (strain P125109) GN=pcm PE=3 SV=1
+300835 sp|B5RDP9|PIMT_SALG2  Protein-L-isoaspartate O-methyltransferase OS=Salmonella gallinarum (strain 287/91 / NCTC 13346) GN=pcm PE=3 SV=1
+300836 sp|B4TFW3|PIMT_SALHS  Protein-L-isoaspartate O-methyltransferase OS=Salmonella heidelberg (strain SL476) GN=pcm PE=3 SV=1
+300837 sp|B4T453|PIMT_SALNS  Protein-L-isoaspartate O-methyltransferase OS=Salmonella newport (strain SL254) GN=pcm PE=3 SV=1
+300838 sp|Q5PEE9|PIMT_SALPA  Protein-L-isoaspartate O-methyltransferase OS=Salmonella paratyphi A (strain ATCC 9150 / SARB42) GN=pcm PE=3 SV=1
+300839 sp|A9N1H6|PIMT_SALPB  Protein-L-isoaspartate O-methyltransferase OS=Salmonella paratyphi B (strain ATCC BAA-1250 / SPB7) GN=pcm PE=3 SV=2
+300840 sp|C0PXA3|PIMT_SALPC  Protein-L-isoaspartate O-methyltransferase OS=Salmonella paratyphi C (strain RKS4594) GN=pcm PE=3 SV=1
+300841 sp|B5BEY0|PIMT_SALPK  Protein-L-isoaspartate O-methyltransferase OS=Salmonella paratyphi A (strain AKU_12601) GN=pcm PE=3 SV=1
+300842 sp|Q2S176|PIMT_SALRD  Protein-L-isoaspartate O-methyltransferase OS=Salinibacter ruber (strain DSM 13855 / M31) GN=pcm PE=3 SV=1
+300843 sp|B4TTV7|PIMT_SALSV  Protein-L-isoaspartate O-methyltransferase OS=Salmonella schwarzengrund (strain CVM19633) GN=pcm PE=3 SV=1
+300844 sp|Q8Z474|PIMT_SALTI  Protein-L-isoaspartate O-methyltransferase OS=Salmonella typhi GN=pcm PE=3 SV=1
+300845 sp|Q8ZMF9|PIMT_SALTY  Protein-L-isoaspartate O-methyltransferase OS=Salmonella typhimurium (strain LT2 / SGSC1412 / ATCC 700720) GN=pcm PE=3 SV=1
+300846 sp|Q9URZ1|PIMT_SCHPO  Probable protein-L-isoaspartate O-methyltransferase OS=Schizosaccharomyces pombe (strain 972 / ATCC 24843) GN=pcm2 PE=3 SV=1
+300847 sp|A8G9Z6|PIMT_SERP5  Protein-L-isoaspartate O-methyltransferase OS=Serratia proteamaculans (strain 568) GN=pcm PE=3 SV=1
+300848 sp|A1S4E3|PIMT_SHEAM  Protein-L-isoaspartate O-methyltransferase OS=Shewanella amazonensis (strain ATCC BAA-1098 / SB2B) GN=pcm PE=3 SV=1
+300849 sp|B8E8T7|PIMT_SHEB2  Protein-L-isoaspartate O-methyltransferase OS=Shewanella baltica (strain OS223) GN=pcm PE=3 SV=1
+300850 sp|A3D789|PIMT_SHEB5  Protein-L-isoaspartate O-methyltransferase OS=Shewanella baltica (strain OS155 / ATCC BAA-1091) GN=pcm PE=3 SV=1
+300851 sp|A6WR22|PIMT_SHEB8  Protein-L-isoaspartate O-methyltransferase OS=Shewanella baltica (strain OS185) GN=pcm PE=3 SV=1
+300852 sp|A9KYG4|PIMT_SHEB9  Protein-L-isoaspartate O-methyltransferase OS=Shewanella baltica (strain OS195) GN=pcm PE=3 SV=1
+300853 sp|Q12PY8|PIMT_SHEDO  Protein-L-isoaspartate O-methyltransferase OS=Shewanella denitrificans (strain OS217 / ATCC BAA-1090 / DSM 15013) GN=pcm PE=3 SV=1
+300854 sp|Q086A4|PIMT_SHEFN  Protein-L-isoaspartate O-methyltransferase OS=Shewanella frigidimarina (strain NCIMB 400) GN=pcm PE=3 SV=1
+300855 sp|B0TK10|PIMT_SHEHH  Protein-L-isoaspartate O-methyltransferase OS=Shewanella halifaxensis (strain HAW-EB4) GN=pcm PE=3 SV=1
+300856 sp|A3QC83|PIMT_SHELP  Protein-L-isoaspartate O-methyltransferase OS=Shewanella loihica (strain ATCC BAA-1088 / PV-4) GN=pcm PE=3 SV=2
+300857 sp|Q8EBR6|PIMT_SHEON  Protein-L-isoaspartate O-methyltransferase OS=Shewanella oneidensis (strain MR-1) GN=pcm PE=3 SV=1
+300858 sp|A8H1T1|PIMT_SHEPA  Protein-L-isoaspartate O-methyltransferase OS=Shewanella pealeana (strain ATCC 700345 / ANG-SQ1) GN=pcm PE=3 SV=1
+300859 sp|A4Y937|PIMT_SHEPC  Protein-L-isoaspartate O-methyltransferase OS=Shewanella putrefaciens (strain CN-32 / ATCC BAA-453) GN=pcm PE=3 SV=1
+300860 sp|B8CJQ2|PIMT_SHEPW  Protein-L-isoaspartate O-methyltransferase OS=Shewanella piezotolerans (strain WP3 / JCM 13877) GN=pcm PE=3 SV=1
+300861 sp|A0KU88|PIMT_SHESA  Protein-L-isoaspartate O-methyltransferase OS=Shewanella sp. (strain ANA-3) GN=pcm PE=3 SV=1
+300862 sp|Q0HL66|PIMT_SHESM  Protein-L-isoaspartate O-methyltransferase OS=Shewanella sp. (strain MR-4) GN=pcm PE=3 SV=1
+300863 sp|Q0HXG4|PIMT_SHESR  Protein-L-isoaspartate O-methyltransferase OS=Shewanella sp. (strain MR-7) GN=pcm PE=3 SV=1
+300864 sp|A1RHF9|PIMT_SHESW  Protein-L-isoaspartate O-methyltransferase OS=Shewanella sp. (strain W3-18-1) GN=pcm PE=3 SV=1
+300865 sp|B1KPT0|PIMT_SHEWM  Protein-L-isoaspartate O-methyltransferase OS=Shewanella woodyi (strain ATCC 51908 / MS32) GN=pcm PE=3 SV=1
+300866 sp|B2TZI8|PIMT_SHIB3  Protein-L-isoaspartate O-methyltransferase OS=Shigella boydii serotype 18 (strain CDC 3083-94 / BS512) GN=pcm PE=3 SV=1
+300867 sp|Q31XA5|PIMT_SHIBS  Protein-L-isoaspartate O-methyltransferase OS=Shigella boydii serotype 4 (strain Sb227) GN=pcm PE=3 SV=1
+300868 sp|Q32CI7|PIMT_SHIDS  Protein-L-isoaspartate O-methyltransferase OS=Shigella dysenteriae serotype 1 (strain Sd197) GN=pcm PE=3 SV=1
+300869 sp|Q0T1H4|PIMT_SHIF8  Protein-L-isoaspartate O-methyltransferase OS=Shigella flexneri serotype 5b (strain 8401) GN=pcm PE=3 SV=1
+300870 sp|Q83JY3|PIMT_SHIFL  Protein-L-isoaspartate O-methyltransferase OS=Shigella flexneri GN=pcm PE=3 SV=3
+300871 sp|Q3YYB9|PIMT_SHISS  Protein-L-isoaspartate O-methyltransferase OS=Shigella sonnei (strain Ss046) GN=pcm PE=3 SV=1
+300872 sp|Q2NVM1|PIMT_SODGM  Protein-L-isoaspartate O-methyltransferase OS=Sodalis glossinidius (strain morsitans) GN=pcm PE=3 SV=1
+300873 sp|A3DMG3|PIMT_STAMF  Protein-L-isoaspartate O-methyltransferase OS=Staphylothermus marinus (strain ATCC 43588 / DSM 3639 / JCM 9404 / F1) GN=pcm PE=3 SV=1
+300874 sp|B4SR93|PIMT_STRM5  Protein-L-isoaspartate O-methyltransferase OS=Stenotrophomonas maltophilia (strain R551-3) GN=pcm PE=3 SV=1
+300875 sp|B2FK95|PIMT_STRMK  Protein-L-isoaspartate O-methyltransferase OS=Stenotrophomonas maltophilia (strain K279a) GN=pcm PE=3 SV=1
+300876 sp|Q2LUT4|PIMT_SYNAS  Protein-L-isoaspartate O-methyltransferase OS=Syntrophus aciditrophicus (strain SB) GN=pcm PE=3 SV=1
+300877 sp|Q2JJN4|PIMT_SYNJB  Protein-L-isoaspartate O-methyltransferase OS=Synechococcus sp. (strain JA-2-3B'a(2-13)) GN=pcm PE=3 SV=1
+300878 sp|B1XQE1|PIMT_SYNP2  Protein-L-isoaspartate O-methyltransferase OS=Synechococcus sp. (strain ATCC 27264 / PCC 7002 / PR-6) GN=pcm PE=3 SV=1
+300879 sp|A6LNM3|PIMT_THEM4  Protein-L-isoaspartate O-methyltransferase OS=Thermosipho melanesiensis (strain DSM 12029 / CIP 104789 / BI429) GN=pcm PE=3 SV=1
+300880 sp|Q56308|PIMT_THEMA  Protein-L-isoaspartate O-methyltransferase OS=Thermotoga maritima (strain ATCC 43589 / MSB8 / DSM 3109 / JCM 10099) GN=pcm PE=1 SV=1
+300881 sp|B6YX51|PIMT_THEON  Protein-L-isoaspartate O-methyltransferase OS=Thermococcus onnurineus (strain NA1) GN=pcm PE=3 SV=1
+300882 sp|C6A3F2|PIMT_THESM  Protein-L-isoaspartate O-methyltransferase OS=Thermococcus sibiricus (strain MM 739 / DSM 12597) GN=pcm PE=3 SV=1
+300883 sp|Q3SKJ2|PIMT_THIDA  Protein-L-isoaspartate O-methyltransferase OS=Thiobacillus denitrificans (strain ATCC 25259) GN=pcm PE=3 SV=1
+300884 sp|A5F9C1|PIMT_VIBC3  Protein-L-isoaspartate O-methyltransferase OS=Vibrio cholerae serotype O1 (strain ATCC 39541 / Classical Ogawa 395 / O395) GN=pcm PE=1 SV=1
+300885 sp|A7MTT6|PIMT_VIBCB  Protein-L-isoaspartate O-methyltransferase OS=Vibrio campbellii (strain ATCC BAA-1116 / BB120) GN=pcm PE=3 SV=1
+300886 sp|Q9KUI8|PIMT_VIBCH  Protein-L-isoaspartate O-methyltransferase OS=Vibrio cholerae serotype O1 (strain ATCC 39315 / El Tor Inaba N16961) GN=pcm PE=3 SV=1
+300887 sp|C3LS22|PIMT_VIBCM  Protein-L-isoaspartate O-methyltransferase OS=Vibrio cholerae serotype O1 (strain M66-2) GN=pcm PE=3 SV=1
+300888 sp|Q5E332|PIMT_VIBF1  Protein-L-isoaspartate O-methyltransferase OS=Vibrio fischeri (strain ATCC 700601 / ES114) GN=pcm PE=3 SV=1
+300889 sp|B5FAF3|PIMT_VIBFM  Protein-L-isoaspartate O-methyltransferase OS=Vibrio fischeri (strain MJ11) GN=pcm PE=3 SV=1
+300890 sp|Q87LQ6|PIMT_VIBPA  Protein-L-isoaspartate O-methyltransferase OS=Vibrio parahaemolyticus serotype O3:K6 (strain RIMD 2210633) GN=pcm PE=3 SV=1
+300891 sp|B7VK62|PIMT_VIBTL  Protein-L-isoaspartate O-methyltransferase OS=Vibrio tasmaniensis (strain LGP32) GN=pcm PE=3 SV=1
+300892 sp|Q8DC56|PIMT_VIBVU  Protein-L-isoaspartate O-methyltransferase OS=Vibrio vulnificus (strain CMCP6) GN=pcm PE=3 SV=1
+300893 sp|Q7MHQ8|PIMT_VIBVY  Protein-L-isoaspartate O-methyltransferase OS=Vibrio vulnificus (strain YJ016) GN=pcm PE=3 SV=1
+300894 sp|Q43209|PIMT_WHEAT  Protein-L-isoaspartate O-methyltransferase OS=Triticum aestivum GN=PCM PE=1 SV=1
+300895 sp|Q8PLR3|PIMT_XANAC  Protein-L-isoaspartate O-methyltransferase OS=Xanthomonas axonopodis pv. citri (strain 306) GN=pcm PE=3 SV=1
+300896 sp|Q3BUS3|PIMT_XANC5  Protein-L-isoaspartate O-methyltransferase OS=Xanthomonas campestris pv. vesicatoria (strain 85-10) GN=pcm PE=3 SV=1
+300897 sp|Q4UTP9|PIMT_XANC8  Protein-L-isoaspartate O-methyltransferase OS=Xanthomonas campestris pv. campestris (strain 8004) GN=pcm PE=3 SV=1
+300898 sp|B0RTZ8|PIMT_XANCB  Protein-L-isoaspartate O-methyltransferase OS=Xanthomonas campestris pv. campestris (strain B100) GN=pcm PE=3 SV=1
+300899 sp|Q8P9Y6|PIMT_XANCP  Protein-L-isoaspartate O-methyltransferase OS=Xanthomonas campestris pv. campestris (strain ATCC 33913 / DSM 3586 / NCPPB 528 / LMG 568 / P 25) GN=pcm PE=3 SV=1
+300900 sp|Q2P1L5|PIMT_XANOM  Protein-L-isoaspartate O-methyltransferase OS=Xanthomonas oryzae pv. oryzae (strain MAFF 311018) GN=pcm PE=3 SV=1
+300901 sp|B2SUB3|PIMT_XANOP  Protein-L-isoaspartate O-methyltransferase OS=Xanthomonas oryzae pv. oryzae (strain PXO99A) GN=pcm PE=3 SV=1
+300902 sp|Q5GYL2|PIMT_XANOR  Protein-L-isoaspartate O-methyltransferase OS=Xanthomonas oryzae pv. oryzae (strain KACC10331 / KXO85) GN=pcm PE=3 SV=1
+300903 sp|A7INP1|PIMT_XANP2  Protein-L-isoaspartate O-methyltransferase OS=Xanthobacter autotrophicus (strain ATCC BAA-1158 / Py2) GN=pcm PE=3 SV=1
+300904 sp|B2I8X8|PIMT_XYLF2  Protein-L-isoaspartate O-methyltransferase OS=Xylella fastidiosa (strain M23) GN=pcm PE=3 SV=1
+300905 sp|Q9PF21|PIMT_XYLFA  Protein-L-isoaspartate O-methyltransferase OS=Xylella fastidiosa (strain 9a5c) GN=pcm PE=3 SV=1
+300906 sp|B0U4U6|PIMT_XYLFM  Protein-L-isoaspartate O-methyltransferase OS=Xylella fastidiosa (strain M12) GN=pcm PE=3 SV=1
+300907 sp|Q87AK5|PIMT_XYLFT  Protein-L-isoaspartate O-methyltransferase OS=Xylella fastidiosa (strain Temecula1 / ATCC 700964) GN=pcm PE=3 SV=1
+300908 sp|A1JJT8|PIMT_YERE8  Protein-L-isoaspartate O-methyltransferase OS=Yersinia enterocolitica serotype O:8 / biotype 1B (strain NCTC 13174 / 8081) GN=pcm PE=3 SV=1
+300909 sp|A7FLX4|PIMT_YERP3  Protein-L-isoaspartate O-methyltransferase OS=Yersinia pseudotuberculosis serotype O:1b (strain IP 31758) GN=pcm PE=3 SV=1
+300910 sp|Q1C474|PIMT_YERPA  Protein-L-isoaspartate O-methyltransferase OS=Yersinia pestis bv. Antiqua (strain Antiqua) GN=pcm PE=3 SV=1
+300911 sp|B2K581|PIMT_YERPB  Protein-L-isoaspartate O-methyltransferase OS=Yersinia pseudotuberculosis serotype IB (strain PB1/+) GN=pcm PE=3 SV=1
+300912 sp|Q8ZBQ0|PIMT_YERPE  Protein-L-isoaspartate O-methyltransferase OS=Yersinia pestis GN=pcm PE=3 SV=1
+300913 sp|A9R115|PIMT_YERPG  Protein-L-isoaspartate O-methyltransferase OS=Yersinia pestis bv. Antiqua (strain Angola) GN=pcm PE=3 SV=1
+300914 sp|Q1CLR2|PIMT_YERPN  Protein-L-isoaspartate O-methyltransferase OS=Yersinia pestis bv. Antiqua (strain Nepal516) GN=pcm PE=3 SV=1
+300915 sp|A4TQ01|PIMT_YERPP  Protein-L-isoaspartate O-methyltransferase OS=Yersinia pestis (strain Pestoides F) GN=pcm PE=3 SV=1
+300916 sp|Q66EB9|PIMT_YERPS  Protein-L-isoaspartate O-methyltransferase OS=Yersinia pseudotuberculosis serotype I (strain IP32953) GN=pcm PE=3 SV=1
+300917 sp|B1JJF4|PIMT_YERPY  Protein-L-isoaspartate O-methyltransferase OS=Yersinia pseudotuberculosis serotype O:3 (strain YPIII) GN=pcm PE=3 SV=1
+310256 sp|B9E043|PRMA_CLOK1  Ribosomal protein L11 methyltransferase OS=Clostridium kluyveri (strain NBRC 12016) GN=prmA PE=3 SV=1
+310257 sp|A5N6M4|PRMA_CLOK5  Ribosomal protein L11 methyltransferase OS=Clostridium kluyveri (strain ATCC 8527 / DSM 555 / NCIMB 10680) GN=prmA PE=3 SV=1
+310641 sp|Q89AT0|PRMC_BUCBP  Release factor glutamine methyltransferase OS=Buchnera aphidicola subsp. Baizongia pistaciae (strain Bp) GN=prmC PE=3 SV=1
+310697 sp|Q8PC99|PRMC_XANCP  Release factor glutamine methyltransferase OS=Xanthomonas campestris pv. campestris (strain ATCC 33913 / DSM 3586 / NCPPB 528 / LMG 568 / P 25) GN=prmC PE=3 SV=1
+377685 sp|Q0VP26|RLMD_ALCBS  23S rRNA (uracil(1939)-C(5))-methyltransferase RlmD OS=Alcanivorax borkumensis (strain ATCC 700651 / DSM 11573 / NCIMB 13689 / SK2) GN=rlmD PE=3 SV=1
+377708 sp|A8ANZ1|RLMD_CITK8  23S rRNA (uracil(1939)-C(5))-methyltransferase RlmD OS=Citrobacter koseri (strain ATCC BAA-895 / CDC 4225-83 / SGSC4696) GN=rlmD PE=3 SV=1
+377710 sp|A7MQZ8|RLMD_CROS8  23S rRNA (uracil(1939)-C(5))-methyltransferase RlmD OS=Cronobacter sakazakii (strain ATCC BAA-894) GN=rlmD PE=3 SV=1
+377716 sp|Q8XED8|RLMD_ECO57  23S rRNA (uracil(1939)-C(5))-methyltransferase RlmD OS=Escherichia coli O157:H7 GN=rlmD PE=3 SV=3
+377717 sp|A1AEX2|RLMD_ECOK1  23S rRNA (uracil(1939)-C(5))-methyltransferase RlmD OS=Escherichia coli O1:K1 / APEC GN=rlmD PE=3 SV=1
+377718 sp|Q0TE74|RLMD_ECOL5  23S rRNA (uracil(1939)-C(5))-methyltransferase RlmD OS=Escherichia coli O6:K15:H31 (strain 536 / UPEC) GN=rlmD PE=3 SV=1
+377719 sp|Q8FEG6|RLMD_ECOL6  23S rRNA (uracil(1939)-C(5))-methyltransferase RlmD OS=Escherichia coli O6:H1 (strain CFT073 / ATCC 700928 / UPEC) GN=rlmD PE=3 SV=3
+377720 sp|P55135|RLMD_ECOLI  23S rRNA (uracil(1939)-C(5))-methyltransferase RlmD OS=Escherichia coli (strain K12) GN=rlmD PE=1 SV=3
+377721 sp|Q1R7Q7|RLMD_ECOUT  23S rRNA (uracil(1939)-C(5))-methyltransferase RlmD OS=Escherichia coli (strain UTI89 / UPEC) GN=rlmD PE=3 SV=1
+377722 sp|C5B8X6|RLMD_EDWI9  23S rRNA (uracil(1939)-C(5))-methyltransferase RlmD OS=Edwardsiella ictaluri (strain 93-146) GN=rlmD PE=3 SV=1
+377723 sp|A4WDX1|RLMD_ENT38  23S rRNA (uracil(1939)-C(5))-methyltransferase RlmD OS=Enterobacter sp. (strain 638) GN=rlmD PE=3 SV=1
+377724 sp|B2VFZ2|RLMD_ERWT9  23S rRNA (uracil(1939)-C(5))-methyltransferase RlmD OS=Erwinia tasmaniensis (strain DSM 17950 / Et1/99) GN=rlmD PE=3 SV=1
+377732 sp|Q4QNK7|RLMD_HAEI8  23S rRNA (uracil(1939)-C(5))-methyltransferase RlmD OS=Haemophilus influenzae (strain 86-028NP) GN=rlmD PE=3 SV=1
+377733 sp|P44643|RLMD_HAEIN  23S rRNA (uracil(1939)-C(5))-methyltransferase RlmD OS=Haemophilus influenzae (strain ATCC 51907 / DSM 11121 / KW20 / Rd) GN=rlmD PE=3 SV=1
+377735 sp|Q0I127|RLMD_HAES1  23S rRNA (uracil(1939)-C(5))-methyltransferase RlmD OS=Haemophilus somnus (strain 129Pt) GN=rlmD PE=3 SV=1
+377739 sp|B5XV15|RLMD_KLEP3  23S rRNA (uracil(1939)-C(5))-methyltransferase RlmD OS=Klebsiella pneumoniae (strain 342) GN=rlmD PE=3 SV=1
+377740 sp|A6TD57|RLMD_KLEP7  23S rRNA (uracil(1939)-C(5))-methyltransferase RlmD OS=Klebsiella pneumoniae subsp. pneumoniae (strain ATCC 700721 / MGH 78578) GN=rlmD PE=3 SV=1
+377746 sp|A1U2U9|RLMD_MARHV  23S rRNA (uracil(1939)-C(5))-methyltransferase RlmD OS=Marinobacter hydrocarbonoclasticus (strain ATCC 700491 / DSM 11845 / VT8) GN=rlmD PE=3 SV=1
+377754 sp|Q3JCY2|RLMD_NITOC  23S rRNA (uracil(1939)-C(5))-methyltransferase RlmD OS=Nitrosococcus oceani (strain ATCC 19707 / NCIMB 11848) GN=rlmD PE=3 SV=1
+377755 sp|Q9CJX3|RLMD_PASMU  23S rRNA (uracil(1939)-C(5))-methyltransferase RlmD OS=Pasteurella multocida (strain Pm70) GN=rlmD PE=3 SV=1
+377756 sp|Q6D178|RLMD_PECAS  23S rRNA (uracil(1939)-C(5))-methyltransferase RlmD OS=Pectobacterium atrosepticum (strain SCRI 1043 / ATCC BAA-672) GN=rlmD PE=3 SV=1
+377757 sp|C6DDJ9|RLMD_PECCP  23S rRNA (uracil(1939)-C(5))-methyltransferase RlmD OS=Pectobacterium carotovorum subsp. carotovorum (strain PC1) GN=rlmD PE=3 SV=1
+377759 sp|Q7N839|RLMD_PHOLL  23S rRNA (uracil(1939)-C(5))-methyltransferase RlmD OS=Photorhabdus luminescens subsp. laumondii (strain DSM 15139 / CIP 105565 / TT01) GN=rlmD PE=3 SV=1
+377760 sp|Q6LMS7|RLMD_PHOPR  23S rRNA (uracil(1939)-C(5))-methyltransferase RlmD OS=Photobacterium profundum GN=rlmD PE=3 SV=2
+377762 sp|B1XU70|RLMD_POLNS  23S rRNA (uracil(1939)-C(5))-methyltransferase RlmD OS=Polynucleobacter necessarius subsp. necessarius (strain STIR1) GN=rlmD PE=3 SV=1
+377764 sp|B4EUF2|RLMD_PROMH  23S rRNA (uracil(1939)-C(5))-methyltransferase RlmD OS=Proteus mirabilis (strain HI4320) GN=rlmD PE=3 SV=1
+377771 sp|Q3K8E9|RLMD_PSEPF  23S rRNA (uracil(1939)-C(5))-methyltransferase RlmD OS=Pseudomonas fluorescens (strain Pf0-1) GN=rlmD PE=3 SV=1
+377782 sp|Q57KF9|RLMD_SALCH  23S rRNA (uracil(1939)-C(5))-methyltransferase RlmD OS=Salmonella choleraesuis (strain SC-B67) GN=rlmD PE=3 SV=1
+377783 sp|Q5PEJ4|RLMD_SALPA  23S rRNA (uracil(1939)-C(5))-methyltransferase RlmD OS=Salmonella paratyphi A (strain ATCC 9150 / SARB42) GN=rlmD PE=3 SV=1
+377784 sp|Q8Z446|RLMD_SALTI  23S rRNA (uracil(1939)-C(5))-methyltransferase RlmD OS=Salmonella typhi GN=rlmD PE=3 SV=3
+377785 sp|Q8ZME1|RLMD_SALTY  23S rRNA (uracil(1939)-C(5))-methyltransferase RlmD OS=Salmonella typhimurium (strain LT2 / SGSC1412 / ATCC 700720) GN=rlmD PE=3 SV=3
+377787 sp|B8E8S1|RLMD_SHEB2  23S rRNA (uracil(1939)-C(5))-methyltransferase RlmD OS=Shewanella baltica (strain OS223) GN=rlmD PE=3 SV=1
+377788 sp|A3D7B5|RLMD_SHEB5  23S rRNA (uracil(1939)-C(5))-methyltransferase RlmD OS=Shewanella baltica (strain OS155 / ATCC BAA-1091) GN=rlmD PE=3 SV=1
+377789 sp|A6WR37|RLMD_SHEB8  23S rRNA (uracil(1939)-C(5))-methyltransferase RlmD OS=Shewanella baltica (strain OS185) GN=rlmD PE=3 SV=1
+377790 sp|A9KYI1|RLMD_SHEB9  23S rRNA (uracil(1939)-C(5))-methyltransferase RlmD OS=Shewanella baltica (strain OS195) GN=rlmD PE=3 SV=1
+377793 sp|B0TK00|RLMD_SHEHH  23S rRNA (uracil(1939)-C(5))-methyltransferase RlmD OS=Shewanella halifaxensis (strain HAW-EB4) GN=rlmD PE=3 SV=1
+377794 sp|Q8EBQ3|RLMD_SHEON  23S rRNA (uracil(1939)-C(5))-methyltransferase RlmD OS=Shewanella oneidensis (strain MR-1) GN=rlmD PE=3 SV=1
+377796 sp|A4Y952|RLMD_SHEPC  23S rRNA (uracil(1939)-C(5))-methyltransferase RlmD OS=Shewanella putrefaciens (strain CN-32 / ATCC BAA-453) GN=rlmD PE=3 SV=1
+377798 sp|A0KU76|RLMD_SHESA  23S rRNA (uracil(1939)-C(5))-methyltransferase RlmD OS=Shewanella sp. (strain ANA-3) GN=rlmD PE=3 SV=1
+377799 sp|A8FSS4|RLMD_SHESH  23S rRNA (uracil(1939)-C(5))-methyltransferase RlmD OS=Shewanella sediminis (strain HAW-EB3) GN=rlmD PE=3 SV=1
+377800 sp|Q0HL77|RLMD_SHESM  23S rRNA (uracil(1939)-C(5))-methyltransferase RlmD OS=Shewanella sp. (strain MR-4) GN=rlmD PE=3 SV=2
+377801 sp|Q0HXI0|RLMD_SHESR  23S rRNA (uracil(1939)-C(5))-methyltransferase RlmD OS=Shewanella sp. (strain MR-7) GN=rlmD PE=3 SV=2
+377802 sp|A1RHE4|RLMD_SHESW  23S rRNA (uracil(1939)-C(5))-methyltransferase RlmD OS=Shewanella sp. (strain W3-18-1) GN=rlmD PE=3 SV=1
+377803 sp|B1KPU0|RLMD_SHEWM  23S rRNA (uracil(1939)-C(5))-methyltransferase RlmD OS=Shewanella woodyi (strain ATCC 51908 / MS32) GN=rlmD PE=3 SV=1
+377804 sp|Q31XK5|RLMD_SHIBS  23S rRNA (uracil(1939)-C(5))-methyltransferase RlmD OS=Shigella boydii serotype 4 (strain Sb227) GN=rlmD PE=3 SV=1
+377805 sp|Q32CD0|RLMD_SHIDS  23S rRNA (uracil(1939)-C(5))-methyltransferase RlmD OS=Shigella dysenteriae serotype 1 (strain Sd197) GN=rlmD PE=3 SV=1
+377806 sp|Q0T1Q1|RLMD_SHIF8  23S rRNA (uracil(1939)-C(5))-methyltransferase RlmD OS=Shigella flexneri serotype 5b (strain 8401) GN=rlmD PE=3 SV=1
+377807 sp|Q83QD5|RLMD_SHIFL  23S rRNA (uracil(1939)-C(5))-methyltransferase RlmD OS=Shigella flexneri GN=rlmD PE=3 SV=3
+377808 sp|Q3YY71|RLMD_SHISS  23S rRNA (uracil(1939)-C(5))-methyltransferase RlmD OS=Shigella sonnei (strain Ss046) GN=rlmD PE=3 SV=1
+377809 sp|B4SRK6|RLMD_STRM5  23S rRNA (uracil(1939)-C(5))-methyltransferase RlmD OS=Stenotrophomonas maltophilia (strain R551-3) GN=rlmD PE=3 SV=1
+377810 sp|B2FPX2|RLMD_STRMK  23S rRNA (uracil(1939)-C(5))-methyltransferase RlmD OS=Stenotrophomonas maltophilia (strain K279a) GN=rlmD PE=3 SV=1
+377816 sp|A5F5I8|RLMD_VIBC3  23S rRNA (uracil(1939)-C(5))-methyltransferase RlmD OS=Vibrio cholerae serotype O1 (strain ATCC 39541 / Classical Ogawa 395 / O395) GN=rlmD PE=3 SV=1
+377818 sp|Q9KPC1|RLMD_VIBCH  23S rRNA (uracil(1939)-C(5))-methyltransferase RlmD OS=Vibrio cholerae serotype O1 (strain ATCC 39315 / El Tor Inaba N16961) GN=rlmD PE=3 SV=1
+377819 sp|C3LQZ5|RLMD_VIBCM  23S rRNA (uracil(1939)-C(5))-methyltransferase RlmD OS=Vibrio cholerae serotype O1 (strain M66-2) GN=rlmD PE=3 SV=1
+377826 sp|Q8PMU6|RLMD_XANAC  23S rRNA (uracil(1939)-C(5))-methyltransferase RlmD OS=Xanthomonas axonopodis pv. citri (strain 306) GN=rlmD PE=3 SV=1
+377827 sp|Q3BVV1|RLMD_XANC5  23S rRNA (uracil(1939)-C(5))-methyltransferase RlmD OS=Xanthomonas campestris pv. vesicatoria (strain 85-10) GN=rlmD PE=3 SV=2
+377828 sp|Q4USG1|RLMD_XANC8  23S rRNA (uracil(1939)-C(5))-methyltransferase RlmD OS=Xanthomonas campestris pv. campestris (strain 8004) GN=rlmD PE=3 SV=1
+377829 sp|Q8PB48|RLMD_XANCP  23S rRNA (uracil(1939)-C(5))-methyltransferase RlmD OS=Xanthomonas campestris pv. campestris (strain ATCC 33913 / DSM 3586 / NCPPB 528 / LMG 568 / P 25) GN=rlmD PE=3 SV=1
+377830 sp|Q2P4L7|RLMD_XANOM  23S rRNA (uracil(1939)-C(5))-methyltransferase RlmD OS=Xanthomonas oryzae pv. oryzae (strain MAFF 311018) GN=rlmD PE=3 SV=2
+377831 sp|Q5H1Q8|RLMD_XANOR  23S rRNA (uracil(1939)-C(5))-methyltransferase RlmD OS=Xanthomonas oryzae pv. oryzae (strain KACC10331 / KXO85) GN=rlmD PE=3 SV=2
+377834 sp|A1JJR0|RLMD_YERE8  23S rRNA (uracil(1939)-C(5))-methyltransferase RlmD OS=Yersinia enterocolitica serotype O:8 / biotype 1B (strain NCTC 13174 / 8081) GN=rlmD PE=3 SV=1
+412387 sp|Q9KGK4|RSMA_BACHD  Ribosomal RNA small subunit methyltransferase A OS=Bacillus halodurans (strain ATCC BAA-125 / DSM 18197 / FERM 7344 / JCM 9153 / C-125) GN=rsmA PE=3 SV=1
+412454 sp|Q8RDC8|RSMA_CALS4  Ribosomal RNA small subunit methyltransferase A OS=Caldanaerobacter subterraneus subsp. tengcongensis (strain DSM 15242 / JCM 11007 / NBRC 100824 / MB4) GN=rsmA PE=3 SV=1
+412461 sp|Q3A8X5|RSMA_CARHZ  Ribosomal RNA small subunit methyltransferase A OS=Carboxydothermus hydrogenoformans (strain ATCC BAA-161 / DSM 6008 / Z-2901) GN=rsmA PE=3 SV=1
+412497 sp|A4QCP0|RSMA_CORGB  Ribosomal RNA small subunit methyltransferase A OS=Corynebacterium glutamicum (strain R) GN=rsmA PE=3 SV=1
+412498 sp|Q8NRY1|RSMA_CORGL  Ribosomal RNA small subunit methyltransferase A OS=Corynebacterium glutamicum (strain ATCC 13032 / DSM 20300 / JCM 1318 / LMG 3730 / NCIMB 10025) GN=rsmA PE=3 SV=1
+412521 sp|C0QFJ2|RSMA_DESAH  Ribosomal RNA small subunit methyltransferase A OS=Desulfobacterium autotrophicum (strain ATCC 43914 / DSM 3382 / HRM2) GN=rsmA PE=3 SV=1
+412571 sp|Q8R6B1|RSMA_FUSNN  Ribosomal RNA small subunit methyltransferase A OS=Fusobacterium nucleatum subsp. nucleatum (strain ATCC 25586 / CIP 101130 / JCM 8532 / LMG 13131) GN=rsmA PE=3 SV=1
+412573 sp|Q39W34|RSMA_GEOMG  Ribosomal RNA small subunit methyltransferase A OS=Geobacter metallireducens (strain GS-15 / ATCC 53774 / DSM 7210) GN=rsmA PE=3 SV=1
+412607 sp|A6W6U4|RSMA_KINRD  Ribosomal RNA small subunit methyltransferase A OS=Kineococcus radiotolerans (strain ATCC BAA-149 / DSM 14245 / SRS30216) GN=rsmA PE=3 SV=1
+412633 sp|Q92F79|RSMA_LISIN  Ribosomal RNA small subunit methyltransferase A OS=Listeria innocua serovar 6a (strain CLIP 11262) GN=rsmA PE=3 SV=1
+412634 sp|C1KYC1|RSMA_LISMC  Ribosomal RNA small subunit methyltransferase A OS=Listeria monocytogenes serotype 4b (strain CLIP80459) GN=rsmA PE=3 SV=1
+412635 sp|Q724M5|RSMA_LISMF  Ribosomal RNA small subunit methyltransferase A OS=Listeria monocytogenes serotype 4b (strain F2365) GN=rsmA PE=3 SV=1
+412636 sp|B8DGN7|RSMA_LISMH  Ribosomal RNA small subunit methyltransferase A OS=Listeria monocytogenes serotype 4a (strain HCC23) GN=rsmA PE=3 SV=1
+412637 sp|Q8YAE2|RSMA_LISMO  Ribosomal RNA small subunit methyltransferase A OS=Listeria monocytogenes serovar 1/2a (strain ATCC BAA-679 / EGD-e) GN=rsmA PE=3 SV=1
+412649 sp|Q8TQU8|RSMA_METAC  Probable ribosomal RNA small subunit methyltransferase A OS=Methanosarcina acetivorans (strain ATCC 35395 / DSM 2834 / JCM 12185 / C2A) GN=rsmA PE=3 SV=1
+412650 sp|Q466S6|RSMA_METBF  Probable ribosomal RNA small subunit methyltransferase A OS=Methanosarcina barkeri (strain Fusaro / DSM 804) GN=rsmA PE=3 SV=1
+412654 sp|Q2FSA9|RSMA_METHJ  Probable ribosomal RNA small subunit methyltransferase A OS=Methanospirillum hungatei JF-1 (strain ATCC 27890 / DSM 864 / NBRC 100397 / JF-1) GN=rsmA PE=3 SV=1
+412655 sp|Q58435|RSMA_METJA  Probable ribosomal RNA small subunit methyltransferase A OS=Methanocaldococcus jannaschii (strain ATCC 43067 / DSM 2661 / JAL-1 / JCM 10045 / NBRC 100440) GN=rsmA PE=1 SV=1
+412660 sp|Q8PU18|RSMA_METMA  Probable ribosomal RNA small subunit methyltransferase A OS=Methanosarcina mazei (strain ATCC BAA-159 / DSM 3647 / Goe1 / Go1 / JCM 11833 / OCM 88) GN=rsmA PE=3 SV=2
+412665 sp|O27381|RSMA_METTH  Probable ribosomal RNA small subunit methyltransferase A OS=Methanothermobacter thermautotrophicus (strain ATCC 29096 / DSM 1053 / JCM 10044 / NBRC 100330 / Delta H) GN=rsmA PE=3 SV=1
+412685 sp|Q8EU92|RSMA_MYCPE  Ribosomal RNA small subunit methyltransferase A OS=Mycoplasma penetrans (strain HF-2) GN=rsmA PE=3 SV=1
+412781 sp|Q7UIR4|RSMA_RHOBA  Ribosomal RNA small subunit methyltransferase A OS=Rhodopirellula baltica (strain DSM 10527 / NCIMB 13988 / SH1) GN=rsmA PE=3 SV=1
+412888 sp|Q04II4|RSMA_STRP2  Ribosomal RNA small subunit methyltransferase A OS=Streptococcus pneumoniae serotype 2 (strain D39 / NCTC 7466) GN=rsmA PE=3 SV=1
+412890 sp|B5E2H6|RSMA_STRP4  Ribosomal RNA small subunit methyltransferase A OS=Streptococcus pneumoniae serotype 19F (strain G54) GN=rsmA PE=3 SV=1
+412892 sp|C1CA29|RSMA_STRP7  Ribosomal RNA small subunit methyltransferase A OS=Streptococcus pneumoniae (strain 70585) GN=rsmA PE=3 SV=1
+412899 sp|B1I8T7|RSMA_STRPI  Ribosomal RNA small subunit methyltransferase A OS=Streptococcus pneumoniae (strain Hungary19A-6) GN=rsmA PE=3 SV=1
+412900 sp|B8ZNY9|RSMA_STRPJ  Ribosomal RNA small subunit methyltransferase A OS=Streptococcus pneumoniae (strain ATCC 700669 / Spain 23F-1) GN=rsmA PE=3 SV=1
+412902 sp|Q97NN5|RSMA_STRPN  Ribosomal RNA small subunit methyltransferase A OS=Streptococcus pneumoniae serotype 4 (strain ATCC BAA-334 / TIGR4) GN=rsmA PE=3 SV=2
+412904 sp|B2IM67|RSMA_STRPS  Ribosomal RNA small subunit methyltransferase A OS=Streptococcus pneumoniae (strain CGSP14) GN=rsmA PE=3 SV=1
+412905 sp|Q8DND3|RSMA_STRR6  Ribosomal RNA small subunit methyltransferase A OS=Streptococcus pneumoniae (strain ATCC BAA-255 / R6) GN=rsmA PE=3 SV=1
+412912 sp|C1CGR5|RSMA_STRZJ  Ribosomal RNA small subunit methyltransferase A OS=Streptococcus pneumoniae (strain JJA) GN=rsmA PE=3 SV=1
+412913 sp|C1CMT3|RSMA_STRZP  Ribosomal RNA small subunit methyltransferase A OS=Streptococcus pneumoniae (strain P1031) GN=rsmA PE=3 SV=1
+412914 sp|C1CTN9|RSMA_STRZT  Ribosomal RNA small subunit methyltransferase A OS=Streptococcus pneumoniae (strain Taiwan19F-14) GN=rsmA PE=3 SV=1
+412918 sp|Q2LSQ6|RSMA_SYNAS  Ribosomal RNA small subunit methyltransferase A OS=Syntrophus aciditrophicus (strain SB) GN=rsmA PE=3 SV=1
+412919 sp|Q31RH6|RSMA_SYNE7  Ribosomal RNA small subunit methyltransferase A OS=Synechococcus elongatus (strain PCC 7942) GN=rsmA PE=3 SV=1
+412923 sp|Q5N2S8|RSMA_SYNP6  Ribosomal RNA small subunit methyltransferase A OS=Synechococcus sp. (strain ATCC 27144 / PCC 6301 / SAUG 1402/1) GN=rsmA PE=3 SV=1
+412931 sp|P59157|RSMA_THEEB  Ribosomal RNA small subunit methyltransferase A OS=Thermosynechococcus elongatus (strain BP-1) GN=rsmA PE=3 SV=1
+412932 sp|Q47SX4|RSMA_THEFY  Ribosomal RNA small subunit methyltransferase A OS=Thermobifida fusca (strain YX) GN=rsmA PE=3 SV=1
+412935 sp|Q9X1F1|RSMA_THEMA  Ribosomal RNA small subunit methyltransferase A OS=Thermotoga maritima (strain ATCC 43589 / MSB8 / DSM 3109 / JCM 10099) GN=rsmA PE=3 SV=1
+412936 sp|B9K8F0|RSMA_THENN  Ribosomal RNA small subunit methyltransferase A OS=Thermotoga neapolitana (strain ATCC 49049 / DSM 4359 / NS-E) GN=rsmA PE=3 SV=1
+412938 sp|A5IME8|RSMA_THEP1  Ribosomal RNA small subunit methyltransferase A OS=Thermotoga petrophila (strain RKU-1 / ATCC BAA-488 / DSM 13995) GN=rsmA PE=3 SV=1
+412940 sp|B1LBH5|RSMA_THESQ  Ribosomal RNA small subunit methyltransferase A OS=Thermotoga sp. (strain RQ2) GN=rsmA PE=3 SV=1
+412947 sp|O83357|RSMA_TREPA  Ribosomal RNA small subunit methyltransferase A OS=Treponema pallidum (strain Nichols) GN=rsmA PE=3 SV=1
+412948 sp|B2S2T4|RSMA_TREPS  Ribosomal RNA small subunit methyltransferase A OS=Treponema pallidum subsp. pallidum (strain SS14) GN=rsmA PE=3 SV=1
+413497 sp|Q97CW4|RSMG_CLOAB  Ribosomal RNA small subunit methyltransferase G OS=Clostridium acetobutylicum (strain ATCC 824 / DSM 792 / JCM 1419 / LMG 5710 / VKM B-1787) GN=rsmG PE=3 SV=1
+413598 sp|A5G9V1|RSMG_GEOUR  Ribosomal RNA small subunit methyltransferase G OS=Geobacter uraniireducens (strain Rf4) GN=rsmG PE=3 SV=1
+413742 sp|A6L982|RSMG_PARD8  Ribosomal RNA small subunit methyltransferase G OS=Parabacteroides distasonis (strain ATCC 8503 / DSM 20701 / NCTC 11152) GN=rsmG PE=3 SV=1
+473530 sp|Q755M8|TRM61_ASHGO  tRNA (adenine(58)-N(1))-methyltransferase catalytic subunit TRM61 OS=Ashbya gossypii (strain ATCC 10895 / CBS 109.51 / FGSC 9923 / NRRL Y-1056) GN=TRM61 PE=3 SV=1
+473533 sp|A6H791|TRM61_BOVIN  tRNA (adenine(58)-N(1))-methyltransferase catalytic subunit TRMT61A OS=Bos taurus GN=TRMT61A PE=2 SV=1
+473534 sp|Q5A416|TRM61_CANAL  tRNA (adenine(58)-N(1))-methyltransferase catalytic subunit TRM61 OS=Candida albicans (strain SC5314 / ATCC MYA-2876) GN=TRM61 PE=3 SV=1
+473535 sp|Q6FL77|TRM61_CANGA  tRNA (adenine(58)-N(1))-methyltransferase catalytic subunit TRM61 OS=Candida glabrata (strain ATCC 2001 / CBS 138 / JCM 3761 / NBRC 0622 / NRRL Y-65) GN=TRM61 PE=3 SV=1
+473540 sp|Q96FX7|TRM61_HUMAN  tRNA (adenine(58)-N(1))-methyltransferase catalytic subunit TRMT61A OS=Homo sapiens GN=TRMT61A PE=1 SV=1
+473541 sp|Q6CN53|TRM61_KLULA  tRNA (adenine(58)-N(1))-methyltransferase catalytic subunit TRM61 OS=Kluyveromyces lactis (strain ATCC 8585 / CBS 2359 / DSM 70799 / NBRC 1267 / NRRL Y-1140 / WM37) GN=TRM61 PE=3 SV=1
+473542 sp|Q80XC2|TRM61_MOUSE  tRNA (adenine(58)-N(1))-methyltransferase catalytic subunit TRMT61A OS=Mus musculus GN=Trmt61a PE=1 SV=1
+473543 sp|Q6AY46|TRM61_RAT  tRNA (adenine(58)-N(1))-methyltransferase catalytic subunit TRMT61A OS=Rattus norvegicus GN=Trmt61a PE=2 SV=1
+473546 sp|P46959|TRM61_YEAST  tRNA (adenine(58)-N(1))-methyltransferase catalytic subunit TRM61 OS=Saccharomyces cerevisiae (strain ATCC 204508 / S288c) GN=GCD14 PE=1 SV=1
+475247 sp|Q8GBB2|TRMI_THET2  tRNA (adenine(58)-N(1))-methyltransferase TrmI OS=Thermus thermophilus (strain HB27 / ATCC BAA-163 / DSM 7039) GN=trmI PE=1 SV=2
+475248 sp|Q5SKN4|TRMI_THET8  tRNA (adenine(58)-N(1))-methyltransferase TrmI OS=Thermus thermophilus (strain HB8 / ATCC 27634 / DSM 579) GN=trmI PE=3 SV=1
+475312 sp|A0KPC4|TRMN6_AERHH  tRNA1(Val) (adenine(37)-N6)-methyltransferase OS=Aeromonas hydrophila subsp. hydrophila (strain ATCC 7966 / DSM 30187 / JCM 1027 / KCTC 2358 / NCIMB 9240) GN=AHA_3669 PE=3 SV=1
+475313 sp|A4SRS5|TRMN6_AERS4  tRNA1(Val) (adenine(37)-N6)-methyltransferase OS=Aeromonas salmonicida (strain A449) GN=ASA_3636 PE=3 SV=1
+475321 sp|A7MH06|TRMN6_CROS8  tRNA1(Val) (adenine(37)-N6)-methyltransferase OS=Cronobacter sakazakii (strain ATCC BAA-894) GN=ESA_00683 PE=3 SV=2
+475377 sp|B4F055|TRMN6_PROMH  tRNA1(Val) (adenine(37)-N6)-methyltransferase OS=Proteus mirabilis (strain HI4320) GN=PMI1896 PE=3 SV=1
+475380 sp|A9MGW2|TRMN6_SALAR  tRNA1(Val) (adenine(37)-N6)-methyltransferase OS=Salmonella arizonae (strain ATCC BAA-731 / CDC346-86 / RSK2980) GN=yfiC PE=3 SV=2
+475381 sp|Q57L59|TRMN6_SALCH  tRNA1(Val) (adenine(37)-N6)-methyltransferase OS=Salmonella choleraesuis (strain SC-B67) GN=yfiC PE=3 SV=2
+475382 sp|B5QTV6|TRMN6_SALEP  tRNA1(Val) (adenine(37)-N6)-methyltransferase OS=Salmonella enteritidis PT4 (strain P125109) GN=yfiC PE=3 SV=1
+475383 sp|B5RD57|TRMN6_SALG2  tRNA1(Val) (adenine(37)-N6)-methyltransferase OS=Salmonella gallinarum (strain 287/91 / NCTC 13346) GN=yfiC PE=3 SV=1
+475384 sp|Q5PNB8|TRMN6_SALPA  tRNA1(Val) (adenine(37)-N6)-methyltransferase OS=Salmonella paratyphi A (strain ATCC 9150 / SARB42) GN=yfiC PE=3 SV=1
+475385 sp|A9N0W9|TRMN6_SALPB  tRNA1(Val) (adenine(37)-N6)-methyltransferase OS=Salmonella paratyphi B (strain ATCC BAA-1250 / SPB7) GN=yfiC PE=3 SV=2
+475386 sp|C0PVY6|TRMN6_SALPC  tRNA1(Val) (adenine(37)-N6)-methyltransferase OS=Salmonella paratyphi C (strain RKS4594) GN=yfiC PE=3 SV=2
+475387 sp|B5BAS2|TRMN6_SALPK  tRNA1(Val) (adenine(37)-N6)-methyltransferase OS=Salmonella paratyphi A (strain AKU_12601) GN=yfiC PE=3 SV=1
+475388 sp|Q8Z4J9|TRMN6_SALTI  tRNA1(Val) (adenine(37)-N6)-methyltransferase OS=Salmonella typhi GN=yfiC PE=3 SV=1
+475389 sp|Q8ZMX8|TRMN6_SALTY  tRNA1(Val) (adenine(37)-N6)-methyltransferase OS=Salmonella typhimurium (strain LT2 / SGSC1412 / ATCC 700720) GN=yfiC PE=3 SV=1
+507310 sp|P9WK02|Y089_MYCTO  Uncharacterized methyltransferase MT0098 OS=Mycobacterium tuberculosis (strain CDC 1551 / Oshkosh) GN=MT0098 PE=3 SV=1
+507311 sp|P9WK03|Y089_MYCTU  Uncharacterized methyltransferase Rv0089 OS=Mycobacterium tuberculosis (strain ATCC 25618 / H37Rv) GN=Rv0089 PE=3 SV=1
+507356 sp|P65347|Y092_MYCBO  Uncharacterized methyltransferase Mb0092 OS=Mycobacterium bovis (strain ATCC BAA-935 / AF2122/97) GN=Mb0092 PE=3 SV=1
+510995 sp|B9DN09|Y1399_STACT  Uncharacterized methyltransferase Sca_1399 OS=Staphylococcus carnosus (strain TM300) GN=Sca_1399 PE=3 SV=1
+512313 sp|Q6MAY1|Y1544_PARUW  Uncharacterized RNA methyltransferase pc1544 OS=Protochlamydia amoebophila (strain UWE25) GN=pc1544 PE=3 SV=1
+519 hits found

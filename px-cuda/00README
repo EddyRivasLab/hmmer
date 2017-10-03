@@ -1,0 +1,162 @@
+================
+[0118-esl_dsqdata-redesign]
+Last projections for H4, for M=143 query: 31.2s processing time @ 20Gc/s 
+Expect 31.2/15.6/7.8s on 1/2/4 core
+
+px
+On my mac, which is a quad-processor.
+   sudo purge
+   time ./px -n 1 ~/examples/Caudal_act.hmm ~/src/easel/refprot
+
+                cold                           warm
+        -------------------------     ------------------------
+ncpu     real      user     sys       real      user     sys
+----    ------    ------   ------     -----    -------  ------
+ 1      32.109    34.255    1.896    32.202     34.419   1.161 
+ 2	15.302    32.654    1.141    15.299 	32.621   1.147 
+ 4       9.282    40.300    1.170    10.171     43.769   1.312 
+ 8       8.105    60.771    1.235     8.834 	64.936   1.366 
+16       8.605    62.763    1.371     8.227 	60.502   1.322 
+
+- Slower than first trial (see "race hunting" below), where I found
+  and fixed a race condition. Did that fix slow things down somehow? 
+  Or was it not processing all the data in the first trial version?
+  (I have no check for that!)
+
+- Poor scaling at ncpu=4 (3.5x, not 4x). Rise in user time too.  What
+  does user time measure, w.r.t a threaded program?
+
+  
+
+hmmsearch 3.1b2, clang -O3
+   sudo purge
+   time hmmsearch --cpu 0 ~/examples/Caudal_act.hmm ~/data/refprot.fa > foo
+
+                cold                           warm
+        -------------------------     ------------------------
+ncpu     real      user     sys       real      user     sys
+----    ------    ------   ------     -----    -------  ------
+  0     61.704    58.556    2.766     59.654    57.803   1.763 
+  1     32.846    53.620    2.678     32.306 	52.999   1.788 
+  2     24.072    54.363    2.730     23.038 	54.705   1.869 
+  4     24.378    54.632    3.064     22.789 	54.782   2.106 
+  8     25.009    54.886    3.434     23.818    54.616   2.515 
+
+ - why is --cpu 1 faster than serial, --cpu 0? (is it doing async i/o?)
+ - little cold/warm difference, unlike BLAST
+
+
+ncbi blast 2.3.0+ executables; cold times (using sudo purge), random test query of L=143
+   sudo purge
+   time blastp -query testq -db ~/data/refprot-ncbi -num_threads 1 > foo
+
+                cold                           warm
+        -------------------------     ------------------------
+ncpu     real      user     sys       real      user     sys
+----    ------    ------   ------     -----    -------  ------
+ 1     	69.589    48.665    4.543    37.195     35.894 	 1.257 
+ 2      43.201    42.920    5.279    17.899 	33.035 	 1.293 
+ 4      20.096    35.887    4.312    10.036     36.423   1.378 
+ 8      11.520    41.807    4.582     7.558 	51.532   1.848 
+16       8.383    51.540    5.228     7.303 	52.363   1.926 
+32       8.224    52.557    5.392     7.332     52.351   1.977 
+
+ - Odd that BLAST keeps scaling up to ~16 threads when cold
+
+BLAST db, sum of five files each:
+                 BLAST        HMMER
+headers, .phr : 2088.9M     1411.1M
+index,   .pin :   91.5M      182.9M  : exact 2x diff, prob 64B vs 32B (8B vs 16B per seq) 
+seq,     .psq : 4370.2M     2924.9M  : BLAST is exactly 4358.7 nres + 11.4M nseq = 4370.1 cleartext w/ \0 sentinel
+
+
+
+################
+# Race hunting
+################
+First trial run of px gave a stall at high thread count:
+
+                cold                           warm
+        -------------------------     ------------------------
+ncpu     real      user     sys       real      user     sys
+----    ------    ------   ------     -----    -------  ------
+ 1	31.862 	  34.038    1.786    32.264 	34.474 	 1.128
+ 2      15.404    32.821    1.741    15.272 	32.639   1.093 
+ 4       9.390    40.114    1.904     9.392 	40.494   1.200 
+ 8 	 8.334    60.494    2.079     7.906 	59.368   1.197 
+16       8.436    60.237    2.118     [stalls, reproducibly!]
+
+ - why the stall?
+
+clang -O3
+does not reproduce w/ clang -g -Wall
+does not reproduce w/ esl_dsqdata_example reader (-t16 or -t32; -n or not)
+DOES reproduce w/ uniprot_sprot
+DOES reproduce on foo, 10000 L=100 random seqs
+
+Problem identified:
+ at_eof must be inside unpacker outbox mutex
+ reader must signal "outbox full" (counterintuitively) to other readers 
+ when it sets or handles eof.
+
+
+
+================
+= Looking into scaling
+================
+
+px -n4
+           # chunks    read time   process time    eof time
+Thread 0:     763        0.02s        9.84s        0.00015s
+Thread 1:     764        0.02s        9.85s        0
+Thread 2:     769        0.03s        9.83s        0
+Thread 3:     763        0.03s        9.83s        0
+
+3059 chunks processed, 39.348s, 0.013s/chunk, +/- 0.003, 0.004 -- 0.032s
+
+px -n2
+Thread 0:    1527        0.009s      15.45s
+Thread 1:    1532        0.006s      15.45s
+          
+3059 chunks processed, 30.9s: 0.01s/chunk, +/- 0.002, range 0.0035 -- 0.023
+
+This is odd because there's nothing threaded going on, once it's
+inside the chunk processing; there's no obvious reason the same chunks
+should take a different total time on 2 vs. 4 cpus. 
+
+Perhaps it's just contending for other demands on the cpu? But all I
+have running is pandora, firefox.... turning them off has little effect:
+	9.189 real	40.040 user	1.212 sys
+
+ah, it'll run into the unpacker's thread time 
+
+ncpu=3 10.661 real	34.121 user	1.173 sys
+
+That's perfect-ish scaling.
+
+unpacker runs at 2000MB/s for protein: 2.2s to unpack
+
+  total cpu time = 31.2s + 2.2s = 33.4 / 4 = 8.35s
+
+maybe accounts for some, but doesn't account for all of it.
+
+instrumented loader and unpacker with stopwatches; warm run:
+cpu = 3:
+  unpacker: 8.363473 wait; 2.386027 work
+  loader:   9.713480 wait; 1.045829 work
+
+cpu = 4:
+  unpacker: 5.604856 wait; 3.636060 work   <= work on unpacker went up. it's contending for cpu.
+  loader:   8.235980 wait; 1.015609 work
+
+
+still doesn't account for the whole difference. 
+  (31.2 + 3.6) / 4 = 8.7s  but I'm seeing 9.2 at best. 
+
+It's possible that the loader's cpu time also factors in. 
+If 9.2; 9.2*4 = 36.8;  5.6s to account for.
+Coincidence that that's exactly the benchmark time of dsqreader, cold?
+
+
+
+
