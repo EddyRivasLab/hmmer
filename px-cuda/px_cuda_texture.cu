@@ -12,50 +12,377 @@
 
 
 
-#define NUM_REPS 1000
+#define NUM_REPS 1
+#define MAX_BAND_WIDTH 3 /*  Maximum number of registers to use in holding a "band" of the array.
+This is the equivalent quantity to the orignal SSV filter's MAX_BANDS variable, just renamed in a way
+I find less confusing.  Performance will probably be optimized if this is set to the largest value that
+keeps the number of registers the SSV filter uses to 32 or fewer.  (64K registers per SM/32 registers per
+thread allows 2048 threads/SM, which is the max)
+ */
 char * restripe_char(char *source, int source_chars_per_vector, int dest_chars_per_vector, int source_length, int *dest_length);
-// triply-unrolled inner loop for Q= 3 
+int *restripe_char_to_int(char *source, int source_chars_per_vector, int dest_ints_per_vector, int source_length, int *dest_length);
 
-
-// Does the start-of-SSV initialization on the CUDA card
-__global__ void SSV_start_cuda(P7_FILTERMX *mx, unsigned int *hv_in, unsigned int *mpv_in, int M){
-
-  int myoffset = threadIdx.x; // get our position within the warp
-  int Q = ((M-1) / 128) + 1;
-
-  if(myoffset == 0){
-    // only do memory setup on one thread
-    if(mx->allocM < M){
-      if(mx->allocM == 0){
-        mx->dp = (int16_t *) malloc(128 * Q);
-      }
-      else{
-        free(mx->dp);
-        mx->dp = (int16_t *) malloc(128 * Q);
-      }
-      mx->allocM = M;
-    }
-  }
-
-  __syncthreads(); // barrier everyone until thread 0 done with memory stuff
-
-  //Initialize mpv and hv
-  mpv_in[myoffset] = 0x80808080; 
-  hv_in[myoffset] = 0x80808080;
-
-  int i;
-  for(i = 0; i < Q; i++){
-    ((unsigned int *)mx->dp)[(i * 32) + myoffset] = 0x80808080;
-  }
-
-}
 __shared__ int dsq_buffer[32];
-__shared__ int8_t rbv_block[21*1024];
+__shared__ int8_t rbv_block[21*2048];
 __shared__ int8_t *rbv_shared[21];
 
+// Perform the core calculation on one vector
+#define STEP_SINGLE(sv) \
+  sv = sv + *rsc; \
+  rsc += 32; \
+  if (sv < -128){  \
+    sv = -128;  \
+  } \
+  if (sv > 127){ \
+    sv = 127; \
+  } \
+  xEv = max(xEv, sv); 
+
+
+#define LENGTH_CHECK(label) \
+  if (i >= L) goto label;
+
+#define NO_CHECK(label)
+
+#define STEP_BANDS_1() \
+  STEP_SINGLE(sv[0])
+
+#define STEP_BANDS_2() \
+  STEP_BANDS_1()       \
+  STEP_SINGLE(sv[1])
+
+#define STEP_BANDS_3() \
+  STEP_BANDS_2()       \
+  STEP_SINGLE(sv[2])
+
+// Here we left-shift by 5 rather than multiplying by 32 (# of threads in a warp)
+// because CUDA seems to treat something as a char and generate negative indices if we multiply
+// by the constant 32
+#define CONVERT_STEP(step, length_check, label, sv, pos) \
+  length_check(label)                                    \
+  rsc = rbv_base[dsq[i]] + (pos << 5) + myoffset;               \
+  if((*rsc > 127) || (*rsc < -128)){ \
+    printf("Out of bounds rsc of %d found at row %d, position %d. DSQ was %d, myoffset was %d\n", *rsc, i, pos, dsq[i], myoffset);  \
+  } \
+  step()                                                 \
+  sv_shuffle = __shfl_up(sv, 1);   \
+  if(myoffset == 0){   \
+    sv = neginfmask; \
+  } \
+  else{ \
+    sv = sv_shuffle;  \
+  }  \
+  i++;
+
+
+#define CONVERT_1(step, LENGTH_CHECK, label)            \
+  CONVERT_STEP(step, LENGTH_CHECK, label, sv[0], Q - 1)
+
+#define CONVERT_2(step, LENGTH_CHECK, label)            \
+  CONVERT_STEP(step, LENGTH_CHECK, label, sv[1], Q - 2)  \
+  CONVERT_1(step, LENGTH_CHECK, label)
+
+#define CONVERT_3(step, LENGTH_CHECK, label)            \
+  CONVERT_STEP(step, LENGTH_CHECK, label, sv[2], Q - 3)  \
+  CONVERT_2(step, LENGTH_CHECK, label)
+
+// declare sv as an array because CUDA can map arrays to registers and this makes it
+// easier to tune the number of registers we use
+
+// again, left-shift by 5 rather than multiplying by 32 to avoid weird negative number results
+#define RESET_1()                  \
+  int sv[MAX_BAND_WIDTH];          \
+  sv[0] = neginfmask;
+
+#define RESET_2() \
+  RESET_1() \
+  sv[1] = neginfmask;
+
+#define RESET_3()                  \
+  RESET_2()                        \
+  sv[2] = neginfmask;
+
+#define CALC(reset, step, convert, width, check_array) \
+  int myoffset = threadIdx.x; \
+  int neginfmask = -128; \
+  int i, i2, *rsc, num_iters, sv_shuffle; \
+  dsq++; \
+  reset(); \
+  if (L <= Q-q-width)  num_iters = L;               \
+  else           num_iters = Q-q-width;           \
+  i = 0;                                        \
+  while (num_iters >0) {                        \
+    rsc = rbv_base[dsq[i]] + ((i + q) << 5) + myoffset;  \
+    step()                                      \
+    i++;                                        \
+    num_iters--;                                \
+  }                                             \
+  i = Q - q - width;                                \
+  convert(step, LENGTH_CHECK, done1)            \
+done1:                                          \
+  for (i2 = Q - q; i2 < L - Q; i2 += Q)          \
+    {                                            \
+    i = 0;                                     \
+    num_iters = Q - width;                         \
+    while (num_iters > 0) {                       \
+      rsc = rbv_base[dsq[i2 + i]] + (i << 5) + myoffset; \
+      step()                                      \
+      i++;                                        \
+      num_iters--;                                \
+      }                                             \
+      i += i2;                                   \
+    convert(step, NO_CHECK, )                                      \
+    }  \
+  if ((L - i2) < (Q-width)) num_iters = L-i2;        \
+  else                  num_iters = Q-width;         \
+  i = 0;                                         \
+  while (num_iters > 0) {                        \
+    rsc = rbv_base[dsq[i2 + i]] + (i << 5) + myoffset;  \
+    step()                                       \
+    i++;                                         \
+    num_iters--;                                 \
+  }                                              \
+  i+=i2;                                         \
+  convert(step, LENGTH_CHECK, done2)             \
+done2:                                          \
+  return xEv;
+
+
+__device__ int calc_band_1(char *dsq, int L, int **rbv_base, int Q, int q, int beginv, int xEv, int ** check_array)
+{
+  CALC(RESET_1, STEP_BANDS_1, CONVERT_1, 1, check_array)
+}
+
+__device__ int calc_band_2(char *dsq, int L, int **rbv_base, int Q, int q, int beginv, int xEv, int ** check_array)
+{
+  CALC(RESET_2, STEP_BANDS_2, CONVERT_2, 2, check_array)
+}
+
+__device__ int calc_band_3(char *dsq, int L, int **rbv_base, int Q, int q, int beginv, int xEv, int ** check_array)
+{
+  CALC(RESET_3, STEP_BANDS_3, CONVERT_3, 3, check_array)
+}
+
+__global__ void SSV_cuda(char *dsq, P7_FILTERMX *mx, int L, int Q, P7_OPROFILE *om, int8_t *retval, int **check_array){
+  int myoffset, mywarp, myblock, q;
+  int **rbv_base, partner_xEv;
+  int last_q = 0;
+  int xEv = -128;
+  int bands;
+
+  myoffset = threadIdx.x; // Expect a one-dimensional block of 32 threads (one warp)
+  mywarp = threadIdx.y; 
+  myblock = blockIdx.y;
+  int num_reps, i;
+  // copy rbv array 
+ if((om->M * sizeof(int)) <= 0){
+    if((myoffset < 21) && (mywarp == 0)){ // update this for different alphabets
+      memcpy((rbv_block + (2048) * myoffset), om->rbv[myoffset], 128*Q);
+      rbv_shared[myoffset] = &(rbv_block[myoffset * 2048]);
+    }
+    rbv_base = (int **) rbv_shared;
+  }
+  else{
+    rbv_base = (int **) om->rbv;
+  } 
+  __syncthreads(); // Wait until thread 0 done with copy
+ 
+  //int(*fs[MAX_BAND_WIDTH + 1]) (char *, int, int **, int, int, int, int)
+   // = {NULL , calc_band_1};
+
+  for(num_reps = 0; num_reps < NUM_REPS; num_reps++){
+  last_q = 0; // reset this at start of filter
+  xEv = -128;
+  /* Use the highest number of bands but no more than MAX_BANDS */
+  bands = (Q + MAX_BAND_WIDTH - 1) / MAX_BAND_WIDTH;
+  for (i = 0; i < bands; i++) 
+    {
+      q      = (Q * (i + 1)) / bands;
+      switch(q-last_q){
+        case 1:
+          xEv = calc_band_1(dsq, L, rbv_base, Q, last_q, -128, xEv, check_array);
+          break;
+        case 2:
+          xEv = calc_band_2(dsq, L, rbv_base, Q, last_q, -128, xEv, check_array);
+          break; 
+        case 3:
+          xEv = calc_band_3(dsq, L, rbv_base, Q, last_q, -128, xEv, check_array);
+          break;  
+        default:
+          printf("Illegal band width %d\n", q-last_q);
+      }
+
+      last_q = q;
+    }
+
+    // Find max of the hvs
+    partner_xEv = __shfl_down(xEv, 16); 
+    if(myoffset < 16){ // only bottom half of the cores continue from here
+  
+
+      xEv = max(xEv, partner_xEv);
+
+      // Reduce 6 4x8-bit quantities to 8
+      partner_xEv = __shfl_down(xEv, 8); 
+      if(myoffset < 8){ // only bottom half of the cores continue from here
+  
+
+        xEv = max(xEv, partner_xEv);
+
+        // Reduce 8 4x8-bit quantities to 4
+        partner_xEv = __shfl_down(xEv, 4); 
+        if(myoffset < 4){ // only bottom half of the cores continue from here
+
+          xEv = max(xEv, partner_xEv);
+
+          // Reduce 4 4x8-bit quantities to 2
+          partner_xEv = __shfl_down(xEv, 2); 
+          if(myoffset < 2){ // only bottom half of the cores continue from here
+
+            xEv = max(xEv, partner_xEv);
+            // Reduce 2 4x8-bit quantities to 1
+
+            partner_xEv = __shfl_down(xEv, 1); 
+            if(myoffset < 1){ // only bottom half of the cores continue from here
+
+              xEv = max(xEv, partner_xEv);
+
+              if((myblock == 0) &&(mywarp ==0) && (myoffset == 0)){ // only one thread writes result
+
+                if (xEv > 127){
+                  *retval = 127; 
+                }
+                else{
+                  if (xEv < -128){  
+                    *retval = -128;
+                  }
+                  else{
+                    *retval = xEv & 255;
+                  }                 
+                }
+              } 
+            }
+          }
+        }
+      }
+    }
+  }
+  return; 
+}  
+
+__global__ void SSV_cuda_32bit_memory(char *dsq, P7_FILTERMX *mx, int L, int Q, P7_OPROFILE *om, int8_t *retval){
+  int myoffset, mywarp, myblock, q;
+  int *rbv, mpv, hv, sv, **rbv_base, sv_shuffle, *dp, partner_hv;
+  int neginfmask = -128;
+  myoffset = threadIdx.x; // Expect a one-dimensional block of 32 threads (one warp)
+  mywarp = threadIdx.y; 
+  myblock = blockIdx.y;
+  int num_reps, i;
+  // copy rbv array 
+ if((om->M * sizeof(int)) <= 2048){
+    if((myoffset < 21) && (mywarp == 0)){ // update this for different alphabets
+      memcpy((rbv_block + (2048) * myoffset), om->rbv[myoffset], 128*Q);
+      rbv_shared[myoffset] = &(rbv_block[myoffset * 2048]);
+    }
+    rbv_base = (int **) rbv_shared;
+  }
+  else{
+    rbv_base = (int **) om->rbv;
+  } 
+  __syncthreads();
+
+
+  dp = (int *) malloc(Q * sizeof(int)); // allocate my local roow buffer
+
+  __syncthreads(); //barrier until thread 0 done with any memory setup
+ 
+  for(num_reps = 0; num_reps < NUM_REPS; num_reps++){
+    for(i = 0; i < Q; i++){ // initialize our row buffer
+      dp[i] = neginfmask;
+    }
+
+    mpv = neginfmask;
+    hv = neginfmask;
+    for(i = 0; i < L; i++){
+
+      rbv = rbv_base[dsq[i]];
+      for(q = 0; q < Q; q++){
+          sv    = mpv+ rbv[(q * 32) + myoffset];
+#ifdef TRUNCATE
+          if (sv < -128){
+            sv = -128;
+          }
+#endif
+          hv = max(hv, sv);
+          mpv   = dp[q];
+          dp[q] = sv;
+      }
+      // Shift SV up one core for next row
+      sv_shuffle = __shfl_up(sv, 1);
+      if(myoffset == 0){ 
+        mpv = neginfmask;
+      }
+      else{
+      mpv = sv_shuffle;
+      }
+    }
+    // Find max of the hvs
+    partner_hv = __shfl_down(hv, 16); 
+    if(myoffset < 16){ // only bottom half of the cores continue from here
+  
+
+      hv = max(hv, partner_hv);
+
+      // Reduce 6 4x8-bit quantities to 8
+      partner_hv = __shfl_down(hv, 8); 
+      if(myoffset < 8){ // only bottom half of the cores continue from here
+  
+
+        hv = max(hv, partner_hv);
+
+        // Reduce 8 4x8-bit quantities to 4
+        partner_hv = __shfl_down(hv, 4); 
+        if(myoffset < 4){ // only bottom half of the cores continue from here
+
+          hv = max(hv, partner_hv);
+
+          // Reduce 4 4x8-bit quantities to 2
+          partner_hv = __shfl_down(hv, 2); 
+          if(myoffset < 2){ // only bottom half of the cores continue from here
+
+            hv = max(hv, partner_hv);
+            // Reduce 2 4x8-bit quantities to 1
+
+            partner_hv = __shfl_down(hv, 1); 
+            if(myoffset < 1){ // only bottom half of the cores continue from here
+
+              hv = max(hv, partner_hv);
+
+              if((myblock == 0) &&(mywarp ==0) && (myoffset == 0)){ // only one thread writes result
+                if (hv > 127){
+                  *retval = 127; 
+                }
+                else{
+                  if (hv < -128){  
+                    *retval = -128;
+                  }
+                  else{
+                    *retval = hv & 255;
+                  }                 
+                }
+              } 
+            }
+          }
+        }
+      }
+    }
+  }
+  free(dp);
+  return; 
+}  
 
 // This attempt uses 32-bit math and DP registers to see if that speeds things up any
-__global__ void SSV_cuda(char *dsq, P7_FILTERMX *mx, int L, int Q, P7_OPROFILE *om, int8_t *retval){
+__global__ void SSV_cuda_8to32(char *dsq, P7_FILTERMX *mx, int L, int Q, P7_OPROFILE *om, int8_t *retval){
   int myoffset, mywarp, myblock; // per-thread offset from start of each "vector"
   int *rbv, mpv[4], hv[4], hv_max; 
   int neginfmask = -128;
@@ -125,7 +452,7 @@ __global__ void SSV_cuda(char *dsq, P7_FILTERMX *mx, int L, int Q, P7_OPROFILE *
     hv[2] = neginfmask;
     mpv[3] = neginfmask;
     hv[3] = neginfmask;
-    char4 dsq_chunk, dsq_chunk_next;
+    char4 dsq_chunk;
     int *rbv1, *rbv2, *rbv3;
     if(Q == 3){
       char4 rbv_test;
@@ -1570,7 +1897,7 @@ P7_OPROFILE *create_oprofile_on_card(P7_OPROFILE *the_profile){
   for(i = 0; i < the_profile->abc->Kp; i++){
     int *cuda_rbv_entry, *restriped_rbv;
     int restriped_rbv_size;
-    restriped_rbv = (int *) restripe_char((char *)(the_profile->rbv[i]), the_profile->V, 128, Q * the_profile->V, &restriped_rbv_size);
+    restriped_rbv = restripe_char_to_int((char *)(the_profile->rbv[i]), the_profile->V, 32, Q * the_profile->V, &restriped_rbv_size);
 
     if(cudaMalloc(&cuda_rbv_entry, restriped_rbv_size) != cudaSuccess){
       p7_Fail((char *) "Unable to allocate memory in create_oprofile_on_card");
@@ -1638,6 +1965,51 @@ char * restripe_char(char *source, int source_chars_per_vector, int dest_chars_p
 
 }
 
+
+int *restripe_char_to_int(char *source, int source_chars_per_vector, int dest_ints_per_vector, int source_length, int *dest_length){
+  int *dest;
+  int dest_num_vectors, source_num_vectors, unpadded_dest_vectors;
+
+  source_num_vectors = source_length/source_chars_per_vector;
+  if(source_num_vectors * source_chars_per_vector != source_length){
+    source_num_vectors++;
+  }
+  unpadded_dest_vectors = source_length/dest_ints_per_vector;
+  if(unpadded_dest_vectors * dest_ints_per_vector != source_length){
+    unpadded_dest_vectors++;  //round up if source length isn't a multiple of the dest vector length
+  }
+ // printf("Unpadded_dest_vectors = %d. ", unpadded_dest_vectors);
+  dest_num_vectors = unpadded_dest_vectors + MAX_BAND_WIDTH -1; // add extra vectors for SSV wrap-around
+  dest = (int *) malloc(dest_num_vectors * dest_ints_per_vector * sizeof(int));
+  *dest_length = dest_num_vectors * dest_ints_per_vector *sizeof(int);
+  //printf("Padded dest_num_vectors = %d. Dest_length = %d\n", dest_num_vectors, *dest_length);
+
+  int source_pos, dest_pos;
+  int i;
+
+  for(i = 0; i < source_length; i++){
+    source_pos = ((i % source_num_vectors) * source_chars_per_vector) + (i / source_num_vectors);
+    dest_pos = ((i % unpadded_dest_vectors) * dest_ints_per_vector) + (i / unpadded_dest_vectors);
+    dest[dest_pos] = (int) source[source_pos];
+  }
+
+  // pad out the dest vector with zeroes if necessary
+  for(; i < unpadded_dest_vectors * dest_ints_per_vector; i++){
+      dest_pos = ((i % unpadded_dest_vectors) * dest_ints_per_vector) + (i / unpadded_dest_vectors);
+    //  printf("Padding 0 at location %d \n", dest_pos);
+    dest[dest_pos] = 0;
+  }
+
+  // add the extra copies of the early vectors to support the SSV wrap-around
+  for(int source = 0; i < dest_num_vectors * dest_ints_per_vector; i++){
+    dest[i] = dest[source];
+   // printf("Padding from location %d to location %d\n", source, i);
+    source++;
+  }
+
+  return dest;
+}
+
 int
 p7_SSVFilter_shell_sse(const ESL_DSQ *dsq, int L, const P7_OPROFILE *om, P7_FILTERMX *fx, float *ret_sc, P7_OPROFILE *card_OPROFILE, P7_FILTERMX *card_FILTERMX)
 {
@@ -1666,7 +2038,7 @@ p7_SSVFilter_shell_sse(const ESL_DSQ *dsq, int L, const P7_OPROFILE *om, P7_FILT
   fx->Vw   = p7_VWIDTH_SSE / sizeof(int16_t); // A hack. FILTERMX wants Vw in units of int16_t. 
   fx->type = p7F_SSVFILTER;
   dp       = (__m128i *) fx->dp;
-  card_Q = ((((om->M)-1) / (128)) + 1);
+  card_Q = ((((om->M)-1) / (32)) + 1);
   cudaMalloc((void **) &card_h, 1);
   err = cudaGetLastError();
   cudaMalloc((void**)  &card_dsq, L+8);  //Pad out so that we can grab dsq four bytes at a time
@@ -1675,13 +2047,24 @@ p7_SSVFilter_shell_sse(const ESL_DSQ *dsq, int L, const P7_OPROFILE *om, P7_FILT
  // SSV_start_cuda<<<1, 32>>>(card_FILTERMX, (unsigned int *) card_hv, (unsigned int *) card_mpv, om->M);
   cudaEventRecord(start);
   num_blocks.x = 1;
-  num_blocks.y = 20;
+  num_blocks.y = 1;
   num_blocks.z = 1;
-  warps_per_block = 32;
+  warps_per_block = 1;
   threads_per_block.x = 32;
   threads_per_block.y = warps_per_block;
   threads_per_block.z = 1;
-  SSV_cuda <<<num_blocks, threads_per_block>>>(card_dsq, card_FILTERMX, L, card_Q, card_OPROFILE, card_h );
+
+  int **check_array, **check_array_cuda;
+  check_array = (int **) malloc(L * sizeof(int *));
+  cudaMalloc((void **) &check_array_cuda, (L * sizeof(int *)));
+  for(int temp = 0; temp < L; temp++){
+    int *row_array;
+    cudaMalloc((void **) &row_array, (om->M * sizeof(int)));
+    check_array[temp] = row_array;
+  }
+  cudaMemcpy(check_array_cuda, check_array, (L* sizeof(int)), cudaMemcpyHostToDevice);
+
+  SSV_cuda <<<num_blocks, threads_per_block>>>(card_dsq, card_FILTERMX, L, card_Q, card_OPROFILE, card_h, check_array_cuda);
   int8_t h_compare;
   cudaMemcpy(&h_compare, card_h, 1, cudaMemcpyDeviceToHost);
   cudaEventRecord(stop);
