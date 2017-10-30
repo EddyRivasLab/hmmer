@@ -7,13 +7,15 @@
 #include "hmmer.h"
 #include "px_cuda.h"
 //#define TRUNCATE 
+#define NEGINFMASK -128
 #define MAX(a, b, c)\
   asm("max.u32 %0, %1, %2;" : "=r"(a): "r"(b), "r"(c));
 
+#define DSQ_BUFFER_SIZE 512
+#define RBV_VECTOR_LENGTH 2048
 
-
-#define NUM_REPS 1
-#define MAX_BAND_WIDTH 3 /*  Maximum number of registers to use in holding a "band" of the array.
+#define NUM_REPS 1000
+#define MAX_BAND_WIDTH 1 /*  Maximum number of registers to use in holding a "band" of the array.
 This is the equivalent quantity to the orignal SSV filter's MAX_BANDS variable, just renamed in a way
 I find less confusing.  Performance will probably be optimized if this is set to the largest value that
 keeps the number of registers the SSV filter uses to 32 or fewer.  (64K registers per SM/32 registers per
@@ -22,97 +24,89 @@ thread allows 2048 threads/SM, which is the max)
 char * restripe_char(char *source, int source_chars_per_vector, int dest_chars_per_vector, int source_length, int *dest_length);
 int *restripe_char_to_int(char *source, int source_chars_per_vector, int dest_ints_per_vector, int source_length, int *dest_length);
 
-__shared__ int dsq_buffer[32];
-__shared__ int8_t rbv_block[21*2048];
+__shared__ int8_t rbv_block[21* RBV_VECTOR_LENGTH];
 __shared__ int8_t *rbv_shared[21];
 
 // Perform the core calculation on one vector
 #define STEP_SINGLE(sv) \
   sv = sv + *rsc; \
-  rsc += 32; \
   if (sv < -128){  \
     sv = -128;  \
   } \
   if (sv > 127){ \
     sv = 127; \
   } \
-  xEv = max(xEv, sv); 
+  MAX(xEv, xEv, sv); 
 
+/*  if (sv < -128){  \
+    sv = -128;  \
+  } \
+  if (sv > 127){ \
+    sv = 127; \
+  } \ */
+/*    sv = sv + *rsc; \ */
 
 #define LENGTH_CHECK(label) \
   if (i >= L) goto label;
 
 #define NO_CHECK(label)
 
-#define STEP_BANDS_1() \
-  STEP_SINGLE(sv[0])
-
-#define STEP_BANDS_2() \
-  STEP_BANDS_1()       \
-  STEP_SINGLE(sv[1])
-
-#define STEP_BANDS_3() \
-  STEP_BANDS_2()       \
-  STEP_SINGLE(sv[2])
 
 // Here we left-shift by 5 rather than multiplying by 32 (# of threads in a warp)
 // because CUDA seems to treat something as a char and generate negative indices if we multiply
 // by the constant 32
 #define CONVERT_STEP(step, length_check, label, sv, pos) \
   length_check(label)                                    \
-  rsc = rbv_base[dsq[i]] + (pos << 5) + myoffset;               \
-  if((*rsc > 127) || (*rsc < -128)){ \
-    printf("Out of bounds rsc of %d found at row %d, position %d. DSQ was %d, myoffset was %d\n", *rsc, i, pos, dsq[i], myoffset);  \
-  } \
+  rsc = rbv_base[dsq[i]] + (pos << 5) + threadIdx.x;               \
   step()                                                 \
   sv_shuffle = __shfl_up(sv, 1);   \
-  if(myoffset == 0){   \
-    sv = neginfmask; \
+  if(threadIdx.x == 0){   \
+    sv = NEGINFMASK; \
   } \
   else{ \
     sv = sv_shuffle;  \
   }  \
   i++;
 
+#define CONVERT_STEP_NEW(step, length_check, label, sv, pos) \
+  length_check(label)                                    \
+  rsc = rbv_base[dsq[i]] + pos;               \
+  step()                                                 \
+  sv_shuffle = __shfl_up(sv, 1);   \
+  if(threadIdx.x == 0){   \
+    sv = NEGINFMASK; \
+  } \
+  else{ \
+    sv = sv_shuffle;  \
+  }  \
+  i++;
 
-#define CONVERT_1(step, LENGTH_CHECK, label)            \
-  CONVERT_STEP(step, LENGTH_CHECK, label, sv[0], Q - 1)
+//#define CALC(reset, step, convert, width) \
 
-#define CONVERT_2(step, LENGTH_CHECK, label)            \
-  CONVERT_STEP(step, LENGTH_CHECK, label, sv[1], Q - 2)  \
-  CONVERT_1(step, LENGTH_CHECK, label)
-
-#define CONVERT_3(step, LENGTH_CHECK, label)            \
-  CONVERT_STEP(step, LENGTH_CHECK, label, sv[2], Q - 3)  \
-  CONVERT_2(step, LENGTH_CHECK, label)
-
-// declare sv as an array because CUDA can map arrays to registers and this makes it
-// easier to tune the number of registers we use
-
-// again, left-shift by 5 rather than multiplying by 32 to avoid weird negative number results
-#define RESET_1()                  \
-  int sv[MAX_BAND_WIDTH];          \
-  sv[0] = neginfmask;
-
-#define RESET_2() \
-  RESET_1() \
-  sv[1] = neginfmask;
-
-#define RESET_3()                  \
-  RESET_2()                        \
-  sv[2] = neginfmask;
-
-#define CALC(reset, step, convert, width, check_array) \
-  int myoffset = threadIdx.x; \
-  int neginfmask = -128; \
+#define CALC(reset, step, convert, width) \
   int i, i2, *rsc, num_iters, sv_shuffle; \
   dsq++; \
   reset(); \
   if (L <= Q-q-width)  num_iters = L;               \
   else           num_iters = Q-q-width;           \
   i = 0;                                        \
+   while (num_iters >=4) {                       \
+    rsc = rbv_base[dsq[i]] + ((i + q) << 5) + threadIdx.x;  \
+    step()                                      \
+    i++;                                        \
+    rsc = rbv_base[dsq[i]] + ((i + q) << 5) + threadIdx.x;  \
+    step()                                      \
+    i++;                                        \
+    rsc = rbv_base[dsq[i]] + ((i + q) << 5) + threadIdx.x;  \
+    step()                                      \
+    i++;                                        \
+    rsc = rbv_base[dsq[i]] + ((i + q) << 5) + threadIdx.x;  \
+    step()                                      \
+    i++;                                        \
+    num_iters -= 4;                             \
+  }        \
   while (num_iters >0) {                        \
-    rsc = rbv_base[dsq[i]] + ((i + q) << 5) + myoffset;  \
+    rsc = rbv_base[dsq[i]] + ((i + q) << 5) + threadIdx.x;  \
     step()                                      \
     i++;                                        \
     num_iters--;                                \
@@ -124,8 +118,23 @@ done1:                                          \
     {                                            \
     i = 0;                                     \
     num_iters = Q - width;                         \
+    while (num_iters >= 4) {                   \
+      rsc = rbv_base[dsq[i2 + i]] + (i << 5) + threadIdx.x; \
+      step()                                      \
+      i++;                                        \
+      rsc = rbv_base[dsq[i2 + i]] + (i << 5) + threadIdx.x; \
+      step()                                      \
+      i++;                                        \
+      rsc = rbv_base[dsq[i2 + i]] + (i << 5) + threadIdx.x; \
+      step()                                      \
+      i++;                                        \
+      rsc = rbv_base[dsq[i2 + i]] + (i << 5) + threadIdx.x; \
+      step()                                      \
+      i++;                                        \
+      num_iters-= 4;                              \
+     }                 \
     while (num_iters > 0) {                       \
-      rsc = rbv_base[dsq[i2 + i]] + (i << 5) + myoffset; \
+      rsc = rbv_base[dsq[i2 + i]] + (i << 5) + threadIdx.x; \
       step()                                      \
       i++;                                        \
       num_iters--;                                \
@@ -133,58 +142,357 @@ done1:                                          \
       i += i2;                                   \
     convert(step, NO_CHECK, )                                      \
     }  \
-  if ((L - i2) < (Q-width)) num_iters = L-i2;        \
-  else                  num_iters = Q-width;         \
+  if ((L - i2) < (Q-q-width)) num_iters = L-i2;        \
+  else                  num_iters = Q-6;         \
   i = 0;                                         \
+  while (num_iters >= 4) {                       \
+  rsc = rbv_base[dsq[i2 + i]] + (i << 5) + threadIdx.x;  \
+   step()                                       \
+   i++;                                         \
+  rsc = rbv_base[dsq[i2 + i]] + (i << 5) + threadIdx.x;  \
+   step()                                       \
+   i++;                                         \
+  rsc = rbv_base[dsq[i2 + i]] + (i << 5) + threadIdx.x;  \
+   step()                                       \
+   i++;                                         \
+   rsc = rbv_base[dsq[i2 + i]] + (i << 5) + threadIdx.x;  \
+   step()                                       \
+   i++;                                         \
+   num_iters -= 4;                              \
+ }                    \
   while (num_iters > 0) {                        \
-    rsc = rbv_base[dsq[i2 + i]] + (i << 5) + myoffset;  \
+    rsc = rbv_base[dsq[i2 + i]] + (i << 5) + threadIdx.x;  \
     step()                                       \
     i++;                                         \
     num_iters--;                                 \
   }                                              \
   i+=i2;                                         \
   convert(step, LENGTH_CHECK, done2)             \
-done2:                                          \
+done2:                                         \
   return xEv;
 
 
-__device__ int calc_band_1(char *dsq, int L, int **rbv_base, int Q, int q, int beginv, int xEv, int ** check_array)
+// declare sv as an array because CUDA can map arrays to registers and this makes it
+// easier to tune the number of registers we use
+
+// again, left-shift by 5 rather than multiplying by 32 to avoid weird negative number results
+
+// always define functions for a one-wide band, define others depending on the value of MAX_BAND_WIDTH
+#define RESET_1()                  \
+  int sv[MAX_BAND_WIDTH];          \
+  sv[0] = NEGINFMASK;
+
+#define STEP_BANDS_1() \
+  STEP_SINGLE(sv[0])
+
+#define CONVERT_1(step, LENGTH_CHECK, label)            \
+  CONVERT_STEP(step, LENGTH_CHECK, label, sv[0], Q - 1)
+
+__device__ int calc_band_1(char *dsq, int L, int **rbv_base, int Q, int q, int beginv, int xEv)
 {
-  CALC(RESET_1, STEP_BANDS_1, CONVERT_1, 1, check_array)
+  CALC(RESET_1, STEP_BANDS_1, CONVERT_1, 1)
 }
 
-__device__ int calc_band_2(char *dsq, int L, int **rbv_base, int Q, int q, int beginv, int xEv, int ** check_array)
-{
-  CALC(RESET_2, STEP_BANDS_2, CONVERT_2, 2, check_array)
-}
 
-__device__ int calc_band_3(char *dsq, int L, int **rbv_base, int Q, int q, int beginv, int xEv, int ** check_array)
-{
-  CALC(RESET_3, STEP_BANDS_3, CONVERT_3, 3, check_array)
-}
 
-__global__ void SSV_cuda(char *dsq, P7_FILTERMX *mx, int L, int Q, P7_OPROFILE *om, int8_t *retval, int **check_array){
-  int myoffset, mywarp, myblock, q;
-  int **rbv_base, partner_xEv;
+
+#if MAX_BAND_WIDTH > 1
+#define RESET_2() \
+  RESET_1() \
+  sv[1] = NEGINFMASK;
+
+#define STEP_BANDS_2() \
+  STEP_BANDS_1()       \
+  STEP_SINGLE(sv[1])
+
+#define CONVERT_2(step, LENGTH_CHECK, label)            \
+  CONVERT_STEP(step, LENGTH_CHECK, label, sv[1], Q - 2)  \
+  CONVERT_1(step, LENGTH_CHECK, label)
+
+__device__ int calc_band_2(char *dsq, int L, int **rbv_base, int Q, int q, int beginv, int xEv)
+{
+  CALC(RESET_2, STEP_BANDS_2, CONVERT_2, 2)
+}
+#endif
+
+
+#if MAX_BAND_WIDTH > 2
+#define RESET_3()                  \
+  RESET_2()                        \
+  sv[2] = NEGINFMASK;
+
+#define STEP_BANDS_3() \
+  STEP_BANDS_2()       \
+  STEP_SINGLE(sv[2])
+
+#define CONVERT_3(step, LENGTH_CHECK, label)            \
+  CONVERT_STEP(step, LENGTH_CHECK, label, sv[2], Q - 3)  \
+  CONVERT_2(step, LENGTH_CHECK, label)
+
+__device__ int calc_band_3(char *dsq, int L, int **rbv_base, int Q, int q, int beginv, int xEv)
+{
+  CALC(RESET_3, STEP_BANDS_3, CONVERT_3, 3)
+}
+#endif
+
+
+#if MAX_BAND_WIDTH > 3
+#define RESET_4()                  \
+  RESET_3()                        \
+  sv[3] = NEGINFMASK;
+
+#define STEP_BANDS_4() \
+  STEP_BANDS_3()       \
+  STEP_SINGLE(sv[3])
+
+#define CONVERT_4(step, LENGTH_CHECK, label)            \
+  CONVERT_STEP(step, LENGTH_CHECK, label, sv[3], Q - 4)  \
+  CONVERT_3(step, LENGTH_CHECK, label)
+
+__device__ int calc_band_4(char *dsq, int L, int **rbv_base, int Q, int q, int beginv, int xEv)
+{
+  CALC(RESET_4, STEP_BANDS_4, CONVERT_4, 4)
+}
+#endif
+
+#if MAX_BAND_WIDTH > 4
+#define RESET_5()                  \
+  RESET_4()                        \
+  sv[4] = NEGINFMASK;
+
+#define STEP_BANDS_5() \
+  STEP_BANDS_4()       \
+  STEP_SINGLE(sv[4])
+
+#define CONVERT_5(step, LENGTH_CHECK, label)            \
+  CONVERT_STEP(step, LENGTH_CHECK, label, sv[4], Q - 5)  \
+  CONVERT_4(step, LENGTH_CHECK, label)
+
+/*__device__ int calc_band_5(char *dsq, int L, int **rbv_base, int Q, int q, int beginv, int xEv)
+{
+  CALC(RESET_5, STEP_BANDS_5, CONVERT_5, 5)
+} */
+__device__ int calc_band_5(char *dsq, int L, int **rbv_base, int Q, int q, int beginv, int xEv)
+{
+  int i, i2, *rsc, num_iters, sv_shuffle, dsq_val; \
+  dsq++; \
+  RESET_5(); \
+  if (L <= Q-q-5)  num_iters = L;               \
+  else           num_iters = Q-q-5;           \
+  i = 0;                                        \
+  int offset = q << 5 + threadIdx.x; \
+   while (num_iters >=4) {                       \
+    dsq_val = dsq[i]; \
+    rsc = rbv_base[dsq_val] + offset;  \
+    STEP_BANDS_5()                                      \
+    i+= 1;  \
+    offset += 32; \
+    dsq_val = dsq[i]; \
+    rsc = rbv_base[dsq_val] + offset;  \
+    STEP_BANDS_5()                                      \
+    i++;                                        \
+    offset += 32; \
+    dsq_val = dsq[i]; \
+    rsc = rbv_base[dsq_val] + offset;  \
+    STEP_BANDS_5()                                      \
+    i++;                                        \
+    offset += 32;  \
+    dsq_val = dsq[i]; \
+    rsc = rbv_base[dsq_val] + offset;  \
+    STEP_BANDS_5()                                      \
+    i++;                                        \
+    offset += 32; \
+    num_iters -= 4;                             \
+  }        \
+  while (num_iters >0) {                        \
+    rsc = rbv_base[dsq[i]] + offset;  \
+    STEP_BANDS_5()                                      \
+    i++;                                        \
+    offset += 32; \
+    num_iters--;                                \
+  }                                             \
+  i = Q - q - 5;                                \
+  CONVERT_5(STEP_BANDS_5, LENGTH_CHECK, done1)            \
+done1:                                          \
+  for (i2 = Q - q; i2 < L - Q; i2 += Q)          \
+    {                                            \
+    i = 0;                                     \
+    offset = threadIdx.x; \
+    num_iters = Q - 5;                         \
+    while (num_iters >= 4) {                   \
+      dsq_val = dsq[i2+i]; \
+      rsc = rbv_base[dsq_val] + offset; \
+      STEP_BANDS_5()                                      \
+      i++;                                        \
+      offset += 32; \
+      dsq_val = dsq[i2+i]; \
+      rsc = rbv_base[dsq_val] + offset; \
+      STEP_BANDS_5()                                      \
+      i++;                                        \
+      offset += 32; \
+      dsq_val = dsq[i2+i]; \
+      rsc = rbv_base[dsq_val] + offset; \
+      STEP_BANDS_5()                                      \
+      i++;                                        \
+      offset += 32;
+      dsq_val = dsq[i2+i]; \
+      rsc = rbv_base[dsq_val] + offset; \
+      STEP_BANDS_5()                                      \
+      i++;                                        \
+      offset += 32;\
+      num_iters-= 4;                              \
+     }                 \
+    while (num_iters > 0) {                       \
+      dsq_val = dsq[i2+i]; \
+      rsc = rbv_base[dsq_val] + offset; \
+      STEP_BANDS_5()                                      \
+      i++;                                        \
+      offset += 32; \
+      num_iters--;                                \
+      }                                             \
+      i += i2;                                   \
+    int offset2 =  ((Q-5) << 5) + threadIdx.x;\
+    CONVERT_STEP_NEW(STEP_BANDS_5, NO_CHECK, , sv[4], offset2)  \
+    offset2 += 32;
+    CONVERT_STEP_NEW(STEP_BANDS_5, NO_CHECK, , sv[3], offset2)  \
+    offset2 += 32;
+    CONVERT_STEP_NEW(STEP_BANDS_5, NO_CHECK, , sv[2], offset2)  \
+    offset2 += 32;
+    CONVERT_STEP_NEW(STEP_BANDS_5, NO_CHECK, , sv[1], offset2)  \
+    offset2 += 32;
+    CONVERT_STEP_NEW(STEP_BANDS_5, NO_CHECK, , sv[0], offset2)  \
+    }  \
+  if ((L - i2) < (Q-q-5)) num_iters = L-i2;        \
+  else                  num_iters = Q-6;         \
+  i = 0;                                         \
+  offset = threadIdx.x;
+  while (num_iters >= 4) {                       \
+  dsq_val = dsq[i2+i];\
+  rsc = rbv_base[dsq_val] +offset;  \
+   STEP_BANDS_5()                                       \
+   i++;                                         \
+   offset += 32;
+     dsq_val = dsq[i2+i];\
+  rsc = rbv_base[dsq_val] + offset;  \
+   STEP_BANDS_5()                                       \
+   i++;                                         \
+   offset += 32;\
+   dsq_val = dsq[i2+i];\
+   rsc = rbv_base[dsq_val] + offset;  \
+   STEP_BANDS_5()                                       \
+   i++;                                         \
+   offset += 32;
+     dsq_val = dsq[i2+i];\
+  rsc = rbv_base[dsq_val] + offset;  \
+   STEP_BANDS_5()                                       \
+   i++;                                         \
+   offset += 32; \
+   num_iters -= 4;                              \
+ }                    \
+  while (num_iters > 0) {                        \
+    dsq_val = dsq[i2+i]; \
+    rsc = rbv_base[dsq_val] + offset;  \
+    STEP_BANDS_5()                                       \
+    i++;                                         \
+    num_iters--;                                 \
+    offset+= 32;\
+  }                                              \
+  i+=i2;                                         \
+  CONVERT_5(STEP_BANDS_5, LENGTH_CHECK, done2)             \
+done2:                                         \
+  return xEv;
+}
+#endif
+
+#if MAX_BAND_WIDTH > 5
+#define RESET_6()                  \
+  RESET_5()                        \
+  sv[5] = NEGINFMASK;
+
+#define STEP_BANDS_6() \
+  STEP_BANDS_5()       \
+  STEP_SINGLE(sv[5])
+
+#define CONVERT_6(step, LENGTH_CHECK, label)            \
+  CONVERT_STEP(step, LENGTH_CHECK, label, sv[5], Q - 6)  \
+  CONVERT_5(step, LENGTH_CHECK, label)
+
+
+__device__ int calc_band_6(char *dsq, int L, int **rbv_base, int Q, int q, int beginv, int xEv)
+{
+  CALC(RESET_6, STEP_BANDS_6, CONVERT_6, 6)
+}
+#endif
+
+#if MAX_BAND_WIDTH > 6
+#define RESET_7()                  \
+  RESET_6()                        \
+  sv[6] = NEGINFMASK;
+
+#define STEP_BANDS_7() \
+  STEP_BANDS_6()       \
+  STEP_SINGLE(sv[6])
+
+#define CONVERT_7(step, LENGTH_CHECK, label)            \
+  CONVERT_STEP(step, LENGTH_CHECK, label, sv[6], Q - 7)  \
+  CONVERT_6(step, LENGTH_CHECK, label)
+
+__device__ int calc_band_7(char *dsq, int L, int **rbv_base, int Q, int q, int beginv, int xEv)
+{
+  CALC(RESET_7, STEP_BANDS_7, CONVERT_7, 7)
+}
+#endif
+
+#if MAX_BAND_WIDTH > 7
+#define RESET_8()                  \
+  RESET_7()                        \
+  sv[7] = NEGINFMASK;
+
+#define STEP_BANDS_8() \
+  STEP_BANDS_7()       \
+  STEP_SINGLE(sv[7])
+
+#define CONVERT_8(step, LENGTH_CHECK, label)            \
+  CONVERT_STEP(step, LENGTH_CHECK, label, sv[7], Q - 8)  \
+  CONVERT_6(step, LENGTH_CHECK, label)
+
+__device__ int calc_band_8(char *dsq, int L, int **rbv_base, int Q, int q, int beginv, int xEv)
+{
+  CALC(RESET_8, STEP_BANDS_8, CONVERT_8, 8)
+}
+#endif
+
+__global__ void SSV_cuda(char *dsq, P7_FILTERMX *mx, int L, int Q, P7_OPROFILE *om, int8_t *retval){
+  int q;
+  int **rbv_base;
+  __shared__ char *dsq_ptr;
   int last_q = 0;
-  int xEv = -128;
+  int xEv = NEGINFMASK;
   int bands;
-
-  myoffset = threadIdx.x; // Expect a one-dimensional block of 32 threads (one warp)
-  mywarp = threadIdx.y; 
-  myblock = blockIdx.y;
   int num_reps, i;
+  __shared__ int8_t dsq_buffer[DSQ_BUFFER_SIZE];
+
   // copy rbv array 
- if((om->M * sizeof(int)) <= 0){
-    if((myoffset < 21) && (mywarp == 0)){ // update this for different alphabets
-      memcpy((rbv_block + (2048) * myoffset), om->rbv[myoffset], 128*Q);
-      rbv_shared[myoffset] = &(rbv_block[myoffset * 2048]);
+ if(((Q+ MAX_BAND_WIDTH) * sizeof(int)) <= RBV_VECTOR_LENGTH){
+    if((threadIdx.x < 21) && (threadIdx.y == 0)){ // update this for different alphabets
+      memcpy((rbv_block + RBV_VECTOR_LENGTH * threadIdx.x), om->rbv[threadIdx.x], 128*(Q+ MAX_BAND_WIDTH));
+      rbv_shared[threadIdx.x] = &(rbv_block[threadIdx.x * RBV_VECTOR_LENGTH]);
     }
     rbv_base = (int **) rbv_shared;
   }
   else{
     rbv_base = (int **) om->rbv;
   } 
+
+  if(L <= DSQ_BUFFER_SIZE){
+    if(threadIdx.x == 0){ // only do the copy on one thread per block
+      memcpy(dsq_buffer, dsq, L);
+    }
+    dsq_ptr = (char *)dsq_buffer;
+  }
+  else{
+    dsq_ptr = dsq;
+  }
   __syncthreads(); // Wait until thread 0 done with copy
  
   //int(*fs[MAX_BAND_WIDTH + 1]) (char *, int, int **, int, int, int, int)
@@ -200,14 +508,53 @@ __global__ void SSV_cuda(char *dsq, P7_FILTERMX *mx, int L, int Q, P7_OPROFILE *
       q      = (Q * (i + 1)) / bands;
       switch(q-last_q){
         case 1:
-          xEv = calc_band_1(dsq, L, rbv_base, Q, last_q, -128, xEv, check_array);
+          xEv = calc_band_1(dsq_ptr, L, rbv_base, Q, last_q, -128, xEv);
           break;
+#if MAX_BAND_WIDTH > 1 
         case 2:
-          xEv = calc_band_2(dsq, L, rbv_base, Q, last_q, -128, xEv, check_array);
+          xEv = calc_band_2(dsq_ptr, L, rbv_base, Q, last_q, -128, xEv);
           break; 
+#endif
+#if MAX_BAND_WIDTH > 2          
         case 3:
-          xEv = calc_band_3(dsq, L, rbv_base, Q, last_q, -128, xEv, check_array);
+          xEv = calc_band_3(dsq_ptr, L, rbv_base, Q, last_q, -128, xEv);
           break;  
+#endif
+#if MAX_BAND_WIDTH > 3         
+        case 4:
+          xEv = calc_band_4(dsq_ptr, L, rbv_base, Q, last_q, -128, xEv);
+          break;  
+#endif
+#if MAX_BAND_WIDTH > 4         
+        case 5:
+          xEv = calc_band_5(dsq_ptr, L, rbv_base, Q, last_q, -128, xEv);
+          break;  
+#endif
+#if MAX_BAND_WIDTH > 5         
+        case 6:
+          xEv = calc_band_6(dsq_ptr, L, rbv_base, Q, last_q, -128, xEv);
+          break;  
+#endif
+#if MAX_BAND_WIDTH > 6          
+        case 7:
+          xEv = calc_band_7(dsq_ptr, L, rbv_base, Q, last_q, -128, xEv);
+          break;  
+#endif
+#if MAX_BAND_WIDTH > 7         
+        case 8:
+          xEv = calc_band_8(dsq_ptr, L, rbv_base, Q, last_q, -128, xEv);
+          break;  
+#endif
+#if MAX_BAND_WIDTH > 8         
+        case 9:
+          xEv = calc_band_9(dsq_ptr, L, rbv_base, Q, last_q, -128, xEv);
+          break;  
+#endif
+#if MAX_BAND_WIDTH > 9         
+        case 10:
+          xEv = calc_band_10(dsq_ptr, L, rbv_base, Q, last_q, -128, xEv);
+          break;  
+#endif
         default:
           printf("Illegal band width %d\n", q-last_q);
       }
@@ -216,38 +563,34 @@ __global__ void SSV_cuda(char *dsq, P7_FILTERMX *mx, int L, int Q, P7_OPROFILE *
     }
 
     // Find max of the hvs
-    partner_xEv = __shfl_down(xEv, 16); 
-    if(myoffset < 16){ // only bottom half of the cores continue from here
+    last_q = __shfl_down(xEv, 16); //reuse last_q here to reduce register usage 
+    if(threadIdx.x < 16){ // only bottom half of the cores continue from here
   
-
-      xEv = max(xEv, partner_xEv);
+      MAX(xEv, xEv, last_q);
 
       // Reduce 6 4x8-bit quantities to 8
-      partner_xEv = __shfl_down(xEv, 8); 
-      if(myoffset < 8){ // only bottom half of the cores continue from here
+      last_q = __shfl_down(xEv, 8); 
+      if(threadIdx.x < 8){ // only bottom half of the cores continue from here
   
-
-        xEv = max(xEv, partner_xEv);
-
+        MAX(xEv, xEv, last_q);
+        
         // Reduce 8 4x8-bit quantities to 4
-        partner_xEv = __shfl_down(xEv, 4); 
-        if(myoffset < 4){ // only bottom half of the cores continue from here
-
-          xEv = max(xEv, partner_xEv);
-
+        last_q = __shfl_down(xEv, 4); 
+        if(threadIdx.x < 4){ // only bottom half of the cores continue from here
+          
+          MAX(xEv, xEv, last_q);
+          
           // Reduce 4 4x8-bit quantities to 2
-          partner_xEv = __shfl_down(xEv, 2); 
-          if(myoffset < 2){ // only bottom half of the cores continue from here
-
-            xEv = max(xEv, partner_xEv);
+          last_q = __shfl_down(xEv, 2); 
+          if(threadIdx.x < 2){ // only bottom half of the cores continue from here
+            MAX(xEv, xEv, last_q);
             // Reduce 2 4x8-bit quantities to 1
 
-            partner_xEv = __shfl_down(xEv, 1); 
-            if(myoffset < 1){ // only bottom half of the cores continue from here
+            last_q = __shfl_down(xEv, 1); 
+            if(threadIdx.x < 1){ // only bottom half of the cores continue from here
+              MAX(xEv, xEv, last_q);
 
-              xEv = max(xEv, partner_xEv);
-
-              if((myblock == 0) &&(mywarp ==0) && (myoffset == 0)){ // only one thread writes result
+              if((blockIdx.y == 0) &&(threadIdx.y ==0) && (threadIdx.x == 0)){ // only one thread writes result
 
                 if (xEv > 127){
                   *retval = 127; 
@@ -269,1579 +612,6 @@ __global__ void SSV_cuda(char *dsq, P7_FILTERMX *mx, int L, int Q, P7_OPROFILE *
   }
   return; 
 }  
-
-__global__ void SSV_cuda_32bit_memory(char *dsq, P7_FILTERMX *mx, int L, int Q, P7_OPROFILE *om, int8_t *retval){
-  int myoffset, mywarp, myblock, q;
-  int *rbv, mpv, hv, sv, **rbv_base, sv_shuffle, *dp, partner_hv;
-  int neginfmask = -128;
-  myoffset = threadIdx.x; // Expect a one-dimensional block of 32 threads (one warp)
-  mywarp = threadIdx.y; 
-  myblock = blockIdx.y;
-  int num_reps, i;
-  // copy rbv array 
- if((om->M * sizeof(int)) <= 2048){
-    if((myoffset < 21) && (mywarp == 0)){ // update this for different alphabets
-      memcpy((rbv_block + (2048) * myoffset), om->rbv[myoffset], 128*Q);
-      rbv_shared[myoffset] = &(rbv_block[myoffset * 2048]);
-    }
-    rbv_base = (int **) rbv_shared;
-  }
-  else{
-    rbv_base = (int **) om->rbv;
-  } 
-  __syncthreads();
-
-
-  dp = (int *) malloc(Q * sizeof(int)); // allocate my local roow buffer
-
-  __syncthreads(); //barrier until thread 0 done with any memory setup
- 
-  for(num_reps = 0; num_reps < NUM_REPS; num_reps++){
-    for(i = 0; i < Q; i++){ // initialize our row buffer
-      dp[i] = neginfmask;
-    }
-
-    mpv = neginfmask;
-    hv = neginfmask;
-    for(i = 0; i < L; i++){
-
-      rbv = rbv_base[dsq[i]];
-      for(q = 0; q < Q; q++){
-          sv    = mpv+ rbv[(q * 32) + myoffset];
-#ifdef TRUNCATE
-          if (sv < -128){
-            sv = -128;
-          }
-#endif
-          hv = max(hv, sv);
-          mpv   = dp[q];
-          dp[q] = sv;
-      }
-      // Shift SV up one core for next row
-      sv_shuffle = __shfl_up(sv, 1);
-      if(myoffset == 0){ 
-        mpv = neginfmask;
-      }
-      else{
-      mpv = sv_shuffle;
-      }
-    }
-    // Find max of the hvs
-    partner_hv = __shfl_down(hv, 16); 
-    if(myoffset < 16){ // only bottom half of the cores continue from here
-  
-
-      hv = max(hv, partner_hv);
-
-      // Reduce 6 4x8-bit quantities to 8
-      partner_hv = __shfl_down(hv, 8); 
-      if(myoffset < 8){ // only bottom half of the cores continue from here
-  
-
-        hv = max(hv, partner_hv);
-
-        // Reduce 8 4x8-bit quantities to 4
-        partner_hv = __shfl_down(hv, 4); 
-        if(myoffset < 4){ // only bottom half of the cores continue from here
-
-          hv = max(hv, partner_hv);
-
-          // Reduce 4 4x8-bit quantities to 2
-          partner_hv = __shfl_down(hv, 2); 
-          if(myoffset < 2){ // only bottom half of the cores continue from here
-
-            hv = max(hv, partner_hv);
-            // Reduce 2 4x8-bit quantities to 1
-
-            partner_hv = __shfl_down(hv, 1); 
-            if(myoffset < 1){ // only bottom half of the cores continue from here
-
-              hv = max(hv, partner_hv);
-
-              if((myblock == 0) &&(mywarp ==0) && (myoffset == 0)){ // only one thread writes result
-                if (hv > 127){
-                  *retval = 127; 
-                }
-                else{
-                  if (hv < -128){  
-                    *retval = -128;
-                  }
-                  else{
-                    *retval = hv & 255;
-                  }                 
-                }
-              } 
-            }
-          }
-        }
-      }
-    }
-  }
-  free(dp);
-  return; 
-}  
-
-// This attempt uses 32-bit math and DP registers to see if that speeds things up any
-__global__ void SSV_cuda_8to32(char *dsq, P7_FILTERMX *mx, int L, int Q, P7_OPROFILE *om, int8_t *retval){
-  int myoffset, mywarp, myblock; // per-thread offset from start of each "vector"
-  int *rbv, mpv[4], hv[4], hv_max; 
-  int neginfmask = -128;
-  //unsigned int neginfmask = 0x80808080;
-  myoffset = threadIdx.x; // Expect a one-dimensional block of 32 threads (one warp)
-  mywarp = threadIdx.y; 
-  myblock = blockIdx.y;
-  int num_reps, i;
-  int dp_local[128];
-  int sv[4], sv_shuffle;
-  int **rbv_base;
-  // copy rbv array 
-  if(om->M <= 1024){
-    if((myoffset < 21) && (mywarp == 0)){ // update this for different alphabets
-      memcpy((rbv_block + 1024 * myoffset), om->rbv[myoffset], 128*Q);
-      rbv_shared[myoffset] = &(rbv_block[myoffset * 1024]);
-    }
-    rbv_base = (int **) rbv_shared;
-  }
-  else{
-    rbv_base = (int **) om->rbv;
-  }
-  __syncthreads();
-
-  if(myoffset == 0){
-    // only do memory setup on one thread
-    if(mx->allocM < om->M){
-      if(mx->allocM == 0){
-        mx->dp = (int16_t *) malloc(512 * Q);
-      }
-      else{
-        free(mx->dp);
-          mx->dp = (int16_t *) malloc(512 * Q);
-      }
-      mx->allocM = om->M;
-    }
-  }
-  __syncthreads(); //barrier until thread 0 done with any memory setup
-    
-
-  for(num_reps = 0; num_reps < NUM_REPS; num_reps++){
-
-/*    for(i = 0; i < Q; i++){ // initialize our row buffer
-      ((int *)mx->dp)[(i * 128) + (myoffset * 4)] = neginfmask;
-      ((int *)mx->dp)[(i * 128) + (myoffset * 4) + 1] = neginfmask;
-      ((int *)mx->dp)[(i * 128) + (myoffset * 4) + 2] = neginfmask;
-      ((int *)mx->dp)[(i * 128) + (myoffset * 4) + 3] = neginfmask;
-    } */
-    dp_local[0] = neginfmask;
-    dp_local[1] = neginfmask;
-    dp_local[2] = neginfmask;
-    dp_local[3] = neginfmask;
-    dp_local[4] = neginfmask;
-    dp_local[5] = neginfmask;
-    dp_local[6] = neginfmask;
-    dp_local[7] = neginfmask;
-    dp_local[8] = neginfmask;
-    dp_local[9] = neginfmask;
-    dp_local[10] = neginfmask;
-    dp_local[11] = neginfmask;
-
-    mpv[0] = neginfmask;
-    hv[0] = neginfmask;
-    mpv[1] = neginfmask;
-    hv[1] = neginfmask;
-    mpv[2] = neginfmask;
-    hv[2] = neginfmask;
-    mpv[3] = neginfmask;
-    hv[3] = neginfmask;
-    char4 dsq_chunk;
-    int *rbv1, *rbv2, *rbv3;
-    if(Q == 3){
-      char4 rbv_test;
-      if(myoffset == 0){
-        dsq_buffer[mywarp] = *((int *) dsq); // Grab chunks of dsq four bytes at a time to reduce number of global memory loads
-      }
-      for(i = 0; (L-i) > 3; i+=4){
-        dsq_chunk = *((char4 *)(dsq_buffer+mywarp)) ;
-        if(myoffset == 0){
-          dsq_buffer[mywarp] = *((int *) (dsq+ i)); // Grab chunks of dsq four bytes at a time to reduce number of global memory loads
-        }
-        rbv = (rbv_base[dsq_chunk.x]) + myoffset;
-        rbv1 =  (rbv_base[dsq_chunk.y]) + myoffset;
-        rbv2 = (rbv_base[dsq_chunk.z]) + myoffset;
-        rbv3 = (rbv_base[dsq_chunk.w]) + myoffset;
-        // row 1
-        rbv_test = (* (char4*)rbv); 
-        sv[0] = mpv[0] + rbv_test.x; 
-#ifdef TRUNCATE
-        if(sv[0] < -128){
-          sv[0] = -128;
-        }
-#endif
-        MAX(hv[0], hv[0], sv[0]);
-        //hv[0] = max(hv[0], sv[0]); 
-        mpv[0] = dp_local[0]; 
-        dp_local[0] = sv[0];  
-        sv[1] = mpv[1] + rbv_test.y;   
-#ifdef TRUNCATE
-        if(sv[1] < -128){  
-          sv[1] = -128; 
-        } 
-#endif  
-        MAX(hv[1], hv[1], sv[1]);
-//        hv[1] = max(hv[1], sv[1]); 
-        mpv[1] = dp_local[1]; 
-        dp_local[1] = sv[1]; 
-        sv[2] = mpv[2] + rbv_test.z; 
-#ifdef TRUNCATE
-        if (sv[2] < -128){ 
-          sv[2] = -128;
-        }
-#endif
-        MAX(hv[2], sv[2], hv[2]);        
-//        hv[2] = max(hv[2], sv[2]);
-        mpv[2] = dp_local[2];
-        dp_local[2] = sv[2];
-        sv[3] = mpv[3] + rbv_test.w;
-#ifdef TRUNCATE
-        if (sv[3] < -128){
-          sv[3] = -128;
-        } 
-#endif
-//        hv[3] = max(hv[3], sv[3]);
-        MAX(hv[3], sv[3], hv[3]);
-        mpv[3] = dp_local[3];
-        dp_local[3] = sv[3];
-        rbv += 32;
-        rbv_test = (* (char4*)rbv);
-        sv[0] = mpv[0] + rbv_test.x;
-#ifdef TRUNCATE        
-        if(sv[0] < -128){
-          sv[0] = -128;
-        } 
-#endif  
-        MAX(hv[0], sv[0], hv[0]);      
-//        hv[0] = max(hv[0], sv[0]);
-        mpv[0] = dp_local[4];
-        dp_local[4] = sv[0];
-        sv[1] = mpv[1] + rbv_test.y;
-#ifdef TRUNCATE
-        if(sv[1] < -128){
-          sv[1] = -128;
-        } 
-#endif
-        MAX(hv[1], sv[1], hv[1]);
-//        hv[1] = max(hv[1], sv[1]);
-        mpv[1] = dp_local[5];
-        dp_local[5] = sv[1];
-        sv[2] = mpv[2] + rbv_test.z;
-#ifdef TRUNCATE        
-        if (sv[2] < -128){
-          sv[2] = -128;
-        } 
-#endif
-        MAX(hv[2], hv[2], sv[2]);
-//        hv[2] = max(hv[2], sv[2]);
-        mpv[2] = dp_local[6];
-        dp_local[6] = sv[2];
-        sv[3] = mpv[3] + rbv_test.w;
-#ifdef TRUNCATE
-        if (sv[3] < -128){
-          sv[3] = -128;
-        }
-#endif
-        MAX(hv[3], sv[3], hv[3]);
-//        hv[3] = max(hv[3], sv[3]);
-        mpv[3] = dp_local[7];
-        dp_local[7] = sv[3];
-        rbv += 32;
-        rbv_test = (* (char4*)rbv);
-        sv[0] = mpv[0] + rbv_test.x;
-#ifdef TRUNCATE
-        if(sv[0] < -128){
-          sv[0] = -128;
-        } 
-#endif
-        MAX(hv[0], hv[0], sv[0]);
-//        hv[0] = max(hv[0], sv[0]);
-        mpv[0] = dp_local[8];
-        dp_local[8] = sv[0];
-        sv[1] = mpv[1] + rbv_test.y;
-#ifdef TRUNCATE
-        if(sv[1] < -128){
-          sv[1] = -128;
-        }
-#endif
-        MAX(hv[1], sv[1], hv[1]);
-//        hv[1] = max(hv[1], sv[1]);
-        mpv[1] = dp_local[9];
-        dp_local[9] = sv[1];
-        sv[2] = mpv[2] + rbv_test.z;
-#ifdef TRUNCATE
-        if (sv[2] < -128){
-          sv[2] = -128;
-        }
-#endif
-        MAX(hv[2], sv[2], hv[2]);
-//        hv[2] = max(hv[2], sv[2]);
-        mpv[2] = dp_local[10];
-        dp_local[10] = sv[2];
-        sv[3] = mpv[3] + rbv_test.w;
-#ifdef TRUNCATE
-        if (sv[3] < -128){
-          sv[3] = -128;
-        }
-#endif
-        MAX(hv[3], sv[3], hv[3]);
-//        hv[3] = max(hv[3], sv[3]);
-        mpv[3] = dp_local[11];
-        dp_local[11] = sv[3];
-        sv_shuffle = __shfl_up(sv[3], 1);
-        mpv[3] = sv[2];
-        mpv[2] = sv[1];
-        mpv[1] = sv[0];
-        if(myoffset == 0){ 
-          mpv[0] = neginfmask;
-        }
-        else{
-          mpv[0] = sv_shuffle;
-        }
-
-        //row 2
-        //rbv = (rbv_base[dsq_chunk.y]) + myoffset;
-        rbv_test = (* (char4*)rbv1);
-        sv[0] = mpv[0] + rbv_test.x;
-#ifdef TRUNCATE
-        if(sv[0] < -128){
-          sv[0] = -128;
-        }
-#endif
-        MAX(hv[0], sv[0], hv[0]);
-//        hv[0] = max(hv[0], sv[0]);
-        mpv[0] = dp_local[0];
-        dp_local[0] = sv[0];
-        sv[1] = mpv[1] + rbv_test.y;
-#ifdef TRUNCATE
-        if(sv[1] < -128){
-          sv[1] = -128;
-        }
-#endif
-        MAX(hv[1], sv[1], hv[1]);
-//        hv[1] = max(hv[1], sv[1]);
-        mpv[1] = dp_local[1];
-        dp_local[1] = sv[1];
-        sv[2] = mpv[2] + rbv_test.z;
-#ifdef TRUNCATE
-        if (sv[2] < -128){
-          sv[2] = -128;
-        }
-#endif
-        MAX(hv[2], sv[2], hv[2]);
-//        hv[2] = max(hv[2], sv[2]);
-        mpv[2] = dp_local[2];
-        dp_local[2] = sv[2];
-        sv[3] = mpv[3] + rbv_test.w;
-#ifdef TRUNCATE
-        if (sv[3] < -128){
-          sv[3] = -128;
-        }
-#endif
-        MAX(hv[3], sv[3], hv[3]);
-//        hv[3] = max(hv[3], sv[3]);
-        mpv[3] = dp_local[3];
-        dp_local[3] = sv[3];
-        rbv1 += 32;
-        rbv_test = (* (char4*)rbv1);
-        sv[0] = mpv[0] + rbv_test.x;
-#ifdef TRUNCATE
-        if(sv[0] < -128){
-          sv[0] = -128;
-        }
-#endif
-        MAX(hv[0], sv[0], hv[0]);
-//        hv[0] = max(hv[0], sv[0]);
-        mpv[0] = dp_local[4];
-        dp_local[4] = sv[0];
-        sv[1] = mpv[1] + rbv_test.y;
-#ifdef TRUNCATE        
-        if(sv[1] < -128){
-          sv[1] = -128; 
-        }
-#endif
-        MAX(hv[1], sv[1], hv[1]);
-//        hv[1] = max(hv[1], sv[1]);
-        mpv[1] = dp_local[5];
-        dp_local[5] = sv[1];
-        sv[2] = mpv[2] + rbv_test.z;
-#ifdef TRUNCATE
-        if (sv[2] < -128){
-          sv[2] = -128;
-        }
-#endif
-        MAX(hv[2], sv[2], hv[2]);
-        //hv[2] = max(hv[2], sv[2]);
-        mpv[2] = dp_local[6];
-        dp_local[6] = sv[2];
-        sv[3] = mpv[3] + rbv_test.w;
-#ifdef TRUNCATE
-        if (sv[3] < -128){
-          sv[3] = -128;
-        }
-#endif
-        MAX(hv[3], sv[3], hv[3]);
-//        hv[3] = max(hv[3], sv[3]);
-        mpv[3] = dp_local[7];
-        dp_local[7] = sv[3];
-        rbv1 += 32;
-        rbv_test = (* (char4*)rbv1);
-        sv[0] = mpv[0] + rbv_test.x;
-#ifdef TRUNCATE
-        if(sv[0] < -128){
-          sv[0] = -128;
-        }
-#endif
-        MAX(hv[0], sv[0], hv[0]);
-        //hv[0] = max(hv[0], sv[0]);
-        mpv[0] = dp_local[8];
-        dp_local[8] = sv[0];
-        sv[1] = mpv[1] + rbv_test.y;
-#ifdef TRUNCATE
-        if(sv[1] < -128){
-          sv[1] = -128;
-        }
-#endif
-        MAX(hv[1], sv[1], hv[1]);
-        //hv[1] = max(hv[1], sv[1]);
-        mpv[1] = dp_local[9];
-        dp_local[9] = sv[1];
-        sv[2] = mpv[2] + rbv_test.z;
-#ifdef TRUNCATE
-        if (sv[2] < -128){
-          sv[2] = -128;
-        }
-#endif
-        MAX(hv[2], sv[2], hv[2]);
-//        hv[2] = max(hv[2], sv[2]);
-        mpv[2] = dp_local[10];
-        dp_local[10] = sv[2];
-        sv[3] = mpv[3] + rbv_test.w;
-#ifdef TRUNCATE
-        if (sv[3] < -128){
-          sv[3] = -128;
-        }
-#endif
-          MAX(hv[3], sv[3], hv[3]);
-//        hv[3] = max(hv[3], sv[3]);
-        mpv[3] = dp_local[11];
-        dp_local[11] = sv[3];
-        sv_shuffle = __shfl_up(sv[3], 1);
-        mpv[3] = sv[2];
-        mpv[2] = sv[1];
-        mpv[1] = sv[0];
-        if(myoffset == 0){ 
-          mpv[0] = neginfmask;
-        }
-        else{
-          mpv[0] = sv_shuffle;
-        }
-
-        // Row 3
-        //rbv = (rbv_base[dsq_chunk.z]) + myoffset; 
-        
-        rbv_test = (* (char4*)rbv2);
-        sv[0] = mpv[0] + rbv_test.x;
-#ifdef TRUNCATE
-        if(sv[0] < -128){
-          sv[0] = -128;
-        }
-#endif
-        MAX(hv[0], sv[0], hv[0]);
-        //hv[0] = max(hv[0], sv[0]);
-        mpv[0] = dp_local[0];
-        dp_local[0] = sv[0];
-        sv[1] = mpv[1] + rbv_test.y;
-#ifdef TRUNCATE
-        if(sv[1] < -128){
-          sv[1] = -128;
-        }
-#endif
-        MAX(hv[1], sv[1], hv[1]);
-        //hv[1] = max(hv[1], sv[1]);
-        mpv[1] = dp_local[1];
-        dp_local[1] = sv[1];
-        sv[2] = mpv[2] + rbv_test.z;
-#ifdef TRUNCATE
-        if (sv[2] < -128){
-          sv[2] = -128;
-        }
-#endif
-        MAX(hv[2], sv[2], hv[2]);
-        //hv[2] = max(hv[2], sv[2]);
-        mpv[2] = dp_local[2];
-        dp_local[2] = sv[2];
-        sv[3] = mpv[3] + rbv_test.w;
-#ifdef TRUNCATE
-        if (sv[3] < -128){
-          sv[3] = -128;
-        }
-#endif
-        MAX(hv[3], sv[3], hv[3]);
-//        hv[3] = max(hv[3], sv[3]);
-        mpv[3] = dp_local[3];
-        dp_local[3] = sv[3];
-        rbv2 += 32;
-        rbv_test = (* (char4*)rbv2);
-        sv[0] = mpv[0] + rbv_test.x;
-#ifdef TRUNCATE
-        if(sv[0] < -128){
-          sv[0] = -128;
-        }
-#endif        
-        MAX(hv[0], sv[0], hv[0]);
-        //hv[0] = max(hv[0], sv[0]);
-        mpv[0] = dp_local[4];
-        dp_local[4] = sv[0];
-        sv[1] = mpv[1] + rbv_test.y;
-#ifdef  TRUNCATE    
-        if(sv[1] < -128){
-          sv[1] = -128;
-        }
-#endif
-        MAX(hv[1], sv[1], hv[1]);
-//        hv[1] = max(hv[1], sv[1]);
-        mpv[1] = dp_local[5];
-        dp_local[5] = sv[1];
-        sv[2] = mpv[2] + rbv_test.z;
-#ifdef TRUNCATE
-        if (sv[2] < -128){
-          sv[2] = -128;
-        }
-#endif        
-        MAX(hv[2], sv[2], hv[2]);
-//        hv[2] = max(hv[2], sv[2]);
-        mpv[2] = dp_local[6];
-        dp_local[6] = sv[2];
-        sv[3] = mpv[3] + rbv_test.w;
-#ifdef  TRUNCATE
-        if (sv[3] < -128){
-          sv[3] = -128; 
-        }
-#endif
-        MAX(hv[3], sv[3], hv[3]);
-        //hv[3] = max(hv[3], sv[3]);
-        mpv[3] = dp_local[7];
-        dp_local[7] = sv[3];
-        rbv2 += 32; 
-        rbv_test = (* (char4*)rbv2);
-        sv[0] = mpv[0] + rbv_test.x;
-#ifdef TRUNCATE
-        if(sv[0] < -128){
-          sv[0] = -128; 
-        } 
-#endif
-        MAX(hv[0], sv[0], hv[0]);
-        hv[0] = max(hv[0], sv[0]);
-        mpv[0] = dp_local[8];
-        dp_local[8] = sv[0];
-        sv[1] = mpv[1] + rbv_test.y;
-#ifdef TRUNCATE
-        if(sv[1] < -128){
-          sv[1] = -128; 
-        }
-#endif
-        MAX(hv[1], sv[1], hv[1]);
-//        hv[1] = max(hv[1], sv[1]);
-        mpv[1] = dp_local[9];
-        dp_local[9] = sv[1];
-        sv[2] = mpv[2] + rbv_test.z;
-#ifdef TRUNCATE
-        if (sv[2] < -128){
-          sv[2] = -128;
-        }
-#endif
-        MAX(hv[2], sv[2], hv[2]);
-//        hv[2] = max(hv[2], sv[2]);
-        mpv[2] = dp_local[10];
-        dp_local[10] = sv[2];
-        sv[3] = mpv[3] + rbv_test.w;
-#ifdef TRUNCATE
-        if (sv[3] < -128){
-          sv[3] = -128;
-        }
-#endif
-        MAX(hv[3], sv[3], hv[3]);
-//        hv[3] = max(hv[3], sv[3]);
-        mpv[3] = dp_local[11];
-        dp_local[11] = sv[3];
-        sv_shuffle = __shfl_up(sv[3], 1);
-        mpv[3] = sv[2];
-        mpv[2] = sv[1];
-        mpv[1] = sv[0];
-        if(myoffset == 0){ 
-          mpv[0] = neginfmask;
-        }
-        else{
-          mpv[0] = sv_shuffle; 
-        }
-        //row 4
-        //rbv = (rbv_base[dsq_chunk.w]) + myoffset; 
-        
-        rbv_test = (* (char4*)rbv3);
-        sv[0] = mpv[0] + rbv_test.x;
-#ifdef TRUNCATE
-        if(sv[0] < -128){
-          sv[0] = -128;
-        }
-#endif
-        MAX(hv[0], sv[0], hv[0]);
-        //hv[0] = max(hv[0], sv[0]); 
-        mpv[0] = dp_local[0]; 
-        dp_local[0] = sv[0];  
-        sv[1] = mpv[1] + rbv_test.y;
-#ifdef TRUNCATE
-        if(sv[1] < -128){
-          sv[1] = -128; 
-        }
-#endif
-        MAX(hv[1], sv[1], hv[1]);
-//        hv[1] = max(hv[1], sv[1]);
-        mpv[1] = dp_local[1];
-        dp_local[1] = sv[1];
-        sv[2] = mpv[2] + rbv_test.z;
-#ifdef  TRUNCATE
-        if (sv[2] < -128){
-          sv[2] = -128;
-        }
-#endif
-        MAX(hv[2], sv[2], hv[2]);
-//        hv[2] = max(hv[2], sv[2]);
-        mpv[2] = dp_local[2];
-        dp_local[2] = sv[2];
-        sv[3] = mpv[3] + rbv_test.w;
-#ifdef  TRUNCATE
-        if (sv[3] < -128){
-          sv[3] = -128; 
-        } 
-#endif
-        MAX(hv[3], sv[3], hv[3]);
-        //hv[3] = max(hv[3], sv[3]);
-        mpv[3] = dp_local[3]; 
-        dp_local[3] = sv[3];
-        rbv3 += 32;
-        rbv_test = (* (char4*)rbv3);
-        sv[0] = mpv[0] + rbv_test.x;
-#ifdef TRUNCATE
-        if(sv[0] < -128){
-          sv[0] = -128; 
-        }
-#endif
-           MAX(hv[0], sv[0], hv[0]);
-        //hv[0] = max(hv[0], sv[0]);
-        mpv[0] = dp_local[4];
-        dp_local[4] = sv[0];
-        sv[1] = mpv[1] + rbv_test.y;
-#ifdef TRUNCATE
-        if(sv[1] < -128){
-          sv[1] = -128;
-        }
-#endif        
-        MAX(hv[1], sv[1], hv[1]);
-        //hv[1] = max(hv[1], sv[1]);
-        mpv[1] = dp_local[5];
-        dp_local[5] = sv[1];
-        sv[2] = mpv[2] + rbv_test.z;
-#ifdef TRUNCATE
-        if (sv[2] < -128){
-          sv[2] = -128;
-        }
-#endif  
-        MAX(hv[2], sv[2], hv[2]);      
-        //hv[2] = max(hv[2], sv[2]);
-        mpv[2] = dp_local[6];
-        dp_local[6] = sv[2];
-        sv[3] = mpv[3] + rbv_test.w;
-#ifdef TRUNCATE
-        if (sv[3] < -128){
-          sv[3] = -128;
-        }
-#endif
-        MAX(hv[3], sv[3], hv[3]);
-        //hv[3] = max(hv[3], sv[3]);
-        mpv[3] = dp_local[7];
-        dp_local[7] = sv[3];
-        rbv3 += 32;
-        rbv_test = (* (char4*)rbv3); 
-        sv[0] = mpv[0] + rbv_test.x;
-#ifdef TRUNCATE
-        if(sv[0] < -128){
-          sv[0] = -128;
-        }
-#endif
-        MAX(hv[0], sv[0], hv[0]);
-        //hv[0] = max(hv[0], sv[0]);
-        mpv[0] = dp_local[8];
-        dp_local[8] = sv[0];
-        sv[1] = mpv[1] + rbv_test.y;
-#ifdef TRUNCATE
-        if(sv[1] < -128){
-          sv[1] = -128; 
-        }
-#endif
-        MAX(hv[1], sv[1], hv[1]);
-//        hv[1] = max(hv[1], sv[1]);
-        mpv[1] = dp_local[9];
-        dp_local[9] = sv[1];
-        sv[2] = mpv[2] + rbv_test.z;
-#ifdef TRUNCATE
-        if (sv[2] < -128){
-          sv[2] = -128;
-        }
-#endif
-        MAX(hv[2], sv[2], hv[2]);
-//        hv[2] = max(hv[2], sv[2]);
-        mpv[2] = dp_local[10];
-        dp_local[10] = sv[2];
-        sv[3] = mpv[3] + rbv_test.w;
-#ifdef TRUNCATE
-        if (sv[3] < -128){
-          sv[3] = -128; 
-        }
-#endif
-        MAX(hv[3], sv[3], hv[3]);
-//        hv[3] = max(hv[3], sv[3]);
-        mpv[3] = dp_local[11];
-        dp_local[11] = sv[3];
-        sv_shuffle = __shfl_up(sv[3], 1);
-        mpv[3] = sv[2];
-        mpv[2] = sv[1];
-        mpv[1] = sv[0];
-        if(myoffset == 0){
-          mpv[0] = neginfmask;
-        }
-        else{
-          mpv[0] = sv_shuffle;
-        }
-      }
-      dsq_chunk = *((char4 *) dsq_buffer+mywarp);
-      int remaining_rows = L-i;
-      if(remaining_rows > 0){
-        // If we get in here, there must be at least one row remaining to compute
-        rbv = (rbv_base[dsq_chunk.x]) + myoffset;  
-        // row 1
-        rbv_test = (* (char4*)rbv);
-        sv[0] = mpv[0] + rbv_test.x;
-#ifdef TRUNCATE
-        if(sv[0] < -128){
-          sv[0] = -128;
-        }
-#endif
-        MAX(hv[0], sv[0], hv[0]);
-        //hv[0] = max(hv[0], sv[0]);
-        mpv[0] = dp_local[0];
-        dp_local[0] = sv[0]; 
-        sv[1] = mpv[1] + rbv_test.y;
-#ifdef TRUNCATE
-        if(sv[1] < -128){ 
-          sv[1] = -128; 
-        }
-#endif
-        MAX(hv[1], sv[1], hv[1]);
-        //hv[1] = max(hv[1], sv[1]); 
-        mpv[1] = dp_local[1];
-        dp_local[1] = sv[1]; 
-        sv[2] = mpv[2] + rbv_test.z;
-#ifdef TRUNCATE
-        if (sv[2] < -128){
-          sv[2] = -128; 
-        } 
-#endif
-        MAX(hv[2], sv[2], hv[2]);
-//        hv[2] = max(hv[2], sv[2]);
-        mpv[2] = dp_local[2]; 
-        dp_local[2] = sv[2]; 
-        sv[3] = mpv[3] + rbv_test.w;
-#ifdef TRUNCATE
-        if (sv[3] < -128){
-          sv[3] = -128;
-        } 
-#endif
-        MAX(hv[3], sv[3], hv[3]);    
-//        hv[3] = max(hv[3], sv[3]);
-        mpv[3] = dp_local[3];
-        dp_local[3] = sv[3];
-        rbv += 32;
-        rbv_test = (* (char4*)rbv);
-        sv[0] = mpv[0] + rbv_test.x;
-#ifdef TRUNCATE 
-        if(sv[0] < -128){ 
-          sv[0] = -128;
-        }
-#endif        
-        MAX(hv[0], sv[0], hv[0]);
- //       hv[0] = max(hv[0], sv[0]);
-        mpv[0] = dp_local[4];
-        dp_local[4] = sv[0];
-        sv[1] = mpv[1] + rbv_test.y;
-#ifdef TRUNCATE
-        if(sv[1] < -128){
-          sv[1] = -128;
-        }
-#endif
-        MAX(hv[1], sv[1], hv[1]);
-//        hv[1] = max(hv[1], sv[1]);
-        mpv[1] = dp_local[5];
-        dp_local[5] = sv[1];
-        sv[2] = mpv[2] + rbv_test.z;
-#ifdef TRUNCATE
-        if (sv[2] < -128){ 
-          sv[2] = -128;
-        }
-#endif
-        MAX(hv[2], sv[2], hv[2]);
-//        hv[2] = max(hv[2], sv[2]);
-        mpv[2] = dp_local[6];
-        dp_local[6] = sv[2];
-        sv[3] = mpv[3] + rbv_test.w;
-#ifdef TRUNCATE
-        if (sv[3] < -128){
-          sv[3] = -128;
-        }
-#endif
-        MAX(hv[3], sv[3], hv[3]);
-//        hv[3] = max(hv[3], sv[3]);
-        mpv[3] = dp_local[7];
-        dp_local[7] = sv[3];
-        rbv += 32;
-        rbv_test = (* (char4*)rbv);
-        sv[0] = mpv[0] + rbv_test.x;
-#ifdef TRUNCATE
-        if(sv[0] < -128){
-          sv[0] = -128; 
-        }
-#endif
-        MAX(hv[0], sv[0], hv[0]);
-//        hv[0] = max(hv[0], sv[0]);
-        mpv[0] = dp_local[8];
-        dp_local[8] = sv[0];
-        sv[1] = mpv[1] + rbv_test.y;
-#ifdef TRUNCATE
-        if(sv[1] < -128){
-          sv[1] = -128;
-        }
-#endif
-        MAX(hv[1], sv[1], hv[1]);
-//        hv[1] = max(hv[1], sv[1]);
-        mpv[1] = dp_local[9];
-        dp_local[9] = sv[1];
-        sv[2] = mpv[2] + rbv_test.z;
-#ifdef TRUNCATE
-        if (sv[2] < -128){
-          sv[2] = -128;
-        }
-#endif
-        MAX(hv[2], sv[2], hv[2]);
-//        hv[2] = max(hv[2], sv[2]);
-        mpv[2] = dp_local[10];
-        dp_local[10] = sv[2];
-        sv[3] = mpv[3] + rbv_test.w;
-#ifdef TRUNCATE        
-        if (sv[3] < -128){
-          sv[3] = -128;
-        }
-#endif
-        MAX(hv[3], sv[3], hv[3]);
-//        hv[3] = max(hv[3], sv[3]);
-        mpv[3] = dp_local[11];
-        dp_local[11] = sv[3];
-        rbv += 32; 
-        sv_shuffle = __shfl_up(sv[3], 1);
-        mpv[3] = sv[2];
-        mpv[2] = sv[1];
-        mpv[1] = sv[0];
-        if(myoffset == 0){
-          mpv[0] = neginfmask;
-        }
-        else{
-          mpv[0] = sv_shuffle;
-        }
-        if(remaining_rows > 1){
-          //row 2
-          rbv = (rbv_base[dsq_chunk.y]) + myoffset;
-          rbv_test = (* (char4*)rbv);
-          sv[0] = mpv[0] + rbv_test.x;
-#ifdef TRUNCATE
-          if(sv[0] < -128){
-            sv[0] = -128;
-          }
-#endif
-          MAX(hv[0], sv[0], hv[0]);
-          //hv[0] = max(hv[0], sv[0]);
-          mpv[0] = dp_local[0];
-          dp_local[0] = sv[0]; 
-          sv[1] = mpv[1] + rbv_test.y;
-#ifdef TRUNCATE
-          if(sv[1] < -128){
-            sv[1] = -128;
-          }
-#endif    
-          MAX(hv[1], sv[1], hv[1]);     
-        //  hv[1] = max(hv[1], sv[1]);
-          mpv[1] = dp_local[1];
-          dp_local[1] = sv[1];
-          sv[2] = mpv[2] + rbv_test.z; 
-#ifdef TRUNCATE
-          if (sv[2] < -128){ 
-            sv[2] = -128; 
-          }
-#endif
-          MAX(hv[2], sv[2], hv[2]);
-          //hv[2] = max(hv[2], sv[2]);
-          mpv[2] = dp_local[2];
-          dp_local[2] = sv[2];
-          sv[3] = mpv[3] + rbv_test.w;
-#ifdef TRUNCATE
-          if (sv[3] < -128){ 
-            sv[3] = -128;
-          }
-#endif
-          MAX(hv[3], sv[3], hv[3]);
-          hv[3] = max(hv[3], sv[3]);
-          mpv[3] = dp_local[3];
-          dp_local[3] = sv[3];
-          rbv += 32;
-          rbv_test = (* (char4*)rbv);
-          sv[0] = mpv[0] + rbv_test.x;
-#ifdef TRUNCATE
-          if(sv[0] < -128){
-            sv[0] = -128;
-          }
-#endif
-          MAX(hv[0], sv[0], hv[0]);
-//          hv[0] = max(hv[0], sv[0]);
-          mpv[0] = dp_local[4];
-          dp_local[4] = sv[0];
-          sv[1] = mpv[1] + rbv_test.y;
-#ifdef TRUNCATE
-          if(sv[1] < -128){
-            sv[1] = -128;
-          }
-#endif
-          MAX(hv[1], sv[1], hv[1]);
-//          hv[1] = max(hv[1], sv[1]);
-          mpv[1] = dp_local[5];
-          dp_local[5] = sv[1];
-          sv[2] = mpv[2] + rbv_test.z;
-#ifdef TRUNCATE
-          if (sv[2] < -128){
-            sv[2] = -128;
-          }
-#endif          
-          MAX(hv[2], sv[2], hv[2]); 
-//          hv[2] = max(hv[2], sv[2]);
-          mpv[2] = dp_local[6];
-          dp_local[6] = sv[2];
-          sv[3] = mpv[3] + rbv_test.w;
-#ifdef TRUNCATE
-          if (sv[3] < -128){
-            sv[3] = -128;
-          }
-#endif
-        MAX(hv[3], sv[3], hv[3]);
-//          hv[3] = max(hv[3], sv[3]);
-          mpv[3] = dp_local[7];
-          dp_local[7] = sv[3];
-          rbv += 32;
-
-          rbv_test = (* (char4*)rbv);
-          sv[0] = mpv[0] + rbv_test.x;
-#ifdef TRUNCATE
-          if(sv[0] < -128){ 
-            sv[0] = -128; 
-          } 
-#endif
-          MAX(hv[0], sv[0], hv[0]);
-          hv[0] = max(hv[0], sv[0]);
-          mpv[0] = dp_local[8]; 
-          dp_local[8] = sv[0]; 
-          sv[1] = mpv[1] + rbv_test.y;
-#ifdef TRUNCATE
-          if(sv[1] < -128){ 
-            sv[1] = -128; 
-          }
-#endif
-          MAX(hv[1], sv[1], hv[1]);
-          //hv[1] = max(hv[1], sv[1]); 
-          mpv[1] = dp_local[9]; 
-          dp_local[9] = sv[1]; 
-          sv[2] = mpv[2] + rbv_test.z; 
-#ifdef TRUNCATE
-          if (sv[2] < -128){ 
-            sv[2] = -128; 
-          }
-#endif
-          MAX(hv[2], sv[2], hv[2]);
-          //hv[2] = max(hv[2], sv[2]); 
-          mpv[2] = dp_local[10]; 
-          dp_local[10] = sv[2]; 
-          sv[3] = mpv[3] + rbv_test.w; 
-#ifdef TRUNCATE
-          if (sv[3] < -128){ 
-            sv[3] = -128; 
-          } 
-#endif
-          MAX(hv[3], sv[3], hv[3]);
-//          hv[3] = max(hv[3], sv[3]); 
-          mpv[3] = dp_local[11]; 
-          dp_local[11] = sv[3]; 
-          rbv += 32;  
-          sv_shuffle = __shfl_up(sv[3], 1);  
-          mpv[3] = sv[2];
-          mpv[2] = sv[1];
-          mpv[1] = sv[0];
-          if(myoffset == 0){ 
-            mpv[0] = neginfmask;
-          }
-          else{
-            mpv[0] = sv_shuffle; 
-          }
-          if(remaining_rows > 2){
-            // Row 3
-            rbv = (rbv_base[dsq_chunk.z]) + myoffset; 
-        
-            rbv_test = (* (char4*)rbv);
-            sv[0] = mpv[0] + rbv_test.x; 
-#ifdef TRUNCATE
-            if(sv[0] < -128){
-              sv[0] = -128;
-            }
-#endif
-            MAX(hv[0], sv[0], hv[0]);
-  //          hv[0] = max(hv[0], sv[0]);
-            mpv[0] = dp_local[0]; 
-            dp_local[0] = sv[0];
-            sv[1] = mpv[1] + rbv_test.y;
-#ifdef TRUNCATE
-            if(sv[1] < -128){ 
-              sv[1] = -128; 
-            } 
-#endif
-            MAX(hv[1], sv[1], hv[1]);
-            //hv[1] = max(hv[1], sv[1]);
-            mpv[1] = dp_local[1];
-            dp_local[1] = sv[1];
-            sv[2] = mpv[2] + rbv_test.z;
-#ifdef TRUNCATE
-            if (sv[2] < -128){ 
-              sv[2] = -128; 
-            } 
-#endif
-            MAX(hv[2], sv[2], hv[2]);
-//            hv[2] = max(hv[2], sv[2]); 
-            mpv[2] = dp_local[2]; 
-            dp_local[2] = sv[2]; 
-            sv[3] = mpv[3] + rbv_test.w; 
-#ifdef TRUNCATE
-            if (sv[3] < -128){ 
-              sv[3] = -128; 
-            } 
-#endif
-            MAX(hv[3], sv[3], hv[3]);
-  //          hv[3] = max(hv[3], sv[3]);
-            mpv[3] = dp_local[3];
-            dp_local[3] = sv[3];
-            rbv += 32; 
-          
-            rbv_test = (* (char4*)rbv); 
-            sv[0] = mpv[0] + rbv_test.x; 
-#ifdef TRUNCATE
-            if(sv[0] < -128){ 
-              sv[0] = -128; 
-            } 
-#endif
-            MAX(hv[0], sv[0], hv[0]);
-            //hv[0] = max(hv[0], sv[0]);
-            mpv[0] = dp_local[4];
-            dp_local[4] = sv[0]; 
-            sv[1] = mpv[1] + rbv_test.y;
-#ifdef TRUNCATE            
-            if(sv[1] < -128){ 
-              sv[1] = -128;
-            } 
-#endif
-            MAX(hv[1], sv[1], hv[1]);
-            //hv[1] = max(hv[1], sv[1]);
-            mpv[1] = dp_local[5];
-            dp_local[5] = sv[1];
-            sv[2] = mpv[2] + rbv_test.z;
-#ifdef TRUNCATE
-            if (sv[2] < -128){ 
-              sv[2] = -128; 
-            } 
-#endif
-            MAX(hv[2], sv[2], hv[2]);
-//            hv[2] = max(hv[2], sv[2]);
-            mpv[2] = dp_local[6];
-            dp_local[6] = sv[2]; 
-            sv[3] = mpv[3] + rbv_test.w;
-#ifdef TRUNCATE
-            if (sv[3] < -128){
-              sv[3] = -128;
-            }
-#endif
-            MAX(hv[3], sv[3], hv[3]);
-         //   hv[3] = max(hv[3], sv[3]);
-            mpv[3] = dp_local[7];
-            dp_local[7] = sv[3];
-            rbv += 32; 
-            rbv_test = (* (char4*)rbv);
-            sv[0] = mpv[0] + rbv_test.x;
-#ifdef TRUNCATE
-            if(sv[0] < -128){
-              sv[0] = -128; 
-            }
-#endif
-            MAX(hv[0], sv[0], hv[0]);
-            //hv[0] = max(hv[0], sv[0]); 
-            mpv[0] = dp_local[8]; 
-            dp_local[8] = sv[0]; 
-            sv[1] = mpv[1] + rbv_test.y;
-#ifdef TRUNCATE
-            if(sv[1] < -128){ 
-              sv[1] = -128; 
-            }
-#endif
-            MAX(hv[1], sv[1], hv[1]);
-//            hv[1] = max(hv[1], sv[1]);
-            mpv[1] = dp_local[9];
-            dp_local[9] = sv[1];
-            sv[2] = mpv[2] + rbv_test.z;
-#ifdef TRUNCATE
-            if (sv[2] < -128){
-              sv[2] = -128; 
-            }
-#endif
-            MAX(hv[2], sv[2], hv[2]);
-  //          hv[2] = max(hv[2], sv[2]);
-            mpv[2] = dp_local[10];
-            dp_local[10] = sv[2];
-            sv[3] = mpv[3] + rbv_test.w;
-#ifdef TRUNCATE            
-            if (sv[3] < -128){
-              sv[3] = -128;
-            } 
-#endif            
-            MAX(hv[3], sv[3], hv[3]);
-            //hv[3] = max(hv[3], sv[3]);
-            mpv[3] = dp_local[11]; 
-            dp_local[11] = sv[3]; 
-            rbv += 32;  
-            }
-          }
-        }
-    
-    }
-
-    int partner_hv;
-
-    // Done with main loop.  Now reduce answer vector (hv) to one byte for return
-    hv_max = max(hv[0], hv[1]);
-    hv_max = max(hv_max, hv[2]);
-    hv_max = max(hv_max, hv[3]);
-    partner_hv = __shfl_down(hv_max, 16); 
-    if(myoffset < 16){ // only bottom half of the cores continue from here
-  
-
-      hv_max = max(hv_max, partner_hv);
-
-      // Reduce 6 4x8-bit quantities to 8
-      partner_hv = __shfl_down(hv_max, 8); 
-      if(myoffset < 8){ // only bottom half of the cores continue from here
-  
-
-        hv_max = max(hv_max, partner_hv);
-
-        // Reduce 8 4x8-bit quantities to 4
-        partner_hv = __shfl_down(hv_max, 4); 
-        if(myoffset < 4){ // only bottom half of the cores continue from here
-
-          hv_max = max(hv_max, partner_hv);
-
-          // Reduce 4 4x8-bit quantities to 2
-          partner_hv = __shfl_down(hv_max, 2); 
-          if(myoffset < 2){ // only bottom half of the cores continue from here
-
-            hv_max = max(hv_max, partner_hv);
-            // Reduce 2 4x8-bit quantities to 1
-
-            partner_hv = __shfl_down(hv_max, 1); 
-            if(myoffset < 1){ // only bottom half of the cores continue from here
-
-              hv_max = max(hv_max, partner_hv);
-
-              if((myblock == 0) &&(mywarp ==0) && (myoffset == 0)){ // only one thread writes result
-                if (hv_max > 127){
-                  *retval = 127; 
-                }
-                else{
-                  if (hv_max < -128){  
-                    *retval = -128;
-                  }
-                  else{
-                    *retval = hv_max & 255;
-                  }                 
-                }
-              } 
-            }
-          }
-        }
-      }
-    }
-  } 
-  return;
-}
-
-
-__global__ void SSV_cuda_packed(char *dsq, P7_FILTERMX *mx, int L, int Q, P7_OPROFILE *om, int8_t *retval){
-
-  int myoffset, mywarp, myblock; // per-thread offset from start of each "vector"
-  unsigned int *rbv, *dp, mpv, hv; 
-  unsigned int neginfmask = 0x80808080;
-  myoffset = threadIdx.x; // Expect a one-dimensional block of 32 threads (one warp)
-  mywarp = threadIdx.y; 
-  myblock = blockIdx.y;
-  int num_reps, i;
-  int dp_local[128];
-  int sv, sv_shuffle, sv0, sv1, sv2, hv0, hv1, hv2;
-  unsigned int **rbv_base;
-  // copy rbv array 
-  if(om->M <= 1024){
-    if((myoffset < 21) && (mywarp == 0)){ // update this for different alphabets
-      memcpy((rbv_block + 1024 * myoffset), om->rbv[myoffset], 128*Q);
-      rbv_shared[myoffset] = &(rbv_block[myoffset * 1024]);
-    }
-    rbv_base = (unsigned int **) rbv_shared;
-  }
-  else{
-    rbv_base = (unsigned int **) om->rbv;
-  }
-  __syncthreads();
-
-  for(num_reps = 0; num_reps < 10000; num_reps++){
-    dp = ((unsigned int *)mx->dp) + myoffset;
-
-  mpv = neginfmask;
-  hv = neginfmask;
-  int dsq_mod;
-  int dsq_chunk, dsq_chunk_next;
-  unsigned int *rbv0, *rbv1, *rbv2;
-  if(Q == 3){
-    //all-registers version
-    dp_local[0] = neginfmask;
-    dp_local[1] = neginfmask;
-    dp_local[2] = neginfmask;
-    hv0 = neginfmask;
-    hv1 = neginfmask;
-    hv2 = neginfmask;
-
-    i = 0;
-    dsq_chunk_next = *((int *) (dsq+i)); // Grab chunks of dsq four bytes at a time to reduce number of global memory loads
-    while((L - i) > 3){ // unroll loop by four
-      dsq_chunk = dsq_chunk_next;
-      i+=4;
-      dsq_chunk_next = *((int *) (dsq+i)); // Try prefetching this
-      // 1st iteration
-      rbv0 = (rbv_base[dsq_chunk &255]) + myoffset;
-      dsq_chunk = dsq_chunk >> 8;
-      dsq_mod++;
-      // triply-unrolled loop
-      sv0 = __vaddss4(mpv, *rbv0);
-      hv0 = __vmaxs4(hv0, sv0);
-      mpv = dp_local[0];
-      dp_local[0] = sv0;
-//      rbv += 32;  // advance to next 
-      sv1 = __vaddss4(mpv, *(rbv0+32));
-      hv1 = __vmaxs4(hv1, sv1);
-      mpv = dp_local[1];
-      dp_local[1] = sv1;
-//      rbv += 32;  // advance to next 
-      sv2 = __vaddss4(mpv, *(rbv0+64));
-      hv2 = __vmaxs4(hv2, sv2);
-      mpv = dp_local[2];
-      dp_local[2] = sv2;
-//      rbv += 32;  // advance to next 
-      sv = sv2;
-
-     // Now, leftshift (memory order) the sv vector to get the next mpv
-      sv_shuffle = __shfl_up(sv, 1);  // Get the next core up's value of SV
-      if(myoffset == 0){
-        mpv = __byte_perm(sv, neginfmask, 0x2107); //left-shifts sv by one byte, puts the high byte of neginfmask in the low byte of sv
-      }
-      else{
-        mpv = __byte_perm(sv, sv_shuffle, 0x2107); //left-shifts sv by one byte, puts the high byte of sv_shuffle in the low byte of sv
-      }
-
-      // 2nd iteration
-      rbv1 = (rbv_base[dsq_chunk &255]) + myoffset;
-      dsq_chunk = dsq_chunk >> 8;
-      // triply-unrolled loop
-      sv0 = __vaddss4(mpv, *rbv1);
-      hv0 = __vmaxs4(hv0, sv0);
-      mpv = dp_local[0];
-      dp_local[0] = sv0;
-//      rbv += 32;  // advance to next 
-      sv1 = __vaddss4(mpv, *(rbv1+32));
-      hv1 = __vmaxs4(hv1, sv1);
-      mpv = dp_local[1];
-      dp_local[1] = sv1;
-//      rbv += 32;  // advance to next 
-      sv2 = __vaddss4(mpv, *(rbv1+64));
-      hv2 = __vmaxs4(hv2, sv2);
-      mpv = dp_local[2];
-      dp_local[2] = sv2;
-//      rbv += 32;  // advance to next 
-      sv = sv2;
-
-     // Now, leftshift (memory order) the sv vector to get the next mpv
-      sv_shuffle = __shfl_up(sv, 1);  // Get the next core up's value of SV
-      if(myoffset == 0){
-        mpv = __byte_perm(sv, neginfmask, 0x2107); //left-shifts sv by one byte, puts the high byte of neginfmask in the low byte of sv
-      }
-      else{
-        mpv = __byte_perm(sv, sv_shuffle, 0x2107); //left-shifts sv by one byte, puts the high byte of sv_shuffle in the low byte of sv
-      }
-
-      //3rd iteration
-      rbv2 = (rbv_base[dsq_chunk &255]) + myoffset;
-      dsq_chunk = dsq_chunk >> 8;
-      // triply-unrolled loop
-      sv0 = __vaddss4(mpv, *rbv2);
-      hv0 = __vmaxs4(hv0, sv0);
-      mpv = dp_local[0];
-      dp_local[0] = sv0;
-//      rbv += 32;  // advance to next 
-      sv1 = __vaddss4(mpv, *(rbv2+32));
-      hv1 = __vmaxs4(hv1, sv1);
-      mpv = dp_local[1];
-      dp_local[1] = sv1;
-//      rbv += 32;  // advance to next 
-      sv2 = __vaddss4(mpv, *(rbv2+64));
-      hv2 = __vmaxs4(hv2, sv2);
-      mpv = dp_local[2];
-      dp_local[2] = sv2;
-//      rbv += 32;  // advance to next 
-      sv = sv2;
-
-     // Now, leftshift (memory order) the sv vector to get the next mpv
-      sv_shuffle = __shfl_up(sv, 1);  // Get the next core up's value of SV
-      if(myoffset == 0){
-        mpv = __byte_perm(sv, neginfmask, 0x2107); //left-shifts sv by one byte, puts the high byte of neginfmask in the low byte of sv
-      }
-      else{
-        mpv = __byte_perm(sv, sv_shuffle, 0x2107); //left-shifts sv by one byte, puts the high byte of sv_shuffle in the low byte of sv
-      }
-
-      //4th iteration
-      rbv = (rbv_base[dsq_chunk &255]) + myoffset;
-      dsq_chunk = dsq_chunk >> 8;
-      // triply-unrolled loop
-      sv0 = __vaddss4(mpv, *rbv);
-      hv0 = __vmaxs4(hv0, sv0);
-      mpv = dp_local[0];
-      dp_local[0] = sv0;
-//      rbv += 32;  // advance to next 
-      sv1 = __vaddss4(mpv, *(rbv+32));
-      hv1 = __vmaxs4(hv1, sv1);
-      mpv = dp_local[1];
-      dp_local[1] = sv1;
-//      rbv += 32;  // advance to next 
-      sv2 = __vaddss4(mpv, *(rbv+64));
-      hv2 = __vmaxs4(hv2, sv2);
-      mpv = dp_local[2];
-      dp_local[2] = sv2;
-//      rbv += 32;  // advance to next 
-      sv = sv2;
-
-     // Now, leftshift (memory order) the sv vector to get the next mpv
-      sv_shuffle = __shfl_up(sv, 1);  // Get the next core up's value of SV
-      if(myoffset == 0){
-        mpv = __byte_perm(sv, neginfmask, 0x2107); //left-shifts sv by one byte, puts the high byte of neginfmask in the low byte of sv
-      }
-      else{
-        mpv = __byte_perm(sv, sv_shuffle, 0x2107); //left-shifts sv by one byte, puts the high byte of sv_shuffle in the low byte of sv
-      }
-
-    }
-
-    for(dsq_mod=4; i < L; i++){
-      if(dsq_mod == 4){
-        dsq_chunk = *((int *) (dsq+i)); // Grab chunks of dsq four bytes at a time to reduce number of global memory loads
-        dsq_mod = 0;
-      }
-
-      rbv = (rbv_base[dsq_chunk &255]) + myoffset;
-      dsq_chunk = dsq_chunk >> 8;
-      dsq_mod++;
-      int rbv0 = *rbv;
-      int rbv1 = *(rbv+32);
-      int rbv2 = *(rbv+64);
-      // triply-unrolled loop
-      sv0 = __vaddss4(mpv, rbv0);
-      hv0 = __vmaxs4(hv0, sv0);
-      mpv = dp_local[0];
-      dp_local[0] = sv0;
-//      rbv += 32;  // advance to next 
-      sv1 = __vaddss4(mpv, rbv1);
-      hv1 = __vmaxs4(hv1, sv1);
-      mpv = dp_local[1];
-      dp_local[1] = sv1;
-//      rbv += 32;  // advance to next 
-      sv2 = __vaddss4(mpv, rbv2);
-      hv2 = __vmaxs4(hv2, sv2);
-      mpv = dp_local[2];
-      dp_local[2] = sv2;
-//      rbv += 32;  // advance to next 
-      sv = sv2;
-
-     // Now, leftshift (memory order) the sv vector to get the next mpv
-      sv_shuffle = __shfl_up(sv, 1);  // Get the next core up's value of SV
-      if(myoffset == 0){
-        mpv = __byte_perm(sv, neginfmask, 0x2107); //left-shifts sv by one byte, puts the high byte of neginfmask in the low byte of sv
-      }
-      else{
-        mpv = __byte_perm(sv, sv_shuffle, 0x2107); //left-shifts sv by one byte, puts the high byte of sv_shuffle in the low byte of sv
-      }
-    }
-    hv = __vmaxs4(hv0, hv1);
-    hv = __vmaxs4(hv, hv2);
-  }
-  else{ // in-memory, slower, version
-    
-    if(myoffset == 0){
-      // only do memory setup on one thread
-      if(mx->allocM < om->M){
-        if(mx->allocM == 0){
-          mx->dp = (int16_t *) malloc(128 * Q);
-        }
-        else{
-          free(mx->dp);
-          mx->dp = (int16_t *) malloc(128 * Q);
-        }
-        mx->allocM = om->M;
-      }
-    }
-    __syncthreads(); //barrier until thread 0 done with any memory setup
-    
-    for(i = 0; i < Q; i++){ // initialize our row buffer
-      ((unsigned int *)mx->dp)[(i * 32) + myoffset] = 0x80808080;
-    }
- 
-    for(i = 0; i < L; i++){
-      rbv = ((unsigned int *)om->rbv[dsq[i]]) + myoffset;
-      dp = ((unsigned int *)mx->dp) + myoffset;
-
-      int q= 0;
-      while (q < Q-3){ //unroll inner loop 4x
-        sv = __vaddss4(mpv, *rbv);
-        hv = __vmaxs4(hv, sv);
-        mpv = *dp;
-        *dp = sv;
-        dp += 32; // advance to next
-        rbv += 32;  // advance to next 
-        sv = __vaddss4(mpv, *rbv);
-        hv = __vmaxs4(hv, sv);
-        mpv = *dp;
-        *dp = sv;
-        dp += 32; // advance to next
-        rbv += 32;  // advance to next 
-        sv = __vaddss4(mpv, *rbv);
-        hv = __vmaxs4(hv, sv);
-        mpv = *dp;
-        *dp = sv;
-        dp += 32; // advance to next
-        rbv += 32;  // advance to next 
-        sv = __vaddss4(mpv, *rbv);
-        hv = __vmaxs4(hv, sv);
-        mpv = *dp;
-        *dp = sv;
-        dp += 32; // advance to next
-        rbv += 32;  // advance to next 
-        q+=4;
-      }
-      for(; q < Q; q++){ // postamble to finish up
-        sv = __vaddss4(mpv, *rbv);
-        hv = __vmaxs4(hv, sv);
-        mpv = *dp;
-        *dp = sv;
-        dp += 32; // advance to next
-        rbv += 32;  // advance to next 
-      }
-
-      // Now, leftshift (memory order) the sv vector to get the next mpv
-      sv_shuffle = __shfl_up(sv, 1);  // Get the next core up's value of SV
-      if(myoffset == 0){
-        sv_shuffle = neginfmask; // special-case the high core in the warp, since it has nobody to grab a value from
-      }
-
-      mpv = __byte_perm(sv, sv_shuffle, 0x2107); //left-shifts sv by one byte, puts the high byte of sv_shuffle in the low byte of sv
-    }
-  }
-
-
-  unsigned int partner_hv;
-
-  // Done with main loop.  Now reduce answer vector (hv) to one byte for return
-  // Reduce 32 4x8-bit quantities to 16
-  partner_hv = __shfl_down(hv, 16); 
-  if(myoffset < 16){ // only bottom half of the cores continue from here
-  
-
-    hv = __vmaxs4(hv, partner_hv);
-
-    // Reduce 6 4x8-bit quantities to 8
-    partner_hv = __shfl_down(hv, 8); 
-    if(myoffset < 8){ // only bottom half of the cores continue from here
-  
-
-      hv = __vmaxs4(hv, partner_hv);
-
-      // Reduce 8 4x8-bit quantities to 4
-      partner_hv = __shfl_down(hv, 4); 
-      if(myoffset < 4){ // only bottom half of the cores continue from here
-
-        hv = __vmaxs4(hv, partner_hv);
-
-        // Reduce 4 4x8-bit quantities to 2
-        partner_hv = __shfl_down(hv, 2); 
-        if(myoffset < 2){ // only bottom half of the cores continue from here
-
-          hv = __vmaxs4(hv, partner_hv);
-          // Reduce 2 4x8-bit quantities to 1
-
-          partner_hv = __shfl_down(hv, 1); 
-          if(myoffset < 1){ // only bottom half of the cores continue from here
-
-            hv = __vmaxs4(hv, partner_hv);
-
-            // now, reduce the final 32 bit quantity to one 8-bit quantity.
-
-            unsigned int temp;
-
-            temp = hv >> 16;
-
-            hv = __vmaxs4(hv, temp);
-
-            temp = hv >> 8;
-
-            hv = __vmaxs4(hv, temp);
-            if((myblock == 0) &&(mywarp ==0) && (myoffset == 0)){ // only one thread writes result
-              *retval = hv & 255; // low 8 bits of the word is the final result
-            }
-          }
-        }
-      }
-    }
-  }
-  } 
-  return;
-}
 
 
 // GPU kernel that copies values from the CPU version of an OPROFILE to one on the GPU.  Should generally only be called on one GPU core
@@ -1880,10 +650,13 @@ __global__ void initialize_filtermx_on_card(P7_FILTERMX *the_filtermx){
 // allocates and populates a P7_OPROFILE structure on a CUDA card that matches the one passed as its argument
 P7_OPROFILE *create_oprofile_on_card(P7_OPROFILE *the_profile){
   P7_OPROFILE *cuda_OPROFILE;
-
+  cudaError_t err;
   int Q = P7_Q(the_profile->M, the_profile->V);
 
   if(cudaMalloc(&cuda_OPROFILE, sizeof(P7_OPROFILE)) != cudaSuccess){
+
+    err = cudaGetLastError();
+    printf("Error: %s\n", cudaGetErrorString(err));
     p7_Fail((char *) "Unable to allocate memory in create_oprofile_on_card");
   }
 
@@ -1897,7 +670,8 @@ P7_OPROFILE *create_oprofile_on_card(P7_OPROFILE *the_profile){
   for(i = 0; i < the_profile->abc->Kp; i++){
     int *cuda_rbv_entry, *restriped_rbv;
     int restriped_rbv_size;
-    restriped_rbv = restripe_char_to_int((char *)(the_profile->rbv[i]), the_profile->V, 32, Q * the_profile->V, &restriped_rbv_size);
+  restriped_rbv = restripe_char_to_int((char *)(the_profile->rbv[i]), the_profile->V, 32, Q * the_profile->V, &restriped_rbv_size);
+  //restriped_rbv = (int *) restripe_char((char *)(the_profile->rbv[i]), the_profile->V, 128, Q * the_profile->V, &restriped_rbv_size);
 
     if(cudaMalloc(&cuda_rbv_entry, restriped_rbv_size) != cudaSuccess){
       p7_Fail((char *) "Unable to allocate memory in create_oprofile_on_card");
@@ -1917,6 +691,15 @@ P7_OPROFILE *create_oprofile_on_card(P7_OPROFILE *the_profile){
   copy_oprofile_values_to_card<<<1,1>>>(cuda_OPROFILE, the_profile->tauBM, the_profile->scale_b, the_profile->scale_w, the_profile->base_w, the_profile->ddbound_w, the_profile->L, the_profile->M, the_profile->V, the_profile->max_length, the_profile->allocM, the_profile->allocQb, the_profile->allocQw, the_profile->allocQf, the_profile->mode, the_profile->nj, the_profile->is_shadow, (int8_t **) cuda_rbv);
 
  return cuda_OPROFILE;
+}
+
+void destroy_oprofile_on_card(P7_OPROFILE *cpu_oprofile, P7_OPROFILE *cuda_oprofile){
+  int i;
+  for(i = 0; i < cpu_oprofile->abc->Kp; i++){
+    cudaFree(cuda_oprofile->rbv[i]);
+  }
+  cudaFree(cuda_oprofile->rbv);
+  cudaFree(cuda_oprofile);
 }
 
 P7_FILTERMX *create_filtermx_on_card(){
@@ -2049,11 +832,11 @@ p7_SSVFilter_shell_sse(const ESL_DSQ *dsq, int L, const P7_OPROFILE *om, P7_FILT
   num_blocks.x = 1;
   num_blocks.y = 1;
   num_blocks.z = 1;
-  warps_per_block = 1;
+  warps_per_block =1;
   threads_per_block.x = 32;
   threads_per_block.y = warps_per_block;
   threads_per_block.z = 1;
-
+  /*
   int **check_array, **check_array_cuda;
   check_array = (int **) malloc(L * sizeof(int *));
   cudaMalloc((void **) &check_array_cuda, (L * sizeof(int *)));
@@ -2063,8 +846,9 @@ p7_SSVFilter_shell_sse(const ESL_DSQ *dsq, int L, const P7_OPROFILE *om, P7_FILT
     check_array[temp] = row_array;
   }
   cudaMemcpy(check_array_cuda, check_array, (L* sizeof(int)), cudaMemcpyHostToDevice);
+ */
 
-  SSV_cuda <<<num_blocks, threads_per_block>>>(card_dsq, card_FILTERMX, L, card_Q, card_OPROFILE, card_h, check_array_cuda);
+  SSV_cuda <<<num_blocks, threads_per_block>>>(card_dsq, card_FILTERMX, L, card_Q, card_OPROFILE, card_h);
   int8_t h_compare;
   cudaMemcpy(&h_compare, card_h, 1, cudaMemcpyDeviceToHost);
   cudaEventRecord(stop);
@@ -2119,7 +903,7 @@ p7_SSVFilter_shell_sse(const ESL_DSQ *dsq, int L, const P7_OPROFILE *om, P7_FILT
   h = esl_sse_hmax_epi8(hv);
   cudaFree(card_h);
   cudaFree(card_dsq);
-
+// cudaFree(check_array_cuda)
 
   if(h != h_compare){
     printf("Final result miss-match: %d (CUDA) vs %d (CPU)\n", h_compare, h);
@@ -2229,6 +1013,7 @@ main(int argc, char **argv)
   p7_hmmfile_Close(hfp);
   esl_alphabet_Destroy(abc);
   esl_getopts_Destroy(go); */
+  //destroy_oprofile_on_card(om, card_OPROFILE);
   exit(0);
 }
 
