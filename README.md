@@ -15,10 +15,10 @@ To participate in HMMER development, visit us at
 depends on the Easel library, also at
 [github](https://github.com/EddyRivasLab/easel).
 
-Don't use github as a source of "official" HMMER release code.  Our
-release tarballs bundle up some convenient stuff that you have to be
-able to create for yourself if you're trying to do it from our github
-repository.
+We don't intend github to be a source of "official" HMMER release
+code.  Our release tarballs bundle up some convenient stuff that you
+have to be able to create for yourself if you're trying to do it from
+our github repository.
 
 
 ### to download and build the current source code release:
@@ -29,9 +29,9 @@ it is also straightforward to download and build from source on most
 systems:
 
 ```bash
-   % wget http://eddylab.org/software/hmmer3/3.1b2/hmmer-3.1b2.tar.gz
-   % tar zxf hmmer-3.1b2.tar.gz
-   % cd hmmer-3.1b2
+   % wget http://eddylab.org/software/hmmer3/3.2/hmmer-3.2.tar.gz
+   % tar zxf hmmer-3.2.tar.gz
+   % cd hmmer-3.2
    % ./configure --prefix /your/install/path
    % make
    % make check
@@ -41,6 +41,7 @@ systems:
 Executable programs will be installed in `/your/install/path/bin`.
 
 Files to read in the top-level source directory:
+
    * INSTALL - brief installation instructions.
    * Userguide.pdf - the HMMER User's Guide.
  

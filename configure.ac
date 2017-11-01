@@ -76,7 +76,7 @@ m4_include([easel/m4/ax_pthread.m4])
 # 2. AC_INIT
 ################################################################
 
-AC_INIT(HMMER, 3.1rc1, sean@eddylab.org, hmmer)
+AC_INIT(HMMER, 3.2, sean@eddylab.org, hmmer)
 AC_MSG_NOTICE([Configuring HMMER3 for your system.])
 
 # remember if the user is overriding CFLAGS
@@ -93,16 +93,16 @@ fi
 #
 # AC_INIT args set these output variables and preprocessor symbols:
 #     PACKAGE_NAME      <package>     e.g. "HMMER"
-#     PACKAGE_VERSION   <version>     e.g. "3.1"
+#     PACKAGE_VERSION   <version>     e.g. "3.2"
 #     PACKAGE_BUGREPORT <bug-report>  e.g. "sean@eddylab.org"
 #     PACKAGE_TARNAME   <tarname>     e.g. "hmmer"
 # From them, AC_INIT automatically derives one more:
-#     PACKAGE_STRING    <package> <version>, e.g. "HMMER 3.0"
+#     PACKAGE_STRING    <package> <version>, e.g. "HMMER 3.2"
 # and we define additional output variables of our own:
-#     HMMER_DATE        release date: e.g. "January 2007"
+#     HMMER_DATE        release date: e.g. "August 2017"
 #     HMMER_COPYRIGHT   one-line copyright string
 #     HMMER_LICENSE     one-line license string
-#     HMMER_VERSION     copy of version code, e.g. "3.0"
+#     HMMER_VERSION     copy of version code, e.g. "3.2"
 #     HMMER_URL         URL home for HMMER.
 # And we have to define the relevant package variables for Easel as well.
 #
@@ -110,7 +110,7 @@ fi
 # to use HMMER as a library inside other packages, with no name clashes.
 ################################################################
 
-HMMER_DATE="January 2017"
+HMMER_DATE="August 2017"
 HMMER_COPYRIGHT="Copyright (C) 2017 Howard Hughes Medical Institute."
 HMMER_LICENSE="Freely distributed under the BSD open source license."
 HMMER_VERSION=$PACKAGE_VERSION
@@ -119,7 +119,7 @@ HMMER_URL="http://hmmer.org/"
 HMMER_ESLDIR="easel"
 HMMER_SADIR="libdivsufsort"
 
-EASEL_DATE="January 2017"
+EASEL_DATE="August 2017"
 EASEL_COPYRIGHT="Copyright (C) 2017 Howard Hughes Medical Institute."
 EASEL_LICENSE="Freely distributed under the BSD open source license."
 EASEL_VERSION="0.44"

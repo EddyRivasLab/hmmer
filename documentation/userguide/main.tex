@@ -1,16 +1,25 @@
 \documentclass[10pt]{article}
-%\usepackage{helvetic}
-\usepackage{times}
 \usepackage{fullpage}
-\usepackage{fancybox}  % Must include fancybox *before* fancyvrb;
-\usepackage{fancyvrb}  % don't know why.
-\usepackage[pdftex]{graphicx}
-\usepackage{url}
-%\usepackage[backref,colorlinks]{hyperref}
+
+\usepackage{fontspec}          % Assumes you're using xelatex
+\setmainfont{Times New Roman}
+
+\usepackage{fancybox}  % Must include fancybox *before* fancyvrb; don't know why.
+\usepackage{fancyvrb}
+\usepackage{graphicx}
+\usepackage[usenames,dvipsnames]{color}
+\usepackage[backref,colorlinks]{hyperref}
 \usepackage[authoryear]{natbib}
 
+\hypersetup{
+  citecolor = {RoyalBlue},
+  linkcolor = {RoyalBlue},
+  urlcolor  = {RoyalBlue},
+}
+
+
 \setcounter{secnumdepth}{1}
-\renewcommand{\familydefault}{\sfdefault}
+
 \input{macros}
 
 \begin{document}

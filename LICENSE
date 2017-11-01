@@ -9,39 +9,33 @@ Copyright (C) 2015-2017 President and Fellows of Harvard College
 Copyright (C) 1992-2004 Washington University School of Medicine
 Copyright (C) 1992-1994 MRC Laboratory of Molecular Biology
 
-The code includes contributions and input from the members of the
-HMMER development team, whose current members include:
+The code includes contributions and input from current and past
+members of the HMMER development team, as well as other colleagues and
+sources, including:
 
-   Sean Eddy          HHMI/Harvard University
-   Travis Wheeler     University of Montana
-   Nick Carter        HHMI/Harvard University
-   Elena Rivas        Harvard University
-   Walt Shands        Intel and U. Montana
-   Eric Nawrocki      NIH NCBI
-   Rob Finn           European Bioinformatics Institute
+   Bill Arndt        
+   Jeremy Buhler     
+   Tyler Camp
+   Nick Carter        
+   Sergi Castellano  
+   Goran Ceric       
+   Michael Farrar    
+   Rob Finn          
+   Ian Holmes        
+   Bjarne Knudsen    
+   Diana Kolbe       
+   Erik Lindahl      
+   Graeme Mitchison  
+   Eric Nawrocki     
+   Lee Newberg       
+   Elena Rivas        
+   Walt Shands  
+   Travis Wheeler    
 
-and past members (with their past affiliations) include:
-   Sergi Castellano   HHMI Janelia Farm 
-   Goran Ceric        HHMI Janelia Farm
-   Michael Farrar     HHMI Janelia Farm 
-   Bill Arndt         HHMI Janelia Farm
-   Bjarne Knudsen     CLC bio
-   Diana Kolbe        Washington University/Janelia Farm
-
-HMMER also includes contributions from others, including copyrighted
-and licensed code and technology. These are noted in the appropriate
-places in source files. Contributors include:
-
-   Jeremy Buhler                   Washington University
-   Ian Holmes                      UC Berkeley
-   Erik Lindahl                    Stanford University
-   Graeme Mitchison                Cambridge University
-   Lee Newberg                     Rensselaer Polytechnic Institute
-
-   Apple Computer                  Cupertino, CA
-   Free Software Foundation, Inc.  Cambridge, MA
-   IBM TJ Watson Research Center   Yorktown Heights, NY
-   X Consortium                    Cambridge, MA
+   Apple Computer                  
+   Free Software Foundation, Inc.  
+   IBM TJ Watson Research Center   
+   X Consortium                    
    
 HMMER uses the Easel software library, which has its own license and
 copyright information. See easel/COPYRIGHT and easel/LICENSE.
@@ -49,7 +43,7 @@ copyright information. See easel/COPYRIGHT and easel/LICENSE.
 HMMER includes patent-pending SIMD technology under a nonexclusive
 license from Michael Farrar. You are sublicensed to use this
 technology specifically for the use, modification, and redistribution
-of HMMER3.
+of HMMER.
 
 This source code is distributed as open source under the terms of the
 BSD three-clause license:

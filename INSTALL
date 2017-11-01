@@ -10,9 +10,9 @@ Installation chapter in the HMMER User's Guide (Userguide.pdf).
 
 Starting from a distribution "with binaries", such as 
 hmmer-@HMMER_VERSION@-linux-intel-x86_64.tar.gz:
-   uncompress hmmer-@HMMER_VERSION@-xyz.tar.gz  
-   tar xf hmmer-@HMMER_VERSION@-xyz.tar
-   cd hmmer-@HMMER_VERSION@-xyz
+   uncompress hmmer-@HMMER_VERSION@-linux-intel-x86_64.tar.gz  
+   tar xf hmmer-@HMMER_VERSION@-linux-intel-x86_64.tar
+   cd hmmer-@HMMER_VERSION@-linux-intel-x86_64
  
 The pre-compiled binaries are found in the directory ./binaries.
 You may copy these into a directory of your choosing, or simply add
@@ -35,8 +35,8 @@ HMMER is developed primarily on Linux and Mac OS/X systems. It is
 tested on a variety of UNIX and UNIX-like operating systems. It is
 written in ANSI C99 conforming to POSIX standards. It is meant to be
 portable to any POSIX-compliant system with an ANSI C99 compiler,
-including all UNIX and Macintosh systems. A binary version is also
-available for Windows systems with Cygwin installed (Cygwin is 
+including all UNIX and Apple OS/X systems. A binary version is also
+available for Windows systems with Cygwin installed (Cygwin is
 optional POSIX compatibility software).
 
 
