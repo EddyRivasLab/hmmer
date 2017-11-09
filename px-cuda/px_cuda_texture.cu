@@ -6,10 +6,11 @@
 #include "esl_sse.h"
 #include "hmmer.h"
 #include "px_cuda.h"
-//#define TRUNCATE 
+//#define VALIDATE
 #define NEGINFMASK -128
 #define MAX(a, b, c)\
-  asm("max.u32 %0, %1, %2;" : "=r"(a): "r"(b), "r"(c));
+  a = (b > c) ? b:c;
+//  asm("max.u32 %0, %1, %2;" : "=r"(a): "r"(b), "r"(c));
 
 #define RBV_VECTOR_LENGTH 512
 
@@ -34,12 +35,6 @@ texture<uint4,2> rbv;
 #define STEP_SINGLE(sv) \
   sv = sv + *rsc;\
   rsc += 32;\
-   if (sv < -128){  \
-    sv = -128;  \
-  } \
-  if (sv > 127){ \
-    sv = 127; \
-  } \
   MAX(xEv, xEv, sv);
 
 /*  if (sv < -128){  \
@@ -93,7 +88,8 @@ texture<uint4,2> rbv;
     num_iters--;                                \
   }                                             \
   i = Q - q - width;                                \
-  row = dsq[i];\
+  row = dsq[i
+  ];\
   startpos = ((Q-width) << 5) + threadIdx.x; \
   convert(step, LENGTH_CHECK, done1)            \
 done1:                                          \
@@ -135,7 +131,6 @@ done2:                                         \
   return xEv;
 */
 
-//put back dsq++ if things go wrong
 #define CALC(reset, step, convert, width) \
   int i=0, i2, num_iters; \
   int *rsc, dsq_buffer_position= 0, offset;\
@@ -143,12 +138,13 @@ done2:                                         \
   if (L <= Q-q-width)  num_iters = L;               \
   else           num_iters = Q-q-width;           \
   if(num_iters > 0){\
-    *(((int*) dsq_buffer) + threadIdx.x) = *(((int*) (dsq)) + threadIdx.x); \
+    *(((int *) dsq_buffer) + threadIdx.x) = *(((int *) (dsq)) + threadIdx.x); \
     dsq_buffer_position = 0;\
     __syncwarp();\
   }                                        \
   while (num_iters >0) {                        \
     rsc = rbv_base[dsq_buffer[dsq_buffer_position]] + ((q+i) << 5) + threadIdx.x;\
+    step()                                      \
     dsq_buffer_position++;\
     if(dsq_buffer_position == 128){ \
       offset = (i+1) & 127;\
@@ -156,7 +152,6 @@ done2:                                         \
       dsq_buffer_position = offset;\
       __syncwarp();\
     }\
-    step()                                      \
     i++;                                        \
     num_iters--;                                \
   }                                             \
@@ -226,7 +221,7 @@ done2:                                         \
 // again, left-shift by 5 rather than multiplying by 32 to avoid weird negative number results
 
 // always define functions for a one-wide band, define others depending on the value of MAX_BAND_WIDTH
-#define RESET_1()                  \
+/*#define RESET_1()                  \
   int sv[MAX_BAND_WIDTH];          \
   sv[0] = NEGINFMASK;
 
@@ -302,131 +297,330 @@ __device__ int calc_band_4(char *dsq, int8_t *dsq_buffer, int L, int **rbv_base,
   CALC(RESET_4, STEP_BANDS_4, CONVERT_4, 4)
 }
 #endif
-
+*/
 #if MAX_BAND_WIDTH > 4
 #define RESET_5()                  \
   RESET_4()                        \
   sv[4] = NEGINFMASK;
 
-#define STEP_BANDS_5() \
-  STEP_BANDS_4()       \
-  STEP_SINGLE(sv[4])
+#ifndef VALIDATE
+#define STEP_BANDS_5(rsc) \
+    sv[0] = sv[0] + *rsc;   \
+    MAX(xEv0, xEv0, sv[0]);\
+    sv[1] = sv[1] + *(rsc +32);\
+    MAX(xEv1, xEv1, sv[1]);\
+    sv[2] = sv[2] + *(rsc+64);\
+    MAX(xEv2, xEv2, sv[2]);\
+    sv[3] = sv[3] + *(rsc+96);\
+    MAX(xEv3, xEv3, sv[3]);\
+    sv[4] = sv[4] + *(rsc+128);\
+    MAX(xEv4, xEv4, sv[4]);
+#endif
+#ifdef VALIDATE
+#define STEP_BANDS_5(rsc) \
+    sv[0] = sv[0] + *rsc;   \
+    if (sv[0] < -128){  \
+    sv[0] = -128;  \
+  } \
+  if (sv[0] > 127){ \
+    sv[0] = 127; \
+  } \
+    MAX(xEv0, xEv0, sv[0]);\
+    sv[1] = sv[1] + *(rsc +32);\
+    if (sv[1] < -128){  \
+    sv[1] = -128;  \
+  } \
+  if (sv[1] > 127){ \
+    sv[1] = 127; \
+  } \
+    MAX(xEv1, xEv1, sv[1]);\
+    sv[2] = sv[2] + *(rsc+64);\
+    if (sv[2] < -128){  \
+    sv[2] = -128;  \
+  } \
+  if (sv[2] > 127){ \
+    sv[2] = 127; \
+  } \
+    MAX(xEv2, xEv2, sv[2]);\
+    sv[3] = sv[3] + *(rsc+96);\
+    if (sv[3] < -128){  \
+    sv[3] = -128;  \
+  } \
+  if (sv[3] > 127){ \
+    sv[3] = 127; \
+  } \
+    MAX(xEv3, xEv3, sv[3]);\
+    sv[4] = sv[4] + *(rsc+128);\
+    if (sv[4] < -128){  \
+    sv[4] = -128;  \
+  } \
+  if (sv[4] > 127){ \
+    sv[4] = 127; \
+  } \
+    MAX(xEv4, xEv4, sv[4]);
+#endif
 
-#define CONVERT_5(step, LENGTH_CHECK, label)            \
-  CONVERT_STEP(step, LENGTH_CHECK, label, sv[4], Q-5)  \
-  CONVERT_4(step, LENGTH_CHECK, label)
+#define CONVERT_5(LENGTH_CHECK, label)            \
+  LENGTH_CHECK(label)        \
+  STEP_BANDS_5((rbv_base[dsq_buffer[dsq_buffer_position]]+ rsc_offset_convert))\
+  rsc_offset_convert += 32; \
+  dsq_buffer_position++;\
+  if(dsq_buffer_position == 128){\
+    dsq_buffer_position = (i+1) & 127;\
+    *(((int*) dsq_buffer) + threadIdx.x) = *(((int*) (dsq + (i + 1- dsq_buffer_position))) + threadIdx.x);\
+    __syncwarp();\
+  }\
+  sv[4] = __shfl_up(sv[4], 1);\
+  if(threadIdx.x == 0){   \
+    sv[4] = NEGINFMASK; \
+  } \
+  i++;\
+\
+  LENGTH_CHECK(label)      \
+  STEP_BANDS_5((rbv_base[dsq_buffer[dsq_buffer_position]]+ rsc_offset_convert))\
+  rsc_offset_convert += 32; \
+  dsq_buffer_position++;\
+  if(dsq_buffer_position == 128){\
+    dsq_buffer_position = (i+1) & 127;\
+    *(((int*) dsq_buffer) + threadIdx.x) = *(((int*) (dsq + (i + 1- dsq_buffer_position))) + threadIdx.x);\
+    __syncwarp();\
+  }\
+  sv[3] = __shfl_up(sv[3], 1);   \
+  if(threadIdx.x == 0){   \
+    sv[3] = NEGINFMASK; \
+  } \
+  i++;\
+\
+  LENGTH_CHECK(label)       \
+  STEP_BANDS_5((rbv_base[dsq_buffer[dsq_buffer_position]]+ rsc_offset_convert))\
+  rsc_offset_convert += 32; \
+  dsq_buffer_position++;\
+  if(dsq_buffer_position == 128){\
+    dsq_buffer_position = (i+1) & 127;\
+    *(((int*) dsq_buffer) + threadIdx.x) = *(((int*) (dsq + (i + 1- dsq_buffer_position))) + threadIdx.x);\
+    __syncwarp();\
+  }\
+  sv[2] = __shfl_up(sv[2], 1);\
+  if(threadIdx.x == 0){   \
+    sv[2] = NEGINFMASK; \
+  } \
+  i++;\
+ \
+  LENGTH_CHECK(label)\
+  STEP_BANDS_5((rbv_base[dsq_buffer[dsq_buffer_position]]+ rsc_offset_convert))\
+  rsc_offset_convert += 32; \
+  dsq_buffer_position++;\
+  if(dsq_buffer_position == 128){\
+    dsq_buffer_position = (i+1) & 127;\
+    *(((int*) dsq_buffer) + threadIdx.x) = *(((int*) (dsq + (i + 1- dsq_buffer_position))) + threadIdx.x);\
+    __syncwarp();\
+  }\
+  sv[1] = __shfl_up(sv[1], 1);\
+  if(threadIdx.x == 0){   \
+    sv[1] = NEGINFMASK;\
+  } \
+  i++;\
+\
+  LENGTH_CHECK(label)\
+  STEP_BANDS_5((rbv_base[dsq_buffer[dsq_buffer_position]]+ rsc_offset_convert)) \
+  rsc_offset_convert += 32;\
+  dsq_buffer_position++;\
+  if(dsq_buffer_position == 128){\
+    dsq_buffer_position = (i+1) & 127;\
+    *(((int*) dsq_buffer) + threadIdx.x) = *(((int*) (dsq + (i + 1- dsq_buffer_position))) + threadIdx.x);\
+    __syncwarp();\
+  }\
+  sv[0] = __shfl_up(sv[0], 1);\
+  if(threadIdx.x == 0){   \
+    sv[0] = NEGINFMASK; \
+  } \
+  i++;
 
-__device__ int calc_band_5(char *dsq, int8_t *dsq_buffer, int L, int **rbv_base, int Q, int q, int xEv)
+//Convert operation for use when we've pre-determined that we won't run over the sequence length
+//and that there's enough values in the dsq buffer
+#define CONVERT_5_NOCHECKS()            \
+  STEP_BANDS_5((rbv_base[dsq_buffer[dsq_buffer_position]]+ rsc_offset_convert))\
+  sv[4] = __shfl_up(sv[4], 1);\
+  if(threadIdx.x == 0){   \
+    sv[4] = NEGINFMASK; \
+  } \
+\
+  STEP_BANDS_5((rbv_base[dsq_buffer[dsq_buffer_position+1]]+ rsc_offset_convert +32))\
+  sv[3] = __shfl_up(sv[3], 1);   \
+  if(threadIdx.x == 0){   \
+    sv[3] = NEGINFMASK; \
+  } \
+\
+  STEP_BANDS_5((rbv_base[dsq_buffer[dsq_buffer_position+2]]+ rsc_offset_convert +64))\
+  sv[2] = __shfl_up(sv[2], 1);\
+  if(threadIdx.x == 0){   \
+    sv[2] = NEGINFMASK; \
+  } \
+ \
+  STEP_BANDS_5((rbv_base[dsq_buffer[dsq_buffer_position+3]]+ rsc_offset_convert +96))\
+  sv[1] = __shfl_up(sv[1], 1);\
+  if(threadIdx.x == 0){   \
+    sv[1] = NEGINFMASK;\
+  } \
+\
+  STEP_BANDS_5((rbv_base[dsq_buffer[dsq_buffer_position+4]]+ rsc_offset_convert +128)) \
+    dsq_buffer_position+=5;\
+  sv[0] = __shfl_up(sv[0], 1);\
+  if(threadIdx.x == 0){   \
+    sv[0] = NEGINFMASK; \
+  }\
+  i+=5;
+
+
+ /* rsc_temp[0]=rbv_base[*(dsq_buffer_ptr+1)]+ rsc_offset_convert +32;\
+  rsc_temp[1]=rbv_base[*(dsq_buffer_ptr+2)]+ rsc_offset_convert +64;\
+  rsc_temp[2]=rbv_base[*(dsq_buffer_ptr+3)]+ rsc_offset_convert +96;\
+  rsc_temp[3]=rbv_base[*(dsq_buffer_ptr+4)]+ rsc_offset_convert +128;\ */
+
+/*__device__ int calc_band_5(char *dsq, int8_t *dsq_buffer, int L, int **rbv_base, int Q, int q, int xEv)
 {
   CALC(RESET_5, STEP_BANDS_5, CONVERT_5, 5)
+} */
+
+__device__ int calc_band_5(char *dsq, int8_t *dsq_buffer, int L, int **rbv_base, int Q, int q, int xEv){
+ int i=0, i2, num_iters, xEv0, xEv1, xEv2, xEv3, xEv4; 
+  int dsq_buffer_position= 0, rsc_offset, rsc_offset_convert;
+  //unwind resets 
+  int sv[MAX_BAND_WIDTH];          
+  sv[0] = NEGINFMASK;
+  sv[1] = NEGINFMASK;
+  sv[2] = NEGINFMASK;
+  sv[3] = NEGINFMASK;
+  sv[4] = NEGINFMASK;
+  xEv0 = xEv;
+  xEv1 = xEv;
+  xEv2 = xEv;
+  xEv3 = xEv;
+  xEv4 = xEv;
+  if(L < Q-q-5){
+    num_iters = L;  // Need to test and handle this case
+  }
+  else  num_iters = Q-q-5;           
+  if(num_iters > 0){
+    if(threadIdx.x <8){
+    *(((int4 *) dsq_buffer) + threadIdx.x) = *(((int4 *) (dsq)) + threadIdx.x);
+  }
+    dsq_buffer_position = 0;
+    __syncwarp();
+  } 
+  rsc_offset = (q << 5) + threadIdx.x;                                      
+  while (num_iters >0) {                        
+    STEP_BANDS_5((rbv_base[dsq_buffer[dsq_buffer_position]] + rsc_offset))
+    rsc_offset +=32;
+    dsq_buffer_position++;
+    if(dsq_buffer_position == 128){ 
+      dsq_buffer_position = (i+1) & 15; //only need to align to 128-bit boundary
+      if(threadIdx.x<8){
+        *(((int*) dsq_buffer) + threadIdx.x) = *(((int*) (dsq + (i + 1- dsq_buffer_position))) + threadIdx.x); 
+      }
+      __syncwarp();
+    }
+
+    i++;                                        
+    num_iters--;                                
+  }                                             
+
+  rsc_offset_convert = ((Q-5) << 5) + threadIdx.x;
+  if((dsq_buffer_position < 124) &&(i < (L-4))){
+    CONVERT_5_NOCHECKS()
+  }                     
+  else{ 
+    CONVERT_5(LENGTH_CHECK, done1)
+  }
+done1:   
+ dsq_buffer_position = (Q-q) & 15;
+ if(threadIdx.x <8){
+  *(((int4 *) dsq_buffer) + threadIdx.x) = *(((int4 *) (dsq + ((Q-q)- dsq_buffer_position))) + threadIdx.x); 
+ }
+  for (i2 = Q - q; i2 < L - Q; i2 += Q)          
+    {                                            
+    i = 0;
+    rsc_offset = threadIdx.x;                                     
+    __syncwarp();
+    num_iters = Q - 5;                         
+    while (num_iters > 0) {                       
+      STEP_BANDS_5((rbv_base[dsq_buffer[dsq_buffer_position]] + rsc_offset))
+      rsc_offset += 32;
+      dsq_buffer_position++;
+      if(dsq_buffer_position == 128){ 
+        dsq_buffer_position = (i + i2 + 1) & 15;
+        if(threadIdx.x<8){
+          *(((int4 *) dsq_buffer) + threadIdx.x) = *(((int4 *) (dsq + (i+i2 + 1- dsq_buffer_position))) + threadIdx.x); 
+        }
+        __syncwarp();
+      }
+    num_iters--;
+    i++;                           
+    }                                             
+    i += i2;         
+    rsc_offset_convert = ((Q-5) << 5) + threadIdx.x;   
+    if(dsq_buffer_position < 124){
+      CONVERT_5_NOCHECKS()
+    }                     
+    else{ 
+      CONVERT_5(NO_CHECK, )
+    }
+
+
+  }  
+  if ((L - i2) < (Q-5)) num_iters = L-i2;        
+  else                  num_iters = Q-5;         
+  i = 0;                                       
+  if(num_iters > 0){
+    dsq_buffer_position = i2 & 15;
+    if(threadIdx.x < 8){
+      *(((int4 *) dsq_buffer) + threadIdx.x) = *(((int4 *) (dsq + (i2- dsq_buffer_position))) + threadIdx.x); 
+    }
+    __syncwarp();
+    rsc_offset = threadIdx.x;
+  }
+  while (num_iters > 0) {                        
+    STEP_BANDS_5((rbv_base[dsq_buffer[dsq_buffer_position]] +rsc_offset))
+    rsc_offset += 32;
+    dsq_buffer_position++;
+    if(dsq_buffer_position == 128){ 
+      dsq_buffer_position = (i + i2+1) & 15;
+      if(threadIdx.x <8){
+        *(((int4 *) dsq_buffer) + threadIdx.x) = *(((int4 *) (dsq + (i+i2 + 1- dsq_buffer_position))) + threadIdx.x); 
+      }
+      __syncwarp();
+    }
+    i++;                                         
+    num_iters--;                                 
+  }                                              
+  i+=i2;                                         
+
+  rsc_offset_convert = ((Q-5) << 5) + threadIdx.x;
+  if((dsq_buffer_position < 124) &&(i < (L-4))){
+      CONVERT_5_NOCHECKS()
+    }                     
+    else{ 
+      CONVERT_5(LENGTH_CHECK, done2)
+    }
+
+done2:            
+  MAX(xEv, xEv, xEv0);
+  MAX(xEv1, xEv1, xEv2);
+  MAX(xEv3, xEv3, xEv3);
+  MAX(xEv1, xEv1, xEv3);
+  MAX(xEv, xEv, xEv1);                             
+  return xEv;
 } 
-#endif
-
-#if MAX_BAND_WIDTH > 5
-#define RESET_6()                  \
-  RESET_5()                        \
-  sv[5] = NEGINFMASK;
-
-#define STEP_BANDS_6() \
-  STEP_BANDS_5()       \
-  STEP_SINGLE(sv[5])
-
-#define CONVERT_6(step, LENGTH_CHECK, label)            \
-  CONVERT_STEP(step, LENGTH_CHECK, label, sv[5], Q-6)  \
-  CONVERT_5(step, LENGTH_CHECK, label)
-
-
-__device__ int calc_band_6(char *dsq, int8_t *dsq_buffer, int L, int **rbv_base, int Q, int q, int xEv)
-{
-  CALC(RESET_6, STEP_BANDS_6, CONVERT_6, 6)
-}
-#endif
-
-#if MAX_BAND_WIDTH > 6
-#define RESET_7()                  \
-  RESET_6()                        \
-  sv[6] = NEGINFMASK;
-
-#define STEP_BANDS_7() \
-  STEP_BANDS_6()       \
-  STEP_SINGLE(sv[6])
-
-#define CONVERT_7(step, LENGTH_CHECK, label)            \
-  CONVERT_STEP(step, LENGTH_CHECK, label, sv[6], Q-7)  \
-  CONVERT_6(step, LENGTH_CHECK, label)
-
-__device__ int calc_band_7(char *dsq, int8_t *dsq_buffer, int L, int **rbv_base, int Q, int q, int xEv)
-{
-  CALC(RESET_7, STEP_BANDS_7, CONVERT_7, 7)
-}
-#endif
-
-#if MAX_BAND_WIDTH > 7
-#define RESET_8()                  \
-  RESET_7()                        \
-  sv[7] = NEGINFMASK;
-
-#define STEP_BANDS_8() \
-  STEP_BANDS_7()       \
-  STEP_SINGLE(sv[7])
-
-#define CONVERT_8(step, LENGTH_CHECK, label)            \
-  CONVERT_STEP(step, LENGTH_CHECK, label, sv[7], Q-8)  \
-  CONVERT_7(step, LENGTH_CHECK, label)
-
-__device__ int calc_band_8(char *dsq, int8_t *dsq_buffer, int L, int **rbv_base, int Q, int q, int xEv)
-{
-  CALC(RESET_8, STEP_BANDS_8, CONVERT_8, 8)
-}
-#endif
-
-#if MAX_BAND_WIDTH > 8
-#define RESET_9()                  \
-  RESET_8()                        \
-  sv[8] = NEGINFMASK;
-
-#define STEP_BANDS_9() \
-  STEP_BANDS_8()       \
-  STEP_SINGLE(sv[8])
-
-#define CONVERT_9(step, LENGTH_CHECK, label)            \
-  CONVERT_STEP(step, LENGTH_CHECK, label, sv[8], Q-9)  \
-  CONVERT_8(step, LENGTH_CHECK, label)
-
-__device__ int calc_band_9(char *dsq, int8_t *dsq_buffer, int L, int **rbv_base, int Q, int q, int xEv)
-{
-  CALC(RESET_9, STEP_BANDS_9, CONVERT_9, 9)
-}
-
-#endif
-
-#if MAX_BAND_WIDTH > 9
-#define RESET_10()                  \
-  RESET_9()                        \
-  sv[9] = NEGINFMASK;
-
-#define STEP_BANDS_10() \
-  STEP_BANDS_9()       \
-  STEP_SINGLE(sv[9])
-
-#define CONVERT_10(step, LENGTH_CHECK, label)            \
-  CONVERT_STEP(step, LENGTH_CHECK, label, sv[9], Q-10)  \
-  CONVERT_9(step, LENGTH_CHECK, label)
-
-__device__ int calc_band_10(char *dsq, int8_t *dsq_buffer, int L, int **rbv_base, int Q, int q, int xEv)
-{
-  CALC(RESET_10, STEP_BANDS_10, CONVERT_10, 10)
-}
-
 #endif
 
 
 __global__ 
-__launch_bounds__(1024,2)
+//__launch_bounds__(1024,2)
 void SSV_cuda(char *dsq, int L, int Q, P7_OPROFILE *om, int8_t *retval){
   int q;
   int **rbv_base;
-  __shared__ int8_t dsq_buffer[32 * 128];
+  __shared__ int4 dsq_buffer_mem[32 * 8];
+  int8_t *dsq_buffer = (int8_t *) dsq_buffer_mem;
   int last_q = 0;
   int xEv = NEGINFMASK;
   int bands;
@@ -447,9 +641,6 @@ void SSV_cuda(char *dsq, int L, int Q, P7_OPROFILE *om, int8_t *retval){
  
   int8_t *my_dsq_buffer = &(dsq_buffer[0]) + (128 * threadIdx.y);
 
-  //int(*fs[MAX_BAND_WIDTH + 1]) (char *, int, int **, int, int, int, int)
-   // = {NULL , calc_band_1};
-
   for(num_reps = 0; num_reps < NUM_REPS; num_reps++){
   last_q = 0; // reset this at start of filter
   xEv = NEGINFMASK;
@@ -459,7 +650,7 @@ void SSV_cuda(char *dsq, int L, int Q, P7_OPROFILE *om, int8_t *retval){
     {
       q      = (Q * (i + 1)) / bands;
       switch(q-last_q){
-        case 1:
+/*        case 1:
           xEv = calc_band_1(dsq, my_dsq_buffer, L, rbv_base, Q, last_q, xEv);
           break;
 #if MAX_BAND_WIDTH > 1 
@@ -476,35 +667,10 @@ void SSV_cuda(char *dsq, int L, int Q, P7_OPROFILE *om, int8_t *retval){
         case 4:
           xEv = calc_band_4(dsq, my_dsq_buffer, L, rbv_base, Q, last_q, xEv);
           break;  
-#endif
+#endif */
 #if MAX_BAND_WIDTH > 4         
         case 5:
           xEv = calc_band_5(dsq, my_dsq_buffer, L, rbv_base, Q, last_q, xEv);
-          break;  
-#endif
-#if MAX_BAND_WIDTH > 5         
-        case 6:
-          xEv = calc_band_6(dsq, my_dsq_buffer, L, rbv_base, Q, last_q, xEv);
-          break;  
-#endif
-#if MAX_BAND_WIDTH > 6          
-        case 7:
-          xEv = calc_band_7(dsq, my_dsq_buffer, L, rbv_base, Q, last_q, xEv);
-          break;  
-#endif
-#if MAX_BAND_WIDTH > 7         
-        case 8:
-          xEv = calc_band_8(dsq, my_dsq_buffer, L, rbv_base, Q, last_q, xEv);
-          break;  
-#endif
-#if MAX_BAND_WIDTH > 8         
-        case 9:
-          xEv = calc_band_9(dsq, my_dsq_buffer, L, rbv_base, Q, last_q, xEv);
-          break;  
-#endif
-#if MAX_BAND_WIDTH > 9         
-        case 10:
-          xEv = calc_band_10(dsq, my_dsq_buffer, L, rbv_base, Q, last_q, xEv);
           break;  
 #endif
         default:
@@ -604,7 +770,6 @@ P7_OPROFILE *create_oprofile_on_card(P7_OPROFILE *the_profile){
   P7_OPROFILE *cuda_OPROFILE;
   cudaError_t err;
   int Q = P7_Q(the_profile->M, the_profile->V);
-  int *rbv_buffer;
 
   if(cudaMalloc(&cuda_OPROFILE, sizeof(P7_OPROFILE)) != cudaSuccess){
 
@@ -642,38 +807,6 @@ P7_OPROFILE *create_oprofile_on_card(P7_OPROFILE *the_profile){
     cuda_rbv_temp +=1;
   }
  
-  // Allocate texture for rbv and copy data
-
-  int *rbv_copy_loc;
-  for(i = 0; i < the_profile->abc->Kp; i++){
-    restriped_rbv = restripe_char_to_int((char *)(the_profile->rbv[i]), the_profile->V, 32, Q * the_profile->V, &restriped_rbv_size);
-
-
-    if (i == 0){ // Only do the malloc once
-      if(cudaMalloc(&rbv_buffer, (the_profile->abc->Kp * restriped_rbv_size)) != cudaSuccess){
-        err = cudaGetLastError();
-        printf("Error: %s\n", cudaGetErrorString(err));
-        p7_Fail((char *) "Unable to allocate memory in create_oprofile_on_card");
-      } 
-      rbv_copy_loc = rbv_buffer;
-    }
-
-    if(cudaMemcpy(rbv_copy_loc, restriped_rbv, restriped_rbv_size, cudaMemcpyHostToDevice) != cudaSuccess){
-         err = cudaGetLastError();
-        printf("Error: %s\n", cudaGetErrorString(err));
-      p7_Fail((char *) "Unable to copy data in create_oprofile_on_card");
-    }
-    rbv_copy_loc += (restriped_rbv_size/sizeof(int));
-    // units of restriped_rbv_size are bytes, units of rbv_copy_loc are ints
-  }
-
-  // Bind the buffer to the texture so we can access it using texture calls
-  cudaChannelFormatDesc desc = cudaCreateChannelDesc<uint4>();
-  if(cudaBindTexture2D(NULL, rbv, rbv_buffer, desc, restriped_rbv_size/sizeof(uint4), the_profile->abc->Kp, restriped_rbv_size) != cudaSuccess){
-    err = cudaGetLastError();
-    printf("Error: %s\n", cudaGetErrorString(err));
-    p7_Fail((char *) "Unable to bind buffer to texture in create_oprofile_on_card");
-  }
 
   // copy over base parameters.  Only call this kernel on one core because it just assigns values to fields in the data structure and has no parallelism
   copy_oprofile_values_to_card<<<1,1>>>(cuda_OPROFILE, the_profile->tauBM, the_profile->scale_b, the_profile->scale_w, the_profile->base_w, the_profile->ddbound_w, the_profile->L, the_profile->M, the_profile->V, the_profile->max_length, the_profile->allocM, the_profile->allocQb, the_profile->allocQw, the_profile->allocQf, the_profile->mode, the_profile->nj, the_profile->is_shadow, (int8_t **) cuda_rbv);

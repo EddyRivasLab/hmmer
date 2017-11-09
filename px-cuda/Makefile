@@ -1,5 +1,5 @@
 CC     = nvcc
-CFLAGS = -O3 -g -lineinfo --Wno-deprecated-declarations --compiler-options "-msse4.1" -gencode=arch=compute_61,code=compute_61
+CFLAGS = -O3 -lineinfo --Wno-deprecated-declarations --compiler-options "-msse4.1" -gencode=arch=compute_61,code=compute_61
 HOME = ../../
 all:   px px_serial engine px_cuda px_cuda_texture
 
