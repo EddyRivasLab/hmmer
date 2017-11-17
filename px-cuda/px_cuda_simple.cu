@@ -7,7 +7,7 @@
 #include "hmmer.h"
 #include "px_cuda.h"
 
-#define MAX_BAND_WIDTH 1
+#define MAX_BAND_WIDTH 2
 #define NEGINFMASK 0x80808080
 #define MAX(a, b, c)\
   a = (b > c) ? b:c;
@@ -24,15 +24,25 @@ __device__  uint calc_band_1(const __restrict__ uint8_t *dsq, int L, int Q, int 
   uint sv0 = NEGINFMASK, xE=NEGINFMASK, *rsc;
   int offset;
   // loop 1 of SSV
-  for(offset = (q <<5)+threadIdx.x; offset < (((Q-1)<<5) +threadIdx.x); dsq++){
-      rsc = rbv[*dsq] + offset;
-      offset += 32;
-      sv0   = __vaddss4(sv0, *rsc);
-      xE  = __vmaxs4(xE, sv0);     
-    }
-    //convert step
+
+  rsc = rbv[*dsq] +(q <<5);
+  if(threadIdx.x < 8){
+    ((uint4 *)residue_buffer)[threadIdx.x] = ((uint4*)rsc)[threadIdx.x];
+  }
+  __syncwarp();
+  #pragma unroll 4
+  for(offset = (q <<5); offset < (((Q-1)<<5)); dsq++){
+    offset += 32;
     rsc = rbv[*dsq] + offset;
-    sv0   = __vaddss4(sv0, *rsc); 
+    sv0   = __vaddss4(sv0, residue_buffer[threadIdx.x]);  
+    if(threadIdx.x < 8){
+      ((uint4 *)residue_buffer)[threadIdx.x] = ((uint4*)rsc)[threadIdx.x];
+    }
+    __syncwarp();
+    xE  = __vmaxs4(xE, sv0);     
+  }
+    //convert step
+    sv0   = __vaddss4(sv0, residue_buffer[threadIdx.x]);  
     xE  = __vmaxs4(xE, sv0);  
     sv0 = __byte_perm(sv0, __shfl_up_sync(0xffffffff, sv0, 1), 0x2107); //left-shifts sv by one byte, puts the high byte of sv_shuffle in the low byte of sv
     if(threadIdx.x == 0){
@@ -44,45 +54,58 @@ __device__  uint calc_band_1(const __restrict__ uint8_t *dsq, int L, int Q, int 
     ((uint4 *)residue_buffer)[threadIdx.x] = ((uint4*)rsc)[threadIdx.x];
   }
   __syncwarp();
-  for(int row = Q-q; row < L-Q; row++){
-    for(offset =0; offset < ((Q-1) <<5);){
-      offset +=32;
-      row++;
-      dsq++;
-      rsc = rbv[*dsq] + offset;
-      sv0   = __vaddss4(sv0, residue_buffer[threadIdx.x]);  
-      if(threadIdx.x < 8){
-        ((uint4 *)residue_buffer)[threadIdx.x] = ((uint4*)rsc)[threadIdx.x];
-      }
-      __syncwarp();
-      xE  = __vmaxs4(xE, sv0);  
-    }
-    //convert step
-    rsc = rbv[*dsq] + offset +threadIdx.x;
-    sv0   = __vaddss4(sv0, *rsc); 
-    xE  = __vmaxs4(xE, sv0);  
-    sv0 = __byte_perm(sv0, __shfl_up_sync(0xffffffff, sv0, 1), 0x2107); //left-shifts sv by one byte, puts the high byte of sv_shuffle in the low byte of sv
-    if(threadIdx.x == 0){
-      sv0 = __byte_perm(sv0, NEGINFMASK, 0x2107); //left-shifts sv by one byte, puts the high byte of sv_shuffle in the low byte of sv
-    }
+  offset = 0;
+  #pragma unroll 4
+  for(int row = Q-q; row < L-Q; row++){ // merge the nested loops in original SSV to support unrolling
+    offset +=32;
     dsq++;
-    rsc = rbv[*dsq];
+    rsc = rbv[*dsq] + offset;
+    sv0   = __vaddss4(sv0, residue_buffer[threadIdx.x]);  
     if(threadIdx.x < 8){
       ((uint4 *)residue_buffer)[threadIdx.x] = ((uint4*)rsc)[threadIdx.x];
     }
     __syncwarp();
+    xE  = __vmaxs4(xE, sv0);  
+    if(offset == ((Q-1) <<5)){
+      //convert step
+      sv0   = __vaddss4(sv0, residue_buffer[threadIdx.x]);  
+      xE  = __vmaxs4(xE, sv0);  
+      sv0 = __byte_perm(sv0, __shfl_up_sync(0xffffffff, sv0, 1), 0x2107); //left-shifts sv by one byte, puts the high byte of sv_shuffle in the low byte of sv
+      if(threadIdx.x == 0){
+        sv0 = __byte_perm(sv0, NEGINFMASK, 0x2107); //left-shifts sv by one byte, puts the high byte of sv_shuffle in the low byte of sv
+      }
+      dsq++;
+      rsc = rbv[*dsq];
+      if(threadIdx.x < 8){
+        ((uint4 *)residue_buffer)[threadIdx.x] = ((uint4*)rsc)[threadIdx.x];
+      }
+      __syncwarp();
+      row++;
+      offset = 0;
+    }
   }
 
   //Loop 3 of SSV
-  for(offset = threadIdx.x; offset < ((Q-1) <<5)+threadIdx.x;){
-    rsc = rbv[*dsq] + offset;
+  rsc = rbv[*dsq];
+  if(threadIdx.x < 8){
+    ((uint4 *)residue_buffer)[threadIdx.x] = ((uint4*)rsc)[threadIdx.x];
+  }
+  __syncwarp();
+  #pragma unroll 4
+  for(offset = 0; offset < ((Q-1) <<5);){
     offset += 32;
-    sv0   = __vaddss4(sv0, *rsc); 
+    dsq++;
+    rsc = rbv[*dsq] + offset;
+
+    sv0   = __vaddss4(sv0, residue_buffer[threadIdx.x]);  
+    if(threadIdx.x < 8){
+      ((uint4 *)residue_buffer)[threadIdx.x] = ((uint4*)rsc)[threadIdx.x];
+    }
+    __syncwarp(); 
     xE  = __vmaxs4(xE, sv0);
   }
   //convert step
-  rsc = rbv[*dsq] + offset;
-  sv0   = __vaddss4(sv0, *rsc); 
+  sv0   = __vaddss4(sv0, residue_buffer[threadIdx.x]);  
   xE  = __vmaxs4(xE, sv0);  
 
   sv0 = __byte_perm(sv0, __shfl_up_sync(0xffffffff, sv0, 1), 0x2107); //left-shifts sv by one byte, puts the high byte of sv_shuffle in the low byte of sv
@@ -92,14 +115,177 @@ __device__  uint calc_band_1(const __restrict__ uint8_t *dsq, int L, int Q, int 
   return xE;   
 }
 
+__device__  uint calc_band_2(const __restrict__ uint8_t *dsq, int L, int Q, int q, uint ** rbv, volatile uint *residue_buffer){
+  uint sv0 = NEGINFMASK, sv1 = NEGINFMASK, xE=NEGINFMASK, *rsc;
+  int offset;
+  // loop 1 of SSV
+
+  rsc = rbv[*dsq] + (q<<5);
+  if(threadIdx.x < 16){
+    ((uint4 *)residue_buffer)[threadIdx.x] = ((uint4*)rsc)[threadIdx.x];
+  }
+  __syncwarp();
+  #pragma unroll 4
+
+  for(offset = (q <<5); offset < (((Q-2)<<5)); dsq++){
+    offset += 32;
+    rsc = rbv[*dsq] + offset;
+    sv0   = __vaddss4(sv0, residue_buffer[threadIdx.x]);
+    sv1   = __vaddss4(sv1, residue_buffer[threadIdx.x+32]);  
+    if(threadIdx.x < 16){
+      ((uint4 *)residue_buffer)[threadIdx.x] = ((uint4*)rsc)[threadIdx.x];
+    }
+    __syncwarp();
+    xE  = __vmaxs4(xE, sv0); 
+    xE  = __vmaxs4(xE, sv1);     
+  }
+    //convert step
+  sv0   = __vaddss4(sv0, residue_buffer[threadIdx.x]); 
+  sv1   = __vaddss4(sv1, residue_buffer[threadIdx.x+32]);  
+  xE  = __vmaxs4(xE, sv0); 
+  xE  = __vmaxs4(xE, sv1);   
+  sv1 = __byte_perm(sv1, __shfl_up_sync(0xffffffff, sv1, 1), 0x2107); //left-shifts sv by one byte, puts the high byte of sv_shuffle in the low byte of sv
+  if(threadIdx.x == 0){
+    sv1 = __byte_perm(sv1, NEGINFMASK, 0x2107); //left-shifts sv by one byte, puts the high byte of sv_shuffle in the low byte of sv
+  }
+  dsq++;
+  offset += 32;
+  rsc = rbv[*dsq]+offset;
+  if(threadIdx.x < 16){
+    ((uint4 *)residue_buffer)[threadIdx.x] = ((uint4*)rsc)[threadIdx.x];
+  }
+  __syncwarp();
+
+  //convert step
+  sv0   = __vaddss4(sv0, residue_buffer[threadIdx.x]); 
+  sv1   = __vaddss4(sv1, residue_buffer[threadIdx.x+32]);  
+  xE  = __vmaxs4(xE, sv0); 
+  xE  = __vmaxs4(xE, sv1);   
+  sv0 = __byte_perm(sv0, __shfl_up_sync(0xffffffff, sv0, 1), 0x2107); //left-shifts sv by one byte, puts the high byte of sv_shuffle in the low byte of sv
+  if(threadIdx.x == 0){
+    sv0 = __byte_perm(sv0, NEGINFMASK, 0x2107); //left-shifts sv by one byte, puts the high byte of sv_shuffle in the low byte of sv
+  }
+  dsq++;
+
+  //loop 2 of SSV
+  rsc = rbv[*dsq];
+  if(threadIdx.x < 16){
+    ((uint4 *)residue_buffer)[threadIdx.x] = ((uint4*)rsc)[threadIdx.x];
+  }
+  __syncwarp();
+  offset = 0;
+  #pragma unroll 4
+  for(int row = Q-q; row < L-Q; row++){ // merge the nested loops in original SSV to support unrolling
+    offset +=32;
+    dsq++;
+    rsc = rbv[*dsq] + offset;
+    sv0   = __vaddss4(sv0, residue_buffer[threadIdx.x]);  
+    sv1   = __vaddss4(sv1, residue_buffer[threadIdx.x+32]); 
+    if(threadIdx.x < 16){
+      ((uint4 *)residue_buffer)[threadIdx.x] = ((uint4*)rsc)[threadIdx.x];
+    }
+    __syncwarp();
+    xE  = __vmaxs4(xE, sv0);  
+    xE  = __vmaxs4(xE, sv1);  
+
+    if(offset >= ((Q-2) <<5)){
+      //convert step
+      sv0   = __vaddss4(sv0, residue_buffer[threadIdx.x]); 
+      sv1   = __vaddss4(sv1, residue_buffer[threadIdx.x+32]);  
+      xE  = __vmaxs4(xE, sv0); 
+      xE  = __vmaxs4(xE, sv1);   
+      sv1 = __byte_perm(sv1, __shfl_up_sync(0xffffffff, sv1, 1), 0x2107); //left-shifts sv by one byte, puts the high byte of sv_shuffle in the low byte of sv
+      if(threadIdx.x == 0){
+        sv1 = __byte_perm(sv1, NEGINFMASK, 0x2107); //left-shifts sv by one byte, puts the high byte of sv_shuffle in the low byte of sv
+      }
+      dsq++;
+      offset+=32;
+      rsc = rbv[*dsq]+offset;
+      if(threadIdx.x < 16){
+        ((uint4 *)residue_buffer)[threadIdx.x] = ((uint4*)rsc)[threadIdx.x];
+      }
+      __syncwarp();
+      row++;
+      //convert step
+      sv0   = __vaddss4(sv0, residue_buffer[threadIdx.x]); 
+      sv1   = __vaddss4(sv1, residue_buffer[threadIdx.x+32]);  
+      xE  = __vmaxs4(xE, sv0); 
+      xE  = __vmaxs4(xE, sv1);   
+      sv0 = __byte_perm(sv0, __shfl_up_sync(0xffffffff, sv0, 1), 0x2107); //left-shifts sv by one byte, puts the high byte of sv_shuffle in the low byte of sv
+      if(threadIdx.x == 0){
+        sv0 = __byte_perm(sv0, NEGINFMASK, 0x2107); //left-shifts sv by one byte, puts the high byte of sv_shuffle in the low byte of sv
+      }
+      dsq++;
+      offset=0;
+      rsc = rbv[*dsq];
+      if(threadIdx.x < 16){
+        ((uint4 *)residue_buffer)[threadIdx.x] = ((uint4*)rsc)[threadIdx.x];
+      }
+      __syncwarp();
+      row++;
+    }
+  }
+
+  //Loop 3 of SSV
+  rsc = rbv[*dsq];
+  if(threadIdx.x < 16){
+    ((uint4 *)residue_buffer)[threadIdx.x] = ((uint4*)rsc)[threadIdx.x];
+  }
+  __syncwarp();
+//  #pragma unroll 4
+  for(offset = 0; offset < ((Q-2) <<5);){
+    offset += 32;
+    dsq++;
+    rsc = rbv[*dsq] + offset;
+    sv0   = __vaddss4(sv0, residue_buffer[threadIdx.x]); 
+    sv1   = __vaddss4(sv1, residue_buffer[threadIdx.x+32]); 
+ 
+    if(threadIdx.x < 16){
+      ((uint4 *)residue_buffer)[threadIdx.x] = ((uint4*)rsc)[threadIdx.x];
+    }
+    __syncwarp(); 
+    xE  = __vmaxs4(xE, sv0);
+    xE  = __vmaxs4(xE, sv1);
+
+  }
+  //convert step
+  sv0   = __vaddss4(sv0, residue_buffer[threadIdx.x]); 
+  sv1   = __vaddss4(sv1, residue_buffer[threadIdx.x+32]);  
+  xE  = __vmaxs4(xE, sv0); 
+  xE  = __vmaxs4(xE, sv1);   
+  sv1 = __byte_perm(sv1, __shfl_up_sync(0xffffffff, sv1, 1), 0x2107); //left-shifts sv by one byte, puts the high byte of sv_shuffle in the low byte of sv
+  if(threadIdx.x == 0){
+    sv1 = __byte_perm(sv1, NEGINFMASK, 0x2107); //left-shifts sv by one byte, puts the high byte of sv_shuffle in the low byte of sv
+  }
+  dsq++;
+  offset +=32;
+  rsc = rbv[*dsq]+offset;
+  if(threadIdx.x < 16){
+    ((uint4 *)residue_buffer)[threadIdx.x] = ((uint4*)rsc)[threadIdx.x];
+  }
+  __syncwarp();
+
+  //convert step
+  sv0   = __vaddss4(sv0, residue_buffer[threadIdx.x]); 
+  sv1   = __vaddss4(sv1, residue_buffer[threadIdx.x+32]);  
+  xE  = __vmaxs4(xE, sv0); 
+  xE  = __vmaxs4(xE, sv1);   
+  sv0 = __byte_perm(sv0, __shfl_up_sync(0xffffffff, sv0, 1), 0x2107); //left-shifts sv by one byte, puts the high byte of sv_shuffle in the low byte of sv
+  if(threadIdx.x == 0){
+    sv0 = __byte_perm(sv0, NEGINFMASK, 0x2107); //left-shifts sv by one byte, puts the high byte of sv_shuffle in the low byte of sv
+  }
+  return xE;   
+}
+
+
 __global__
 void SSV_cuda(const __restrict__ uint8_t *dsq, int L, P7_OPROFILE *om, int8_t *retval){
   __shared__ uint4 shared_buffer[1024 *3];  //allocate one big lump that takes up all our shared memory
   int  Q = ((((om->M)-1) / (128)) + 1);
   int8_t *my_buffer= (int8_t*)(shared_buffer + (threadIdx.y * 96));
   uint *residue_buffer = (uint*) my_buffer;
-  uint **rbv = (uint **)(my_buffer + 128); // residue buffer = 128B
-  uint8_t *my_dsq_buffer = ((uint8_t *)rbv) + 352; // 27 ptrs, rounded up to multiple of 16 bytes.
+  uint **rbv = (uint **)(my_buffer + 512); // residue buffer = 128B
+  uint8_t *my_dsq_buffer = ((uint8_t *)rbv) + 224; // 27 ptrs, rounded up to multiple of 16 bytes.
   const uint8_t *dsq_ptr;
   // needs to scale w abc->Kp
 
@@ -115,7 +301,7 @@ void SSV_cuda(const __restrict__ uint8_t *dsq, int L, P7_OPROFILE *om, int8_t *r
 
 
   for(num_reps = 0; num_reps < NUM_REPS; num_reps++){
-    if(L <= 1184){
+    if(L <= 800){
       if(threadIdx.x == 0){
         memcpy(my_dsq_buffer, dsq, L);
       }
@@ -135,22 +321,10 @@ void SSV_cuda(const __restrict__ uint8_t *dsq, int L, P7_OPROFILE *om, int8_t *r
         case 1:
           xE = __vmaxs4(xE, calc_band_1(dsq_ptr, L, Q, last_q, rbv, residue_buffer));
           break;
-/*
-#if MAX_BAND_WIDTH > 1 
-        case 2:
-          xEv = calc_band_2(dsq, my_dsq_buffer, L, rbv_base, Q, last_q, xEv);
-          break; 
-#endif
-#if MAX_BAND_WIDTH > 2          
-        case 3:
-          xEv = calc_band_3(dsq, my_dsq_buffer, L, rbv_base, Q, last_q, xEv);
-          break;  
-#endif
-#if MAX_BAND_WIDTH > 3         
-        case 4:
-          xEv = calc_band_4(dsq, my_dsq_buffer, L, rbv_base, Q, last_q, xEv);
-          break;  
-*/
+       case 2:
+          xE = __vmaxs4(xE, calc_band_2(dsq_ptr, L, Q, last_q, rbv, residue_buffer));
+          break;
+
         default:
           printf("Illegal band width %d\n", q-last_q);
       }
@@ -481,16 +655,18 @@ P7_FILTERMX *create_filtermx_on_card(){
 
 char * restripe_char(char *source, int source_chars_per_vector, int dest_chars_per_vector, int source_length, int *dest_length){
   char *dest;
-  int dest_num_vectors;
+  int dest_num_vectors, unpadded_dest_vectors;
   int source_num_vectors;
   source_num_vectors = source_length/source_chars_per_vector;
   if(source_num_vectors * source_chars_per_vector != source_length){
     source_num_vectors++;
   }
-  dest_num_vectors = source_length/dest_chars_per_vector;
-  if(dest_num_vectors * dest_chars_per_vector != source_length){
-    dest_num_vectors++;  //round up if source length isn't a multiple of the dest vector length
+  unpadded_dest_vectors = source_length/dest_chars_per_vector;
+  if(unpadded_dest_vectors * dest_chars_per_vector != source_length){
+    unpadded_dest_vectors++;  //round up if source length isn't a multiple of the dest vector length
   }
+ // printf("Unpadded_dest_vectors = %d. ", unpadded_dest_vectors);
+  dest_num_vectors = unpadded_dest_vectors + MAX_BAND_WIDTH -1; // add extra vectors for SSV wrap-around
 
   dest = (char *) malloc(dest_num_vectors * dest_chars_per_vector);
   *dest_length = dest_num_vectors * dest_chars_per_vector;
@@ -500,14 +676,22 @@ char * restripe_char(char *source, int source_chars_per_vector, int dest_chars_p
 
   for(i = 0; i < source_length; i++){
     source_pos = ((i % source_num_vectors) * source_chars_per_vector) + (i / source_num_vectors);
-    dest_pos = ((i % dest_num_vectors) * dest_chars_per_vector) + (i / dest_num_vectors);
-    dest[dest_pos] = source[source_pos];
+    dest_pos = ((i % unpadded_dest_vectors) * dest_chars_per_vector) + (i / unpadded_dest_vectors);
+    dest[dest_pos] = (int) source[source_pos];
   }
 
   // pad out the dest vector with zeroes if necessary
-  for(i = source_length; i < *dest_length; i++){
-      dest_pos = ((i % dest_num_vectors) * dest_chars_per_vector) + (i / dest_num_vectors);
+  for(; i < unpadded_dest_vectors * dest_chars_per_vector; i++){
+      dest_pos = ((i % unpadded_dest_vectors) * dest_chars_per_vector) + (i / unpadded_dest_vectors);
+    //  printf("Padding 0 at location %d \n", dest_pos);
     dest[dest_pos] = 0;
+  }
+
+  // add the extra copies of the early vectors to support the SSV wrap-around
+  for(int source = 0; i < dest_num_vectors * dest_chars_per_vector; i++){
+    dest[i] = dest[source];
+   // printf("Padding from location %d to location %d\n", source, i);
+    source++;
   }
 
   return dest;
@@ -597,7 +781,7 @@ p7_SSVFilter_shell_sse(const ESL_DSQ *dsq, int L, const __restrict__
  // SSV_start_cuda<<<1, 32>>>(card_FILTERMX, (unsigned int *) card_hv, (unsigned int *) card_mpv, om->M);
   cudaEventRecord(start);
   num_blocks.x = 1;
-  num_blocks.y = 40;
+  num_blocks.y = 20;
   num_blocks.z = 1;
   warps_per_block = 32;
   threads_per_block.x = 32;
