@@ -6,7 +6,8 @@
 #include "esl_sse.h"
 #include "hmmer.h"
 #include "px_cuda.h"
-//#define VALIDATE
+
+#define MAX_BAND_WIDTH 1
 #define NEGINFMASK 0x80808080
 #define MAX(a, b, c)\
   a = (b > c) ? b:c;
@@ -14,130 +15,355 @@
 
 //  a = (b > c) ? b:c;
 
-#define NUM_REPS 1
+#define NUM_REPS 10
 
 char * restripe_char(char *source, int source_chars_per_vector, int dest_chars_per_vector, int source_length, int *dest_length);
 int *restripe_char_to_int(char *source, int source_chars_per_vector, int dest_ints_per_vector, int source_length, int *dest_length);
 
+__device__  uint calc_band_1(const __restrict__ uint8_t *dsq, int L, int Q, int q, uint ** rbv, volatile uint *residue_buffer){
+  uint sv0 = NEGINFMASK, xE=NEGINFMASK, *rsc;
+  int offset;
+  // loop 1 of SSV
+  for(offset = (q <<5)+threadIdx.x; offset < (((Q-1)<<5) +threadIdx.x); dsq++){
+      rsc = rbv[*dsq] + offset;
+      offset += 32;
+      sv0   = __vaddss4(sv0, *rsc);
+      xE  = __vmaxs4(xE, sv0);     
+    }
+    //convert step
+    rsc = rbv[*dsq] + offset;
+    sv0   = __vaddss4(sv0, *rsc); 
+    xE  = __vmaxs4(xE, sv0);  
+    sv0 = __byte_perm(sv0, __shfl_up_sync(0xffffffff, sv0, 1), 0x2107); //left-shifts sv by one byte, puts the high byte of sv_shuffle in the low byte of sv
+    if(threadIdx.x == 0){
+      sv0 = __byte_perm(sv0, NEGINFMASK, 0x2107); //left-shifts sv by one byte, puts the high byte of sv_shuffle in the low byte of sv
+    }
+  //loop 2 of SSV
+  rsc = rbv[*dsq];
+  if(threadIdx.x < 8){
+    ((uint4 *)residue_buffer)[threadIdx.x] = ((uint4*)rsc)[threadIdx.x];
+  }
+  __syncwarp();
+  for(int row = Q-q; row < L-Q; row++){
+    for(offset =0; offset < ((Q-1) <<5);){
+      offset +=32;
+      row++;
+      dsq++;
+      rsc = rbv[*dsq] + offset;
+      sv0   = __vaddss4(sv0, residue_buffer[threadIdx.x]);  
+      if(threadIdx.x < 8){
+        ((uint4 *)residue_buffer)[threadIdx.x] = ((uint4*)rsc)[threadIdx.x];
+      }
+      __syncwarp();
+      xE  = __vmaxs4(xE, sv0);  
+    }
+    //convert step
+    rsc = rbv[*dsq] + offset +threadIdx.x;
+    sv0   = __vaddss4(sv0, *rsc); 
+    xE  = __vmaxs4(xE, sv0);  
+    sv0 = __byte_perm(sv0, __shfl_up_sync(0xffffffff, sv0, 1), 0x2107); //left-shifts sv by one byte, puts the high byte of sv_shuffle in the low byte of sv
+    if(threadIdx.x == 0){
+      sv0 = __byte_perm(sv0, NEGINFMASK, 0x2107); //left-shifts sv by one byte, puts the high byte of sv_shuffle in the low byte of sv
+    }
+    dsq++;
+    rsc = rbv[*dsq];
+    if(threadIdx.x < 8){
+      ((uint4 *)residue_buffer)[threadIdx.x] = ((uint4*)rsc)[threadIdx.x];
+    }
+    __syncwarp();
+  }
+
+  //Loop 3 of SSV
+  for(offset = threadIdx.x; offset < ((Q-1) <<5)+threadIdx.x;){
+    rsc = rbv[*dsq] + offset;
+    offset += 32;
+    sv0   = __vaddss4(sv0, *rsc); 
+    xE  = __vmaxs4(xE, sv0);
+  }
+  //convert step
+  rsc = rbv[*dsq] + offset;
+  sv0   = __vaddss4(sv0, *rsc); 
+  xE  = __vmaxs4(xE, sv0);  
+
+  sv0 = __byte_perm(sv0, __shfl_up_sync(0xffffffff, sv0, 1), 0x2107); //left-shifts sv by one byte, puts the high byte of sv_shuffle in the low byte of sv
+  if(threadIdx.x == 0){
+    sv0 = __byte_perm(sv0, NEGINFMASK, 0x2107); //left-shifts sv by one byte, puts the high byte of sv_shuffle in the low byte of sv
+  }
+  return xE;   
+}
+
+__global__
+void SSV_cuda(const __restrict__ uint8_t *dsq, int L, P7_OPROFILE *om, int8_t *retval){
+  __shared__ uint4 shared_buffer[1024 *3];  //allocate one big lump that takes up all our shared memory
+  int  Q = ((((om->M)-1) / (128)) + 1);
+  int8_t *my_buffer= (int8_t*)(shared_buffer + (threadIdx.y * 96));
+  uint *residue_buffer = (uint*) my_buffer;
+  uint **rbv = (uint **)(my_buffer + 128); // residue buffer = 128B
+  uint8_t *my_dsq_buffer = ((uint8_t *)rbv) + 352; // 27 ptrs, rounded up to multiple of 16 bytes.
+  const uint8_t *dsq_ptr;
+  // needs to scale w abc->Kp
+
+  for(int i =0; i < 27; i++){
+    rbv[i]=(uint *)(om->rbv[i]);
+  }
+
+  int q;
+  int last_q = 0;
+  uint xE = NEGINFMASK, sv_shuffle;
+  int bands;
+  int num_reps, i;
+
+
+  for(num_reps = 0; num_reps < NUM_REPS; num_reps++){
+    if(L <= 1184){
+      if(threadIdx.x == 0){
+        memcpy(my_dsq_buffer, dsq, L);
+      }
+      __syncwarp();
+      dsq_ptr = my_dsq_buffer;
+    }
+    else{
+      dsq_ptr = dsq;
+    }
+  last_q = 0; // reset this at start of filter
+  /* Use the highest number of bands but no more than MAX_BANDS */
+  bands = (Q + MAX_BAND_WIDTH - 1) / MAX_BAND_WIDTH;
+  for (i = 0; i < bands; i++) 
+    {
+      q      = (Q * (i + 1)) / bands;
+      switch(q-last_q){
+        case 1:
+          xE = __vmaxs4(xE, calc_band_1(dsq_ptr, L, Q, last_q, rbv, residue_buffer));
+          break;
+/*
+#if MAX_BAND_WIDTH > 1 
+        case 2:
+          xEv = calc_band_2(dsq, my_dsq_buffer, L, rbv_base, Q, last_q, xEv);
+          break; 
+#endif
+#if MAX_BAND_WIDTH > 2          
+        case 3:
+          xEv = calc_band_3(dsq, my_dsq_buffer, L, rbv_base, Q, last_q, xEv);
+          break;  
+#endif
+#if MAX_BAND_WIDTH > 3         
+        case 4:
+          xEv = calc_band_4(dsq, my_dsq_buffer, L, rbv_base, Q, last_q, xEv);
+          break;  
+*/
+        default:
+          printf("Illegal band width %d\n", q-last_q);
+      }
+
+      last_q = q;
+    }
+  }
+// Done with main loop.  Now reduce answer vector (xE) to one byte for return
+  // Reduce 32 4x8-bit quantities to 16
+  sv_shuffle = __shfl_down(xE, 16); 
+  if(threadIdx.x < 16){ // only bottom half of the cores continue from here
+  
+
+    xE = __vmaxs4(xE, sv_shuffle);
+
+    // Reduce 6 4x8-bit quantities to 8
+    sv_shuffle = __shfl_down(xE, 8); 
+    if(threadIdx.x < 8){ // only bottom half of the cores continue from here
+  
+
+      xE = __vmaxs4(xE, sv_shuffle);
+
+      // Reduce 8 4x8-bit quantities to 4
+      sv_shuffle = __shfl_down(xE, 4); 
+      if(threadIdx.x < 4){ // only bottom half of the cores continue from here
+
+        xE = __vmaxs4(xE, sv_shuffle);
+
+        // Reduce 4 4x8-bit quantities to 2
+        sv_shuffle = __shfl_down(xE, 2); 
+        if(threadIdx.x < 2){ // only bottom half of the cores continue from here
+
+          xE = __vmaxs4(xE, sv_shuffle);
+          // Reduce 2 4x8-bit quantities to 1
+
+          sv_shuffle = __shfl_down(xE, 1);  
+          if(threadIdx.x < 1){ // only bottom half of the cores continue from here
+
+            xE = __vmaxs4(xE, sv_shuffle);
+
+            // now, reduce the final 32 bit quantity to one 8-bit quantity.
+
+            sv_shuffle = xE >> 16;
+
+            xE = __vmaxs4(xE, sv_shuffle);
+
+            sv_shuffle = xE >> 8;
+
+            xE = __vmaxs4(xE, sv_shuffle);
+            if((blockIdx.y == 0) &&(threadIdx.y ==0) && (threadIdx.x == 0)){ // only one thread writes result
+              *retval = xE & 255; // low 8 bits of the word is the final result
+            }
+          }
+        }
+      }
+    }
+  }
+
+  return; 
+}  
+
+/*
 __global__ 
 //__launch_bounds__(1024,2)
-void SSV_cuda(const __restrict__ uint8_t *dsq, int L, const __restrict__ P7_OPROFILE *om, int8_t *retval){
-  int Q, band;
+void SSV_cuda_takeone(const __restrict__ uint8_t *dsq, int L, const __restrict__ P7_OPROFILE *om, int8_t *retval){
+  __shared__ uint shared_buffer[1024 *12];  //allocate one big lump that takes up all our shared memory
+  int8_t *my_buffer; 
+  my_buffer = (int8_t *)(shared_buffer + (threadIdx.y * 384));
+  int8_t *dsq_ptr;
+  int Q;
   uint sv_shuffle, *rsc;
   Q = ((((om->M)-1) / (128)) + 1);
-  int xE=NEGINFMASK, xE_temp, row, column, sv;
-    /* Use the highest number of bands but no more than MAX_BANDS */
+  int xE, row, column, sv, sv0, sv1, sv2, sv3;
+  uint **rbv = (uint **)my_buffer + (L+(sizeof(uint)-1))/sizeof(uint);
+  for(int i =0; i < 27; i++){
+    rbv[i]=(uint *)om->rbv[i];
+  }
   for(int reps = 0; reps <NUM_REPS; reps++){
-    for (band = 0; band < Q; band++) {
-        xE_temp = NEGINFMASK; 
-        sv = NEGINFMASK;
+    if(threadIdx.x ==0){
+      memcpy(my_buffer, (void *)dsq, L);
+    }
+    xE = NEGINFMASK; 
 
+    for (int band = 0; band < Q/4; band+=4) {
+      if(threadIdx.x==0){
+              printf("Running band %d, Q/4 = %d\n", band, Q/4);
+            }
+        sv0 = NEGINFMASK;
+        sv1 = NEGINFMASK;
+        sv2 = NEGINFMASK;
+        sv3 = NEGINFMASK;
+        dsq_ptr = my_buffer;
+        int offset;
         // loop 1 of SSV
-        for(row = 0; row < (Q-band-1); row++){
-            rsc = ((unsigned int *)om->rbv[dsq[row]]) + ((band +row)  <<5) + threadIdx.x;
-            sv   = __vaddss4(sv, *rsc); 
-            xE_temp  = __vmaxs4(xE_temp, sv);  
+        for(row = 0, offset = (band <<5)+threadIdx.x; row < (Q-band-4); row++){
+            rsc = rbv[*dsq_ptr] + offset;
+            offset += 128;
+            dsq_ptr++;
+            sv0   = __vaddss4(sv0, *rsc);
+            sv1   = __vaddss4(sv1, *(rsc+32));
+            sv2   = __vaddss4(sv2, *(rsc+64));
+            sv3   = __vaddss4(sv3, *(rsc+96));
+            xE  = __vmaxs4(xE, sv0); 
+            xE  = __vmaxs4(xE, sv1); 
+            xE  = __vmaxs4(xE, sv2);
+            xE  = __vmaxs4(xE, sv3);      
         }
         //convert step
-        rsc = ((unsigned int *)om->rbv[dsq[row]]) + ((Q-1)<<5) + threadIdx.x;
-        sv   = __vaddss4(sv, *rsc); 
-        xE_temp  = __vmaxs4(xE_temp, sv);  
-        sv_shuffle = __shfl_up(sv, 1);  // Get the next core up's value of SV
+        rsc = rbv[*dsq_ptr] + offset;
+        sv0   = __vaddss4(sv0, *rsc); 
+        xE  = __vmaxs4(xE, sv);  
+        sv_shuffle = __shfl_up(sv0, 1);  // Get the next core up's value of SV
         if(threadIdx.x == 0){
-          sv = __byte_perm(sv, NEGINFMASK, 0x2107); //left-shifts sv by one byte, puts the high byte of neginfmask in the low byte of sv
+          sv0 = __byte_perm(sv0, NEGINFMASK, 0x2107); //left-shifts sv by one byte, puts the high byte of neginfmask in the low byte of sv
         }
         else{
-          sv = __byte_perm(sv, sv_shuffle, 0x2107); //left-shifts sv by one byte, puts the high byte of sv_shuffle in the low byte of sv
+          sv0 = __byte_perm(sv0, sv_shuffle, 0x2107); //left-shifts sv by one byte, puts the high byte of sv_shuffle in the low byte of sv
         }
-
         //loop 2 of SSV
-        for(; row < L-Q; row++){
-          for(column =0; column < Q-1; column++){
-            rsc = ((unsigned int *)om->rbv[dsq[row+column]]) + (column  <<5) + threadIdx.x;
-            sv   = __vaddss4(sv, *rsc); 
-            xE_temp  = __vmaxs4(xE_temp, sv);  
+        for(; row < L-Q; row++, dsq_ptr++){
+          rsc = rbv[*dsq_ptr] + threadIdx.x;
+          for(offset =threadIdx.x, column =0; column < Q-1; column++, row++){
+            sv0   = __vaddss4(sv0, *rsc);
+            sv1 =  __vaddss4(sv1, *(rsc+32));
+            sv2 =  __vaddss4(sv2, *(rsc+64));
+            sv3 =  __vaddss4(sv3, *(rsc+96));
+            xE  = __vmaxs4(xE, sv0);  
+            xE  = __vmaxs4(xE, sv1);  
+            xE  = __vmaxs4(xE, sv2);  
+            xE  = __vmaxs4(xE, sv3);   
+            dsq_ptr++;
+            offset +=128;
+            rsc = rbv[*dsq_ptr] + offset;
+            xE  = __vmaxs4(xE, sv);  
           }
-          row += column;
            //convert step
-          rsc = ((unsigned int *)om->rbv[dsq[row]]) + ((Q-1)<<5) + threadIdx.x;
-          sv   = __vaddss4(sv, *rsc); 
-          xE_temp  = __vmaxs4(xE_temp, sv);  
-          sv_shuffle = __shfl_up(sv, 1);  // Get the next core up's value of SV
+          rsc = rbv[*dsq_ptr] + offset;
+          sv0   = __vaddss4(sv0, *rsc); 
+          xE  = __vmaxs4(xE, sv0);  
+
+          sv_shuffle = __shfl_up(sv0, 1);  // Get the next core up's value of SV
           if(threadIdx.x == 0){
-            sv = __byte_perm(sv, NEGINFMASK, 0x2107); //left-shifts sv by one byte, puts the high byte of neginfmask in the low byte of sv
+            sv0 = __byte_perm(sv0, NEGINFMASK, 0x2107); //left-shifts sv by one byte, puts the high byte of neginfmask in the low byte of sv
           }
           else{
-            sv = __byte_perm(sv, sv_shuffle, 0x2107); //left-shifts sv by one byte, puts the high byte of sv_shuffle in the low byte of sv
+            sv0 = __byte_perm(sv0, sv_shuffle, 0x2107); //left-shifts sv by one byte, puts the high byte of sv_shuffle in the low byte of sv
           }
         }
 
         //Loop 3 of SSV
-        for(column = 0; column < (Q-1); column++){
-          rsc = ((unsigned int *)om->rbv[dsq[row+column]]) + (column  <<5) + threadIdx.x;
-          sv   = __vaddss4(sv, *rsc); 
-          xE_temp  = __vmaxs4(xE_temp, sv);
+        for(column = 0, offset = threadIdx.x; column < (Q-1); column++){
+          rsc = rbv[my_buffer[row]] + offset;
+          row++; 
+          offset += 32;
+          sv0   = __vaddss4(sv0, *rsc); 
+          xE  = __vmaxs4(xE, sv0);
         }
-        row += column;
         //convert step
-        rsc = ((unsigned int *)om->rbv[dsq[row]]) + ((Q-1)<<5) + threadIdx.x;
-        sv   = __vaddss4(sv, *rsc); 
-        xE_temp  = __vmaxs4(xE_temp, sv);  
-        sv_shuffle = __shfl_up(sv, 1);  // Get the next core up's value of SV
+        rsc = rbv[my_buffer[row]] + offset;
+        sv0   = __vaddss4(sv0, *rsc); 
+        xE  = __vmaxs4(xE, sv0);  
+        sv_shuffle = __shfl_up(sv0, 1);  // Get the next core up's value of SV
         if(threadIdx.x == 0){
-          sv = __byte_perm(sv, NEGINFMASK, 0x2107); //left-shifts sv by one byte, puts the high byte of neginfmask in the low byte of sv
+          sv0 = __byte_perm(sv0, NEGINFMASK, 0x2107); //left-shifts sv by one byte, puts the high byte of neginfmask in the low byte of sv
         }
         else{
-          sv = __byte_perm(sv, sv_shuffle, 0x2107); //left-shifts sv by one byte, puts the high byte of sv_shuffle in the low byte of sv
-        }
-        xE = __vmaxs4(xE_temp, xE);    
+          sv0 = __byte_perm(sv0, sv_shuffle, 0x2107); //left-shifts sv by one byte, puts the high byte of sv_shuffle in the low byte of sv
+        }   
     }
   }
-    unsigned int partner_xE;
 
   // Done with main loop.  Now reduce answer vector (xE) to one byte for return
   // Reduce 32 4x8-bit quantities to 16
-  partner_xE = __shfl_down(xE, 16); 
+  sv_shuffle = __shfl_down(xE, 16); 
   if(threadIdx.x < 16){ // only bottom half of the cores continue from here
   
 
-    xE = __vmaxs4(xE, partner_xE);
+    xE = __vmaxs4(xE, sv_shuffle);
 
     // Reduce 6 4x8-bit quantities to 8
-    partner_xE = __shfl_down(xE, 8); 
+    sv_shuffle = __shfl_down(xE, 8); 
     if(threadIdx.x < 8){ // only bottom half of the cores continue from here
   
 
-      xE = __vmaxs4(xE, partner_xE);
+      xE = __vmaxs4(xE, sv_shuffle);
 
       // Reduce 8 4x8-bit quantities to 4
-      partner_xE = __shfl_down(xE, 4); 
+      sv_shuffle = __shfl_down(xE, 4); 
       if(threadIdx.x < 4){ // only bottom half of the cores continue from here
 
-        xE = __vmaxs4(xE, partner_xE);
+        xE = __vmaxs4(xE, sv_shuffle);
 
         // Reduce 4 4x8-bit quantities to 2
-        partner_xE = __shfl_down(xE, 2); 
+        sv_shuffle = __shfl_down(xE, 2); 
         if(threadIdx.x < 2){ // only bottom half of the cores continue from here
 
-          xE = __vmaxs4(xE, partner_xE);
+          xE = __vmaxs4(xE, sv_shuffle);
           // Reduce 2 4x8-bit quantities to 1
 
-          partner_xE = __shfl_down(xE, 1);  
+          sv_shuffle = __shfl_down(xE, 1);  
           if(threadIdx.x < 1){ // only bottom half of the cores continue from here
 
-            xE = __vmaxs4(xE, partner_xE);
+            xE = __vmaxs4(xE, sv_shuffle);
 
             // now, reduce the final 32 bit quantity to one 8-bit quantity.
 
-            unsigned int temp;
+            sv = xE >> 16;
 
-            temp = xE >> 16;
+            xE = __vmaxs4(xE, sv);
 
-            xE = __vmaxs4(xE, temp);
+            sv = xE >> 8;
 
-            temp = xE >> 8;
-
-            xE = __vmaxs4(xE, temp);
+            xE = __vmaxs4(xE, sv);
             if((blockIdx.y == 0) &&(threadIdx.y ==0) && (threadIdx.x == 0)){ // only one thread writes result
               *retval = xE & 255; // low 8 bits of the word is the final result
             }
@@ -149,7 +375,7 @@ void SSV_cuda(const __restrict__ uint8_t *dsq, int L, const __restrict__ P7_OPRO
 
   return;
 }  
-
+*/
 
 // GPU kernel that copies values from the CPU version of an OPROFILE to one on the GPU.  Should generally only be called on one GPU core
 __global__ void copy_oprofile_values_to_card(P7_OPROFILE *the_profile, float tauBM, float scale_b, float scale_w, int16_t base_w, int16_t ddbound_w, int L, int M, int V, int max_length, int allocM, int allocQb, int allocQw, int allocQf, int mode, float nj, int is_shadow, int8_t **rbv){
