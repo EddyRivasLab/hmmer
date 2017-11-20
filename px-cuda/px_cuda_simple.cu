@@ -804,7 +804,7 @@ void SSV_cuda(const __restrict__ uint8_t *dsq, int L, P7_OPROFILE *om, int8_t *r
 
     uint *rsc_vector = (uint *)(rbv + ((KP+1)/2)*2);
     int i;
-    for(i = 0; i < min(KP, cachable_rscs); i++){
+    for(i = 0; i < 0/*min(KP, cachable_rscs)*/; i++){
       memcpy((void *) rsc_vector, (void *) om->rbv[i], rsc_length);
       rbv[i] = rsc_vector;
       rsc_vector += rsc_length/sizeof(uint); //this is guaranteed to be an integer
