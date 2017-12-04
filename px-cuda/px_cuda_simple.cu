@@ -10,7 +10,7 @@
 
 #define DSQ_BUFFER_LENGTH 16  //must be multiple of 16 to allow 128-bit loads
 #define KP 27  // number of characters in alphabet.  Make parameter.
-#define MAX_BAND_WIDTH 4
+#define MAX_BAND_WIDTH 1
 #define NEGINFMASK 0x80808080
 #define MAX(a, b, c)\
   a = (b > c) ? b:c;
@@ -18,133 +18,159 @@
 
 //  a = (b > c) ? b:c;
 
-#define NUM_REPS 1000
+
+// Note: setting dsq_buffer_offset to -1 after we refill the buffer only works because we
+// always increment dsq_buffer_offset before fetching a byte of dsq.  If you break that 
+// invariant, badness will ensue.
+#define STEP_1()\
+  sv0   = __vaddss4(sv0, *rsc);\
+  dsq_buffer_offset++;\
+  rsc =  rbv[*(dsq_buffer+dsq_buffer_offset)] + offset;\
+  if(dsq_buffer_offset == DSQ_BUFFER_LENGTH-1){\
+    dsq += DSQ_BUFFER_LENGTH;\
+      if(threadIdx.x < (DSQ_BUFFER_LENGTH >>4)){\
+      ((uint4 *) dsq_buffer)[threadIdx.x] = ((uint4 *)dsq)[threadIdx.x];\
+      } \
+      __syncwarp();\
+      dsq_buffer_offset =-1;\
+    }\
+  xE  = __vmaxs4(xE, sv0);
+
+#define NUM_REPS 1
 
 char * restripe_char(char *source, int source_chars_per_vector, int dest_chars_per_vector, int source_length, int *dest_length);
 int *restripe_char_to_int(char *source, int source_chars_per_vector, int dest_ints_per_vector, int source_length, int *dest_length);
 
-__device__  uint calc_band_1(const __restrict__ uint8_t *dsq, uint8_t *dsq_buffer, int L, int Q, int q, uint ** rbv){
-  uint sv0 = NEGINFMASK, xE=NEGINFMASK, *rsc;
+__device__  uint calc_band_1(const __restrict__ uint8_t *dsq, __volatile__ uint8_t *dsq_buffer, int L, int Q, int q, uint ** rbv, uint *check_array_cuda){
+  uint sv0 = NEGINFMASK, xE=NEGINFMASK, *rsc, row=0;
   int offset, dsq_buffer_offset=0;
-  // loop 1 of SSV
-
+  uint8_t *dsq_base = (uint8_t *) dsq;
+  // loop 1 of SSV 
+  if(threadIdx.x == 0){
+  printf("Starting calc_band_1 with q=%d\n", q);
+}
   // Grab some dsq entries
   if(threadIdx.x < (DSQ_BUFFER_LENGTH >>4)){
     ((uint4 *) dsq_buffer)[threadIdx.x] = ((uint4 *)dsq)[threadIdx.x];
+    __threadfence();
   } 
+  offset = (q <<5)+threadIdx.x;
+  rsc = rbv[*(dsq_buffer+dsq_buffer_offset)]+ offset;
 
-  rsc = rbv[*(dsq_buffer+dsq_buffer_offset)]+ (q <<5)+threadIdx.x;
-
-  #pragma unroll 4
-  for(offset = (q <<5)+threadIdx.x; offset < (((Q-1)<<5))+threadIdx.x;){
-    sv0   = __vaddss4(sv0, *rsc);
-    offset += 32;
-    dsq_buffer_offset++;
-    if(dsq_buffer_offset == DSQ_BUFFER_LENGTH){
-      dsq += DSQ_BUFFER_LENGTH;
-      if(threadIdx.x < (DSQ_BUFFER_LENGTH >>4)){
-      ((uint4 *) dsq_buffer)[threadIdx.x] = ((uint4 *)dsq)[threadIdx.x];
-      } 
-      __syncwarp();
-      dsq_buffer_offset =0;
+  //#pragma unroll 4
+  for(int i =0; i < min(L, (Q-q-1));i++){
+    offset+=32;
+    if((dsq_buffer_offset >= DSQ_BUFFER_LENGTH || (dsq-dsq_base +dsq_buffer_offset) > row) && threadIdx.x == 0)
+    {
+      printf("buffer overrun found in loop 1, iteration %d\n", i);
     }
-    rsc =  rbv[*(dsq_buffer+dsq_buffer_offset)] + offset;  
-    xE  = __vmaxs4(xE, sv0);     
+    STEP_1()
+    if(check_array_cuda[(row * Q * 32) + (offset-32)]!=0){
+      printf("Computing result for second time in loop 1 at row %d, element %d\n", row, (offset-32) );
+    }
+    check_array_cuda[(row * Q * 32) + (offset-32)] = sv0;\
+
+    row++;    
   }
+  if(row >= L){
+    goto done1;
+  }
+  //convert step
+  offset+=32;
+    STEP_1()
+      if(check_array_cuda[(row * Q * 32) + (offset-32)]!=0){
+      printf("Computing result for second time in convert 1at row %d, element %d\n", row, (offset-32) );
+    }
+    check_array_cuda[(row * Q * 32) + (offset-32)] =sv0;\
+  sv0 = __byte_perm(sv0, __shfl_up_sync(0xffffffff, sv0, 1), 0x2107); //left-shifts sv by one byte, puts the high byte of sv_shuffle in the low byte of sv
+  if(threadIdx.x == 0){
+      sv0 = __byte_perm(sv0, 0x80, 0x2104); //left-shifts sv by one byte, puts -128 in the low byte of sv
+  }
+  row++;
+  //loop 2 of SSV
+  if(threadIdx.x == 0){
+  printf("Starting loop 2 with row=%d\n", row);
+}
+  //#pragma unroll 4
+  if(row != Q-q && threadIdx.x == 0 ){
+    printf("Unexpected number of iterations in first loop %d vs %d\n", row, Q-q);
+  }
+/*  if(threadIdx.x==0){
+  printf("Starting loop 2 at row %d, q=%d\n", row,q);
+} */
+  done1:
+  for(offset = threadIdx.x, row = Q-q; row < L-Q; row+=Q){ 
+
+    for(int i = 0; i < Q-1; i++){
+      if((dsq_buffer_offset >= DSQ_BUFFER_LENGTH|| ((dsq-dsq_base +dsq_buffer_offset) > (row+i))&& threadIdx.x == 0)){
+        printf("buffer overrun found in loop 2, iteration %d, row=%d\n", i,row);
+      }
+      offset+=32;
+      STEP_1()
+      if(check_array_cuda[((row+i) * Q * 32) + (offset-32)]!=0){
+        printf("Computing result for second time in loop 2 at row %d, element %d\n", (row+i), (offset-32) );
+      }
+      check_array_cuda[((row+i) * Q * 32) + (offset-32)] =sv0;\
+    } 
+
     //convert step
-    sv0   = __vaddss4(sv0, *rsc);  
-    xE  = __vmaxs4(xE, sv0);  
+    int offset_old =offset;
+    offset = threadIdx.x;
+    STEP_1()
+    if(check_array_cuda[((row+Q-1) * Q * 32) + (offset_old)]!=0){
+      printf("Computing result for second time in convert 2 at row %d, element %d\n", (row+Q-1), (offset) );
+    }
+    check_array_cuda[((row+ Q-1) * Q * 32) + (offset_old)] =sv0;\
     sv0 = __byte_perm(sv0, __shfl_up_sync(0xffffffff, sv0, 1), 0x2107); //left-shifts sv by one byte, puts the high byte of sv_shuffle in the low byte of sv
     if(threadIdx.x == 0){
-      sv0 = __byte_perm(sv0, NEGINFMASK, 0x2107); //left-shifts sv by one byte, puts the high byte of sv_shuffle in the low byte of sv
-    }
-  //loop 2 of SSV
-
-  // Prefetch buffer contents for first iteration
-  if(dsq_buffer_offset == DSQ_BUFFER_LENGTH){
-    dsq += DSQ_BUFFER_LENGTH;
-    if(threadIdx.x < (DSQ_BUFFER_LENGTH >>4)){
-      ((uint4 *) dsq_buffer)[threadIdx.x] = ((uint4 *)dsq)[threadIdx.x];
-    } 
-      __syncwarp();
-      dsq_buffer_offset =0;
-    }
-  rsc =  rbv[*(dsq_buffer+dsq_buffer_offset)]+threadIdx.x;
-  offset = threadIdx.x;
-  #pragma unroll 4
-  for(int row = Q-q; row < L-Q; row++){ // merge the nested loops in original SSV to support unrolling
-    sv0   = __vaddss4(sv0, *rsc);
-    offset +=32;
-    dsq_buffer_offset++;
-    if(dsq_buffer_offset == DSQ_BUFFER_LENGTH){
-      dsq += DSQ_BUFFER_LENGTH;
-      if(threadIdx.x < (DSQ_BUFFER_LENGTH >>4)){
-        ((uint4 *) dsq_buffer)[threadIdx.x] = ((uint4 *)dsq)[threadIdx.x];
-      } 
-      __syncwarp();
-      dsq_buffer_offset =0;
-    }
-    rsc =  rbv[*(dsq_buffer+dsq_buffer_offset)] +offset;  
-    xE  = __vmaxs4(xE, sv0);  
-    if(offset == ((Q-1) <<5) +threadIdx.x){
-      //convert step
-      sv0   = __vaddss4(sv0, *rsc);  
-      xE  = __vmaxs4(xE, sv0);  
-      sv0 = __byte_perm(sv0, __shfl_up_sync(0xffffffff, sv0, 1), 0x2107); //left-shifts sv by one byte, puts the high byte of sv_shuffle in the low byte of sv
-      if(threadIdx.x == 0){
-        sv0 = __byte_perm(sv0, NEGINFMASK, 0x2107); //left-shifts sv by one byte, puts the high byte of sv_shuffle in the low byte of sv
-      }
-      dsq_buffer_offset++;
-      if(dsq_buffer_offset == DSQ_BUFFER_LENGTH){
-        dsq += DSQ_BUFFER_LENGTH;
-        if(threadIdx.x < (DSQ_BUFFER_LENGTH >>4)){
-          ((uint4 *) dsq_buffer)[threadIdx.x] = ((uint4 *)dsq)[threadIdx.x];
-        } 
-        __syncwarp();
-        dsq_buffer_offset =0;
-      }
-      offset = threadIdx.x;
-      rsc =  rbv[*(dsq_buffer+dsq_buffer_offset)] + offset;
-
-      row++;
-
+      sv0 = __byte_perm(sv0, 0x80, 0x2104); //left-shifts sv by one byte, puts -128 in the low byte of sv
     }
   }
 
   //Loop 3 of SSV
-  if(dsq_buffer_offset == DSQ_BUFFER_LENGTH){
-    dsq += DSQ_BUFFER_LENGTH;
-    if(threadIdx.x < (DSQ_BUFFER_LENGTH >>4)){
-      ((uint4 *) dsq_buffer)[threadIdx.x] = ((uint4 *)dsq)[threadIdx.x];
-    } 
-    __syncwarp();
-    dsq_buffer_offset =0;
-  }
-  rsc =  rbv[*(dsq_buffer+dsq_buffer_offset)]+threadIdx.x;
+  offset = threadIdx.x;
+  //#pragma unroll 4
+  if(threadIdx.x == 0){
+  printf("Starting loop 3 with row=%d\n", row);
+}
+  for(int end_offset =(min((Q-1), (L-row)) <<5)+threadIdx.x; offset < end_offset; ){
+    offset +=32;
 
-  #pragma unroll 4
-  for(offset = threadIdx.x; offset < ((Q-1) <<5)+threadIdx.x;){   
-    sv0   = __vaddss4(sv0, *rsc);  
-    offset += 32;
-    dsq_buffer_offset++;
-    if(dsq_buffer_offset == DSQ_BUFFER_LENGTH){
-      dsq += DSQ_BUFFER_LENGTH;
-      if(threadIdx.x < (DSQ_BUFFER_LENGTH >>4)){
-        ((uint4 *) dsq_buffer)[threadIdx.x] = ((uint4 *)dsq)[threadIdx.x];
-      } 
-      __syncwarp();
-      dsq_buffer_offset =0;
+       if((dsq_buffer_offset >= DSQ_BUFFER_LENGTH|| ((dsq-dsq_base +dsq_buffer_offset) > row)) && threadIdx.x == 0){
+      printf("buffer overrun found in loop 3, iteration %d\n", end_offset);
     }
-    rsc =  rbv[*(dsq_buffer+dsq_buffer_offset)]+offset;
-    xE  = __vmaxs4(xE, sv0);
+            STEP_1() 
+        if(check_array_cuda[(row * Q * 32) + (offset-32)]!=0){
+      printf("Computing result for second time in loop 3 at row %d, element %d\n", row, (offset-32) );
+    }
+    check_array_cuda[(row * Q * 32) + (offset-32)] = sv0;\
+    row++;
   }
   //convert step
-  sv0   = __vaddss4(sv0, *rsc);  
-  xE  = __vmaxs4(xE, sv0);  
-
+  if (row >=L){
+  if(threadIdx.x == 0){
+      printf("Skipping convert\n");
+    } 
+    goto exit;
+  }
+    STEP_1()
+      if(check_array_cuda[(row * Q * 32) + (offset)]!=0){
+      printf("Computing result for second time in convert 3 at row %d, element %d\n", row, (offset) );
+    }
+    check_array_cuda[(row * Q * 32) + (offset)] =sv0;\
+  row++;
   sv0 = __byte_perm(sv0, __shfl_up_sync(0xffffffff, sv0, 1), 0x2107); //left-shifts sv by one byte, puts the high byte of sv_shuffle in the low byte of sv
   if(threadIdx.x == 0){
-    sv0 = __byte_perm(sv0, NEGINFMASK, 0x2107); //left-shifts sv by one byte, puts the high byte of sv_shuffle in the low byte of sv
+       sv0 = __byte_perm(sv0, 0x80, 0x2104); //left-shifts sv by one byte, puts -128 in the low byte of sv
+  } 
+
+exit:
+  if(row!= L && threadIdx.x == 0 ){
+    printf("Total iteration mis-match: %d vs %d. Q= %d, q=%d. L mod 4 = %d.\n", row, L, Q, q, (L %4));
+  }
+  long int dsq_used = (long int)dsq+ dsq_buffer_offset- (long int)dsq_base;
+  if(dsq_used != L && threadIdx.x == 0 ){
+    printf("Wrong number of dsq bytes used %d expected %ld found, dsq = %p, dsq_base = %p\n", L ,dsq_used, dsq, dsq_base) ;
   }
   return xE;   
 }
@@ -236,7 +262,55 @@ __device__  uint calc_band_2(const __restrict__ uint8_t *dsq, uint8_t *dsq_buffe
   offset = threadIdx.x;
 
   for(int row = Q-q; row < L-Q; row++){ // merge the nested loops in original SSV to support unrolling
-    offset +=32;
+    for(offset = threadIdx.x; offset <((Q-2) <<5) +threadIdx.x;){
+
+      dsq_buffer_ptr++;
+      if(dsq_buffer_ptr == dsq_buffer + DSQ_BUFFER_LENGTH){
+        dsq += DSQ_BUFFER_LENGTH;
+        if(threadIdx.x < (DSQ_BUFFER_LENGTH >>4)){
+          ((uint4 *) dsq_buffer)[threadIdx.x] = ((uint4 *)dsq)[threadIdx.x];
+        } 
+        __syncwarp();
+        dsq_buffer_ptr = dsq_buffer;
+      } 
+      offset +=32;
+      sv0   = __vaddss4(sv0, *rsc);  
+      sv1   = __vaddss4(sv1, *(rsc+32));  
+      rsc =  rbv[*dsq_buffer_ptr] +offset; 
+      xE0  = __vmaxs4(xE0, sv0);  
+      xE1  = __vmaxs4(xE1, sv1);
+    }
+ 
+    //convert step
+    sv0   = __vaddss4(sv0, *rsc); 
+    sv1   = __vaddss4(sv1, *(rsc+32));  
+    xE0  = __vmaxs4(xE0, sv0); 
+    xE1  = __vmaxs4(xE1, sv1);   
+    sv1 = __byte_perm(sv1, __shfl_up_sync(0xffffffff, sv1, 1), 0x2107); //left-shifts sv by one byte, puts the high byte of sv_shuffle in the low byte of sv
+    if(threadIdx.x == 0){
+      sv1 = __byte_perm(sv1, NEGINFMASK, 0x2107); //left-shifts sv by one byte, puts the high byte of sv_shuffle in the low byte of sv
+    }
+    dsq_buffer_ptr++;
+    offset+=32;
+    if(dsq_buffer_ptr == dsq_buffer + DSQ_BUFFER_LENGTH){
+      dsq += DSQ_BUFFER_LENGTH;
+      if(threadIdx.x < (DSQ_BUFFER_LENGTH >>4)){
+        ((uint4 *) dsq_buffer)[threadIdx.x] = ((uint4 *)dsq)[threadIdx.x];
+      } 
+      __syncwarp();
+      dsq_buffer_ptr = dsq_buffer;
+    }
+    rsc =  rbv[*dsq_buffer_ptr] + offset;
+    row++;
+    //convert step
+    sv0   = __vaddss4(sv0, *rsc); 
+    sv1   = __vaddss4(sv1, *(rsc+32));  
+    xE0  = __vmaxs4(xE0, sv0); 
+    xE1  = __vmaxs4(xE1, sv1);   
+    sv0 = __byte_perm(sv0, __shfl_up_sync(0xffffffff, sv0, 1), 0x2107); //left-shifts sv by one byte, puts the high byte of sv_shuffle in the low byte of sv
+    if(threadIdx.x == 0){
+      sv0 = __byte_perm(sv0, NEGINFMASK, 0x2107); //left-shifts sv by one byte, puts the high byte of sv_shuffle in the low byte of sv
+    }
     dsq_buffer_ptr++;
     if(dsq_buffer_ptr == dsq_buffer + DSQ_BUFFER_LENGTH){
       dsq += DSQ_BUFFER_LENGTH;
@@ -245,58 +319,10 @@ __device__  uint calc_band_2(const __restrict__ uint8_t *dsq, uint8_t *dsq_buffe
       } 
       __syncwarp();
       dsq_buffer_ptr = dsq_buffer;
-    } 
-    sv0   = __vaddss4(sv0, *rsc);  
-    sv1   = __vaddss4(sv1, *(rsc+32));  
-    rsc =  rbv[*dsq_buffer_ptr] +offset; 
-    xE0  = __vmaxs4(xE0, sv0);  
-    xE1  = __vmaxs4(xE1, sv1);
-
- 
-    if(offset == ((Q-2) <<5) +threadIdx.x){
-      //convert step
-      sv0   = __vaddss4(sv0, *rsc); 
-      sv1   = __vaddss4(sv1, *(rsc+32));  
-      xE0  = __vmaxs4(xE0, sv0); 
-      xE1  = __vmaxs4(xE1, sv1);   
-      sv1 = __byte_perm(sv1, __shfl_up_sync(0xffffffff, sv1, 1), 0x2107); //left-shifts sv by one byte, puts the high byte of sv_shuffle in the low byte of sv
-      if(threadIdx.x == 0){
-        sv1 = __byte_perm(sv1, NEGINFMASK, 0x2107); //left-shifts sv by one byte, puts the high byte of sv_shuffle in the low byte of sv
-      }
-      dsq_buffer_ptr++;
-      offset+=32;
-    if(dsq_buffer_ptr == dsq_buffer + DSQ_BUFFER_LENGTH){
-        dsq += DSQ_BUFFER_LENGTH;
-        if(threadIdx.x < (DSQ_BUFFER_LENGTH >>4)){
-          ((uint4 *) dsq_buffer)[threadIdx.x] = ((uint4 *)dsq)[threadIdx.x];
-        } 
-        __syncwarp();
-        dsq_buffer_ptr = dsq_buffer;
-      }
-      rsc =  rbv[*dsq_buffer_ptr] + offset;
-      row++;
-      //convert step
-      sv0   = __vaddss4(sv0, *rsc); 
-      sv1   = __vaddss4(sv1, *(rsc+32));  
-      xE0  = __vmaxs4(xE0, sv0); 
-      xE1  = __vmaxs4(xE1, sv1);   
-      sv0 = __byte_perm(sv0, __shfl_up_sync(0xffffffff, sv0, 1), 0x2107); //left-shifts sv by one byte, puts the high byte of sv_shuffle in the low byte of sv
-      if(threadIdx.x == 0){
-        sv0 = __byte_perm(sv0, NEGINFMASK, 0x2107); //left-shifts sv by one byte, puts the high byte of sv_shuffle in the low byte of sv
-      }
-      dsq_buffer_ptr++;
-    if(dsq_buffer_ptr == dsq_buffer + DSQ_BUFFER_LENGTH){
-        dsq += DSQ_BUFFER_LENGTH;
-        if(threadIdx.x < (DSQ_BUFFER_LENGTH >>4)){
-          ((uint4 *) dsq_buffer)[threadIdx.x] = ((uint4 *)dsq)[threadIdx.x];
-        } 
-        __syncwarp();
-        dsq_buffer_ptr = dsq_buffer;
-      }
-      offset = threadIdx.x;
-      rsc =  rbv[*dsq_buffer_ptr] + offset;
-      row++;
     }
+    offset = threadIdx.x;
+    rsc =  rbv[*dsq_buffer_ptr] + offset;
+    row++;
   }
 
   //Loop 3 of SSV
@@ -508,11 +534,10 @@ __device__  uint calc_band_4(const __restrict__ uint8_t *dsq, uint8_t *dsq_buffe
       dsq_buffer_ptr = dsq_buffer;
     }
   rsc =  rbv[*dsq_buffer_ptr]+threadIdx.x;
-  offset = threadIdx.x;
 
   for(int row = Q-q; row < L-Q; row++){ // merge the nested loops in original SSV to support unrolling
-    if(offset < ((Q-4) <<5) +threadIdx.x){
-      offset +=32;
+    for(offset = threadIdx.x; offset <((Q-4) <<5) +threadIdx.x;){
+    //if(offset < ((Q-4) <<5) +threadIdx.x){
   
     dsq_buffer_ptr++;
     if(dsq_buffer_ptr == dsq_buffer + DSQ_BUFFER_LENGTH){
@@ -523,6 +548,8 @@ __device__  uint calc_band_4(const __restrict__ uint8_t *dsq, uint8_t *dsq_buffe
       __syncwarp();
       dsq_buffer_ptr = dsq_buffer;
     } 
+
+    offset += 32;
     sv0   = __vaddss4(sv0, *rsc);  
     sv1   = __vaddss4(sv1, *(rsc+32));  
     sv2   = __vaddss4(sv0, *(rsc+64));  
@@ -533,7 +560,6 @@ __device__  uint calc_band_4(const __restrict__ uint8_t *dsq, uint8_t *dsq_buffe
     xE2  = __vmaxs4(xE2, sv2);  
     xE3  = __vmaxs4(xE3, sv3);
     }
-    if(offset == ((Q-4) <<5) +threadIdx.x){
      //convert step
       sv0   = __vaddss4(sv0, *rsc); 
       sv1   = __vaddss4(sv1, *(rsc+32)); 
@@ -549,7 +575,7 @@ __device__  uint calc_band_4(const __restrict__ uint8_t *dsq, uint8_t *dsq_buffe
       }
       dsq_buffer_ptr++;
       offset+=32;
-
+    
     if(dsq_buffer_ptr == dsq_buffer + DSQ_BUFFER_LENGTH){
         dsq += DSQ_BUFFER_LENGTH;
         if(threadIdx.x < (DSQ_BUFFER_LENGTH >>4)){
@@ -640,11 +666,7 @@ __device__  uint calc_band_4(const __restrict__ uint8_t *dsq, uint8_t *dsq_buffe
       offset = threadIdx.x;
       rsc =  rbv[*dsq_buffer_ptr] + offset;
       row++;
-    }
   }
-
-
-
 
   //Loop 3 of SSV
   if(dsq_buffer_ptr == dsq_buffer + DSQ_BUFFER_LENGTH){
@@ -783,13 +805,12 @@ __device__  uint calc_band_4(const __restrict__ uint8_t *dsq, uint8_t *dsq_buffe
 
 
 
-
 __global__
-void SSV_cuda(const __restrict__ uint8_t *dsq, int L, P7_OPROFILE *om, int8_t *retval){
+void SSV_cuda(const __restrict__ uint8_t *dsq, int L, P7_OPROFILE *om, int8_t *retval, uint *check_array_cuda){
   __shared__ uint4 shared_buffer[1024 *3];  //allocate one big lump that takes up all our shared memory
   int  Q = ((((om->M)-1) / (128)) + 1);
   uint8_t *my_dsq_buffer = ((uint8_t *)shared_buffer)+(DSQ_BUFFER_LENGTH *threadIdx.y);
-  uint **rbv = (uint **)(((int8_t *)shared_buffer)+(blockDim.y * DSQ_BUFFER_LENGTH)); 
+  uint **rbv = (uint **)(int8_t *)shared_buffer + (blockDim.y * DSQ_BUFFER_LENGTH); 
   // rbv starts after all of the dsq buffers 
 
 
@@ -804,7 +825,7 @@ void SSV_cuda(const __restrict__ uint8_t *dsq, int L, P7_OPROFILE *om, int8_t *r
 
     uint *rsc_vector = (uint *)(rbv + ((KP+1)/2)*2);
     int i;
-    for(i = 0; i < 0/*min(KP, cachable_rscs)*/; i++){
+    for(i = 0; i < min(KP, cachable_rscs); i++){
       memcpy((void *) rsc_vector, (void *) om->rbv[i], rsc_length);
       rbv[i] = rsc_vector;
       rsc_vector += rsc_length/sizeof(uint); //this is guaranteed to be an integer
@@ -832,7 +853,7 @@ void SSV_cuda(const __restrict__ uint8_t *dsq, int L, P7_OPROFILE *om, int8_t *r
       q      = (Q * (i + 1)) / bands;
       switch(q-last_q){
         case 1:
-          xE = __vmaxs4(xE, calc_band_1(dsq, my_dsq_buffer, L, Q, last_q, rbv));
+          xE = __vmaxs4(xE, calc_band_1(dsq, my_dsq_buffer, L, Q, last_q, (uint **) om->rbv, check_array_cuda));
           break;
         case 2:
           xE = __vmaxs4(xE, calc_band_2(dsq, my_dsq_buffer, L, Q, last_q, rbv));
@@ -847,6 +868,7 @@ void SSV_cuda(const __restrict__ uint8_t *dsq, int L, P7_OPROFILE *om, int8_t *r
       last_q = q;
     }
   }
+
 // Done with main loop.  Now reduce answer vector (xE) to one byte for return
   // Reduce 32 4x8-bit quantities to 16
   sv_shuffle = __shfl_down(xE, 16); 
@@ -881,7 +903,7 @@ void SSV_cuda(const __restrict__ uint8_t *dsq, int L, P7_OPROFILE *om, int8_t *r
             xE = __vmaxs4(xE, sv_shuffle);
 
             // now, reduce the final 32 bit quantity to one 8-bit quantity.
-
+printf("Reduced xE is %x\n",xE);
             sv_shuffle = xE >> 16;
 
             xE = __vmaxs4(xE, sv_shuffle);
@@ -890,7 +912,7 @@ void SSV_cuda(const __restrict__ uint8_t *dsq, int L, P7_OPROFILE *om, int8_t *r
 
             xE = __vmaxs4(xE, sv_shuffle);
             if((blockIdx.y == 0) &&(threadIdx.y ==0) && (threadIdx.x == 0)){ // only one thread writes result
-              *retval = xE & 255; // low 8 bits of the word is the final result
+            *retval = xE & 255; // low 8 bits of the word is the final result
             }
           }
         }
@@ -1036,7 +1058,7 @@ char * restripe_char(char *source, int source_chars_per_vector, int dest_chars_p
   for(; i < unpadded_dest_vectors * dest_chars_per_vector; i++){
       dest_pos = ((i % unpadded_dest_vectors) * dest_chars_per_vector) + (i / unpadded_dest_vectors);
     //  printf("Padding 0 at location %d \n", dest_pos);
-    dest[dest_pos] = 0;
+    dest[dest_pos] = -128;
   }
 
   // add the extra copies of the early vectors to support the SSV wrap-around
@@ -1082,7 +1104,7 @@ char * restripe_char(char *source, int source_chars_per_vector, int dest_chars_p
   for(; i < unpadded_dest_vectors * dest_ints_per_vector; i++){
       dest_pos = ((i % unpadded_dest_vectors) * dest_ints_per_vector) + (i / unpadded_dest_vectors);
     //  printf("Padding 0 at location %d \n", dest_pos);
-    dest[dest_pos] = 0;
+    dest[dest_pos] = -128;
   }
 
   // add the extra copies of the early vectors to support the SSV wrap-around
@@ -1110,6 +1132,7 @@ p7_SSVFilter_shell_sse(const ESL_DSQ *dsq, int L, const __restrict__
   int8_t   h, *card_h;
   int      i,q;
   int      status;
+  int test;
 
   cudaEvent_t start, stop;
   cudaEventCreate(&start);
@@ -1133,25 +1156,20 @@ p7_SSVFilter_shell_sse(const ESL_DSQ *dsq, int L, const __restrict__
  // SSV_start_cuda<<<1, 32>>>(card_FILTERMX, (unsigned int *) card_hv, (unsigned int *) card_mpv, om->M);
   cudaEventRecord(start);
   num_blocks.x = 1;
-  num_blocks.y = 40;
+  num_blocks.y = 1;
   num_blocks.z = 1;
-  warps_per_block = 32;
+  warps_per_block = 1;
   threads_per_block.x = 32;
   threads_per_block.y = warps_per_block;
   threads_per_block.z = 1;
-  /*
-  int **check_array, **check_array_cuda;
-  check_array = (int **) malloc(L * sizeof(int *));
-  cudaMalloc((void **) &check_array_cuda, (L * sizeof(int *)));
-  for(int temp = 0; temp < L; temp++){
-    int *row_array;
-    cudaMalloc((void **) &row_array, (om->M * sizeof(int)));
-    check_array[temp] = row_array;
-  }
-  cudaMemcpy(check_array_cuda, check_array, (L* sizeof(int)), cudaMemcpyHostToDevice);
- */
+  
+  uint *check_array, *check_array_cuda;
+  check_array = (uint *) calloc(L * ((((om->M)-1) / (128)) + 1) * 32 * sizeof(uint), 1);
+  cudaMalloc((void**)  &check_array_cuda,L * ((((om->M)-1) / (128)) + 1) * 32 * sizeof(uint)); 
+  cudaMemcpy(check_array_cuda, check_array, L * ((((om->M)-1) / (128)) + 1) * 32* sizeof(uint), cudaMemcpyHostToDevice);
+ 
 
-  SSV_cuda <<<num_blocks, threads_per_block>>>(card_dsq, L, card_OPROFILE, card_h);
+  SSV_cuda <<<num_blocks, threads_per_block>>>(card_dsq, L, card_OPROFILE, card_h, check_array_cuda);
   int8_t h_compare;
   cudaMemcpy(&h_compare, card_h, 1, cudaMemcpyDeviceToHost);
   cudaEventRecord(stop);
@@ -1168,7 +1186,16 @@ p7_SSVFilter_shell_sse(const ESL_DSQ *dsq, int L, const __restrict__
   if(err != cudaSuccess){
     printf("Error: %s\n", cudaGetErrorString(err));
   }
- 
+  // Compare CUDA result and SSE
+  cudaMemcpy(check_array, check_array_cuda, L * ((((om->M)-1) / (128)) + 1) * 32* sizeof(uint), cudaMemcpyDeviceToHost);
+ /* for(i = 0; i <L;i++){
+    for(int j= 0; j< (((((om->M)-1) / 128) + 1) * 32); j++){
+      if(check_array[(i * (((((om->M)-1) / 128) + 1) * 32))+ j] != 1){
+        printf("Unexpected check_array value of %x found at row %d, element %d\n", check_array[(i * (((((om->M)-1) / 128) + 1) * 32))+ j], i, j);
+      }
+    }
+  }*/
+
   mpv = hv;
   for (q = 0; q < Q; q++)
     dp[q] = hv;
@@ -1186,48 +1213,43 @@ p7_SSVFilter_shell_sse(const ESL_DSQ *dsq, int L, const __restrict__
           dp[q] = sv;
         }  
       mpv = esl_sse_rightshift_int8(sv, neginfmask);
-
-      // Compare CUDA result and SSE
- /*     cudaMemcpy(restriped_rbv, card_dp, card_rbv_length, cudaMemcpyDeviceToHost);
-      for(j = 0; j < om->M; j++){
-          int cuda_index = (j/card_Q) + ((j %card_Q) * 128);
-          int cpu_index = (j/Q) + ((j %Q) * om->V);
-          char *cuda_dp_char = (char *)restriped_rbv;
-          char *cpu_dp_char = (char *) dp;
-          char cuda_value = cuda_dp_char[cuda_index];
-          char cpu_value = cpu_dp_char[cpu_index];
-          if(cpu_value != cuda_value){
-            printf("SSV dp miss-match at row %d, position %d: %d (CUDA) vs %d (CPU), indices were %d (CUDA), %d (CPU)\n", i, j, cuda_value, cpu_value, cuda_index, cpu_index);
-          }
-      }
-*/
-    //  free(restriped_rbv);
+  
     }
   h = esl_sse_hmax_epi8(hv);
   cudaFree(card_h);
   cudaFree(card_dsq);
-// cudaFree(check_array_cuda)
 
   if(h != h_compare){
-    printf("Final result miss-match: %d (CUDA) vs %d (CPU)\n", h_compare, h);
+    printf("Final result miss-match: %x (CUDA) vs %x (CPU)\n\n", h_compare, h);
   }
-
+ float known_good;  
+ 
+  test = p7_SSVFilter_base_sse(dsq, L, om, fx, &known_good);
   if (h == 127)  
     { *ret_sc = eslINFINITY; return eslERANGE; }
   else if (h > -128)
     { 
       *ret_sc = ((float) h + 128.) / om->scale_b + om->tauBM - 2.0;   // 2.0 is the tauNN/tauCC "2 nat approximation"
-      *ret_sc += 2.0 * logf(2.0 / (float) (L + 2));                   
+      *ret_sc += 2.0 * logf(2.0 / (float) (L + 2)); 
+      if(*ret_sc != known_good){
+        printf("miss-match with known good result %f vs %f\n", *ret_sc, known_good);
+      }                  
       return eslOK;
     }
   else 
     {
       *ret_sc = -eslINFINITY;
+            if(*ret_sc != known_good){
+        printf("miss-match with known good result %f vs %f\n", *ret_sc, known_good);
+      }     
       return eslOK;
     }
     
  FAILURE:
   *ret_sc = -eslINFINITY;
+        if(*ret_sc != known_good){
+        printf("miss-match with known good result %f vs %f\n", *ret_sc, known_good);
+      }     
   return status;
 }
 
@@ -1289,7 +1311,7 @@ main(int argc, char **argv)
 
   eng = p7_engine_Create(abc, NULL, NULL, gm->M, 400);
 
-  while (( status = esl_dsqdata_Read(dd, &chu)) == eslOK && num_hits < 5)  
+  while (( status = esl_dsqdata_Read(dd, &chu)) == eslOK && num_hits < 100)  
     {
       for (i = 0; i < 5 /* chu->N */; i++)
 	{
