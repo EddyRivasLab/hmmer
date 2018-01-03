@@ -44,66 +44,38 @@ int *restripe_char_to_int(char *source, int source_chars_per_vector, int dest_in
   }\
 
 #define STEP_1()\
+  if((row & 31) == 0){\
+    rsc_precompute = rbv[dsq[row + threadIdx.x]];\
+  }\
+  rsc =  ((int *)__shfl_sync(0xffffffff, (uint64_t) rsc_precompute, (row & 31))) + offset;\
   sv0   = sv0 + *rsc;\
-  dsq_buffer_offset++;\
-  rsc =  rbv[*(dsq_buffer+dsq_buffer_offset)] + offset;\
-  if(dsq_buffer_offset == DSQ_BUFFER_LENGTH-1){\
-    dsq += DSQ_BUFFER_LENGTH;\
-      if(threadIdx.x < (DSQ_BUFFER_LENGTH >>4)){\
-      ((uint4 *) dsq_buffer)[threadIdx.x] = ((uint4 *)dsq)[threadIdx.x];\
-      } \
-      __syncwarp();\
-      dsq_buffer_offset =-1;\
-    }\
   MAX(xE0, sv0, xE0);
 
 #define STEP_2()\
+  if((row & 31) == 0){\
+    rsc_precompute = rbv[dsq[row + threadIdx.x]];\
+  }\
+  rsc =  ((int *)__shfl_sync(0xffffffff, (uint64_t) rsc_precompute, (row & 31))) + offset;\
   sv0   = sv0 + *rsc;\
   sv1   = sv1 + *(rsc+32);\
-  dsq_buffer_offset++;\
-  rsc =  rbv[*(dsq_buffer+dsq_buffer_offset)] + offset;\
-  if(dsq_buffer_offset == DSQ_BUFFER_LENGTH-1){\
-    dsq += DSQ_BUFFER_LENGTH;\
-      if(threadIdx.x < (DSQ_BUFFER_LENGTH >>4)){\
-      ((uint4 *) dsq_buffer)[threadIdx.x] = ((uint4 *)dsq)[threadIdx.x];\
-      } \
-      __syncwarp();\
-      dsq_buffer_offset =-1;\
-    }\
+  sv0 = max(sv0, -128);\
+  sv0 = min(sv0, 127);\
+  sv1 = max(sv1, -128);\
+  sv1 = min(sv1, 127);\
   MAX(xE0, sv0, xE0);\
-  MAX(xE0, sv1, xE0);
-
+  MAX(xE1, sv1, xE1);
 
 /*  sv0 = max(sv0, -128);\
   sv0 = min(sv0, 127);\
   sv1 = max(sv1, -128);\
   sv1 = min(sv1, 127);\ */
-/*
-#define STEP_4()\
-  sv0   = sv0 + *rsc;\
-  rsc += 32;\
-  sv1   = sv1 + *(rsc);\
-  rsc += 32;\
-  sv2   = sv2 + *(rsc);\
-  rsc += 32;\
-  dsq_buffer_offset++;\
-  rsc =  rbv[*(dsq_buffer+dsq_buffer_offset)] + offset;\
-  if(dsq_buffer_offset == DSQ_BUFFER_LENGTH-1){\
-    dsq += DSQ_BUFFER_LENGTH;\
-      if(threadIdx.x < (DSQ_BUFFER_LENGTH >>4)){\
-      ((uint4 *) dsq_buffer)[threadIdx.x] = ((uint4 *)dsq)[threadIdx.x];\
-      } \
-      __syncwarp();\
-      dsq_buffer_offset =-1;\
-    }\
-  MAX(xE0, sv0, xE0);\
-  MAX(xE0, sv1, xE0);\
-  MAX(xE0, sv2, xE0);\
-  MAX(xE0, sv3, xE0);
-*/
+
 
 #define STEP_4()\
-  rsc =  (int *)(*dsq_ptr + offset);\
+  if((row & 31) == 0){\
+    rsc_precompute = rbv[dsq[row+ threadIdx.x]];\
+  }\
+  rsc=  ((int *)__shfl_sync(0xffffffff, (uint64_t) rsc_precompute, (row & 31))) + offset;\
   sv0   = sv0 + *rsc;\
   sv1   = sv1 + *(rsc+32);\
   sv2   = sv2 + *(rsc+64);\
@@ -112,9 +84,7 @@ int *restripe_char_to_int(char *source, int source_chars_per_vector, int dest_in
   MAX(xE1, sv1, xE1);\
   MAX(xE2, sv2, xE2);\
   MAX(xE3, sv3, xE3);\
-  offset+=32;\
-  row++;\
-  dsq_ptr++;
+  row++;
 
 //  if(threadIdx.x == 0 && threadIdx.y == 0 && threadIdx.z == 0 && blockIdx.x == 0 && blockIdx.y == 0 && blockIdx.z == 0){\
     printf("row = %d, dsq_ptr = %p, *dsq_ptr = %d, dsq[row] = %d\n", row, dsq_ptr, *dsq_ptr, dsq[row]);\
@@ -156,270 +126,151 @@ int *restripe_char_to_int(char *source, int source_chars_per_vector, int dest_in
       sv3 = -128;\
   }
 
-__device__  uint calc_band_1(const __restrict__ uint8_t *dsq, __volatile__ uint8_t *dsq_buffer, int L, int Q, int q, int ** rbv){
+__device__  uint calc_band_1(const __restrict__ uint8_t *dsq, int L, int Q, int q, int ** rbv){
   int sv0 = NEGINFMASK, xE0=NEGINFMASK, *rsc;
   int row=0;
-  int offset, dsq_buffer_offset=0;
+  int offset;
+  int* rsc_precompute;
+
   // loop 1 of SSV 
   // Grab some dsq entries
-  if(threadIdx.x < (DSQ_BUFFER_LENGTH >>4)){
-    ((uint4 *) dsq_buffer)[threadIdx.x] = ((uint4 *)dsq)[threadIdx.x];
-    __threadfence();
-  } 
+
   offset = (q <<5)+threadIdx.x;
-  rsc = rbv[*(dsq_buffer+dsq_buffer_offset)]+ offset;
-
-  //#pragma unroll 4
-  for(int i =0; i < min(L, (Q-q-1));i++){
-    offset+=32;
-    STEP_1()
-    row++;    
-  }
-  if(row >= L){
-    goto done1;
-  }
-  //convert step
-    offset = threadIdx.x;
-    STEP_1()
-    CONVERT_1()
-  row++;
-
-  done1:
-  // loop 2 of SSV
-  for(offset = threadIdx.x, row = Q-q; row < L-Q; row+=Q){ 
-
-    for(int i = 0; i < Q-1; i++){
-      offset+=32;
+  for(row = 0; row < L; row++){
+    if(offset >= ((Q-1)<<5) ){
+      // end of row 
       STEP_1()
-    } 
-
-    //convert step
-    offset = threadIdx.x;
-    STEP_1()
-    CONVERT_1()
+      CONVERT_1()
+      offset = threadIdx.x;
+    }
+    else{ // normal step
+      STEP_1()
+      offset+= 32; 
+    }
   }
-
-  //Loop 3 of SSV
-  offset = threadIdx.x;
-  for(int end_offset =(min((Q-1), (L-row)) <<5)+threadIdx.x; offset < end_offset; ){
-    offset +=32;
-    STEP_1() 
-    row++;
-  }
-  //convert step
-  if (row >=L){
-    goto exit;
-  }
-    STEP_1()
-  row++;
-  CONVERT_1()
-
-exit:
   return xE0;   
 }
 
-
-__device__  uint calc_band_2(const __restrict__ uint8_t *dsq, __volatile__ uint8_t *dsq_buffer, int L, int Q, int q, int ** rbv){
+__device__  uint calc_band_2(const __restrict__ uint8_t *dsq, int L, int Q, int q, int ** rbv){
   int sv0 = NEGINFMASK, xE0=NEGINFMASK, sv1 = NEGINFMASK, xE1=NEGINFMASK, *rsc;
   int row=0;
-  int offset, dsq_buffer_offset=0;
-  // loop 1 of SSV 
-  // Grab some dsq entries
-  if(threadIdx.x < (DSQ_BUFFER_LENGTH >>4)){
-    ((uint4 *) dsq_buffer)[threadIdx.x] = ((uint4 *)dsq)[threadIdx.x];
-    __threadfence();
-  } 
-  offset = (q <<5)+threadIdx.x;
-  rsc = rbv[*(dsq_buffer+dsq_buffer_offset)]+ offset;
-
-  //#pragma unroll 4
-  for(int i =0; i < min(L, (Q-q-2));i++){
-    offset+=32;
-    STEP_2()
-    row++;    
-  }
-  if(row >= L){
-    goto done1;
-  }
-  //convert step
-    offset += 32;
-    STEP_2()
-    row++;
-    CONVERT_2()
-    if(row >= L){
-    goto done1;
-  }
-    offset = threadIdx.x;
-    STEP_2()
-    CONVERT_1()
-
-  done1:
-  // loop 2 of SSV
-  for(offset = threadIdx.x, row = Q-q; row < L-Q;){ 
-
-    for(int i = 0; i < Q-2; i++){
-      offset+=32;
+  int offset, end_offset;
+  int* rsc_precompute;
+  
+    offset = (q <<5)+threadIdx.x;
+  end_offset = (Q-2)<<5;
+  for(int end_row = L-1, row = 0; row < end_row; row++){
+    if(offset >= end_offset ){
+      // end of row 
       STEP_2()
+      offset+=32;
+      CONVERT_2()
+      row++;
+      STEP_2()
+      CONVERT_1()
+      offset = threadIdx.x;
     }
-
-    //convert step
-    offset += 32;
-    STEP_2()
-    CONVERT_2()
-    offset = threadIdx.x;
-    STEP_2()
-    CONVERT_1()
-  }
-
-  //Loop 3 of SSV
-  offset = threadIdx.x;
-  for(int end_offset =(min((Q-2), (L-row)) <<5)+threadIdx.x; offset < end_offset; ){
-    offset +=32;
-    STEP_2() 
-  }
-  //convert step
-   if (row >=L){
-    goto exit;
-  }
-    offset += 32;
-    STEP_2()
-    CONVERT_2()
-  if (row >=L){
-    goto exit;
-  }
-    STEP_2()
-  CONVERT_1()
-
-exit:
-  return max(xE0, xE1);   
-}
-
-__device__  uint calc_band_4( int **dsq, __volatile__ int **dsq_buffer, int L, int Q, int q, int ** rbv){
-  int sv0 = NEGINFMASK, xE0=NEGINFMASK, sv1 = NEGINFMASK,sv2 = NEGINFMASK, sv3 = NEGINFMASK,*rsc,xE1=NEGINFMASK,xE2=NEGINFMASK,xE3=NEGINFMASK;
-  int row=0;
-  int offset= threadIdx.x;
-  __volatile__ int **dsq_ptr = dsq_buffer + DSQ_BUFFER_LENGTH_POINTERS;
-  // loop 1 of SSV 
-  // Grab some dsq entries
-  // Grab some dsq entries
-  for(row =0; row < min(L, (Q-q-4));){
-      ENSURE_DSQ_BUFFER(1);
-      STEP_4();
+    else{ // normal step
+      STEP_2();
+      offset+= 32; 
     }
-
-   //convert step
-  if(row >= L){
-    goto done1;
   }
-  ENSURE_DSQ_BUFFER(1);
-  STEP_4()
-  CONVERT_4()
-  if(row >= L-1){
-    goto done1;
+  if(row < L){ // Might not be completely done
+    STEP_2()
   }
-  ENSURE_DSQ_BUFFER(1);
-  STEP_4()
-  CONVERT_3()
-  if(row >= L-2){
-    goto done1;
-  }
-  ENSURE_DSQ_BUFFER(1);
-  STEP_4()
-  CONVERT_2()
-  if(row >= L-3){
-    goto done1;
-  }
-  ENSURE_DSQ_BUFFER(1);
-  STEP_4()
-  offset = threadIdx.x;
-  CONVERT_1()
-
-  done1:
-  // loop 2 of SSV
-
-  for(row = Q-q; row < L-Q;){
-    while(offset <((Q-4) << 5) + threadIdx.x){
-      ENSURE_DSQ_BUFFER(1);
-      STEP_4()
-    }
-    //convert step
-    ENSURE_DSQ_BUFFER(1);
-    STEP_4()
-    CONVERT_4()
-    ENSURE_DSQ_BUFFER(1);
-    STEP_4()
-    CONVERT_3()
-    ENSURE_DSQ_BUFFER(1);
-    STEP_4()
-    CONVERT_2()
-    ENSURE_DSQ_BUFFER(1);
-    STEP_4()
-    offset = threadIdx.x;
-    CONVERT_1()
-  } 
-
-  //Loop 3 of SSV
-  for(int end_offset = (min((Q-4), (L-row)) <<5)+threadIdx.x; offset < end_offset;){  
-  ENSURE_DSQ_BUFFER(1);
-  STEP_4()
-  offset += 32; 
-  }
-
-  //convert step
-  if(row >= L){
-    goto exit;
-  }
-  ENSURE_DSQ_BUFFER(1);
-  STEP_4()
-  offset += 32;
-  CONVERT_4()
-  if(row >= L){
-    goto exit;
-  }
-  ENSURE_DSQ_BUFFER(1);
-  STEP_4()
-  offset += 32;
-  CONVERT_3()
-   if (row >=L){
-    goto exit;
-  }
-  ENSURE_DSQ_BUFFER(1);
-  STEP_4()
-  offset += 32;
-  CONVERT_2()
-  if (row >=L){
-    goto exit;
-  }
-  ENSURE_DSQ_BUFFER(1);
-  STEP_4()
-
-exit:
   MAX(xE0, xE1, xE0);
-  MAX(xE2, xE2, xE3);
-  MAX(xE0, xE0, xE2);
   return xE0;   
 }
 
-
-
+//note: row is incremented inside of STEP_4, which is why this function terminates
+__device__  uint calc_band_4(const __restrict__ uint8_t *dsq, int L, int Q, int q, int ** rbv){
+  int sv0 = NEGINFMASK, xE0=NEGINFMASK, sv1 = NEGINFMASK, xE1=NEGINFMASK, sv2 = NEGINFMASK, xE2=NEGINFMASK, sv3 = NEGINFMASK, xE3=NEGINFMASK, *rsc, *rsc_next;
+  int offset, end_offset;
+  int* rsc_precompute;
+  int row = 0;
+  rsc_precompute = rbv[dsq[threadIdx.x]];
+  offset = (q <<5)+threadIdx.x;
+  rsc = ((int *)__shfl_sync(0xffffffff, (uint64_t) rsc_precompute, 0)) + offset;\
+  end_offset = (Q-4)<<5;
+  for(int unroll_offset = ((Q-8) << 5) +threadIdx.x; row < L-4;){
+    while(offset < unroll_offset){
+      STEP_4();
+      offset+= 32;
+      STEP_4();
+      offset+= 32;
+      STEP_4();
+      offset+= 32;
+      STEP_4();
+      offset+= 32;
+    }
+    if(offset < end_offset){
+      // normal step
+      STEP_4();
+      offset+= 32;
+    }
+    else{
+      // end of row 
+      STEP_4()
+      offset+=32;
+      CONVERT_4()
+      STEP_4()
+      offset+=32;
+      CONVERT_3()
+      STEP_4()
+      offset+=32;
+      CONVERT_2()
+      STEP_4()
+      CONVERT_1()
+      offset = threadIdx.x;
+    }
+  }
+  for(; row < L;){
+    if(offset < end_offset){
+      // normal step
+      STEP_4();
+      offset+= 32;
+    }
+    else{
+      // end of row 
+      STEP_4()
+      offset+=32;
+      CONVERT_4()
+      if(row == L){
+        continue;
+      }
+      STEP_4()
+      offset+=32;
+      CONVERT_3()
+      if(row == L){
+        continue;
+      }
+      STEP_4()
+      offset+=32;
+      CONVERT_2()
+      if(row == L){
+        continue;
+      }
+      STEP_4()
+      CONVERT_1()
+    }
+  }
+  MAX(xE0, xE1, xE0);
+  MAX(xE2, xE2, xE3);
+  MAX(xE0, xE2, xE0);
+  return xE0;   
+}
 
 __global__
 void SSV_cuda(const __restrict__ uint8_t *dsq, int L, P7_OPROFILE *om, int8_t *retval){
   __shared__ uint4 shared_buffer[1024 *3];  //allocate one big lump that takes up all our shared memory
   int  Q = ((((om->M)-1) / (32)) + 1);
-  int **my_dsq_buffer = (int **)shared_buffer+(DSQ_BUFFER_LENGTH_POINTERS *threadIdx.y);
-  int **rbv = (int **)((int8_t *)shared_buffer + (blockDim.y * DSQ_BUFFER_LENGTH)); 
-  // rbv starts after all of the dsq buffers 
-  int **dsq_parsed;
+  int **rbv = (int **)shared_buffer; 
 
   // needs to scale w abc->Kp
   if(threadIdx.x < KP && threadIdx.y == 0 && threadIdx.z == 0){
-    // only one thread copies rbv data
-    //int space_available = (48 *1024) - ((blockDim.y * DSQ_BUFFER_LENGTH) + (((KP+1)/2)*2 * sizeof(uint *)));
-    // make this read shared memory size  
 
     int rsc_length = (Q + MAX_BAND_WIDTH -1) * 128;  // 32 threaads * 4 bytes 
-    int cachable_rscs = ((48 *1024) - ((blockDim.y * DSQ_BUFFER_LENGTH) + (((KP+1)/2)*2 * sizeof(uint *))))/rsc_length; // number of rbv entries that will fit in shared memory
+    int cachable_rscs = ((48 *1024) - (((KP+1)/2)*2 * sizeof(uint *)))/rsc_length; // number of rbv entries that will fit in shared memory
 
     if(threadIdx.x < cachable_rscs){
       rbv[threadIdx.x] = (int *)(rbv + ((KP+1)/2)*2) + (rsc_length/sizeof(int))*threadIdx.x;
@@ -433,39 +284,20 @@ void SSV_cuda(const __restrict__ uint8_t *dsq, int L, P7_OPROFILE *om, int8_t *r
   __syncthreads();
 
   int xE = NEGINFMASK;
-  if(threadIdx.x == 0){
-      dsq_parsed = (int **) malloc((L+1) * sizeof(int *));
-      if (dsq_parsed == NULL){
-        printf("unable to allocate dsq_parsed\n");
-      }
-      *((int***) my_dsq_buffer) = dsq_parsed;
-    }
-    __syncwarp();
-
-    dsq_parsed = *((int***) my_dsq_buffer);
 
 for(int num_reps = 0; num_reps < NUM_REPS; num_reps++){
-    for(int i = 0; i < (L+blockDim.x -1)/blockDim.x; i++){ 
-      if((i*blockDim.x)+threadIdx.x < L ){
-        dsq_parsed[(i * blockDim.x) + threadIdx.x] = rbv[dsq[(i * blockDim.x) + threadIdx.x]];
-      }
-    } 
   for (int i = 0; i < Q; i+=MAX_BAND_WIDTH) 
     {
     switch(min(MAX_BAND_WIDTH, Q-i)){
-/*      case 1:
-          xE = max(xE, calc_band_1(dsq, my_dsq_buffer, L, Q, i, rbv));
-          break;
-#if MAX_BAND_WIDTH > 1 
-        case 2:
-          xE = max(xE, calc_band_2(dsq, my_dsq_buffer, L, Q, i, rbv));
-          break;
-#endif */
-#if MAX_BAND_WIDTH > 3 
-         case 4:
-          xE = max(xE, calc_band_4(dsq_parsed, (volatile int **) my_dsq_buffer, L, Q, i, rbv));
-          break;
-#endif         
+      case 1:
+        xE = max(xE, calc_band_1(dsq, L, Q, i, rbv));
+        break;   
+      case 2:
+        xE = max(xE, calc_band_2(dsq, L, Q, i, rbv));
+        break;
+      case 4:
+        xE = max(xE, calc_band_4(dsq, L, Q, i, rbv));
+        break; 
       }
     }
   }
@@ -490,9 +322,9 @@ for(int num_reps = 0; num_reps < NUM_REPS; num_reps++){
   if((blockIdx.y == 0) &&(threadIdx.y ==0) && (threadIdx.x == 0)){ // only one thread writes result
     *retval = xE & 255; // low 8 bits of the word is the final result
   }
-  if(threadIdx.x == 0){
+/*  if(threadIdx.x == 0){
     free(dsq_parsed);
-  }     
+  }   */  
   return; 
 }  
 
@@ -724,7 +556,7 @@ p7_SSVFilter_shell_sse(const ESL_DSQ *dsq, int L, const __restrict__
 
   cudaMalloc((void **) &card_h, 1);
   err = cudaGetLastError();
-  cudaMalloc((void**)  &card_dsq, L+8);  //Pad out so that we can grab dsq four bytes at a time
+  cudaMalloc((void**)  &card_dsq, L+31);  //Pad out so that we can grab dsq four bytes at a time
   cudaMemcpy(card_dsq, (dsq+ 1), L, cudaMemcpyHostToDevice);
 
   cudaEventRecord(start);
