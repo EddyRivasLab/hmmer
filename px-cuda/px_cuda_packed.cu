@@ -9,11 +9,11 @@
 #include "cuda_profiler_api.h"
 
 #define KP 27  // number of characters in alphabet.  Make parameter.
-#define MAX_BAND_WIDTH 4
-#define NEGINFMASK -128
+#define MAX_BAND_WIDTH 1
+#define NEGINFMASK 0x80808080
 #define NUM_REPS 1000
 #define MAX(a, b, c)\
-  a = (b > c) ? b:c;
+  a = __vmaxs4(b, c);
 
  // asm("max.s32 %0, %1, %2;" : "=r"(a): "r"(b), "r"(c));
 
@@ -23,44 +23,37 @@ int *restripe_char_to_int(char *source, int source_chars_per_vector, int dest_in
 
 
 #define STEP_1()\
-  sv0   = sv0 + *rsc;\
+  sv0   = __vaddss4(sv0, *rsc);\
   rsc =  ((int *)__shfl_sync(0xffffffff, (uint64_t) rsc_precompute, (last_row_fetched-row))) + offset;\
-  MAX(xE0, sv0, xE0);
+  xE0  = __vmaxs4(xE0, sv0);
 
 #define STEP_2()\
-  sv0   = sv0 + *rsc;\
-  sv1   = sv1 + *(rsc+32);\
+  sv0   = __vaddss4(sv0, *rsc);\
+  sv1   = __vaddss4(sv1, *(rsc+32));\
   rsc =  ((int *)__shfl_sync(0xffffffff, (uint64_t) rsc_precompute, (last_row_fetched-row))) + offset;\
-  MAX(xE0, sv0, xE0);\
-  MAX(xE0, sv1, xE0);
-
-/*  sv0 = max(sv0, -128);\
-  sv0 = min(sv0, 127);\
-  sv1 = max(sv1, -128);\
-  sv1 = min(sv1, 127);\ */
+  xE0  = __vmaxs4(xE0, sv0);\
+  xE0  = __vmaxs4(xE0, sv1);
 
 
 #define STEP_3()\
-  sv0   = sv0 + *rsc;\
-  sv1   = sv1 + *(rsc+32);\
-  sv2   = sv2 + *(rsc+64);\
+  sv0   = __vaddss4(sv0, *rsc);\
+  sv1   = __vaddss4(sv1, *(rsc+32));\
+  sv2   = __vaddss4(sv2, *(rsc+64));\
   rsc =  ((int *)__shfl_sync(0xffffffff, (uint64_t) rsc_precompute, (last_row_fetched-row))) + offset;\
-  MAX(xE0, sv0, xE0);\
-  MAX(xE0, sv1, xE0);\
-  MAX(xE0, sv2, xE0);
-
+  xE0  = __vmaxs4(xE0, sv0);\
+  xE0  = __vmaxs4(xE0, sv1);\
+  xE0  = __vmaxs4(xE0, sv2);
 
 #define STEP_4()\
-  sv0   = sv0 + *rsc;\
-  sv1   = sv1 + *(rsc+32);\
-  sv2   = sv2 + *(rsc+64);\
-  sv3   = sv3 + *(rsc+96);\
+  sv0   = __vaddss4(sv0, *rsc);\
+  sv1   = __vaddss4(sv1, *(rsc+32));\
+  sv2   = __vaddss4(sv2, *(rsc+64));\
+  sv3   = __vaddss4(sv3, *(rsc+96));\
   rsc =  ((int *)__shfl_sync(0xffffffff, (uint64_t) rsc_precompute, (last_row_fetched-row))) + offset;\
-  MAX(xE0, sv0, xE0);\
-  MAX(xE0, sv1, xE0);\
-  MAX(xE0, sv2, xE0);\
-  MAX(xE0, sv3, xE0);
-
+  xE0  = __vmaxs4(xE0, sv0);\
+  xE0  = __vmaxs4(xE0, sv1);\
+  xE0  = __vmaxs4(xE0, sv2);\
+  xE0  = __vmaxs4(xE0, sv3);
 
 #define ENSURE_DSQ(count)\
   if(row +count-1 >= last_row_fetched){\
@@ -68,44 +61,31 @@ int *restripe_char_to_int(char *source, int source_chars_per_vector, int dest_in
     rsc_precompute = rbv[dsq[last_row_fetched - threadIdx.x]];\
   }
 
-//  if(threadIdx.x == 0 && threadIdx.y == 0 && threadIdx.z == 0 && blockIdx.x == 0 && blockIdx.y == 0 && blockIdx.z == 0){\
-    printf("row = %d, dsq_ptr = %p, *dsq_ptr = %d, dsq[row] = %d\n", row, dsq_ptr, *dsq_ptr, dsq[row]);\
-  }\
-//if(threadIdx.x == 0 && threadIdx.y == 0 && threadIdx.z == 0 && blockIdx.x == 0 && blockIdx.y == 0 && blockIdx.z == 0){\
-    printf("row = %d, dsq_ptr = %p\n", row, dsq_ptr);\
-  }\
-  /*sv0 = max(sv0, -128);\
-  sv0 = min(sv0, 127);\
-  sv1 = max(sv1, -128);\
-  sv1 = min(sv1, 127);\
-  sv2 = max(sv2, -128);\
-  sv2 = min(sv2, 127);\
-  sv3 = max(sv3, -128);\
-  sv3 = min(sv3, 127);\ */
 // Note that these CONVERT macros are different from the ones in the CPU SSV. They only implement the shifting necessary to prepare
 // sv for the next row.  They don't include the STEP functionality.
+
 #define CONVERT_1()\
-  sv0 = __shfl_up_sync(0xffffffff, sv0, 1);\
+  sv0 = __byte_perm(sv0, __shfl_up_sync(0xffffffff, sv0, 1), 0x2107);\
   if(threadIdx.x == 0){\
-      sv0 = -128;\
+      sv0 = __byte_perm(sv0, 0x80, 0x3214);\
   }
 
 #define CONVERT_2()\
-  sv1 = __shfl_up_sync(0xffffffff, sv1, 1);\
+  sv1 = __byte_perm(sv1, __shfl_up_sync(0xffffffff, sv1, 1), 0x2107);\
   if(threadIdx.x == 0){\
-      sv1 = -128;\
+      sv1 = __byte_perm(sv1, 0x80, 0x3214);\
   }
 
 #define CONVERT_3()\
-  sv2 = __shfl_up_sync(0xffffffff, sv2, 1);\
+  sv2 = __byte_perm(sv2, __shfl_up_sync(0xffffffff, sv2, 1), 0x2107);\
   if(threadIdx.x == 0){\
-      sv2 = -128;\
+      sv2 = __byte_perm(sv2, 0x80, 0x3214);\
   }
 
 #define CONVERT_4()\
-  sv3 = __shfl_up_sync(0xffffffff, sv3, 1);\
+  sv3 = __byte_perm(sv3, __shfl_up_sync(0xffffffff, sv3, 1), 0x2107);\
   if(threadIdx.x == 0){\
-      sv3 = -128;\
+      sv3 = __byte_perm(sv3, 0x80, 0x3214);\
   }
 
 __device__  uint calc_band_1(const __restrict__ uint8_t *dsq, int L, int Q, int q, int ** rbv){
@@ -189,8 +169,7 @@ __device__  uint calc_band_1(const __restrict__ uint8_t *dsq, int L, int Q, int 
 }
 
 __device__  uint calc_band_2(const __restrict__ uint8_t *dsq, int L, int Q, int q, int ** rbv){
-  int sv0 = NEGINFMASK, xE0=NEGINFMASK, sv1 = NEGINFMASK, xE1=NEGINFMASK,
-  *rsc;
+  int sv0 = NEGINFMASK, xE0=NEGINFMASK, sv1 = NEGINFMASK, *rsc;
   int row=0, last_row_fetched = -1;
   int offset;
   int* rsc_precompute;
@@ -270,14 +249,10 @@ __device__  uint calc_band_2(const __restrict__ uint8_t *dsq, int L, int Q, int 
     }
     if(row <= L){
       // at end of row, convert
-      ENSURE_DSQ(1)
-      offset = threadIdx.x;
       STEP_2()
-      CONVERT_2()
       row++;
     }
   }
-  MAX(xE0, xE1, xE0)
   return xE0;   
 }
 
@@ -382,8 +357,7 @@ __device__  uint calc_band_3(const __restrict__ uint8_t *dsq, int L, int Q, int 
 
 
 __device__  uint calc_band_4(const __restrict__ uint8_t *dsq, int L, int Q, int q, int ** rbv){
-  int sv0 = NEGINFMASK, xE0=NEGINFMASK, sv1 = NEGINFMASK, sv2 = NEGINFMASK, sv3 = NEGINFMASK,
-  *rsc;
+  int sv0 = NEGINFMASK, xE0=NEGINFMASK, sv1 = NEGINFMASK, sv2 = NEGINFMASK, sv3 = NEGINFMASK, *rsc;
   int row=0, last_row_fetched = -1;
   int offset;
   int* rsc_precompute;
@@ -489,6 +463,7 @@ __device__  uint calc_band_4(const __restrict__ uint8_t *dsq, int L, int Q, int 
       STEP_4()
     }
   }
+
   return xE0;   
 }
 
@@ -498,7 +473,7 @@ __device__  uint calc_band_4(const __restrict__ uint8_t *dsq, int L, int Q, int 
 __global__
 void SSV_cuda(const __restrict__ uint8_t *dsq, int L, P7_OPROFILE *om, int8_t *retval){
   __shared__ uint4 shared_buffer[1024 *3];  //allocate one big lump that takes up all our shared memory
-  int  Q = ((((om->M)-1) / (32)) + 1);
+  int  Q = ((((om->M)-1) / (128)) + 1);
   int **rbv = (int **)shared_buffer; 
 
   // needs to scale w abc->Kp
@@ -507,7 +482,7 @@ void SSV_cuda(const __restrict__ uint8_t *dsq, int L, P7_OPROFILE *om, int8_t *r
     int rsc_length = (Q + MAX_BAND_WIDTH -1) * 128;  // 32 threaads * 4 bytes 
     int cachable_rscs = ((48 *1024) - (((KP+1)/2)*2 * sizeof(uint *)))/rsc_length; // number of rbv entries that will fit in shared memory
 
-    if(threadIdx.x < cachable_rscs){
+    if(threadIdx.x < min(KP, cachable_rscs)){
       rbv[threadIdx.x] = (int *)(rbv + ((KP+1)/2)*2) + (rsc_length/sizeof(int))*threadIdx.x;
       memcpy((void *) rbv[threadIdx.x], (void *) om->rbv[threadIdx.x], rsc_length);
     }
@@ -525,16 +500,16 @@ for(int num_reps = 0; num_reps < NUM_REPS; num_reps++){
     {
     switch(min(MAX_BAND_WIDTH, Q-i)){
       case 1:
-        xE = max(xE, calc_band_1(dsq, L, Q, i, rbv));
+        xE = __vmaxs4(xE, calc_band_1(dsq, L, Q, i, rbv));
         break;
       case 2:
-        xE = max(xE, calc_band_2(dsq, L, Q, i, rbv));
+        xE = __vmaxs4(xE, calc_band_2(dsq, L, Q, i, rbv));
         break;
       case 3:
-        xE = max(xE, calc_band_3(dsq, L, Q, i, rbv));
+        xE = __vmaxs4(xE, calc_band_3(dsq, L, Q, i, rbv));
         break;
       case 4:
-        xE = max(xE, calc_band_4(dsq, L, Q, i, rbv));
+        xE = __vmaxs4(xE, calc_band_4(dsq, L, Q, i, rbv));
         break; 
       }
     }
@@ -542,22 +517,24 @@ for(int num_reps = 0; num_reps < NUM_REPS; num_reps++){
 
 // Done with main loop.  Now reduce answer vector (xE) to one byte for return
   // Reduce 32 values to 16
-  xE = max(xE, __shfl_down_sync(0x0000ffff, xE, 16));
+  xE = __vmaxs4(xE, __shfl_down_sync(0x0000ffff, xE, 16));
 
  // Reduce 16 values to 8
-  xE = max(xE, __shfl_down_sync(0x0000ff, xE, 8));
+  xE = __vmaxs4(xE, __shfl_down_sync(0x0000ff, xE, 8));
  
 // Reduce 8 values to 4
-  xE = max(xE, __shfl_down_sync(0x00000f, xE, 4));
+  xE = __vmaxs4(xE, __shfl_down_sync(0x00000f, xE, 4));
 
 // Reduce 4 values to 2
-  xE = max(xE, __shfl_down_sync(0x000003, xE, 2));
+  xE = __vmaxs4(xE, __shfl_down_sync(0x000003, xE, 2));
 
 // Reduce 2 values to 1
-  xE = max(xE, __shfl_down_sync(0x000001, xE, 1));
+  xE = __vmaxs4(xE, __shfl_down_sync(0x000001, xE, 1));
 
 
   if((blockIdx.y == 0) &&(threadIdx.y ==0) && (threadIdx.x == 0)){ // only one thread writes result
+  xE = __vmaxs4(xE, (xE>>16));
+  xE = __vmaxs4(xE, (xE>>8)); 
     *retval = xE & 255; // low 8 bits of the word is the final result
   }
 /*  if(threadIdx.x == 0){
@@ -620,13 +597,13 @@ P7_OPROFILE *create_oprofile_on_card(P7_OPROFILE *the_profile){
     p7_Fail((char *) "Unable to allocate memory in create_oprofile_on_card");
   }
   int i;
-  int *restriped_rbv;
+  char *restriped_rbv;
   int restriped_rbv_size;
 
   unsigned int **cuda_rbv_temp = cuda_rbv; // use this variable to copy rbv pointers into CUDA array 
   for(i = 0; i < the_profile->abc->Kp; i++){
     int *cuda_rbv_entry;
-  restriped_rbv = restripe_char_to_int ((char*)(the_profile->rbv[i]), the_profile->V, 32, Q * the_profile->V, &restriped_rbv_size);
+  restriped_rbv = restripe_char ((char*)(the_profile->rbv[i]), the_profile->V, 128, Q * the_profile->V, &restriped_rbv_size);
   //restriped_rbv = (int *) restripe_char((char *)(the_profile->rbv[i]), the_profile->V, 128, Q * the_profile->V, &restriped_rbv_size);
 
     if(cudaMalloc(&cuda_rbv_entry, restriped_rbv_size) != cudaSuccess){
@@ -687,7 +664,6 @@ char * restripe_char(char *source, int source_chars_per_vector, int dest_chars_p
 
   dest = (char *) malloc(dest_num_vectors * dest_chars_per_vector);
   *dest_length = dest_num_vectors * dest_chars_per_vector;
-
   int source_pos, dest_pos;
   int i;
 
@@ -867,9 +843,9 @@ p7_SSVFilter_shell_sse(const ESL_DSQ *dsq, int L, const __restrict__
   for(i = 0; i < om->abc->Kp; i++){
 
   }
- /* if(h != h_compare){
+  if(h != h_compare){
     printf("Final result miss-match: %x (CUDA) vs %x (CPU) on sequence %d with length %d\n\n", h_compare, h, num, L);
-  } */
+  } 
  float known_good;  
  
  p7_SSVFilter_base_sse(dsq, L, om, fx, &known_good);

@@ -9,7 +9,7 @@
 #include "cuda_profiler_api.h"
 
 #define KP 27  // number of characters in alphabet.  Make parameter.
-#define MAX_BAND_WIDTH 4
+#define MAX_BAND_WIDTH 1
 #define NEGINFMASK -128
 #define NUM_REPS 1000
 #define MAX(a, b, c)\
@@ -19,18 +19,18 @@
 
 
 char * restripe_char(char *source, int source_chars_per_vector, int dest_chars_per_vector, int source_length, int *dest_length);
-int *restripe_char_to_int(char *source, int source_chars_per_vector, int dest_ints_per_vector, int source_length, int *dest_length);
+int *restripe_char_to_float(char *source, int source_chars_per_vector, int dest_ints_per_vector, int source_length, int *dest_length);
 
 
 #define STEP_1()\
   sv0   = sv0 + *rsc;\
-  rsc =  ((int *)__shfl_sync(0xffffffff, (uint64_t) rsc_precompute, (last_row_fetched-row))) + offset;\
+  rsc =  ((float *)__shfl_sync(0xffffffff, (uint64_t) rsc_precompute, (last_row_fetched-row))) + offset;\
   MAX(xE0, sv0, xE0);
 
 #define STEP_2()\
   sv0   = sv0 + *rsc;\
   sv1   = sv1 + *(rsc+32);\
-  rsc =  ((int *)__shfl_sync(0xffffffff, (uint64_t) rsc_precompute, (last_row_fetched-row))) + offset;\
+  rsc =  ((float *)__shfl_sync(0xffffffff, (uint64_t) rsc_precompute, (last_row_fetched-row))) + offset;\
   MAX(xE0, sv0, xE0);\
   MAX(xE0, sv1, xE0);
 
@@ -44,7 +44,7 @@ int *restripe_char_to_int(char *source, int source_chars_per_vector, int dest_in
   sv0   = sv0 + *rsc;\
   sv1   = sv1 + *(rsc+32);\
   sv2   = sv2 + *(rsc+64);\
-  rsc =  ((int *)__shfl_sync(0xffffffff, (uint64_t) rsc_precompute, (last_row_fetched-row))) + offset;\
+  rsc =  ((float *)__shfl_sync(0xffffffff, (uint64_t) rsc_precompute, (last_row_fetched-row))) + offset;\
   MAX(xE0, sv0, xE0);\
   MAX(xE0, sv1, xE0);\
   MAX(xE0, sv2, xE0);
@@ -55,7 +55,7 @@ int *restripe_char_to_int(char *source, int source_chars_per_vector, int dest_in
   sv1   = sv1 + *(rsc+32);\
   sv2   = sv2 + *(rsc+64);\
   sv3   = sv3 + *(rsc+96);\
-  rsc =  ((int *)__shfl_sync(0xffffffff, (uint64_t) rsc_precompute, (last_row_fetched-row))) + offset;\
+  rsc =  ((float *)__shfl_sync(0xffffffff, (uint64_t) rsc_precompute, (last_row_fetched-row))) + offset;\
   MAX(xE0, sv0, xE0);\
   MAX(xE0, sv1, xE0);\
   MAX(xE0, sv2, xE0);\
@@ -108,15 +108,15 @@ int *restripe_char_to_int(char *source, int source_chars_per_vector, int dest_in
       sv3 = -128;\
   }
 
-__device__  uint calc_band_1(const __restrict__ uint8_t *dsq, int L, int Q, int q, int ** rbv){
-  int sv0 = NEGINFMASK, xE0=NEGINFMASK, *rsc;
+__device__  uint calc_band_1(const __restrict__ uint8_t *dsq, int L, int Q, int q, float ** rbv){
+  float sv0 = NEGINFMASK, xE0=NEGINFMASK, *rsc;
   int row=0, last_row_fetched = -1;
   int offset;
-  int* rsc_precompute;
+  float* rsc_precompute;
 
   offset = (q <<5)+threadIdx.x;
   ENSURE_DSQ(1)
-  rsc =  ((int *)__shfl_sync(0xffffffff, (uint64_t) rsc_precompute, 31)) + offset;
+  rsc =  ((float *)__shfl_sync(0xffffffff, (uint64_t) rsc_precompute, 31)) + offset;
   row++;
   int num_iters = min(L, Q-(q +1)); // first band may start in middle of row
   while(row <= L-Q){
@@ -188,16 +188,16 @@ __device__  uint calc_band_1(const __restrict__ uint8_t *dsq, int L, int Q, int 
   return xE0;   
 }
 
-__device__  uint calc_band_2(const __restrict__ uint8_t *dsq, int L, int Q, int q, int ** rbv){
-  int sv0 = NEGINFMASK, xE0=NEGINFMASK, sv1 = NEGINFMASK, xE1=NEGINFMASK,
+__device__  uint calc_band_2(const __restrict__ uint8_t *dsq, int L, int Q, int q, float ** rbv){
+  float sv0 = NEGINFMASK, xE0=NEGINFMASK, sv1 = NEGINFMASK, xE1=NEGINFMASK,
   *rsc;
   int row=0, last_row_fetched = -1;
   int offset;
-  int* rsc_precompute;
+  float* rsc_precompute;
 
   offset = (q <<5)+threadIdx.x;
   ENSURE_DSQ(1)
-  rsc =  ((int *)__shfl_sync(0xffffffff, (uint64_t) rsc_precompute, 31)) + offset;
+  rsc =  ((float *)__shfl_sync(0xffffffff, (uint64_t) rsc_precompute, 31)) + offset;
   row++;
   int num_iters = min(L, Q-(q +2)); // first band may start in middle of row
   while(row <= L-Q){
@@ -281,15 +281,15 @@ __device__  uint calc_band_2(const __restrict__ uint8_t *dsq, int L, int Q, int 
   return xE0;   
 }
 
-__device__  uint calc_band_3(const __restrict__ uint8_t *dsq, int L, int Q, int q, int ** rbv){
-  int sv0 = NEGINFMASK, xE0=NEGINFMASK, sv1 = NEGINFMASK, sv2 = NEGINFMASK, *rsc;
+__device__  uint calc_band_3(const __restrict__ uint8_t *dsq, int L, int Q, int q, float ** rbv){
+  float sv0 = NEGINFMASK, xE0=NEGINFMASK, sv1 = NEGINFMASK, sv2 = NEGINFMASK, *rsc;
   int row=0, last_row_fetched = -1;
   int offset;
-  int* rsc_precompute;
+  float* rsc_precompute;
 
   offset = (q <<5)+threadIdx.x;
   ENSURE_DSQ(1)
-  rsc =  ((int *)__shfl_sync(0xffffffff, (uint64_t) rsc_precompute, 31)) + offset;
+  rsc =  ((float *)__shfl_sync(0xffffffff, (uint64_t) rsc_precompute, 31)) + offset;
   row++;
   int num_iters = min(L, Q-(q +3)); // first band may start in middle of row
   while(row <= L-Q){
@@ -381,16 +381,16 @@ __device__  uint calc_band_3(const __restrict__ uint8_t *dsq, int L, int Q, int 
 }
 
 
-__device__  uint calc_band_4(const __restrict__ uint8_t *dsq, int L, int Q, int q, int ** rbv){
-  int sv0 = NEGINFMASK, xE0=NEGINFMASK, sv1 = NEGINFMASK, sv2 = NEGINFMASK, sv3 = NEGINFMASK,
+__device__  uint calc_band_4(const __restrict__ uint8_t *dsq, int L, int Q, int q, float ** rbv){
+  float sv0 = NEGINFMASK, xE0=NEGINFMASK, sv1 = NEGINFMASK, sv2 = NEGINFMASK, sv3 = NEGINFMASK,
   *rsc;
   int row=0, last_row_fetched = -1;
   int offset;
-  int* rsc_precompute;
+  float* rsc_precompute;
 
   offset = (q <<5)+threadIdx.x;
   ENSURE_DSQ(1)
-  rsc =  ((int *)__shfl_sync(0xffffffff, (uint64_t) rsc_precompute, 31)) + offset;
+  rsc =  ((float *)__shfl_sync(0xffffffff, (uint64_t) rsc_precompute, 31)) + offset;
   row++;
   int num_iters = min(L, Q-(q +4)); // first band may start in middle of row
   while(row <= L-Q){
@@ -499,7 +499,7 @@ __global__
 void SSV_cuda(const __restrict__ uint8_t *dsq, int L, P7_OPROFILE *om, int8_t *retval){
   __shared__ uint4 shared_buffer[1024 *3];  //allocate one big lump that takes up all our shared memory
   int  Q = ((((om->M)-1) / (32)) + 1);
-  int **rbv = (int **)shared_buffer; 
+  float **rbv = (float **)shared_buffer; 
 
   // needs to scale w abc->Kp
   if(threadIdx.x < KP && threadIdx.y == 0 && threadIdx.z == 0){
@@ -508,11 +508,11 @@ void SSV_cuda(const __restrict__ uint8_t *dsq, int L, P7_OPROFILE *om, int8_t *r
     int cachable_rscs = ((48 *1024) - (((KP+1)/2)*2 * sizeof(uint *)))/rsc_length; // number of rbv entries that will fit in shared memory
 
     if(threadIdx.x < cachable_rscs){
-      rbv[threadIdx.x] = (int *)(rbv + ((KP+1)/2)*2) + (rsc_length/sizeof(int))*threadIdx.x;
+      rbv[threadIdx.x] = (float *)(rbv + ((KP+1)/2)*2) + (rsc_length/sizeof(int))*threadIdx.x;
       memcpy((void *) rbv[threadIdx.x], (void *) om->rbv[threadIdx.x], rsc_length);
     }
     else{
-      rbv[threadIdx.x]=(int *)(om->rbv[threadIdx.x]);
+      rbv[threadIdx.x]=(float *)(om->rbv[threadIdx.x]);
     }
 
   }
@@ -626,7 +626,7 @@ P7_OPROFILE *create_oprofile_on_card(P7_OPROFILE *the_profile){
   unsigned int **cuda_rbv_temp = cuda_rbv; // use this variable to copy rbv pointers into CUDA array 
   for(i = 0; i < the_profile->abc->Kp; i++){
     int *cuda_rbv_entry;
-  restriped_rbv = restripe_char_to_int ((char*)(the_profile->rbv[i]), the_profile->V, 32, Q * the_profile->V, &restriped_rbv_size);
+  restriped_rbv = restripe_char_to_float ((char*)(the_profile->rbv[i]), the_profile->V, 32, Q * the_profile->V, &restriped_rbv_size);
   //restriped_rbv = (int *) restripe_char((char *)(the_profile->rbv[i]), the_profile->V, 128, Q * the_profile->V, &restriped_rbv_size);
 
     if(cudaMalloc(&cuda_rbv_entry, restriped_rbv_size) != cudaSuccess){
@@ -716,7 +716,7 @@ char * restripe_char(char *source, int source_chars_per_vector, int dest_chars_p
 }
 
 
-int *restripe_char_to_int(char *source, int source_chars_per_vector, int dest_ints_per_vector, int source_length, int *dest_length){
+int *restripe_char_to_float(char *source, int source_chars_per_vector, int dest_ints_per_vector, int source_length, int *dest_length){
   int *dest;
   int dest_num_vectors, source_num_vectors, unpadded_dest_vectors;
 
@@ -740,7 +740,7 @@ int *restripe_char_to_int(char *source, int source_chars_per_vector, int dest_in
   for(i = 0; i < source_length; i++){
     source_pos = ((i % source_num_vectors) * source_chars_per_vector) + (i / source_num_vectors);
     dest_pos = ((i % unpadded_dest_vectors) * dest_ints_per_vector) + (i / unpadded_dest_vectors);
-    dest[dest_pos] = (int) source[source_pos];
+    dest[dest_pos] = (float) source[source_pos];
   }
 
   // pad out the dest vector with zeroes if necessary
