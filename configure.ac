@@ -76,7 +76,7 @@ m4_include([easel/m4/ax_pthread.m4])
 # 2. AC_INIT
 ################################################################
 
-AC_INIT(HMMER, 3.2, sean@eddylab.org, hmmer)
+AC_INIT(HMMER, 3.2rc1, sean@eddylab.org, hmmer)
 AC_MSG_NOTICE([Configuring HMMER3 for your system.])
 
 # remember if the user is overriding CFLAGS
@@ -110,8 +110,8 @@ fi
 # to use HMMER as a library inside other packages, with no name clashes.
 ################################################################
 
-HMMER_DATE="August 2017"
-HMMER_COPYRIGHT="Copyright (C) 2017 Howard Hughes Medical Institute."
+HMMER_DATE="March 2018"
+HMMER_COPYRIGHT="Copyright (C) 2018 Howard Hughes Medical Institute."
 HMMER_LICENSE="Freely distributed under the BSD open source license."
 HMMER_VERSION=$PACKAGE_VERSION
 HMMER_URL="http://hmmer.org/"
@@ -119,10 +119,10 @@ HMMER_URL="http://hmmer.org/"
 HMMER_ESLDIR="easel"
 HMMER_SADIR="libdivsufsort"
 
-EASEL_DATE="August 2017"
-EASEL_COPYRIGHT="Copyright (C) 2017 Howard Hughes Medical Institute."
+EASEL_DATE="March 2018"
+EASEL_COPYRIGHT="Copyright (C) 2018 Howard Hughes Medical Institute."
 EASEL_LICENSE="Freely distributed under the BSD open source license."
-EASEL_VERSION="0.44"
+EASEL_VERSION="0.44rc1"
 EASEL_URL="http://bioeasel.org/"
 
 AC_SUBST(HMMER_DATE)
