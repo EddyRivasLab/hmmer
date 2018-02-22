@@ -83,7 +83,7 @@ ifndef V
 	QUIET_AR      = @echo '    ' AR $@;
 	QUIET_SUBDIR0 = +@subdir=
 	QUIET_SUBDIR1 = ; echo '    ' SUBDIR $$subdir; \
-		        ${MAKE} -C $$subdir
+		        ${MAKE} -s -C $$subdir
 endif
 
 .PHONY: all dev check tests install uninstall distclean clean 
@@ -161,9 +161,6 @@ uninstall:
 	   rm -f ${DESTDIR}${includedir}/$$file ;\
 	done
 
-distclean: clean
-	-rm -f Makefile 
-
 clean:
 	-rm -f impl_lib.stamp
 	-rm -f ${UTESTS}
@@ -174,4 +171,11 @@ clean:
 	for prog in ${UTESTS} ${BENCHMARKS} ${EXAMPLES}; do \
 	   if test -d $$prog.dSYM; then rm -rf $$prog.dSYM ; fi ;\
 	done
+ifndef V
+	@echo '     ' CLEAN impl_vmx
+endif
+
+
+distclean: clean
+	-rm -f Makefile 
 

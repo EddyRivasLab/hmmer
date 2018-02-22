@@ -54,6 +54,9 @@ uninstall:
 
 clean:
 	-rm -f *~ 
+ifndef V
+	@echo '     ' CLEAN man
+endif
 
 distclean:
 	-rm -f *~ 

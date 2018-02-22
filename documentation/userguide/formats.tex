@@ -592,7 +592,7 @@ format for the UCSC SAM profile HMM software package.
 To select A2M format, use the format code \ccode{a2m}: for example, 
 to reformat a Stockholm alignment to A2M:
 
-\user{esl-reformat a2m myali.sto}.
+\user{esl-reformat a2m myali.sto}
 
 Easel currently does not read A2M format, and it currently only writes
 in what UCSC calls ``dotless'' A2M format.
@@ -778,7 +778,7 @@ mongodb (\url{http://www.mongodb.org}).
 The HMMER-Easel tool \prog{esl-reformat} is able to convert a file in unaligned
 fasta format into an hmmpgmd format file, such as
 
-\user{esl-reformat --id\_map mydb.hmmpgmd.map hmmpgmd mydb.fasta > mydb.hmmpgmd}.
+\user{esl-reformat --id\_map mydb.hmmpgmd.map hmmpgmd mydb.fasta > mydb.hmmpgmd}
 
 The optional \prog{--id\_map} flag captures sequence name and description
 information into a simple tabular file, to be used for mapping those values 

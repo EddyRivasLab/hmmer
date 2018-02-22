@@ -28,7 +28,6 @@ SEDITION      = ${top_srcdir}/easel/devkit/sedition
 RMANPROCESS   = ${top_srcdir}/easel/devkit/rmanprocess.pl
 
 MANPAGES = \
-	${top_srcdir}/documentation/man/alimask.man\
 	${top_srcdir}/documentation/man/hmmalign.man\
 	${top_srcdir}/documentation/man/hmmbuild.man\
 	${top_srcdir}/documentation/man/hmmconvert.man\
@@ -46,6 +45,8 @@ MANPAGES = \
 	${top_srcdir}/documentation/man/nhmmer.man\
 	${top_srcdir}/documentation/man/nhmmscan.man\
 	${top_srcdir}/documentation/man/phmmer.man
+#	${top_srcdir}/documentation/man/alimask.man\
+
 
 TEXFILES =\
 	ack.tex\
@@ -112,7 +113,11 @@ uninstall:
 
 clean:
 	-rm -f latex.log
-	-rm -f main.aux main.bbl main.blg main.log main.toc x.log *~
+	-rm -f main.aux main.bbl main.blg main.log main.toc main.brf main.out x.log *~
+ifndef V
+	@echo '     ' CLEAN userguide
+endif
+
 
 distclean: clean
 	if test "x${srcdir}" != "x."; then \
