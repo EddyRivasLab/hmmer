@@ -396,7 +396,7 @@ p7_alidisplay_Serialize(P7_ALIDISPLAY *ad)
   return eslOK;
 
  ERROR:
-  if (ad->mem) free(ad->mem); ad->mem = NULL;
+  if (ad->mem) { free(ad->mem); ad->mem = NULL; }
   return status;
 }
 
