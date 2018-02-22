@@ -103,7 +103,7 @@ fm_configInit( FM_CFG *cfg, ESL_GETOPTS *go )
    */
    if (cfg->meta->alph_type == fm_DNA)
      trim_chunk_count = 64; //2-bit steps
-   else if (cfg->meta->alph_type == fm_AMINO)
+   else // then cfg->meta->alph_type == fm_AMINO, we suppose
      trim_chunk_count = 16; //8-bit steps
 
   //chars_per_vector = 128/meta->charBits;
