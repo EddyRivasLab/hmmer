@@ -523,7 +523,7 @@ synthesize_positives(ESL_GETOPTS *go, struct cfg_s *cfg, char *testname, ESL_STA
 	  esl_sq_FormatDesc(sq, "domain: %s", domain1->name);
 	}
 
-      fprintf(cfg->possummfp, "%-35s %5d %5d %5d %5d %5d %5d", sq->name, (int) sq->n, L1, d1n, L2, d2n, L3);
+      fprintf(cfg->possummfp, "%-40s %5d %5d %5d %5d %5d %5d", sq->name, (int) sq->n, L1, d1n, L2, d2n, L3);
 
 
       sq->dsq[0] = sq->dsq[L+1] = eslDSQ_SENTINEL;
@@ -655,7 +655,7 @@ set_random_segment(ESL_GETOPTS *go, struct cfg_s *cfg, FILE *logfp, ESL_DSQ *dsq
 
   /* log sequence source info: <name> <start> <end> */
   if (logfp != NULL && db_dependent) 
-    fprintf(logfp, " %-15s %5d %5d", pkey, start, end); 
+    fprintf(logfp, " %-24s %5d %5d", pkey, start, end); 
 
   /* Now apply the appropriate randomization algorithm */
   if      (esl_opt_GetBoolean(go, "--mono"))    status = esl_rsq_XShuffle  (cfg->r, sq->dsq, L, sq->dsq);
