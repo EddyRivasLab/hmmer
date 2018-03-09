@@ -47,7 +47,7 @@ p7_seqcache_Open(char *seqfile, P7_SEQCACHE **ret_cache, char *errbuf)
   uint64_t           hdr_size;
 
   char              *hdr_ptr;
-  char              *res_ptr;
+  ESL_DSQ           *res_ptr;
   char              *desc_ptr;
   char              *ptr;
   char               buffer[512];
@@ -143,7 +143,7 @@ p7_seqcache_Open(char *seqfile, P7_SEQCACHE **ret_cache, char *errbuf)
   cache->count       = seq_cnt;
 
   hdr_ptr = cache->header_mem;
-  res_ptr = cache->residue_mem;
+  res_ptr = (ESL_DSQ *) cache->residue_mem;
   for (i = 0; i < db_cnt; ++i) db_inx[i] = 0;
 
   strcpy(buffer, "000000001");
@@ -177,7 +177,7 @@ p7_seqcache_Open(char *seqfile, P7_SEQCACHE **ret_cache, char *errbuf)
     if (db_key >= (1 << (db_cnt + 1))) { printf("inx: %d db %d %s\n", inx, db_key, sq->desc); return eslEFORMAT; }
 
     cache->list[inx].name   = hdr_ptr;
-    cache->list[inx].dsq    = (ESL_DSQ *)res_ptr;
+    cache->list[inx].dsq    = res_ptr;
     cache->list[inx].n      = sq->n;
     cache->list[inx].idx    = inx;
     cache->list[inx].db_key = db_key;
