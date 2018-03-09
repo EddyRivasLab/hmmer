@@ -6,22 +6,23 @@
  */
 #include "p7_config.h"
 
-#include <inttypes.h>
+
 #include <math.h>
 #include <float.h>
+#include <inttypes.h>
 #include <syslog.h>
-#include "misc/logsum.h"
+#include <unistd.h>
+
 #ifdef HAVE_MPI
 #include <mpi.h>
 #endif
-#include "dp_vector/simdvec.h"
-#include "base/general.h"
-#include "easel.h"
 
+#include "easel.h"
 #include "esl_getopts.h"
 
-
-
+#include "dp_vector/simdvec.h"
+#include "base/general.h"
+#include "misc/logsum.h"
 
 
 /*****************************************************************
