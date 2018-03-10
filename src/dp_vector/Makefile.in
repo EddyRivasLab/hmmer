@@ -13,6 +13,7 @@ OBJS = \
 #	p7_oprofile_mpi.o \
 
 SSE_OBJS = \
+	simdvec_x86.o      \
 	ssvfilter_sse.o    \
 	vitfilter_sse.o    \
 	fwdfilter_sse.o    \
