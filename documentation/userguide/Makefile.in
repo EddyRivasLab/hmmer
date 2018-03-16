@@ -64,7 +64,7 @@ TEXFILES =\
 
 pdf:    Userguide.pdf
 
-Userguide.pdf: symlinks.stamp titlepage.tex copyright.tex manpages.tex
+Userguide.pdf: symlinks.stamp titlepage.tex copyright.tex manpages.tex ${MANPAGES} ${TEXFILES}
 	@for prog in pdflatex bibtex; do \
 	  command -v $$prog >/dev/null 2>&1 || { echo >&2 "The $$prog program is required to build the Userguide, but it's not installed. Aborting."; exit 1; } \
 	done

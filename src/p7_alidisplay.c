@@ -720,7 +720,7 @@ p7_alidisplay_Backconvert(const P7_ALIDISPLAY *ad, const ESL_ALPHABET *abc, ESL_
   P7_TRACE *tr   = NULL;	/* RETURN: faux trace                */
   int       subL = 0;		/* subsequence length in the <ad>    */
   int       a, i, k;        	/* coords for <ad>, <sq->dsq>, model */
-  char      cur_st, nxt_st;	/* state type: MDI                   */
+  char      s;   	        /* current state type: MDI           */
   int       status;
   
   /* Make a first pass over <ad> just to calculate subseq length */
@@ -739,28 +739,26 @@ p7_alidisplay_Backconvert(const P7_ALIDISPLAY *ad, const ESL_ALPHABET *abc, ESL_
   if ((status = ((ad->ppline == NULL) ? p7_trace_Append(tr, p7T_S, 0, 0) : p7_trace_AppendWithPP(tr, p7T_S, 0, 0, 0.0))) != eslOK) goto ERROR;
   if ((status = ((ad->ppline == NULL) ? p7_trace_Append(tr, p7T_N, 0, 0) : p7_trace_AppendWithPP(tr, p7T_N, 0, 0, 0.0))) != eslOK) goto ERROR;
   if ((status = ((ad->ppline == NULL) ? p7_trace_Append(tr, p7T_B, 0, 0) : p7_trace_AppendWithPP(tr, p7T_B, 0, 0, 0.0))) != eslOK) goto ERROR;
-  k = ad->hmmfrom;
-  i = 1; 
+  k = ad->hmmfrom - 1;   // -1 so the first M causes k to advance to <hmmfrom>.
+  i = 1;                 //    ... which assumes <ad> always starts with M; currently true, all alis are local alis.
   for (a = 0; a < ad->N; a++)
     {
-      if (esl_abc_CIsResidue(abc, ad->model[a]))   { cur_st = (esl_abc_CIsResidue(abc, ad->aseq[a])   ? p7T_M : p7T_D); } else cur_st = p7T_I;
-      if (esl_abc_CIsResidue(abc, ad->model[a+1])) { nxt_st = (esl_abc_CIsResidue(abc, ad->aseq[a+1]) ? p7T_M : p7T_D); } else nxt_st = p7T_I; /* ad->N pos is \0, nxt_st becomes p7T_I on last step, that's fine. */
+      /* here, anything that could appear in the original input
+       * sequence, as opposed to an alignment gap, needs to be
+       * reconstructed.  So, do not test for IsResidue(), because that
+       * will fail to reconstruct * chars. use ! IsGap() instead.
+       * [xref iss#135]
+       */
+      if   (! esl_abc_CIsGap(abc, ad->model[a])) { k++; s = (! esl_abc_CIsGap(abc, ad->aseq[a]) ? p7T_M : p7T_D); }
+      else s = p7T_I; 
 
-      if ((status = ((ad->ppline == NULL) ? p7_trace_Append(tr, cur_st, k, i) : p7_trace_AppendWithPP(tr, cur_st, k, i, p7_alidisplay_DecodePostProb(ad->ppline[a])))) != eslOK) goto ERROR;
+      if ((status = ((ad->ppline == NULL) ? p7_trace_Append(tr, s, k, i) : p7_trace_AppendWithPP(tr, s, k, i, p7_alidisplay_DecodePostProb(ad->ppline[a])))) != eslOK) goto ERROR;
 
-      switch (cur_st) {
+      switch (s) {
       case p7T_M: sq->dsq[i] = esl_abc_DigitizeSymbol(abc, ad->aseq[a]); i++; break;
       case p7T_I: sq->dsq[i] = esl_abc_DigitizeSymbol(abc, ad->aseq[a]); i++; break;
       case p7T_D:                                                             break;
       }
-
-      switch (nxt_st) {
-      case p7T_M:  k++; break;
-      case p7T_I:       break;
-      case p7T_D:  k++; break;
-      case p7T_E:       break;
-      }
-
     }
   if ((status = ((ad->ppline == NULL) ? p7_trace_Append(tr, p7T_E, 0, 0) : p7_trace_AppendWithPP(tr, p7T_E, 0, 0, 0.0))) != eslOK) goto ERROR;
   if ((status = ((ad->ppline == NULL) ? p7_trace_Append(tr, p7T_C, 0, 0) : p7_trace_AppendWithPP(tr, p7T_C, 0, 0, 0.0))) != eslOK) goto ERROR;
@@ -804,6 +802,201 @@ p7_alidisplay_Backconvert(const P7_ALIDISPLAY *ad, const ESL_ALPHABET *abc, ESL_
 /*****************************************************************
  * 3. Debugging/dev code
  *****************************************************************/
+
+
+/* Function:  p7_alidisplay_Sample()
+ * Synopsis:  Sample a random, ugly <P7_ALIDISPLAY> for test purposes
+ * Incept:    SRE, Wed Feb 28 14:22:12 2018 [Caravan Palace, Dragons]
+ *
+ * Purpose:   Sample a random, dirty <P7_ALIDISPLAY> of length <N> for 
+ *            testing purposes, using random number generator <rng>.
+ *            Return it through <ret_ad>. Caller frees.
+ *            
+ *            P7_ALIDISPLAY is assumed to be a _local_ alignment.
+ *            Must start with M, and end with M|D.
+ *            
+ * Args:      rng    - random number generator
+ *            N      - length of alignment
+ *            ret_ad - RETURN: random sampled <P7_ALIDISPLAY>
+ *
+ * Returns:   <eslOK> on success, and <ret_ad> points to the new
+ *            <P7_ALIDISPLAY>
+ *
+ * Throws:    <eslEMEM> on allocation error, and <ret_ad> is NULL.
+ */
+int
+p7_alidisplay_Sample(ESL_RANDOMNESS *rng, int N, P7_ALIDISPLAY **ret_ad)
+{
+  P7_ALIDISPLAY *ad            = NULL;
+  char          *guidestring   = NULL;	/* string [0..N-1] composed of MDI */
+  int            nM            = 0;
+  int            nD            = 0;
+  int            nI            = 0;
+  enum p7t_statetype_e last_st;
+  int            pos;
+  int            status;
+
+  ESL_ALLOC(guidestring, sizeof(char) * (N+1));
+
+  guidestring[0] = 'M'; nM++; last_st = p7T_M; /* local alignments must start with M */
+  for (pos = 1; pos < N-1; pos++)
+    {
+      switch (last_st) 
+	{
+	case p7T_M:
+	  switch (esl_rnd_Roll(rng, 3)) 
+	    {
+	    case 0: guidestring[pos] = 'M'; nM++; last_st = p7T_M; break;
+	    case 1: guidestring[pos] = 'D'; nD++; last_st = p7T_D; break;
+	    case 2: guidestring[pos] = 'I'; nI++; last_st = p7T_I; break;
+	    }
+	  break;
+
+	case p7T_I: 
+	  switch (esl_rnd_Roll(rng, 2))
+	    {
+	    case 0: guidestring[pos] = 'M'; nM++; last_st = p7T_M; break;
+	    case 1: guidestring[pos] = 'I'; nI++; last_st = p7T_I; break;
+	    }
+	  break;
+
+	case p7T_D: 
+	  switch (esl_rnd_Roll(rng, 2)) 
+	    {
+	    case 0: guidestring[pos] = 'M'; nM++; last_st = p7T_M; break;
+	    case 1: guidestring[pos] = 'D'; nD++; last_st = p7T_D; break;
+	    }
+	  break;
+	  
+	default:
+	  break;
+	}
+    }
+  /* local alignments can end on M or D. (optimal local alignments can only end on M) */
+  switch (last_st) {
+  case p7T_I:
+    guidestring[N-1] = 'M';  nM++;  break;
+  default:   
+    switch (esl_rnd_Roll(rng, 2)) {
+    case 0: guidestring[N-1] = 'M'; nM++; break;
+    case 1: guidestring[N-1] = 'D'; nD++; break;
+    }
+    break;
+  }
+  guidestring[N] = '\0';
+
+  ESL_ALLOC(ad, sizeof(P7_ALIDISPLAY));
+  ad->rfline  = ad->mmline = ad->csline = ad->model   = ad->mline  = ad->aseq = ad->ntseq = ad->ppline = NULL;
+  ad->hmmname = ad->hmmacc = ad->hmmdesc = NULL;
+  ad->sqname  = ad->sqacc  = ad->sqdesc  = NULL;
+  ad->mem     = NULL;
+  ad->memsize = 0;
+
+  /* Optional lines are added w/ 50% chance */
+  if (esl_rnd_Roll(rng, 2) == 0)  ESL_ALLOC(ad->rfline, sizeof(char) * (N+1));
+  if (esl_rnd_Roll(rng, 2) == 0)  ESL_ALLOC(ad->mmline, sizeof(char) * (N+1));
+  if (esl_rnd_Roll(rng, 2) == 0)  ESL_ALLOC(ad->csline, sizeof(char) * (N+1));
+  if (esl_rnd_Roll(rng, 2) == 0)  ESL_ALLOC(ad->ppline, sizeof(char) * (N+1));
+  ESL_ALLOC(ad->model, sizeof(char) * (N+1));
+  ESL_ALLOC(ad->mline, sizeof(char) * (N+1));
+  ESL_ALLOC(ad->aseq,  sizeof(char) * (N+1));
+  ad->N = N;
+
+  esl_strdup("my_hmm", -1, &(ad->hmmname));
+  if (esl_rnd_Roll(rng, 2) == 0) esl_strdup("PF000007",          -1, &(ad->hmmacc));  else esl_strdup("", -1, &(ad->hmmacc));
+  if (esl_rnd_Roll(rng, 2) == 0) esl_strdup("(hmm description)", -1, &(ad->hmmdesc)); else esl_strdup("", -1, &(ad->hmmdesc));
+
+  esl_strdup("my_seq", -1, &(ad->sqname));
+  if (esl_rnd_Roll(rng, 2) == 0) esl_strdup("ABC000001.42",           -1, &(ad->sqacc));  else esl_strdup("", -1, &(ad->sqacc));
+  if (esl_rnd_Roll(rng, 2) == 0) esl_strdup("(sequence description)", -1, &(ad->sqdesc)); else esl_strdup("", -1, &(ad->sqdesc));
+
+  /* model, seq coords must look valid. */
+  ad->hmmfrom = 100;
+  ad->hmmto   = ad->hmmfrom + nM + nD - 1;
+  ad->M       = ad->hmmto + esl_rnd_Roll(rng, 2);
+
+  ad->sqfrom  = 1000;
+  ad->sqto    = ad->sqfrom + nM + nI - 1;
+  ad->L       = ad->sqto + esl_rnd_Roll(rng, 2);
+
+  /* rfline is free-char "reference annotation" on consensus; H3 puts '.' for inserts. */
+  if (ad->rfline) {
+    for (pos = 0; pos < N; pos++)
+      ad->rfline[pos] = (guidestring[pos] == 'I' ? '.' : 'x');
+    ad->rfline[pos] = '\0';
+  }
+
+  /* mmline indicates which columns should be masked (assigned background distribution), '.' indicates no mask; H3 puts '.' for inserts. */
+  if (ad->mmline) {
+    for (pos = 0; pos < N; pos++)
+      ad->mmline[pos] = (guidestring[pos] == 'I' ? '.' : '.');
+    ad->mmline[pos] = '\0';
+  }
+
+  /* csline is optional. It has free-char "consensus structure annotation" on consensus positions. H3 puts '.' on inserts. */
+  if (ad->csline) {
+    for (pos = 0; pos < N; pos++)
+      ad->csline[pos] = (guidestring[pos] == 'I' ? '.' : 'X');
+    ad->csline[pos] = '\0';
+  }
+  
+  /* the mandatory three-line alignment display:
+   *
+   *   guidestring:    MMMDI
+   *   model:          XXXX.
+   *   mline:          A+   
+   *   aseq:           AAA-a
+   */
+  for (pos = 0; pos < N; pos++)
+    {
+      switch (guidestring[pos]) {
+      case 'M':
+	ad->model[pos] = 'X';
+	switch (esl_rnd_Roll(rng, 3)) {
+	case 0: ad->mline[pos] = 'A';    
+	case 1: ad->mline[pos] = '+';
+	case 2: ad->mline[pos] = ' ';
+	}
+	if (ad->mline[pos] == ' ' && esl_rnd_Roll(rng, 50) == 0) ad->aseq[pos] = '*';  // dirty aligned sequence up with nasty * stop codons, about 1/(3*50) of the time.
+	else                                                     ad->aseq[pos] = 'A';  // ... they would only be aligned to ' ' on an mline.
+	break;                                                                         // ... they might appear aligned to a match or insert state (see iss#135)
+
+      case 'D':
+	ad->model[pos] = 'X';
+	ad->mline[pos] = ' ';
+	ad->aseq[pos]  = '-';
+	break;
+
+      case 'I':
+	ad->model[pos] = '.';
+	ad->mline[pos] = ' ';
+	ad->aseq[pos]  = 'a';
+	break;
+      }
+    }
+  ad->model[pos] = '\0';
+  ad->mline[pos] = '\0';
+  ad->aseq[pos]  = '\0';
+
+  /* ppline is optional */
+  if (ad->ppline) {
+    for (pos = 0; pos < N; pos++)
+      ad->ppline[pos] = (guidestring[pos] == 'D' ? '.' : p7_alidisplay_EncodePostProb(esl_random(rng)));
+    ad->ppline[pos] = '\0';
+  }
+
+  free(guidestring);
+  *ret_ad = ad; 
+  return eslOK;
+
+ ERROR:
+  if (guidestring) free(guidestring);
+  if (ad)          p7_alidisplay_Destroy(ad);
+  *ret_ad = NULL;
+  return status;
+}
+
+
 
 /* Function:  p7_alidisplay_Dump()
  * Synopsis:  Print contents of P7_ALIDISPLAY for inspection.
@@ -1013,184 +1206,6 @@ main(int argc, char **argv)
  * 5. Unit tests.
  ****************************************************************/
 #ifdef p7ALIDISPLAY_TESTDRIVE
-
-/* create_faux_alidisplay()
- * 
- * Create a fake P7_ALIDISPLAY of length <N> for testing purposes,
- * randomizing it to try to exercise many possible combos of
- * optional annotation, etc. Return it in <ret_ad>; caller frees.
- */
-static int
-create_faux_alidisplay(ESL_RANDOMNESS *rng, int N, P7_ALIDISPLAY **ret_ad)
-{
-  P7_ALIDISPLAY *ad            = NULL;
-  char          *guidestring   = NULL;	/* string [0..N-1] composed of MDI */
-  int            nM            = 0;
-  int            nD            = 0;
-  int            nI            = 0;
-  enum p7t_statetype_e last_st;
-  int            pos;
-  int            status;
-
-  ESL_ALLOC(guidestring, sizeof(char) * (N+1));
-
-  guidestring[0] = 'M'; nM++; last_st = p7T_M; /* local alignments must start with M */
-  for (pos = 1; pos < N-1; pos++)
-    {
-      switch (last_st) 
-	{
-	case p7T_M:
-	  switch (esl_rnd_Roll(rng, 3)) 
-	    {
-	    case 0: guidestring[pos] = 'M'; nM++; last_st = p7T_M; break;
-	    case 1: guidestring[pos] = 'D'; nD++; last_st = p7T_D; break;
-	    case 2: guidestring[pos] = 'I'; nI++; last_st = p7T_I; break;
-	    }
-	  break;
-
-	case p7T_I: 
-	  switch (esl_rnd_Roll(rng, 2))
-	    {
-	    case 0: guidestring[pos] = 'M'; nM++; last_st = p7T_M; break;
-	    case 1: guidestring[pos] = 'I'; nI++; last_st = p7T_I; break;
-	    }
-	  break;
-
-	case p7T_D: 
-	  switch (esl_rnd_Roll(rng, 2)) 
-	    {
-	    case 0: guidestring[pos] = 'M'; nM++; last_st = p7T_M; break;
-	    case 1: guidestring[pos] = 'D'; nD++; last_st = p7T_D; break;
-	    }
-	  break;
-	  
-	default:
-	  break;
-	}
-    }
-  /* local alignments can end on M or D. (optimal local alignments can only end on M) */
-  switch (last_st) {
-  case p7T_I:
-    guidestring[N-1] = 'M';  nM++;  break;
-  default:   
-    switch (esl_rnd_Roll(rng, 2)) {
-    case 0: guidestring[N-1] = 'M'; nM++; break;
-    case 1: guidestring[N-1] = 'D'; nD++; break;
-    }
-    break;
-  }
-  guidestring[N] = '\0';
-
-  ESL_ALLOC(ad, sizeof(P7_ALIDISPLAY));
-  ad->rfline  = ad->mmline = ad->csline = ad->model   = ad->mline  = ad->aseq = ad->ntseq = ad->ppline = NULL;
-  ad->hmmname = ad->hmmacc = ad->hmmdesc = NULL;
-  ad->sqname  = ad->sqacc  = ad->sqdesc  = NULL;
-  ad->mem     = NULL;
-  ad->memsize = 0;
-
-  /* Optional lines are added w/ 50% chance */
-  if (esl_rnd_Roll(rng, 2) == 0)  ESL_ALLOC(ad->rfline, sizeof(char) * (N+1));
-  if (esl_rnd_Roll(rng, 2) == 0)  ESL_ALLOC(ad->mmline, sizeof(char) * (N+1));
-  if (esl_rnd_Roll(rng, 2) == 0)  ESL_ALLOC(ad->csline, sizeof(char) * (N+1));
-  if (esl_rnd_Roll(rng, 2) == 0)  ESL_ALLOC(ad->ppline, sizeof(char) * (N+1));
-  ESL_ALLOC(ad->model, sizeof(char) * (N+1));
-  ESL_ALLOC(ad->mline, sizeof(char) * (N+1));
-  ESL_ALLOC(ad->aseq,  sizeof(char) * (N+1));
-  ad->N = N;
-
-  esl_strdup("my_hmm", -1, &(ad->hmmname));
-  if (esl_rnd_Roll(rng, 2) == 0) esl_strdup("PF000007",          -1, &(ad->hmmacc));  else esl_strdup("", -1, &(ad->hmmacc));
-  if (esl_rnd_Roll(rng, 2) == 0) esl_strdup("(hmm description)", -1, &(ad->hmmdesc)); else esl_strdup("", -1, &(ad->hmmdesc));
-
-  esl_strdup("my_seq", -1, &(ad->sqname));
-  if (esl_rnd_Roll(rng, 2) == 0) esl_strdup("ABC000001.42",           -1, &(ad->sqacc));  else esl_strdup("", -1, &(ad->sqacc));
-  if (esl_rnd_Roll(rng, 2) == 0) esl_strdup("(sequence description)", -1, &(ad->sqdesc)); else esl_strdup("", -1, &(ad->sqdesc));
-
-  /* model, seq coords must look valid. */
-  ad->hmmfrom = 100;
-  ad->hmmto   = ad->hmmfrom + nM + nD - 1;
-  ad->M       = ad->hmmto + esl_rnd_Roll(rng, 2);
-
-  ad->sqfrom  = 1000;
-  ad->sqto    = ad->sqfrom + nM + nI - 1;
-  ad->L       = ad->sqto + esl_rnd_Roll(rng, 2);
-
-  /* rfline is free-char "reference annotation" on consensus; H3 puts '.' for inserts. */
-  if (ad->rfline) {
-    for (pos = 0; pos < N; pos++)
-      ad->rfline[pos] = (guidestring[pos] == 'I' ? '.' : 'x');
-    ad->rfline[pos] = '\0';
-  }
-
-  /* mmline indicates which columns should be masked (assigned background distribution), '.' indicates no mask; H3 puts '.' for inserts. */
-  if (ad->mmline) {
-    for (pos = 0; pos < N; pos++)
-      ad->mmline[pos] = (guidestring[pos] == 'I' ? '.' : '.');
-    ad->mmline[pos] = '\0';
-  }
-
-  /* csline is optional. It has free-char "consensus structure annotation" on consensus positions. H3 puts '.' on inserts. */
-  if (ad->csline) {
-    for (pos = 0; pos < N; pos++)
-      ad->csline[pos] = (guidestring[pos] == 'I' ? '.' : 'X');
-    ad->csline[pos] = '\0';
-  }
-  
-  /* the mandatory three-line alignment display:
-   *
-   *   guidestring:    MMMDI
-   *   model:          XXXX.
-   *   mline:          A+   
-   *   aseq:           AAA-a
-   */
-  for (pos = 0; pos < N; pos++)
-    {
-      switch (guidestring[pos]) {
-      case 'M':
-	ad->model[pos] = 'X';
-	switch (esl_rnd_Roll(rng, 3)) {
-	case 0: ad->mline[pos] = 'A';
-	case 1: ad->mline[pos] = '+';
-	case 2: ad->mline[pos] = ' ';
-	}
-	ad->aseq[pos]  = 'A';
-	break;
-
-      case 'D':
-	ad->model[pos] = 'X';
-	ad->mline[pos] = ' ';
-	ad->aseq[pos]  = '-';
-	break;
-
-      case 'I':
-	ad->model[pos] = '.';
-	ad->mline[pos] = ' ';
-	ad->aseq[pos]  = 'a';
-	break;
-      }
-    }
-  ad->model[pos] = '\0';
-  ad->mline[pos] = '\0';
-  ad->aseq[pos]  = '\0';
-
-  /* ppline is optional */
-  if (ad->ppline) {
-    for (pos = 0; pos < N; pos++)
-      ad->ppline[pos] = (guidestring[pos] == 'D' ? '.' : p7_alidisplay_EncodePostProb(esl_random(rng)));
-    ad->ppline[pos] = '\0';
-  }
-
-  free(guidestring);
-  *ret_ad = ad; 
-  return eslOK;
-
- ERROR:
-  if (guidestring) free(guidestring);
-  if (ad)          p7_alidisplay_Destroy(ad);
-  *ret_ad = NULL;
-  return status;
-}
-
 static void
 utest_Serialize(ESL_RANDOMNESS *rng, int ntrials, int N)
 {
@@ -1201,15 +1216,15 @@ utest_Serialize(ESL_RANDOMNESS *rng, int ntrials, int N)
 
   for (trial = 0; trial < ntrials; trial++)
     {
-      if ( create_faux_alidisplay(rng, N, &ad)   != eslOK) esl_fatal(msg);
-      if ( (ad2 = p7_alidisplay_Clone(ad))       == NULL)  esl_fatal(msg);
-      if ( p7_alidisplay_Compare(ad, ad2)        != eslOK) esl_fatal(msg);
+      if ( p7_alidisplay_Sample(rng, N, &ad) != eslOK) esl_fatal(msg);
+      if ( (ad2 = p7_alidisplay_Clone(ad))   == NULL)  esl_fatal(msg);
+      if ( p7_alidisplay_Compare(ad, ad2)    != eslOK) esl_fatal(msg);
 
-      if ( p7_alidisplay_Serialize(ad)           != eslOK) esl_fatal(msg);
-      if ( p7_alidisplay_Compare(ad, ad2)        != eslOK) esl_fatal(msg);
+      if ( p7_alidisplay_Serialize(ad)       != eslOK) esl_fatal(msg);
+      if ( p7_alidisplay_Compare(ad, ad2)    != eslOK) esl_fatal(msg);
 
-      if ( p7_alidisplay_Deserialize(ad)         != eslOK) esl_fatal(msg);
-      if ( p7_alidisplay_Compare(ad, ad2)        != eslOK) esl_fatal(msg);
+      if ( p7_alidisplay_Deserialize(ad)     != eslOK) esl_fatal(msg);
+      if ( p7_alidisplay_Compare(ad, ad2)    != eslOK) esl_fatal(msg);
 
       p7_alidisplay_Destroy(ad);
       p7_alidisplay_Destroy(ad2);
@@ -1228,7 +1243,7 @@ utest_Backconvert(int be_verbose, ESL_RANDOMNESS *rng, ESL_ALPHABET *abc, int nt
 
   for (trial = 0; trial < ntrials; trial++)
     {
-      if ( create_faux_alidisplay(rng, N, &ad)                   != eslOK) esl_fatal(msg);
+      if ( p7_alidisplay_Sample(rng, N, &ad)                     != eslOK) esl_fatal(msg);
       if ( p7_alidisplay_Serialize(ad)                           != eslOK) esl_fatal(msg);
       if (be_verbose && p7_alidisplay_Dump(stdout, ad)           != eslOK) esl_fatal(msg);
       if ( p7_alidisplay_Backconvert(ad, abc, &sq, &tr)          != eslOK) esl_fatal(msg);

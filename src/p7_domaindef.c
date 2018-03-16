@@ -384,8 +384,7 @@ int
 p7_domaindef_ByPosteriorHeuristics(const ESL_SQ *sq, const ESL_SQ *ntsq, P7_OPROFILE *om,
 				   P7_OMX *oxf, P7_OMX *oxb, P7_OMX *fwd, P7_OMX *bck, 
 				   P7_DOMAINDEF *ddef, P7_BG *bg, int long_target,
-				   P7_BG *bg_tmp, float *scores_arr, float *fwd_emissions_arr
-)
+				   P7_BG *bg_tmp, float *scores_arr, float *fwd_emissions_arr)
 {
   int i, j;
   int triggered;
@@ -793,7 +792,6 @@ reparameterize_model (P7_BG *bg, P7_OPROFILE *om, const ESL_SQ *sq, int start, i
  * <ddef>: <ddef->tr> has been used, and possibly reallocated, for
  *         the OA trace of the domain. Before exit, we called
  *         <Reuse()> on it.
- *
  * 
  * <ox1> : happens to be holding OA score matrix for the domain
  *         upon return, but that's not part of the spec; officially
@@ -803,6 +801,14 @@ reparameterize_model (P7_BG *bg, P7_OPROFILE *om, const ESL_SQ *sq, int start, i
  *         for the domain upon return, but we're not making that
  *         part of the spec, so caller shouldn't rely on this;
  *         spec just makes its contents "undefined".
+ *         
+ * 
+ * Returns <eslFAIL> if domain is not successfully identified.  This
+ * is rare; one way it can happen is if posterior decoding calculation
+ * overflows, which can occur on highly repetitive sequence
+ * {J3/119-121}. Beware: as a result, it is possible to have
+ * <ddef->ndom = 0>, for nonzero region(s)/envelope(s). See {iss131}.
+ * 
  */
 static int
 rescore_isolated_domain(P7_DOMAINDEF *ddef, P7_OPROFILE *om, const ESL_SQ *sq, const ESL_SQ *ntsq,
@@ -838,7 +844,7 @@ rescore_isolated_domain(P7_DOMAINDEF *ddef, P7_OPROFILE *om, const ESL_SQ *sq, c
   p7_Backward(sq->dsq + i-1, Ld, om, ox1, ox2, NULL);
 
   status = p7_Decoding(om, ox1, ox2, ox2);      /* <ox2> is now overwritten with post probabilities     */
-  if (status == eslERANGE) return eslFAIL;      /* rare: numeric overflow; domain is assumed to be repetitive garbage [J3/119-212] */
+  if (status == eslERANGE) return eslFAIL;      /* rare: numeric overflow; domain is assumed to be repetitive garbage [J3/119-121] */
 
   /* Find an optimal accuracy alignment */
   p7_OptimalAccuracy(om, ox2, ox1, &oasc);      /* <ox1> is now overwritten with OA scores              */

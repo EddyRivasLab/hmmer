@@ -72,7 +72,7 @@
  *
  */
 int
-hmmpgmd2msa(void *data, P7_HMM *hmm, ESL_SQ *qsq, int *incl, int incl_size, int *excl, int excl_size, ESL_MSA **ret_msa) {
+hmmpgmd2msa(void *data, P7_HMM *hmm, ESL_SQ *qsq, int *incl, int incl_size, int *excl, int excl_size, int excl_all, ESL_MSA **ret_msa) {
   int i, j;
   int c;
   int status;
@@ -153,6 +153,18 @@ hmmpgmd2msa(void *data, P7_HMM *hmm, ESL_SQ *qsq, int *incl, int incl_size, int 
   th.nincluded = 0;
   th.is_sorted_by_sortkey = 0;
   th.is_sorted_by_seqidx  = 0;
+
+  /* jackhmmer (hmmer web) - allow all hits to be unchecked */
+  if(excl_all){
+    for (i = 0; i < th.N; i++) {
+      ESL_ALLOC( th.hit[i]->dcl, sizeof(P7_DOMAIN) *  th.hit[i]->ndom);
+      /* Go through the hits and set all to be excluded */
+      if(th.hit[i]->flags & p7_IS_INCLUDED){
+        th.hit[i]->flags = p7_IS_DROPPED;
+        th.hit[i]->nincluded = 0;
+      }
+    }
+  }
 
   for (i = 0; i < th.N; i++) {
     ESL_ALLOC( th.hit[i]->dcl, sizeof(P7_DOMAIN) *  th.hit[i]->ndom);

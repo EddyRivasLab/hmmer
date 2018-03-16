@@ -153,8 +153,7 @@ worker_process(ESL_GETOPTS *go)
   impl_Init();
   p7_FLogsumInit();      /* we're going to use table-driven Logsum() approximations at times */
 
-  if (esl_opt_IsOn(go, "--cpu")) env.ncpus = esl_opt_GetInteger(go, "--cpu");
-  else esl_threads_CPUCount(&env.ncpus);
+  env.ncpus = ESL_MIN(esl_opt_GetInteger(go, "--cpu"),  esl_threads_GetCPUCount());
 
   env.hmm_db = NULL;
   env.seq_db = NULL;
