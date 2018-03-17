@@ -116,7 +116,7 @@ static ESL_OPTIONS options[] = {
   { "--daemon",     eslARG_NONE,        NULL, NULL, NULL,      NULL,  NULL,  DAEMONOPTS,        "run program as a daemon",                                     12 },
 
 #ifdef HMMER_THREADS
-  { "--cpu",        eslARG_INT,  NULL,"HMMER_NCPU", "n>=0",NULL,  NULL,  CPUOPTS,           "number of parallel CPU workers to use for multithreads",      12 },
+  { "--cpu",        eslARG_INT,  p7_NCPU,"HMMER_NCPU", "n>=0",NULL,  NULL,  CPUOPTS,            "number of parallel CPU workers to use for multithreads",      12 },
 #endif
 #ifdef HMMER_MPI
   { "--stall",      eslARG_NONE,   FALSE, NULL, NULL,      NULL,"--mpi", NULL,              "arrest after start: for debugging MPI under gdb",             12 },  
@@ -503,9 +503,7 @@ serial_master(ESL_GETOPTS *go, struct cfg_s *cfg)
 
 #ifdef HMMER_THREADS
   /* initialize thread data */
-  if (esl_opt_IsOn(go, "--cpu")) ncpus = esl_opt_GetInteger(go, "--cpu");
-  else                           esl_threads_CPUCount(&ncpus);
-
+  ncpus = ESL_MIN( esl_opt_GetInteger(go, "--cpu"), esl_threads_GetCPUCount());
   if (ncpus > 0)
     {
       threadObj = esl_threads_Create(&pipeline_thread);

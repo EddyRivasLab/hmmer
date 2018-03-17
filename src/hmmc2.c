@@ -181,7 +181,7 @@ usage(char *pgm)
 int main(int argc, char *argv[])
 {
   int              i, j;
-  uint64_t              n;
+  uint64_t         n;
   int              eod;
   int              eof;
   int              size;
@@ -330,9 +330,9 @@ int main(int argc, char *argv[])
 
       /* Send the string to the server */ 
       n = strlen(seq);
-      printf ("Sending data %d:\n", n);
+      printf ("Sending data %" PRIu64 ":\n", n);
       if (writen(sock, seq, n) != n) {
-        fprintf(stderr, "[%s:%d] write (size %d) error %d - %s\n", __FILE__, __LINE__, n, errno, strerror(errno));
+        fprintf(stderr, "[%s:%d] write (size %" PRIu64 ") error %d - %s\n", __FILE__, __LINE__, n, errno, strerror(errno));
         exit(1);
       }
 
@@ -440,9 +440,9 @@ int main(int argc, char *argv[])
 #endif
         /* Send the string to the server */ 
         n = strlen(seq);
-        printf ("Sending data %d:\n", n);
+        printf ("Sending data %" PRIu64 ":\n", n);
         if (writen(sock, seq, n) != n) {
-          fprintf(stderr, "[%s:%d] write (size %d) error %d - %s\n", __FILE__, __LINE__, n, errno, strerror(errno));
+          fprintf(stderr, "[%s:%d] write (size %" PRIu64 ") error %d - %s\n", __FILE__, __LINE__, n, errno, strerror(errno));
           exit(1);
         }
 

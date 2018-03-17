@@ -601,7 +601,7 @@ The most official documentation for A2M format appears to be at
 \url{http://compbio.soe.ucsc.edu/a2m-desc.html}. You may refer to that
 document if anything in the brief description below is unclear.
 
-\subsection{An example A2M file}
+\subsubsection{An example A2M file}
 
 This alignment:
 
@@ -688,7 +688,7 @@ column.
 
 
 
-
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 \subsection{hmmpgmd sequence database format}
 
 The hmmpgmd sequence database format closely resembles the 
@@ -786,3 +786,98 @@ back to \prog{hmmpgmd} query hits.
 
 
 
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+
+\subsection{Score matrix files}
+
+Profile HMMs can be built from single sequences, not just from
+multiple sequence alignments. For example, the \prog{phmmer} and
+\prog{jackhmmer} search programs take a single sequence query as an
+input, and \prog{nhmmer} can as well. For single sequence queries, the
+probability parameters for residue alignments are derived from a
+substitution score matrix, such as BLOSUM62. Scores are converted to
+probabilities as described by \citet{Altschul91}. The scores can be
+arbitrary, but they must satisfy a couple of conditions so they 
+can be interpreted as implicit log-odds probabilities: there must be
+at least one positive score, and the expected score (on nonhomologous
+alignments) must be negative.
+
+The default score matrix for protein alignments is BLOSUM62; for DNA,
+a matrix we call DNA1. Using the \prog{--mx} option (for programs that
+can use score matrices), you can choose instead one of several
+alternative protein score matrices: PAM30, PAM70, PAM120, PAM240,
+BLOSUM45, BLOSUM50, BLOSUM80, and BLOSUM90. For example, you could use
+\prog{--mx BLOSUM50}.
+
+The \prog{--mxfile} option allows you to provide a score matrix as a
+file. You can download many standard score matrice files from NCBI at
+\url{ftp://ftp.ncbi.nlm.nih.gov/blast/matrices/}. HMMER can read
+\emph{almost} any of these files, with one exception: because it
+requires the score matrix to be symmetrical (same number of residues
+in rows and columns), the NCBI \prog{NUC.4.4} matrix for DNA works,
+but the alternative short-form format \prog{NUC.4.2} does not
+work. The scores in these two files are identical, so just use
+\prog{NUC.4.4}, and files like it.
+
+Here's a simple example file:
+
+\begin{cchunk}
+# My score matrix
+#
+   A  T  G  C
+A  1 -3 -3 -3
+T -3  1 -3 -3
+G -3 -3  1 -3
+C -3 -3 -3  1
+\end{cchunk}
+
+In more detail, the rules for the format are:
+
+\begin{itemize}
+
+\item Blank lines are ignored.
+
+\item A \prog{\#} indicates a comment. Anything after it is
+  ignored. Lines that start with \prog{\#} are ignored like blank
+  lines.
+
+\item The first data line is a header line, labeling each column with
+  $n$ single residue characters (case-insensitive). A nucleic matrix
+  has $4 \leq n \leq 16$: at least the four canonical residues
+  \prog{ACGT} (or \prog{U}, for you RNA zealots), and it may also
+  contain any or all ambiguity codes \prog{RYMKSWHBVDN*}. A protein
+  matrix has $20 \leq n 27$; it must contain at least the 20 canonical
+  residues \prog{ACDEFGHIKLMNPQRSTVWY}, and may contain any or all
+  ambiguity codes \prog{BJZOU}. These residues can be in any order,
+  but the rows must be in the same order as the columns.
+
+\item The next $n$ data lines are the rows of a square $n \times n$
+  score matrix:
+
+\begin{itemize}
+\item  Fields in the row are whitespace-delimited (tabs or
+       spaces).
+
+\item Optionally, each row can start with its single residue label.
+  Therefore each row has either $n+1$ fields if there is a leading
+  label, or $n$ fields if not. Rows and columns are in the same order.
+
+\item  Each score is an integer. Plus signs are optional. 
+\end{itemize}
+
+\item The file may not contain any additional lines (other than
+  comments or blank lines).
+\end{itemize}
+
+HMMER only uses the scores for canonical residues, and uses them to
+calculate probabilities. If scores for ambiguous residue codes are
+provided, HMMER ignores them; it has its own logic for dealing with
+the probability of ambiguous residues, given the probability of
+canonical residues.
+
+
+
+
+
+
+  

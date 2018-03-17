@@ -129,10 +129,10 @@ static ESL_OPTIONS options[] = {
 
 /* Other options */
 #ifdef HMMER_THREADS 
-  { "--cpu",     eslARG_INT,    NULL,"HMMER_NCPU","n>=0",NULL,     NULL,  NULL,  "number of parallel CPU workers for multithreads",       8 },
+  { "--cpu",     eslARG_INT,    p7_NCPU,"HMMER_NCPU","n>=0",NULL,   NULL,    NULL, "number of parallel CPU workers for multithreads",       8 },
 #endif
 #ifdef HMMER_MPI
-  { "--mpi",     eslARG_NONE,   FALSE, NULL, NULL,      NULL,      NULL,  NULL,  "run as an MPI parallel program",                        8 },
+  { "--mpi",     eslARG_NONE,   FALSE, NULL, NULL,       NULL,    NULL,      NULL, "run as an MPI parallel program",                        8 },
 #endif
   { "--stall",   eslARG_NONE,       FALSE, NULL, NULL,    NULL,     NULL,    NULL, "arrest after start: for attaching debugger to process", 8 },
   { "--informat", eslARG_STRING,     NULL, NULL, NULL,    NULL,     NULL,    NULL, "assert input alifile is in format <s> (no autodetect)", 8 },
@@ -557,9 +557,7 @@ usual_master(const ESL_GETOPTS *go, struct cfg_s *cfg)
 
 #ifdef HMMER_THREADS
   /* initialize thread data */
-  if (esl_opt_IsOn(go, "--cpu")) ncpus = esl_opt_GetInteger(go, "--cpu");
-  else                                   esl_threads_CPUCount(&ncpus);
-
+  ncpus = ESL_MIN(esl_opt_GetInteger(go, "--cpu"), esl_threads_GetCPUCount());
   if (ncpus > 0)
     {
       threadObj = esl_threads_Create(&pipeline_thread);

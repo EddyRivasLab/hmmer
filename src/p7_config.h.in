@@ -24,10 +24,19 @@
  *****************************************************************/
 
 /* p7_RAMLIMIT controls the switch from fast full DP to slow
- * linear-memory divide and conquer. Default devotes 32 MB/thread.
+ *             linear-memory divide and conquer. Default devotes 32
+ *             MB/thread.
  */
 #ifndef p7_RAMLIMIT
 #define p7_RAMLIMIT   32
+#endif
+
+/* p7_NCPU sets the default number of CPU cores (worker threads)
+ *         used by multithreaded programs. Must be quoted, because
+ *         it's used to set default options.
+ */
+#ifndef p7_NCPU
+#define p7_NCPU  "2"
 #endif
 
 /* p7_ALILENGTH controls length of displayed alignment lines.

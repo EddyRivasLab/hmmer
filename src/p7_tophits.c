@@ -1562,10 +1562,10 @@ p7_tophits_Domains(FILE *ofp, P7_TOPHITS *th, P7_PIPELINE *pli, int textw)
 
 
 /* Function:  p7_tophits_Alignment()
- * Synopsis:  Create a multiple alignment of all the included domains.
+ * Synopsis:  Create multiple alignment of all included domains.
  *
  * Purpose:   Create a multiple alignment of all domains marked
- *            "includable" in the top hits list <th>, and return it in
+ *            "includable" in the top hits list <th>. Return it in
  *            <*ret_msa>.
  *            
  *            Use of <optflags> is identical to <optflags> in <p7_tracealign_Seqs()>.
@@ -1580,44 +1580,47 @@ p7_tophits_Domains(FILE *ofp, P7_TOPHITS *th, P7_PIPELINE *pli, int textw)
  * Returns:   <eslOK> on success, and <*ret_msa> points to a new MSA that
  *            the caller is responsible for freeing.
  *
- *            Returns <eslFAIL> if there are no reported domains that
- *            satisfy reporting thresholds, in which case <*ret_msa>
- *            is <NULL>.
+ *            Returns <eslFAIL> if there are no included domains,
+ *            in which case <*ret_msa> is <NULL>.
  *
- * Throws:    <eslEMEM> on allocation failure; <eslECORRUPT> on 
- *            unexpected internal data corruption.
+ * Throws:    <eslEMEM> on allocation failure; 
+ *            <eslECORRUPT> on unexpected internal data corruption.
  *
  * Xref:      J4/29: incept.
  *            J4/76: added inc_sqarr, inc_trarr, inc_n, optflags 
+ *            H4/72: iss131, segfault if top seq has no reported domains
  */
 int
 p7_tophits_Alignment(const P7_TOPHITS *th, const ESL_ALPHABET *abc, 
-         ESL_SQ **inc_sqarr, P7_TRACE **inc_trarr, int inc_n,
-         int optflags, ESL_MSA **ret_msa)
+                     ESL_SQ **inc_sqarr, P7_TRACE **inc_trarr, int inc_n,
+                     int optflags, ESL_MSA **ret_msa)
 {
   ESL_SQ   **sqarr = NULL;
   P7_TRACE **trarr = NULL;
   ESL_MSA   *msa   = NULL;
   int        ndom  = 0;
+  int        M     = 0;
   int        h, d, y;
-  int        M;
   int        status;
 
-  /* How many domains will be included in the new alignment? 
-   * We also set model size M here; every alignment has a copy.
+  /* How many domains will be included in the new alignment?  We also
+   * set M here; we don't have hmm, but every ali has a copy.
+   *
+   * Beware: although p7_Pipeline() must not register hits that have
+   * no domains, it did happen {iss131}. So we're careful (here, at
+   * least) about testing ndom before reaching into dcl[] to get M.
    */
   for (h = 0; h < th->N; h++)
     if (th->hit[h]->flags & p7_IS_INCLUDED)
     {
         for (d = 0; d < th->hit[h]->ndom; d++)
           if (th->hit[h]->dcl[d].is_included)
+            if (M == 0) M = th->hit[h]->dcl[d].ad->M;
             ndom++;
     }
-
+  if (inc_n && M == 0)  M = inc_trarr[0]->M;          
+  
   if (inc_n+ndom == 0) { status = eslFAIL; goto ERROR; }
-
-  if (inc_n)     M = inc_trarr[0]->M;          
-  else           M = th->hit[0]->dcl[0].ad->M;
   
   /* Allocation */
   ESL_ALLOC(sqarr, sizeof(ESL_SQ *)   * (ndom + inc_n));
