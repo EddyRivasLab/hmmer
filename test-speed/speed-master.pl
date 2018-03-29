@@ -24,18 +24,17 @@
 #      <nthread>: how many threads to run in each timed process.
 #                 This is passed on to the <script> verbatim.
 #
-#      <joblist>: A list of job names, one word per line.  This will
-#                 simply be passed on to the <script>, which uses it
-#                 to pull appropriate test queries out of
-#                 <querydb>. Thus it will usually be a list of query
-#                 names.
+#      <joblist>: Name of a file containing a list of job names, one word per
+#                 line.  This filename will simply be passed on to the
+#                 <script>, which then uses it to pull appropriate test
+#                 queries out of <querydb>. Thus it will usually be a
+#                 list of query names.
 #
 #      <querydb>: File to fetch queries listed in <joblist> from.
 #                 Passed to <script> without modification.
 #
 #     <targetdb>: File to search and time the search. 
 #                 Passed to <script> without modification.
-#
 #
 #       <script>: This script is executed on each of <nproc>
 #                 processes, on an appropriately constructed subset of the 
@@ -82,10 +81,27 @@ for ($i = 0; $i < $nproc; $i++)
     close SUBTBL;
 }
 
-# Call the drivers.
+# Ask slurm for 4G RAM per thread.
+$memrequest = 4000 * $nthread;
+
+# Write a slurm array script
+# I'd love to make these jobs exclusive, since we're speed benchmarking,
+# but we only have 16 nodes (each with 36 cores).
 #
-for ($i = 0; $i < $nproc; $i++)
-{
-   system("qsub -l excl=true -V -cwd -b y -N $resultdir.$i -j y -o $resultdir/tbl$i.sge '$driver $top_builddir $top_srcdir $resultdir $resultdir/tbl.$i $nthread $querydb $targetdb $resultdir/tbl$i.out'");
-}
+open(SLURMSCRIPT, ">$resultdir.sh") || die("failed to create slurm script");
+print SLURMSCRIPT <<EOF;
+#! /bin/bash
+#SBATCH -t 6-00:00
+#SBATCH --mem $memrequest
+#SBATCH -p eddy
+#SBATCH -n $nthread
+#SBATCH -N 1
+#SBATCH -o $resultdir/tbl.%a.slurm
+$driver $top_builddir $top_srcdir $resultdir $resultdir/tbl.\${SLURM_ARRAY_TASK_ID} $nthread $querydb $targetdb $resultdir/tbl.\${SLURM_ARRAY_TASK_ID}.out
+EOF
+
+# Submit the job array.
+#
+$maxidx = $nproc-1;
+system("sbatch --array=0-$maxidx $resultdir.sh");
 

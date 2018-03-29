@@ -91,9 +91,23 @@ for ($i = 0; $i < $ncpu; $i++)
     close SUBTBL;
 }
 
-# Submit all the individual profmark jobs
-for ($i = 0; $i < $ncpu; $i++)
-{
-   system("qsub -V -cwd -b y -N $resultdir.$i -j y -o $resultdir/tbl$i.sge '$pmark_script $top_builddir $top_srcdir $resultdir $resultdir/tbl.$i $msafile $fafile $resultdir/tbl$i.out'");
-}
+# Write a slurm array script
+#
+open(SLURMSCRIPT, ">$resultdir.sh") || die("failed to create slurm script");
+print SLURMSCRIPT <<EOF;
+#!/bin/bash
+#SBATCH -t 6-00:00
+#SBATCH --mem 4000
+#SBATCH -p eddy
+#SBATCH -n 1
+#SBATCH -N 1
+#SBATCH -o $resultdir/tbl.%a.slurm
+$pmark_script $top_builddir $top_srcdir $resultdir $resultdir/tbl.\${SLURM_ARRAY_TASK_ID} $msafile $fafile $resultdir/tbl.\${SLURM_ARRAY_TASK_ID}.out
+EOF
 
+
+# Submit the job array
+$maxi = $ncpu-1;
+system("sbatch --array=0-$maxi $resultdir.sh");
+
+    
