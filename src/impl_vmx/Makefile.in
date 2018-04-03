@@ -20,7 +20,6 @@ LIBS        = -lhmmer -leasel @LIBS@ -lm
 
 AR          = @AR@ 
 RANLIB      = @RANLIB@
-INSTALL     = @INSTALL@
 
 ESLDIR         = @HMMER_ESLDIR@
 MYLIBDIRS      = -L../../${ESLDIR} -L.. 
@@ -86,7 +85,7 @@ ifndef V
 		        ${MAKE} -s -C $$subdir
 endif
 
-.PHONY: all dev check tests install uninstall distclean clean 
+.PHONY: all dev check tests distclean clean 
 
 all:   libhmmer-impl.stamp
 dev:   ${UTESTS} ${BENCHMARKS} ${EXAMPLES}
@@ -150,16 +149,6 @@ ${EXAMPLES}: libhmmer-impl.stamp ../libhmmer.a ${HDRS} ../hmmer.h
 	   else echo '    ' GEN $@ ;\
 	fi ;\
 	${CC} ${CFLAGS} ${VMX_CFLAGS} ${CPPFLAGS} ${LDFLAGS} ${DEFS} ${MYLIBDIRS} ${MYINCDIRS} -D$${DFLAG} -o $@ $${DFILE} ${LIBS}
-
-install:
-	for file in ${HDRS}; do \
-	   ${INSTALL} -m 0644 ${srcdir}/$$file ${DESTDIR}${includedir}/ ;\
-	done
-
-uninstall:
-	for file in ${HDRS}; do \
-	   rm -f ${DESTDIR}${includedir}/$$file ;\
-	done
 
 clean:
 	-rm -f impl_lib.stamp

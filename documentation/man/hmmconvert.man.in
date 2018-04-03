@@ -81,7 +81,7 @@ HMMER distribution (Userguide.pdf); or see the HMMER web page
 
 .nf
 @HMMER_COPYRIGHT@
-p@HMMER_LICENSE@
+@HMMER_LICENSE@
 .fi
 
 For additional information on copyright and licensing, see the file
@@ -93,10 +93,6 @@ web page
 .SH AUTHOR
 
 .nf
-Eddy/Rivas Laboratory
-Janelia Farm Research Campus
-19700 Helix Drive
-Ashburn VA 20147 USA
 http://eddylab.org
 .fi
 

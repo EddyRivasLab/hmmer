@@ -6,13 +6,17 @@ ________________________________________________________________
 Larger changes:
 
 * HMMER is now distributed under the BSD license, instead of the GPL.
+
+* 'make install' streamlined. Now we install only programs and man
+  pages, for 18 HMMER programs and 22 Easel miniapps.  We don't
+  install development .h headers or .a libraries.
+
 * We changed our default policy on the number of threads/cores that
   the search programs use. Previously multithreaded programs would use
   all available cores by default; now we use two worker threads by
   default (~2 cores), if multiple cores are available. HMMER3 search
   programs do not scale much beyond 2 cores anyway, due to input
   saturation and memory use.
-
 
 Other, smaller new features include:
 
@@ -32,6 +36,8 @@ Other, smaller new features include:
   has description "lines" of up to 2.7MB.
 * MSAs output with -A option now include name, acc, desc, author markup.
 * In Easel miniapps, esl-translate replaces previous (buggy) esl-stranslate.
+* Easel miniapps include a new esl-alirev tool, for reverse
+  complementing an RNA/DNA alignment
 * nhmmer/nhmmscan now allow alignments as target dbs
 * target relentropy for DNA models changed from 0.45 to 0.62
 

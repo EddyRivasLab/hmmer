@@ -32,11 +32,17 @@ sources, including:
    Walt Shands  
    Travis Wheeler    
 
+HMMER also includes copyrighted and licensed code that has been
+incorporated from other sources, including:
+
+   Yuta Mori                       libdivsufsort-lite
    Apple Computer                  
    Free Software Foundation, Inc.  
    IBM TJ Watson Research Center   
    X Consortium                    
    
+
+
 HMMER uses the Easel software library, which has its own license and
 copyright information. See easel/COPYRIGHT and easel/LICENSE.
 

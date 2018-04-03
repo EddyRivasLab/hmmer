@@ -1,9 +1,9 @@
 # Process this file with autoconf to produce the HMMER3 configure script.
 #
-# This is synchronized with Easel's configure script, so that HMMER
-# configures Easel in addition to itself. This saves having to do a
-# separate ./configure in Easel, but it also means that everything
-# that appears in Easel's configure script must also appear here.
+# HMMER configures Easel in addition to itself, so this is
+# synchronized with Easel's configure script.  Saves having to do a
+# separate ./configure in Easel, but everything in Easel's configure
+# script must also appear here.
 #
 # reminders to save re-reading autoconf manual for the n'th time:
 #    output variables:
@@ -22,17 +22,17 @@
 #      -  use within scope of the ./configure script
 #
 # Contents:
-#   1. Autoconf requirements
+#   1. autoconf requirements
 #   2. AC_INIT
-#   3. Info on the package
-#   4. Process ./configure command line
-#   5. Checks for programs, including ${CC}, ${CFLAGS}
-#   6. Checks for libraries
-#   7. Checks for header files
-#   8. Checks for types
-#   9. Checks for structures
-#  10. Checks for compiler characteristics
-#  11. Checks for library functions
+#   3. info on the package
+#   4. process ./configure command line
+#   5. checks for programs, including ${CC}, ${CFLAGS}
+#   6. checks for libraries
+#   7. checks for header files
+#   8. checks for types
+#   9. checks for structures
+#  10. checks for compiler characteristics
+#  11. checks for library functions
 #  12. checks for system services
 #  13. AC_CONFIG_FILES
 #  14. AC_OUTPUT
@@ -51,9 +51,8 @@
 
 
 ################################################################
-# 1. Autoconf requirements
+# 1. autoconf requirements
 ################################################################
-
 # Autoconf 2.61 has a bug in AC_FUNC_FSEEKO; don't use it.
 # 2.63 was released in 2008.
 AC_PREREQ(2.63)
@@ -559,34 +558,89 @@ AC_SYS_LARGEFILE
 # 13. Config subdirs and files
 ################################################################
 
-AC_CONFIG_FILES([Makefile])
-AC_CONFIG_FILES([src/Makefile])
-AC_CONFIG_FILES([testsuite/Makefile])
-AC_CONFIG_FILES([profmark/Makefile])
-AC_CONFIG_FILES([src/impl_${impl_choice}/Makefile])
-AC_CONFIG_FILES([documentation/Makefile])
-AC_CONFIG_FILES([documentation/man/Makefile])
-if test -d "documentation/userguide"; then 
-  AC_CONFIG_FILES([documentation/userguide/Makefile])
-fi  
-if test -d release-notes; then
-  AC_CONFIG_FILES(release-notes/LICENSE.sh)
-fi
+# HMMER Makefiles.
+AC_CONFIG_FILES([ \
+  Makefile                          \
+  src/Makefile                      \
+  testsuite/Makefile                \
+  profmark/Makefile                 \
+  src/impl_${impl_choice}/Makefile  \
+  documentation/Makefile            \
+  documentation/man/Makefile        \
+  documentation/userguide/Makefile  \
+  libdivsufsort/Makefile            \
+  ])
 
-AC_CONFIG_FILES([easel/Makefile])
-AC_CONFIG_FILES([easel/miniapps/Makefile])
-AC_CONFIG_FILES([easel/testsuite/Makefile])
-if test -d "easel/documentation"; then
-  AC_CONFIG_FILES([easel/documentation/Makefile])
-fi    
+# Easel Makefiles.
+AC_CONFIG_FILES([ \
+  easel/Makefile                \
+  easel/miniapps/Makefile       \
+  easel/testsuite/Makefile      \
+  easel/documentation/Makefile  \
+  ])
 
-AC_CONFIG_FILES([libdivsufsort/Makefile])
+# Substitutions in Userguide .tex files
+# HMMER_VERSION, HMMER_DATE, HMMER_COPYRIGHT
+AC_CONFIG_FILES([ \
+  documentation/userguide/titlepage.tex  \
+  documentation/userguide/copyright.tex  \
+  ])
+
+# Substitutions in HMMER man pages:
+# HMMER_VERSION, HMMER_DATE, HMMER_COPYRIGHT, HMMER_LICENSE, HMMER_URL
+AC_CONFIG_FILES([ \
+  documentation/man/alimask.man     \
+  documentation/man/hmmalign.man    \
+  documentation/man/hmmbuild.man    \
+  documentation/man/hmmconvert.man  \
+  documentation/man/hmmemit.man     \
+  documentation/man/hmmer.man       \
+  documentation/man/hmmfetch.man    \
+  documentation/man/hmmlogo.man     \
+  documentation/man/hmmpgmd.man     \
+  documentation/man/hmmpress.man    \
+  documentation/man/hmmscan.man     \
+  documentation/man/hmmsearch.man   \
+  documentation/man/hmmsim.man      \
+  documentation/man/hmmstat.man     \
+  documentation/man/jackhmmer.man   \
+  documentation/man/makehmmerdb.man \
+  documentation/man/nhmmer.man      \
+  documentation/man/nhmmscan.man    \
+  documentation/man/phmmer.man      \
+  ])
+
+# Substitutions in Easel man pages:
+# EASEL_VERSION, EASEL_DATE, EASEL_COPYRIGHT, EASEL_LICENSE, EASEL_URL
+AC_CONFIG_FILES([ \
+  easel/miniapps/esl-afetch.man      \
+  easel/miniapps/esl-alimanip.man    \
+  easel/miniapps/esl-alimap.man      \
+  easel/miniapps/esl-alimask.man     \
+  easel/miniapps/esl-alimerge.man    \
+  easel/miniapps/esl-alipid.man      \
+  easel/miniapps/esl-alirev.man      \
+  easel/miniapps/esl-alistat.man     \
+  easel/miniapps/esl-compalign.man   \
+  easel/miniapps/esl-compstruct.man  \
+  easel/miniapps/esl-construct.man   \
+  easel/miniapps/esl-histplot.man    \
+  easel/miniapps/esl-mask.man        \
+  easel/miniapps/esl-reformat.man    \
+  easel/miniapps/esl-selectn.man     \
+  easel/miniapps/esl-seqrange.man    \
+  easel/miniapps/esl-seqstat.man     \
+  easel/miniapps/esl-sfetch.man      \
+  easel/miniapps/esl-shuffle.man     \
+  easel/miniapps/esl-ssdraw.man      \
+  easel/miniapps/esl-translate.man   \
+  easel/miniapps/esl-weight.man      \
+ ])
 
 AC_CONFIG_HEADERS([easel/decoy_config.h])   # Put this first to keep gnu 'autoheader' from overwriting a real config file.
 AC_CONFIG_HEADERS([src/p7_config.h])
 AC_CONFIG_HEADERS([easel/esl_config.h])
 AC_CONFIG_HEADERS([libdivsufsort/divsufsort.h])
-
 
 # the following incantation establishes a symlink of
 # src/impl_{whatever} to src/impl in the *build* directory.
@@ -608,6 +662,10 @@ HMMER configuration:
      linker:               ${LDFLAGS}
      libraries:            ${LIBS} ${LIBGSL} ${PTHREAD_LIBS}
      DP implementation:    ${impl_choice}
+
+Do 'make' to build HMMER.
+Then (optionally) do 'make check' to run self tests,
+and (optionally) 'make install' to install permanently.
 "
 
 if test "$impl_choice" = "dummy"; then

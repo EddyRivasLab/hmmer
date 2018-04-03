@@ -24,48 +24,48 @@ HMMER_COPYRIGHT = "@HMMER_COPYRIGHT@"
 
 INSTALL       = @INSTALL@
 RMAN          = rman
-SEDITION      = ${top_srcdir}/easel/devkit/sedition
 RMANPROCESS   = ${top_srcdir}/easel/devkit/rmanprocess.pl
 
 MANPAGES = \
-	${top_srcdir}/documentation/man/hmmalign.man\
-	${top_srcdir}/documentation/man/hmmbuild.man\
-	${top_srcdir}/documentation/man/hmmconvert.man\
-	${top_srcdir}/documentation/man/hmmemit.man\
-	${top_srcdir}/documentation/man/hmmfetch.man\
-	${top_srcdir}/documentation/man/hmmlogo.man\
-	${top_srcdir}/documentation/man/hmmpgmd.man\
-	${top_srcdir}/documentation/man/hmmpress.man\
-	${top_srcdir}/documentation/man/hmmscan.man\
-	${top_srcdir}/documentation/man/hmmsearch.man\
-	${top_srcdir}/documentation/man/hmmsim.man\
-	${top_srcdir}/documentation/man/hmmstat.man\
-	${top_srcdir}/documentation/man/jackhmmer.man\
-	${top_srcdir}/documentation/man/makehmmerdb.man\
-	${top_srcdir}/documentation/man/nhmmer.man\
-	${top_srcdir}/documentation/man/nhmmscan.man\
-	${top_srcdir}/documentation/man/phmmer.man
-#	${top_srcdir}/documentation/man/alimask.man\
-
+	../man/alimask.man     \
+	../man/hmmalign.man    \
+	../man/hmmbuild.man    \
+	../man/hmmconvert.man  \
+	../man/hmmemit.man     \
+	../man/hmmfetch.man    \
+	../man/hmmlogo.man     \
+	../man/hmmpgmd.man     \
+	../man/hmmpress.man    \
+	../man/hmmscan.man     \
+	../man/hmmsearch.man   \
+	../man/hmmsim.man      \
+	../man/hmmstat.man     \
+	../man/jackhmmer.man   \
+	../man/makehmmerdb.man \
+	../man/nhmmer.man      \
+	../man/nhmmscan.man    \
+	../man/phmmer.man      
 
 TEXFILES =\
-	ack.tex\
-	formats.tex\
-	glossary.tex\
-	install.tex\
-	introduction.tex\
-	macros.tex\
-	main.tex\
-	more.tex\
-	pipeline.tex\
-	tabular.tex\
+	ack.tex          \
+	copyright.tex    \
+	formats.tex      \
+	glossary.tex     \
+	install.tex      \
+	introduction.tex \
+	macros.tex       \
+	main.tex         \
+	more.tex         \
+	pipeline.tex     \
+	tabular.tex      \
+	titlepage.tex    \
 	tutorial.tex
 
 .PHONY: pdf install uninstall clean distclean TAGS
 
 pdf:    Userguide.pdf
 
-Userguide.pdf: symlinks.stamp titlepage.tex copyright.tex manpages.tex ${MANPAGES} ${TEXFILES}
+Userguide.pdf: symlinks.stamp manpages.tex ${MANPAGES} ${TEXFILES}
 	@for prog in xelatex bibtex; do \
 	  command -v $$prog >/dev/null 2>&1 || { echo >&2 "The $$prog program is required to build the Userguide, but it's not installed. Aborting."; exit 1; } \
 	done
@@ -86,14 +86,6 @@ symlinks.stamp:
 	fi
 	@echo "symlinks created:\c" > $@
 	@date >> $@
-
-titlepage.tex: ${srcdir}/titlepage.tex.in
-	@cp -f ${srcdir}/titlepage.tex.in titlepage.tex
-	@${SEDITION} HMMER_VERSION ${HMMER_VERSION} HMMER_DATE ${HMMER_DATE} titlepage.tex
-
-copyright.tex: ${srcdir}/copyright.tex.in
-	@cp -f ${srcdir}/copyright.tex.in copyright.tex
-	@${SEDITION} HMMER_COPYRIGHT ${HMMER_COPYRIGHT} copyright.tex
 
 # manpages: convert man pages to LaTeX chapter in User Guide.
 #    uses PolyglotMan 3.2 "rman", and rmanprocess.pl script in easel's devkit
