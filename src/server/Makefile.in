@@ -1,0 +1,28 @@
+MODULE = server
+
+OBJS = worker_node.o \
+	master_node.o \
+	shard.o \
+	p7_hitlist.o
+
+HDRS =  
+
+PROGS = hmmserver
+
+UTESTS = shard_utest
+
+STATS  = 
+
+BENCHMARKS = 
+
+EXAMPLES = 
+
+top_srcdir   = @top_srcdir@
+top_builddir = @top_builddir@
+srcdir       = @srcdir@
+VPATH        = @srcdir@ 
+SHELL        = /bin/sh
+
+include ../Makefile-subdirs.mk
+
+
