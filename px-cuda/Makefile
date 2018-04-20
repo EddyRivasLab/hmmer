@@ -1,4 +1,4 @@
-CC     = nvcc
+CC     = nvcc -ccbin /usr/bin/gcc-6
 CFLAGS = -O3 -g -lineinfo --ptxas-options=-v --maxrregcount=32 -arch=compute_60 -code=sm_61  -lineinfo --Wno-deprecated-declarations --compiler-options "-msse4.1" 
 HOME = ../../
 all:   px_cuda_packed
