@@ -15,8 +15,9 @@ static int
 FM_hit_sorter(const void *a, const void *b)
 {
 //    return 2 * (((FM_DIAG*)a)->sortkey > ((FM_DIAG*)b)->sortkey) - 1;  // same as the test below
-    if      ( ((FM_DIAG*)a)->sortkey > ((FM_DIAG*)b)->sortkey) return 1;
-    else                                 return -1;
+    if      ( ((FM_DIAG*)a)->sortkey > ((FM_DIAG*)b)->sortkey) return  1;
+    else  if( ((FM_DIAG*)a)->sortkey < ((FM_DIAG*)b)->sortkey) return -1;
+    else                                                       return  0;
 }
 
 

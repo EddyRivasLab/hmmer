@@ -268,8 +268,11 @@ hit_sorter_by_sortkey(const void *vh1, const void *vh2)
     int dir1 = (h1->dcl[0].iali < h1->dcl[0].jali ? 1 : -1);
     int dir2 = (h2->dcl[0].iali < h2->dcl[0].jali ? 1 : -1);
     if (dir1 != dir2) return dir2; // so if dir1 is pos (1), and dir2 is neg (-1), this will return -1, placing h1 before h2;  otherwise, vice versa
-    else              return (h1->dcl[0].iali > h2->dcl[0].iali ? 1 : -1 );
-
+    else { 
+      if     (h1->dcl[0].iali > h2->dcl[0].iali) return  1; 
+      else if(h1->dcl[0].iali < h2->dcl[0].iali) return -1; 
+      else                                       return  0;
+    }
   }
 }
 
@@ -287,8 +290,16 @@ hit_sorter_by_seqidx_aliposition(const void *vh1, const void *vh2)
 
   if (dir1 != dir2) return dir2; // so if dir1 is pos (1), and dir2 is neg (-1), this will return -1, placing h1 before h2;  otherwise, vice versa
 
-  if ( h1->dcl[0].iali == h2->dcl[0].iali)    return  (h1->dcl[0].jali < h2->dcl[0].jali ? 1 : -1 );
-  else                                        return  (h1->dcl[0].iali > h2->dcl[0].iali ? 1 : -1 );
+  if ( h1->dcl[0].iali == h2->dcl[0].iali) { 
+    if     (h1->dcl[0].jali < h2->dcl[0].jali) return  1; 
+    else if(h1->dcl[0].jali > h2->dcl[0].jali) return -1; 
+    else                                       return  0;
+  }
+  else { 
+    if     (h1->dcl[0].iali > h2->dcl[0].iali) return  1; 
+    else if(h1->dcl[0].iali < h2->dcl[0].iali) return -1;
+    else                                       return  0;
+  }
 }
 
 static int
@@ -307,8 +318,16 @@ hit_sorter_by_modelname_aliposition(const void *vh1, const void *vh2)
 
   if (dir1 != dir2) return dir2; // so if dir1 is pos (1), and dir2 is neg (-1), this will return -1, placing h1 before h2;  otherwise, vice versa
 
-  if ( h1->dcl[0].iali == h2->dcl[0].iali)    return  (h1->dcl[0].jali < h2->dcl[0].jali ? 1 : -1 );
-  else                                        return  (h1->dcl[0].iali > h2->dcl[0].iali ? 1 : -1 );
+  if ( h1->dcl[0].iali == h2->dcl[0].iali) { 
+    if     (h1->dcl[0].jali < h2->dcl[0].jali) return  1; 
+    else if(h1->dcl[0].jali > h2->dcl[0].jali) return -1; 
+    else                                       return  0;
+  }
+  else { 
+    if     (h1->dcl[0].iali > h2->dcl[0].iali) return  1; 
+    else if(h1->dcl[0].iali < h2->dcl[0].iali) return -1;
+    else                                       return  0;
+  }
 }
 
 
