@@ -197,8 +197,9 @@ hit_sorter(const void *a, const void *b)
     if      (h1->direction > h2->direction) return 1;
     else if (h1->direction < h2->direction) return -1;
     else {
-      if  (h1->start > h2->start) return  1;
-      else                        return -1;
+      if     (h1->start > h2->start) return  1;
+      else if(h1->start < h2->start) return -1;
+      else                           return  0;
     }
   }
 }
