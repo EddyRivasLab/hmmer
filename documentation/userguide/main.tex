@@ -1,64 +1,45 @@
-\documentclass[10pt]{article}
-\usepackage{fullpage}
+\documentclass[notoc]{tufte-book}    % `notoc` suppresses TL custom TOC, reverts to standard LaTeX
 
-\usepackage{fontspec}          % Assumes you're using xelatex
-\setmainfont{Times New Roman}
+\input{titlepage}                    % definitions for \maketitle 
+\bibliographystyle{unsrtnat-brief}   % customized natbib unsrtnat. Abbrev 3+ authors to ``et al.'' 
 
-\usepackage{fancybox}  % Must include fancybox *before* fancyvrb; don't know why.
-\usepackage{fancyvrb}
-\usepackage{graphicx}
-\usepackage[usenames,dvipsnames]{color}
-\usepackage[backref,colorlinks]{hyperref}
-\usepackage[authoryear]{natbib}
-
-\hypersetup{
-  citecolor = {RoyalBlue},
-  linkcolor = {RoyalBlue},
-  urlcolor  = {RoyalBlue},
-}
-
-
-\setcounter{secnumdepth}{1}
-
-\input{macros}
 
 \begin{document}
-\bibliographystyle{apalike}
+\setcounter{tocdepth}{2}             % 0=chapters 1=sections 2=subsections 3=subsubsections? 4=paragraphs
 
-\input{titlepage}
+\maketitle
+
 \input{copyright}
-\newpage
-\tableofcontents
 
-\newpage
+\begin{adjustwidth}{}{-1in}          % TL \textwidth is quite narrow.
+\tableofcontents                     % Expand it manually for TOC and man pages.
+\end{adjustwidth}
+
 \input{introduction}
-
-\newpage
 \input{install}
-
-\newpage
 \input{tutorial}
 
-\newpage
-\input{pipeline}
+%\input{pipeline}
+%\input{tabular}
 
-\newpage
-\input{tabular}
-
-\newpage
 \input{more}
 
-\newpage
+\begin{adjustwidth}{}{-1in}   
+\chapter{Manual pages for HMMER programs}             
 \input{manpages}
+\end{adjustwidth}
 
-\newpage
+\begin{adjustwidth}{}{-1in}   
+\chapter{Manual pages for Easel miniapps}             
+\input{easel_manpages}
+\end{adjustwidth}
+
 \input{formats}
 
-\newpage
 \input{ack}
+\label{manualend}
 
-\newpage
-\bibliography{master,lab,books}
+\nobibliography{master,lab,books}
 
 \end{document}
 

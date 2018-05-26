@@ -1,13 +1,13 @@
 .TH "hmmstat" 1 "@HMMER_DATE@" "HMMER @HMMER_VERSION@" "HMMER Manual"
 
 .SH NAME
-hmmstat - display summary statistics for a profile file
+hmmstat \- summary statistics for a profile file
 
 
 .SH SYNOPSIS
 .B hmmstat
-.I [options]
-.I <hmmfile>
+[\fIoptions\fR]
+.I hmmfile
 
 
 .SH DESCRIPTION
@@ -16,13 +16,15 @@ The
 .B hmmstat
 utility prints out a tabular file of summary statistics for each
 profile in
-.IR <hmmfile> .
+.IR hmmfile .
 
 
 .PP 
-.I <hmmfile> 
-may be '-' (a dash character), in which case profiles
-are read from a <stdin> pipe instead of from a file.
+.I hmmfile 
+may be '\-' (a dash character), in which case profiles
+are read from a
+stdin
+pipe instead of from a file.
 
 .PP
 The columns are:
@@ -37,7 +39,7 @@ The name of the profile.
 
 .TP
 .B accession
-The optional accession of the profile, or "-" if there is none.
+The optional accession of the profile, or "\-" if there is none.
 
 .TP
 .B nseq
@@ -87,7 +89,7 @@ pipeline, by causing too many nonhomologous sequences to pass the filters.
 .SH OPTIONS
 
 .TP
-.B -h
+.B \-h
 Help; print a brief reminder of command line usage and all available
 options.
 
@@ -95,7 +97,7 @@ options.
 .SH SEE ALSO 
 
 See 
-.B hmmer(1)
+.BR hmmer (1)
 for a master man page with a list of all the individual man pages
 for programs in the HMMER package.
 

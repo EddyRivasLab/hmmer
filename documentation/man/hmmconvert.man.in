@@ -1,13 +1,13 @@
 .TH "hmmconvert" 1 "@HMMER_DATE@" "HMMER @HMMER_VERSION@" "HMMER Manual"
 
 .SH NAME
-hmmconvert - convert profile file to a HMMER format
+hmmconvert \- convert profile file to various formats
 
 
 .SH SYNOPSIS
 .B hmmconvert
-.I [options]
-.I <hmmfile>
+[\fIoptions\fR]
+.I hmmfile
 
 
 .SH DESCRIPTION
@@ -24,41 +24,45 @@ old/obsolete formats from HMMER2, ASCII or binary; the output profile
 is a current HMMER3 ASCII format.
 
 .PP
-.I <hmmfile> 
-may be '-' (dash), which
-means reading this input from
-.I stdin
-rather than a file.  
+.I hmmfile
+may be '\-' (dash), which means reading this input from stdin rather
+than a file.
 
 
 .SH OPTIONS
 
 .TP
-.B -h
+.B \-h
 Help; print a brief reminder of command line usage and all available
 options.
 
 .TP 
-.B -a
+.B \-a
 Output profiles in ASCII text format. This is the default.
 
 .TP 
-.B -b
+.B \-b
 Output profiles in binary format. 
 
 .TP 
-.B -2
+.B \-2
 Output in legacy HMMER2 ASCII text format, in ls (glocal) mode. This
 allows HMMER3 models to be converted back to a close approximation of
 HMMER2, for comparative studies.
 
 .TP 
-.BI --outfmt " <s>"
+.BI \-\-outfmt " <s>"
 Output in a HMMER3 ASCII text format other then the most current one.
 Valid choices for 
 .I <s>
-are 3/a through 3/f.
-The current format is 3/f, and this is the default. The format 3/b 
+are
+.B "3/a"
+through
+.BR "3/f" .
+The current format is
+.BR 3/f ,
+and this is the default. The format
+.B 3/b 
 was used in the official HMMER3 release, and the others were used in
 the various testing versions.
 
@@ -66,7 +70,7 @@ the various testing versions.
 .SH SEE ALSO 
 
 See 
-.B hmmer(1)
+.BR hmmer (1)
 for a master man page with a list of all the individual man pages
 for programs in the HMMER package.
 

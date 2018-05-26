@@ -1,57 +1,57 @@
 .TH "hmmpress" 1 "@HMMER_DATE@" "HMMER @HMMER_VERSION@" "HMMER Manual"
 
 .SH NAME
-hmmpress - prepare an HMM database for hmmscan 
+hmmpress \- prepare a profile database for hmmscan 
 
 .SH SYNOPSIS
 
 .B hmmpress
-.I [options]
-.I <hmmfile>
+[\fIoptions\fR]
+.I hmmfile
 
 
 .SH DESCRIPTION
 
 .PP
-Starting from a profile database
-.I <hmmfile>
-in standard HMMER3 format,
-construct binary compressed datafiles for 
-.BR hmmscan .
+Constructs binary compressed datafiles for 
+.BR hmmscan ,
+starting from a profile database
+.I hmmfile
+in standard HMMER3 format.
 The 
-.I hmmpress
+.B hmmpress
 step is required for
 .B hmmscan
 to work.
 
 .PP
 Four files are created:
-.IR <hmmfile>.h3m ,
-.IR <hmmfile>.h3i ,
-.IR <hmmfile>.h3f ,
+.IB hmmfile .h3m,
+.IB hmmfile .h3i,
+.IB hmmfile .h3f,
 and
-.IR <hmmfile>.h3p .
+.IB hmmfile .h3p.
 The 
-.I <hmmfile>.h3m
+.IB hmmfile .h3m
 file contains the profile HMMs and their annotation in a binary
 format.
 The 
-.I <hmmfile>.h3i
+.IB hmmfile .h3i
 file is an SSI index for the
-.I <hmmfile>.h3m
+.IB hmmfile .h3m
 file.
 The
-.I <hmmfile>.h3f
+.IB hmmfile .h3f
 file contains precomputed data structures
 for the fast heuristic filter (the MSV filter).
 The
-.I <hmmfile>.h3p
+.IB hmmfile .h3p
 file contains precomputed data structures
 for the rest of each profile.
 
 .PP
-.I <hmmfile>
-may not be '-' (dash); running
+.I hmmfile
+may not be '\-' (dash); running
 .B hmmpress
 on a standard input stream rather than a file
 is not allowed.
@@ -60,12 +60,12 @@ is not allowed.
 .SH OPTIONS
 
 .TP
-.B -h
+.B \-h
 Help; print a brief reminder of command line usage and all available
 options.
 
 .TP
-.B -f
+.B \-f
 Force; overwrites any previous hmmpress'ed datafiles. The default is
 to bitch about any existing files and ask you to delete them first.
 
@@ -75,7 +75,7 @@ to bitch about any existing files and ask you to delete them first.
 .SH SEE ALSO 
 
 See 
-.B hmmer(1)
+.BR hmmer (1)
 for a master man page with a list of all the individual man pages
 for programs in the HMMER package.
 

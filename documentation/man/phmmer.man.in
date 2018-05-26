@@ -1,14 +1,14 @@
 .TH "phmmer" 1 "@HMMER_DATE@" "HMMER @HMMER_VERSION@" "HMMER Manual"
 
 .SH NAME
-phmmer - search protein sequence(s) against a protein sequence database
+phmmer \- search protein sequence(s) against a protein sequence database
 
 
 .SH SYNOPSIS
 .B phmmer
-.I [options]
-.I <seqfile>
-.I <seqdb>
+[\fIoptions\fR]
+.I seqfile
+.I seqdb
 
 
 .SH DESCRIPTION
@@ -17,24 +17,24 @@ phmmer - search protein sequence(s) against a protein sequence database
 .B phmmer
 is used to search one or more query protein sequences against a protein sequence database.
 For each query sequence in 
-.IR <seqfile> ,
+.IR seqfile ,
 use that sequence to search the target database of sequences in
-.IR <seqdb> ,
+.IR seqdb ,
 and output ranked lists of the sequences with the most significant
 matches to the query.
 
 .PP 
 Either the query
-.I <seqfile> 
+.I seqfile
 or the target
-.I <seqdb> 
-may be '-' (a dash character), in which case
+.I seqdb 
+may be '\-' (a dash character), in which case
 the query sequences or target database input will be read from a <stdin> pipe instead of from a
 file. Only one input source can come through <stdin>, not both.
 An exception is that if the
-.I <seqfile> 
+.I seqfile 
 contains more than one query sequence, then
-.I <seqdb> 
+.I seqdb 
 cannot come from <stdin>, because we can't rewind the
 streaming target database to search it with another query.
 
@@ -42,20 +42,20 @@ streaming target database to search it with another query.
 .PP
 The output format is designed to be human-readable, but is often so
 voluminous that reading it is impractical, and parsing it is a pain. The
-.B --tblout 
+.B \-\-tblout 
 and 
-.B --domtblout 
+.B \-\-domtblout 
 options save output in simple tabular formats that are concise and
 easier to parse.
 The 
-.B -o
+.B \-o
 option allows redirecting the main output, including throwing it away
 in /dev/null.
 
 .SH OPTIONS
 
 .TP
-.B -h
+.B \-h
 Help; print a brief reminder of command line usage and all available
 options.
 
@@ -63,13 +63,13 @@ options.
 .SH OPTIONS FOR CONTROLLING OUTPUT
 
 .TP 
-.BI -o " <f>"
+.BI \-o " <f>"
 Direct the main human-readable output to a file
 .I <f> 
 instead of the default stdout.
 
 .TP
-.BI -A " <f>"
+.BI \-A " <f>"
 Save a multiple alignment of all significant hits (those satisfying
 inclusion thresholds)
 to the file 
@@ -77,36 +77,36 @@ to the file
 in Stockholm format.
 
 .TP 
-.BI --tblout " <f>"
+.BI \-\-tblout " <f>"
 Save a simple tabular (space-delimited) file summarizing the
 per-target output, with one data line per homologous target sequence
 found.
 
 .TP 
-.BI --domtblout " <f>"
+.BI \-\-domtblout " <f>"
 Save a simple tabular (space-delimited) file summarizing the
 per-domain output, with one data line per homologous domain
 detected in a query sequence for each homologous model.
 
 .TP 
-.B --acc
+.B \-\-acc
 Use accessions instead of names in the main output, where available
 for profiles and/or sequences.
 
 .TP 
-.B --noali
+.B \-\-noali
 Omit the alignment section from the main output. This can greatly
 reduce the output volume.
 
 .TP 
-.B --notextw
+.B \-\-notextw
 Unlimit the length of each line in the main output. The default
 is a limit of 120 characters per line, which helps in displaying
 the output cleanly on terminals and in editors, but can truncate
 target profile description lines.
 
 .TP 
-.BI --textw " <n>"
+.BI \-\-textw " <n>"
 Set the main output's line length limit to
 .I <n>
 characters per line. The default is 120.
@@ -122,7 +122,7 @@ is constructed by inferring residue probabilities from a standard
 position-independent gap open and gap extend probabilities.
 
 .TP
-.BI --popen " <x>"
+.BI \-\-popen " <x>"
 Set the gap open probability for a single sequence query model to 
 .IR <x> .
 The default is 0.02. 
@@ -130,7 +130,7 @@ The default is 0.02.
 must be >= 0 and < 0.5.
 
 .TP
-.BI --pextend " <x>"
+.BI \-\-pextend " <x>"
 Set the gap extend probability for a single sequence query model to 
 .IR <x> .
 The default is 0.4. 
@@ -138,7 +138,7 @@ The default is 0.4.
 must be >= 0 and < 1.0.
 
 .TP
-.BI --mx " <s>"
+.BI \-\-mx " <s>"
 Obtain residue alignment probabilities from the built-in
 substitution matrix named
 .IR <s> . 
@@ -150,20 +150,20 @@ can be
 PAM30, PAM70, PAM120, PAM240, BLOSUM45, BLOSUM50, BLOSUM62, BLOSUM80,
 or BLOSUM90.
 Only one of the
-.B --mx 
+.B \-\-mx 
 and
-.B --mxfile
+.B \-\-mxfile
 options may be used.
 
 .TP
-.BI --mxfile " <mxfile>"
+.BI \-\-mxfile " mxfile"
 Obtain residue alignment probabilities from the substitution matrix
 in file
-.IR <mxfile> .
+.IR mxfile .
 The default score matrix is BLOSUM62 (this matrix is internal to
 HMMER and does not have to be available as a file). 
 The format of a substitution matrix
-.I <mxfile>
+.I mxfile
 is the standard format accepted by BLAST, FASTA, and other sequence 
 analysis software.
 See ftp.ncbi.nlm.nih.gov/blast/matrices/ for example files. (The only
@@ -176,9 +176,9 @@ like NCBI's NUC.4.4, not NUC.4.2.)
 
 Reporting thresholds control which hits are reported in output files
 (the main output,
-.IR --tblout ,
+.BR \-\-tblout ,
 and 
-.IR --domtblout ).
+.BR \-\-domtblout ).
 Sequence hits and domain hits are ranked by statistical significance
 (E-value) and output is generated in two sections called per-target
 and per-domain output. In per-target output, by default, all
@@ -191,7 +191,7 @@ E-value reporting thresholds, or to use bit score thresholds instead.
 
 
 .TP
-.BI -E " <x>"
+.BI \-E " <x>"
 In the per-target output, report target sequences with an E-value of <=
 .IR <x> . 
 The default is 10.0, meaning that on average, about 10 false positives
@@ -199,13 +199,13 @@ will be reported per query, so you can see the top of the noise
 and decide for yourself if it's really noise.
 
 .TP
-.BI -T " <x>"
+.BI \-T " <x>"
 Instead of thresholding per-profile output on E-value, instead
 report target sequences with a bit score of >=
 .IR <x> .
 
 .TP
-.BI --domE " <x>"
+.BI \-\-domE " <x>"
 In the per-domain output, for target sequences that have already satisfied
 the per-profile reporting threshold, report individual domains
 with a conditional E-value of <=
@@ -217,7 +217,7 @@ already satisfied the per-target reporting threshold (and thus must
 have at least one homologous domain already).
 
 .TP
-.BI --domT " <x>"
+.BI \-\-domT " <x>"
 Instead of thresholding per-domain output on E-value, instead
 report domains with a bit score of >=
 .IR <x> .
@@ -226,12 +226,12 @@ report domains with a bit score of >=
 
 Inclusion thresholds are stricter than reporting thresholds. They
 control which hits are included in any output multiple alignment (the
-.I -A 
+.B \-A 
 option) and which domains are marked as significant ("!") as opposed
 to questionable ("?")  in domain output.
 
 .TP
-.BI --incE " <x>"
+.BI \-\-incE " <x>"
 Use an E-value of <=
 .I <x>
 as the per-target inclusion threshold.
@@ -240,7 +240,7 @@ would be expected in every 100 searches with different query
 sequences.
 
 .TP
-.BI --incT " <x>"
+.BI \-\-incT " <x>"
 Instead of using E-values for setting the inclusion threshold, instead
 use a bit score of >= 
 .I <x>
@@ -248,7 +248,7 @@ as the per-target inclusion threshold.
 By default this option is unset.
 
 .TP
-.BI --incdomE " <x>"
+.BI \-\-incdomE " <x>"
 Use a conditional E-value of <=
 .I <x> 
 as the per-domain inclusion threshold, in targets that have already
@@ -256,7 +256,7 @@ satisfied the overall per-target inclusion threshold.
 The default is 0.01.
 
 .TP
-.BI --incdomT " <x>"
+.BI \-\-incdomT " <x>"
 Instead of using E-values,
 use a bit score of >=
 .I <x>
@@ -293,29 +293,29 @@ E-values, or alignments, all of which are determined solely in
 postprocessing.
 
 .TP
-.B --max
+.B \-\-max
 Maximum sensitivity.  Turn off all filters, including the bias filter,
 and run full Forward/Backward postprocessing on every target. This
 increases sensitivity slightly, at a large cost in speed.
 
 .TP
-.BI --F1 " <x>"
+.BI \-\-F1 " <x>"
 First filter threshold; set the P-value threshold for the MSV filter
 step.  The default is 0.02, meaning that roughly 2% of the highest
 scoring nonhomologous targets are expected to pass the filter.
 
 .TP
-.BI --F2 " <x>"
+.BI \-\-F2 " <x>"
 Second filter threshold; set the P-value threshold for the Viterbi
 filter step.  The default is 0.001.
 
 .TP
-.BI --F3 " <x>"
+.BI \-\-F3 " <x>"
 Third filter threshold; set the P-value threshold for the Forward
 filter step.  The default is 1e-5.
 
 .TP
-.B --nobias
+.B \-\-nobias
 Turn off the bias filter. This increases sensitivity somewhat, but can
 come at a high cost in speed, especially if the query has biased
 residue composition (such as a repetitive sequence region, or if it is
@@ -335,37 +335,37 @@ distributions for MSV filter scores, Viterbi filter scores, and
 Forward scores requires three short random sequence simulations.
 
 .TP
-.BI --EmL " <n>"
+.BI \-\-EmL " <n>"
 Sets the sequence length in simulation that estimates the location
 parameter mu for MSV filter E-values. Default is 200.
 
 .TP
-.BI --EmN " <n>"
+.BI \-\-EmN " <n>"
 Sets the number of sequences in simulation that estimates the location
 parameter mu for MSV filter E-values. Default is 200.
 
 .TP
-.BI --EvL " <n>"
+.BI \-\-EvL " <n>"
 Sets the sequence length in simulation that estimates the location
 parameter mu for Viterbi filter E-values. Default is 200.
 
 .TP
-.BI --EvN " <n>"
+.BI \-\-EvN " <n>"
 Sets the number of sequences in simulation that estimates the location
 parameter mu for Viterbi filter E-values. Default is 200.
 
 .TP
-.BI --EfL " <n>"
+.BI \-\-EfL " <n>"
 Sets the sequence length in simulation that estimates the location
 parameter tau for Forward E-values. Default is 100.
 
 .TP
-.BI --EfN " <n>"
+.BI \-\-EfN " <n>"
 Sets the number of sequences in simulation that estimates the location
 parameter tau for Forward E-values. Default is 200.
 
 .TP
-.BI --Eft " <x>"
+.BI \-\-Eft " <x>"
 Sets the tail mass fraction to fit in the simulation that estimates
 the location parameter tau for Forward evalues. Default is 0.04.
 
@@ -375,25 +375,25 @@ the location parameter tau for Forward evalues. Default is 0.04.
 .SH OTHER OPTIONS
 
 .TP
-.B --nonull2
+.B \-\-nonull2
 Turn off the null2 score corrections for biased composition.
 
 .TP
-.BI -Z " <x>"
+.BI \-Z " <x>"
 Assert that the total number of targets in your searches is
 .IR <x> ,
 for the purposes of per-sequence E-value calculations,
 rather than the actual number of targets seen. 
 
 .TP
-.BI --domZ " <x>"
+.BI \-\-domZ " <x>"
 Assert that the total number of targets in your searches is
 .IR <x> ,
 for the purposes of per-domain conditional E-value calculations,
 rather than the number of targets that passed the reporting thresholds.
 
 .TP 
-.BI --seed " <n>"
+.BI \-\-seed " <n>"
 Seed the random number generator with
 .IR <n> ,
 an integer >= 0. 
@@ -408,46 +408,46 @@ stochastic simulations will vary from run to run of the same command.
 The default seed is 42.
 
 .TP 
-.BI --qformat " <s>"
-Declare that the input
-.I <seqfile>
-is in format 
-.IR <s> .
-Accepted formats include 
-.IR fasta , 
-.IR embl , 
-.IR genbank ,
-.IR ddbj , 
-.IR uniprot ,
-.IR stockholm , 
-.IR pfam , 
-.IR a2m , 
-and 
-.IR afa .
-The default is to autodetect the format of the file.
+.BI \-\-qformat " <s>"
+Assert that input
+.I seqfile
+is in format
+.IR <s> ,
+bypassing format autodetection.
+Common choices for 
+.I <s> 
+include:
+.BR fasta ,
+.BR embl ,
+.BR genbank.
+Alignment formats also work;
+common choices include:
+.BR stockholm , 
+.BR a2m ,
+.BR afa ,
+.BR psiblast ,
+.BR clustal ,
+.BR phylip .
+For more information, and for codes for some less common formats,
+see main documentation.
+The string
+.I <s>
+is case-insensitive (\fBfasta\fR or \fBFASTA\fR both work).
 
-.TP 
-.BI --tformat " <s>"
-Declare that the input
-.I <seqdb>
-is in format 
+.BI \-\-tformat " <s>"
+Assert that target sequence database
+.I seqdb
+is in format
+.IR <s> ,
+bypassing format autodetection.
+See
+.B \-\-qformat
+above for list of accepted format codes for
 .IR <s> .
-Accepted formats include 
-.IR fasta , 
-.IR embl , 
-.IR genbank ,
-.IR ddbj , 
-.IR uniprot ,
-.IR stockholm , 
-.IR pfam , 
-.IR a2m , 
-and 
-.IR afa .
-The default is to autodetect the format of the file.
 
 
 .TP
-.BI --cpu " <n>"
+.BI \-\-cpu " <n>"
 Set the number of parallel worker threads to 
 .IR <n> .
 On multicore machines, the default is 2.
@@ -463,19 +463,21 @@ support turned off.
 
 
 .TP
-.BI --stall
+.BI \-\-stall
 For debugging the MPI master/worker version: pause after start, to
 enable the developer to attach debuggers to the running master and
 worker(s) processes. Send SIGCONT signal to release the pause.
 (Under gdb: 
-.IR "(gdb) signal SIGCONT" )
+.BR "(gdb) signal SIGCONT" )
 (Only available if optional MPI support was enabled at compile-time.)
 
 .TP
-.BI --mpi
-Run in MPI master/worker mode, using
-.IR mpirun .
-(Only available if optional MPI support was enabled at compile-time.)
+.BI \-\-mpi
+Run under MPI control with master/worker parallelization (using
+.BR mpirun ,
+for example, or equivalent). Only available if optional MPI support
+was enabled at compile-time.
+
 
 
 
@@ -483,7 +485,7 @@ Run in MPI master/worker mode, using
 .SH SEE ALSO 
 
 See 
-.B hmmer(1)
+.BR hmmer (1)
 for a master man page with a list of all the individual man pages
 for programs in the HMMER package.
 

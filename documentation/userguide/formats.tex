@@ -1,11 +1,11 @@
-\section{File formats}
-\label{section:formats}
+\chapter{File formats}
+\label{chapter:formats}
 \setcounter{footnote}{0}
 
-\subsection{HMMER profile HMM files}
+\section{HMMER profile HMM files}
 \label{section:savefiles}
 
-The file \prog{tutorial/fn3.hmm} gives an example of a HMMER3 ASCII
+The file \mono{tutorial/fn3.hmm} gives an example of a HMMER3 ASCII
 save file. An abridged version is shown here, where (\ldots) mark
 deletions made for clarity and space:
 
@@ -55,19 +55,19 @@ HMM          A        C        D        E        F        G        H        I   
 \end{tinysreoutput}
 
 An HMM file consists of one or more HMMs.  Each HMM starts with a
-format version identifier (here, \prog{HMMER3/f}) and ends with
-\prog{//} on a line by itself.  The format version identifier allows
+format version identifier (here, \mono{HMMER3/f}) and ends with
+\mono{//} on a line by itself.  The format version identifier allows
 backward compatibility as the HMMER software evolves: it tells the
 parser this file is from HMMER3's save file format version
 f.\footnote{HMMER 3.0 used 3/b format. HMMER 3.1 uses 3/f format.
   Some alpha test versions of 3.0 used 3/a format. Internal
   development versions of 3.1 used 3/c, 3/d, and 3/e formats.}  The closing
-\prog{//} allows multiple HMMs to be concatenated.
+\mono{//} allows multiple HMMs to be concatenated.
 
 The format is divided into two regions. The first region contains
 textual information and miscalleneous parameters in a roughly
 tag-value scheme.  This section ends with a line beginning with the
-keyword \prog{HMM}. The second region is a tabular, whitespace-limited
+keyword \mono{HMM}. The second region is a tabular, whitespace-limited
 format for the main model parameters.
 
 All probability parameters are all stored as negative natural log
@@ -81,75 +81,75 @@ that fields are separated by at least one space character.
 
 A more detailed description of the format follows.
 
-\subsubsection{header section}
+\subsection{header section}
 
 The header section is parsed line by line in a tag/value format. Each
 line type is either \textbf{mandatory} or \textbf{optional} as
 indicated. 
 
-\begin{sreitems}{\emprog{header}}
+\begin{sreitems}{\monob{header}}
 
-\item [\emprog{HMMER3/f}] Unique identifier for the save file format
-  version; the \prog{/f} means that this is HMMER3 HMM file format
+\item [\monob{HMMER3/f}] Unique identifier for the save file format
+  version; the \mono{/f} means that this is HMMER3 HMM file format
   version f. When HMMER3 changes its save file format, the revision
   code advances. This way, parsers may easily remain backwards
-  compatible. The remainder of the line after the \prog{HMMER3/f} tag
+  compatible. The remainder of the line after the \mono{HMMER3/f} tag
   is free text that is ignored by the parser. HMMER currently writes
   its version number and release date in brackets here,
-  e.g. \prog{[3.1b2 | December 2013]} in this
+  e.g. \mono{[3.1b2 | December 2013]} in this
   example. \textbf{Mandatory.}
 
-\item [\emprog{NAME <s>}] Model name; \prog{<s>} is a single word
+\item [\monob{NAME <s>}] Model name; \mono{<s>} is a single word
 containing no spaces or tabs. The name is normally picked up from the
 \verb+#=GF ID+ line from a Stockholm alignment file.  If this is not
 present, the name is created from the name of the alignment file by
 removing any file type suffix. For example, an otherwise nameless HMM
-built from the alignment file \prog{rrm.slx} would be named
-\prog{rrm}.  \textbf{Mandatory.}
+built from the alignment file \mono{rrm.slx} would be named
+\mono{rrm}.  \textbf{Mandatory.}
 
-\item [\emprog{ACC <s>}] Accession number; \prog{<s>} is a one-word
+\item [\monob{ACC <s>}] Accession number; \mono{<s>} is a one-word
 accession number. This is picked up from the \verb+#=GF AC+ line in a
 Stockholm format alignment. \textbf{Optional.}
 
-\item [\emprog{DESC <s>}] Description line; \prog{<s>} is a one-line
+\item [\monob{DESC <s>}] Description line; \mono{<s>} is a one-line
 free text description. This is picked up from the \verb+#=GF DE+ line
 in a Stockholm alignment file. \textbf{Optional.}
 
-\item [\emprog{LENG <d>}] Model length; \prog{<d>}, a positive nonzero
+\item [\monob{LENG <d>}] Model length; \mono{<d>}, a positive nonzero
 integer, is the number of match states in the model.
 \textbf{Mandatory.}
 
-\item [\emprog{MAXL <d>}] Max instance length; \prog{<d>}, a positive
+\item [\monob{MAXL <d>}] Max instance length; \mono{<d>}, a positive
 nonzero integer, is the upper bound on the length at which and instance
 of the model is expected to be found. Used only by nhmmer and nhmmscan.
 \textbf{Optional.}
 
-\item [\emprog{ALPH <s>}] Symbol alphabet type. For biosequence
-analysis models, \prog{<s>} is \prog{amino}, \prog{DNA}, or \prog{RNA}
+\item [\monob{ALPH <s>}] Symbol alphabet type. For biosequence
+analysis models, \mono{<s>} is \mono{amino}, \mono{DNA}, or \mono{RNA}
 (case insensitive). There are also other accepted alphabets for
-purposes beyond biosequence analysis, including \prog{coins},
-\prog{dice}, and \prog{custom}. This determines the symbol alphabet
+purposes beyond biosequence analysis, including \mono{coins},
+\mono{dice}, and \mono{custom}. This determines the symbol alphabet
 and the size of the symbol emission probability distributions.  If
-\prog{amino}, the alphabet size $K$ is set to 20 and the symbol
+\mono{amino}, the alphabet size $K$ is set to 20 and the symbol
 alphabet to ``ACDEFGHIKLMNPQRSTVWY'' (alphabetic order); if
-\prog{DNA}, the alphabet size $K$ is set to 4 and the symbol alphabet
-to ``ACGT''; if \prog{RNA}, the alphabet size $K$ is set to 4 and the
+\mono{DNA}, the alphabet size $K$ is set to 4 and the symbol alphabet
+to ``ACGT''; if \mono{RNA}, the alphabet size $K$ is set to 4 and the
 symbol alphabet to ``ACGU''. \textbf{Mandatory.}
 
-\item [\emprog{RF <s>}] Reference annotation flag; \prog{<s>} is
-either \prog{no} or \prog{yes} (case insensitive). If \prog{yes}, the
+\item [\monob{RF <s>}] Reference annotation flag; \mono{<s>} is
+either \mono{no} or \mono{yes} (case insensitive). If \mono{yes}, the
 reference annotation character field for each match state in the main
-model (see below) is valid; if \prog{no}, these characters are
+model (see below) is valid; if \mono{no}, these characters are
 ignored.  Reference column annotation is picked up from a Stockholm
 alignment file's \verb+#=GC RF+ line. It is propagated to alignment
 outputs, and also may optionally be used to define consensus match
 columns in profile HMM construction. \textbf{Optional}; assumed to be
 no if not present.
 
-\item [\emprog{MM <s>}] Model masked flag; \prog{<s>} is
-either \prog{no} or \prog{yes} (case insensitive). If \prog{yes}, the
+\item [\monob{MM <s>}] Model masked flag; \mono{<s>} is
+either \mono{no} or \mono{yes} (case insensitive). If \mono{yes}, the
 model mask annotation character field for each match state in the main
-model (see below) is valid; if \prog{no}, these characters are
+model (see below) is valid; if \mono{no}, these characters are
 ignored. Indicates that the profile model was created such that
 emission probabilities at masked positions are set to match the 
 background frequency, rather than being set based on observed frequencies 
@@ -157,10 +157,10 @@ in the alignment. Position-specific insertion and deletion rates are not
 altered, even in masked regions. \textbf{Optional}; assumed to be
 no if not present.
 
-\item [\emprog{CONS <s>}] Consensus residue annotation flag;
-  \prog{<s>} is either \prog{no} or \prog{yes} (case insensitive).  If
-  \prog{yes}, the consensus residue field for each match state in the
-  main model (see below) is valid. If \prog{no}, these characters are
+\item [\monob{CONS <s>}] Consensus residue annotation flag;
+  \mono{<s>} is either \mono{no} or \mono{yes} (case insensitive).  If
+  \mono{yes}, the consensus residue field for each match state in the
+  main model (see below) is valid. If \mono{no}, these characters are
   ignored. Consensus residue annotation is determined when models are
   built. For models of single sequences, the consensus is the same as
   the query sequence. For models of multiple alignments, the consensus
@@ -169,70 +169,70 @@ no if not present.
   residue is $\geq$ an arbitrary threshold (0.5 for protein models,
   0.9 for DNA/RNA models).
 
-\item [\emprog{CS <s>}] Consensus structure annotation flag;
-\prog{<s>} is either \prog{no} or \prog{yes} (case insensitive). If
-\prog{yes}, the consensus structure character field for each match
-state in the main model (see below) is valid; if \prog{no} these
+\item [\monob{CS <s>}] Consensus structure annotation flag;
+\mono{<s>} is either \mono{no} or \mono{yes} (case insensitive). If
+\mono{yes}, the consensus structure character field for each match
+state in the main model (see below) is valid; if \mono{no} these
 characters are ignored. Consensus structure annotation is picked up
 from a Stockholm file's \verb+#=GC SS_cons+ line, and propagated to
 alignment displays.  \textbf{Optional}; assumed to be no if not
 present.
 
-\item [\emprog{MAP <s>}] Map annotation flag; \prog{<s>} is either
-\prog{no} or \prog{yes} (case insensitive).  If set to \prog{yes}, the
+\item [\monob{MAP <s>}] Map annotation flag; \mono{<s>} is either
+\mono{no} or \mono{yes} (case insensitive).  If set to \mono{yes}, the
 map annotation field in the main model (see below) is valid; if
-\prog{no}, that field will be ignored.  The HMM/alignment map
+\mono{no}, that field will be ignored.  The HMM/alignment map
 annotates each match state with the index of the alignment column from
 which it came. It can be used for quickly mapping any subsequent
 HMM alignment back to the original multiple alignment, via the model.
 \textbf{Optional}; assumed to be no if not present.
 
-\item [\emprog{DATE <s>}] Date the model was constructed; \prog{<s>}
+\item [\monob{DATE <s>}] Date the model was constructed; \mono{<s>}
 is a free text date string.  This field is only used for logging
 purposes.\footnote{HMMER does not use dates for any purpose other than
 human-readable annotation, so it is no more prone than you are to Y2K,
 Y2038, or any other date-related eschatology.} \textbf{Optional.}
 
-\item [\emprog{COM [<n>] <s>}] Command line log; \prog{<n>} counts
-command line numbers, and \prog{<s>} is a one-line command. There may
-be more than one \prog{COM} line per save file, each numbered starting
+\item [\monob{COM [<n>] <s>}] Command line log; \mono{<n>} counts
+command line numbers, and \mono{<s>} is a one-line command. There may
+be more than one \mono{COM} line per save file, each numbered starting
 from $n=1$. These lines record every HMMER command that modified the
 save file. This helps us reproducibly and automatically log how Pfam
 models have been constructed, for example. \textbf{Optional.}
 
-\item [\emprog{NSEQ  <d>}] Sequence number; \prog{<d>} is a nonzero
+\item [\monob{NSEQ  <d>}] Sequence number; \mono{<d>} is a nonzero
 positive integer, the number of sequences that the HMM was trained on.
 This field is only used for logging purposes.
 \textbf{Optional.}
 
-\item [\emprog{EFFN <f>}] Effective sequence number; \prog{<f>} is a
+\item [\monob{EFFN <f>}] Effective sequence number; \mono{<f>} is a
 nonzero positive real, the effective total number of sequences
-determined by \prog{hmmbuild} during sequence weighting, for combining
+determined by \mono{hmmbuild} during sequence weighting, for combining
 observed counts with Dirichlet prior information in parameterizing the
 model. This field is only used for logging purposes.
 \textbf{Optional.}
 
-\item [\emprog{CKSUM <d>}] Training alignment checksum; \prog{<d>} is
+\item [\monob{CKSUM <d>}] Training alignment checksum; \mono{<d>} is
   a nonnegative unsigned 32-bit integer. This number is calculated
   from the training sequence data, and used in conjunction with the
   alignment map information to verify that a given alignment is indeed
   the alignment that the map is for. \textbf{Optional.}
 
-\item [\emprog{GA    <f> <f>}] Pfam gathering thresholds GA1 and GA2.
+\item [\monob{GA    <f> <f>}] Pfam gathering thresholds GA1 and GA2.
 See Pfam documentation of GA lines. \textbf{Optional.}
 
-\item [\emprog{TC <f> <f>}] Pfam trusted cutoffs TC1 and TC2.  See
+\item [\monob{TC <f> <f>}] Pfam trusted cutoffs TC1 and TC2.  See
 Pfam documentation of TC lines. \textbf{Optional.}
 
-\item [\emprog{NC <f> <f>}] Pfam noise cutoffs NC1 and NC2.  See Pfam
+\item [\monob{NC <f> <f>}] Pfam noise cutoffs NC1 and NC2.  See Pfam
 documentation of NC lines. \textbf{Optional.}
 
-\item [\emprog{STATS <s1> <s2> <f1> <f2>}] Statistical parameters
-  needed for E-value calculations. \prog{<s1>} is the model's
-  alignment mode configuration: currently only \prog{LOCAL} is
-  recognized. \prog{<s2>} is the name of the score distribution:
-  currently \prog{MSV}, \prog{VITERBI}, and \prog{FORWARD} are
-  recognized.  \prog{<f1>} and \prog{<f2>} are two real-valued
+\item [\monob{STATS <s1> <s2> <f1> <f2>}] Statistical parameters
+  needed for E-value calculations. \mono{<s1>} is the model's
+  alignment mode configuration: currently only \mono{LOCAL} is
+  recognized. \mono{<s2>} is the name of the score distribution:
+  currently \mono{MSV}, \mono{VITERBI}, and \mono{FORWARD} are
+  recognized.  \mono{<f1>} and \mono{<f2>} are two real-valued
   parameters controlling location and slope of each distribution,
   respectively; $\mu$ and $\lambda$ for Gumbel distributions for MSV
   and Viterbi scores, and $\tau$ and $\lambda$ for exponential tails
@@ -241,18 +241,18 @@ documentation of NC lines. \textbf{Optional.}
   the model is considered to be calibrated for E-value
   statistics. \textbf{Optional.}
 
-\item [\emprog{HMM }] Flags the start of the main model
+\item [\monob{HMM }] Flags the start of the main model
 section. Solely for human readability of the tabular model data, the
-symbol alphabet is shown on the \prog{HMM} line, aligned to the fields
+symbol alphabet is shown on the \mono{HMM} line, aligned to the fields
 of the match and insert symbol emission distributions in the main
 model below. The next line is also for human readability, providing
 column headers for the state transition probability fields in the main
-model section that follows. Though unparsed after the \prog{HMM} tag,
+model section that follows. Though unparsed after the \mono{HMM} tag,
 the presence of two header lines is \textbf{mandatory:} the parser
-always skips the line after the \prog{HMM} tag line.
+always skips the line after the \mono{HMM} tag line.
 
-\item [\emprog{COMPO <f>*K}] The first line in the main model section
-may be an optional line starting with \emprog{COMPO}: these are the
+\item [\monob{COMPO <f>*K}] The first line in the main model section
+may be an optional line starting with \monob{COMPO}: these are the
 model's overall average match state emission probabilities, which are
 used as a background residue composition in the ``filter null''
 model. The $K$ fields on this line are log probabilities for each
@@ -261,7 +261,7 @@ order. \textbf{Optional.}
 
 \end{sreitems}
 
-\subsubsection{main model section}
+\subsection{main model section}
 
 All the remaining fields are \textbf{mandatory}.
 
@@ -283,7 +283,7 @@ nonexistent delete state 0 are set to $\log 1 = 0$ and $\log 0 =
 -\infty = $ `*'.
 
 The remainder of the model has three lines per node, for $M$ nodes
-(where $M$ is the number of match states, as given by the \prog{LENG}
+(where $M$ is the number of match states, as given by the \mono{LENG}
 line). These three lines are ($K$ is the alphabet size in residues):
 
 \begin{sreitems}{\textbf{State transition line}}
@@ -293,28 +293,28 @@ number ($1 \ldots M$).  The parser verifies this number as a
 consistency check (it expects the nodes to come in order). The next
 $K$ numbers for match emissions, one per symbol, in alphabetic order.
 
-The next field is the \prog{MAP} annotation for this node.  If
-\prog{MAP} was \prog{yes} in the header, then this is an integer,
+The next field is the \mono{MAP} annotation for this node.  If
+\mono{MAP} was \mono{yes} in the header, then this is an integer,
 representing the alignment column index for this match state
 (1..alen); otherwise, this field is `-'.
 
-The next field is the \prog{CONS} consensus residue for this node.  If
-\prog{CONS} was \prog{yes} in the header, then this is a single
+The next field is the \mono{CONS} consensus residue for this node.  If
+\mono{CONS} was \mono{yes} in the header, then this is a single
 character, representing the consensus residue annotation for this
 match state; otherwise, this field is `-'.
 
-The next field is the \prog{RF} annotation for this node.  If
-\prog{RF} was \prog{yes} in the header, then this is a single
+The next field is the \mono{RF} annotation for this node.  If
+\mono{RF} was \mono{yes} in the header, then this is a single
 character, representing the reference annotation for this match state;
 otherwise, this field is `-'.
 
-The next field is the \prog{MM} mask value for this node.  If
-\prog{MM} was \prog{yes} in the header, then this is a single 'm'
+The next field is the \mono{MM} mask value for this node.  If
+\mono{MM} was \mono{yes} in the header, then this is a single 'm'
 character, indicating that the position was identified as a masked 
 position during model construction; otherwise, this field is `-'.
 
-The next field is the \prog{CS} annotation for this node.  If
-\prog{CS} was \prog{yes}, then this is a single character,
+The next field is the \mono{CS} annotation for this node.  If
+\mono{CS} was \mono{yes}, then this is a single character,
 representing the consensus structure at this match state; otherwise
 this field is `-'.
 
@@ -335,7 +335,7 @@ $D_k \rightarrow M_{k+1}$ transition is always 0.0 (probability 1.0).
 
 Finally, the last line of the format is the ``//'' record separator.
 
-\subsection{Stockholm, the recommended multiple sequence alignment format}
+\section{Stockholm, the recommended multiple sequence alignment format}
 \label{section:stockholm}
 
 The Pfam and Rfam Consortiums have developed a multiple sequence
@@ -344,7 +344,7 @@ extensible annotation.
 
 Most popular multiple alignment file formats can be changed into a
 minimal Stockholm format file just by adding a Stockholm header line
-and a trailing \prog{//} terminator:
+and a trailing \mono{//} terminator:
 
 \begin{sreoutput}
 # STOCKHOLM 1.0
@@ -387,45 +387,45 @@ columns, and database source information including name, accession
 number, and coordinates (for subsequences extracted from a longer
 source sequence) See below for details.
 
-\subsubsection{syntax of Stockholm markup}
+\subsection{syntax of Stockholm markup}
 
 There are four types of Stockholm markup annotation, for per-file,
 per-sequence, per-column, and per-residue annotation:
 
-\begin{sreitems}{\emprog{\#=GR <seqname> <tag> <..s..>}}
-\item [\emprog{\#=GF <tag> <s>}]
-        Per-file annotation. \prog{<s>} is a free format text line
-        of annotation type \prog{<tag>}. For example, \prog{\#=GF DATE
+\begin{sreitems}{\monob{\#=GR <seqname> <tag> <..s..>}}
+\item [\monob{\#=GF <tag> <s>}]
+        Per-file annotation. \mono{<s>} is a free format text line
+        of annotation type \mono{<tag>}. For example, \mono{\#=GF DATE
         April 1, 2000}. Can occur anywhere in the file, but usually
-        all the \prog{\#=GF} markups occur in a header.
+        all the \mono{\#=GF} markups occur in a header.
 
-\item [\emprog{\#=GS <seqname> <tag> <s>}]
-        Per-sequence annotation. \prog{<s>} is a free format text line
-        of annotation type \prog{tag} associated with the sequence
-        named \prog{<seqname>}. For example, \prog{\#=GS seq1
+\item [\monob{\#=GS <seqname> <tag> <s>}]
+        Per-sequence annotation. \mono{<s>} is a free format text line
+        of annotation type \mono{tag} associated with the sequence
+        named \mono{<seqname>}. For example, \mono{\#=GS seq1
         SPECIES\_SOURCE Caenorhabditis elegans}. Can occur anywhere
         in the file, but in single-block formats (e.g. the Pfam
         distribution) will typically follow on the line after the
         sequence itself, and in multi-block formats (e.g. HMMER
         output), will typically occur in the header preceding the
-        alignment but following the \prog{\#=GF} annotation.
+        alignment but following the \mono{\#=GF} annotation.
 
-\item [\emprog{\#=GC <tag> <..s..>}]
-        Per-column annotation. \prog{<..s..>} is an aligned text line
-        of annotation type \prog{<tag>}.
+\item [\monob{\#=GC <tag> <..s..>}]
+        Per-column annotation. \mono{<..s..>} is an aligned text line
+        of annotation type \mono{<tag>}.
         \verb+#=GC+ lines are
-        associated with a sequence alignment block; \prog{<..s..>}
+        associated with a sequence alignment block; \mono{<..s..>}
         is aligned to the residues in the alignment block, and has
         the same length as the rest of the block.
         Typically \verb+#=GC+ lines are placed at the end of each block.
 
-\item [\emprog{\#=GR <seqname> <tag> <..s..>}]
-        Per-residue annotation. \prog{<..s..>} is an aligned text line
-        of annotation type \prog{<tag>}, associated with the sequence
-        named \prog{<seqname>}. 
+\item [\monob{\#=GR <seqname> <tag> <..s..>}]
+        Per-residue annotation. \mono{<..s..>} is an aligned text line
+        of annotation type \mono{<tag>}, associated with the sequence
+        named \mono{<seqname>}. 
         \verb+#=GR+ lines are 
         associated with one sequence in a sequence alignment block; 
-        \prog{<..s..>}
+        \mono{<..s..>}
         is aligned to the residues in that sequence, and has
         the same length as the rest of the block.
         Typically
@@ -433,7 +433,7 @@ per-sequence, per-column, and per-residue annotation:
         aligned sequence they annotate.
 \end{sreitems}
 
-\subsubsection{semantics of Stockholm markup}
+\subsection{semantics of Stockholm markup}
 
 Any Stockholm parser will accept syntactically correct files, but is
 not obligated to do anything with the markup lines. It is up to the
@@ -443,7 +443,7 @@ Belvu alignment viewer and the HMMER profile hidden Markov model
 software package.
 
 Belvu simply reads Stockholm markup and displays it, without trying to
-interpret it at all. The tag types (\prog{\#=GF}, etc.) are sufficient
+interpret it at all. The tag types (\mono{\#=GF}, etc.) are sufficient
 to tell Belvu how to display the markup: whether it is attached to the
 whole file, sequences, columns, or residues.
 
@@ -459,42 +459,42 @@ structured data format lingo.
 The Stockholm markup tags that are parsed semantically by my software
 are as follows:
 
-\subsubsection{recognized \#=GF annotations}
-\begin{sreitems}{\emprog{TC  <f> <f>}}
-\item [\emprog{ID  <s>}] 
-        Identifier. \emprog{<s>} is a name for the alignment;
+\subsection{recognized \#=GF annotations}
+\begin{sreitems}{\monob{TC  <f> <f>}}
+\item [\monob{ID  <s>}] 
+        Identifier. \monob{<s>} is a name for the alignment;
         e.g. ``rrm''. One word. Unique in file.
 
-\item [\emprog{AC  <s>}]
-        Accession. \emprog{<s>} is a unique accession number for the
+\item [\monob{AC  <s>}]
+        Accession. \monob{<s>} is a unique accession number for the
         alignment; e.g. 
         ``PF00001''. Used by the Pfam database, for instance. 
         Often a alphabetical prefix indicating the database
         (e.g. ``PF'') followed by a unique numerical accession.
         One word. Unique in file. 
         
-\item [\emprog{DE  <s>}]
-        Description. \emprog{<s>} is a free format line giving
+\item [\monob{DE  <s>}]
+        Description. \monob{<s>} is a free format line giving
         a description of the alignment; e.g.
         ``RNA recognition motif proteins''. One line. Unique in file.
 
-\item [\emprog{AU  <s>}]
-        Author. \emprog{<s>} is a free format line listing the 
+\item [\monob{AU  <s>}]
+        Author. \monob{<s>} is a free format line listing the 
         authors responsible for an alignment; e.g. 
         ``Bateman A''. One line. Unique in file.
 
-\item [\emprog{GA  <f> <f>}]
+\item [\monob{GA  <f> <f>}]
         Gathering thresholds. Two real numbers giving HMMER bit score
         per-sequence and per-domain cutoffs used in gathering the
         members of Pfam full alignments. 
         
-\item [\emprog{NC  <f> <f>}]
+\item [\monob{NC  <f> <f>}]
         Noise cutoffs. Two real numbers giving HMMER bit score
         per-sequence and per-domain cutoffs, set according to the
         highest scores seen for unrelated sequences when gathering
         members of Pfam full alignments.
 
-\item [\emprog{TC  <f> <f>}]
+\item [\monob{TC  <f> <f>}]
         Trusted cutoffs. Two real numbers giving HMMER bit score
         per-sequence and per-domain cutoffs, set according to the
         lowest scores seen for true homologous sequences that
@@ -502,11 +502,11 @@ are as follows:
         members of Pfam full alignments. 
 \end{sreitems}
 
-\subsubsection{recognized \#=GS annotations}
+\subsection{recognized \#=GS annotations}
 
-\begin{sreitems}{\emprog{WT  <f>}}
-\item [\emprog{WT  <f>}]
-        Weight. \emprog{<f>} is a positive real number giving the
+\begin{sreitems}{\monob{WT  <f>}}
+\item [\monob{WT  <f>}]
+        Weight. \monob{<f>} is a positive real number giving the
         relative weight for a sequence, usually used to compensate
         for biased representation by downweighting similar sequences.   
         Usually the weights average 1.0 (e.g. the weights sum to
@@ -514,34 +514,34 @@ are as follows:
         required. Either every sequence must have a weight annotated, 
         or none of them can.  
 
-\item [\emprog{AC  <s>}]
-        Accession. \emprog{<s>} is a database accession number for 
-        this sequence. (Compare the \prog{\#=GF AC} markup, which gives
+\item [\monob{AC  <s>}]
+        Accession. \monob{<s>} is a database accession number for 
+        this sequence. (Compare the \mono{\#=GF AC} markup, which gives
         an accession for the whole alignment.) One word. 
         
-\item [\emprog{DE  <s>}]
-        Description. \emprog{<s>} is one line giving a description for
-        this sequence. (Compare the \prog{\#=GF DE} markup, which gives
+\item [\monob{DE  <s>}]
+        Description. \monob{<s>} is one line giving a description for
+        this sequence. (Compare the \mono{\#=GF DE} markup, which gives
         a description for the whole alignment.)
 \end{sreitems}
 
 
-\subsubsection{recognized \#=GC annotations}
+\subsection{recognized \#=GC annotations}
 
-\begin{sreitems}{\emprog{SA\_cons}}
+\begin{sreitems}{\monob{SA\_cons}}
 
-\item [\emprog{RF}]
+\item [\monob{RF}]
         Reference line. Any character is accepted as a markup for a
         column. The intent is to allow labeling the columns with some
         sort of mark.
         
-\item [\emprog{MM}]
+\item [\monob{MM}]
         Model mask line. An 'm' indicates that the column lies within a 
-        masked range, so that \prog{hmmbuild} should produce emissions matching
+        masked range, so that \mono{hmmbuild} should produce emissions matching
         the background for a match state corresponding to that alignment column.
         Otherwise, a '.' is used.
                 
-\item [\emprog{SS\_cons}]
+\item [\monob{SS\_cons}]
         Secondary structure consensus. For protein alignments,
         DSSP codes or gaps are accepted as markup: [HGIEBTSCX.-\_], where
         H is alpha helix, G is 3/10-helix, I is p-helix, E is extended
@@ -550,20 +550,20 @@ are as follows:
         (for instance, a residue that was not resolved in a crystal
         structure). 
 
-\item [\emprog{SA\_cons}]
+\item [\monob{SA\_cons}]
         Surface accessibility consensus. 0-9, gap symbols, or X are
         accepted as markup. 0 means $<$10\% accessible residue surface
         area, 1 means $<$20\%, 9 means $<$100\%, etc. X means unknown
         structure.
 \end{sreitems}
 
-\subsubsection{recognized \#=GR annotations}
-\begin{sreitems}{\emprog{SA}}
-\item [\emprog{SS}]
-        Secondary structure consensus. See \prog{\#=GC SS\_cons} above.
-\item [\emprog{SA}]
-        Surface accessibility consensus. See \prog{\#=GC SA\_cons} above.
-\item [\emprog{PP}] Posterior probability for an aligned residue. This
+\subsection{recognized \#=GR annotations}
+\begin{sreitems}{\monob{SA}}
+\item [\monob{SS}]
+        Secondary structure consensus. See \mono{\#=GC SS\_cons} above.
+\item [\monob{SA}]
+        Surface accessibility consensus. See \mono{\#=GC SA\_cons} above.
+\item [\monob{PP}] Posterior probability for an aligned residue. This
   represents the probability that this residue is assigned to the HMM
   state corresponding to this alignment column, as opposed to some
   other state. (Note that a residue can be confidently
@@ -579,17 +579,16 @@ are as follows:
 
 % Adapted from Easel documentation's format_a2m.tex by:
 %  - including format_a2m.tex
-%  - add an extra level of \sub: \subsection -> \subsubsection
-%  - add the subsection header below
+%  - add the section header below
 %  - revise first pp to be about HMMER.
 
-\subsection{A2M multiple alignment format}
+\section{A2M multiple alignment format}
 
 HMMER's Easel library routines are capable of writing alignments in UC
 Santa Cruz ``A2M'' (alignment to model) format, the native input
 format for the UCSC SAM profile HMM software package. 
 
-To select A2M format, use the format code \ccode{a2m}: for example, 
+To select A2M format, use the format code \mono{a2m}: for example, 
 to reformat a Stockholm alignment to A2M:
 
 \user{esl-reformat a2m myali.sto}
@@ -601,27 +600,27 @@ The most official documentation for A2M format appears to be at
 \url{http://compbio.soe.ucsc.edu/a2m-desc.html}. You may refer to that
 document if anything in the brief description below is unclear.
 
-\subsubsection{An example A2M file}
+\subsection{An example A2M file}
 
 This alignment:
 
-\begin{cchunk}
+\begin{sreoutput}
 seq1  ACDEF...GHIKLMNPQTVWY
 seq2  ACDEF...GHIKLMNPQTVWY
 seq3  ---EFmnrGHIKLMNPQT---
-\end{cchunk}
+\end{sreoutput}
 
 \noindent 
 is encoded in A2M format as:
 
-\begin{cchunk}
+\begin{sreoutput}
 >seq1  Sequence 1 description
 ACDEFGHIKLMNPQTVWY
 >seq2  Sequence 2 description
 ACDEFGHIKLMNPQTVWY
 >seq3  Sequence 3 description
 ---EFmnrGHIKLMNPQT---
-\end{cchunk}
+\end{sreoutput}
 
 A2M format looks a lot like aligned FASTA format. A crucial difference
 is that the aligned sequences in a ``dotless'' A2M file do not
@@ -642,7 +641,7 @@ Thus every sequence must have the same number of consensus columns
 (upper case letters plus `-' characters), and may have additional lower
 case letters for insertions.
 
-\subsubsection{Legal characters}
+\subsection{Legal characters}
 
 A2M (and SAM) do not support some special characters such as the `*'
 (not-a-residue) or `\verb+~+' (missing data) characters. Easel outputs these
@@ -665,7 +664,7 @@ residues, lest they be read as FIMs. For this reason, Easel converts
 `O' residues to `X' when it writes an amino acid alignment in A2M
 format.
 
-\subsubsection{Determining consensus columns}
+\subsection{Determining consensus columns}
 
 Writing A2M format requires knowing which alignment columns are
 supposed to be considered consensus and which are considered
@@ -679,7 +678,7 @@ has been read from an alignment format that has no reference
 annotation line (only Stockholm and SELEX formats support reference
 annotation). In this case, Easel internally generates a ``reasonable''
 guess at consensus columns, using essentially the same procedure that
-HMMER's \prog{hmmbuild} program uses by default: sequence fragments
+HMMER's \mono{hmmbuild} program uses by default: sequence fragments
 (sequences $<$50\% of the mean sequence length in the alignment
 overall) are ignored, and for the remaining sequences, any column
 containing $\geq$ 50\% residues is considered to be a consensus
@@ -689,139 +688,139 @@ column.
 
 
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-\subsection{hmmpgmd sequence database format}
+\section{hmmpgmd sequence database format}
 
 The hmmpgmd sequence database format closely resembles the 
 FASTA format, with slight modification to support use within HMMER's
-\prog{hmmpgmd} daemon. 
+\mono{hmmpgmd} daemon. 
 
 
-The \prog{hmmpgmd} program enables search of one or more sequence 
+The \mono{hmmpgmd} program enables search of one or more sequence 
 databases (e.g. NR, SwissProt, UniProt) within a single instance,
 having loaded a single sequence file into memory. Because the set of 
 sequences found within the various databases may overlap, the hmmpgmd 
 format allows each sequence to be stored once, and includes a small piece of
 metadata that indicates, for each sequence, the list of source databases in
-which the sequence is found. When a search is performed in \prog{hmmpgmd}, a
+which the sequence is found. When a search is performed in \mono{hmmpgmd}, a
 single target database is specified, and search is restricted to sequences
 belonging to that database.
 
 Furthermore, because a single sequence might be found multiple times
-within a single sequence database, \prog{hmmpgmd} is designed to compute
+within a single sequence database, \mono{hmmpgmd} is designed to compute
 E-values not just on the total number of non-redundant sequences
 within a database, but on the total number of sequences in the original
 (possibly redundant) database, provided those redundant counts are
 given in the hmmpgmd-formatted file.
 
-The \prog{hmmpgmd} file begins with a single line containing various counts
+The \mono{hmmpgmd} file begins with a single line containing various counts
 describing the contents of the file, of the form
 
-\emprog{\#res\_cnt seq\_cnt db\_cnt cnt\_1 fullcnt\_1 cnt\_2 fullcnt\_2 $\ldots$ date\_stamp}
+\monob{\#res\_cnt seq\_cnt db\_cnt cnt\_1 fullcnt\_1 cnt\_2 fullcnt\_2 $\ldots$ date\_stamp}
 
-\subsubsection{Fields in header line}
+\subsection{Fields in header line}
 
-\begin{sreitems}{\emprog{header}}
+\begin{sreitems}{\monob{header}}
 
-\item [\emprog{res\_cnt}] Number of residues in the sequence file.
+\item [\monob{res\_cnt}] Number of residues in the sequence file.
 
-\item [\emprog{seq\_cnt}] Number of sequences in the sequence file. 
+\item [\monob{seq\_cnt}] Number of sequences in the sequence file. 
 
-\item [\emprog{db\_cnt}] Number of databases in the sequence file. 
+\item [\monob{db\_cnt}] Number of databases in the sequence file. 
 
-\item [\emprog{cnt\_i}] Of the sequnces in the file, the number that belong to
-database \prog{i}. Note that if the file contains only a single
-database, this will match \prog{seq\_cnt}.
+\item [\monob{cnt\_i}] Of the sequnces in the file, the number that belong to
+database \mono{i}. Note that if the file contains only a single
+database, this will match \mono{seq\_cnt}.
  
-\item [\emprog{fullcnt\_i}] For database \prog{i}, the number of sequences
+\item [\monob{fullcnt\_i}] For database \mono{i}, the number of sequences
 that should be used in computing E-values. If redundant 
 sequences were collapsed out of the original database, this may be 
-larger than \prog{cnt\_i}.  
+larger than \mono{cnt\_i}.  
 
 \end{sreitems}
 
 
-\subsubsection{FASTA-like sequence format}
+\subsection{FASTA-like sequence format}
 
 In the main body of the sequence file, database sequences are stored
 sequentially, with each entry consisting of a one-line FASTA-like
 header followed by one or more lines containing the amino acid sequence, 
 like
 
-\begin{cchunk}
+\begin{sreoutput}
 >1 100
 ACDEFGHIKLMNPQTVWY
 >2 010
 ACDKLMNPQTVWYEFGHI
 >3 111
 EFMNRGHIKLMNPQT
-\end{cchunk}
+\end{sreoutput}
 
 Note that the per-entry header line is made up of two parts. The first part 
 is a numeric, incrementing sequence identifier (the i'th entry has the
-identifier \prog{i}). The second part is a bit string indicating database
+identifier \mono{i}). The second part is a bit string indicating database
 membership. In this example, sequence 1 is found in database 1, sequence 2 is
 found in database 2, and sequence 3 found in databases 1, 2, and 3. The number 
-of bits in each bit string should match \prog{db\_cnt}.
+of bits in each bit string should match \mono{db\_cnt}.
 
-Because \prog{hmmpgmd} accepts only numeric sequence identifiers, it is
+Because \mono{hmmpgmd} accepts only numeric sequence identifiers, it is
 necessary to keep track of the mapping between each numeric sequence identifier
 and the corresponding meta data (e.g. name, accession, description) external to
-the hmmpgmd-format file, and post-process \prog{hmmpgmd} seach results to 
+the hmmpgmd-format file, and post-process \mono{hmmpgmd} seach results to 
 apply those fields to the target sequence information.
 Depending on the size of the map list, this might be easily acheived with a
 simple perl array, or might require a more heavy-duty mapping backend such as
 mongodb (\url{http://www.mongodb.org}).
   
 
-\subsubsection{Creating a file in hmmpgmd format}
+\subsection{Creating a file in hmmpgmd format}
 
-The HMMER-Easel tool \prog{esl-reformat} is able to convert a file in unaligned
+The HMMER-Easel tool \mono{esl-reformat} is able to convert a file in unaligned
 fasta format into an hmmpgmd format file, such as
 
 \user{esl-reformat --id\_map mydb.hmmpgmd.map hmmpgmd mydb.fasta > mydb.hmmpgmd}
 
-The optional \prog{--id\_map} flag captures sequence name and description
+The optional \mono{--id\_map} flag captures sequence name and description
 information into a simple tabular file, to be used for mapping those values 
-back to \prog{hmmpgmd} query hits.
+back to \mono{hmmpgmd} query hits.
 
 
 
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 
-\subsection{Score matrix files}
+\section{Score matrix files}
 
 Profile HMMs can be built from single sequences, not just from
-multiple sequence alignments. For example, the \prog{phmmer} and
-\prog{jackhmmer} search programs take a single sequence query as an
-input, and \prog{nhmmer} can as well. For single sequence queries, the
+multiple sequence alignments. For example, the \mono{phmmer} and
+\mono{jackhmmer} search programs take a single sequence query as an
+input, and \mono{nhmmer} can as well. For single sequence queries, the
 probability parameters for residue alignments are derived from a
 substitution score matrix, such as BLOSUM62. Scores are converted to
-probabilities as described by \citet{Altschul91}. The scores can be
-arbitrary, but they must satisfy a couple of conditions so they 
-can be interpreted as implicit log-odds probabilities: there must be
-at least one positive score, and the expected score (on nonhomologous
-alignments) must be negative.
+probabilities as described by Altschul (1991).\cite{Altschul91}. The
+scores can be arbitrary, but they must satisfy a couple of conditions
+so they can be interpreted as implicit log-odds probabilities: there
+must be at least one positive score, and the expected score (on
+nonhomologous alignments) must be negative.
 
 The default score matrix for protein alignments is BLOSUM62; for DNA,
-a matrix we call DNA1. Using the \prog{--mx} option (for programs that
+a matrix we call DNA1. Using the \mono{--mx} option (for programs that
 can use score matrices), you can choose instead one of several
 alternative protein score matrices: PAM30, PAM70, PAM120, PAM240,
 BLOSUM45, BLOSUM50, BLOSUM80, and BLOSUM90. For example, you could use
-\prog{--mx BLOSUM50}.
+\mono{--mx BLOSUM50}.
 
-The \prog{--mxfile} option allows you to provide a score matrix as a
+The \mono{--mxfile} option allows you to provide a score matrix as a
 file. You can download many standard score matrice files from NCBI at
 \url{ftp://ftp.ncbi.nlm.nih.gov/blast/matrices/}. HMMER can read
 \emph{almost} any of these files, with one exception: because it
 requires the score matrix to be symmetrical (same number of residues
-in rows and columns), the NCBI \prog{NUC.4.4} matrix for DNA works,
-but the alternative short-form format \prog{NUC.4.2} does not
+in rows and columns), the NCBI \mono{NUC.4.4} matrix for DNA works,
+but the alternative short-form format \mono{NUC.4.2} does not
 work. The scores in these two files are identical, so just use
-\prog{NUC.4.4}, and files like it.
+\mono{NUC.4.4}, and files like it.
 
 Here's a simple example file:
 
-\begin{cchunk}
+\begin{sreoutput}
 # My score matrix
 #
    A  T  G  C
@@ -829,7 +828,7 @@ A  1 -3 -3 -3
 T -3  1 -3 -3
 G -3 -3  1 -3
 C -3 -3 -3  1
-\end{cchunk}
+\end{sreoutput}
 
 In more detail, the rules for the format are:
 
@@ -837,18 +836,18 @@ In more detail, the rules for the format are:
 
 \item Blank lines are ignored.
 
-\item A \prog{\#} indicates a comment. Anything after it is
-  ignored. Lines that start with \prog{\#} are ignored like blank
+\item A \mono{\#} indicates a comment. Anything after it is
+  ignored. Lines that start with \mono{\#} are ignored like blank
   lines.
 
 \item The first data line is a header line, labeling each column with
   $n$ single residue characters (case-insensitive). A nucleic matrix
   has $4 \leq n \leq 16$: at least the four canonical residues
-  \prog{ACGT} (or \prog{U}, for you RNA zealots), and it may also
-  contain any or all ambiguity codes \prog{RYMKSWHBVDN*}. A protein
+  \mono{ACGT} (or \mono{U}, for you RNA zealots), and it may also
+  contain any or all ambiguity codes \mono{RYMKSWHBVDN*}. A protein
   matrix has $20 \leq n 27$; it must contain at least the 20 canonical
-  residues \prog{ACDEFGHIKLMNPQRSTVWY}, and may contain any or all
-  ambiguity codes \prog{BJZOU}. These residues can be in any order,
+  residues \mono{ACDEFGHIKLMNPQRSTVWY}, and may contain any or all
+  ambiguity codes \mono{BJZOU}. These residues can be in any order,
   but the rows must be in the same order as the columns.
 
 \item The next $n$ data lines are the rows of a square $n \times n$

@@ -42,7 +42,6 @@ incorporated from other sources, including:
    X Consortium                    
    
 
-
 HMMER uses the Easel software library, which has its own license and
 copyright information. See easel/COPYRIGHT and easel/LICENSE.
 
@@ -83,9 +82,12 @@ BSD three-clause license:
    ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED
    OF THE POSSIBILITY OF SUCH DAMAGE.
 
-"HMMER" is a trademark of the Howard Hughes Medical Institute. If you
-fork a modified version of the code, please name it something that
-would not be confused with HMMER itself.
+
+HMMER development is supported in part by the National Human Genome
+Research Institute of the US National Institutes of Health under grant
+number R01HG009116. The content is solely the responsibility of the
+authors and does not necessarily represent the official views of the
+National Institutes of Health.
 
 ------------------------------------------------------------------
 The HMMER dev team | HHMI/Harvard University | http://hmmer.org/

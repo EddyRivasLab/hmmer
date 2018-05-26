@@ -1,13 +1,13 @@
 .TH "alimask" 1 "@HMMER_DATE@" "HMMER @HMMER_VERSION@" "HMMER Manual"
 
 .SH NAME
-alimask - Add mask line to a multiple sequence alignment
+alimask \- calculate and add column mask to a multiple sequence alignment
 
 .SH SYNOPSIS
 .B alimask
-.I [options]
-.I <msafile>
-.I <postmsafile>
+[\fIoptions\fR]
+.I msafile
+.I postmsafile
 
 
 .SH DESCRIPTION
@@ -27,7 +27,7 @@ altered, even in masked regions.
 .B alimask
 autodetects input format, and produces masked alignments 
 in Stockholm format.  
-.I <msafile> 
+.I msafile 
 may contain only one sequence alignment.
 
 .PP
@@ -39,14 +39,14 @@ hits.
 .PP
 In the simplest case, a mask range is given in coordinates 
 relative to the input alignment, using
-.BI --alirange " <s>". 
+.BI \-\-alirange " <s>". 
 However it is more often the case that the region to be 
 masked has been identified in coordinates relative to 
 the profile model (e.g. based on recognizing a simple 
 repeat pattern in false hit alignments or in the HMM logo). 
 Not all alignment columns are converted to match state 
 positions in the profile (see the 
-.I --symfrac
+.B \-\-symfrac
 flag for 
 .B hmmbuild
 for discussion), so model positions do not necessarily match 
@@ -56,7 +56,7 @@ alignment positions,
 .B alimask
 accepts the mask range input in model coordinates as well, 
 using
-.BI --modelrange " <s>". 
+.BI \-\-modelrange " <s>". 
 When using this flag, 
 .I alimask
 determines which alignment positions would be identified by
@@ -75,47 +75,46 @@ flags are also used by
 .SH OPTIONS
 
 .TP
-.B -h
+.B \-h
 Help; print a brief reminder of command line usage and all available
 options.
 
 .TP
-.BI -o " <f>"
+.BI \-o " <f>"
 Direct the summary output to file
 .IR <f> ,
-rather than to
-.IR stdout .
+rather than to stdout.
 
 
 .SH OPTIONS FOR SPECIFYING MASK RANGE
 
 A single mask range is given as a dash-separated pair, like
-.I "--modelrange 10-20"
+.B "\-\-modelrange 10\-20"
 and multiple ranges may be submitted as a comma-separated list,
-.IR "--modelrange 10-20,30-42" .
+.BR "\-\-modelrange 10\-20,30\-42" .
 
 
 .TP
-.BI --modelrange " <s>"
+.BI \-\-modelrange " <s>"
 Supply the given range(s) in model coordinates. 
 
 .TP
-.BI --alirange " <s>"
+.BI \-\-alirange " <s>"
 Supply the given range(s) in alignment coordinates. 
 
 .TP
-.B --apendmask 
+.B \-\-apendmask 
 Add to the existing mask found with the alignment.
 The default is to overwrite any existing mask. 
 
 .TP
-.BI --model2ali " <s>"
+.BI \-\-model2ali " <s>"
 Rather than actually produce the masked alignment, simply
 print model range(s) corresponding to input alignment 
 range(s).
 
 .TP
-.BI --ali2model " <s>"
+.BI \-\-ali2model " <s>"
 Rather than actually produce the masked alignment, simply
 print alignment range(s) corresponding to input model 
 range(s).
@@ -123,34 +122,23 @@ range(s).
 
 .SH OPTIONS FOR SPECIFYING THE ALPHABET
 
-The alphabet type (amino, DNA, or RNA) is autodetected by default, by
-looking at the composition of the
-.IR msafile .
-Autodetection is normally quite reliable, but occasionally alphabet
-type may be ambiguous and autodetection can fail (for instance, on
-tiny toy alignments of just a few residues). To avoid this, or to
-increase robustness in automated analysis pipelines, you may specify
-the alphabet type of
+.TP
+.B \-\-amino
+Assert that sequences in 
 .I msafile
-with these options.
+are protein, bypassing alphabet autodetection.
 
 .TP
-.B --amino
-Specify that all sequences in 
+.B \-\-dna
+Assert that sequences in
 .I msafile
-are proteins.
+are DNA, bypassing alphabet autodetection.
 
 .TP
-.B --dna
-Specify that all sequences in 
+.B \-\-rna
+Assert that sequences in 
 .I msafile
-are DNAs.
-
-.TP
-.B --rna
-Specify that all sequences in 
-.I msafile
-are RNAs.
+are RNA, bypassing alphabet autodetection.
 
 
 
@@ -159,24 +147,24 @@ are RNAs.
 These options control how consensus columns are defined in an alignment.
 
 .TP
-.B --fast 
+.B \-\-fast 
 Define consensus columns as those that have a fraction >= 
 .B symfrac
 of residues as opposed to gaps. (See below for the
-.B --symfrac
+.B \-\-symfrac
 option.) This is the default.
 
 .TP
-.B --hand
+.B \-\-hand
 Define consensus columns in next profile using reference annotation to
 the multiple alignment. 
 This allows you to define any consensus columns you like.
 
 .TP
-.BI --symfrac " <x>"
+.BI \-\-symfrac " <x>"
 Define the residue fraction threshold necessary to define a
 consensus column when using the 
-.B --fast 
+.B \-\-fast 
 option. The default is 0.5. The symbol fraction in each column
 is calculated after taking relative sequence weighting into account,
 and ignoring gap characters corresponding to ends of sequence
@@ -188,7 +176,7 @@ means that only columns that include 0 gaps (internal
 insertions/deletions) will be assigned as consensus.
 
 .TP
-.BI --fragthresh " <x>"
+.BI \-\-fragthresh " <x>"
 We only want to count terminal gaps as deletions if the aligned
 sequence is known to be full-length, not if it is a fragment (for
 instance, because only part of it was sequenced). HMMER uses a simple
@@ -198,12 +186,12 @@ or equal to a fraction
 times the alignment length in columns,
 then the sequence is handled as a fragment. The default is 0.5.
 Setting
-.BI --fragthresh 0
+.B \-\-fragthresh 0
 will define no (nonempty) sequence as a fragment; you might want to do
 this if you know you've got a carefully curated alignment of full-length
 sequences.
 Setting
-.BI --fragthresh 1
+.B \-\-fragthresh 1
 will define all sequences as fragments; you might want to do this if
 you know your alignment is entirely composed of fragments, such as
 translated short reads in metagenomic shotgun data.
@@ -219,34 +207,34 @@ each receive half the weight that one sequence would.  These options
 control which algorithm gets used.
 
 .TP
-.B --wpb
+.B \-\-wpb
 Use the Henikoff position-based sequence weighting scheme [Henikoff
 and Henikoff, J. Mol. Biol. 243:574, 1994].  This is the default.
 
 .TP 
-.B --wgsc 
+.B \-\-wgsc 
 Use the Gerstein/Sonnhammer/Chothia weighting algorithm [Gerstein et
 al, J. Mol. Biol. 235:1067, 1994].
 
 .TP 
-.B --wblosum
+.B \-\-wblosum
 Use the same clustering scheme that was used to weight data in
 calculating BLOSUM subsitution matrices [Henikoff and Henikoff,
 Proc. Natl. Acad. Sci 89:10915, 1992]. Sequences are single-linkage
 clustered at an identity threshold (default 0.62; see
-.IR --wid )
+.BR \-\-wid )
 and within each cluster of c sequences, each sequence gets relative
 weight 1/c.
 
 .TP
-.B --wnone
+.B \-\-wnone
 No relative weights. All sequences are assigned uniform weight. 
 
 .TP 
-.BI --wid " <x>"
+.BI \-\-wid " <x>"
 Sets the identity threshold used by single-linkage clustering when 
 using 
-.IR --wblosum . 
+.BR \-\-wblosum . 
 Invalid with any other weighting scheme. Default is 0.62.
 
 
@@ -256,19 +244,52 @@ Invalid with any other weighting scheme. Default is 0.62.
 .SH OTHER OPTIONS
 
 .TP 
-.BI --informat " <s>"
-Declare that the input
+.BI \-\-informat " <s>"
+Assert that input
 .I msafile
-is in format 
+is in alignment format
+.IR <s> ,
+bypassing format autodetection.
+Common choices for 
+.I <s> 
+include:
+.BR stockholm , 
+.BR a2m ,
+.BR afa ,
+.BR psiblast ,
+.BR clustal ,
+.BR phylip .
+For more information, and for codes for some less common formats,
+see main documentation.
+The string
+.I <s>
+is case-insensitive (\fBa2m\fR or \fBA2M\fR both work).
+
+
+.TP
+.BI \-\-outformat " <s>"
+Write the output
+.I postmsafile
+in alignment format
 .IR <s> .
-Currently the accepted multiple alignment sequence file formats 
-include Stockholm, Aligned FASTA, Clustal, NCBI PSI-BLAST, PHYLIP, 
-Selex, and UCSC SAM A2M. Default is to autodetect the format of
-the file.
+Common choices for 
+.I <s> 
+include:
+.BR stockholm , 
+.BR a2m ,
+.BR afa ,
+.BR psiblast ,
+.BR clustal ,
+.BR phylip .
+The string
+.I <s>
+is case-insensitive (\fBa2m\fR or \fBA2M\fR both work).
+Default is
+.BR stockholm .
 
 
 .TP 
-.BI --seed " <n>"
+.BI \-\-seed " <n>"
 Seed the random number generator with
 .IR <n> ,
 an integer >= 0. 
@@ -287,7 +308,7 @@ The default seed is 42.
 .SH SEE ALSO 
 
 See 
-.B hmmer(1)
+.BR hmmer (1)
 for a master man page with a list of all the individual man pages
 for programs in the HMMER package.
 

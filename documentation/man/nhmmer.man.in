@@ -1,14 +1,14 @@
 .TH "nhmmer" 1 "@HMMER_DATE@" "HMMER @HMMER_VERSION@" "HMMER Manual"
 
 .SH NAME
-nhmmer - search DNA/RNA queries against a DNA/RNA sequence database
+nhmmer \- search DNA queries against a DNA sequence database
 
 
 .SH SYNOPSIS
 .B nhmmer
-.I [options]
-.I <queryfile>
-.I <seqdb>
+[\fIoptions\fR]
+.I queryfile
+.I seqdb
 
 
 .SH DESCRIPTION
@@ -18,18 +18,18 @@ nhmmer - search DNA/RNA queries against a DNA/RNA sequence database
 is used to search one or more nucleotide queries against a 
 nucleotide sequence database.
 For each query in 
-.IR <queryfile> ,
+.IR queryfile ,
 use that query to search the target database of sequences in
-.IR <seqdb> ,
+.IR seqdb ,
 and output a ranked list of the hits with the most significant
 matches to the query. A query may be either a profile model 
 built using 
 .BR hmmbuild , 
 a sequence alignment, or a single sequence. Sequence based
 queries can be in a number of formats (see
-.BR --qformat ), 
+.BR \-\-qformat ), 
 and can typically be autodetected. Note that only 
-.I Stockholm
+Stockholm
 format supports queries made up of more than one sequence 
 alignment.
 
@@ -37,36 +37,36 @@ alignment.
 
 .PP 
 Either the query
-.I <queryfile> 
+.I queryfile 
 or the target
-.I <seqdb> 
-may be '-' (a dash character), in which case
+.I seqdb 
+may be '\-' (a dash character), in which case
 the query file or target database input will be read from a <stdin> pipe instead of from a
 file. Only one input source can come through <stdin>, not both.
 If the
-.I <queryfile> 
+.I queryfile 
 contains more than one query, then
-.I <seqdb> 
-cannot come from <stdin>, because we can't rewind the
+.I seqdb 
+cannot come from stdin, because we can't rewind the
 streaming target database to search it with another profile. 
 
 .PP
 If the query is sequence-based,
 a new file containing the HMM(s) built from the input(s) in 
-.I <queryfile>
+.I queryfile
 may optionally be produced, with the filename set using the 
-.B --hmmout
+.B \-\-hmmout
 flag.
 
 
 .PP
 The output format is designed to be human-readable, but is often so
 voluminous that reading it is impractical, and parsing it is a pain. The
-.B --tblout 
+.B \-\-tblout 
 option saves output in a simple tabular format that is concise and
 easier to parse.
 The 
-.B -o
+.B \-o
 option allows redirecting the main output, including throwing it away
 in /dev/null.
 
@@ -75,7 +75,7 @@ in /dev/null.
 .SH OPTIONS
 
 .TP
-.B -h
+.B \-h
 Help; print a brief reminder of command line usage and all available
 options.
 
@@ -84,64 +84,64 @@ options.
 .SH OPTIONS FOR CONTROLLING OUTPUT
 
 .TP 
-.BI -o " <f>"
+.BI \-o " <f>"
 Direct the main human-readable output to a file
 .I <f> 
 instead of the default stdout.
 
 .TP
-.BI -A " <f>"
+.BI \-A " <f>"
 Save a multiple alignment of all significant hits (those satisfying
-.IR "inclusion thresholds" )
-to the file 
+"inclusion thresholds") to the file 
 .IR <f> .
 
 .TP 
-.BI --tblout " <f>"
+.BI \-\-tblout " <f>"
 Save a simple tabular (space-delimited) file summarizing the
 per-target output, with one data line per homologous target sequence
 found.
 
 .TP 
-.BI --dfamtblout " <f>"
+.BI \-\-dfamtblout " <f>"
 Save a tabular (space-delimited) file summarizing the 
 per-hit output, similar to 
-.B --tblout
+.B \-\-tblout
 but more succinct. 
 
 .TP 
-.BI --aliscoresout " <f>" 
+.BI \-\-aliscoresout " <f>" 
 Save to file a list of per-position scores for each hit.
 This is useful, for example, in identifying regions of high
 score density for use in resolving overlapping hits from 
 different models.
 
 .TP 
-.BI --hmmout " <f>" 
-If <queryfile> is sequence-based, write the internally-computed 
-HMM(s) to
+.BI \-\-hmmout " <f>" 
+If
+.I queryfile
+is sequence-based, write the internally-computed HMM(s) to file
 .IR <f> . 
 
 
 .TP 
-.B --acc
+.B \-\-acc
 Use accessions instead of names in the main output, where available
 for profiles and/or sequences.
 
 .TP 
-.B --noali
+.B \-\-noali
 Omit the alignment section from the main output. This can greatly
 reduce the output volume.
 
 .TP 
-.B --notextw
+.B \-\-notextw
 Unlimit the length of each line in the main output. The default
 is a limit of 120 characters per line, which helps in displaying
 the output cleanly on terminals and in editors, but can truncate
 target profile description lines.
 
 .TP 
-.BI --textw " <n>"
+.BI \-\-textw " <n>"
 Set the main output's line length limit to
 .I <n>
 characters per line. The default is 120.
@@ -151,8 +151,7 @@ characters per line. The default is 120.
 .SH OPTIONS CONTROLLING SINGLE SEQUENCE SCORING
 
 By default, if a query is a single sequence from a file in 
-.IR fasta
-format,
+fasta format,
 .B nhmmer 
 uses a search model constructed from that sequence and a standard
 20x20 substitution matrix for residue probabilities, along with two
@@ -162,33 +161,33 @@ parameters to be changed, and for single-sequence scoring options to
 be applied to a single sequence coming from an aligned format.
 
 .TP
-.BI --singlemx 
+.BI \-\-singlemx 
 If a single sequence query comes from a multiple sequence alignment file, 
-such as in 
-.IR stockholm
-format, the search model is by default constructed as is typically done 
+such as in Stockholm format, the search model is by default constructed as is typically done 
 for multiple sequence alignments. This option forces 
 .B nhmmer 
 to use the single-sequence method with substitution score matrix.
 
 .TP
-.BI --mxfile " <mxfile>"
+.BI \-\-mxfile "<mxfile"
 Obtain residue alignment probabilities from the substitution matrix
 in file
-.IR <mxfile> .
+.IR mxfile .
 The default score matrix is DNA1 (this matrix is internal to
 HMMER and does not have to be available as a file). 
 The format of a substitution matrix
-.I <mxfile>
+.I mxfile
 is the standard format accepted by BLAST, FASTA, and other sequence 
 analysis software.
-See ftp.ncbi.nlm.nih.gov/blast/matrices/ for example files. (The only
+See
+.B ftp.ncbi.nlm.nih.gov/blast/matrices/
+for example files. (The only
 exception: we require matrices to be square, so for DNA, use files
 like NCBI's NUC.4.4, not NUC.4.2.)
 
 
 .TP
-.BI --popen " <x>"
+.BI \-\-popen " <x>"
 Set the gap open probability for a single sequence query model to 
 .IR <x> .
 The default is 0.02. 
@@ -196,7 +195,7 @@ The default is 0.02.
 must be >= 0 and < 0.5.
 
 .TP
-.BI --pextend " <x>"
+.BI \-\-pextend " <x>"
 Set the gap extend probability for a single sequence query model to 
 .IR <x> .
 The default is 0.4. 
@@ -209,14 +208,14 @@ must be >= 0 and < 1.0.
 
 Reporting thresholds control which hits are reported in output files
 (the main output,
-.IR --tblout ,
+.BR \-\-tblout ,
 and 
-.IR --dfamtblout ).
+.BR \-\-dfamtblout ).
 Hits are ranked by statistical significance (E-value). 
 
 
 .TP
-.BI -E " <x>"
+.BI \-E " <x>"
 Report target sequences with an E-value of <=
 .IR <x> . 
 The default is 10.0, meaning that on average, about 10 false positives
@@ -224,7 +223,7 @@ will be reported per query, so you can see the top of the noise
 and decide for yourself if it's really noise.
 
 .TP
-.BI -T " <x>"
+.BI \-T " <x>"
 Instead of thresholding output on E-value, instead
 report target sequences with a bit score of >=
 .IR <x> .
@@ -241,7 +240,7 @@ round, or marked as significant ("!") as opposed to questionable ("?")
 in hit output.
 
 .TP
-.BI --incE " <x>"
+.BI \-\-incE " <x>"
 Use an E-value of <=
 .I <x>
 as the inclusion threshold.
@@ -250,7 +249,7 @@ would be expected in every 100 searches with different query
 sequences.
 
 .TP
-.BI --incT " <x>"
+.BI \-\-incT " <x>"
 Instead of using E-values for setting the inclusion threshold, 
 use a bit score of >= 
 .I <x>
@@ -272,12 +271,12 @@ by
 from Stockholm format alignment files. For a nucleotide model, each 
 thresholding option has a single per-hit threshold <x>
 This acts as if
-.BI -T <x>
-.BI --incT <x>
+.BI \-T " <x>"
+.BI \-\-incT " <x>"
 has been applied specifically using each model's curated thresholds.
 
 .TP
-.B --cut_ga
+.B \-\-cut_ga
 Use the GA (gathering) bit score threshold in the model to set
 per-hit reporting and inclusion
 thresholds. GA thresholds are generally considered to be the
@@ -287,7 +286,7 @@ with a model of a family known to be found in that organism. They
 may allow for minimal expected false discovery rate.
 
 .TP
-.B --cut_nc
+.B \-\-cut_nc
 Use the NC (noise cutoff) bit score threshold in the model to set
 per-hit reporting and inclusion
 thresholds. NC thresholds are less stringent than GA; in the context
@@ -295,7 +294,7 @@ of Pfam, they are generally used to store the score of the
 highest-scoring known false positive.
 
 .TP
-.B --cut_tc
+.B \-\-cut_tc
 Use the TC (trusted cutoff) bit score threshold in the model to set
 per-hit reporting and inclusion
 thresholds. TC thresholds are more stringent than GA, and are
@@ -323,7 +322,7 @@ E-values, or alignments, all of which are determined solely in
 postprocessing.
 
 .TP
-.B --max
+.B \-\-max
 Turn off (nearly) all filters, including the bias filter, and run full
 Forward/Backward postprocessing on most of the target sequence. 
 In contrast to 
@@ -331,30 +330,30 @@ In contrast to
 and
 .BR hmmsearch ,
 where this flag really does turn off the filters entirely, the
-.I --max
+.B \-\-max
 flag in 
 .B nhmmer
 sets the scanning-SSV filter threshold to 0.4, not 1.0. Use of this
 flag increases sensitivity somewhat, at a large cost in speed.
 
 .TP
-.BI --F1 " <x>"
+.BI \-\-F1 " <x>"
 Set the P-value threshold for the SSV filter step.  The default is
 0.02, meaning that roughly 2% of the highest scoring nonhomologous
 targets are expected to pass the filter.
 
 .TP
-.BI --F2 " <x>"
+.BI \-\-F2 " <x>"
 Set the P-value threshold for the Viterbi filter step.
 The default is 0.001. 
 
 .TP
-.BI --F3 " <x>"
+.BI \-\-F3 " <x>"
 Set the P-value threshold for the Forward filter step.
 The default is 1e-5.
 
 .TP
-.B --nobias
+.B \-\-nobias
 Turn off the bias filter. This increases sensitivity somewhat, but can
 come at a high cost in speed, especially if the query has biased
 residue composition (such as a repetitive sequence region, or if it is
@@ -368,36 +367,32 @@ abnormally heavy load.
 
 .SH OPTIONS FOR SPECIFYING THE ALPHABET
 
-The alphabet type of the target database (DNA or RNA) is autodetected 
-by default, by looking at the composition of the
-.IR <seqdb> .
-Autodetection is normally quite reliable, but occasionally alphabet
-type may be ambiguous and autodetection can fail (for instance, when
-the first sequence starts with a run of ambiguous characters). To 
-avoid this, or to increase robustness in automated analysis pipelines, 
-you may specify the alphabet type of
-.I <seqdb>
-with these options.
+.TP
+.B \-\-amino
+Assert that sequences in 
+.I msafile
+are protein, bypassing alphabet autodetection.
 
 .TP
-.B --dna
-Specify that all sequences in 
-.I <seqdb>
-are DNAs.
+.B \-\-dna
+Assert that sequences in
+.I msafile
+are DNA, bypassing alphabet autodetection.
 
 .TP
-.B --rna
-Specify that all sequences in 
-.I <seqdb>
-are RNAs.
+.B \-\-rna
+Assert that sequences in 
+.I msafile
+are RNA, bypassing alphabet autodetection.
+
 
 
 .SH OPTIONS CONTROLLING SEED SEARCH HEURISTIC
 
 When searching with 
-.IR nhmmer ,
+.BR nhmmer ,
 one may optionally precompute a binary version of the target database, using
-.IR makehmmerdb ,
+.BR makehmmerdb ,
 then search against that database. Using default settings, this yields a
 roughly 10-fold acceleration with small loss of sensitivity on benchmarks.
 This is achieved using a heuristic method that searches for seeds (ungapped 
@@ -405,77 +400,77 @@ alignments) around which full processing is done. This is essentially
 a replacement to the SSV stage. (This method has been extensively tested, 
 but should still be treated as somewhat experimental.)
 The following options only impact 
-.I nhmmer
+.B nhmmer
 if the value of 
-.B --tformat
+.B \-\-tformat
 is
-.IR hmmerdb .
+.BR hmmerdb .
 
 Changing parameters for this seed-finding step will impact both speed and 
 sensitivity - typically faster search leads to lower sensitivity. 
 
 .TP
-.BI --seed_max_depth " <n>"
+.BI \-\-seed_max_depth " <n>"
 The seed step requires that a seed reach a specified bit score in length 
 no longer than 
-.BR <n> . 
+.IR <n> . 
 By default, this value is 15. Longer seeds allow a greater chance of 
 meeting the bit score threshold, leading to diminished filtering
 (greater sensitivity, slower run time).
 
 .TP
-.BI --seed_sc_thresh " <x>"
+.BI \-\-seed_sc_thresh " <x>"
 The seed must reach score 
-.B <x>
+.I <x>
 (in bits). The default is 15.0 bits. A higher threshold increases 
 filtering stringency, leading to faster run times and lower 
 sensitivity.
 
 .TP
-.BI --seed_sc_density " <x>"
+.BI \-\-seed_sc_density " <x>"
 Either all prefixes or all suffixes of a seed must have 
 bit density (bits per aligned position) of at least 
-.BR <x> . 
+.IR <x> . 
 The default is 0.8 bits/position. An increase in the density 
 requirement leads to increased filtering stringency, thus faster 
 run times and lower sensitivity.
 
 .TP
-.BI --seed_drop_max_len " <n>"
+.BI \-\-seed_drop_max_len " <n>"
 A seed may not have a run of length
-.B <n>
+.I <n>
 in which the score drops by 
-.I --seed_drop_lim
+.B \-\-seed_drop_lim
 or more. Basically, this prunes seeds that go through long
 slightly-negative seed extensions. The default is 4.  Increasing 
 the limit causes (slightly) diminished filtering efficiency, thus 
 slower run times and higher sensitivity. (minor tuning option)
 
 .TP
-.BI --seed_drop_lim " <x>"
+.BI \-\-seed_drop_lim " <x>"
 In a seed, there may be no run of length 
-.I --seed_drop_max_len
+.B \-\-seed_drop_max_len
 in which the score drops by 
-.IR --seed_drop_lim .
+.BR \-\-seed_drop_lim .
 The default is 0.3 bits. Larger numbers mean less filtering.
 (minor tuning option)
 
 .TP
-.BI --seed_req_pos " <n>"
+.BI \-\-seed_req_pos " <n>"
 A seed must contain a run of at least 
-.B <n>
+.I <n>
 positive-scoring matches. The default is 5. Larger values mean
 increased filtering.
 (minor tuning option)
 
 .TP
-.BI --seed_ssv_length " <n>"
+.BI \-\-seed_ssv_length " <n>"
 After finding a short seed, an ungapped alignment is extended 
 in both directions in an attempt to meet the 
-.I --F1
+.B \-\-F1
 score threshold. The window through which this ungapped alignment
 extends is length 
-.BR <n> .
+.IR <n> .
 The default is 70.  
 Decreasing this value slightly reduces run time, at a small risk of
 reduced sensitivity. (minor tuning option)
@@ -485,76 +480,98 @@ reduced sensitivity. (minor tuning option)
 
 
 .TP 
-.BI --qhmm " <s>"
-Declare that the input
-.I <queryfile>
+.B \-\-qhmm 
+Assert that the input
+.I queryfile
 contains one or more profile HMMs, as built by 
 .BR hmmbuild . 
 
 .TP 
-.BI --qfasta " <s>"
-Declare that the input
-.I <queryfile>
-contains one or more unaligned sequences, stored in 
-.IR fasta 
-format. 
+.B \-\-qfasta 
+Assert that the input
+.I queryfile
+contains one or more unaligned sequences, stored in fasta format. 
  
 .TP 
-.BI --qmsa " <s>"
-Declare that the input
-.I <queryfile>
+.B \-\-qmsa 
+Assert that the input
+.I queryfile
 contains one or more sequence alignments. The format of
 the file may be specified with the  
-.BR --qformat 
+.B \-\-qformat 
 flag.
 
 
 .TP 
-.BI --qformat " <s>"
-Declare that the input
-.I <queryfile>
-is in format 
-.IR <s> .
-This is used when the query is sequence-based, rather than made
-up of profile model(s).
-Currently the accepted multiple alignment sequence file formats 
-include Stockholm, Aligned FASTA, Clustal, NCBI PSI-BLAST, PHYLIP, 
-Selex, and UCSC SAM A2M. Default is to autodetect the format of
-the file.
+.BI \-\-qformat " <s>"
+Assert that input
+.I queryfile
+is a sequence file (unaligned or aligned), in format
+.IR <s> ,
+bypassing format autodetection.
+Common choices for 
+.I <s> 
+include:
+.BR fasta ,
+.BR embl ,
+.BR genbank.
+Alignment formats also work;
+common choices include:
+.BR stockholm , 
+.BR a2m ,
+.BR afa ,
+.BR psiblast ,
+.BR clustal ,
+.BR phylip .
+For more information, and for codes for some less common formats,
+see main documentation.
+The string
+.I <s>
 
 .TP
-.BI --tformat " <s>"
-Assert that the target sequence database file is in format 
-.IR <s> . 
-Accepted formats include 
-.IR fasta , 
-.IR embl , 
-.IR genbank ,
-.IR ncbi ,
-.IR ddbj , 
-.IR uniprot ,
-.IR stockholm , 
-.IR pfam , 
-.IR a2m , 
-.IR afa , 
-and 
-.IR fmindex .
-The default is to autodetect the format of the file. The format
-.I ncbi
+.BI \-\-tformat " <s>"
+Assert that target sequence database
+.I seqdb
+is in format
+.IR <s> ,
+bypassing format autodetection.
+Common choices for 
+.I <s> 
+include:
+.BR fasta ,
+.BR embl ,
+.BR genbank ,
+.BR ncbi ,
+.BR fmindex .
+Alignment formats also work;
+common choices include:
+.BR stockholm , 
+.BR a2m ,
+.BR afa ,
+.BR psiblast ,
+.BR clustal ,
+.BR phylip .
+For more information, and for codes for some less common formats,
+see main documentation.
+The string
+.I <s>
+is case-insensitive (\fBfasta\fR or \fBFASTA\fR both work).
+The format
+.B ncbi
 indicates that the database file is a binary file produced using
-.I makeblastdb 
-. The format
-.I fmindex
+.BR makeblastdb .
+The format
+.B fmindex
 indicates that the database file is a binary file produced using
-.I makehmmerdb . 
+.BR makehmmerdb . 
 
 
 .TP
-.B --nonull2
+.B \-\-nonull2
 Turn off the null2 score corrections for biased composition.
 
 .TP
-.BI -Z " <x>"
+.BI \-Z " <x>"
 For the purposes of per-hit E-value calculations,
 Assert that the total size of the target database is
 .I <x>
@@ -563,7 +580,7 @@ rather than the actual number of targets seen.
 
 
 .TP
-.BI --seed " <n>"
+.BI \-\-seed " <n>"
 Set the random number seed to 
 .IR <n> .
 Some steps in postprocessing require Monte Carlo simulation.  The
@@ -573,15 +590,13 @@ reproducible) results. A choice of 0 uses a randomly chosen seed.
 
 
 .TP 
-.BI --w_beta " <x>"
+.BI \-\-w_beta " <x>"
 Window length tail mass.
 The upper bound,
 .IR W ,
 on the length at which nhmmer expects to find an instance of the 
 model is set such that the fraction of all sequences generated
-by the model with length 
-.I ">= W"
-is less than  
+by the model with length >= W is less than  
 .IR <x> . 
 The default is 1e-7. 
 This flag may be used to override the value of 
@@ -593,38 +608,34 @@ or when the query is sequence-based.
 
 
 .TP 
-.BI --w_length " <n>"
-Override the model instance length upper bound,
-.IR W ,
+.BI \-\-w_length " <n>"
+Override the model instance length upper bound, W,
 which is otherwise controlled by
-.BR --w_beta . 
-It should be larger than the model length. The value of 
-.I W
+.BR \-\-w_beta . 
+It should be larger than the model length. The value of W
 is used deep in the acceleration pipeline, and modest changes
-are not expected to impact results (though larger values of 
-.I W
+are not expected to impact results (though larger values of W
 do lead to longer run time). 
 This flag may be used to override the value of 
-.I W
-established for the model by 
+W established for the model by 
 .BR hmmbuild ,
 or when the query is sequence-based.
 
 
 
 .TP 
-.B --watson 
+.B \-\-watson 
 Only search the top strand. By default both the query sequence
 and its reverse-complement are searched.
 
 .TP 
-.B --crick 
+.B \-\-crick 
 Only search the bottom (reverse-complement) strand. By 
 default both the query sequence and its reverse-complement are searched.
 
 
 .TP
-.BI --cpu " <n>"
+.BI \-\-cpu " <n>"
 Set the number of parallel worker threads to 
 .IR <n> .
 On multicore machines, the default is 2.
@@ -641,20 +652,20 @@ support turned off.
 
 
 .TP
-.BI --stall
+.BI \-\-stall
 For debugging the MPI master/worker version: pause after start, to
 enable the developer to attach debuggers to the running master and
 worker(s) processes. Send SIGCONT signal to release the pause.
 (Under gdb: 
-.IR "(gdb) signal SIGCONT" )
+.BR "(gdb) signal SIGCONT" )
 (Only available if optional MPI support was enabled at compile-time.)
 
 .TP
-.BI --mpi
-Run in MPI master/worker mode, using
-.IR mpirun .
-(Only available if optional MPI support was enabled at compile-time.)
-
+.BI \-\-mpi
+Run under MPI control with master/worker parallelization (using
+.BR mpirun ,
+for example, or equivalent). Only available if optional MPI support
+was enabled at compile-time.
 
 
 
@@ -664,7 +675,7 @@ Run in MPI master/worker mode, using
 .SH SEE ALSO 
 
 See 
-.B hmmer(1)
+.BR hmmer (1)
 for a master man page with a list of all the individual man pages
 for programs in the HMMER package.
 

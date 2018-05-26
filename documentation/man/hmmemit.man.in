@@ -1,11 +1,11 @@
 .TH "hmmemit" 1 "@HMMER_DATE@" "HMMER @HMMER_VERSION@" "HMMER Manual"
 
 .SH NAME
-hmmemit - sample sequences from a profile HMM
+hmmemit \- sample sequences from a profile 
 
 .SH SYNOPSIS
 .B hmmemit
-.I [options]
+[\fIoptions\fR]
 .I hmmfile
 
 
@@ -25,18 +25,18 @@ creating synthetic true positives for benchmarks or tests.
 The default is to sample one unaligned sequence from the core
 probability model, which means that each sequence consists of one
 full-length domain.  Alternatively, with the
-.B -c
+.B \-c
 option, you can emit a simple majority-rule consensus sequence;
 or with the
-.B -a 
+.B \-a 
 option, you can emit an alignment (in which case, you probably
 also want to set 
-.B -N 
+.B \-N 
 to something other than its default of 1 sequence per model).
 
 .PP
 As another option, with the
-.B -p
+.B \-p
 option you can sample a sequence from a fully configured HMMER search
 profile. This means sampling a `homologous sequence' by HMMER's
 definition, including nonhomologous flanking sequences, local
@@ -50,30 +50,27 @@ may contain a library of HMMs, in which case
 each HMM will be used in turn.
 
 .PP
-.I <hmmfile> 
-may be '-' (dash), which
-means reading this input from
-.I stdin
-rather than a file.  
+.I hmmfile 
+may be '\-' (dash), which
+means reading this input from stdin rather than a file.  
 
 
 .SH COMMON OPTIONS
 
 .TP
-.B -h
+.B \-h
 Help; print a brief reminder of command line usage and all available
 options.
 
 
 .TP
-.BI -o " <f>"
+.BI \-o " <f>"
 Direct the output sequences to file
 .IR <f> ,
-rather than to
-.IR stdout .
+rather than to stdout.
 
 .TP
-.BI -N " <n>"
+.BI \-N " <n>"
 Sample
 .I <n>
 sequences per model, rather than just one.
@@ -89,22 +86,22 @@ you may choose one (and only one) of the following alternatives.
 
 
 .TP
-.B -a
+.B \-a
 Emit an alignment for each HMM in the 
 .I hmmfile
 rather than sampling unaligned sequences one at a time.
 
 .TP
-.B -c
+.B \-c
 Emit a plurality-rule consensus sequence, instead of sampling a
 sequence from the profile HMM's probability distribution. The
 consensus sequence is formed by selecting the maximum probability
 residue at each match state.
 
 .TP
-.B -C
+.B \-C
 Emit a fancier plurality-rule consensus sequence than the
-.B -c
+.B \-c
 option. If the maximum probability residue has p < 
 .B minl
 show it as a lower case 'any' residue (n or x); if p >= 
@@ -119,9 +116,9 @@ The default settings of
 and 
 .B minl 
 are both 0.0, which means
-.B -C 
+.B \-C 
 gives the same output as 
-.B -c 
+.B \-c 
 unless you also set 
 .B minu
 and
@@ -129,7 +126,7 @@ and
 to what you want.
 
 .TP
-.B -p
+.B \-p
 Sample unaligned sequences from the implicit search profile, not from
 the core model.  The core model consists only of the homologous states
 (between the begin and end states of a HMMER Plan7 model). The profile
@@ -146,45 +143,46 @@ local mode, and the target sequence length is configured for L=400.
 .SH OPTIONS CONTROLLING EMISSION FROM PROFILES
 
 These options require that you have set the
-.B -p
+.B \-p
 option.
 
 .TP
-.BI -L " <n>"
+.BI \-L " <n>"
 Configure the profile's target sequence length model to generate a
 mean length of approximately <n> rather than the default of 400.
 
 .TP
-.B --local
+.B \-\-local
 Configure the profile for multihit local alignment.
 
 .TP
-.B --unilocal
+.B \-\-unilocal
 Configure the profile for unihit local alignment (Smith/Waterman).
 
 .TP
-.B --glocal
+.B \-\-glocal
 Configure the profile for multihit glocal alignment.
 
 .TP
-.B --uniglocal
+.B \-\-uniglocal
 Configure the profile for unihit glocal alignment.
 
 
 .SH OPTIONS CONTROLLING FANCY CONSENSUS EMISSION
 
 These options require that you have set the
-.BR "-C option" .
+.B \-C
+option.
 
 .TP
-.BI --minl " <x>"
+.BI \-\-minl " <x>"
 Sets the 
 .B minl
 threshold for showing weakly conserved residues as lower case.
 (0 <= x <= 1)
 
 .TP
-.BI --minu " <x>"
+.BI \-\-minu " <x>"
 Sets the 
 .B minu 
 threshold for showing strongly conserved residues as upper case.
@@ -195,7 +193,7 @@ threshold for showing strongly conserved residues as upper case.
 .SH OTHER OPTIONS
 
 .TP
-.BI --seed " <n>"
+.BI \-\-seed " <n>"
 Seed the random number generator with
 .IR <n> ,
 an integer >= 0. 
@@ -218,7 +216,7 @@ runs will generate different samples.
 .SH SEE ALSO 
 
 See 
-.B hmmer(1)
+.BR hmmer (1)
 for a master man page with a list of all the individual man pages
 for programs in the HMMER package.
 

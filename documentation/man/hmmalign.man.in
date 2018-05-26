@@ -1,44 +1,40 @@
 .TH "hmmalign" 1 "@HMMER_DATE@" "HMMER @HMMER_VERSION@" "HMMER Manual"
 
 .SH NAME
-hmmalign - align sequences to a profile HMM
+hmmalign \- align sequences to a profile 
 
 .SH SYNOPSIS
 .B hmmalign
-.I [options]
-.I <hmmfile>
-.I <seqfile>
+[\fIoptions\fR]
+.I hmmfile
+.I seqfile
 
 .SH DESCRIPTION
 
 .PP
 Perform a multiple sequence alignment of all the sequences in
-.I <seqfile>
+.I seqfile
 by aligning them individually to the profile HMM in
-.I <hmmfile>.
-The new alignment is output to 
-.I stdout
-in Stockholm format.
+.I hmmfile.
+The new alignment is output to stdout.
 
 .PP 
 The
-.I <hmmfile>
+.I hmmfile
 should contain only a single profile. If it contains more, only the
 first profile in the file will be used. 
 
 .PP
 Either 
-.I <hmmfile> 
+.I hmmfile
 or 
-.I <seqfile> 
-(but not both) may be '-' (dash), which
-means reading this input from
-.I stdin
-rather than a file.  
+.I seqfile 
+(but not both) may be '\-' (dash), which
+means reading this input from stdin rather than a file.  
 
 .PP
 The sequences in 
-.I <seqfile>
+.I seqfile
 are aligned in unihit local alignment mode.  Therefore they should
 already be known to contain only a single domain (or a fragment of one).
 The optimal alignment
@@ -46,35 +42,34 @@ may assign some residues as nonhomologous (N and C states), in which
 case these residues are still included in the resulting alignment, but
 shoved to the outer edges. To trim these unaligned nonhomologous residues from
 the result, see the
-.B --trim
+.B \-\-trim
 option.
 
 
 .SH OPTIONS
 
 .TP
-.B -h
+.B \-h
 Help; print a brief reminder of command line usage and all available
 options.
 
 .TP
-.BI -o " <f>"
+.BI \-o " <f>"
 Direct the output alignment to file
 .I <f>,
-rather than to
-.I stdout.
+rather than to stdout.
 
 .TP
-.BI --mapali " <f>"
+.BI \-\-mapali " <f>"
 Merge the existing alignment in file 
 .I <f>
 into the result, where 
 .I <f> 
 is exactly the same alignment that was used to build the model in  
-.I <hmmfile>.
+.I hmmfile.
 This is done using a map of alignment columns to consensus 
 profile positions that is stored in the
-.I <hmmfile>.
+.I hmmfile.
 The multiple alignment in 
 .I <f>
 will be exactly reproduced in its consensus columns (as defined by the
@@ -84,53 +79,82 @@ convention to be unaligned data.
 
 
 .TP
-.B --trim
+.B \-\-trim
 Trim nonhomologous residues (assigned to N and C states in the optimal
 alignments) from the resulting multiple alignment output. 
 
 .TP
-.B --amino
-Specify that all sequences in 
-.I <seqfile>
-are proteins. By default, alphabet type is autodetected
-from looking at the residue composition.
+.B \-\-amino
+Assert that sequences in 
+.I seqfile
+are protein, bypassing alphabet autodetection.
 
 .TP
-.B --dna
-Specify that all sequences in 
-.I <seqfile>
-are DNAs.
+.B \-\-dna
+Assert that sequences in
+.I seqfile
+are DNA, bypassing alphabet autodetection.
 
 .TP
-.B --rna
-Specify that all sequences in 
-.I <seqfile>
-are RNAs.
+.B \-\-rna
+Assert that sequences in 
+.I seqfile
+are RNA, bypassing alphabet autodetection.
+
 
 .TP 
-.BI --informat " <s>"
-Declare that the input
-.I <seqfile>
-is in format 
-.I <s>.
-Accepted sequence file formats include FASTA, EMBL, GenBank, DDBJ,
-UniProt, Stockholm, and SELEX. Default is to autodetect the format of
-the file.
+.BI \-\-informat " <s>"
+Assert that input
+.I seqfile
+is in format
+.IR <s> ,
+bypassing format autodetection.
+Common choices for 
+.I <s> 
+include:
+.BR fasta ,
+.BR embl ,
+.BR genbank.
+Alignment formats also work;
+common choices include:
+.BR stockholm , 
+.BR a2m ,
+.BR afa ,
+.BR psiblast ,
+.BR clustal ,
+.BR phylip .
+For more information, and for codes for some less common formats,
+see main documentation.
+The string
+.I <s>
+is case-insensitive (\fBfasta\fR or \fBFASTA\fR both work).
 
 .TP 
-.BI --outformat " <s>"
-Specify that the output multiple alignment
-is in format 
-.I <s>.
-Currently the accepted multiple alignment sequence file formats only
-include Stockholm and SELEX.
+.BI \-\-outformat " <s>"
+Write the output alignment
+in format
+.IR <s> .
+Common choices for 
+.I <s> 
+include:
+.BR stockholm , 
+.BR a2m ,
+.BR afa ,
+.BR psiblast ,
+.BR clustal ,
+.BR phylip .
+The string
+.I <s>
+is case-insensitive (\fBa2m\fR or \fBA2M\fR both work).
+Default is
+.BR stockholm .
 
 
 
 .SH SEE ALSO 
 
 See 
-.B hmmer(1)
+.BR hmmer (1)
 for a master man page with a list of all the individual man pages
 for programs in the HMMER package.
 

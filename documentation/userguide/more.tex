@@ -1,17 +1,18 @@
 
-\section{Some other topics}
-\label{section:more}
+\chapter{Some other topics}
+\label{chapter:more}
 \setcounter{footnote}{0}
 
-\subsection{How do I cite HMMER?}
+\section{How do I cite HMMER?}
 
-The appropriate citation is to the web site, \url{hmmer.org}. You
-should also cite what version of the software you used. We archive all
-old versions, so anyone should be able to obtain the version you used,
-when exact reproducibility of an analysis is an issue. 
+There has never been a paper on the HMMER software. There may never
+be!  The best citation is to the web site, \url{hmmer.org}.
 
-The version number is in the header of most output files. To see it
-quickly, do something like \prog{hmmscan -h} to get a help page, and
+You should also cite what version of the software you used. We archive
+all old versions, so anyone should be able to obtain the version you
+used, when exact reproducibility of an analysis is an issue.  The
+version number is in the header of most output files. To see it
+quickly, do something like \mono{hmmscan -h} to get a help page, and
 the header will say:
 
 \begin{sreoutput}
@@ -24,19 +25,20 @@ the header will say:
 
 So (from the second line there) this is from HMMER 3.1.
 
-There is not yet any appropriate citable published paper that
-describes the HMMER3 software suite.
+If an unenlightened, url-unfriendly journal forces you to cite a dead
+tree reference, currently the best one to use is the 2011 paper on
+HMMER3 acceleration.\cite{Eddy11}
 
 
 
-\subsection{How do I report a bug?}
+\section{How do I report a bug?}
 
-Email us, at \url{hmmer@janelia.hhmi.org}.
+Open an issue on our issue tracker at GitHub,\sidenote{\href{https://github.com/EddyRivasLab/hmmer/issues}{github.com/EddyRivasLab/hmmer/issues}}
+or email me.
 
-Before we can see what needs fixing, we almost always need to
-reproduce a bug on one of our machines. This means we want to have a
-small, reproducible test case that shows us the failure you're seeing.
-So if you're reporting a bug, please send us:
+\emph{Please} give us enough information that we can reproduce the
+bug, including any files.  Ideally, we'd like to have a small,
+reproducible test case.  So if you're reporting a bug, please send us:
 
 \begin{itemize}
  \item A brief description of what went wrong.
@@ -53,10 +55,10 @@ information, but any work you can put into giving us a clean
 reproducible test case doesn't hurt and often helps.
 
 The information about hardware, operating system, and compiler is
-important. Bugs are frequently specific to particular configurations
-of hardware/OS/compiler.  We have a wide variety of systems available
-for trying to reproduce bugs, and we'll try to match your system as
-closely as we can.
+often important. Bugs are frequently specific to particular
+configurations of hardware/OS/compiler.  We have a wide variety of
+systems available for trying to reproduce bugs, and we'll try to match
+your system as closely as we can.
 
 If you first see a problem on some huge compute (like running a
 zillion query sequence over a huge profile database), it will really,
@@ -64,12 +66,11 @@ really help us if you spend a bit of time yourself trying to isolate
 whether the problem really only manifests itself on that huge compute,
 or if you can isolate a smaller test case for us. The ideal bug report
 (for us) gives us everything we need to reproduce your problem in one
-email with at most some small attachments. 
-
-Remember, we're not a company with dedicated support staff -- we're a
+email with at most some small attachments.
+\marginnote{Remember, we're not a company with dedicated support staff -- we're a
 small lab of busy researchers like you. Somebody here is going to drop
-what they're doing to try to help you out. Try to save us some time,
-and we're more likely to stay in our usual good mood.
+what they're doing to try to help you out. Probably me. Try to save us
+some time, and we're more likely to stay in our usual good mood.}
 
 If we're in our usual good mood, we'll reply quickly.  We'll probably
 tell you we fixed the bug in our development code, and that the fix
@@ -82,14 +83,11 @@ If the code fix is small, we might also tell you how to patch and
 recompile the code yourself. You may or may not want to do this.
 
 
-There are currently not enough open bugs to justify having a formal
-on-line bug tracking system. We have a bugtracking system, but it's
-internal.
 
 
-\subsection{Input files}
+\section{Input files}
 
-\subsubsection{Reading from a stdin pipe using - (dash) as a filename argument}
+\subsection{Reading from a stdin pipe using - (dash) as a filename argument}
 
 Generally, HMMER programs read their sequence and/or profile input
 from files. Unix power users often find it convenient to string an
@@ -113,8 +111,8 @@ give essentially identical output:
 
 Most Easel ``miniapp'' programs share the same ability of pipe-reading.
 
-Because the programs for profile HMM fetching (\prog{hmmfetch}) and
-sequence fetching (\prog{esl-sfetch}) can fetch any number of profiles
+Because the programs for profile HMM fetching (\mono{hmmfetch}) and
+sequence fetching (\mono{esl-sfetch}) can fetch any number of profiles
 or sequences by names/accessions given in a list, \emph{and} these
 programs can also read these lists from a stdin pipe, you can craft
 incantations that generate subsets of queries or targets on the
@@ -125,12 +123,12 @@ fly. For example:
 \user{cat mytargs.list | esl-sfetch -f uniprot\_sprot.fasta - | hmmsearch globins4.hmm -}
 
 This takes a list of sequence names/accessions in
-\prog{mytargets.list}, fetches them one by one from UniProt (note that
+\mono{mytargets.list}, fetches them one by one from UniProt (note that
 we index the UniProt file first, for fast retrieval; and note that
-\prog{esl-sfetch} is reading its \prog{<namefile>} list of
+\mono{esl-sfetch} is reading its \mono{<namefile>} list of
 names/accessions through a pipe using the '-' argument), and pipes
-them to an \prog{hmmsearch}. It should be obvious from this that we
-can replace the \prog{cat mytargets.list} with \emph{any} incantation
+them to an \mono{hmmsearch}. It should be obvious from this that we
+can replace the \mono{cat mytargets.list} with \emph{any} incantation
 that generates a list of sequence names/accessions (including SQL
 database queries).
 
@@ -141,23 +139,23 @@ Ditto for piping subsets of profiles. Supposing you have a copy of Pfam in Pfam-
 \user{cat myqueries.list | hmmfetch -f Pfam.hmm - | hmmsearch - uniprot\_sprot.fasta}
 
 This takes a list of query profile names/accessions in
-\prog{myqueries.list}, fetches them one by one from Pfam, and does an
-hmmsearch with each of them against UniProt. As above, the \prog{cat
+\mono{myqueries.list}, fetches them one by one from Pfam, and does an
+hmmsearch with each of them against UniProt. As above, the \mono{cat
   myqueries.list} part can be replaced by any suitable incantation
 that generates a list of profile names/accessions.
 
 There are three kinds of cases where using '-' is restricted or
 doesn't work. A fairly obvious restriction is that you can only use
-one '-' per command; you can't do a \prog{hmmsearch - -} that tries to
+one '-' per command; you can't do a \mono{hmmsearch - -} that tries to
 read both profile queries and sequence targets through the same stdin
 pipe. Second, another case is when an input file must be obligately
 associated with additional, separately generated auxiliary files, so
 reading data from a single stream using '-' doesn't work because the
 auxiliary files aren't present (in this case, using '-' will be
-prohibited by the program). An example is \prog{hmmscan}, which needs
-its \prog{<hmmfile>} argument to be associated with four auxiliary
-files named \prog{<hmmfile>.h3\{mifp\}} that \prog{hmmpress} creates,
-so \prog{hmmscan} does not permit a '-' for its \prog{<hmmfile>}
+prohibited by the program). An example is \mono{hmmscan}, which needs
+its \mono{<hmmfile>} argument to be associated with four auxiliary
+files named \mono{<hmmfile>.h3\{mifp\}} that \mono{hmmpress} creates,
+so \mono{hmmscan} does not permit a '-' for its \mono{<hmmfile>}
 argument. Finally, when a command would require multiple passes over
 an input file, the command will generally abort after the first pass
 if you are trying to read that file through a standard input pipe
@@ -174,7 +172,7 @@ database:
 This will fail. Unfortunately the above business about how it will
 ``generally abort after the first pass'' means it fails weirdly. The
 first query profile search will succeed, and its output will appear;
-then an error message will be generated when \prog{hmmsearch} sees the
+then an error message will be generated when \mono{hmmsearch} sees the
 \emph{second} profile query and oops, it realizes it is unable to
 rewind the target sequence database stream. This is inherent in how it
 reads the profile HMM query file sequentially as a stream (which is
@@ -196,13 +194,67 @@ pipes, you just have to know, for any given program, which file it
 considers to be queries and which it considers to be targets. (That
 is, the logic in searching many queries against many targets is ``For
 each query: search the target database; then rewind the target
-database to the beginning.'') For \prog{hmmsearch}, the profiles are
-queries and sequences are targets. For \prog{hmmscan}, the reverse.
+database to the beginning.'') For \mono{hmmsearch}, the profiles are
+queries and sequences are targets. For \mono{hmmscan}, the reverse.
 
 In general, HMMER and Easel programs document in their man page
 whether (and which) command line arguments can be replaced by '-'.
 You can always check by trial and error, too. The worst that can
 happen is a ``Failed to open file -'' error message, if the program
 can't read from pipes.
+
+
+\section{When's HMMER4 coming?}
+
+HMMER4 has been in development since 2011. Some of the stuff it will
+include:
+
+\paragraph{The return of glocal alignment.} Slow old HMMER2 was
+ capable of ``glocal'' alignment, in which it would align a complete
+ profile to a subsequence of a target sequence; this was great for
+ annotating domain structure of protein sequences, among other things.
+ In developing our speed heuristic for HMMER3, for numerical reasons,
+ we had to sacrifice glocal alignment; HMMER3 \emph{only} does local
+alignment. In HMMER4, we've solved the problems that prevented H3 from
+using glocal alignment. H4 uses a new \emph{dual-mode} profile
+architecture, combining local and glocal alignment modes in a single
+probability model.
+
+\paragraph{Memory efficiency.} The HMMER ensemble alignment
+algorithms (the HMM Forward and Backward algorithms) are expensive in
+memory. For most uses, you don't notice, but there are extreme cases
+where you may. H3 can require as much as $\sim 36L^2$ bytes of memory
+for a query sequence of length $L$, and for a 35Kaa titin sequence,
+that's 44GB of RAM. In HMMER4, we've solved this with a variety of old
+and new techniques.
+
+\paragraph{Ensemble calculations everywhere.} HMMER uses ensemble
+calculations (i.e., integrates over alignment uncertainty) for scoring
+homologous sequences and for calculating the confidence in individual
+aligned residues. However, when it decides how many domains are in a
+sequence, and where they are, it uses an \emph{ad hoc} procedure that
+uses ensemble information, but is not well defined. In HMMER4, we've
+solved that problem with a new domain definition algorithm.
+
+\paragraph{More processor support.} One of the attractive features of the
+HMMER ``MSV'' acceleration algorithm is that it is a very tight and
+efficient piece of code. The bad news is, it's a very tight and
+efficient piece of \emph{assembly} code. We have to write
+processor-specific SIMD vector instructions for each platform that
+HMMER runs on. HMMER currently only supports x86 (Intel/AMD) and
+PowerPC platforms (big-endian AIX PowerPC's, not the newer crop of
+little-endian Linux PowerPC's). HMMER4 will also include support for
+Linux/PowerPC and ARM NEON. It also can use the latest x86 vector
+instructions (AVX and AVX-512).
+
+\paragraph{Better parallelization.} HMMER is so fast that it's often
+input-bound, rather than CPU-bound: that is, it takes longer just to
+get the sequences from your disk than it takes to compare them to a
+profile. That's been taxing the simple parallelization methods we
+use. HMMER's multithreaded parallelization really doesn't scale well
+beyond 2-4 processors, on most machines; and possibly worse, if you're
+on a slow filesystem (for example, if you're reading data from a
+network filesystem instead of from local disk). In H4, we're working
+on improving our parallelization and our data input.
 
 

@@ -53,13 +53,13 @@
 ################################################################
 # 1. autoconf requirements
 ################################################################
-# Autoconf 2.61 has a bug in AC_FUNC_FSEEKO; don't use it.
+# Autoconf 2.61 (circa 2006) has a bug in AC_FUNC_FSEEKO; don't use it.
 # 2.63 was released in 2008.
 AC_PREREQ(2.63)
 
-
-# Our extra macros are with Easel, in easel/m4
-# Though it's sort of standard to expect them in m4/. Hope nobody gets confused.
+# Our extra macros are with Easel, in easel/m4.
+# It's sort of standard to expect them in m4/, don't 
+# be confused that they're down in easel.
 #
 m4_include([easel/m4/ax_compiler_vendor.m4])
 m4_include([easel/m4/ax_gcc_func_attribute.m4])
@@ -75,7 +75,7 @@ m4_include([easel/m4/ax_pthread.m4])
 # 2. AC_INIT
 ################################################################
 
-AC_INIT(HMMER, 3.2rc1, sean@eddylab.org, hmmer)
+AC_INIT(HMMER, 3.2, sean@eddylab.org, hmmer)
 AC_MSG_NOTICE([Configuring HMMER3 for your system.])
 
 # remember if the user is overriding CFLAGS
@@ -109,7 +109,7 @@ fi
 # to use HMMER as a library inside other packages, with no name clashes.
 ################################################################
 
-HMMER_DATE="March 2018"
+HMMER_DATE="April 2018"
 HMMER_COPYRIGHT="Copyright (C) 2018 Howard Hughes Medical Institute."
 HMMER_LICENSE="Freely distributed under the BSD open source license."
 HMMER_VERSION=$PACKAGE_VERSION
@@ -118,10 +118,10 @@ HMMER_URL="http://hmmer.org/"
 HMMER_ESLDIR="easel"
 HMMER_SADIR="libdivsufsort"
 
-EASEL_DATE="March 2018"
+EASEL_DATE="April 2018"
 EASEL_COPYRIGHT="Copyright (C) 2018 Howard Hughes Medical Institute."
 EASEL_LICENSE="Freely distributed under the BSD open source license."
-EASEL_VERSION="0.44rc1"
+EASEL_VERSION="0.44"
 EASEL_URL="http://bioeasel.org/"
 
 AC_SUBST(HMMER_DATE)

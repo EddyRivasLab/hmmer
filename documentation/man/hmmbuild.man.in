@@ -1,49 +1,34 @@
 .TH "hmmbuild" 1 "@HMMER_DATE@" "HMMER @HMMER_VERSION@" "HMMER Manual"
 
 .SH NAME
-hmmbuild - construct profile HMM(s) from multiple sequence alignment(s)
+hmmbuild \- construct profiles from multiple sequence alignments
 
 .SH SYNOPSIS
 .B hmmbuild
-.I [options]
-.I <hmmfile_out>
-.I <msafile>
+[\fIoptions\fR]
+.I hmmfile
+.I msafile
 
 
 .SH DESCRIPTION
 
 For each multiple sequence alignment in 
-.I <msafile>
+.I msafile
 build a profile HMM 
 and save it to a new file
-.IR <hmmfile_out> .
+.IR hmmfile .
 
 
 .PP
-.I <msafile> 
-may be '-' (dash), which means
-reading this input from
-.I stdin
-rather than a file. 
-To use '-', you must also specify the
-alignment file format with
-.BI --informat " <s>",
-as in
-.B "--informat stockholm"
-(because of a current limitation in our implementation,
-MSA file formats cannot be autodetected in a nonrewindable
-input stream.)
+.I msafile 
+may be '\-' (dash), which means
+reading this input from stdin rather than a file. 
+
 
 .PP
-.I <hmmfile_out>
-may not be '-' 
-.IR (stdout) ,
-because sending the HMM file to 
-.I stdout
-would conflict with the other text
-output of the program.
-
-
+.I hmmfile
+may not be '\-' (stdout), because sending the HMM file to stdout would
+conflict with the other text output of the program.
 
 
 
@@ -51,12 +36,12 @@ output of the program.
 .SH OPTIONS
 
 .TP
-.B -h
+.B \-h
 Help; print a brief reminder of command line usage and all available
 options.
 
 .TP
-.BI -n " <s>"
+.BI \-n " <s>"
 Name the new profile 
 .IR <s> .
 The default is to use the name of the alignment (if one is present in 
@@ -67,7 +52,7 @@ or, failing that, the name of the
 If 
 .I msafile
 contains more than one alignment, 
-.I -n
+.B \-n
 doesn't work, and every alignment must have a name 
 annotated in the 
 .I msafile
@@ -75,14 +60,13 @@ annotated in the
 
 
 .TP
-.BI -o " <f>"
+.BI \-o " <f>"
 Direct the summary output to file
 .IR <f> ,
-rather than to
-.IR stdout .
+rather than to stdout.
 
 .TP
-.BI -O " <f>"
+.BI \-O " <f>"
 After each model is constructed, resave annotated, possibly modified
 source alignments to a file
 .I <f>
@@ -97,60 +81,47 @@ transitions between insert and delete states.
 
 .SH OPTIONS FOR SPECIFYING THE ALPHABET
 
-The alphabet type (amino, DNA, or RNA) is autodetected by default, by
-looking at the composition of the
-.IR msafile .
-Autodetection is normally quite reliable, but occasionally alphabet
-type may be ambiguous and autodetection can fail (for instance, on
-tiny toy alignments of just a few residues). To avoid this, or to
-increase robustness in automated analysis pipelines, you may specify
-the alphabet type of
+.TP
+.B \-\-amino
+Assert that sequences in 
 .I msafile
-with these options.
+are protein, bypassing alphabet autodetection.
 
 .TP
-.B --amino
-Specify that all sequences in 
+.B \-\-dna
+Assert that sequences in
 .I msafile
-are proteins.
+are DNA, bypassing alphabet autodetection.
 
 .TP
-.B --dna
-Specify that all sequences in 
+.B \-\-rna
+Assert that sequences in 
 .I msafile
-are DNAs.
-
-.TP
-.B --rna
-Specify that all sequences in 
-.I msafile
-are RNAs.
-
-
+are RNA, bypassing alphabet autodetection.
 
 .SH OPTIONS CONTROLLING PROFILE CONSTRUCTION 
 
 These options control how consensus columns are defined in an alignment.
 
 .TP
-.B --fast 
+.B \-\-fast 
 Define consensus columns as those that have a fraction >= 
 .B symfrac
 of residues as opposed to gaps. (See below for the
-.B --symfrac
+.B \-\-symfrac
 option.) This is the default.
 
 .TP
-.B --hand
+.B \-\-hand
 Define consensus columns in next profile using reference annotation to
 the multiple alignment. 
 This allows you to define any consensus columns you like.
 
 .TP
-.BI --symfrac " <x>"
+.BI \-\-symfrac " <x>"
 Define the residue fraction threshold necessary to define a
 consensus column when using the 
-.B --fast 
+.B \-\-fast 
 option. The default is 0.5. The symbol fraction in each column
 is calculated after taking relative sequence weighting into account,
 and ignoring gap characters corresponding to ends of sequence
@@ -162,7 +133,7 @@ means that only columns that include 0 gaps (internal
 insertions/deletions) will be assigned as consensus.
 
 .TP
-.BI --fragthresh " <x>"
+.BI \-\-fragthresh " <x>"
 We only want to count terminal gaps as deletions if the aligned
 sequence is known to be full-length, not if it is a fragment (for
 instance, because only part of it was sequenced). HMMER uses a simple
@@ -173,12 +144,12 @@ of the sequence) is less than or equal to a fraction
 times the alignment length in columns,
 then the sequence is handled as a fragment. The default is 0.5.
 Setting
-.BI --fragthresh 0
+.B \-\-fragthresh 0
 will define no (nonempty) sequence as a fragment; you might want to do
-this if you know you've got a carefully curated alignment of full-length
+this if you know you've got a carefully curated alignment of full\-length
 sequences.
 Setting
-.BI --fragthresh 1
+.B \-\-fragthresh 1
 will define all sequences as fragments; you might want to do this if
 you know your alignment is entirely composed of fragments, such as
 translated short reads in metagenomic shotgun data.
@@ -194,34 +165,34 @@ each receive half the weight that one sequence would.  These options
 control which algorithm gets used.
 
 .TP
-.B --wpb
+.B \-\-wpb
 Use the Henikoff position-based sequence weighting scheme [Henikoff
 and Henikoff, J. Mol. Biol. 243:574, 1994].  This is the default.
 
 .TP 
-.B --wgsc 
+.B \-\-wgsc 
 Use the Gerstein/Sonnhammer/Chothia weighting algorithm [Gerstein et
 al, J. Mol. Biol. 235:1067, 1994].
 
 .TP 
-.B --wblosum
+.B \-\-wblosum
 Use the same clustering scheme that was used to weight data in
 calculating BLOSUM subsitution matrices [Henikoff and Henikoff,
 Proc. Natl. Acad. Sci 89:10915, 1992]. Sequences are single-linkage
 clustered at an identity threshold (default 0.62; see
-.IR --wid )
+.BR \-\-wid )
 and within each cluster of c sequences, each sequence gets relative
 weight 1/c.
 
 .TP
-.B --wnone
+.B \-\-wnone
 No relative weights. All sequences are assigned uniform weight. 
 
 .TP 
-.BI --wid " <x>"
+.BI \-\-wid " <x>"
 Sets the identity threshold used by single-linkage clustering when 
 using 
-.IR --wblosum . 
+.BR \-\-wblosum . 
 Invalid with any other weighting scheme. Default is 0.62.
 
 
@@ -235,69 +206,69 @@ total effective sequence number,
 This number may be the actual number of sequences in the alignment,
 but it is almost always smaller than that.
 The default entropy weighting method 
-.I (--eent)
+(\fB\-\-eent\fR)
 reduces the effective sequence
 number to reduce the information content (relative entropy, or average
 expected score on true homologs) per consensus position. The target
 relative entropy is controlled by a two-parameter function, where the
 two parameters are settable with
-.I --ere
+.B \-\-ere
 and 
-.IR --esigma .
+.BR \-\-esigma .
 
 .TP
-.B --eent
+.B \-\-eent
 Adjust effective sequence number to achieve a specific relative entropy
 per position (see
-.IR --ere ).
+.BR \-\-ere ).
 This is the default.
 
 .TP
-.B --eclust
+.B \-\-eclust
 Set effective sequence number to the number of single-linkage clusters
 at a specific identity threshold (see 
-.IR --eid ).
+.BR \-\-eid ).
 This option is not recommended; it's for experiments evaluating
 how much better
-.B --eent
+.B \-\-eent
 is.
 
 .TP
-.B --enone
+.B \-\-enone
 Turn off effective sequence number determination and just use the
 actual number of sequences. One reason you might want to do this is
 to try to maximize the relative entropy/position of your model, which
 may be useful for short models.
 
 .TP
-.BI --eset " <x>"
+.BI \-\-eset " <x>"
 Explicitly set the effective sequence number for all models to 
 .IR <x> .
 
 .TP
-.BI --ere " <x>"
+.BI \-\-ere " <x>"
 Set the minimum relative entropy/position target to 
 .IR <x> .
 Requires
-.BR --eent . 
+.BR \-\-eent . 
 Default depends on the sequence alphabet. For protein
 sequences, it is 0.59 bits/position; for nucleotide 
 sequences, it is 0.45 bits/position.
 
 .TP
-.BI --esigma " <x>"
+.BI \-\-esigma " <x>"
 Sets the minimum relative entropy contributed by an entire
 model alignment, over its whole length. This has the effect
 of making short models have 
 higher relative entropy per position than 
-.I --ere 
+.B \-\-ere 
 alone would give. The default is 45.0 bits.
 
 .TP
-.BI --eid " <x>"
+.BI \-\-eid " <x>"
 Sets the fractional pairwise identity cutoff used by 
 single linkage clustering with the
-.B --eclust 
+.B \-\-eclust 
 option. The default is 0.62.
 
 
@@ -310,12 +281,12 @@ nucleic acid (RNA and DNA) models are built in. The following options
 allow you to override the default priors.
 
 .TP
-.B --pnone
+.B \-\-pnone
 Don't use any priors. Probability parameters will simply be the
 observed frequencies, after relative sequence weighting. 
 
 .TP
-.B --plaplace
+.B \-\-plaplace
 Use a Laplace +1 prior in place of the default mixture Dirichlet
 prior.
 
@@ -336,7 +307,7 @@ parameters to be changed, and for single-sequence scoring options to
 be applied to a single sequence coming from an aligned format.
 
 .TP
-.BI --singlemx 
+.BI \-\-singlemx 
 If a single sequence query comes from a multiple sequence alignment file, 
 such as in 
 .IR stockholm
@@ -346,7 +317,7 @@ for multiple sequence alignments. This option forces
 to use the single-sequence method with substitution score matrix.
 
 .TP
-.BI --mx " <s>"
+.BI \-\-mx " <s>"
 Obtain residue alignment probabilities from the built-in
 substitution matrix named
 .IR <s> . 
@@ -358,13 +329,13 @@ can be
 PAM30, PAM70, PAM120, PAM240, BLOSUM45, BLOSUM50, BLOSUM62, BLOSUM80,
 BLOSUM90, or DNA1.
 Only one of the
-.B --mx 
+.B \-\-mx 
 and
-.B --mxfile
+.B \-\-mxfile
 options may be used.
 
 .TP
-.BI --mxfile " <mxfile>"
+.BI \-\-mxfile " <mxfile>"
 Obtain residue alignment probabilities from the substitution matrix
 in file
 .IR <mxfile> .
@@ -380,7 +351,7 @@ exception: we require matrices to be square, so for DNA, use files
 like NCBI's NUC.4.4, not NUC.4.2.)
 
 .TP
-.BI --popen " <x>"
+.BI \-\-popen " <x>"
 Set the gap open probability for a single sequence query model to 
 .IR <x> .
 The default is 0.02. 
@@ -388,7 +359,7 @@ The default is 0.02.
 must be >= 0 and < 0.5.
 
 .TP
-.BI --pextend " <x>"
+.BI \-\-pextend " <x>"
 Set the gap extend probability for a single sequence query model to 
 .IR <x> .
 The default is 0.4. 
@@ -403,37 +374,37 @@ filter scores, Viterbi filter scores, and Forward scores require three
 short random sequence simulations.
 
 .TP
-.BI --EmL " <n>"
+.BI \-\-EmL " <n>"
 Sets the sequence length in simulation that estimates the location
 parameter mu for MSV filter E-values. Default is 200.
 
 .TP
-.BI --EmN " <n>"
+.BI \-\-EmN " <n>"
 Sets the number of sequences in simulation that estimates the location
 parameter mu for MSV filter E-values. Default is 200.
 
 .TP
-.BI --EvL " <n>"
+.BI \-\-EvL " <n>"
 Sets the sequence length in simulation that estimates the location
 parameter mu for Viterbi filter E-values. Default is 200.
 
 .TP
-.BI --EvN " <n>"
+.BI \-\-EvN " <n>"
 Sets the number of sequences in simulation that estimates the location
 parameter mu for Viterbi filter E-values. Default is 200.
 
 .TP
-.BI --EfL " <n>"
+.BI \-\-EfL " <n>"
 Sets the sequence length in simulation that estimates the location
 parameter tau for Forward E-values. Default is 100.
 
 .TP
-.BI --EfN " <n>"
+.BI \-\-EfN " <n>"
 Sets the number of sequences in simulation that estimates the location
 parameter tau for Forward E-values. Default is 200.
 
 .TP
-.BI --Eft " <x>"
+.BI \-\-Eft " <x>"
 Sets the tail mass fraction to fit in the simulation that estimates
 the location parameter tau for Forward evalues. Default is 0.04.
 
@@ -441,7 +412,7 @@ the location parameter tau for Forward evalues. Default is 0.04.
 .SH OTHER OPTIONS
 
 .TP
-.BI --cpu " <n>"
+.BI \-\-cpu " <n>"
 Set the number of parallel worker threads to 
 .IR <n> .
 On multicore machines, the default is 2.
@@ -457,19 +428,30 @@ support turned off.
 
 
 .TP 
-.BI --informat " <s>"
-Declare that the input
+.BI \-\-informat " <s>"
+Assert that input
 .I msafile
-is in format 
-.IR <s> .
-Currently the accepted multiple alignment sequence file formats 
-include Stockholm, Aligned FASTA, Clustal, NCBI PSI-BLAST, PHYLIP, 
-Selex, and UCSC SAM A2M. Default is to autodetect the format of
-the file.
+is in alignment format
+.IR <s> ,
+bypassing format autodetection.
+Common choices for 
+.I <s> 
+include:
+.BR stockholm , 
+.BR a2m ,
+.BR afa ,
+.BR psiblast ,
+.BR clustal ,
+.BR phylip .
+For more information, and for codes for some less common formats,
+see main documentation.
+The string
+.I <s>
+is case-insensitive (\fBa2m\fR or \fBA2M\fR both work).
 
 
 .TP 
-.BI --seed " <n>"
+.BI \-\-seed " <n>"
 Seed the random number generator with
 .IR <n> ,
 an integer >= 0. 
@@ -485,7 +467,7 @@ The default seed is 42.
 
 
 .TP 
-.BI --w_beta " <x>"
+.BI \-\-w_beta " <x>"
 Window length tail mass.
 The upper bound,
 .IR W ,
@@ -500,11 +482,11 @@ The default is 1e-7.
 
 
 .TP 
-.BI --w_length " <n>"
+.BI \-\-w_length " <n>"
 Override the model instance length upper bound,
 .IR W ,
 which is otherwise controlled by
-.BR --w_beta . 
+.BR \-\-w_beta . 
 It should be larger than the model length. The value of 
 .I W
 is used deep in the acceleration pipeline, and modest changes
@@ -514,7 +496,7 @@ do lead to longer run time).
 
 
 .TP
-.B --mpi
+.B \-\-mpi
 Run as a parallel MPI program. Each alignment is assigned to a MPI
 worker node for construction. (Therefore, the maximum parallelization 
 cannot exceed the number of alignments in the input
@@ -524,14 +506,14 @@ only available if optional MPI capability was enabled at compile-time.
 
 
 .TP 
-.B --stall
+.B \-\-stall
 For debugging MPI parallelization: arrest program execution
 immediately after start, and wait for a debugger to attach to the
 running process and release the arrest.
 
 
 .TP 
-.BI --maxinsertlen " <n>"
+.BI \-\-maxinsertlen " <n>"
 Restrict insert length parameterization such that the expected
 insert length at each position of the model is no more than
 .IR <n> . 
@@ -542,7 +524,7 @@ insert length at each position of the model is no more than
 .SH SEE ALSO 
 
 See 
-.B hmmer(1)
+.BR hmmer (1)
 for a master man page with a list of all the individual man pages
 for programs in the HMMER package.
 

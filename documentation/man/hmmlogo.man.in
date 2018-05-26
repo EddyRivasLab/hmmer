@@ -1,13 +1,13 @@
 .TH "hmmlogo" 1 "@HMMER_DATE@" "HMMER @HMMER_VERSION@" "HMMER Manual"
 
 .SH NAME
-hmmlogo - given an HMM, produce data required to build an HMM logo
+hmmlogo \- produce a conservation logo graphic from a profile
 
 
 .SH SYNOPSIS
 .B hmmlogo
-.I [options]
-.I <hmmfile>
+[\fIoptions\fR]
+.I hmmfile
 
 
 .SH DESCRIPTION
@@ -34,23 +34,23 @@ probabilities of the letters of the alphabet.
 .SH OPTIONS
 
 .TP
-.B -h
+.B \-h
 Help; print a brief reminder of command line usage and all available
 options.
 
 
 .TP
-.B --height_relent_all
+.B \-\-height_relent_all
 Total height = relative entropy (aka information content); all letters 
 are given a positive height.  (default)
 
 .TP
-.B --height_relent_abovebg
+.B \-\-height_relent_abovebg
 Total height = relative entropy (aka information content); only letters 
 with above-background probability are given positive height.
 
 .TP
-.B --height_score
+.B \-\-height_score
 Total height = sums of scores of positive-scoring letters; letter
 height depends on the score of that letter at that position. Only 
 letters with above-background probability (positive score) are 
@@ -58,14 +58,14 @@ given positive height. (Note that only letter height is meaningful -
 stack height has no inherent meaning).
 
 .TP
-.B --no_indel
+.B \-\-no_indel
 Don't print out the indel probability table.
 
 
 .SH SEE ALSO 
 
 See 
-.B hmmer(1)
+.BR hmmer (1)
 for a master man page with a list of all the individual man pages
 for programs in the HMMER package.
 

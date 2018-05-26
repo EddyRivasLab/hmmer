@@ -24,27 +24,53 @@ HMMER_COPYRIGHT = "@HMMER_COPYRIGHT@"
 
 INSTALL       = @INSTALL@
 RMAN          = rman
-RMANPROCESS   = ${top_srcdir}/easel/devkit/rmanprocess.pl
+RMANPROCESS   = ${top_srcdir}/easel/devkit/rmanprocess.py
 
+# ./configure puts HMMER .man pages in ${top_builddir}/documentation/man
 MANPAGES = \
-	../man/alimask.man     \
-	../man/hmmalign.man    \
-	../man/hmmbuild.man    \
-	../man/hmmconvert.man  \
-	../man/hmmemit.man     \
-	../man/hmmfetch.man    \
-	../man/hmmlogo.man     \
-	../man/hmmpgmd.man     \
-	../man/hmmpress.man    \
-	../man/hmmscan.man     \
-	../man/hmmsearch.man   \
-	../man/hmmsim.man      \
-	../man/hmmstat.man     \
-	../man/jackhmmer.man   \
-	../man/makehmmerdb.man \
-	../man/nhmmer.man      \
-	../man/nhmmscan.man    \
-	../man/phmmer.man      
+	alimask.man     \
+	hmmalign.man    \
+	hmmbuild.man    \
+	hmmconvert.man  \
+	hmmemit.man     \
+	hmmfetch.man    \
+	hmmlogo.man     \
+	hmmpgmd.man     \
+	hmmpress.man    \
+	hmmscan.man     \
+	hmmsearch.man   \
+	hmmsim.man      \
+	hmmstat.man     \
+	jackhmmer.man   \
+	makehmmerdb.man \
+	nhmmer.man      \
+	nhmmscan.man    \
+	phmmer.man      
+
+# ./configure puts Easel .man pages in ${top_builddir}/easel/miniapps
+EASEL_MANPAGES = \
+	esl-afetch.man     \
+	esl-alimanip.man   \
+	esl-alimap.man     \
+	esl-alimask.man    \
+	esl-alimerge.man   \
+	esl-alipid.man     \
+	esl-alirev.man     \
+	esl-alistat.man    \
+	esl-compalign.man  \
+	esl-compstruct.man \
+	esl-construct.man  \
+	esl-histplot.man   \
+	esl-mask.man       \
+	esl-reformat.man   \
+	esl-selectn.man    \
+	esl-seqrange.man   \
+	esl-seqstat.man    \
+	esl-sfetch.man     \
+	esl-shuffle.man    \
+	esl-ssdraw.man     \
+	esl-translate.man  \
+	esl-weight.man
 
 TEXFILES =\
 	ack.tex          \
@@ -61,47 +87,34 @@ TEXFILES =\
 	titlepage.tex    \
 	tutorial.tex
 
-.PHONY: pdf install uninstall clean distclean TAGS
+.PHONY: pdf manpages clean distclean TAGS
 
 pdf:    Userguide.pdf
 
-Userguide.pdf: symlinks.stamp manpages.tex ${MANPAGES} ${TEXFILES}
-	@for prog in xelatex bibtex; do \
-	  command -v $$prog >/dev/null 2>&1 || { echo >&2 "The $$prog program is required to build the Userguide, but it's not installed. Aborting."; exit 1; } \
+# We add ${srcdir} to TEXINPUTS, etc so we can build userguide in a build tree, with input files in source tree.
+Userguide.pdf: manpages ${TEXFILES}
+	@for prog in pdflatex bibtex; do \
+	  command -v $$prog >/dev/null 2>&1 || { echo >&2 "$$prog is required to build Userguide, but it's not installed. Aborting."; exit 1; } \
 	done
 	@echo "     LATEX Userguide.pdf  (see latex.log for output)"
-	@xelatex main   > latex.log 2>&1 
-	@bibtex main   >> latex.log 2>&1 
-	@xelatex main  >> latex.log 2>&1 
-	@xelatex main  >> latex.log 2>&1 
+	@TEXINPUTS=${TEXINPUTS}:${srcdir} pdflatex main                                >  latex.log 2>&1 
+	@BIBINPUTS=${BIBINPUTS}:${srcdir} BSTINPUTS=${BSTINPUTS}:${srcdir} bibtex main >> latex.log 2>&1 
+	@TEXINPUTS=${TEXINPUTS}:${srcdir} pdflatex main                                >> latex.log 2>&1 
+	@TEXINPUTS=${TEXINPUTS}:${srcdir} pdflatex main                                >> latex.log 2>&1 
 	@mv main.pdf Userguide.pdf
 
-symlinks.stamp:
-	@if test "x${srcdir}" != "x."; then \
-	   for texfile in ${TEXFILES}; do \
-	      if ! (test -e $$texfile); then \
-	         ln -s ${srcdir}/$$texfile . ;\
-	      fi ;\
-	   done ;\
-	fi
-	@echo "symlinks created:\c" > $@
-	@date >> $@
-
 # manpages: convert man pages to LaTeX chapter in User Guide.
-#    uses PolyglotMan 3.2 "rman", and rmanprocess.pl script in easel's devkit
-manpages.tex: ${MANPAGES}
-	@command -v ${RMAN} >/dev/null 2>&1 || { echo >&2 "The ${RMAN} program is required to build the Userguide, but it's not installed. Aborting."; exit 1; }
-	@echo "%% This chapter automatically generated. Do not edit." > manpages.tex
-	@echo "\section{Manual pages}" >> manpages.tex 
+#    uses PolyglotMan 3.2 "rman", and rmanprocess.py script in easel's devkit
+manpages:
+	@command -v ${RMAN} >/dev/null 2>&1 || { echo >&2 "${RMAN} is required to build Userguide, but it's not installed. Aborting."; exit 1; }
+	@echo '%% Manual pages chapter automatically generated. Do not edit.'           > manpages.tex
+	@echo '%% Easel miniapps manpage chapter automatically generated. Do not edit.' > easel_manpages.tex
 	@for file in ${MANPAGES}; do\
-	   ${RMAN} -f LaTeX2e $$file 2>/dev/null | ${RMANPROCESS} >> manpages.tex ;\
+	   ${RMAN} -f latex2e ../man/$$file 2>/dev/null | ${RMANPROCESS} >> manpages.tex ;\
 	done
-
-install:
-	${INSTALL} -m 0644 Userguide.pdf ${DESTDIR}${pdfdir}
-
-uninstall:
-	-rm -f  ${DESTDIR}${pdfdir}/Userguide.pdf 
+	@for file in ${EASEL_MANPAGES}; do\
+	   ${RMAN} -f latex2e ../../easel/miniapps/$$file 2>/dev/null | ${RMANPROCESS} >> easel_manpages.tex ;\
+	done
 
 clean:
 	-rm -f latex.log
@@ -117,8 +130,7 @@ distclean: clean
 	      rm -f $$texfile ;\
 	   done ;\
 	fi
-	-rm -f symlinks.stamp
-	-rm -f titlepage.tex copyright.tex manpages.tex
+	-rm -f titlepage.tex copyright.tex manpages.tex easel_manpages.tex
 	-rm -f Userguide.pdf
 	-rm -f Makefile
 

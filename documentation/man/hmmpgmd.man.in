@@ -1,12 +1,12 @@
 .TH "hmmpgmd" 1 "@HMMER_DATE@" "HMMER @HMMER_VERSION@" "HMMER Manual"
 
 .SH NAME
-hmmpgmd - daemon for searching a protein query against a protein database 
+hmmpgmd \- daemon for database search web services
 
 
 .SH SYNOPSIS
 .B hmmpgmd
-.I [options]
+[\fIoptions\fR]
 
 
 .SH DESCRIPTION
@@ -14,28 +14,29 @@ hmmpgmd - daemon for searching a protein query against a protein database
 .PP
 The
 .B hmmpgmd 
-program is the daemon that we use internally for the hmmer.org web server, 
-and essentially stands in front of the protein search programs
+program is the daemon that we use internally for the hmmer.org web server. 
+It essentially stands in front of the search programs
 .BR phmmer , 
 .BR hmmsearch ,
 and 
 .BR hmmscan . 
 
+.PP
 To use
 .BR hmmpgmd , 
 first an instance must be started up as a 
-.I master 
-server, and provided with at least one of a 
-.I "sequence database"
+master 
+server, and provided with at least one 
+sequence database
 (using the 
-.B --seqdb
+.B \-\-seqdb
 flag)
 and/or an 
-.I "HMM database"
+HMM database
 (using the
-.B --hmmdb
+.B \-\-hmmdb
 flag). 
-A sequence database must be in the hmmpgmd format, which may be
+A sequence database must be in hmmpgmd format, which may be
 produced using 
 .BR esl-reformat .
 An HMM database is of the form produced by 
@@ -60,7 +61,7 @@ The master server and workers are expected to remain running.
 One or more clients then connect to the master and submit possibly
 many queries. The master distributes the work of a query among the
 workers, collects results, and merges them before responding to the
-client. Two example client programs are included in the HMMER3.1 src 
+client. Two example client programs are included in the HMMER src 
 directory - the C program
 .B hmmc2
 and the perl script
@@ -82,10 +83,10 @@ by
 
 The general form of a client query is to start with a single line
 of the form 
-.IR "@[options]" , 
+.BR "@[options]" , 
 followed by multiple lines of text representing either the query HMM 
 or fasta-formatted sequence. The final line of each query is the separator 
-.IR "//" .
+.BR "//" .
 
 
 .PP
@@ -93,11 +94,11 @@ For example, to perform a
 .B phmmer
 type search of a sequence against a sequence database 
 file, the first line is of the form 
-.IR "@--seqdb 1" ,
+.BR "@\-\-seqdb 1" ,
 then the fasta-formatted query sequence starting with the header line
-.IR >sequence-name ,
+.BR >sequence-name ,
 followed by one or more lines of sequence, and finally the closing
-.IR "//" .
+.BR "//" .
 
 .PP
 To perform an
@@ -111,12 +112,12 @@ To perform an
 type search, the text matches that of the 
 .B phmmer
 type search, except that the first line changes to 
-.IR "@--hmmdb 1" .
+.BR "@\-\-hmmdb 1" .
 
 .PP
 In the hmmpgmd-formatted sequence database file, each sequence
 can be associated with one or more sub-databases. The 
-.I --seqdb
+.B \-\-seqdb
 flag indicates which of these sub-databases will be queried. 
 The HMM database format does not support sub-databases.
 
@@ -131,7 +132,7 @@ within the client. The example clients show how this is done.
 .SH OPTIONS
 
 .TP
-.B -h
+.B \-h
 Help; print a brief reminder of command line usage and all available
 options.
 
@@ -140,62 +141,64 @@ options.
 .SH EXPERT OPTIONS
 
 .TP 
-.BI --master
+.BI \-\-master
 Run as the master server.
 
 .TP
-.BI --worker " <s>"
+.BI \-\-worker " <s>"
 Run as a worker, connecting to the master server that is running on IP
 address
 .IR <s> .
 
 .TP 
-.BI --daemon
+.BI \-\-daemon
 Run as a daemon using config file: /etc/hmmpgmd.conf
 
 .TP 
-.BI --cport " <n>"
+.BI \-\-cport " <n>"
 Port to use for communication between clients and the master server. 
 The default is 51371.
 
 .TP 
-.BI --wport " <n>"
+.BI \-\-wport " <n>"
 Port to use for communication between workers and the master server. 
 The default is 51372.
 
 .TP 
-.BI --ccncts " <n>"
+.BI \-\-ccncts " <n>"
 Maximum number of client connections to accept. The default is 16.
 
 .TP 
-.BI --wcncts " <n>"
+.BI \-\-wcncts " <n>"
 Maximum number of worker connections to accept. The default is 32.
 
 .TP 
-.BI --pid " <f>"
+.BI \-\-pid " <f>"
 Name of file into which the process id will be written. 
 
 .TP 
-.BI --seqdb " <f>"
-Name of the file (in hmmpgmd format) containing protein sequences.
+.BI \-\-seqdb " <f>"
+Name of the file (in
+.B hmmpgmd
+format) containing protein sequences.
 The contents of this file will be cached for searches. 
 
 .TP 
-.BI --hmmdb " <f>"
+.BI \-\-hmmdb " <f>"
 Name of the file containing protein HMMs. The contents of this file 
 will be cached for searches.
 
 .TP 
-.BI --cpu " <n>"
+.BI \-\-cpu " <n>"
 Number of parallel threads to use (for 
-.I --worker
+.B \-\-worker
 ).
 
 
 .SH SEE ALSO 
 
 See 
-.B hmmer(1)
+.BR hmmer (1)
 for a master man page with a list of all the individual man pages
 for programs in the HMMER package.
 

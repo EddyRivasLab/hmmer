@@ -1,38 +1,56 @@
-\section{Introduction}
+\newpage
+\chapter{Introduction}
+\label{chapter:introduction}
 \setcounter{footnote}{0}
 
-HMMER is for searching sequence databases for homologs of protein or
-DNA sequences, and also for making large multiple sequence alignments.
-HMMER makes a statistical \emph{profile} of a multiple sequence
-alignment (or even a single sequence) that you provide. This profile
-assigns a position-specific scoring system for substitutions,
-insertions, and deletions, using probabilistic models called ``profile
-hidden Markov models'' (profile HMMs) \citep{Krogh94,Eddy98,Durbin98}.
-HMMER provides tools for searching sequence databases with profiles,
-searching profile databases with sequences, and aligning sequences to
-profiles. Although the first implementations of profile HMMs were very
-computationally expensive, HMMER is now typically faster than BLASTP
-or FASTA searches\citep{Eddy11}.\footnote{BLASTN remains two orders of
-  magnitude faster than HMMER DNA searches, but is far less
-  sensitive.}
+Most protein sequences are composed from a relatively small number of
+ancestral protein domain families. As our sampling of common protein
+domain families has become comprehensive and deep, and with raw
+sequence data continuing to grow explosively, it has become
+advantageous to compare sequences against all known families rather
+than all known sequences.
 
-\subsection{How to avoid reading this manual}
+In this respect, protein sequence analysis is starting to become more
+like speech recognition.  When you talk to your smartphone, it doesn't
+compare your digitized speech to everything that's ever been said. It
+compares what you say to a prebuilt dataset of statistical models of
+common words and phonemes.  Using machine learning techniques, each
+statistical model is trained on large datasets of examples spoken in
+different accents by different speakers. Similarly, each protein
+domain family typically has thousands of homologs that can be aligned
+into deep multiple sequence alignments. An alignment reveals a
+specific pattern of evolutionary conservation particular to that
+domain's structure and function, and these patterns can be captured by
+probabilistic models.
+
+HMMER is a software package that provides tools for making statistical
+models of protein and DNA sequence domain families -- called
+\textbf{profile hidden Markov models}, \textbf{profile HMMs}, or just
+\textbf{profiles} -- and for using these profiles to annotate new
+sequences, to search sequence databases for additional homologs, and
+to make deep multiple sequence alignments.  HMMER underlies several
+comprehensive collections of alignments and profiles of known protein
+and DNA sequence domain families, including the Pfam
+database.\sidenote{\href{http://pfam.org}{pfam.org}}
+
+
+\section{How to avoid reading this manual}
 
 We hate reading documentation. If you're like us, you're thinking,
-\pageref*{manualend} pages of documentation, you're joking! I just
-want to know that the software compiles, runs, and gives apparently
-useful results, before I read some \pageref*{manualend} exhausting
-pages of someone's documentation. For cynics who have seen one too
-many software packages that don't work:
+\pageref*{manualend} pages of documentation, you're joking! First I
+want to know that the software compiles, runs, and gives useful
+results, before I'm going to read some \pageref*{manualend} tedious
+pages of someone's documentation. For fellow cynics who have seen one
+too many software packages that don't work:
 
 \begin{itemize}
 
 \item Follow the quick installation instructions on page
-  \pageref{section:installation}. An automated test suite is included,
+  \pageref{chapter:installation}. An automated test suite is included,
   so you will know immediately if something went
-  wrong.\footnote{Nothing should go wrong.}
+  wrong.\sidenote{Nothing should go wrong.}
 
-\item Go to the tutorial section on page \pageref{section:tutorial},
+\item Go to the tutorial section on page \pageref{chapter:tutorial},
   which walks you through some examples of using HMMER on real data.
 
 \end{itemize}
@@ -41,200 +59,157 @@ Everything else, you can come back and read later.
 
 
 
-\subsection{How to avoid using this software (links to similar software)}
+\section{Background and brief history}
 
-Other implementations of profile HMM methods and position-specific
-scoring matrix methods are available, including:
+A multiple sequence alignment of a homologous family of protein
+domains reveals obvious patterns of site-specific evolutionary
+conservation. Key residues may be highly conserved at certain
+positions; some positions may tolerate certain substitutions while
+conserving physiochemical properties like hydrophobicity, charge, or
+size; some positions may be evolutionarily near-neutral and variable;
+insertions and deletions are tolerated at some positions better than
+others.  A \textbf{profile} is a position-specific scoring model that
+describes which symbols are likely to be observed and how frequently
+insertions/deletions occur at each position (column) of a multiple
+sequence alignment.
 
-\begin{center}
-\begin{tabular}{lp{5in}l}
-Software  &   URL \\ \hline
-HH-SUITE  & \url{http://www.soeding.genzentrum.lmu.de/software-and-servers-2/}\\
-PSI-BLAST & \url{https://blast.ncbi.nlm.nih.gov/}\\
-PFTOOLS   & \url{http://web.expasy.org/pftools/}\\
-SAM       & \url{https://compbio.soe.ucsc.edu/sam.html}\\
-\end{tabular}
-\end{center}
+Pairwise sequence alignment methods such as BLAST and FASTA use
+position-\emph{independent} subsitution score matrices such as BLOSUM
+and PAM, but the desirability of position-\emph{specific} models was
+recognized even before BLAST and FASTA were written.\cite{Doolittle81}
+Several groups introduced different position-specific alignment
+scoring approaches in the 1980's. The name ``profiles'', introduced by
+Gribskov and colleagues,\cite{Gribskov87} was a name that stuck.
 
+Profiles have a lot of parameters.  The BLOSUM and PAM amino acid
+substitution matrices have only 210 free parameters (20 $\times$ 20,
+symmetric), and those parameters are averages over large collections
+of many different known sequence alignments. A profile typically has
+at least 22 parameters\marginnote{There's $\sim$22 parameters per
+  position because there's 20 residue scores, plus gap-open and
+  gap-extend penalties for starting or extending an insertion or
+  deletion.}  for each of the $\sim$200 consensus positions or so in a
+typical protein domain, and these thousands of parameters are
+estimated for one particular sequence family alignment, not averaged
+across many. Early profile methods were vexed by a lack of theoretical
+guidance on how to parameterize these models effectively, especially
+for insertion and deletions.
 
+In the 1990's, Anders Krogh, David Haussler, and co-workers at UC
+Santa Cruz recognized a parallel between profiles and widely used
+speech recognition techniques, and they introduced \textbf{profile
+  hidden Markov models (profile HMMs)}.\cite{Krogh94} HMMs had been
+used in biology before, but the Krogh paper had dramatic impact
+because HMM technology was so well suited to addressing the vexing
+parameterization problem. HMMs have a formal probabilistic basis,
+allowing us to use probability theory to set and to interpret the
+large number of free parameters in a profile, including the
+position-specific gap and insertion parameters. The methods are
+mathematically consistent and therefore automatable, which was crucial
+in allowing people to make libraries of hundreds of profile HMMs and
+apply them on a large scale to whole genome analysis.  One such
+database of protein domain models is Pfam.\cite{Sonnhammer97}
+Historically, Pfam and HMMER have been developed in parallel.
 
+The first implementations of profile HMMs were computationally
+intensive, including HMMER1 (1995) and HMMER2 (1998), but HMMER3 is
+now typically faster than BLASTP or FASTA searches even though it uses
+more complex models.\marginnote{For DNA searches, BLASTN remains about
+  two orders of magnitude faster than HMMER DNA searches, but is less
+  sensitive.}
 
-\subsection{What profile HMMs are}
+\section{Problems HMMER is designed to address}
 
-Profile HMMs are statistical models of multiple sequence alignments,
-or even of single sequences. They capture position-specific
-information about how conserved each column of the alignment is, and
-which symbols are likely. Anders Krogh, David Haussler, and co-workers
-at UC Santa Cruz introduced profile HMMs to computational biology
-\citep{Krogh94}, adopting HMM techniques which have been used for
-years in speech recognition.  HMMs had been used in biology before the
-Krogh/Haussler work, notably by Gary Churchill \citep{Churchill89},
-but the Krogh paper had a dramatic impact because HMM technology was
-so well suited to ``profile'' methods that were already popular.
+\paragraph{Sensitive homology searches.}
+You're working on a specific sequence family, and you have carefully
+constructed a representative multiple sequence alignment. The HMMER
+\mono{hmmbuild} program lets you build a profile from your alignment,
+and the \mono{hmmsearch} program lets you search your profile against
+a sequence database looking for homologs.
 
-Profiles had been introduced earlier by Gribskov and colleagues
-\citep{Gribskov87,Gribskov90}, and several other groups introduced
-similar approaches at about the same time, including ``flexible
-patterns'' \citep{Barton90} and
-``templates''\citep{Bashford87,Taylor86}. The term ``profile'' has
-stuck.\footnote{Another popular term is a ``position specific scoring
-  matrix'', a PSSM, but some small nocturnal North American marsupials
-  have a prior claim on this name.}  All profile methods (including
-PSI-BLAST \citep{Altschul97}) are more or less statistical
-descriptions of the consensus of a multiple sequence alignment. They
-use \emph{position-specific} scores for amino acids or nucleotides
-(residues) and position specific penalties for opening and extending
-an insertion or deletion.  Traditional pairwise alignment (for
-example, BLAST \citep{Altschul90}, FASTA \citep{Pearson88}, or the
-Smith/Waterman algorithm \citep{Smith81}) uses position-{\em
-  independent} scoring parameters. Position-specific scoring captures
-important information about the degree of conservation at various
-positions in the multiple alignment, and the varying degree to which
-gaps and insertions are permitted.
+\paragraph{... even for single sequence queries.}
+HMMER3 also works for single sequence comparisons, not just for
+multiple alignments. Pairwise sequence comparison is just a special
+case of profile HMMs. HMMER can use a BLOSUM substitution matrix to
+parameterize a profile built from just one sequence.  HMMER3 includes
+two programs for searching protein databases with single query
+sequences: \mono{phmmer} and \mono{jackhmmer}. We believe
+\mono{phmmer} is superior in many respects to BLASTP, and
+\mono{jackhmmer} to PSI-BLAST.
 
-An advantage of using HMMs is that HMMs have a formal probabilistic
-basis, allowing us to use probability theory to set the large number
-of free parameters in a profile. Though this might sound like an
-academic issue, a probabilistic basis lets us do things that more
-heuristic methods cannot do easily. One of the most important is that
-HMMs have a consistent theory for setting position-specific gap and
-insertion scores. The methods are consistent and therefore
-automatable, allowing us to make libraries of hundreds of profile HMMs
-and apply them on a large scale to whole genome analysis.  One such
-database of protein domain models is Pfam
-\citep{Sonnhammer97,FinnBateman16}, which is part of the Interpro
-protein domain annotation system \citep{MitchellFinn15}. The
-construction and use of Pfam is tightly tied to the HMMER software
-package.
+\paragraph{Automated annotation of protein domains.}
+Various large databases of curated alignments and HMMER models of
+known domains are available, including Pfam and others.  Many ``top
+ten protein domains'' lists, a \emph{de rigueur} table in genome
+analysis papers, depend on HMMER-based annotation. HMMER3's
+\mono{hmmscan} program lets you scan a sequence against a profile
+database to parse the sequence into its component domains.
 
-Profile HMMs do have important limitations. One is that HMMs do not
-capture any higher-order correlations.  An HMM assumes that the
-identity of a particular position is independent of the identity of
-all other positions.\footnote{This is not strictly true. There is a
-  subtle difference between an HMM's state path (a first order Markov
-  chain) and the sequence described by an HMM (generated from the
-  state path by independent emissions of symbols at each state).}
-Profile HMMs are often not good models of structural RNAs, for
-instance, because an HMM cannot describe base pairs.
-
-
-
-\subsection{Applications of profile HMMs}
-
-A principal application of HMMER is when you are working on a sequence
-family, and you have carefully constructed a representative multiple
-sequence alignment. Your family, like most protein (or DNA/RNA)
-families, has a number of strongly conserved key amino acids (or
-nucleotides), separated by characteristic spacings. You wonder if
-there are more members of your family in the sequence databases, but
-the family is so evolutionarily diverse, a BLAST search with any
-individual sequence doesn't even find the rest of the sequences you
-already know about. You're sure there are some distantly related
-sequences in the noise. You spend many pleasant evenings scanning weak
-BLAST alignments by eye to find ones with the right key residues are
-in the right places, but you sure wish there was a computer program
-that did this a little better. This is the main problem HMMER was
-designed to solve.
-
-You don't have to have a multiple alignment; you can search even with
-single sequences. HMMER includes two programs for searching protein
-databases with single query sequences: \prog{phmmer} and
-\prog{jackhmmer}, where \prog{phmmer} aims to supplant BLASTP, and
-\prog{jackhmmer} aims to supplant PSI-BLAST.
-
-Another application is the automated annotation of the domain
-structure of proteins. Large databases of curated alignments and HMMER
-models of known domains are available, including Pfam
-\citep{FinnBateman16} and SMART \citep{Letunic12} in the Interpro
-database consortium \citep{MitchellFinn15}. Many ``top ten protein
-domains'' lists, a \emph{de rigueur} table in genome analysis papers,
-rely heavily on HMMER annotation.  Say you have a new sequence that,
-according to a BLAST analysis, shows a slew of hits to receptor
-tyrosine kinases. Before you decide to call your sequence an RTK
-homologue, you suspiciously recall that RTK's are, like many proteins,
-composed of multiple functional domains, and these domains are often
-found promiscuously in proteins with a wide variety of functions. Is
-your sequence really an RTK? Or is it a novel sequence that just
-happens to have a protein kinase catalytic domain or fibronectin type
-III domain?
-
-Another application is the automated construction and maintenance of
-large multiple alignment databases.  It is useful to organize
-sequences into evolutionarily related families. But there are
-thousands of sequence families, some of which comprise tens of
-thousands of sequences -- and the primary sequence databases continue
-to double every year or two. This is a hopeless task for manual
-curation; but on the other hand, manual curation is still necessary
-for high-quality, biologically relevant multiple alignments. Databases
-like Pfam \citep{FinnBateman16} and Dfam \citep{Wheeler13} are
-constructed by distinguishing between a stable curated ``seed''
-alignment of a small number of representative sequences, and ``full''
-alignments of all detectable homologs. HMMER is used to make a model
-of the seed, search the database for homologs, and can automatically
-produce the full alignment by aligning every sequence to the seed
-consensus.
-
-You may find other applications as well. Using hidden Markov models to
-make a linear consensus model of a bunch of related strings is a
-pretty generic problem, and not just in biological sequence analysis.
-HMMER code has even been hacked to model music, polymorphic computer
-viruses, speech, mouse songs, and even automobile engine
-telemetry.\footnote{True. I told an automotive engineer he had
-  permission, provided I never see one of my own error messages
-  show up on my Honda's dashboard.}  If you use it for something
-particularly strange, we'd be curious to hear about it.
+\paragraph{Curated collections of deep multiple alignments.}  There are thousands of
+sequence families, some of which comprise hundreds of thousands of
+sequences, and the raw sequence databases continue to double every
+year or so. Clustering the entire sequence database into family
+alignments is a hopeless task for manual curation, but some sort of
+manual curation remains necessary for high-quality, biologically
+relevant multiple alignments. Databases like Pfam are constructed by
+distinguishing between a stable curated ``seed'' alignment of a small
+number of representative sequences, and ``full'' alignments of all
+detectable homologs. HMMER is used to make a model of the seed and to
+search the database for homologs, and the \mono{hmmalign} program can
+automatically produce the full alignment by aligning every sequence to
+the seed consensus. \mono{hmmalign} scales to alignments of 
+millions of sequences.
 
 
-\subsection{HMMER uses ensemble algorithms, not optimal alignment}
 
-Historically, most sequence search tools look for optimal (or
-high-scoring) alignments. However, sequence alignments are uncertain,
-and the more distantly related sequences are, the more uncertain
-alignments are. Instead of using optimal alignment algorithms, HMMER
-uses ensemble algorithms that sum probabilities over all possible
-alignments.\footnote{In HMM-speak, we use the Forward algorithm (and
-  variants of it), not the Viterbi algorithm.} This is one reason that
-HMMER gets more power than tools that depend on optimal alignments.
+\section{Ensemble algorithms, \emph{not} optimal alignment}
+
+Most sequence search tools look for optimal high-scoring
+alignments. However, sequence alignments are uncertain, and the more
+distantly related sequences are, the more uncertain their alignment
+is. Instead of using optimal alignment algorithms, HMMER uses ensemble
+algorithms that consider all possible alignments, weighted by their
+relative likelihood.\marginnote{In HMM jargon, we use the Forward
+  algorithm (and variants of it), not the Viterbi algorithm.} This is
+one reason that HMMER gets more power than tools that depend on single
+optimal alignment.
 
 The use of ensemble algorithms shows up in several features that
-differentiate HMMER from older methods:
+differentiate HMMER from some other methods:
 
 \paragraph{Explicit representation of alignment uncertainty.}
   When HMMER shows an alignment, it also calculates how much
-  probability mass that one alignment has in the overall ensemble --
-  which means HMMER can annotate a probabilistic confidence in an
-  alignment, or in each individual aligned residue. Some downstream
-  analyses that depend on alignments (such as phylogenetic tree
-  inference) benefit from being able to distinguish confidently
-  aligned from not confidently aligned residues.
+  probability mass that this alignment has in the ensemble -- which
+  means HMMER can annotate a probabilistic confidence in an alignment,
+  or in each individual aligned residue. Some downstream analyses that
+  depend on alignments (such as phylogenetic tree inference) benefit
+  from being able to distinguish confidently aligned residues.
 
 \paragraph{Sequence scores, not alignment scores.} HMMER's
-  log-odds scores for a sequence aren't just optimal alignment scores;
-  they are summed over the posterior alignment ensemble. Statistical
+  log-odds scores for a sequence aren't optimal alignment scores; they
+  are summed over the posterior alignment ensemble. Statistical
   inference theory says that scores based on a single optimal
   alignment are an approximation that breaks down when alignments are
-  uncertain; HMMER's calculation is the full, unapproximated
+  uncertain. HMMER's calculation is the full, unapproximated
   calculation.
  
-\paragraph{Speed.} The ensemble (Forward) algorithm is more
-  computationally intensive than optimal alignment algorithms.  HMMER
-  implements heuristic acceleration of the HMM Forward algorithm using
-  vectorization technology available on modern processors. As
-  vectorization technology continues to advance, HMMER searches are
-  now typically faster than BLAST.\\
-
+\paragraph{Different speed heuristics.} The ensemble (Forward) algorithm is more
+  computationally intensive than optimal alignment algorithms.
+  HMMER3's acceleration strategy is quite different from
+  BLAST's.\cite{Eddy11}.  HMMER implements heuristic accelerations of
+  the HMM Forward algorithm using vectorization technology available
+  on modern processors.\vspace{1em}
 
 Individually, none of these points is new. As far as alignment
-ensembles and sequence scores go, one main reason why hidden Markov
-models were so theoretically attractive in the first place for
-sequence analysis is that they are good probabilistic models for
-explicitly dealing with alignment uncertainty. The SAM profile HMM
-software from UC Santa Cruz has always used full probabilistic
-inference (the HMM Forward/Backward algorithms) as opposed to optimal
-alignment scores (the HMM Viterbi algorithm). HMMER2 had the full HMM
-inference algorithms available as command-line options, but used
-Viterbi optimal alignment by default, in part for speed
-reasons.
+ensembles go, one reason why hidden Markov models were so
+theoretically attractive in the first place for sequence analysis is
+that they are good probabilistic models for explicitly dealing with
+alignment uncertainty. The SAM profile HMM software from UC Santa Cruz
+has always used full probabilistic inference (the HMM Forward/Backward
+algorithms) as opposed to optimal alignment scores (the HMM Viterbi
+algorithm). HMMER2 had the full HMM inference algorithms available as
+command-line options, but it used Viterbi optimal alignment by
+default, in part for speed reasons.
 
 One reason why it's been hard to deploy sequence scores for practical
 large-scale use is that we haven't known how to accurately calculate
@@ -243,15 +218,15 @@ over alignment uncertainty. Accurate statistical significance
 estimates are essential when one is trying to discriminate homologs
 from millions of unrelated sequences in a large sequence database
 search. The statistical significance of optimal local alignment scores
-is calculated by Karlin/Altschul statistics
-\citep{Karlin90,KarlinAltschul93}. Karlin/Altschul statistics are one
-of the most important and fundamental advances introduced by BLAST.
-However, this theory doesn't apply to HMMER's ensemble log-odds
-sequence scores (HMM ``Forward scores''). The statistical significance
-(expectation values, or E-values) of HMMER sequence scores is
+is calculated by Karlin/Altschul statistics.\cite{Karlin90}
+Karlin/Altschul statistics are one of the most important and
+fundamental advances introduced by BLAST.  However, Karlin/Altschul
+theory \emph{doesn't} apply to HMMER's ensemble log-odds sequence
+scores (HMM ``Forward scores''). The statistical significance
+(E-values, or expectation values) of HMMER sequence scores is
 determined by using a theoretical conjecture about the statistical
 properties of ensemble log-odds scores which have been supported by
-numerical simulation experiments \citep{Eddy08}.
+numerical simulation experiments.\cite{Eddy08}
 
 And as far as speed goes, the pioneers of heuristic acceleration of
 sequence database searches are the folks behind BLAST and FASTA, who
@@ -259,121 +234,82 @@ developed effective heuristics that closely approximate an
 unaccelerated Smith/Waterman dynamic programming search.  The first
 implementations of profile HMM methods used dynamic programming
 without heuristics (the profile HMM Viterbi algorithm is essentially
-Smith/Waterman with position-specific scoring), so they were more
-comparable in speed to Smith/Waterman than to BLAST; plus, using the
-Forward algorithm slowed them down still more. It was a while before
-we invested the time to develop heuristic acceleration of profile HMM
-methods. Our design goal in HMMER3, released in 2010, was to achieve
-rough speed parity with BLAST and FASTA. We did have to develop a new
-and more sensitive heuristic, because we wanted to retain the power of
-the ensemble sequence scores, and it happens that what we did is
-suited to modern hardware architectures, so we benefit
-disproportionally from advances in commodity processors. Lately, this
-means that HMMER's speed has started to pull away from BLAST and
-FASTA.
+Smith/Waterman, just with position-specific probability scores), so
+they were more comparable in speed to Smith/Waterman than to BLAST.
+Using the Forward algorithm slowed them down still more. It was a
+while before we invested the time to develop heuristic acceleration of
+profile HMM methods. A principal design goal in HMMER3 was to achieve
+at least rough speed parity with BLAST and FASTA.
 
 
+\section{Assumptions and limitations of profile HMMs}
 
-\subsection{What's missing}
+Profile HMMs are primary sequence consensus models.  They assume that
+the residue at a particular position is independent of the residues at
+all other positions, and they neglect any higher-order correlations.
+Profile HMMs are often not good models of structural RNAs, for
+instance, because an HMM is not an adequate model of correlated base
+pairs.\marginnote{Our Infernal software provides better tools for
+  structural RNA sequence analysis, using \textbf{profile stochastic
+    context-free grammars}, a more complex class of probability model
+  than HMMs.}
 
-Some of the more important holes for us are:
+A profile HMM also lacks any explicit model of the phylogenetic
+relationships among a set of homologous sequences. Sequences are
+instead assumed to be independently generated from the profile, which
+is tantamount to assuming a star phylogeny with fixed branch
+lengths. Ad hoc sequence weighting techniques are used to compensate
+for the fact that typical multiple alignments include many redundant,
+closely related sequences.
 
-\paragraph{Translated comparisons.} We'd of course love to have the HMM
-equivalents of BLASTX, TBLASTN, and TBLASTX. They'll come.
+
+\section{What's still missing}
+
+Two of the more important holes for us are:
+
+\paragraph{Translated comparisons.} We'd love to have the HMM
+equivalents of BLASTX, TBLASTN, and TBLASTX. They'll come. In the
+meantime, we translate DNA sequence to six frames, and search
+hypothetical ORFs as protein sequences.
 
 \paragraph{Profile/profile comparison.} A number of pioneering papers and
 software packages have demonstrated the power of profile/profile
 comparison for even more sensitive remote homology detection. We will
 aim to develop profile HMM methods in HMMER with improved detection
 power, and at HMMER3 speed. In the meantime, check out
-\href{https://toolkit.tuebingen.mpg.de/\#/tools/hhblits}{HHBLITS} from
-Johannes S\"oding's group.
+HHBLITS from Johannes S\"oding's
+group.\sidenote{\href{https://toolkit.tuebingen.mpg.de/\#/tools/hhblits}{toolkit.tuebingen.mpg.de/\#/tools/hhblits}}
 
 
-\subsection{What's coming}
+\section{How to learn more}
 
-HMMER4 has been under development\footnote{Excruciatingly \emph{slow}
-  development. Hey, it's tough being a PI and trying to keep your own
-  research project.} since 2011. Some of the stuff we're working on:
+Our book \emph{Biological Sequence Analysis}\cite{Durbin98} describes the basic
+theory behind profile HMMs and HMMER.
 
-\paragraph{The return of glocal alignment.} Slow old HMMER2 was
- capable of ``glocal'' alignment, in which it would align a complete
- profile to a subsequence of a target sequence; this was great for
- annotating domain structure of protein sequences, among other things.
- In developing our speed heuristic for HMMER3, for numerical reasons,
- we had to sacrifice glocal alignment; HMMER3 \emph{only} does local
-alignment. In HMMER4, we've solved the problems that prevented H3 from
-using glocal alignment. H4 uses a new \emph{dual-mode} profile
-architecture, combining local and glocal alignment modes in a single
-probability model.
+HMMER's open source development code is available on
+GitHub.\sidenote{\href{http://github.com/EddyRivasLab/hmmer}{github.com/EddyRivasLab/hmmer}}
+The GitHub issue tracker is the best way to give us suggestions,
+feature requests, bug reports, and pull requests.
 
-\paragraph{Memory efficiency.} The HMMER ensemble alignment
-algorithms (the HMM Forward and Backward algorithms) are expensive in
-memory. For most uses, you don't notice, but there are extreme cases
-where you may. H3 can require as much as $\sim 36L^2$ bytes of memory
-for a query sequence of length $L$, and for a 35Kaa titin sequence,
-that's 44GB of RAM. In HMMER4, we've solved this with a variety of old
-and new techniques.
-
-\paragraph{Ensemble calculations everywhere.} HMMER uses ensemble
-calculations (i.e., integrates over alignment uncertainty) for scoring
-homologous sequences and for calculating the confidence in individual
-aligned residues. However, when it decides how many domains are in a
-sequence, and where they are, it uses an \emph{ad hoc} procedure that
-uses ensemble information, but is not well defined. In HMMER4, we've
-solved that problem with a new domain definition algorithm.
-
-\paragraph{More processor support.} One of the attractive features of the
-HMMER ``MSV'' acceleration algorithm is that it is a very tight and
-efficient piece of code. The bad news is, it's a very tight and
-efficient piece of \emph{assembly} code. We have to write
-processor-specific SIMD vector instructions for each platform that
-HMMER runs on. HMMER currently only supports x86 (Intel/AMD) and
-PowerPC platforms (big-endian AIX PowerPC's, not the newer crop of
-little-endian Linux PowerPC's). HMMER4 will also include support for
-Linux/PowerPC and ARM NEON. It also can use the latest x86 vector
-instructions (AVX and AVX-512).
-
-\paragraph{Better parallelization.} HMMER is so fast that it's often
-input-bound, rather than CPU-bound: that is, it takes longer just to
-get the sequences from your disk than it takes to compare them to a
-profile. That's been taxing the simple parallelization methods we
-use. HMMER's multithreaded parallelization really doesn't scale well
-beyond 2-4 processors, on most machines; and possibly worse, if you're
-on a slow filesystem (for example, if you're reading data from a
-network filesystem instead of from local disk). In H4, we're working
-on improving our parallelization and our data input.
-
-\subsection{How to learn more about profile HMMs}
-
-\textbf{Cryptogenomicon} (\url{http://cryptogenomicon.org/}) is a blog
-where we will be talking about issues as they arise in HMMER, and
+\textbf{Cryptogenomicon}\sidenote{\href{http://cryptogenomicon.org/}{cryptogenomicon.org}}
+  is a blog where I sometimes talk about issues as they arise in HMMER, and
 where you can comment or follow the discussion.
 
-Reviews of the profile HMM literature have been written by us
-\citep{Eddy96,Eddy98} and by Anders Krogh \citep{Krogh98}.
 
-For details on how profile HMMs and probabilistic models are used in
-computational biology, see the pioneering 1994 paper from Krogh et
-al. \citep{Krogh94} or our book \emph{Biological Sequence Analysis:
-Probabilistic Models of Proteins and Nucleic Acids} \citep{Durbin98}.
+\section{How to avoid using this software (links to similar software)}
 
-For more details on many aspects of the inner workings of HMMER3, see
-\citep{Eddy08,Eddy09b,Eddy11}.
+Other implementations of profile HMM methods and position-specific
+scoring matrix methods are available, including:
 
-To learn more about HMMs from the perspective of the speech
-recognition community, an excellent tutorial introduction has been
-written by Rabiner \citep{Rabiner89}.
-
-\vspace{2em}
-\begin{srefaq}{How do I cite HMMER?}
-There has never been a paper on the HMMER software, and it looks like
-there may never be. If you're writing
-for an enlightened (url-friendly) journal, the best reference is
-\url{http://hmmer.org/}.  If you must use a paper reference, currently
-the best one to use is the 2011 paper on HMMER3 acceleration \citep{Eddy11}.
-\end{srefaq}
-
+\begin{center}
+\begin{tabular}{lp{5in}l}
+Software  &   URL \\ \hline
+HH-SUITE  & \href{http://www.soeding.genzentrum.lmu.de/software-and-servers-2/}{www.soeding.genzentrum.lmu.de/software-and-servers-2}\\
+PSI-BLAST & \href{https://blast.ncbi.nlm.nih.gov/}{blast.ncbi.nlm.nih.gov}\\
+PFTOOLS   & \href{http://web.expasy.org/pftools/}{web.expasy.org/pftools}\\
+SAM       & \href{https://compbio.soe.ucsc.edu/sam.html}{compbio.soe.ucsc.edu/sam.html}\\
+\end{tabular}
+\end{center}
 
 
 

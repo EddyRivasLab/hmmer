@@ -2,36 +2,40 @@
 
 .SH NAME
 
-HMMER - profile HMMs for biological sequence analysis
+HMMER \- profile HMMs for biological sequence analysis
 
 .SH SYNOPSIS
 
+.nf
 .B hmmalign
-  Align sequences to a profile
+  Align sequences to a profile 
 
 .B hmmbuild
-  Construct profile(s) from multiple sequence alignment(s)
+  Construct profiles from multiple sequence alignments
 
 .B hmmconvert
-  Convert profile file to various HMMER and non-HMMER formats
+  Convert profile file to various formats
 
 .B hmmemit
   Sample sequences from a profile
 
 .B hmmfetch
-  Retrieve profile HMM(s) from a file
+  Retrieve profiles from a file
+
+.B hmmlogo
+  Produce a conservation logo graphic from a profile
 
 .B hmmpgmd
-  Daemon used for hmmer.org web server, for phmmer-, hmmsearch-, and hmmscan-like search 
+  Daemon for database search web services
 
 .B hmmpress
-  Prepare an HMM database for hmmscan
+  Prepare a profile database for hmmscan
 
 .B hmmscan
-  Search protein sequence(s) against a protein profile database
+  Search sequence(s) against a profile database
 
 .B hmmsearch
-  Search protein profile(s) against a protein sequence database
+  Search profile(s) against a sequence database
 
 .B hmmsim
   Collect profile score distributions on random sequences
@@ -40,17 +44,23 @@ HMMER - profile HMMs for biological sequence analysis
   Summary statistics for a profile file
 
 .B jackhmmer
-  Iterative search of a protein sequence against a protein sequence database  
+  Iteratively search sequence(s) against a sequence database
+
+.B makehmmerdb
+  build nhmmer database from a sequence file
 
 .B nhmmer
-  Search nucleotide sequence(s), alignment(s), or profile(s) against a nucleotide sequence database
+  Search DNA/RNA queries against a DNA/RNA sequence database
 
 .B nhmmscan
-  Search nucleotide sequence(s) against a nucleotide profile database
+  Search DNA/RNA sequence(s) against a DNA/RNA profile database
 
 .B phmmer
-  Search a protein sequence(s) against a protein sequence database
+  Search protein sequence(s) against a protein sequence database
 
+.B alimask
+  Calculate and add column mask to a multiple sequence alignment
+.fi
 
 .SH DESCRIPTION
 
@@ -159,10 +169,9 @@ Each program has its own man page.
 .SH SEE ALSO 
 
 This is a summary man page for the entire HMMER3 package.
-See individual man pages
-.BR [hmmbuild(1) ,
-for example]
-for usage, options, and description of each program in the package.
+See individual man pages 
+[\fBhmmbuild\fR(1),
+for example] for usage, options, and description of each program in the package.
 
 .PP
 For complete documentation, see the user guide that came with your
