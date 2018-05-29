@@ -5,10 +5,10 @@
 #   usage: gen-inclusions.py
 #      or: gen-inclusions.py <top_builddir> <top_srcdir>
 #
-# Run the tutorial examples in the user guide and extract output
-# snippets for inclusion in .tex files. Saves having to manually
-# update the user guide to be consistent with changes to output
-# formats (including version numbers and such).
+# Runs the tutorial examples in the user guide and extracts output
+# snippets for inclusion in .tex files. This saves having to manually
+# update the user guide to be consistent with small changes to outputs
+# (including version numbers and such).
 #
 # Each example is run in the current working directory, with input
 # and output files in the cwd, some of them symlinked from
@@ -16,7 +16,7 @@
 #
 # Intended to be run infrequently by developers, not users, to update
 # the user guide source files for a new release. The resulting .tex
-# snippets are checked into git.  It can assume that it's working on a
+# snippets are checked into git. It can assume that it's working on a
 # development machine in a git repo, not in distribution code in the
 # field.
 #
@@ -40,6 +40,7 @@ import re
 import argparse
 
 # Parse command line options and arguments
+#
 parser = argparse.ArgumentParser(description='generate .tex inclusions for user guide')
 parser.add_argument('-t', '--tutupdate', action='store_true')
 parser.add_argument('top_builddir', nargs='?', default='../../..')
@@ -47,6 +48,12 @@ parser.add_argument('top_srcdir',   nargs='?', default='../../..')
 args         = parser.parse_args()
 top_builddir = os.path.abspath(args.top_builddir)   # absolute to top of build tree e.g.  '/home/seddy/hmmer3/build-osx'
 top_srcdir   = args.top_srcdir                      # relative to top of source, e.g.  '../../..'
+
+# Check that <top_builddir>/src seems to contain compiled programs.
+#
+if (not os.path.exists('{0}/src/hmmscan'.format(top_builddir))) or (not os.path.exists('{0}/src/hmmsearch'.format(top_builddir))):
+    sys.exit('no programs found? ./configure; make first')
+
 
 print('gen-inclusions.py : a fiddly script to generate .tex inclusions for user guide')
 print('cross your fingers...')
@@ -108,6 +115,27 @@ def uniprot_relnotes(deffp):
 
 
 
+# intro uses hmmscan -h header
+# this also gets version and date, as \HMMERversion, \HMMERdate
+#
+def hmmscan_noargs(deffp):
+    print('running hmmscan (with no args)...')
+    r = subprocess.run('hmmscan -h',
+                       shell=True, stdout=subprocess.PIPE, encoding='utf-8',  # don't check=True; hmmscan -h returns 1
+                       env={"PATH": "{0}/src".format(top_builddir)})
+    
+    m = re.match(r'((?:#.*\n)+)', r.stdout)
+    with open('hmmscan-noargs.out', 'w') as f:
+        print(m.group(1), file=f, end='')
+
+    m = re.search('# HMMER\s+(\S+)\s+\((.+?)\);', r.stdout)
+    print(r'\newcommand{{\HMMERversion}}{{{0}}}'.format(m.group(1)), file=deffp)
+    print(r'\newcommand{{\HMMERdate}}{{{0}}}'.format(m.group(2)),     file=deffp)
+    print('', file=deffp)
+
+          
+
+
 # 0. hmmbuild  (with no arguments)
 #    Don't set check=True, because hmmbuild w/ no args returns 1 exit code.
 #      hmmbuild-noargs.out : stdout, complete
@@ -118,6 +146,7 @@ def hmmbuild_noargs():
                        shell=True, stdout=subprocess.PIPE, encoding='utf-8',
                        env={"PATH": "{0}/src".format(top_builddir)})
 
+    
 
 
 # 1. hmmbuild globins4.hmm globins4.sto
@@ -153,6 +182,14 @@ def hmmbuild_globins(deffp):
         content = re.sub(r'^((?:\s+[\d\.*]+){7})(?:\s+\S+){11}((?:\s+[\d\.*]+){2})$',  r'\1 ... \2',  content, flags=re.MULTILINE)   # Cuts columns in the insert, transition lines
     with open('hmmbuild-globins.out2', 'w') as f:
         print(content, file=f, end='')
+
+    # the formats chapter uses this profile too
+    with open('globins4.hmm', 'r') as f:
+        content = f.read()
+        m = re.match(r'HMMER3/(\S)\s+(\[.+\])', content)
+        print(r'\newcommand{{\HMMERfmtversion}}{{{0}}}'.format(m.group(1)), file=deffp)
+        print(r'\newcommand{{\HMMERsavestamp}}{{{0}}}'.format(m.group(2)),  file=deffp)
+        print('', file=deffp)
 
 
 # 2. hmmsearch globins4.hmm uniprot_sprot.fasta
@@ -191,8 +228,8 @@ def hmmsearch_globins(deffp):
     # for the top globin hit aren't identical. They're already .1f strings and can be compared directly.
     assert m.group(2) != m.group(5), "guide assumes that full vs. best 1 domain bit scores for top globin differ slightly"
 
-    m = re.search(r'Passed MSV filter:\s+\d+\s+\((\S+)\)', r.stdout)
-    print(r'\newcommand{{\SGUmsvpass}}{{{0:.1f}}}'.format(100 * round(float(m.group(1)), 1)), file=deffp)    
+    m = re.search(r'Passed MSV filter:\s+\d+\s+\((\S+?)\)', r.stdout)
+    print(r'\newcommand{{\SGUmsvpass}}{{{0:.1f}}}'.format(100 * round(float(m.group(1)), 3)), file=deffp)    
 
     m = re.search(r'Passed bias filter:\s+(\d+)', r.stdout)
     print(r'\newcommand{{\SGUbiaspass}}{{{0}}}'.format(m.group(1)), file=deffp)
@@ -593,6 +630,7 @@ def nhmmer_made1(deffp):
 
 with open("inclusions.def", "w") as deffp:
     uniprot_relnotes(deffp)
+    hmmscan_noargs(deffp)
     hmmbuild_noargs()
     hmmbuild_globins(deffp)
     hmmsearch_globins(deffp)    

@@ -7,7 +7,7 @@ Residues passing bias filter:          57239  (0.0867); expected (0.02)
 Residues passing Vit filter:            5181  (0.00785); expected (0.003)
 Residues passing Fwd filter:            3187  (0.00483); expected (3e-05)
 Total number of hits:                      6  (0.000498)
-# CPU time: 0.02u 0.00s 00:00:00.02 Elapsed: 00:00:00.01
-# Mc/sec: 4196.27
+# CPU time: 0.03u 0.00s 00:00:00.03 Elapsed: 00:00:00.01
+# Mc/sec: 3135.30
 //
 [ok]

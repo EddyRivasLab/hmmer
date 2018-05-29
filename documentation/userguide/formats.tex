@@ -1,68 +1,162 @@
-\chapter{File formats}
+\chapter{Input files and formats}
 \label{chapter:formats}
 \setcounter{footnote}{0}
 
+\section{Reading from files, compressed files, and pipes}
+
+Generally, HMMER programs read their sequence and/or profile input
+from files. Unix power users often find it convenient to string an
+incantation of commands together with pipes.\sidenote{Indeed, such
+  wizardly incantations are a point of pride.} For example, you might
+extract a subset of query sequences from a larger file using a
+one-liner combination of scripting commands (python, perl, awk,
+whatever). To facilitate the use of HMMER programs in such
+incantations, you can almost always use an argument of '-' (dash) in
+place of a filename, and the program will take its input from a
+standard input pipe instead of opening a file.
+
+For example, the following three commands are equivalent, and give
+essentially identical output:
+
+   \vspace{1ex}
+   \user{\% hmmsearch globins4.hmm uniprot\_sprot.fasta}  \\
+   \user{\% cat globins4.hmm | hmmsearch - uniprot\_sprot.fasta} \\
+   \user{\% cat uniprot\_sprot.fasta | hmmsearch globins4.hmm - } \\
+   \vspace{1ex}
+
+Most Easel ``miniapp'' programs share the same pipe-reading ability.
+
+Because the programs for profile HMM fetching (\mono{hmmfetch}) and
+sequence fetching (\mono{esl-sfetch}) can fetch any number of profiles
+or sequences by names/accessions given in a list, \emph{and} these
+programs can also read these lists from a stdin pipe, you can craft
+incantations that generate subsets of queries or targets on the
+fly. For example:
+
+   \vspace{1ex}
+   \begin{fullwidth}
+   \user{\indent \% esl-sfetch --index uniprot\_sprot.fasta} \\
+   \user{\% cat mytargs.list | esl-sfetch -f uniprot\_sprot.fasta - | hmmsearch globins4.hmm -} \\
+   \end{fullwidth}
+   \vspace{1ex}
+
+This takes a list of sequence names/accessions in
+\mono{mytargets.list}, fetches them one by one from UniProt (note that
+we index the UniProt file first, for fast retrieval; and note that
+\mono{esl-sfetch} is reading its \mono{<namefile>} list of
+names/accessions through a pipe using the '-' argument), and pipes
+them to an \mono{hmmsearch}. It should be obvious from this that we
+can replace the \mono{cat mytargets.list} with \emph{any} incantation
+that generates a list of sequence names/accessions (including SQL
+database queries).
+
+Ditto for piping subsets of profiles. Supposing you have a copy of Pfam in Pfam-A.hmm:
+
+   \vspace{1ex}
+   \begin{fullwidth}
+   \user{\indent \% hmmfetch --index Pfam-A.hmm} \\
+   \user{\% cat myqueries.list | hmmfetch -f Pfam.hmm - | hmmsearch - uniprot\_sprot.fasta}\\
+   \end{fullwidth}
+   \vspace{1ex}
+
+This takes a list of query profile names/accessions in
+\mono{myqueries.list}, fetches them one by one from Pfam, and does an
+hmmsearch with each of them against UniProt. As above, the \mono{cat
+  myqueries.list} part can be replaced by any suitable incantation
+that generates a list of profile names/accessions.
+
+There are three kinds of cases where using '-' is restricted or
+doesn't work. A fairly obvious restriction is that you can only use
+one '-' per command; you can't do a \mono{hmmsearch - -} that tries to
+read both profile queries and sequence targets through the same stdin
+pipe. Second, another case is when an input file must be obligately
+associated with additional, separately generated auxiliary files, so
+reading data from a single stream using '-' doesn't work because the
+auxiliary files aren't present (in this case, using '-' will be
+prohibited by the program). An example is \mono{hmmscan}, which needs
+its \mono{<hmmfile>} argument to be associated with four auxiliary
+files named \mono{<hmmfile>.h3\{mifp\}} that \mono{hmmpress} creates,
+so \mono{hmmscan} does not permit a '-' for its \mono{<hmmfile>}
+argument. Finally, when a command would require multiple passes over
+an input file, the command will generally abort after the first pass
+if you are trying to read that file through a standard input pipe
+(pipes are nonrewindable in general; a few HMMER or Easel programs
+will buffer input streams to make multiple passes possible, but this
+is not usually the case). An example would be trying to search a file
+containing multiple profile queries against a streamed target
+database:
+
+   \vspace{1ex}
+   \begin{fullwidth}
+   \user{\indent \% cat myqueries.list | hmmfetch -f Pfam.hmm > many.hmms}\\
+   \user{\% cat mytargets.list | esl-sfetch -f uniprot\_sprot.fasta - | hmmsearch many.hmms -}\\
+   \end{fullwidth}
+   \vspace{1ex}
+
+This will fail. Unfortunately the above business about how it will
+``generally abort after the first pass'' means it fails weirdly. The
+first query profile search will succeed, and its output will appear;
+then an error message will be generated when \mono{hmmsearch} sees the
+\emph{second} profile query and oops, suddenly realizes it is unable
+to rewind the target sequence database stream. This is inherent in how
+it reads the profile HMM query file sequentially as a stream (which is
+what's allowing it to read input from stdin pipes in the first place),
+one model at a time: it doesn't see there's more than one query model
+in the file until it gets to the second model.
+
+This case isn't too restricting because the same end goal can be
+achieved by reordering the commands. In cases where you want to do
+multiple queries against multiple targets, you always want to be
+reading the \emph{queries} from a stdin pipe, not the targets:
+
+   \vspace{1ex}
+   \user{\% cat mytargets.list | esl-sfetch -f uniprot\_sprot.fasta > mytarget.seqs}\\
+   \user{\% cat myqueries.list | hmmfetch -f Pfam.hmm - |  hmmsearch - mytarget.seqs}\\
+   \vspace{1ex}
+
+So in this multiple queries/multiple targets case of using stdin
+pipes, you just have to know, for any given program, which file it
+considers to be queries and which it considers to be targets. (That
+is, the logic in searching many queries against many targets is ``For
+each query: search the target database; then rewind the target
+database to the beginning.'') For \mono{hmmsearch}, the profiles are
+queries and sequences are targets. For \mono{hmmscan}, the reverse.
+
+In general, HMMER and Easel programs document in their man page
+whether (and which) command line arguments can be replaced by '-'.
+You can always check by trial and error, too. The worst that can
+happen is a ``Failed to open file -'' error message, if the program
+can't read from pipes.
+
+\subsection{.gz compressed files}
+
+In general, HMMER programs and Easel miniapps can also read \mono{.gz}
+compressed files; they will uncompress them on the fly. You need to
+have \mono{gunzip} installed on your system for this to work.
+
+
+
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+\newpage
 \section{HMMER profile HMM files}
 \label{section:savefiles}
 
-The file \mono{tutorial/fn3.hmm} gives an example of a HMMER3 ASCII
-save file. An abridged version is shown here, where (\ldots) mark
-deletions made for clarity and space:
+A HMMER profile file looks like this, with ...'s marking elisions made
+for clarity and space:\sidenote{This is the \mono{globins4.hmm}
+  profile from the tutorial.}
 
-\begin{tinysreoutput}
-HMMER3/f [3.1 | February 2013]
-NAME  fn3
-ACC   PF00041.13
-DESC  Fibronectin type III domain
-LENG  86
-ALPH  amino
-RF    no
-MM    no
-CONS  yes
-CS    yes
-MAP   yes
-DATE  Fri Feb 15 06:04:13 2013
-NSEQ  106
-EFFN  11.415833
-CKSUM 3564431818
-GA    8.00 7.20
-TC    8.00 7.20
-NC    7.90 7.90
-STATS LOCAL MSV       -9.4043  0.71847
-STATS LOCAL VITERBI   -9.7737  0.71847
-STATS LOCAL FORWARD   -3.8341  0.71847
-HMM          A        C        D        E        F        G        H        I    (...)    Y   
-            m->m     m->i     m->d     i->m     i->i     d->m     d->d
-  COMPO   2.70330  4.91262  3.03272  2.64079  3.60307  2.84344  3.74204  3.07942 (...) 3.21526
-          2.68618  4.42225  2.77519  2.73123  3.46354  2.40513  3.72494  3.29354 (...) 3.61503
-          0.00338  6.08833  6.81068  0.61958  0.77255  0.00000        *
-      1   3.16986  5.21447  4.52134  3.29953  4.34285  4.18764  4.30886  3.35801 (...) 3.93889      1 p - - -
-          2.68629  4.42236  2.77530  2.73088  3.46365  2.40512  3.72505  3.29365 (...) 3.61514
-          0.09796  2.38361  6.81068  0.10064  2.34607  0.48576  0.95510
-      2   2.70230  5.97353  2.24744  2.62947  5.31433  2.60356  4.43584  4.79731 (...) 4.25623      3 s - - -
-          2.68618  4.42225  2.77519  2.73123  3.46354  2.40513  3.72494  3.29354 (...) 3.61503
-          0.00338  6.08833  6.81068  0.61958  0.77255  0.48576  0.95510
-(...)
-     85   2.48488  5.72055  3.87501  1.97538  3.04853  3.48010  4.51877  3.51898 (...) 3.43366    120 e - - B
-     
-          2.68618  4.42225  2.77519  2.73123  3.46354  2.40513  3.72494  3.29354 (...) 3.61503
-          0.00338  6.08833  6.81068  0.61958  0.77255  0.48576  0.95510
-     86   3.03720  5.94099  3.75455  2.96917  5.26587  2.91682  3.66571  4.11840 (...) 4.99111    121 s - - E
-     
-          2.68618  4.42225  2.77519  2.73123  3.46354  2.40513  3.72494  3.29354 (...) 3.61503
-          0.00227  6.08723        *  0.61958  0.77255  0.00000        *
-//
-\end{tinysreoutput}
+   \xsreoutput{inclusions/hmmbuild-globins.out2}
 
-An HMM file consists of one or more HMMs.  Each HMM starts with a
-format version identifier (here, \mono{HMMER3/f}) and ends with
+A profile file consists of one or more profiles.  Each profile starts
+with a format version identifier (here, \mono{HMMER3/\HMMERfmtversion{}}) and ends with
 \mono{//} on a line by itself.  The format version identifier allows
 backward compatibility as the HMMER software evolves: it tells the
 parser this file is from HMMER3's save file format version
-f.\footnote{HMMER 3.0 used 3/b format. HMMER 3.1 uses 3/f format.
-  Some alpha test versions of 3.0 used 3/a format. Internal
-  development versions of 3.1 used 3/c, 3/d, and 3/e formats.}  The closing
-\mono{//} allows multiple HMMs to be concatenated.
+\HMMERfmtversion{}.\footnote{HMMER 3.0 used 3/b format. HMMER 3.1 and 3.2 use 3/f
+  format.  Some alpha test versions of 3.0 used 3/a format. Internal
+  development versions of 3.1 used 3/c, 3/d, and 3/e formats.}  The
+closing \mono{//} allows multiple profiles to be concatenated.
 
 The format is divided into two regions. The first region contains
 textual information and miscalleneous parameters in a roughly
@@ -89,30 +183,30 @@ indicated.
 
 \begin{sreitems}{\monob{header}}
 
-\item [\monob{HMMER3/f}] Unique identifier for the save file format
-  version; the \mono{/f} means that this is HMMER3 HMM file format
-  version f. When HMMER3 changes its save file format, the revision
-  code advances. This way, parsers may easily remain backwards
-  compatible. The remainder of the line after the \mono{HMMER3/f} tag
+\item [\monob{HMMER3/\HMMERfmtversion{}}] Unique identifier for the save file format
+  version; the \mono{/\HMMERfmtversion{}} means that this is HMMER3 profile file format
+  version \HMMERfmtversion{}. When HMMER3 changes its save file format, the revision
+  code advances. This way, parsers can be backwards
+  compatible. The remainder of the line after the \mono{HMMER3/\HMMERfmtversion{}} tag
   is free text that is ignored by the parser. HMMER currently writes
   its version number and release date in brackets here,
-  e.g. \mono{[3.1b2 | December 2013]} in this
+  e.g. \mono{\HMMERsavestamp{}} in this
   example. \textbf{Mandatory.}
 
 \item [\monob{NAME <s>}] Model name; \mono{<s>} is a single word
 containing no spaces or tabs. The name is normally picked up from the
-\verb+#=GF ID+ line from a Stockholm alignment file.  If this is not
+\mono{\#=GF ID} line from a Stockholm alignment file.  If this is not
 present, the name is created from the name of the alignment file by
 removing any file type suffix. For example, an otherwise nameless HMM
 built from the alignment file \mono{rrm.slx} would be named
 \mono{rrm}.  \textbf{Mandatory.}
 
 \item [\monob{ACC <s>}] Accession number; \mono{<s>} is a one-word
-accession number. This is picked up from the \verb+#=GF AC+ line in a
+accession number. This is picked up from the \mono{\#=GF AC} line in a
 Stockholm format alignment. \textbf{Optional.}
 
 \item [\monob{DESC <s>}] Description line; \mono{<s>} is a one-line
-free text description. This is picked up from the \verb+#=GF DE+ line
+free text description. This is picked up from the \mono{\#=GF DE} line
 in a Stockholm alignment file. \textbf{Optional.}
 
 \item [\monob{LENG <d>}] Model length; \mono{<d>}, a positive nonzero
@@ -141,7 +235,7 @@ either \mono{no} or \mono{yes} (case insensitive). If \mono{yes}, the
 reference annotation character field for each match state in the main
 model (see below) is valid; if \mono{no}, these characters are
 ignored.  Reference column annotation is picked up from a Stockholm
-alignment file's \verb+#=GC RF+ line. It is propagated to alignment
+alignment file's \mono{\#=GC RF} line. It is propagated to alignment
 outputs, and also may optionally be used to define consensus match
 columns in profile HMM construction. \textbf{Optional}; assumed to be
 no if not present.
@@ -174,7 +268,7 @@ no if not present.
 \mono{yes}, the consensus structure character field for each match
 state in the main model (see below) is valid; if \mono{no} these
 characters are ignored. Consensus structure annotation is picked up
-from a Stockholm file's \verb+#=GC SS_cons+ line, and propagated to
+from a Stockholm file's \mono{\#=GC SS\_cons} line, and propagated to
 alignment displays.  \textbf{Optional}; assumed to be no if not
 present.
 
@@ -267,8 +361,8 @@ All the remaining fields are \textbf{mandatory}.
 
 The first two lines in the main model section are
 atypical.\footnote{That is, the first two lines after the optional
-  COMPO line. Don't be confused by the presence of an optional COMPO
-  line here. The COMPO line is placed in the model section, below the
+  \mono{COMPO} line. Don't be confused by the presence of an optional \mono{COMPO}
+  line here. The \mono{COMPO} line is placed in the model section, below the
   residue column headers, because it's an array of numbers much like
   residue scores, but it's not really part of the model.}  They
 contain information for the core model's BEGIN node. This is stored as
@@ -335,6 +429,8 @@ $D_k \rightarrow M_{k+1}$ transition is always 0.0 (probability 1.0).
 
 Finally, the last line of the format is the ``//'' record separator.
 
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+\newpage
 \section{Stockholm, the recommended multiple sequence alignment format}
 \label{section:stockholm}
 
@@ -346,22 +442,11 @@ Most popular multiple alignment file formats can be changed into a
 minimal Stockholm format file just by adding a Stockholm header line
 and a trailing \mono{//} terminator:
 
-\begin{sreoutput}
-# STOCKHOLM 1.0
+    \xsreoutput{inclusions/globins4.sto}
 
-seq1  ACDEF...GHIKL
-seq2  ACDEF...GHIKL
-seq3  ...EFMNRGHIKL
-
-seq1  MNPQTVWY
-seq2  MNPQTVWY
-seq3  MNPQT...
-//
-\end{sreoutput}
-
-The first line in the file must be \verb+# STOCKHOLM 1.x+, where
-\verb+x+ is a minor version number for the format specification
-(and which currently has no effect on my parsers). This line allows a
+The first line in the file must be \mono{\# STOCKHOLM 1.x}, where
+\mono{x} is a minor version number for the format specification (and
+which currently has no effect on my parsers). This line allows a
 parser to instantly identify the file format.
 
 In the alignment, each line contains a name, followed by the aligned
@@ -370,13 +455,13 @@ denotes a gap. If the alignment is too long to fit on one line, the
 alignment may be split into multiple blocks, with blocks separated by
 blank lines. The number of sequences, their order, and their names
 must be the same in every block. Within a given block, each
-(sub)sequence (and any associated \verb+#=GR+ and \verb+#=GC+ markup,
-see below) is of equal length, called the \textit{block length}. Block
+(sub)sequence (and any associated \mono{\#=GR} and \mono{\#=GC} markup,
+see below) is of equal length, called the \emph{block length}. Block
 lengths may differ from block to block. The block length must be at
 least one residue, and there is no maximum.
 
 Other blank lines are ignored. You can add comments anywhere to the
-file (even within a block) on lines starting with a \verb+#+.
+file (even within a block) on lines starting with a \mono{\#}.
 
 All other annotation is added using a tag/value comment style. The
 tag/value format is inherently extensible, and readily made
@@ -392,7 +477,7 @@ source sequence) See below for details.
 There are four types of Stockholm markup annotation, for per-file,
 per-sequence, per-column, and per-residue annotation:
 
-\begin{sreitems}{\monob{\#=GR <seqname> <tag> <..s..>}}
+\begin{description}%{\monob{\#=GR <seqname> <tag> <..s..>}}
 \item [\monob{\#=GF <tag> <s>}]
         Per-file annotation. \mono{<s>} is a free format text line
         of annotation type \mono{<tag>}. For example, \mono{\#=GF DATE
@@ -413,25 +498,26 @@ per-sequence, per-column, and per-residue annotation:
 \item [\monob{\#=GC <tag> <..s..>}]
         Per-column annotation. \mono{<..s..>} is an aligned text line
         of annotation type \mono{<tag>}.
-        \verb+#=GC+ lines are
+        \mono{\#=GC} lines are
         associated with a sequence alignment block; \mono{<..s..>}
         is aligned to the residues in the alignment block, and has
         the same length as the rest of the block.
-        Typically \verb+#=GC+ lines are placed at the end of each block.
+        Typically \mono{\#=GC} lines are placed at the end of each block.
 
 \item [\monob{\#=GR <seqname> <tag> <..s..>}]
         Per-residue annotation. \mono{<..s..>} is an aligned text line
         of annotation type \mono{<tag>}, associated with the sequence
         named \mono{<seqname>}. 
-        \verb+#=GR+ lines are 
+        \mono{\#=GR} lines are 
         associated with one sequence in a sequence alignment block; 
         \mono{<..s..>}
         is aligned to the residues in that sequence, and has
         the same length as the rest of the block.
         Typically
-        \verb+#=GR+ lines are placed immediately following the
+        \mono{\#=GR} lines are placed immediately following the
         aligned sequence they annotate.
-\end{sreitems}
+\end{description}
+
 
 \subsection{semantics of Stockholm markup}
 
@@ -569,7 +655,7 @@ are as follows:
   other state. (Note that a residue can be confidently
   \emph{unaligned}: a residue in an insert state or flanking N or C
   state may have high posterior probability.) The posterior
-  probability is encoded as 11 possible characters \verb+0-9*+: $0.0
+  probability is encoded as 11 possible characters \mono{0-9*+}: $0.0
   \leq p < 0.05$ is coded as 0, $0.05 \leq p < 0.15$ is coded as 1,
   (... and so on ...), $0.85 \leq p < 0.95$ is coded as 9, and $0.95
   \leq p \leq 1.0$ is coded as '*'. Gap characters appear in the PP
@@ -577,12 +663,15 @@ are as follows:
 \end{sreitems}
 
 
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+\newpage
+\section{A2M multiple alignment format}
+
 % Adapted from Easel documentation's format_a2m.tex by:
 %  - including format_a2m.tex
 %  - add the section header below
 %  - revise first pp to be about HMMER.
-
-\section{A2M multiple alignment format}
 
 HMMER's Easel library routines are capable of writing alignments in UC
 Santa Cruz ``A2M'' (alignment to model) format, the native input
@@ -643,8 +732,8 @@ case letters for insertions.
 
 \subsection{Legal characters}
 
-A2M (and SAM) do not support some special characters such as the `*'
-(not-a-residue) or `\verb+~+' (missing data) characters. Easel outputs these
+A2M (and SAM) do not support some special characters such as `*'
+(not-a-residue) or `\mono{\~}' (missing data). Easel outputs these
 characters as gaps: either `-' in a consensus column, or nothing in an
 insert column.
 
@@ -670,7 +759,7 @@ Writing A2M format requires knowing which alignment columns are
 supposed to be considered consensus and which are considered
 inserts. If the alignment was produced by HMMER or Infernal, then the
 alignment has so-called ``reference annotation'' (what appears as a
-\verb+#=GC RF+ line in Stockholm format) marking the consensus
+\mono{\#=GC RF} line in Stockholm format) marking the consensus
 columns. 
 
 Often, an alignment has no reference annotation; for example, if it
@@ -688,6 +777,7 @@ column.
 
 
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+\newpage
 \section{hmmpgmd sequence database format}
 
 The hmmpgmd sequence database format closely resembles the 
@@ -786,7 +876,7 @@ back to \mono{hmmpgmd} query hits.
 
 
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-
+\newpage
 \section{Score matrix files}
 
 Profile HMMs can be built from single sequences, not just from

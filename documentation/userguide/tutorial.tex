@@ -2,7 +2,7 @@
 \chapter{Tutorial}
 \label{chapter:tutorial}
 \setcounter{footnote}{0}
-\input{inclusions/inclusions.def}    % snippets captured from output, by gen-inclusions.py 
+
 
 
 First let's do something useful and see it work, then we'll do a
@@ -48,12 +48,7 @@ or
 UniProt\sidenote{\href{http://www.uniprot.org/downloads}{www.uniprot.org/downloads}}.
 You don't have to worry much about sequence file formats. HMMER can
 read most common alignment and sequence file formats
-automatically. You also don't have to uncompress \mono{.gz} files;
-HMMER automatically reads gzip compressed data.
-
-
-  
-
+automatically. 
   
   
 
@@ -183,7 +178,7 @@ the \mono{tutorial} directory:
 of the Dfam seed alignment for the MADE1 transposable element family. 
 %
 \item[\monob{dna\_target.fa}] A 330Kb sequence from human chromosome
-  1, containing four MADE1 elements, in FASTA format.
+  1 in FASTA format, containing four MADE1 elements.
 \end{sreitems}
 
 
@@ -226,6 +221,8 @@ files. Where applicable, the programs have options (usually
 \mono{-{}-rna}, \mono{-{}-dna}, \mono{-{}-amino}) for asserting the
 input alphabet type.
 
+For more information in HMMER input files and formats, see the formats
+chapter on page \pageref{chapter:formats}.
  
 
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
@@ -361,23 +358,23 @@ the same order of magnitude as the sequence bit score. Sometimes
 non-homolog to retain too much score. Conversely, the bias correction
 can be too aggressive sometimes, causing you to miss homologs. You can
 turn the biased-composition score correction off with the
-\mono{-{}-nonull2} option (and if you're doing that, you may also want
+\mono{-{}-nonull2} option.\sidenote{And if you're doing that, you may also want
 to set \mono{-{}-nobias}, to turn off another biased composition step
 called the bias filter, which affects which sequences get scored at
-all).
+all.}
 
 The next three numbers are again an E-value, score, and bias, but only
 for the single best-scoring domain in the sequence, rather than the
 sum of all its identified domains. The rationale for this isn't
 apparent in the globin example, because all the globins in this
 example consist of only a single globin domain. So let's set up a
-second example, using a profile of a single domain that's commonly found
-in multiple domains in a single sequence. Build a fibronectin type III
-domain profile using the \mono{fn3.sto} alignment (this happens
-to be a Pfam seed alignment; it's a good example of an alignment with
-complex Stockholm annotation). Then use that profile to analyze the
-sequence \mono{7LESS\_DROME}, the \emph{Drosophila} Sevenless
-receptor tyrosine kinase:
+second example, using a profile of a single domain that's commonly
+found in multiple domains in a single sequence. Build a fibronectin
+type III domain profile using the \mono{fn3.sto}
+alignment.\sidenote{This happens to be a Pfam seed alignment. It's a
+  good example of an alignment with complex Stockholm annotation.}
+Then use that profile to analyze the sequence \mono{7LESS\_DROME}, the
+\emph{Drosophila} Sevenless receptor tyrosine kinase:
 
    \vspace{1ex}
    \user{\% hmmbuild fn3.hmm fn3.sto} \\
@@ -402,10 +399,10 @@ significant on its own.  On the other hand, if the target sequence
 happened to be a piece of junk consisting of a set of identical
 internal repeats, and one of those repeats accidentially gives a weak
 hit to the query profile, all the repeats will sum up and the sequence
-score might look ``significant'' (mathematically, alas, the
-correct answer: the null hypothesis we're testing against is that the
-sequence is a \emph{random} sequence of some base composition, and a
-repetitive sequence isn't random).
+score might look ``significant''.\sidenote{Mathematically, alas, the
+  correct answer: the null hypothesis we're testing against is that
+  the sequence is a \emph{random} sequence of some base composition,
+  and a repetitive sequence isn't random.}
 
 So operationally:
 \begin{itemize}
@@ -428,9 +425,10 @@ case, only very slightly so, but nonetheless uncertain. The full
 sequence score is summed over all possible alignments of the globin
 profile to the \mono{\SGUseqname{}} sequence. When HMMER identifies
 domains, it identifies what it calls an \textbf{envelope} bounding
-where the domain's alignment most probably lies. (More on this later,
+where the domain's alignment most probably lies.\marginnote{The
+  difference between envelopes and alignments comes up again below
 when we discuss the reported coordinates of domains and alignments in
-the next section of the output.) The ``single best dom'' score is
+the next section of the output.} The ``single best dom'' score is
 calculated after the domain envelope has been defined, and the
 summation is restricted only to the ensemble of possible alignments
 that lie within the envelope. The fact that the two scores are
@@ -453,8 +451,8 @@ domain report later in the output file.
 These two numbers should be about the same. Rarely, you might see that
 they're very different, and this would usually be a sign that the
 target sequence is so highly repetitive that it's confused the HMMER
-domain postprocessors. Such sequences aren't likely to show up as
-significant homologs to any sensible query in the first place.
+domain postprocessor.\sidenote{Such sequences aren't likely to show up as
+significant homologs to any sensible query in the first place.}
 
 The sequence top hits output continues until it runs out of sequences
 to report. By default, the report includes all sequences with an
@@ -479,24 +477,26 @@ output.  The domain table for \mono{7LESS\_DROME} looks like:
 Domains are reported in the order they appear in the sequence, not in
 order of their significance.
 
-The \mono{!} or \mono{?} symbol indicates whether this domain does
-or does not satisfy both per-sequence and per-domain inclusion
+The \mono{!} or \mono{?} symbol indicates whether this domain does or
+does not satisfy both per-sequence and per-domain inclusion
 thresholds. Inclusion thresholds are used to determine what matches
 should be considered to be ``true'', as opposed to reporting
-thresholds that determine what matches will be reported (often
-including the top of the noise, so you can see what interesting
-sequences might be getting tickled by your search). By default,
-inclusion thresholds usually require a per-sequence E value of 0.01 or
-less and a per-domain conditional E-value of 0.01 or less (except
-jackhmmer, which requires a more stringent 0.001 for both), and
-reporting E-value thresholds are set to 10.0.
+thresholds that determine what matches will be reported.\sidenote{The
+  default reporting threshold of 10.0 is chosen so you get to see
+  about $\sim$10 insignificant hits at the top of the noise, so you
+  can see what interesting sequences might be getting tickled by your
+  search.} By default, inclusion thresholds usually require a
+per-sequence E value of 0.01 or less and a per-domain conditional
+E-value of 0.01 or less (except jackhmmer, which requires a more
+stringent 0.001 for both), and reporting E-value thresholds are set to
+10.0.
 
 The bit score and bias values are as described above for sequence
 scores, but are the score of just one domain's envelope. 
 
 The first of the two E-values is the \textbf{conditional
-  E-value}. This is a weird statistic, and it's not even clear I'm
-going to keep it. It is an attempt to
+  E-value}.\marginnote{The conditional E-value is a weird statistic,
+  and it's not clear I'm going to keep it.} It is an attempt to
 measure the statistical significance of each domain, \emph{given that
   we've already decided that the target sequence overall is a true
   homolog}.  It is the expected number of \emph{additional} domains
@@ -610,11 +610,11 @@ envelope is almost always a little wider than what HMMER chooses to
 show as a reasonably confident alignment. As mentioned earlier, the
 envelope represents a subsequence that encompasses most of the
 posterior probability for a given homologous domain, even if precise
-endpoints are only fuzzily inferrable. You'll notice that for higher
+endpoints are only fuzzily inferrable.\marginnote{You'll notice that for higher
 scoring domains, the coordinates of the envelope and the inferred
 alignment will tend to be in tighter agreement, corresponding to
 sharper posterior probability defining the location of the homologous
-region. 
+region.}
 
 Operationally, I recommend using the envelope coordinates to annotate
 domain locations on target sequences, not the alignment
@@ -712,9 +712,9 @@ of ungapped high-scoring alignment segments. Unlike BLAST, it does
 this calculation directly, without BLAST's word hit or hit extension
 step, using a SIMD vector-parallel algorithm. By default, HMMER is
 configured to allow sequences with a P-value of $\leq 0.02$ through
-the MSV score filter (thus, if the database contained no homologs and
+the MSV score filter.\sidenote{Thus, if the database contained no homologs and
 P-values were accurately calculated, the highest scoring 2\% of the
-sequences will pass the filter). Here, for this globin search, about
+sequences will pass the filter.} Here, for this globin search, about
 \SGUmsvpass{}\% of the database got through the MSV filter.
 
 A quick check is then done to see if the target sequence is
@@ -964,9 +964,9 @@ master/worker mode across many cores and/or machines, assuming you've
 compiled support for MPI into it (see the installation instructions).
 You'll also need to know how to invoke an MPI job in your particular
 cluster environment, with your job scheduler and your MPI
-distribution. I can't really help you with this -- different sites
+distribution.\sidenote{I can't really help you with this. Different sites
 have different cluster, scheduler, and MPI environments. Consult a
-local guru, as they say. In general, you will launch the parallel
+local guru, as they say.} In general, you will launch the parallel
 \mono{hmmbuild} by using a command like \mono{mpirun} or \mono{srun}
 that manages the MPI environment for a specified number of processes.
 With the SGE (Sun Grid Engine) scheduler and Intel MPI, an example
@@ -1004,15 +1004,14 @@ program:
    \user{\% hmmpress minifam}
    \vspace{1ex}
 
-This will quickly produce:
+This will produce:
 
    \xsreoutput{inclusions/hmmpress-minifam.out}
 
-and you'll see these four new binary files in the directory. 
-
+and you'll see these four new binary files in the directory.\sidenote{
 Their format is ``proprietary'', an open source term of art that means
 both ``I haven't found time to document them yet'' and ``I still might
-decide to change them arbitrarily without telling you''.
+decide to change them arbitrarily without telling you''.}
 
 \subsection{Step 3: search the profile database with hmmscan}
 
@@ -1054,25 +1053,24 @@ and an example alignment (of that second domain again):
 
    \xsreoutput{inclusions/hmmscan-minifam-sevenless.out3}
 
-You'd think that except for the E-values (which depend on database
-search space sizes), you should get exactly the same scores, domain
-number, domain coordinates, and alignment every time you do a search
-of the same profile against the same sequence. And this is actually
-the case! But in fact, under the hood, it's actually not so obvious
-this should be so, and HMMER is going out of its way to make it
-so. HMMER uses stochastic sampling algorithms to infer some
+You'd probably expect that except for the E-values (which depend on
+database search space sizes), you should get exactly the same scores,
+domain number, domain coordinates, and alignment every time you do a
+comparison of the same profile against the same sequence. Which is
+actually the case! But in fact, under the hood, it's actually not so
+obvious this should be, and HMMER is actually going out of its way to
+make it so. HMMER uses stochastic sampling algorithms to infer some
 parameters, and also to infer the exact domain number and domain
 boundaries in certain difficult cases. If HMMER ran its stochastic
-samples ``properly'', it would see different samples every time you
+samples ``properly'', it would obtain different samples every time you
 ran a program, and all of you would complain to me that HMMER was
 weird and buggy because it gave different answers on the same
 problem. To suppress run-to-run variation, HMMER seeds its random
-number generator(s) identically every time you do a sequence
-comparison. If you're an expert, and you really want to see the proper
-stochastic variation that results from sampling algorithms,
-you can pass a command-line argument of \mono{-{}-seed 0} to
-programs that have this property (hmmbuild and the four search
-programs).
+number generator(s) \emph{identically} every time you do a sequence
+comparison. If you're a stats expert, and you really want to see the
+proper stochastic variation that results from sampling algorithms, you
+can pass a command-line argument of \mono{-{}-seed 0} to programs that
+have this property (hmmbuild and the four search programs).
 
 
 
@@ -1115,7 +1113,7 @@ probabilities into and out of their inserted residue.
 
 This notation is only for your convenience in output files. You can
 see the structure of the profile reflected in the pattern of
-residues and gap characters \marginnote{By default, \mono{hmmalign}
+residues and gap characters \marginnote[-20ex]{By default, \mono{hmmalign}
   removes any columns that are all deletion characters, so the number
   of apparent match columns in a displayed alignment is $\leq$ the
   actual number of match states in the profile. To prevent this
@@ -1123,7 +1121,7 @@ residues and gap characters \marginnote{By default, \mono{hmmalign}
   \mono{-{}-allcol} option. This can be helpful if you're writing a
   postprocessor that's trying to keep track of what columns are
   assigned to what match states in the profile.}.  In input files, in
-most alignment formats\sidenote{A2M format is an important exception!} HMMER is
+most alignment formats\sidenote[][1ex]{A2M format is an important exception!} HMMER is
 case-insensitive, and it does not distinguish between different gap
 characters: '-' (dash), '.' (period), or even '\_' (underscore) are
 accepted as gap characters.
@@ -1133,7 +1131,7 @@ Important: insertions relative to a profile are
 and another has an insertion of length 2 in the same place in the
 profile. The alignment will have ten insert columns, to accomodate the
 longest insertion.  The residues of the shorter insertion are thrown
-down in an arbitrary order.\marginnote{By arbitrary HMMER convention,
+down in an arbitrary order.\marginnote[-4ex]{By arbitrary HMMER convention,
   the insertion is divided in half; half is left-justified, and the
   other half is right-justified, leaving '.' characters in the
   middle.}  Notice that in the previous paragraph I oh-so-carefully
@@ -1163,18 +1161,17 @@ on an insert residue is \emph{not} the probability that it belongs in
 that particular column; again, if there's a choice of column for
 putting an inserted residue, that choice is arbitrary.
 
-\mono{hmmalign} currently has a, um, feature that you may dislike and
-that I know about. Recall that HMMER only does local
-alignments. Here, we know that we've provided full length globin
-sequences, and \mono{globins4} is a full length globin profile. We'd
-probably like \mono{hmmalign} to produce a global alignment. It can't
-currently do that. If it doesn't quite manage to extend its local
-alignment to the full length of a target globin sequence, you'll get a
-weird-looking effect, as the nonmatching termini are pulled out to the
-left or right. For example, look at the N-terminal \mono{g} in
-\mono{MYG\_HORSE} above. HMMER is about 80\% confident that this
-residue is nonhomologous, though any sensible person would align it
-into the first globin consensus column.
+\mono{hmmalign} currently has a, um, feature that you may dislike.
+Recall that HMMER only does local alignments. Here, we know that we've
+provided full length globin sequences, and \mono{globins4} is a full
+length globin profile. We'd probably like \mono{hmmalign} to produce a
+global alignment. It can't currently do that. If it doesn't quite
+manage to extend its local alignment to the full length of a target
+globin sequence, you'll get a weird-looking effect, as the nonmatching
+termini are pulled out to the left or right. For example, look at the
+N-terminal \mono{g} in \mono{MYG\_HORSE} above. HMMER is about 80\%
+confident that this residue is nonhomologous, though any sensible
+person would align it into the first globin consensus column.
 
 Look at the end of that first block of Stockholm alignment, where you'll
 see:
@@ -1360,9 +1357,9 @@ scanned for high-scoring ungapped alignment segments, and a window
 around each such segment is extracted (merging overlapping windows),
 and passed on to the next stage. By default, nhmmer is configured to
 allow sequence segments with a P-value of $\leq 0.02$ through the SSV
-score filter (thus, if the database contained no homologs and P-values
+score filter.\sidenote{Thus, if the database contained no homologs and P-values
 were accurately calculated, the highest scoring 2\% of the sequence
-will pass the filter). Here, \NMHnssv{} bases,
+will pass the filter.} Here, \NMHnssv{} bases,
 or about \NMHfracssv{}\% of the database, got through the SSV filter.
 
 The ``bias filter'' is then applied, as in \mono{hmmsearch}. Here, 

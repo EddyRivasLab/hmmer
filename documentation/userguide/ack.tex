@@ -47,11 +47,11 @@ other probabilistic approaches for other biological sequence analysis
 problems; Graeme Mitchison moved on to quantum computing; I moved on
 to noncoding structural RNAs.
 
-Yet BLAST continued (and indeed, continues) to be the most widely used
-search program. HMMs seemed to be widely considered to be a mysterious
-and orthogonal black box, rather than a natural theoretical basis for
+Yet BLAST continued (and continues) to be the most widely used search
+program. HMMs seemed to be widely considered to be a mysterious and
+orthogonal black box, rather than a natural theoretical basis for
 important applications like BLAST. The NCBI seemed to be slow to adopt
-HMM methods. This nagged at me. The revolution is unfinished!
+HMM methods. This nagged at me. The revolution was unfinished!
 
 When my group moved to Janelia Farm in 2006, I had to make a decision
 about what we should spend time on. It had to be something
@@ -61,30 +61,31 @@ academic science; something that would make a difference. I decided
 that we should aim to replace BLAST with a new generation of software,
 and I launched the HMMER3 project.
 
-In a twist of fate, an embedded systems engineer named Michael Farrar
+Coicidentally, an embedded systems engineer named Michael Farrar
 contacted me in January 2007. As a side hobby, Farrar has developed an
 efficient new ``striped'' method for using SIMD vector instructions to
 accelerate Smith/Waterman sequence alignment. He had used it to
-accelerate Bill Pearson's SSEARCH program by 10-20x, and he asked how
-hard it would be to extend his ideas to HMMER. He published a short
-Bioinformatics paper later in 2007 on the SSEARCH work, solo author
-with no academic affiliation, which gave me plenty to study in
-detail. In December 2007, working from Michael's description, I
-implemented striped SIMD vectorization for HMMER, and I realized how
-to do the fast filter we now call the SSV and MSV filters. Michael and
-I started corresponding frequently by email. We met for coffee at a
-Starbucks on Church Street in Cambridge in early 2008, and I started
-trying to recruit him to Janelia Farm. In April, he visited, and I
-made him an offer in May. We negotiated off and on for a year, and he
-joined the group in June 2009. HMMER3.0 was first released in March
-2010. 
+accelerate Bill Pearson's SSEARCH program by 10-20x, and wanted to
+know if his ideas could be applied in HMMER. He published a short
+Bioinformatics paper later in 2007 on the SSEARCH work, as a solo
+author with no academic affiliation. In December 2007, working from
+Michael's description, I implemented striped SIMD vectorization for
+HMMER, and one pleasant day, I realized how to do the fast filter we
+now call the SSV and MSV filters. Michael and I started corresponding
+frequently by email. We met for coffee at the Starbucks on Church
+Street in Cambridge in early 2008, and I started trying to recruit him
+to Janelia Farm. We negotiated off and on for a year, and he joined
+the group in June 2009. HMMER3.0 was first released in March 2010.
 
 HMMER is still my baby, but it is also the work of several people who
 have come through my lab and other collaborators, including
 contributions from Bill Arndt, Dawn Brooks, Nick Carter, Sergi
 Castellano, Alex Coventry, Michael Farrar, Rob Finn, Ian Holmes, Steve
 Johnson, Bjarne Knudsen, Diana Kolbe, Eric Nawrocki, Elena Rivas, Walt
-Shands, and Travis Wheeler. 
+Shands, and Travis Wheeler.\sidenote{I write ``I'' in this guide, but
+  a few parts of it were first written by Travis.  I think there's
+  probably some stuff that was first written by Ewan Birney in here
+  too.}
 
 I thank Scott Yockel, James Cuff, and the Harvard Odyssey team for our
 computing environment at Harvard, and Goran Ceric and his team for our
@@ -124,8 +125,9 @@ emacs, and autoconf; valgrind; Subversion and Git; Perl and Python;
 \LaTeX; PolyglotMan; and the UNIX and Linux operating systems.
 
 Finally, I'd like to cryptically thank Dave ``Mr. Frog'' Pare and Tom
-``Chainsaw'' Ruschak for an unrelated free software product that was
-historically instrumental in HMMER's development, for reasons that are
-best not discussed while sober.
+``Chainsaw'' Ruschak for an unrelated open source software product
+that was historically instrumental in HMMER's development, for reasons
+that are best not discussed while sober.
+
 
 

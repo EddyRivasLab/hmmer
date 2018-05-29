@@ -1,28 +1,27 @@
 \documentclass[notoc]{tufte-book}    % `notoc` suppresses TL custom TOC, reverts to standard LaTeX
 
+\hyphenation{HMMER}
+
 \input{titlepage}                    % definitions for \maketitle 
 \bibliographystyle{unsrtnat-brief}   % customized natbib unsrtnat. Abbrev 3+ authors to ``et al.'' 
 
-
 \begin{document}
 \setcounter{tocdepth}{2}             % 0=chapters 1=sections 2=subsections 3=subsubsections? 4=paragraphs
+\input{inclusions/inclusions.def}    % snippets captured from output, by gen-inclusions.py 
 
 \maketitle
 
 \input{copyright}
 
-\begin{adjustwidth}{}{-1in}          % TL \textwidth is quite narrow.
-\tableofcontents                     % Expand it manually for TOC and man pages.
+\begin{adjustwidth}{}{-1in}          % TL \textwidth is quite narrow. Expand it manually for TOC and man pages.
+\tableofcontents                     
 \end{adjustwidth}
 
 \input{introduction}
 \input{install}
 \input{tutorial}
-
-%\input{pipeline}
-%\input{tabular}
-
-\input{more}
+\input{pipeline}
+\input{tabular}
 
 \begin{adjustwidth}{}{-1in}   
 \chapter{Manual pages for HMMER programs}             
