@@ -81,7 +81,6 @@ TEXFILES =\
 	introduction.tex \
 	macros.tex       \
 	main.tex         \
-	more.tex         \
 	pipeline.tex     \
 	tabular.tex      \
 	titlepage.tex    \
