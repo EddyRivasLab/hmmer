@@ -663,10 +663,10 @@ HMMER configuration:
      libraries:            ${LIBS} ${LIBGSL} ${PTHREAD_LIBS}
      DP implementation:    ${impl_choice}
 
-Do 'make' to build HMMER, and
- (optionally) 'make check' to run self tests,
- (optionally) 'make install' to install HMMER programs, man pages permanently,
- (optionally) '(cd easel; make install)' to install Easel tools too.
+Do 'make' to build HMMER, and optionally:
+  'make check' to run self tests,
+  'make install' to install programs and man pages,
+  '(cd easel; make install)' to install Easel tools.
 "
 
 if test "$impl_choice" = "dummy"; then
