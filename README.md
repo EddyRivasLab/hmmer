@@ -23,8 +23,9 @@ depends on the Easel library, also at
    % cd hmmer-3.2
    % ./configure --prefix /your/install/path
    % make
-   % make check
-   % make install
+   % make check                 # optional: run automated tests
+   % make install               # optional: install HMMER programs, man pages
+   % (cd easel; make install)   # optional: install Easel tools
 ``` 
 
 Executable programs will be installed in `/your/install/path/bin`. If

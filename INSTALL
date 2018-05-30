@@ -8,7 +8,8 @@ Starting from a source distribution, hmmer-3.2.tar.gz:
    ./configure
    make
    make check                        # optional: automated tests
-   make install                      # optional: installation
+   make install                      # optional: install HMMER programs and man pages
+   (cd easel; make install)          # optional: install Easel tools too
 
 For complete documentation, including customization, supported
 platforms, and troubleshooting, please see the Installation chapter in
