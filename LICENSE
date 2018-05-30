@@ -1,13 +1,10 @@
 HMMER - Biological sequence analysis with profile hidden Markov models
-@HMMER_COPYRIGHT@
-------------------------------------------------------------------
-
-Additional copyrights apply to the entirety of the package:
 Copyright (C) 1992-2018 Sean R. Eddy
 Copyright (C) 2000-2018 Howard Hughes Medical Institute
 Copyright (C) 2015-2018 President and Fellows of Harvard College
 Copyright (C) 1992-2004 Washington University School of Medicine
 Copyright (C) 1992-1994 MRC Laboratory of Molecular Biology
+-----------------------------------------------------------------------
 
 The code includes contributions and input from current and past
 members of the HMMER development team, as well as other colleagues and

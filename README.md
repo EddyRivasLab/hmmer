@@ -15,18 +15,7 @@ To participate in HMMER development, visit us at
 depends on the Easel library, also at
 [github](https://github.com/EddyRivasLab/easel).
 
-We don't intend github to be a source of "official" HMMER release
-code.  Our release tarballs bundle up some convenient stuff that you
-have to be able to create for yourself if you're trying to do it from
-our github repository.
-
-
 ### to download and build the current source code release:
-
-Various tarballs of pre-compiled executables and source code for a
-variety of systems are available at [hmmer.org](http://hmmer.org), but
-it is also straightforward to download and build from source on most
-systems:
 
 ```bash
    % wget http://eddylab.org/software/hmmer3/3.2/hmmer-3.2.tar.gz
@@ -38,7 +27,8 @@ systems:
    % make install
 ``` 
 
-Executable programs will be installed in `/your/install/path/bin`.
+Executable programs will be installed in `/your/install/path/bin`. If
+you leave this argument off, the default prefix is `/usr/local`.
 
 Files to read in the top-level source directory:
 
@@ -57,8 +47,6 @@ You need to clone both the HMMER and Easel repositories, as follows:
    % git clone https://github.com/EddyRivasLab/hmmer
    % cd hmmer
    % git clone https://github.com/EddyRivasLab/easel
-   % git checkout develop
-   % (cd easel; git checkout develop)
    % autoconf
 ```
 
@@ -77,8 +65,9 @@ includes three main branches:
  * **develop** is the HMMER3 development branch
  * **h4-develop** is the HMMER4 development branch.
 
-To contribute to HMMER3 development, you want to be on the **develop**
-branch.
+To build the most recent official release, leave both HMMER and Easel
+on their default **master** branch.  To contribute to HMMER3
+development, you want to be on the **develop** branches.
 
 
 ### to report a problem:

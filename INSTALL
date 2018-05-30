@@ -1,46 +1,18 @@
 Brief installation instructions 
-HMMER @HMMER_VERSION@; @HMMER_DATE@
--------------------------------------------------------------
+HMMER 3.2 (May 2018)
 
-These are quick installation instructions. For complete documentation,
-including customization and troubleshooting, please see the
-Installation chapter in the HMMER User's Guide (Userguide.pdf).
-
--------------------------------------------------------------
-
-Starting from a distribution "with binaries", such as 
-hmmer-@HMMER_VERSION@-linux-intel-x86_64.tar.gz:
-   uncompress hmmer-@HMMER_VERSION@-linux-intel-x86_64.tar.gz  
-   tar xf hmmer-@HMMER_VERSION@-linux-intel-x86_64.tar
-   cd hmmer-@HMMER_VERSION@-linux-intel-x86_64
- 
-The pre-compiled binaries are found in the directory ./binaries.
-You may copy these into a directory of your choosing, or simply add
-this directory to your $PATH variable.
-
--------------------------------------------------------------
-
-Starting from a source distribution, hmmer-@HMMER_VERSION@.tar.gz:
-   uncompress hmmer-@HMMER_VERSION@.tar.gz  
-   tar xf hmmer-@HMMER_VERSION@.tar
-   cd hmmer-@HMMER_VERSION@
+Starting from a source distribution, hmmer-3.2.tar.gz:
+   uncompress hmmer-3.2.tar.gz  
+   tar xf hmmer-3.2.tar
+   cd hmmer-3.2
    ./configure
    make
    make check                        # optional: automated tests
    make install                      # optional: installation
 
--------------------------------------------------------------
+For complete documentation, including customization, supported
+platforms, and troubleshooting, please see the Installation chapter in
+the HMMER User's Guide (Userguide.pdf).
 
-HMMER is developed primarily on Linux and Mac OS/X systems. It is
-tested on a variety of UNIX and UNIX-like operating systems. It is
-written in ANSI C99 conforming to POSIX standards. It is meant to be
-portable to any POSIX-compliant system with an ANSI C99 compiler,
-including all UNIX and Apple OS/X systems. A binary version is also
-available for Windows systems with Cygwin installed (Cygwin is
-optional POSIX compatibility software).
-
-
--------------------------------------------------------------
-HMMER development team | HHMI/Harvard | http://hmmer.org/
 
 
