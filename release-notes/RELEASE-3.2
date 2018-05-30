@@ -1,4 +1,4 @@
-HMMER 3.2 release notes    (Aug 2017)
+HMMER 3.2 release notes    (Jun 2018)
 Previous release was 3.1b2 (Mar 2015)
 http://hmmer.org
 ________________________________________________________________
@@ -18,43 +18,44 @@ Larger changes:
   programs do not scale much beyond 2 cores anyway, due to input
   saturation and memory use.
 
-Other, smaller new features include:
+Smaller new features include:
 
 * improved documentation of --mxfile and score matrix file format
 * adds support for EBI's "uncheck all hits" on jackhmmer web site
-* improves configure script's detection of SIMD vector support
-* configuration now robust against someone running gnu `autoheader`
 * removed experimental hmmbuild --seq_weights_r and --seq_weights_e options
-* clarified A2M format parse error when file contains 'O' residue 
 * appeased new gcc6 --Wmisleading-indentation warning
 * SSI indexing is now robust against duplicate keys
-* improved autoconf test for DAZ,FTZ x86 chip support
-* improved autodetection of A2M vs. aligned FASTA format
+* autoconf now robust against someone running gnu `autoheader`
+* improved autoconf of SIMD vector support
+* improved autoconf of DAZ,FTZ support on x86 processors
 * improved autodetection of phylip interleaved vs sequential format
+* improved autodetection of A2M vs. aligned FASTA format
+* clarified A2M format parse error when file contains 'O' residue 
 * improved portability to Intel/Solaris
-* FASTA parser now ignores description line after a ctrl-A; NCBI NR db 
-  has description "lines" of up to 2.7MB.
+* FASTA parser now ignores description line after a ctrl-A
 * MSAs output with -A option now include name, acc, desc, author markup.
 * In Easel miniapps, esl-translate replaces previous (buggy) esl-stranslate.
-* Easel miniapps include a new esl-alirev tool, for reverse
-  complementing an RNA/DNA alignment
+* Easel miniapps include esl-alirev, reverse complementing RNA/DNA alignment
 * nhmmer/nhmmscan now allow alignments as target dbs
 * target relentropy for DNA models changed from 0.45 to 0.62
+* updated the User Guide
 
+Fixed bugs include:
 
-Bugfixes include:
-
-* nhmmer was corrupted by * symbols in input sequence
 * nhmmscan faulted on old model files because it expected MAXL field
 * --cut-ga wasn't checking that GA line was actually present in model
 * GA thresholds weren't being captured from DNA/RNA Stockholm alignments
 * A2M alignment parsing was corrupted on lines ending in insertions
 * alphabet-guessing failed for FASTA seq >4096 bytes and <4000 residues
 * genbank to fasta format conversion was leaving extra \n in accession
-* NCBI db format: multithreaded nhmmer was failing to read
+* NCBI db format: multithreaded nhmmer was failing to read 
 * NCBI db format: 1st database sequence was skipped for second query (#e6)
 * unit test failures in esl_normal, esl_random due to floating point math
-
+* nhmmer was corrupted by * symbols in input sequence (iss#118)
+* hmmsearch -A crashed if top-ranked hit has no domains (iss#131)
+* new variety of "backconverted subseq" hmmsearch crash on *'s (iss#135)
+* qsort() callbacks now return -1/0/1 as they should. (Infernal iss#11)
+* esl_buffer hangs when input ends with \r (Easel iss#23) 
 
 For details, you can view and search our issue tracking logs at github:
   https://github.com/EddyRivasLab/hmmer/issues/   for HMMER itself

@@ -35,12 +35,11 @@ sources, including:
 HMMER also includes copyrighted and licensed code that has been
 incorporated from other sources, including:
 
-   Yuta Mori                       libdivsufsort-lite
+   Yuta Mori (libdivsufsort-lite)
    Apple Computer                  
    Free Software Foundation, Inc.  
    IBM TJ Watson Research Center   
    X Consortium                    
-   
 
 HMMER uses the Easel software library, which has its own license and
 copyright information. See easel/COPYRIGHT and easel/LICENSE.
@@ -50,7 +49,13 @@ license from Michael Farrar. You are sublicensed to use this
 technology specifically for the use, modification, and redistribution
 of HMMER.
 
-This source code is distributed as open source under the terms of the
+HMMER development is supported in part by the National Human Genome
+Research Institute of the US National Institutes of Health under grant
+number R01HG009116. The content is solely the responsibility of the
+authors and does not necessarily represent the official views of the
+National Institutes of Health.
+
+HMMER source code is distributed as open source under the terms of the
 BSD three-clause license:
 
    Redistribution and use in source and binary forms, with or without
@@ -83,14 +88,6 @@ BSD three-clause license:
    OF THE POSSIBILITY OF SUCH DAMAGE.
 
 
-HMMER development is supported in part by the National Human Genome
-Research Institute of the US National Institutes of Health under grant
-number R01HG009116. The content is solely the responsibility of the
-authors and does not necessarily represent the official views of the
-National Institutes of Health.
-
-------------------------------------------------------------------
-The HMMER dev team | HHMI/Harvard University | http://hmmer.org/
 
 
 

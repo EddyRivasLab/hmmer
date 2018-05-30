@@ -2,7 +2,7 @@
 \newcommand{\UNInseq}{556,825}
 
 \newcommand{\HMMERversion}{3.2}
-\newcommand{\HMMERdate}{April 2018}
+\newcommand{\HMMERdate}{June 2018}
 
 \newcommand{\BGLnseq}{4}
 \newcommand{\BGLalen}{171}
@@ -12,7 +12,7 @@
 \newcommand{\BGLre}{0.589}
 
 \newcommand{\HMMERfmtversion}{f}
-\newcommand{\HMMERsavestamp}{[3.2 | April 2018]}
+\newcommand{\HMMERsavestamp}{[3.2 | June 2018]}
 
 \newcommand{\SGUevalue}{6.7e-65}
 \newcommand{\SGUbitscore}{222.7}
@@ -24,7 +24,7 @@
 \newcommand{\SGUbiaspass}{17546}
 \newcommand{\SGUvitpass}{2368}
 \newcommand{\SGUfwdpass}{1127}
-\newcommand{\SGUelapsed}{1.3}
+\newcommand{\SGUelapsed}{1.1}
 
 \newcommand{\SFSevalue}{6.2e-56}
 \newcommand{\SFSbitscore}{173.1}

@@ -116,7 +116,7 @@ in a readily parseable, columnar, whitespace-delimited format.
 .BI \-\-chkhmm " prefix"
 At the start of each iteration, checkpoint the query HMM, saving it
 to a file named
-\fIprefix\fB-\fIn\fB.hmm\fR
+\fIprefix\fR\fB-\fR\fIn\fR\fB.hmm\fR
 where
 .I n
 is the iteration number (from 1..N).
@@ -128,7 +128,7 @@ domains satisfying inclusion thresholds (e.g. what will become the
 query HMM for the next iteration), 
 saving it
 to a file named
-\fIprefix\fB-\fIn\fB.sto\fR
+\fIprefix\fR\fB-\fR\fIn\fR\fB.sto\fR
 in Stockholm format,
 where
 .I n

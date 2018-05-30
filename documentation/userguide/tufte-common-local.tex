@@ -50,6 +50,10 @@
   \clearpage%
 }
 
+% \smaller not \small, so \mono works proportionately in side/margin notes
+%   avoid nesting \mono{..\monob{..}}, because \smaller will accumulate.
+%   in man pages, close font changes, e.g. \fI..\fR\fB..\fR not \fi..\fB..fR
+% 
 \newcommand{\mono}[1]{{\smaller\texttt{#1}}}                    % literal (to be typed): code, program names
 \newcommand{\monoi}[1]{{\smaller\itshape\texttt{#1}}}           % meta (to be substituted): vars, options, args
 \newcommand{\monob}[1]{{\smaller\bfseries\texttt{#1}}}          % emphasized literals
@@ -61,9 +65,6 @@
 \DefineVerbatimEnvironment{sreoutput}{Verbatim}{fontsize=\scriptsize,xleftmargin=2.0\parindent}%
 \DefineVerbatimEnvironment{tinysreoutput}{Verbatim}{fontsize=\tiny,xleftmargin=2.0\parindent}%
 
-
-
-%\newcommand{\response}[1]{\indent\indent{\small\bfseries\texttt{#1}}}
 
 
 % Description-like environment for producing lists like:

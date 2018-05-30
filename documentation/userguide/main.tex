@@ -38,7 +38,14 @@
 \input{ack}
 \label{manualend}
 
-\nobibliography{master,lab,books}
+% To create distributable/gitted 'distilled.bib' from lab's bibtex dbs:
+%   # uncomment the {master,lab,books}
+%   pdflatex main
+%   bibdistill main.aux > distilled.bib
+%   # restore the {distilled} 
+% 
+\nobibliography{distilled}
+%\nobibliography{master,lab,books}
 
 \end{document}
 
