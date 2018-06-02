@@ -16,6 +16,5 @@ find -L . -name "*README*" -print                         | xargs etags -a
 
 # Easel
 etags -a easel/configure.ac
-etags -a easel/INSTALL
 etags -a easel/LICENSE
 

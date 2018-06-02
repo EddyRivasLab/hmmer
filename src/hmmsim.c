@@ -191,7 +191,7 @@ main(int argc, char **argv)
    */
   cfg.hmmfile  = esl_opt_GetArg(go, 1);
   cfg.r        = esl_randomness_Create(esl_opt_GetInteger(go, "--seed"));
-  //cfg.abc      = esl_alphabet_Create(eslAMINO);
+  cfg.abc      = NULL;
 
   cfg.my_rank  = 0;		/* MPI init will change this soon, if --mpi was set */
   cfg.nproc    = 0;		/* MPI init will change this soon, if --mpi was set */
