@@ -4,6 +4,10 @@
 # in this case, the --cut_ga threshold, using an example that
 # Rob Finn found as a bug in Jan 2011.
 # 
+# This test creates its own small HMM database in $tmppfx.hmm
+# create_test_hmmdb() writes three specific models to a file.
+# Then we index that w/ hmmpress.
+#
 # SRE, Sat Jan  8 09:29:18 2011 [Casa de Gatos] xref J7/50
 
 use IO::Socket;
@@ -14,6 +18,11 @@ $SIG{INT} = \&catch_sigint;
 $builddir = shift;
 $srcdir   = shift;
 $tmppfx   = shift;
+
+$verbose = 0;
+$host    = "127.0.0.1";
+$cport   = 51373;               # ...don't want a test to interfere w/ running hmmpgmd daemon on same machine
+$wport   = 51374;		# nondefault worker and client ports...
 
 # Only one instance of this script should be run at once.  I
 # frequently do several 'make check's in parallel for different
@@ -27,16 +36,6 @@ while (! flock $self, LOCK_EX | LOCK_NB)
     $ntry--;
     sleep(5);
 }
-
-
-$verbose = 0;
-$host    = "127.0.0.1";
-$cport   = 51373;               # ...don't want a test to interfere w/ running hmmpgmd daemon on same machine
-$wport   = 51374;		# nondefault worker and client ports...
-
-# This test creates its own small HMM database in $tmppfx.hmm
-# create_test_hmmdb() writes three specific models to a file.
-# Then we index that w/ hmmpress.
 
 # Verify that we have all the executables and datafiles we need for the test.
 @h3progs = ("hmmpgmd", "hmmc2", "hmmpress");
