@@ -7,12 +7,27 @@
 # SRE, Sat Jan  8 09:29:18 2011 [Casa de Gatos] xref J7/50
 
 use IO::Socket;
+use Fcntl ':flock';
 
 $SIG{INT} = \&catch_sigint;
 
 $builddir = shift;
 $srcdir   = shift;
 $tmppfx   = shift;
+
+# Only one instance of this script should be run at once.  I
+# frequently do several 'make check's in parallel for different
+# builds.  To avoid collisions, flock the script, and try to wait for
+# it to be free.
+$ntry = 10;
+open my $self, '<', $0 or die("FAIL: failed to open $0 for flocking: $1");
+while (! flock $self, LOCK_EX | LOCK_NB)
+{
+    if ($ntry == 0) { die("FAIL: $0 is already running"); }
+    $ntry--;
+    sleep(5);
+}
+
 
 $verbose = 0;
 $host    = "127.0.0.1";
@@ -38,11 +53,18 @@ if($have_threads eq "") {
     exit 0;
 }
 
+
 # Verify that the wport and cport are CLOSED - we don't want to
 # clobber existing hmmpgmd's (or other client-server programs on those
 # ports).
-if (IO::Socket::INET->new(PeerHost => $host, PeerPort => $wport, Proto     => 'tcp')) { die "FAIL: worker port $wport already in use"; }
-if (IO::Socket::INET->new(PeerHost => $host, PeerPort => $cport, Proto     => 'tcp')) { die "FAIL: client port $cport already in use"; }
+#
+# We've flocked the script, but it's possible that the caller is trying
+# to run an instance from a different copy of the script, which the
+# flock strategy doesn't detect.
+if ( IO::Socket::INET->new(PeerHost => $host, PeerPort => $wport, Proto     => 'tcp') ||
+     IO::Socket::INET->new(PeerHost => $host, PeerPort => $cport, Proto     => 'tcp')) 
+{ die "FAIL: worker port $wport or client port $cport already in use"; }
+
 
 # create the files needed for the test
 &create_test_hmmdb("$tmppfx.hmm");
