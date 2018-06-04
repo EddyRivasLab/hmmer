@@ -1482,17 +1482,14 @@ p7_tophits_Alignment(const P7_TOPHITS *th, const ESL_ALPHABET *abc,
    * least) about testing ndom before reaching into dcl[] to get M.
    */
   for (h = 0; h < th->N; h++)
-    {
-      if (th->hit[h]->flags & p7_IS_INCLUDED)
-	{
-	  for (d = 0; d < th->hit[h]->ndom; d++)
-	    if (th->hit[h]->dcl[d].is_included)
-	      if (M == 0) M = th->hit[h]->dcl[d].ad->M;
-	  ndom++;
-	}
-    }
+    if (th->hit[h]->flags & p7_IS_INCLUDED)
+      for (d = 0; d < th->hit[h]->ndom; d++)
+	if (th->hit[h]->dcl[d].is_included)
+	  {
+	    if (M == 0) M = th->hit[h]->dcl[d].ad->M;
+	    ndom++;
+	  }
   if (inc_n && M == 0)  M = inc_trarr[0]->M;          
-  
   if (inc_n+ndom == 0) { status = eslFAIL; goto ERROR; }
   
   /* Allocation */
