@@ -133,7 +133,7 @@ Microsoft Windows.\sidenote{Windows 10 includes a Unix-compatible bash
 and on Apple OS/X.
 
 \paragraph{Processor:} HMMER depends on vector parallelization methods
-are processor-specific. H3 requires either an x86-compatible
+that are processor-specific. H3 requires either an x86-compatible
 (Intel/AMD) processor that supports the SSE2 vector instruction set,
 or a big-endian (AIX, not Linux) PowerPC processor that supports the
 Altivec/VMX instruction set. SSE2 is supported on Intel processors
@@ -142,15 +142,9 @@ includes almost all Intel processors since 2000 and AMD processors
 since 2003. Altivec/VMX is supported on Motorola G4, IBM G5, and IBM
 PowerPC processors starting with the Power6, which includes almost all
 PowerPC-based desktop systems since 1999 and servers since
-2007.\sidenote{ If your platform does not support one of these vector
-  instruction sets, the configure script will revert to an unoptimized
-  implementation called the ``dummy'' implementation. \textbf{The
-    dummy implementation is two orders of magnitude slower.} It will
-  enable you to see H3's scientific features on a much wider range of
-  processors, but \textbf{is not suited for production work}. If
-  you're a packager, please don't package a compiled dummy
-  implementation.}
-
+2007.\sidenote{If your platform does not support either of these
+  vector instruction sets, the configure script will stop with an
+  error message.}
 
 \paragraph{Compiler:} The source code conforms to ANSI
 C99 and POSIX standards. It should compile with any ANSI C99 compliant
@@ -487,15 +481,6 @@ grep (or whatever grep you have) is ok by explicitly setting
   \vspace{1ex}
   \user{\% ./configure GREP=/usr/xpg4/bin/grep}
   \vspace{1ex}
-
-\paragraph{Configuration warns that it's using the ``dummy''
-implementation.} This happens when your system has a processor that we
-don't yet support with a fast vector-parallel implementation. We
-currently support Intel/AMD compatible processors and bigendian
-PowerPC compatible processors.  H3 will revert to a portable but slow
-version on other processors. You really don't want to be using the
-dummy implementation. We're not even sure it was a good idea to
-include it.
 
 \paragraph{Many `make check' tests fail.} We have one report of a
 system that failed to link multithread-capable system C libraries

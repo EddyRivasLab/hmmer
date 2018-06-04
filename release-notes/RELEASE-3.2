@@ -7,9 +7,9 @@ Larger changes:
 
 * HMMER is now distributed under the BSD license, instead of the GPL.
 
-* 'make install' streamlined. Now we install only programs and man
-  pages, for 18 HMMER programs and 22 Easel miniapps.  We don't
-  install development .h headers or .a libraries.
+* The 'make install' has been streamlined. Now we install only
+  programs and man pages, for 18 HMMER programs and 22 Easel miniapps.
+  We don't install development .h headers or .a libraries.
 
 * We changed our default policy on the number of threads/cores that
   the search programs use. Previously multithreaded programs would use
@@ -17,6 +17,18 @@ Larger changes:
   default (~2 cores), if multiple cores are available. HMMER3 search
   programs do not scale much beyond 2 cores anyway, due to input
   saturation and memory use.
+
+* H3 now strictly requires either SSE2 or Altivec/VMX vector
+  support. The portable 'dummy' implementation has been removed. This
+  was an non-vectorized portable pure C implementation, much slower
+  than HMMER3 on x86 and PowerPC platforms with SSE2 or Altivec/VMX
+  vector instructions. We had included it because we could -- HMMER3
+  implements "generic" non-vectorized versions of its core algorithms
+  for unit testing purposes anyway. We thought maybe it'd be useful.
+  As far as I can tell, it was never useful, but several packagers on
+  non-x86, non-PowerPC platforms packaged and distributed it, ignoring
+  the prominent health warnings we put on it.
+
 
 Smaller new features include:
 

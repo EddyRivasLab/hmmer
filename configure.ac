@@ -197,7 +197,6 @@ AC_ARG_ENABLE(gprof,   [AS_HELP_STRING([--enable-gprof],   [compile for gcc code
 
 AC_ARG_ENABLE(sse,     [AS_HELP_STRING([--enable-sse],     [enable our SSE vector code])],               enable_sse=$enableval,     enable_sse=check)
 AC_ARG_ENABLE(vmx,     [AS_HELP_STRING([--enable-vmx],     [enable our Altivec/VMX vector code])],       enable_vmx=$enableval,     enable_vmx=check)
-AC_ARG_ENABLE(dummy,   [AS_HELP_STRING([--enable-dummy],   [enable the portable dummy implementation])], enable_dummy=$enableval,   enable_dummy=check)
 
 AC_ARG_ENABLE(threads, [AS_HELP_STRING([--enable-threads], [enable POSIX threads parallelization])],     enable_threads=$enableval, enable_threads=check)
 AC_ARG_ENABLE(mpi,     [AS_HELP_STRING([--enable-mpi],     [enable MPI parallelization])],               enable_mpi=$enableval,     enable_mpi=no)
@@ -205,13 +204,17 @@ AC_ARG_ENABLE(mpi,     [AS_HELP_STRING([--enable-mpi],     [enable MPI paralleli
 AC_ARG_WITH(gsl,       [AS_HELP_STRING([--with-gsl],       [use the GSL, GNU Scientific Library])],       with_gsl=$withval,         with_gsl=no)
 
 
-# Is the following shell code portable?
-n=0
-if test "$enable_sse"     = "yes"; then n=$((n++)); fi
-if test "$enable_vmx"     = "yes"; then n=$((n++)); fi
-if test "$enable_dummy"   = "yes"; then n=$((n++)); fi
-if (( $n > 0 )); then
-  AC_MSG_ERROR([Select only one implementation: sse, vmx, or dummy])
+
+# If a vector implementation is force-selected, make sure only one is,
+# and turn off checking for the others.
+vecsel=0
+if test "$enable_sse"     = "yes"; then vecsel=$((vecsel+1)); fi
+if test "$enable_vmx"     = "yes"; then vecsel=$((vecsel+1)); fi
+if   [[ $vecsel -gt 1 ]]; then
+  AC_MSG_ERROR([Select only one implementation: sse or vmx])
+elif [[ $vecsel -eq 1 ]]; then
+  if test "$enable_sse"   = "check"; then enable_sse="no";   fi
+  if test "$enable_vmx"   = "check"; then enable_vmx="no";   fi
 fi
 
 
@@ -345,16 +348,16 @@ if test "$enable_sse" = "yes" || test "$enable_sse" = "check"; then
     ])
 fi
 
-# If we didn't choose an implementation, choose the slow dummy
+# If we didn't choose an implementation, die.
 case "$impl_choice" in 
 sse)  AC_MSG_NOTICE([Activating Intel/AMD SSE vector DP implementation]) 
       ;;
 vmx)  AC_MSG_NOTICE([Activating Altivec/VMX vector DP implementation])   
       ;;
-*)    AC_MSG_NOTICE([Activating "dummy" implementation])
-      AC_DEFINE([eslENABLE_DUMMY], 1, [No vector implementation enabled])
-      AC_SUBST([HMMERIMPLLIB], ["impl_dummy/libhmmerimpl.a"])
-      impl_choice="dummy"
+*)    AC_MSG_NOTICE([::::::::::--- no vector instruction set ---::::::::::])
+      AC_MSG_NOTICE([HMMER3 requires SSE or VMX vector instructions.])
+      AC_MSG_NOTICE([Supported platforms are x86 (Intel/AMD) and PowerPC.])
+      AC_MSG_ERROR([No supported vectorization found for your machine.])
       ;;
 esac
 IMPL_CHOICE=$impl_choice
@@ -663,15 +666,11 @@ HMMER configuration:
      libraries:            ${LIBS} ${LIBGSL} ${PTHREAD_LIBS}
      DP implementation:    ${impl_choice}
 
-Do 'make' to build HMMER, and optionally:
-  'make check' to run self tests,
-  'make install' to install programs and man pages,
-  '(cd easel; make install)' to install Easel tools.
+Do 'make'  to build HMMER, and optionally:
+   'make check'  to run self tests,
+   'make install'  to install programs and man pages,
+   '(cd easel; make install)'  to install Easel tools.
 "
 
-if test "$impl_choice" = "dummy"; then
-  AC_MSG_WARN([We will compile the "dummy", a portable ANSI C reference implementation.])
-  AC_MSG_WARN([It is slow, about 100x slower than real H3, and is NOT intended for production use!])
-  AC_MSG_WARN([It only intended to show the basics of how HMMER3 works, portably.])
-fi
+
 
