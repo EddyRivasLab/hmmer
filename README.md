@@ -1,11 +1,11 @@
 ## HMMER - biological sequence analysis using profile HMMs
 
-[HMMER](http://hmmer.org) searches biological sequence databases for homologous sequences,
-using either single sequences or multiple sequence alignments as
-queries. HMMER implements a technology called "profile hidden Markov
-models" (profile HMMs). HMMER is used by many protein family domain
-databases and large-scale annotation pipelines, including
-[Pfam](http://pfam.xfam.org) and other members of the
+[HMMER](http://hmmer.org) searches biological sequence databases for
+homologous sequences, using either single sequences or multiple
+sequence alignments as queries. HMMER implements a technology called
+"profile hidden Markov models" (profile HMMs). HMMER is used by many
+protein family domain databases and large-scale annotation pipelines,
+including [Pfam](http://pfam.xfam.org) and other members of the
 [InterPro Consortium](http://www.ebi.ac.uk/interpro/).
 
 To obtain HMMER releases, please visit [hmmer.org](http://hmmer.org).
@@ -14,6 +14,8 @@ To participate in HMMER development, visit us at
 [github](https://github.com/EddyRivasLab/hmmer).  HMMER development
 depends on the Easel library, also at
 [github](https://github.com/EddyRivasLab/easel).
+
+
 
 ### to download and build the current source code release:
 
@@ -29,7 +31,8 @@ depends on the Easel library, also at
 ``` 
 
 Executable programs will be installed in `/your/install/path/bin`. If
-you leave this argument off, the default prefix is `/usr/local`.
+you leave this optional `./configure` argument off, the default prefix
+is `/usr/local`.
 
 Files to read in the top-level source directory:
 
@@ -38,6 +41,7 @@ Files to read in the top-level source directory:
  
 To get started after installation, see the Tutorial section in the
 HMMER User's Guide (Userguide.pdf).
+
 
 
 ### to clone a copy of HMMER3 source from github:

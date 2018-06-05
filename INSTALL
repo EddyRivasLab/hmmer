@@ -1,5 +1,5 @@
 Brief installation instructions 
-HMMER 3.2 (May 2018)
+HMMER 3.2 (June 2018)
 
 Starting from a source distribution, hmmer-3.2.tar.gz:
    uncompress hmmer-3.2.tar.gz  
@@ -11,9 +11,10 @@ Starting from a source distribution, hmmer-3.2.tar.gz:
    make install                      # optional: install HMMER programs and man pages
    (cd easel; make install)          # optional: install Easel tools too
 
-For complete documentation, including customization, supported
-platforms, and troubleshooting, please see the Installation chapter in
-the HMMER User's Guide (Userguide.pdf).
+For more details including customization, supported platforms, and
+troubleshooting, see the Installation chapter in the HMMER User's
+Guide (Userguide.pdf).
+
 
 
 

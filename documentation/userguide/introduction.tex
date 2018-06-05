@@ -5,31 +5,32 @@
 
 Most protein sequences are composed from a relatively small number of
 ancestral protein domain families. Our sampling of common protein
-domain families has become comprehensive and deep. Raw sequence data
-continues to grow explosively. It is becoming advantageous to compare
-sequences against all known families instead of all known sequences.
+domain families has become comprehensive and deep, while raw sequence
+data continues to accumulate explosively. It has become advantageous
+to compare sequences against all known domain families, instead of all
+known sequences.
 
-This is making protein sequence analysis more like speech recognition.
+This makes protein sequence analysis more like speech recognition.
 When you talk to your smartphone, it doesn't compare your digitized
 speech to everything that's ever been said. It compares what you say
 to a prebuilt dataset of statistical models of common words and
 phonemes.  Using machine learning techniques, each statistical model
-is trained on large datasets of examples spoken in different accents
-by different speakers. Similarly, for each protein domain family,
-there are typically thousands of known homologs that can be aligned
-into deep multiple sequence alignments. An alignment reveals a
+is trained on large datasets of examples spoken by different speakers
+in different accents. Similarly, for each protein domain family, there
+are typically thousands of known homologs that can be aligned into
+deep multiple sequence alignments. Sequence alignments reveal a
 specific pattern of evolutionary conservation particular to that
 domain's structure and function. These patterns can be captured by
 probabilistic models.
 
-HMMER is a software package that provides tools for making statistical
-models of protein and DNA sequence domain families -- called
-\textbf{profile hidden Markov models}, \textbf{profile HMMs}, or just
-\textbf{profiles} -- and for using these profiles to annotate new
-sequences, to search sequence databases for additional homologs, and
-to make deep multiple sequence alignments.  HMMER underlies several
-comprehensive collections of alignments and profiles of known protein
-and DNA sequence domain families, including the Pfam
+HMMER is a software package that provides tools for making
+probabilistic models of protein and DNA sequence domain families --
+called \textbf{profile hidden Markov models}, \textbf{profile HMMs},
+or just \textbf{profiles} -- and for using these profiles to annotate
+new sequences, to search sequence databases for additional homologs,
+and to make deep multiple sequence alignments.  HMMER underlies
+several comprehensive collections of alignments and profiles of known
+protein and DNA sequence domain families, including the Pfam
 database.\sidenote{\href{http://pfam.org}{pfam.org}}
 
 
@@ -39,9 +40,10 @@ database.\sidenote{\href{http://pfam.org}{pfam.org}}
 I hate reading documentation. If you're like me, you're thinking,
 \pageref*{manualend} pages of documentation, you've got to be joking!
 First I want to know that the software compiles, runs, and gives
-useful results, before I'm going to read some \pageref*{manualend}
-tedious pages of someone's documentation. For fellow cynics who have
-seen one too many software packages that don't work:
+useful results, before I'm going to plow through some
+\pageref*{manualend} tedious pages of someone's documentation. For
+fellow cynics who have seen one too many software packages that don't
+work:
 
 \begin{itemize}
 
@@ -71,8 +73,8 @@ size; some positions may be evolutionarily near-neutral and variable;
 insertions and deletions are tolerated at some positions better than
 others.  A \textbf{profile} is a position-specific scoring model that
 describes which symbols are likely to be observed and how frequently
-insertions/deletions occur at each position (column) of a multiple
-sequence alignment.
+insertions/deletions occur at each position (column) of a
+multiple sequence alignment.
 
 Pairwise sequence alignment methods such as BLAST and FASTA use
 position-\emph{independent} subsitution score matrices such as BLOSUM
@@ -93,8 +95,8 @@ at least 22 parameters\marginnote{There's $\sim$22 parameters per
 typical protein domain, and these thousands of parameters are
 estimated for one particular sequence family alignment, not averaged
 across all of them. Early profile methods were vexed by a lack of
-theoretical guidance on how to parameterize these models effectively,
-especially for insertion and deletions.
+theoretical underpinnings for how to parameterize these models
+effectively, especially for insertion and deletions.
 
 In the 1990's, Anders Krogh, David Haussler, and co-workers at UC
 Santa Cruz recognized a parallel between profiles and widely used
@@ -125,11 +127,11 @@ more complex models.\marginnote{For DNA searches, BLASTN remains about
 \section{Problems HMMER is designed for}
 
 \paragraph{Sensitive homology searches.}
-You're working on a specific sequence family, and you have carefully
+You're working on a specific sequence family, and you've carefully
 constructed a representative multiple sequence alignment. The HMMER
 \mono{hmmbuild} program lets you build a profile from your alignment,
 and the \mono{hmmsearch} program lets you search your profile against
-a sequence database looking for homologs.
+a sequence database looking systematically for more homologs.
 
 \paragraph{... even for single sequence queries.}
 HMMER3 also works for single sequence comparisons, not just for
@@ -143,11 +145,11 @@ sequences: \mono{phmmer} and \mono{jackhmmer}. I believe
 
 \paragraph{Automated annotation of protein domains.}
 Various large databases of curated alignments and HMMER models of
-known domains are available, including Pfam and others.  Many ``top
-ten protein domains'' lists, a \emph{de rigueur} table in genome
-analysis papers, depend on HMMER-based annotation. HMMER3's
-\mono{hmmscan} program lets you scan a sequence against a profile
-database to parse the sequence into its component domains.
+known domains are available, including Pfam and others.  Many top ten
+lists of protein domains, a \emph{de rigueur} table in genome analysis
+papers, depend on HMMER-based annotation. HMMER3's \mono{hmmscan}
+program lets you scan a sequence against a profile database to parse
+the sequence into its component domains.
 
 \paragraph{Curated collections of deep multiple alignments.}  There are thousands of
 sequence families, some of which comprise hundreds of thousands of
@@ -345,17 +347,17 @@ systems available for trying to reproduce bugs, and I'll try to match
 your system as closely as we can.
 
 If you first see a problem on some huge compute (like running a
-zillion query sequence over a huge profile database), it will really,
+zillion query sequences over a huge profile database), it will really,
 really help me if you spend a bit of time yourself trying to isolate
 whether the problem really only manifests itself on that huge compute,
 or if you can isolate a smaller test case for me. The ideal bug report
 (for me) gives me everything I need to reproduce your problem in one
 email with at most some small attachments.  \marginnote{Remember, I'm
   not a company with dedicated support staff -- I'm one person, I've
-  got other stuff to do (remember the bit about HMMER4's slow
-  development?), and I'm as busy as you. I'll need to drop what I'm
-  doing to try to help you out. Try to save me some time, and I'm
-  more likely to stay in my usual good mood.}
+  got other stuff to do, the Xfam team is asking me when HMMER4's
+  going to be ready, and I'm as busy as you. I'll need to drop what
+  I'm doing to try to help you out. Work with me to save me some time,
+  and I'm more likely to stay in my usual good mood.}
 
 If I'm in my usual good mood, I'll reply quickly.  I'll probably
 tell you we fixed the bug in our development code, and that the fix
@@ -375,9 +377,8 @@ recompile the code yourself. You may or may not want to do this.
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 \section{When's HMMER4 coming?}
 
-HMMER4 has been in development since 2011.\sidenote{OK, very
-  \emph{slow} development, but hey. I'm trying to teach and run a lab
-  too.} Some of the stuff it will include:
+HMMER4 has been in development since 2011.\sidenote{OK, \emph{slow}
+  development, but hey.} Some of the stuff it will include:
 
 \paragraph{The return of glocal alignment.} Slow old HMMER2 was
  capable of ``glocal'' alignment, in which it would align a complete

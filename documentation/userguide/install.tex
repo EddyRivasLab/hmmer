@@ -111,7 +111,7 @@ branch:\sidenote{As of 3.2, our git master branch is the stable
 This is now essentially the same as if you unpacked a tarball, so from
 here, follow the \mono{./configure; make} instructions above.
 
-The one difference is that our distribution tarballs include this user
+One difference is that our distribution tarballs include this user
 guide as a PDF, in addition to its \LaTeX\ source code. The github
 repo only has the source \LaTeX\ files. To compile the PDF, see
 ``compiling the user guide'' in the gory details below.
@@ -124,8 +124,9 @@ repo only has the source \LaTeX\ files. To compile the PDF, see
 \paragraph{Operating system:} HMMER is designed for
 POSIX-compatible platforms, including UNIX, Linux, and Mac OS/X. The
 POSIX standard essentially includes all operating systems except
-Microsoft Windows.\sidenote{Windows 10 includes a Unix-compatible bash
-  command shell, which should work fine. For older Windows, there are
+Microsoft Windows.\sidenote{Windows 10 includes a Linux subsystem that
+  allows you to install a Linux OS inside Windows, with a bash command
+  shell, and this should work fine. For older Windows, there are
   add-on products available for making Windows more POSIX-compliant
   and more compatible with GNU-ish configures and builds. One such
   product is Cygwin, \href{http://www.cygwin.com}{www.cygwin.com},
@@ -395,9 +396,9 @@ stuff. HMMER and Easel programs have no pathnames compiled into them.
 
 \subsection{Installing both HMMER2 and HMMER3}
 
-HMMER3 is essentially a completely new HMMER, distinct from and
-generally incompatible with HMMER2.  The last release of HMMER2 was
-2.3.2 in 2003. HMMER3 was first released in 2010.
+HMMER3 and HMMER2 are distinct codebases that are generally
+incompatible with each other. The last release of HMMER2 was 2.3.2 in
+2003. HMMER3 was first released in 2010.
 
 HMMER3 is superior to HMMER2 in almost all respects. One exception is
 that HMMER2 is capable of global and glocal alignment, whereas HMMER3
