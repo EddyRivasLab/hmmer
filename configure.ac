@@ -367,6 +367,7 @@ AC_SUBST(IMPL_CHOICE)
 
 # Easel has additional vector implementations that HMMER3 does not
 # support. Provide blank config for those CFLAGS.
+AC_SUBST(SSE4_CFLAGS)
 AC_SUBST(AVX_CFLAGS)
 AC_SUBST(AVX512_CFLAGS)
 AC_SUBST(NEON_CFLAGS)
