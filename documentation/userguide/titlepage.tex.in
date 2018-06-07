@@ -1,26 +1,11 @@
-\begin{titlepage}
-{\Large
+\title{HMMER User's Guide}
 
-\vspace*{\fill}
+\subtitle{Biological sequence analysis using profile hidden Markov models}
 
-\noindent
-{\Huge {HMMER User's Guide}} \vspace{-8.0pt} \\ 
-\rule[2pt]{\textwidth}{1pt} \\
-\hspace*{\fill} {\large {Biological sequence analysis using
-profile hidden Markov models} \\ }
+\author{Sean R. Eddy}
+\subauthor{and the HMMER development team}
 
-\vspace*{\fill}
+\pkgurl{http://hmmer.org}
+\pkgversion{@HMMER_VERSION@}   % ./configure replaces HMMER_VERSION
+\pkgdate{@HMMER_DATE@}         %    ... and HMMER_DATE
 
-\begin{center}
-\url{http://hmmer.org/}\\
-Version @HMMER_VERSION@; @HMMER_DATE@ \\ 
-
-\vspace*{\fill}
-
-The HMMER development team\\
-\end{center}
-
-\vspace*{\fill}
-
-}
-\end{titlepage}

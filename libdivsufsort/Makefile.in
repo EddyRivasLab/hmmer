@@ -50,6 +50,10 @@ libdivsufsort.a: $(OBJS)
 
 clean:
 	$(RM) $(TARGET) $(OBJS)
+ifndef V
+	@echo '     ' CLEAN libdivsufsort
+endif
+
 
 distclean:
 	$(RM) $(TARGET) $(OBJS) $(MAKEFILE) divsufsort.h

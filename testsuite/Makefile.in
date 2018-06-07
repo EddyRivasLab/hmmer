@@ -28,7 +28,7 @@ ifndef V
 	QUIET_AR      = @echo '    ' AR $@;
 	QUIET_SUBDIR0 = +@subdir=
 	QUIET_SUBDIR1 = ; echo '    ' SUBDIR  $$subdir; \
-		        ${MAKE} -C $$subdir
+		        ${MAKE} -s -C $$subdir
 endif
 
 .PHONY: check hmms clean distclean
@@ -47,6 +47,10 @@ hmms:
 clean:
 	-rm -f *.gcno *.gcda *.gcov
 	-rm -f *.o *~ 
+ifndef V
+	@echo '     ' CLEAN testsuite
+endif
+
 
 distclean: clean
 	-rm -f Makefile

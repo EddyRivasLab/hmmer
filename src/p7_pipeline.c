@@ -1525,17 +1525,14 @@ p7_Pipeline_LongTarget(P7_PIPELINE *pli, P7_OPROFILE *om, P7_SCOREDATA *data,
    */
   if ( msv_windowlist.count > 0 ) {
 
-    /* In scan mode, if it passes the MSV filter, read the rest of the profile
-     * Not necessary for dummy mode, where the ->base_w variable checks cause compilation failure*/
-#ifndef P7_IMPL_DUMMY_INCLUDED
+    /* In scan mode, if it passes the MSV filter, read the rest of the profile */
     if (!fmf && pli->hfp)
-    {
-      if (om->base_w == 0 &&  om->scale_w == 0) { // we haven't already read this hmm (if we're on the second strand, we would've)
-        p7_oprofile_ReadRest(pli->hfp, om);
-        if ((status = p7_pli_NewModelThresholds(pli, om)) != eslOK) goto ERROR;
+      {
+	if (om->base_w == 0 &&  om->scale_w == 0) { // we haven't already read this hmm (if we're on the second strand, we would've)
+	  p7_oprofile_ReadRest(pli->hfp, om);
+	  if ((status = p7_pli_NewModelThresholds(pli, om)) != eslOK) goto ERROR;
+	}
       }
-    }
-#endif
 
     p7_oprofile_GetFwdEmissionArray(om, bg, pli_tmp->fwd_emissions_arr);
 
@@ -1701,45 +1698,37 @@ p7_pli_Statistics(FILE *ofp, P7_PIPELINE *pli, ESL_STOPWATCH *w)
   fprintf(ofp, "Internal pipeline statistics summary:\n");
   fprintf(ofp, "-------------------------------------\n");
   if (pli->mode == p7_SEARCH_SEQS) {
-    fprintf(ofp, "Query model(s):                %15" PRId64 "  (%" PRId64 " nodes)\n",     pli->nmodels, pli->nnodes);
-    fprintf(ofp, "Target sequences:              %15" PRId64 "  (%" PRId64 " residues searched)\n",  pli->nseqs,   pli->nres);
+    fprintf(ofp, "Query model(s):              %15" PRId64 "  (%" PRId64 " nodes)\n",     pli->nmodels, pli->nnodes);
+    fprintf(ofp, "Target sequences:            %15" PRId64 "  (%" PRId64 " residues searched)\n",  pli->nseqs,   pli->nres);
     ntargets = pli->nseqs;
   } else {
-    fprintf(ofp,   "Query sequence(s):           %15" PRId64 "  (%" PRId64 " residues searched)\n",  pli->nseqs,   pli->nres);
-    fprintf(ofp,   "Target model(s):             %15" PRId64 "  (%" PRId64 " nodes)\n",     pli->nmodels, pli->nnodes);
+    fprintf(ofp, "Query sequence(s):           %15" PRId64 "  (%" PRId64 " residues searched)\n",  pli->nseqs,   pli->nres);
+    fprintf(ofp, "Target model(s):             %15" PRId64 "  (%" PRId64 " nodes)\n",     pli->nmodels, pli->nnodes);
     ntargets = pli->nmodels;
   }
 
-  if (pli->long_targets) {
-      fprintf(ofp, "Residues passing SSV filter:   %15" PRId64 "  (%.3g); expected (%.3g)\n",
-      //fprintf(ofp, "Windows passing MSV filter:   %15" PRId64 "  (%.4g); expected (%.4g)\n",
-          //pli->n_past_msv,
+  if (pli->long_targets) { // nhmmer style
+      fprintf(ofp, "Residues passing SSV filter: %15" PRId64 "  (%.3g); expected (%.3g)\n",
           pli->pos_past_msv,
           (double)pli->pos_past_msv / (pli->nres*pli->nmodels) ,
           pli->F1);
 
-      fprintf(ofp, "Residues passing bias filter:  %15" PRId64 "  (%.3g); expected (%.3g)\n",
-      //fprintf(ofp, "Windows passing bias filter:  %15" PRId64 "  (%.4g); expected (%.4g)\n",
-          //pli->n_past_bias,
+      fprintf(ofp, "Residues passing bias filter:%15" PRId64 "  (%.3g); expected (%.3g)\n",
           pli->pos_past_bias,
           (double)pli->pos_past_bias / (pli->nres*pli->nmodels) ,
           pli->F1);
 
-      fprintf(ofp, "Residues passing Vit filter:   %15" PRId64 "  (%.3g); expected (%.3g)\n",
-      //fprintf(ofp, "Windows passing Vit filter:   %15" PRId64 "  (%.4g); expected (%.4g)\n",
-          //pli->n_past_vit,
+      fprintf(ofp, "Residues passing Vit filter: %15" PRId64 "  (%.3g); expected (%.3g)\n",
           pli->pos_past_vit,
           (double)pli->pos_past_vit / (pli->nres*pli->nmodels) ,
           pli->F2);
 
-      fprintf(ofp, "Residues passing Fwd filter:   %15" PRId64 "  (%.3g); expected (%.3g)\n",
-      //fprintf(ofp, "Windows passing Fwd filter:   %15" PRId64 "  (%.4g); expected (%.4g)\n",
-          //pli->n_past_fwd,
+      fprintf(ofp, "Residues passing Fwd filter: %15" PRId64 "  (%.3g); expected (%.3g)\n",
           pli->pos_past_fwd,
           (double)pli->pos_past_fwd / (pli->nres*pli->nmodels) ,
           pli->F3);
 
-      fprintf(ofp, "Total number of hits:          %15d  (%.3g)\n",
+      fprintf(ofp, "Total number of hits:        %15d  (%.3g)\n",
           (int)pli->n_output,
           (double)pli->pos_output / (pli->nres*pli->nmodels) );
 

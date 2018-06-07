@@ -49,7 +49,7 @@ p7_seqcache_Open(char *seqfile, P7_SEQCACHE **ret_cache, char *errbuf)
   uint64_t           hdr_size;
 
   char              *hdr_ptr;
-  char              *res_ptr;
+  ESL_DSQ           *res_ptr;
   char              *desc_ptr;
   char              *ptr;
   char               buffer[512];

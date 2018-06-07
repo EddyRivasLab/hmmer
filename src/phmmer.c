@@ -54,12 +54,6 @@ typedef struct {
 #define MPIOPTS     NULL
 #endif
 
-#ifdef HMMER_MPI
-#define DAEMONOPTS  "-o,-A,--tblout,--domtblout,--pfamtblout,--mpi,--stall"
-#else
-#define DAEMONOPTS  "-o,-A,--tblout,--domtblout,--pfamtblout"
-#endif
-
 static ESL_OPTIONS options[] = {
   /* name           type              default   env  range   toggles   reqs   incomp                             help                                       docgroup*/
   { "-h",           eslARG_NONE,        FALSE, NULL, NULL,      NULL,  NULL,  NULL,              "show brief help on version and usage",                         1 },
@@ -113,8 +107,6 @@ static ESL_OPTIONS options[] = {
   { "--seed",       eslARG_INT,         "42",  NULL, "n>=0",    NULL,  NULL,  NULL,              "set RNG seed to <n> (if 0: one-time arbitrary seed)",         12 },
   { "--qformat",    eslARG_STRING,      NULL, NULL, NULL,      NULL,  NULL,  NULL,              "assert query <seqfile> is in format <s>: no autodetection",   12 },
   { "--tformat",    eslARG_STRING,      NULL, NULL, NULL,      NULL,  NULL,  NULL,              "assert target <seqdb> is in format <s>>: no autodetection",   12 },
-  { "--daemon",     eslARG_NONE,        NULL, NULL, NULL,      NULL,  NULL,  DAEMONOPTS,        "run program as a daemon",                                     12 },
-
 #ifdef HMMER_THREADS
   { "--cpu",        eslARG_INT,  p7_NCPU,"HMMER_NCPU", "n>=0",NULL,  NULL,  CPUOPTS,            "number of parallel CPU workers to use for multithreads",      12 },
 #endif
@@ -295,7 +287,6 @@ output_header(FILE *ofp, ESL_GETOPTS *go, char *qfile, char *dbfile)
   }
   if (esl_opt_IsUsed(go, "--qformat")   && fprintf(ofp, "# query <seqfile> format asserted: %s\n",            esl_opt_GetString(go, "--qformat"))    < 0) ESL_EXCEPTION_SYS(eslEWRITE, "write failed");
   if (esl_opt_IsUsed(go, "--tformat")   && fprintf(ofp, "# target <seqdb> format asserted:  %s\n",            esl_opt_GetString(go, "--tformat"))    < 0) ESL_EXCEPTION_SYS(eslEWRITE, "write failed");
-  if (esl_opt_IsUsed(go, "--daemon")    && fprintf(ofp, "run as a daemon process\n")                                                                 < 0) ESL_EXCEPTION_SYS(eslEWRITE, "write failed");
 #ifdef HMMER_THREADS
   if (esl_opt_IsUsed(go, "--cpu")       && fprintf(ofp, "# number of worker threads:        %d\n",            esl_opt_GetInteger(go, "--cpu"))       < 0) ESL_EXCEPTION_SYS(eslEWRITE, "write failed");  
 #endif
@@ -433,17 +424,6 @@ serial_master(ESL_GETOPTS *go, struct cfg_s *cfg)
     dbformat = esl_sqio_EncodeFormat(esl_opt_GetString(go, "--tformat"));
     if (dbformat == eslSQFILE_UNKNOWN) p7_Fail("%s is not a recognized sequence database file format\n", esl_opt_GetString(go, "--tformat"));
   }
-
-  /* validate options if running as a daemon */
-  if (esl_opt_IsOn(go, "--daemon")) 
-    {
-      /* running as a daemon, the input format must be type daemon */
-      if (qformat != eslSQFILE_UNKNOWN && qformat != eslSQFILE_DAEMON) 
-	p7_Fail("Input format %s not supported.  Must be daemon\n", esl_opt_GetString(go, "--qformat"));
-      qformat = eslSQFILE_DAEMON;
-      
-      if (strcmp(cfg->qfile, "-") != 0) p7_Fail("Query sequence file must be '-', in daemon mode\n");
-    }
 
   /* Initialize a default builder configuration,
    * then set only the options we need for single sequence search

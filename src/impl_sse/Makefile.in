@@ -20,7 +20,6 @@ LIBS        = -lhmmer -leasel @LIBS@ -lm
 
 AR          = @AR@ 
 RANLIB      = @RANLIB@
-INSTALL     = @INSTALL@
 
 ESLDIR         = @HMMER_ESLDIR@
 MYLIBDIRS      = -L../../${ESLDIR} -L.. 
@@ -84,10 +83,10 @@ ifndef V
 	QUIET_AR      = @echo '    ' AR $@;
 	QUIET_SUBDIR0 = +@subdir=
 	QUIET_SUBDIR1 = ; echo '    ' SUBDIR $$subdir; \
-		        ${MAKE} -C $$subdir
+		        ${MAKE} -s -C $$subdir
 endif
 
-.PHONY: all dev check tests install uninstall distclean clean 
+.PHONY: all dev check tests distclean clean 
 
 
 all:   libhmmer-impl.stamp
@@ -154,19 +153,6 @@ ${EXAMPLES}: libhmmer-impl.stamp ../libhmmer.a ${HDRS} ../hmmer.h
 	${CC} ${CFLAGS} ${SSE_CFLAGS} ${CPPFLAGS} ${LDFLAGS} ${DEFS} ${MYLIBDIRS} ${MYINCDIRS} -D$${DFLAG} -o $@ $${DFILE} ${LIBS}
 
 
-install:
-	for file in ${HDRS}; do \
-	   ${INSTALL} -m 0644 ${srcdir}/$$file ${DESTDIR}${includedir}/ ;\
-	done
-
-uninstall:
-	for file in ${HDRS}; do \
-	   rm -f ${DESTDIR}${includedir}/$$file ;\
-	done
-
-distclean: clean
-	-rm -f Makefile 
-
 clean:
 	-rm -f libhmmer-impl.stamp
 	-rm -f ${UTESTS}
@@ -177,6 +163,13 @@ clean:
 	for prog in ${UTESTS} ${BENCHMARKS} ${EXAMPLES}; do\
 	   if test -d $$prog.dSYM; then rm -rf $$prog.dSYM; fi;\
 	done
+ifndef V
+	@echo '     ' CLEAN impl_sse
+endif
+
+distclean: clean
+	-rm -f Makefile 
+
 
 
 

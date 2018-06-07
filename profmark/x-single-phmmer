@@ -24,7 +24,7 @@ while (<TABLE>)
     ($msaname) = split;
 
     $cmd  = "esl-afetch -o $wrkdir/$msaname.sto $msafile $msaname";                                      $output = `$cmd`;     if ($?) { print "FAILED: $cmd\n"; next MSA; }   # Fetch the query MSA from the benchmark; tmp .sto file here
-    $cmd  = "esl-seqstat --amino -a $wrkdir/$msaname.sto | grep "^=" | awk '{print \$2}'";               $output = `$cmd`;     if ($?) { print "FAILED: $cmd\n", next MSA; }   # Extract list of indiv seq names. --amino for robustness, some msa's v. small
+    $cmd  = "esl-seqstat --amino -a $wrkdir/$msaname.sto | grep '^=' | awk '{print \$2}'";               $output = `$cmd`;     if ($?) { print "FAILED: $cmd\n", next MSA; }   # Extract list of indiv seq names. --amino for robustness, some msa's v. small
     @qnames = split(/^/,$output); 
     chop (@qnames);
     $qname = $qnames[0];

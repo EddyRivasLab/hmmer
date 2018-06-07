@@ -115,7 +115,6 @@
  */
 #undef eslENABLE_SSE
 #undef eslENABLE_VMX
-#undef eslENABLE_DUMMY
 
 /* System headers
  */

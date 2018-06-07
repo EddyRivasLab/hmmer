@@ -1,9 +1,9 @@
 # Process this file with autoconf to produce the HMMER3 configure script.
 #
-# This is synchronized with Easel's configure script, so that HMMER
-# configures Easel in addition to itself. This saves having to do a
-# separate ./configure in Easel, but it also means that everything
-# that appears in Easel's configure script must also appear here.
+# HMMER configures Easel in addition to itself, so this is
+# synchronized with Easel's configure script.  Saves having to do a
+# separate ./configure in Easel, but everything in Easel's configure
+# script must also appear here.
 #
 # reminders to save re-reading autoconf manual for the n'th time:
 #    output variables:
@@ -22,17 +22,17 @@
 #      -  use within scope of the ./configure script
 #
 # Contents:
-#   1. Autoconf requirements
+#   1. autoconf requirements
 #   2. AC_INIT
-#   3. Info on the package
-#   4. Process ./configure command line
-#   5. Checks for programs, including ${CC}, ${CFLAGS}
-#   6. Checks for libraries
-#   7. Checks for header files
-#   8. Checks for types
-#   9. Checks for structures
-#  10. Checks for compiler characteristics
-#  11. Checks for library functions
+#   3. info on the package
+#   4. process ./configure command line
+#   5. checks for programs, including ${CC}, ${CFLAGS}
+#   6. checks for libraries
+#   7. checks for header files
+#   8. checks for types
+#   9. checks for structures
+#  10. checks for compiler characteristics
+#  11. checks for library functions
 #  12. checks for system services
 #  13. AC_CONFIG_FILES
 #  14. AC_OUTPUT
@@ -51,16 +51,15 @@
 
 
 ################################################################
-# 1. Autoconf requirements
+# 1. autoconf requirements
 ################################################################
-
-# Autoconf 2.61 has a bug in AC_FUNC_FSEEKO; don't use it.
+# Autoconf 2.61 (circa 2006) has a bug in AC_FUNC_FSEEKO; don't use it.
 # 2.63 was released in 2008.
 AC_PREREQ(2.63)
 
-
-# Our extra macros are with Easel, in easel/m4
-# Though it's sort of standard to expect them in m4/. Hope nobody gets confused.
+# Our extra macros are with Easel, in easel/m4.
+# It's sort of standard to expect them in m4/, don't 
+# be confused that they're down in easel.
 #
 m4_include([easel/m4/ax_compiler_vendor.m4])
 m4_include([easel/m4/ax_gcc_func_attribute.m4])
@@ -76,7 +75,7 @@ m4_include([easel/m4/ax_pthread.m4])
 # 2. AC_INIT
 ################################################################
 
-AC_INIT(HMMER, 3.1rc1, sean@eddylab.org, hmmer)
+AC_INIT(HMMER, 3.2, sean@eddylab.org, hmmer)
 AC_MSG_NOTICE([Configuring HMMER3 for your system.])
 
 # remember if the user is overriding CFLAGS
@@ -93,16 +92,16 @@ fi
 #
 # AC_INIT args set these output variables and preprocessor symbols:
 #     PACKAGE_NAME      <package>     e.g. "HMMER"
-#     PACKAGE_VERSION   <version>     e.g. "3.1"
+#     PACKAGE_VERSION   <version>     e.g. "3.2"
 #     PACKAGE_BUGREPORT <bug-report>  e.g. "sean@eddylab.org"
 #     PACKAGE_TARNAME   <tarname>     e.g. "hmmer"
 # From them, AC_INIT automatically derives one more:
-#     PACKAGE_STRING    <package> <version>, e.g. "HMMER 3.0"
+#     PACKAGE_STRING    <package> <version>, e.g. "HMMER 3.2"
 # and we define additional output variables of our own:
-#     HMMER_DATE        release date: e.g. "January 2007"
+#     HMMER_DATE        release date: e.g. "August 2017"
 #     HMMER_COPYRIGHT   one-line copyright string
 #     HMMER_LICENSE     one-line license string
-#     HMMER_VERSION     copy of version code, e.g. "3.0"
+#     HMMER_VERSION     copy of version code, e.g. "3.2"
 #     HMMER_URL         URL home for HMMER.
 # And we have to define the relevant package variables for Easel as well.
 #
@@ -110,8 +109,8 @@ fi
 # to use HMMER as a library inside other packages, with no name clashes.
 ################################################################
 
-HMMER_DATE="January 2017"
-HMMER_COPYRIGHT="Copyright (C) 2017 Howard Hughes Medical Institute."
+HMMER_DATE="June 2018"
+HMMER_COPYRIGHT="Copyright (C) 2018 Howard Hughes Medical Institute."
 HMMER_LICENSE="Freely distributed under the BSD open source license."
 HMMER_VERSION=$PACKAGE_VERSION
 HMMER_URL="http://hmmer.org/"
@@ -119,8 +118,8 @@ HMMER_URL="http://hmmer.org/"
 HMMER_ESLDIR="easel"
 HMMER_SADIR="libdivsufsort"
 
-EASEL_DATE="January 2017"
-EASEL_COPYRIGHT="Copyright (C) 2017 Howard Hughes Medical Institute."
+EASEL_DATE="June 2018"
+EASEL_COPYRIGHT="Copyright (C) 2018 Howard Hughes Medical Institute."
 EASEL_LICENSE="Freely distributed under the BSD open source license."
 EASEL_VERSION="0.44"
 EASEL_URL="http://bioeasel.org/"
@@ -198,7 +197,6 @@ AC_ARG_ENABLE(gprof,   [AS_HELP_STRING([--enable-gprof],   [compile for gcc code
 
 AC_ARG_ENABLE(sse,     [AS_HELP_STRING([--enable-sse],     [enable our SSE vector code])],               enable_sse=$enableval,     enable_sse=check)
 AC_ARG_ENABLE(vmx,     [AS_HELP_STRING([--enable-vmx],     [enable our Altivec/VMX vector code])],       enable_vmx=$enableval,     enable_vmx=check)
-AC_ARG_ENABLE(dummy,   [AS_HELP_STRING([--enable-dummy],   [enable the portable dummy implementation])], enable_dummy=$enableval,   enable_dummy=check)
 
 AC_ARG_ENABLE(threads, [AS_HELP_STRING([--enable-threads], [enable POSIX threads parallelization])],     enable_threads=$enableval, enable_threads=check)
 AC_ARG_ENABLE(mpi,     [AS_HELP_STRING([--enable-mpi],     [enable MPI parallelization])],               enable_mpi=$enableval,     enable_mpi=no)
@@ -206,13 +204,17 @@ AC_ARG_ENABLE(mpi,     [AS_HELP_STRING([--enable-mpi],     [enable MPI paralleli
 AC_ARG_WITH(gsl,       [AS_HELP_STRING([--with-gsl],       [use the GSL, GNU Scientific Library])],       with_gsl=$withval,         with_gsl=no)
 
 
-# Is the following shell code portable?
-n=0
-if test "$enable_sse"     = "yes"; then n=$((n++)); fi
-if test "$enable_vmx"     = "yes"; then n=$((n++)); fi
-if test "$enable_dummy"   = "yes"; then n=$((n++)); fi
-if (( $n > 0 )); then
-  AC_MSG_ERROR([Select only one implementation: sse, vmx, or dummy])
+
+# If a vector implementation is force-selected, make sure only one is,
+# and turn off checking for the others.
+vecsel=0
+if test "$enable_sse"     = "yes"; then vecsel=$((vecsel+1)); fi
+if test "$enable_vmx"     = "yes"; then vecsel=$((vecsel+1)); fi
+if   [[ $vecsel -gt 1 ]]; then
+  AC_MSG_ERROR([Select only one implementation: sse or vmx])
+elif [[ $vecsel -eq 1 ]]; then
+  if test "$enable_sse"   = "check"; then enable_sse="no";   fi
+  if test "$enable_vmx"   = "check"; then enable_vmx="no";   fi
 fi
 
 
@@ -346,16 +348,16 @@ if test "$enable_sse" = "yes" || test "$enable_sse" = "check"; then
     ])
 fi
 
-# If we didn't choose an implementation, choose the slow dummy
+# If we didn't choose an implementation, die.
 case "$impl_choice" in 
 sse)  AC_MSG_NOTICE([Activating Intel/AMD SSE vector DP implementation]) 
       ;;
 vmx)  AC_MSG_NOTICE([Activating Altivec/VMX vector DP implementation])   
       ;;
-*)    AC_MSG_NOTICE([Activating "dummy" implementation])
-      AC_DEFINE([eslENABLE_DUMMY], 1, [No vector implementation enabled])
-      AC_SUBST([HMMERIMPLLIB], ["impl_dummy/libhmmerimpl.a"])
-      impl_choice="dummy"
+*)    AC_MSG_NOTICE([::::::::::--- no vector instruction set ---::::::::::])
+      AC_MSG_NOTICE([HMMER3 requires SSE or VMX vector instructions.])
+      AC_MSG_NOTICE([Supported platforms are x86 (Intel/AMD) and PowerPC.])
+      AC_MSG_ERROR([No supported vectorization found for your machine.])
       ;;
 esac
 IMPL_CHOICE=$impl_choice
@@ -365,6 +367,7 @@ AC_SUBST(IMPL_CHOICE)
 
 # Easel has additional vector implementations that HMMER3 does not
 # support. Provide blank config for those CFLAGS.
+AC_SUBST(SSE4_CFLAGS)
 AC_SUBST(AVX_CFLAGS)
 AC_SUBST(AVX512_CFLAGS)
 AC_SUBST(NEON_CFLAGS)
@@ -559,34 +562,89 @@ AC_SYS_LARGEFILE
 # 13. Config subdirs and files
 ################################################################
 
-AC_CONFIG_FILES([Makefile])
-AC_CONFIG_FILES([src/Makefile])
-AC_CONFIG_FILES([testsuite/Makefile])
-AC_CONFIG_FILES([profmark/Makefile])
-AC_CONFIG_FILES([src/impl_${impl_choice}/Makefile])
-AC_CONFIG_FILES([documentation/Makefile])
-AC_CONFIG_FILES([documentation/man/Makefile])
-if test -d "documentation/userguide"; then 
-  AC_CONFIG_FILES([documentation/userguide/Makefile])
-fi  
-if test -d release-notes; then
-  AC_CONFIG_FILES(release-notes/LICENSE.sh)
-fi
+# HMMER Makefiles.
+AC_CONFIG_FILES([ \
+  Makefile                          \
+  src/Makefile                      \
+  testsuite/Makefile                \
+  profmark/Makefile                 \
+  src/impl_${impl_choice}/Makefile  \
+  documentation/Makefile            \
+  documentation/man/Makefile        \
+  documentation/userguide/Makefile  \
+  libdivsufsort/Makefile            \
+  ])
 
-AC_CONFIG_FILES([easel/Makefile])
-AC_CONFIG_FILES([easel/miniapps/Makefile])
-AC_CONFIG_FILES([easel/testsuite/Makefile])
-if test -d "easel/documentation"; then
-  AC_CONFIG_FILES([easel/documentation/Makefile])
-fi    
+# Easel Makefiles.
+AC_CONFIG_FILES([ \
+  easel/Makefile                \
+  easel/miniapps/Makefile       \
+  easel/testsuite/Makefile      \
+  easel/documentation/Makefile  \
+  ])
 
-AC_CONFIG_FILES([libdivsufsort/Makefile])
+# Substitutions in Userguide .tex files
+# HMMER_VERSION, HMMER_DATE, HMMER_COPYRIGHT
+AC_CONFIG_FILES([ \
+  documentation/userguide/titlepage.tex  \
+  documentation/userguide/copyright.tex  \
+  ])
+
+# Substitutions in HMMER man pages:
+# HMMER_VERSION, HMMER_DATE, HMMER_COPYRIGHT, HMMER_LICENSE, HMMER_URL
+AC_CONFIG_FILES([ \
+  documentation/man/alimask.man     \
+  documentation/man/hmmalign.man    \
+  documentation/man/hmmbuild.man    \
+  documentation/man/hmmconvert.man  \
+  documentation/man/hmmemit.man     \
+  documentation/man/hmmer.man       \
+  documentation/man/hmmfetch.man    \
+  documentation/man/hmmlogo.man     \
+  documentation/man/hmmpgmd.man     \
+  documentation/man/hmmpress.man    \
+  documentation/man/hmmscan.man     \
+  documentation/man/hmmsearch.man   \
+  documentation/man/hmmsim.man      \
+  documentation/man/hmmstat.man     \
+  documentation/man/jackhmmer.man   \
+  documentation/man/makehmmerdb.man \
+  documentation/man/nhmmer.man      \
+  documentation/man/nhmmscan.man    \
+  documentation/man/phmmer.man      \
+  ])
+
+# Substitutions in Easel man pages:
+# EASEL_VERSION, EASEL_DATE, EASEL_COPYRIGHT, EASEL_LICENSE, EASEL_URL
+AC_CONFIG_FILES([ \
+  easel/miniapps/esl-afetch.man      \
+  easel/miniapps/esl-alimanip.man    \
+  easel/miniapps/esl-alimap.man      \
+  easel/miniapps/esl-alimask.man     \
+  easel/miniapps/esl-alimerge.man    \
+  easel/miniapps/esl-alipid.man      \
+  easel/miniapps/esl-alirev.man      \
+  easel/miniapps/esl-alistat.man     \
+  easel/miniapps/esl-compalign.man   \
+  easel/miniapps/esl-compstruct.man  \
+  easel/miniapps/esl-construct.man   \
+  easel/miniapps/esl-histplot.man    \
+  easel/miniapps/esl-mask.man        \
+  easel/miniapps/esl-reformat.man    \
+  easel/miniapps/esl-selectn.man     \
+  easel/miniapps/esl-seqrange.man    \
+  easel/miniapps/esl-seqstat.man     \
+  easel/miniapps/esl-sfetch.man      \
+  easel/miniapps/esl-shuffle.man     \
+  easel/miniapps/esl-ssdraw.man      \
+  easel/miniapps/esl-translate.man   \
+  easel/miniapps/esl-weight.man      \
+ ])
 
 AC_CONFIG_HEADERS([easel/decoy_config.h])   # Put this first to keep gnu 'autoheader' from overwriting a real config file.
 AC_CONFIG_HEADERS([src/p7_config.h])
 AC_CONFIG_HEADERS([easel/esl_config.h])
 AC_CONFIG_HEADERS([libdivsufsort/divsufsort.h])
-
 
 # the following incantation establishes a symlink of
 # src/impl_{whatever} to src/impl in the *build* directory.
@@ -608,11 +666,12 @@ HMMER configuration:
      linker:               ${LDFLAGS}
      libraries:            ${LIBS} ${LIBGSL} ${PTHREAD_LIBS}
      DP implementation:    ${impl_choice}
+
+Do 'make'  to build HMMER, and optionally:
+   'make check'  to run self tests,
+   'make install'  to install programs and man pages,
+   '(cd easel; make install)'  to install Easel tools.
 "
 
-if test "$impl_choice" = "dummy"; then
-  AC_MSG_WARN([We will compile the "dummy", a portable ANSI C reference implementation.])
-  AC_MSG_WARN([It is slow, about 100x slower than real H3, and is NOT intended for production use!])
-  AC_MSG_WARN([It only intended to show the basics of how HMMER3 works, portably.])
-fi
+
 

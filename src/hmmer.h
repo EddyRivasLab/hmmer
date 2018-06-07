@@ -817,14 +817,14 @@ typedef struct p7_hmm_window_list_s {
 
 
 /*****************************************************************
- * 14. The optimized implementation.
+ * 14. Choice of vector implementation.
  *****************************************************************/
 #if   defined (eslENABLE_SSE)
 #include "impl_sse/impl_sse.h"
 #elif defined (eslENABLE_VMX)
 #include "impl_vmx/impl_vmx.h"
 #else
-#include "impl_dummy/impl_dummy.h"
+#error "No vector implementation enabled"
 #endif
 
 

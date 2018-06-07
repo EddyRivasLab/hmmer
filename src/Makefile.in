@@ -46,7 +46,6 @@ MYINCDIRS = -I../${ESLDIR} \
 PROGS = alimask\
 	hmmalign\
 	hmmbuild\
-	hmmc2\
 	hmmconvert\
 	hmmemit\
 	hmmfetch\
@@ -61,15 +60,17 @@ PROGS = alimask\
 	phmmer\
 	nhmmer\
 	nhmmscan\
-	makehmmerdb\
+	makehmmerdb
+
+# "auxprogs" are built but not installed.
+AUXPROGS = \
+	hmmc2 \
 	hmmerfm-exactmatch
 
 PROGOBJS =\
 	alimask.o\
-	exactmatch.o\
 	hmmalign.o\
 	hmmbuild.o\
-	hmmc2.o\
 	hmmconvert.o\
 	hmmemit.o\
 	hmmfetch.o\
@@ -84,7 +85,10 @@ PROGOBJS =\
 	phmmer.o\
 	nhmmer.o\
 	nhmmscan.o\
-	makehmmerdb.o\
+	makehmmerdb.o
+
+AUXPROGOBJS = \
+	hmmc2.o \
 	hmmerfm-exactmatch.o
 
 HDRS =  hmmer.h \
@@ -220,20 +224,20 @@ ifndef V
 	QUIET_AR      = @echo '    ' AR $@;
 	QUIET_SUBDIR0 = +@subdir=
 	QUIET_SUBDIR1 = ; echo '    ' SUBDIR $$subdir; \
-		        ${MAKE} -C $$subdir
+		        ${MAKE} -s -C $$subdir
 endif
 
 .PHONY: all dev tests check install uninstall distclean clean TAGS
 
-all:   ${PROGS} .FORCE
+all:   ${PROGS} ${AUXPROGS} .FORCE
 
-dev:   ${PROGS} ${UTESTS} ${ITESTS} ${STATS} ${BENCHMARKS} ${EXAMPLES} .FORCE
+dev:   ${PROGS} ${AUXPROGS} ${UTESTS} ${ITESTS} ${STATS} ${BENCHMARKS} ${EXAMPLES} .FORCE
 	${QUIET_SUBDIR0}${IMPLDIR} ${QUIET_SUBDIR1} dev
 
-tests: ${PROGS} ${UTESTS} ${ITESTS} .FORCE
+tests: ${PROGS} ${AUXPROGS} ${UTESTS} ${ITESTS} .FORCE
 	${QUIET_SUBDIR0}${IMPLDIR} ${QUIET_SUBDIR1} tests
 
-check: ${PROGS} ${UTESTS} ${ITESTS} .FORCE
+check: ${PROGS} ${AUXPROGS} ${UTESTS} ${ITESTS} .FORCE
 	${QUIET_SUBDIR0}${IMPLDIR} ${QUIET_SUBDIR1} check
 
 libhmmer.a: libhmmer-src.stamp .FORCE
@@ -249,8 +253,9 @@ libhmmer-src.stamp: ${OBJS}
 
 ${OBJS}:        ${HDRS} p7_config.h  
 ${PROGOBJS}:    ${HDRS} p7_config.h
+${AUXPROGOBJS}: ${HDRS} p7_config.h
 
-${PROGS}: % : %.o  libhmmer.a ../${ESLDIR}/libeasel.a 
+${PROGS} ${AUXPROGS}: % : %.o  libhmmer.a ../${ESLDIR}/libeasel.a 
 	${QUIET_GEN}${CC} ${CFLAGS} ${DEFS} ${LDFLAGS} ${MYLIBDIRS} -o $@ $@.o ${MPILIBS} ${LIBS}
 
 .c.o:
@@ -319,34 +324,18 @@ ${EXAMPLES}: libhmmer.a ${HDRS} p7_config.h
 	${CC} ${CFLAGS} ${CPPFLAGS} ${LDFLAGS} ${DEFS} ${MYLIBDIRS} ${MYINCDIRS} -D$${DFLAG} -o $@ $${DFILE} ${LIBS}
 
 install:
-	${QUIET_SUBDIR0}${IMPLDIR} ${QUIET_SUBDIR1} install
 	for file in ${PROGS}; do \
 	   ${INSTALL} -m 0755 $$file ${DESTDIR}${bindir}/ ;\
 	done
-	${INSTALL} -m 0755 libhmmer.a ${DESTDIR}${libdir}/
-	for file in ${HDRS}; do \
-	   ${INSTALL} -m 0644 ${srcdir}/$$file ${DESTDIR}${includedir}/ ;\
-	done
-	${INSTALL} -m 0644 p7_config.h ${DESTDIR}${includedir}/ ;\
 
 uninstall:
-	${QUIET_SUBDIR0}${IMPLDIR} ${QUIET_SUBDIR1} uninstall
 	for file in ${PROGS}; do \
 	   rm -f ${DESTDIR}${bindir}/$$file ;\
 	done
-	-rm -f ${DESTDIR}${libdir}/libhmmer.a
-	for file in ${HDRS}; do \
-	   rm -f ${DESTDIR}${includedir}/$$file ;\
-	done
-	-rm -f ${DESTDIR}${includedir}/p7_config.h
-
-distclean: clean
-	${QUIET_SUBDIR0}${IMPLDIR} ${QUIET_SUBDIR1} distclean
-	-rm -f Makefile p7_config.h
 
 clean:
 	${QUIET_SUBDIR0}${IMPLDIR} ${QUIET_SUBDIR1} clean
-	-rm -f *.o *~ Makefile.bak core ${PROGS} TAGS gmon.out
+	-rm -f *.o *~ Makefile.bak core ${PROGS} ${AUXPROGS} TAGS gmon.out
 	-rm -f libhmmer.a libhmmer-src.stamp
 	-rm -f ${UTESTS}
 	-rm -f ${ITESTS}
@@ -355,8 +344,16 @@ clean:
 	-rm -f ${EXAMPLES}
 	-rm -f *.gcno
 	-rm -f cscope.out
-	for prog in ${PROGS} ${UTESTS} ${STATS} ${BENCHMARKS} ${EXAMPLES} ${ITESTS}; do \
+	for prog in ${PROGS} ${AUXPROGS} ${UTESTS} ${STATS} ${BENCHMARKS} ${EXAMPLES} ${ITESTS}; do \
 	   if test -d $$prog.dSYM; then rm -rf $$prog.dSYM; fi ;\
 	done
+ifndef V
+	@echo '     ' CLEAN src
+endif
+
+distclean: clean
+	${QUIET_SUBDIR0}${IMPLDIR} ${QUIET_SUBDIR1} distclean
+	-rm -f Makefile p7_config.h
+
 
 
