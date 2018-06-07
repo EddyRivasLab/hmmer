@@ -40,7 +40,7 @@
 1 exercise p7_profile         @src/p7_profile_utest@
 1 exercise p7_tophits         @src/p7_tophits_utest@
 1 exercise p7_trace           @src/p7_trace_utest@
-1 exercise p7_scoredata         @src/p7_scoredata_utest@
+1 exercise p7_scoredata       @src/p7_scoredata_utest@
 
 1 exercise decoding           @src/impl/decoding_utest@
 1 exercise fwdback            @src/impl/fwdback_utest@
@@ -68,8 +68,16 @@
 
 
 ################################################################
-# Option tests
+# Option tests 
 ################################################################
+
+# Prep a press'ed "minifam" that's used here and also in some integration tests,
+# and extract an individual 'typical' model Caudal_act.
+1 prep      Caudal                @easel/miniapps/esl-afetch@ !testsuite/minifam! Caudal_act > %CAUDAL.STO%
+1 prep      hmm                   @src/hmmbuild@ %CAUDAL.HMM% %CAUDAL.STO%
+1 prep      minifam               @src/hmmbuild@ %MINIFAM.HMM% !testsuite/minifam!
+1 prep      minifam_press         @src/hmmpress@ %MINIFAM.HMM% 
+
 
 # hmmalign  xxxxxxxxxxxxxxxxxxxx
 1 prep      testseq              @src/hmmemit@  -p --unilocal -L0 -N 4 --seed 42 !testsuite/Caudal_act.hmm! > %TESTSEQ%
@@ -83,7 +91,7 @@
 1 exercise  hmmalign/--outformat @src/hmmalign@ --outformat a2m                      !testsuite/Caudal_act.hmm! %TESTSEQ%
 
 # hmmbuild  xxxxxxxxxxxxxxxxxxxx
-1 exercise  build                @src/hmmbuild@                    --EmL 10 --EvL 10 --EfL 10 %HMMBUILD.hmm% !testsuite/20aa.sto!
+1 exercise  hmmbuild             @src/hmmbuild@                    --EmL 10 --EvL 10 --EfL 10 %HMMBUILD.hmm% !testsuite/20aa.sto!
 1 exercise  build/-h             @src/hmmbuild@  -h
 1 exercise  build/-n             @src/hmmbuild@  -n foo            --EmL 10 --EvL 10 --EfL 10 %HMMBUILD.hmm% !testsuite/20aa.sto!
 1 exercise  build/-o             @src/hmmbuild@  -o %HMMBUILD.out% --EmL 10 --EvL 10 --EfL 10 %HMMBUILD.hmm% !testsuite/20aa.sto!
@@ -120,18 +128,6 @@
 1 exercise  build/--informat     @src/hmmbuild@  --informat stockholm --EmL 10 --EvL 10 --EfL 10 %HMMBUILD.hmm% !testsuite/20aa.sto!
 1 exercise  build/--seed         @src/hmmbuild@  --seed 42             --EmL 10 --EvL 10 --EfL 10 %HMMBUILD.hmm% !testsuite/20aa.sto!
 
-# hmmemit   xxxxxxxxxxxxxxxxxxxx
-1 exercise  hmmemit              @src/hmmemit@                !testsuite/Caudal_act.hmm!
-1 exercise  hmmemit/-h           @src/hmmemit@ -h
-1 exercise  hmmemit/-c           @src/hmmemit@ -c             !testsuite/Caudal_act.hmm!
-1 exercise  hmmemit/-o           @src/hmmemit@ -o /dev/null   !testsuite/Caudal_act.hmm!
-1 exercise  hmmemit/-p           @src/hmmemit@ -p             !testsuite/Caudal_act.hmm!
-1 exercise  hmmemit/-N           @src/hmmemit@ -N 10          !testsuite/Caudal_act.hmm!
-1 exercise  hmmemit/-L           @src/hmmemit@ -p -L 50       !testsuite/Caudal_act.hmm!
-1 exercise  hmmemit/--local      @src/hmmemit@ -p --local     !testsuite/Caudal_act.hmm!
-1 exercise  hmmemit/--unilocal   @src/hmmemit@ -p --unilocal  !testsuite/Caudal_act.hmm!
-1 exercise  hmmemit/--glocal     @src/hmmemit@ -p --glocal    !testsuite/Caudal_act.hmm!
-1 exercise  hmmemit/--uniglocal  @src/hmmemit@ -p --uniglocal !testsuite/Caudal_act.hmm!
 
 # hmmsearch xxxxxxxxxxxxxxxxxxxx
 1 prep      rnddb                @easel/miniapps/esl-shuffle@ -G --amino -L 100 -N 2 -o %RNDDB% 
@@ -170,17 +166,52 @@
 # --cpu: threads only
 # --mpi: MPI only
 
+# hmmscan   xxxxxxxxxxxxxxxxxxxx
+1 exercise  hmmscan             @src/hmmscan@    %MINIFAM.HMM% !tutorial/HBB_HUMAN! 
+1 exercise  scan/-h             @src/hmmscan@    -h
+1 exercise  scan/-o             @src/hmmscan@    -o %SCAN.out%            %MINIFAM.HMM% !tutorial/HBB_HUMAN! 
+1 exercise  scan/--tblout       @src/hmmscan@    --tblout %SCAN.tbl%      %MINIFAM.HMM% !tutorial/HBB_HUMAN!
+1 exercise  scan/--domtblout    @src/hmmscan@    --domtblout %SCAN.dtbl%  %MINIFAM.HMM% !tutorial/HBB_HUMAN! 
+1 exercise  scan/--pfamtblout   @src/hmmscan@    --pfamtblout %SCAN.ptbl% %MINIFAM.HMM% !tutorial/HBB_HUMAN! 
+1 exercise  scan/--acc          @src/hmmscan@    --acc                    %MINIFAM.HMM% !tutorial/HBB_HUMAN! 
+1 exercise  scan/--noali        @src/hmmscan@    --noali                  %MINIFAM.HMM% !tutorial/HBB_HUMAN! 
+1 exercise  scan/--notextw      @src/hmmscan@    --notextw                %MINIFAM.HMM% !tutorial/HBB_HUMAN! 
+1 exercise  scan/--textw        @src/hmmscan@    --textw 120              %MINIFAM.HMM% !tutorial/HBB_HUMAN! 
+1 exercise  scan/-E             @src/hmmscan@    -E 0.01                  %MINIFAM.HMM% !tutorial/HBB_HUMAN! 
+1 exercise  scan/-T             @src/hmmscan@    -T 20                    %MINIFAM.HMM% !tutorial/HBB_HUMAN! 
+1 exercise  scan/--domE         @src/hmmscan@    --domE 0.01              %MINIFAM.HMM% !tutorial/HBB_HUMAN! 
+1 exercise  scan/--domT         @src/hmmscan@    --domT 20                %MINIFAM.HMM% !tutorial/HBB_HUMAN! 
+1 exercise  scan/--incE         @src/hmmscan@    --incE 0.01              %MINIFAM.HMM% !tutorial/HBB_HUMAN! 
+1 exercise  scan/--incT         @src/hmmscan@    --incT 20                %MINIFAM.HMM% !tutorial/HBB_HUMAN! 
+1 exercise  scan/--incdomE      @src/hmmscan@    --incdomE 0.01           %MINIFAM.HMM% !tutorial/HBB_HUMAN! 
+1 exercise  scan/--incdomT      @src/hmmscan@    --incdomT 20             %MINIFAM.HMM% !tutorial/HBB_HUMAN! 
+1 exercise  scan/--incdomT      @src/hmmscan@    --incdomT 20             %MINIFAM.HMM% !tutorial/HBB_HUMAN! 
+1 exercise  scan/--cut_ga       @src/hmmscan@    --cut_ga                 %MINIFAM.HMM% !tutorial/HBB_HUMAN!
+1 exercise  scan/--cut_nc       @src/hmmscan@    --cut_nc                 %MINIFAM.HMM% !tutorial/HBB_HUMAN!
+1 exercise  scan/--cut_tc       @src/hmmscan@    --cut_tc                 %MINIFAM.HMM% !tutorial/HBB_HUMAN! 
+1 exercise  scan/--max          @src/hmmscan@    --max                    %MINIFAM.HMM% !tutorial/HBB_HUMAN! 
+1 exercise  scan/--F1           @src/hmmscan@    --F1 0.03                %MINIFAM.HMM% !tutorial/HBB_HUMAN!
+1 exercise  scan/--F2           @src/hmmscan@    --F2 0.002               %MINIFAM.HMM% !tutorial/HBB_HUMAN!
+1 exercise  scan/--F3           @src/hmmscan@    --F3 0.0002              %MINIFAM.HMM% !tutorial/HBB_HUMAN! 
+1 exercise  scan/--nobias       @src/hmmscan@    --nobias                 %MINIFAM.HMM% !tutorial/HBB_HUMAN!
+1 exercise  scan/--nonull2      @src/hmmscan@    --nonull2                %MINIFAM.HMM% !tutorial/HBB_HUMAN!
+1 exercise  scan/-Z             @src/hmmscan@    -Z 45000000              %MINIFAM.HMM% !tutorial/HBB_HUMAN!
+1 exercise  scan/--domZ         @src/hmmscan@    --domZ 45000000          %MINIFAM.HMM% !tutorial/HBB_HUMAN!
+1 exercise  scan/--seed         @src/hmmscan@    --seed 42                %MINIFAM.HMM% !tutorial/HBB_HUMAN!
+1 exercise  scan/--qformat      @src/hmmscan@    --qformat fasta          %MINIFAM.HMM% !tutorial/HBB_HUMAN! 
+1 exercise  scan/--cpu          @src/hmmscan@    --cpu 2                  %MINIFAM.HMM% !tutorial/HBB_HUMAN! 
+
 
 # jackhmmer xxxxxxxxxxxxxxxxxxxx
 1 exercise  jackhmmer           @src/jackhmmer@                            --EmL 10 --EvL 10 --EfL 10 !tutorial/HBB_HUMAN! %RNDDB%
 1 exercise  j/-h                @src/jackhmmer@  -h
 1 exercise  j/-N                @src/jackhmmer@  -N 2                      --EmL 10 --EvL 10 --EfL 10 !tutorial/HBB_HUMAN! %RNDDB%
-1 exercise  j/-o                @src/jackhmmer@  -o          %PHMMER.out%  --EmL 10 --EvL 10 --EfL 10 !tutorial/HBB_HUMAN! %RNDDB%
-1 exercise  j/-A                @src/jackhmmer@  -A          %PHMMER.sto%  --EmL 10 --EvL 10 --EfL 10 !tutorial/HBB_HUMAN! %RNDDB%
-1 exercise  j/--tblout          @src/jackhmmer@  --tblout    %PHMMER.tbl%  --EmL 10 --EvL 10 --EfL 10 !tutorial/HBB_HUMAN! %RNDDB%
-1 exercise  j/--domtblout       @src/jackhmmer@  --domtblout %PHMMER.dtbl% --EmL 10 --EvL 10 --EfL 10 !tutorial/HBB_HUMAN! %RNDDB%
-1 exercise  j/--chkhmm          @src/jackhmmer@  --chkhmm    %PHMMER.ch%   --EmL 10 --EvL 10 --EfL 10 !tutorial/HBB_HUMAN! %RNDDB%
-1 exercise  j/--chkali          @src/jackhmmer@  --chkali    %PHMMER.ca%   --EmL 10 --EvL 10 --EfL 10 !tutorial/HBB_HUMAN! %RNDDB%
+1 exercise  j/-o                @src/jackhmmer@  -o          %JHMMER.out%  --EmL 10 --EvL 10 --EfL 10 !tutorial/HBB_HUMAN! %RNDDB%
+1 exercise  j/-A                @src/jackhmmer@  -A          %JHMMER.sto%  --EmL 10 --EvL 10 --EfL 10 !tutorial/HBB_HUMAN! %RNDDB%
+1 exercise  j/--tblout          @src/jackhmmer@  --tblout    %JHMMER.tbl%  --EmL 10 --EvL 10 --EfL 10 !tutorial/HBB_HUMAN! %RNDDB%
+1 exercise  j/--domtblout       @src/jackhmmer@  --domtblout %JHMMER.dtbl% --EmL 10 --EvL 10 --EfL 10 !tutorial/HBB_HUMAN! %RNDDB%
+1 exercise  j/--chkhmm          @src/jackhmmer@  --chkhmm    %JHMMER.ch%   --EmL 10 --EvL 10 --EfL 10 !tutorial/HBB_HUMAN! %RNDDB%
+1 exercise  j/--chkali          @src/jackhmmer@  --chkali    %JHMMER.ca%   --EmL 10 --EvL 10 --EfL 10 !tutorial/HBB_HUMAN! %RNDDB%
 1 exercise  j/--acc             @src/jackhmmer@  --acc                     --EmL 10 --EvL 10 --EfL 10 !tutorial/HBB_HUMAN! %RNDDB%
 1 exercise  j/--noali           @src/jackhmmer@  --noali                   --EmL 10 --EvL 10 --EfL 10 !tutorial/HBB_HUMAN! %RNDDB%
 1 exercise  j/--notextw         @src/jackhmmer@  --notextw                 --EmL 10 --EvL 10 --EfL 10 !tutorial/HBB_HUMAN! %RNDDB%
@@ -217,50 +248,50 @@
 1 exercise  j/--tformat         @src/jackhmmer@  --tformat fasta           --EmL 10 --EvL 10 --EfL 10 !tutorial/HBB_HUMAN! %RNDDB%
 # --cpu: threads only
 # --mpi: MPI only
-
+1 prep      cleanup             rm -f %JHMMER.ch%-1.hmm %JHMMER.ca%-1.sto
 
 
 # phmmer    xxxxxxxxxxxxxxxxxxxx
-1 exercise  phmmer               @src/phmmer@                            --EmL 10 --EvL 10 --EfL 10 !tutorial/HBB_HUMAN! %RNDDB%
+1 exercise  phmmer               @src/phmmer@                             --EmL 10 --EvL 10 --EfL 10 !tutorial/HBB_HUMAN! %RNDDB%
 1 exercise  phmmer/-h            @src/phmmer@  -h
 1 exercise  phmmer/-o            @src/phmmer@  -o           %PHMMER.out%  --EmL 10 --EvL 10 --EfL 10 !tutorial/HBB_HUMAN! %RNDDB%
 1 exercise  phmmer/-A            @src/phmmer@  -A           %PHMMER.sto%  --EmL 10 --EvL 10 --EfL 10 !tutorial/HBB_HUMAN! %RNDDB%
 1 exercise  phmmer/--tblout      @src/phmmer@  --tblout     %PHMMER.tbl%  --EmL 10 --EvL 10 --EfL 10 !tutorial/HBB_HUMAN! %RNDDB%
 1 exercise  phmmer/--domtblout   @src/phmmer@  --domtblout  %PHMMER.dtbl% --EmL 10 --EvL 10 --EfL 10 !tutorial/HBB_HUMAN! %RNDDB%
 1 exercise  phmmer/--pfamtblout  @src/phmmer@  --pfamtblout %PHMMER.dtbl% --EmL 10 --EvL 10 --EfL 10 !tutorial/HBB_HUMAN! %RNDDB%
-1 exercise  phmmer/--acc         @src/phmmer@  --acc                     --EmL 10 --EvL 10 --EfL 10 !tutorial/HBB_HUMAN! %RNDDB%
-1 exercise  phmmer/--noali       @src/phmmer@  --noali                   --EmL 10 --EvL 10 --EfL 10 !tutorial/HBB_HUMAN! %RNDDB%
-1 exercise  phmmer/--notextw     @src/phmmer@  --notextw                 --EmL 10 --EvL 10 --EfL 10 !tutorial/HBB_HUMAN! %RNDDB%
-1 exercise  phmmer/--textw       @src/phmmer@  --textw 256               --EmL 10 --EvL 10 --EfL 10 !tutorial/HBB_HUMAN! %RNDDB%
-1 exercise  phmmer/--popen       @src/phmmer@  --popen 0.4               --EmL 10 --EvL 10 --EfL 10 !tutorial/HBB_HUMAN! %RNDDB%
-1 exercise  phmmer/--pextend     @src/phmmer@  --pextend 0.6             --EmL 10 --EvL 10 --EfL 10 !tutorial/HBB_HUMAN! %RNDDB%
+1 exercise  phmmer/--acc         @src/phmmer@  --acc                      --EmL 10 --EvL 10 --EfL 10 !tutorial/HBB_HUMAN! %RNDDB%
+1 exercise  phmmer/--noali       @src/phmmer@  --noali                    --EmL 10 --EvL 10 --EfL 10 !tutorial/HBB_HUMAN! %RNDDB%
+1 exercise  phmmer/--notextw     @src/phmmer@  --notextw                  --EmL 10 --EvL 10 --EfL 10 !tutorial/HBB_HUMAN! %RNDDB%
+1 exercise  phmmer/--textw       @src/phmmer@  --textw 256                --EmL 10 --EvL 10 --EfL 10 !tutorial/HBB_HUMAN! %RNDDB%
+1 exercise  phmmer/--popen       @src/phmmer@  --popen 0.4                --EmL 10 --EvL 10 --EfL 10 !tutorial/HBB_HUMAN! %RNDDB%
+1 exercise  phmmer/--pextend     @src/phmmer@  --pextend 0.6              --EmL 10 --EvL 10 --EfL 10 !tutorial/HBB_HUMAN! %RNDDB%
 1 exercise  phmmer/--mxfile      @src/phmmer@  --mxfile !easel/formats/BLOSUM62! --EmL 10 --EvL 10 --EfL 10 !tutorial/HBB_HUMAN! %RNDDB%
-1 exercise  phmmer/-E            @src/phmmer@  -E 0.01                   --EmL 10 --EvL 10 --EfL 10 !tutorial/HBB_HUMAN! %RNDDB%
-1 exercise  phmmer/-T            @src/phmmer@  -T 20                     --EmL 10 --EvL 10 --EfL 10 !tutorial/HBB_HUMAN! %RNDDB%
-1 exercise  phmmer/--domE        @src/phmmer@  --domE 0.01               --EmL 10 --EvL 10 --EfL 10 !tutorial/HBB_HUMAN! %RNDDB%
-1 exercise  phmmer/--domT        @src/phmmer@  --domT 20                 --EmL 10 --EvL 10 --EfL 10 !tutorial/HBB_HUMAN! %RNDDB%
-1 exercise  phmmer/--incE        @src/phmmer@  --incE 0.01               --EmL 10 --EvL 10 --EfL 10 !tutorial/HBB_HUMAN! %RNDDB%
-1 exercise  phmmer/--incT        @src/phmmer@  --incT 20                 --EmL 10 --EvL 10 --EfL 10 !tutorial/HBB_HUMAN! %RNDDB%
-1 exercise  phmmer/--incdomE     @src/phmmer@  --incdomE 0.01            --EmL 10 --EvL 10 --EfL 10 !tutorial/HBB_HUMAN! %RNDDB%
-1 exercise  phmmer/--incdomT     @src/phmmer@  --incdomT 20              --EmL 10 --EvL 10 --EfL 10 !tutorial/HBB_HUMAN! %RNDDB%
-1 exercise  phmmer/--max         @src/phmmer@  --max                     --EmL 10 --EvL 10 --EfL 10 !tutorial/HBB_HUMAN! %RNDDB%
-1 exercise  phmmer/--F1          @src/phmmer@  --F1 0.03                 --EmL 10 --EvL 10 --EfL 10 !tutorial/HBB_HUMAN! %RNDDB%
-1 exercise  phmmer/--F2          @src/phmmer@  --F2 0.002                --EmL 10 --EvL 10 --EfL 10 !tutorial/HBB_HUMAN! %RNDDB%
-1 exercise  phmmer/--F3          @src/phmmer@  --F3 0.0002               --EmL 10 --EvL 10 --EfL 10 !tutorial/HBB_HUMAN! %RNDDB%
-1 exercise  phmmer/--nobias      @src/phmmer@  --nobias                  --EmL 10 --EvL 10 --EfL 10 !tutorial/HBB_HUMAN! %RNDDB%
-1 exercise  phmmer/--EmL         @src/phmmer@  --EmL 100                          --EvL 10 --EfL 10 !tutorial/HBB_HUMAN! %RNDDB%
-1 exercise  phmmer/--EmN         @src/phmmer@  --EmN 250                 --EmL 10 --EvL 10 --EfL 10 !tutorial/HBB_HUMAN! %RNDDB%
-1 exercise  phmmer/--EvL         @src/phmmer@  --EvL 100                 --EmL 10          --EfL 10 !tutorial/HBB_HUMAN! %RNDDB%
-1 exercise  phmmer/--EvN         @src/phmmer@  --EvN 250                 --EmL 10 --EvL 10 --EfL 10 !tutorial/HBB_HUMAN! %RNDDB%
-1 exercise  phmmer/--EfL         @src/phmmer@  --EfL 100                 --EmL 10 --EvL 10          !tutorial/HBB_HUMAN! %RNDDB%
-1 exercise  phmmer/--EfN         @src/phmmer@  --EfN 250                 --EmL 10 --EvL 10 --EfL 10 !tutorial/HBB_HUMAN! %RNDDB%
-1 exercise  phmmer/--Eft         @src/phmmer@  --Eft 0.045               --EmL 10 --EvL 10 --EfL 10 !tutorial/HBB_HUMAN! %RNDDB%
-1 exercise  phmmer/--nonull2     @src/phmmer@  --nonull2                 --EmL 10 --EvL 10 --EfL 10 !tutorial/HBB_HUMAN! %RNDDB%
-1 exercise  phmmer/-Z            @src/phmmer@  -Z 45000000               --EmL 10 --EvL 10 --EfL 10 !tutorial/HBB_HUMAN! %RNDDB%
-1 exercise  phmmer/--domZ        @src/phmmer@  --domZ 45000000           --EmL 10 --EvL 10 --EfL 10 !tutorial/HBB_HUMAN! %RNDDB%
-1 exercise  phmmer/--seed        @src/phmmer@  --seed 42                 --EmL 10 --EvL 10 --EfL 10 !tutorial/HBB_HUMAN! %RNDDB%
-1 exercise  phmmer/--qformat     @src/phmmer@  --qformat fasta           --EmL 10 --EvL 10 --EfL 10 !tutorial/HBB_HUMAN! %RNDDB%
-1 exercise  phmmer/--tformat     @src/phmmer@  --tformat fasta           --EmL 10 --EvL 10 --EfL 10 !tutorial/HBB_HUMAN! %RNDDB%
+1 exercise  phmmer/-E            @src/phmmer@  -E 0.01                    --EmL 10 --EvL 10 --EfL 10 !tutorial/HBB_HUMAN! %RNDDB%
+1 exercise  phmmer/-T            @src/phmmer@  -T 20                      --EmL 10 --EvL 10 --EfL 10 !tutorial/HBB_HUMAN! %RNDDB%
+1 exercise  phmmer/--domE        @src/phmmer@  --domE 0.01                --EmL 10 --EvL 10 --EfL 10 !tutorial/HBB_HUMAN! %RNDDB%
+1 exercise  phmmer/--domT        @src/phmmer@  --domT 20                  --EmL 10 --EvL 10 --EfL 10 !tutorial/HBB_HUMAN! %RNDDB%
+1 exercise  phmmer/--incE        @src/phmmer@  --incE 0.01                --EmL 10 --EvL 10 --EfL 10 !tutorial/HBB_HUMAN! %RNDDB%
+1 exercise  phmmer/--incT        @src/phmmer@  --incT 20                  --EmL 10 --EvL 10 --EfL 10 !tutorial/HBB_HUMAN! %RNDDB%
+1 exercise  phmmer/--incdomE     @src/phmmer@  --incdomE 0.01             --EmL 10 --EvL 10 --EfL 10 !tutorial/HBB_HUMAN! %RNDDB%
+1 exercise  phmmer/--incdomT     @src/phmmer@  --incdomT 20               --EmL 10 --EvL 10 --EfL 10 !tutorial/HBB_HUMAN! %RNDDB%
+1 exercise  phmmer/--max         @src/phmmer@  --max                      --EmL 10 --EvL 10 --EfL 10 !tutorial/HBB_HUMAN! %RNDDB%
+1 exercise  phmmer/--F1          @src/phmmer@  --F1 0.03                  --EmL 10 --EvL 10 --EfL 10 !tutorial/HBB_HUMAN! %RNDDB%
+1 exercise  phmmer/--F2          @src/phmmer@  --F2 0.002                 --EmL 10 --EvL 10 --EfL 10 !tutorial/HBB_HUMAN! %RNDDB%
+1 exercise  phmmer/--F3          @src/phmmer@  --F3 0.0002                --EmL 10 --EvL 10 --EfL 10 !tutorial/HBB_HUMAN! %RNDDB%
+1 exercise  phmmer/--nobias      @src/phmmer@  --nobias                   --EmL 10 --EvL 10 --EfL 10 !tutorial/HBB_HUMAN! %RNDDB%
+1 exercise  phmmer/--EmL         @src/phmmer@  --EmL 100                           --EvL 10 --EfL 10 !tutorial/HBB_HUMAN! %RNDDB%
+1 exercise  phmmer/--EmN         @src/phmmer@  --EmN 250                  --EmL 10 --EvL 10 --EfL 10 !tutorial/HBB_HUMAN! %RNDDB%
+1 exercise  phmmer/--EvL         @src/phmmer@  --EvL 100                  --EmL 10          --EfL 10 !tutorial/HBB_HUMAN! %RNDDB%
+1 exercise  phmmer/--EvN         @src/phmmer@  --EvN 250                  --EmL 10 --EvL 10 --EfL 10 !tutorial/HBB_HUMAN! %RNDDB%
+1 exercise  phmmer/--EfL         @src/phmmer@  --EfL 100                  --EmL 10 --EvL 10          !tutorial/HBB_HUMAN! %RNDDB%
+1 exercise  phmmer/--EfN         @src/phmmer@  --EfN 250                  --EmL 10 --EvL 10 --EfL 10 !tutorial/HBB_HUMAN! %RNDDB%
+1 exercise  phmmer/--Eft         @src/phmmer@  --Eft 0.045                --EmL 10 --EvL 10 --EfL 10 !tutorial/HBB_HUMAN! %RNDDB%
+1 exercise  phmmer/--nonull2     @src/phmmer@  --nonull2                  --EmL 10 --EvL 10 --EfL 10 !tutorial/HBB_HUMAN! %RNDDB%
+1 exercise  phmmer/-Z            @src/phmmer@  -Z 45000000                --EmL 10 --EvL 10 --EfL 10 !tutorial/HBB_HUMAN! %RNDDB%
+1 exercise  phmmer/--domZ        @src/phmmer@  --domZ 45000000            --EmL 10 --EvL 10 --EfL 10 !tutorial/HBB_HUMAN! %RNDDB%
+1 exercise  phmmer/--seed        @src/phmmer@  --seed 42                  --EmL 10 --EvL 10 --EfL 10 !tutorial/HBB_HUMAN! %RNDDB%
+1 exercise  phmmer/--qformat     @src/phmmer@  --qformat fasta            --EmL 10 --EvL 10 --EfL 10 !tutorial/HBB_HUMAN! %RNDDB%
+1 exercise  phmmer/--tformat     @src/phmmer@  --tformat fasta            --EmL 10 --EvL 10 --EfL 10 !tutorial/HBB_HUMAN! %RNDDB%
 # --cpu: threads only
 # --mpi: MPI only
 
@@ -290,42 +321,55 @@
 1 exercise  nhmmer/--seed        @src/nhmmer@  --seed 42                  !tutorial/MADE1.hmm! %RNDDB%
 
 
-# nhmmscan    xxxxxxxxxxxxxxxxxxxx
+# nhmmscan  xxxxxxxxxxxxxxxxxxxx
 1 prep      rnddb                  @easel/miniapps/esl-shuffle@ -G --dna   -L 10000 -N 2 -o %RNDDB%
-1 prep      press                  @src/hmmpress@  -f                        !tutorial/MADE1.hmm!
-1 exercise  nhmmscan               @src/nhmmscan@                             !tutorial/MADE1.hmm! %RNDDB%
+1 prep      press                  @src/hmmpress@  -f                           !tutorial/MADE1.hmm!
+1 exercise  nhmmscan               @src/nhmmscan@                               !tutorial/MADE1.hmm! %RNDDB%
 1 exercise  nhmmscan/-h            @src/nhmmscan@  -h
 1 exercise  nhmmscan/-o            @src/nhmmscan@  -o           %nhmmscan.out%  !tutorial/MADE1.hmm! %RNDDB%
 1 exercise  nhmmscan/--tblout      @src/nhmmscan@  --tblout     %nhmmscan.tbl%  !tutorial/MADE1.hmm! %RNDDB%
 1 exercise  nhmmscan/--dfamtblout  @src/nhmmscan@  --dfamtblout %nhmmscan.dtbl% !tutorial/MADE1.hmm! %RNDDB%
-1 exercise  nhmmscan/--acc         @src/nhmmscan@  --acc                      !tutorial/MADE1.hmm! %RNDDB%
-1 exercise  nhmmscan/--noali       @src/nhmmscan@  --noali                    !tutorial/MADE1.hmm! %RNDDB%
-1 exercise  nhmmscan/--notextw     @src/nhmmscan@  --notextw                  !tutorial/MADE1.hmm! %RNDDB%
-1 exercise  nhmmscan/--textw       @src/nhmmscan@  --textw 256                !tutorial/MADE1.hmm! %RNDDB%
-1 exercise  nhmmscan/-E            @src/nhmmscan@  -E 0.01                    !tutorial/MADE1.hmm! %RNDDB%
-1 exercise  nhmmscan/-T            @src/nhmmscan@  -T 20                      !tutorial/MADE1.hmm! %RNDDB%
-1 exercise  nhmmscan/--incE        @src/nhmmscan@  --incE 0.01                !tutorial/MADE1.hmm! %RNDDB%
-1 exercise  nhmmscan/--incT        @src/nhmmscan@  --incT 20                  !tutorial/MADE1.hmm! %RNDDB%
-1 exercise  nhmmscan/--max         @src/nhmmscan@  --max                      !tutorial/MADE1.hmm! %RNDDB%
-1 exercise  nhmmscan/--F1          @src/nhmmscan@  --F1 0.03                  !tutorial/MADE1.hmm! %RNDDB%
-1 exercise  nhmmscan/--F2          @src/nhmmscan@  --F2 0.002                 !tutorial/MADE1.hmm! %RNDDB%
-1 exercise  nhmmscan/--F3          @src/nhmmscan@  --F3 0.0002                !tutorial/MADE1.hmm! %RNDDB%
-1 exercise  nhmmscan/--nobias      @src/nhmmscan@  --nobias                   !tutorial/MADE1.hmm! %RNDDB%
-1 exercise  nhmmscan/--nonull2     @src/nhmmscan@  --nonull2                  !tutorial/MADE1.hmm! %RNDDB%
-1 exercise  nhmmscan/-Z            @src/nhmmscan@  -Z 45000000                !tutorial/MADE1.hmm! %RNDDB%
-1 exercise  nhmmscan/--seed        @src/nhmmscan@  --seed 42                  !tutorial/MADE1.hmm! %RNDDB%
+1 exercise  nhmmscan/--acc         @src/nhmmscan@  --acc                        !tutorial/MADE1.hmm! %RNDDB%
+1 exercise  nhmmscan/--noali       @src/nhmmscan@  --noali                      !tutorial/MADE1.hmm! %RNDDB%
+1 exercise  nhmmscan/--notextw     @src/nhmmscan@  --notextw                    !tutorial/MADE1.hmm! %RNDDB%
+1 exercise  nhmmscan/--textw       @src/nhmmscan@  --textw 256                  !tutorial/MADE1.hmm! %RNDDB%
+1 exercise  nhmmscan/-E            @src/nhmmscan@  -E 0.01                      !tutorial/MADE1.hmm! %RNDDB%
+1 exercise  nhmmscan/-T            @src/nhmmscan@  -T 20                        !tutorial/MADE1.hmm! %RNDDB%
+1 exercise  nhmmscan/--incE        @src/nhmmscan@  --incE 0.01                  !tutorial/MADE1.hmm! %RNDDB%
+1 exercise  nhmmscan/--incT        @src/nhmmscan@  --incT 20                    !tutorial/MADE1.hmm! %RNDDB%
+1 exercise  nhmmscan/--max         @src/nhmmscan@  --max                        !tutorial/MADE1.hmm! %RNDDB%
+1 exercise  nhmmscan/--F1          @src/nhmmscan@  --F1 0.03                    !tutorial/MADE1.hmm! %RNDDB%
+1 exercise  nhmmscan/--F2          @src/nhmmscan@  --F2 0.002                   !tutorial/MADE1.hmm! %RNDDB%
+1 exercise  nhmmscan/--F3          @src/nhmmscan@  --F3 0.0002                  !tutorial/MADE1.hmm! %RNDDB%
+1 exercise  nhmmscan/--nobias      @src/nhmmscan@  --nobias                     !tutorial/MADE1.hmm! %RNDDB%
+1 exercise  nhmmscan/--nonull2     @src/nhmmscan@  --nonull2                    !tutorial/MADE1.hmm! %RNDDB%
+1 exercise  nhmmscan/-Z            @src/nhmmscan@  -Z 45000000                  !tutorial/MADE1.hmm! %RNDDB%
+1 exercise  nhmmscan/--seed        @src/nhmmscan@  --seed 42                    !tutorial/MADE1.hmm! %RNDDB%
+1 prep      cleanup                rm !tutorial/MADE1.hmm!.h3?
 
+# hmmemit   xxxxxxxxxxxxxxxxxxxx
+1 exercise  hmmemit              @src/hmmemit@                !testsuite/Caudal_act.hmm!
+1 exercise  hmmemit/-h           @src/hmmemit@ -h
+1 exercise  hmmemit/-c           @src/hmmemit@ -c             !testsuite/Caudal_act.hmm!
+1 exercise  hmmemit/-o           @src/hmmemit@ -o /dev/null   !testsuite/Caudal_act.hmm!
+1 exercise  hmmemit/-p           @src/hmmemit@ -p             !testsuite/Caudal_act.hmm!
+1 exercise  hmmemit/-N           @src/hmmemit@ -N 10          !testsuite/Caudal_act.hmm!
+1 exercise  hmmemit/-L           @src/hmmemit@ -p -L 50       !testsuite/Caudal_act.hmm!
+1 exercise  hmmemit/--local      @src/hmmemit@ -p --local     !testsuite/Caudal_act.hmm!
+1 exercise  hmmemit/--unilocal   @src/hmmemit@ -p --unilocal  !testsuite/Caudal_act.hmm!
+1 exercise  hmmemit/--glocal     @src/hmmemit@ -p --glocal    !testsuite/Caudal_act.hmm!
+1 exercise  hmmemit/--uniglocal  @src/hmmemit@ -p --uniglocal !testsuite/Caudal_act.hmm!
+
+# xxxxxxxxx xxxxxxxxxxxxxxxxxxxx
+1 exercise  hmmfetch             @src/hmmfetch@   %MINIFAM.HMM% Caudal_act
+1 exercise  hmmstat              @src/hmmstat@    !testsuite/Caudal_act.hmm!
+1 exercise  hmmlogo              @src/hmmlogo@    !testsuite/Caudal_act.hmm!
+1 exercise  hmmconvert           @src/hmmconvert@ !testsuite/Caudal_act.hmm!
+1 exercise  hmmsim               @src/hmmsim@     !testsuite/Caudal_act.hmm!
 
 #################################################################
 # Integration tests
 ################################################################
-
-# Prep a press'ed "minifam" that's used in several integration tests,
-# and extract an individual 'typical' model Caudal_act.
-1 prep      Caudal                @easel/miniapps/esl-afetch@ !testsuite/minifam! Caudal_act > %CAUDAL.STO%
-1 prep      hmm                   @src/hmmbuild@ %CAUDAL.HMM% %CAUDAL.STO%
-1 prep      minifam               @src/hmmbuild@ %MINIFAM.HMM% !testsuite/minifam!
-1 prep      minifam_press         @src/hmmpress@ %MINIFAM.HMM% 
 
 # Run-to-run variation tests
 # By default, stochastic simulations are seeded reproducibly, so there
@@ -362,6 +406,7 @@
 1 exercise  hmmpgmd_ga            !testsuite/i19-hmmpgmd-ga.pl!         @@ !! %OUTFILES% 
 #comment out fmindex test until it's been returned to life
 #1 exercise  fmindex-core          !testsuite/i20-fmindex-core.pl!       @@ !! %OUTFILES%
+1 exercise  rewind                !testsuite/i21-rewind.pl!             @@ !! %OUTFILES%
 
 1 exercise  brute-itest           @src/itest_brute@  
 1 exercise  hmmpress-itest        !src/hmmpress.itest.pl! @src/hmmpress@ %MINIFAM.HMM% %TMPPFX%
@@ -424,18 +469,6 @@
 3 valgrind  phmmer                @src/phmmer@     !tutorial/HBB_HUMAN! !tutorial/globins45.fa!
 
 # some derivatives of tmpfiles created by hmmpress, not sqc itself: clean up
-#1 prep     minifam               rm -f %MINIFAM.HMM%.h3f %MINIFAM.HMM%.h3p %MINIFAM.HMM%.h3m %MINIFAM.HMM%.h3i 
+1 prep     minifam                rm -f %MINIFAM.HMM%.h3f %MINIFAM.HMM%.h3p %MINIFAM.HMM%.h3m %MINIFAM.HMM%.h3i 
 
 
-#################################################################
-# HMMER - Biological sequence analysis with profile HMMs
-# Version 3.1b2; February 2015
-# Copyright (C) 2015 Howard Hughes Medical Institute.
-# Other copyrights also apply. See the COPYRIGHT file for a full list.
-# 
-# HMMER is distributed under the terms of the GNU General Public License
-# (GPLv3). See the LICENSE file for details.
-#
-# SVN $Id$
-# SVN $URL$
-################################################################

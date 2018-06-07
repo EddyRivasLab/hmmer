@@ -168,16 +168,20 @@ In more detail, these eight fields are:
 
             <alen> : length of the training set alignment in columns.
 
+	    <nseq> : number of sequences in original alignment after
+                     fragments were removed.
+
           <nfrags> : number of sequences that were excluded from the
                      original alignment because they appeared to be
-		     fragments.
+		     fragments. (<nfrags>+<nseq> = number of seqs
+		     in original MSA)
 
       <nseq_train> : number of sequences in the training set alignment
                      saved to <benchmark_prefix>.msa
 
        <ndom_test> : number of sequences that passed criteria for use
                      as a possible embedded domain in the test
-                     sequences
+                     sequences. (<nseq_train>+<ndom_test> <= <nseq>)
 
        <nseq_test> : number of embedded-domain test sequences saved to
                      <benchmark_prefix>.fa

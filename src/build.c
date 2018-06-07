@@ -19,9 +19,7 @@
  *    3. Unit tests.
  *    4. Test driver.
  *    5. Example.
- *    6. Copyright and license.
  */
-
 #include "p7_config.h"
 
 #include <string.h>
@@ -231,13 +229,8 @@ do_modelmask( ESL_MSA *msa)
   for (i = 1; i <= msa->alen; i++) {
     for (j = 0; j < msa->nseq; j++) {
       if (msa->mm[i-1] == 'm') {
-#ifdef eslAUGMENT_ALPHABET
         if (msa->ax[j][i] != msa->abc->K && msa->ax[j][i] != msa->abc->Kp-1) // if not gap
           msa->ax[j][i] = msa->abc->Kp-3; //that's the degenerate "any character" (N for DNA, X for protein)
-#else
-        if (msa->aseq[j][i] != '-' && msa->aseq[j][i] != '.') // if not gap
-          msa->aseq[j][i] = 'N';
-#endif
       }
     }
   }
@@ -588,7 +581,6 @@ main(int argc, char **argv)
   ESL_GETOPTS  *go        = p7_CreateDefaultApp(options, 1, argc, argv, banner, usage);
   char         *msafile   = esl_opt_GetArg(go, 1);
   int           fmt       = eslMSAFILE_UNKNOWN;
-  int           alphatype = eslUNKNOWN;
   ESL_ALPHABET *abc       = NULL;
   ESL_MSAFILE  *afp       = NULL;
   ESL_MSA      *msa       = NULL;
@@ -602,9 +594,9 @@ main(int argc, char **argv)
   int           status;
   
   /* Standard idioms for opening and reading a digital MSA. (See esl_msa.c example). */
-  if      (esl_opt_GetBoolean(go, "--rna"))   alphatype = eslRNA;
-  else if (esl_opt_GetBoolean(go, "--dna"))   alphatype = eslDNA;
-  else if (esl_opt_GetBoolean(go, "--amino")) alphatype = eslAMINO;
+  if      (esl_opt_GetBoolean(go, "--rna"))   abc = esl_alphabet_Create(eslRNA);
+  else if (esl_opt_GetBoolean(go, "--dna"))   abc = esl_alphabet_Create(eslDNA);
+  else if (esl_opt_GetBoolean(go, "--amino")) abc = esl_alphabet_Create(eslAMINO);
 
   if ((status = esl_msafile_Open(&abc, msafile, NULL, fmt, NULL, &afp)) != eslOK)
     esl_msafile_OpenFailure(afp, status);
@@ -671,11 +663,5 @@ main(int argc, char **argv)
 
 #endif /*p7BUILD_EXAMPLE*/
 
-
-
-
-/************************************************************
- * @LICENSE@
- ************************************************************/
 
 

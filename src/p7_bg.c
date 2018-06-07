@@ -9,10 +9,8 @@
  *     6. Unit tests.
  *     7. Test driver.
  *     8. Examples.
- *     9. Copyright and license.
  */
-
-#include "p7_config.h"		/* must be included first */
+#include "p7_config.h"
 
 #include <string.h>
 
@@ -751,12 +749,7 @@ main(int argc, char **argv)
 }
 #endif /*p7BG_EXAMPLE2*/
 
-/*****************************************************************
- * @LICENSE@
- * 
- * SVN $Id$
- * SVN $URL$
- *****************************************************************/
+
 
 
   

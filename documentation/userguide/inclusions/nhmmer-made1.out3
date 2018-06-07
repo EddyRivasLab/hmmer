@@ -1,0 +1,5 @@
+>> humanchr1_frag  
+    score  bias    Evalue   hmmfrom    hmm to     alifrom    ali to      envfrom    env to       sq len      acc
+   ------ ----- ---------   -------   -------    --------- ---------    --------- ---------    ---------    ----
+ !   38.3   7.0   1.3e-10         4        80 .]    302390    302466 ..    302387    302466 ..    330000    0.90
+

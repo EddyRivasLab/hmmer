@@ -1,0 +1,8 @@
+    E-value  score  bias  Sequence        start    end  Description
+    ------- ------ -----  --------        -----  -----  -----------
+    1.3e-10   38.3   7.0  humanchr1_frag 302390 302466 
+    6.4e-08   29.7   8.2  humanchr1_frag 174456 174498 
+    8.6e-08   29.3   6.2  humanchr1_frag 302466 302389 
+    3.8e-06   24.0   7.0  humanchr1_frag 174493 174456 
+  ------ inclusion threshold ------
+       0.69    7.1   7.8  humanchr1_frag 304073 304103 

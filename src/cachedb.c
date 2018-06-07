@@ -1,10 +1,4 @@
 /* Sequence and profile caches, used by the hmmpgmd daemon.
- * 
- * Contents:
- *   2. P7_CACHEDB_SEQS: a daemon's cached sequence database
- *   x. Benchmark driver
- *   x. Unit tests
- *   x. License and copyright information.
  */
 #include "p7_config.h"
 
@@ -55,7 +49,7 @@ p7_seqcache_Open(char *seqfile, P7_SEQCACHE **ret_cache, char *errbuf)
   uint64_t           hdr_size;
 
   char              *hdr_ptr;
-  char              *res_ptr;
+  ESL_DSQ           *res_ptr;
   char              *desc_ptr;
   char              *ptr;
   char               buffer[512];
@@ -656,10 +650,3 @@ main(int argc, char **argv)
 #endif /*CACHEDB_UTEST2*/
 
 
-
-/*****************************************************************
- * @LICENSE@
- *
- * SVN $URL$
- * SVN $Id$
- *****************************************************************/

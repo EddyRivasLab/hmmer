@@ -1,0 +1,13 @@
+Internal pipeline statistics summary:
+-------------------------------------
+Query model(s):                            1  (80 nodes)
+Target sequences:                          1  (660000 residues searched)
+Residues passing SSV filter:           69202  (0.105); expected (0.02)
+Residues passing bias filter:          57239  (0.0867); expected (0.02)
+Residues passing Vit filter:            5181  (0.00785); expected (0.003)
+Residues passing Fwd filter:            3187  (0.00483); expected (3e-05)
+Total number of hits:                      6  (0.000498)
+# CPU time: 0.03u 0.00s 00:00:00.03 Elapsed: 00:00:00.01
+# Mc/sec: 3017.39
+//
+[ok]

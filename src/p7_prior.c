@@ -1,10 +1,7 @@
 /* Mixture Dirichlet priors for profile HMMs.
  * 
- * 
  * SRE, Sat Mar 24 09:12:44 2007 [Janelia]
- * SVN $Id$
  */
-
 #include "p7_config.h"
 
 #include "easel.h"
@@ -391,7 +388,3 @@ p7_ParameterEstimation(P7_HMM *hmm, const P7_PRIOR *pri)
 }
 
 
-
-/*****************************************************************
- * @LICENSE@
- *****************************************************************/

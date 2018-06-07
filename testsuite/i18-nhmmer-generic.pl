@@ -7,8 +7,6 @@
 # Example: ./i18-nhmmer-generic.pl ..         ..       tmpfoo
 #
 # TJW, Fri Nov 12 11:07:31 EST 2010 [Janelia]
-# SVN $URL$
-# SVN $Id$
 
 BEGIN {
     $builddir  = shift;
@@ -72,12 +70,12 @@ $output = do_cmd($cmd);
 if ($? != 0) { die "FAIL: nhmmer failed unexpectedly\n"; }
 $expect = 
 q[
-Target sequences:                            1  \(9000000 residues searched\)
-Residues passing SSV filter:            174175  \(0.0194\); expected \(0.02\)
-Residues passing bias filter:           145307  \(0.0161\); expected \(0.02\)
-Residues passing Vit filter:             18396  \(0.00204\); expected \(0.003\)
-Residues passing Fwd filter:               415  \(4.61e-05\); expected \(3e-05\)
-Total number of hits:                        4  \(8e-06\)];
+Target sequences:                          1  \(9000000 residues searched\)
+Residues passing SSV filter:          174175  \(0.0194\); expected \(0.02\)
+Residues passing bias filter:         145307  \(0.0161\); expected \(0.02\)
+Residues passing Vit filter:           18396  \(0.00204\); expected \(0.003\)
+Residues passing Fwd filter:             415  \(4.61e-05\); expected \(3e-05\)
+Total number of hits:                      4  \(8e-06\)];
 if ($output !~ /$expect/s) {
     die "FAIL: nhmmer failed search test 1\n";
 }
@@ -96,12 +94,12 @@ $output = do_cmd($cmd);
 if ($? != 0) { die "FAIL: nhmmer failed unexpectedly\n"; }
 $expect = 
 q[
-Target sequences:                            1  \(4500000 residues searched\)
-Residues passing SSV filter:             84366  \(0.0187\); expected \(0.02\)
-Residues passing bias filter:            70869  \(0.0157\); expected \(0.02\)
-Residues passing Vit filter:              9070  \(0.00202\); expected \(0.003\)
-Residues passing Fwd filter:               228  \(5.07e-05\); expected \(3e-05\)
-Total number of hits:                        3  \(1.27e-05\)];
+Target sequences:                          1  \(4500000 residues searched\)
+Residues passing SSV filter:           84366  \(0.0187\); expected \(0.02\)
+Residues passing bias filter:          70869  \(0.0157\); expected \(0.02\)
+Residues passing Vit filter:            9070  \(0.00202\); expected \(0.003\)
+Residues passing Fwd filter:             228  \(5.07e-05\); expected \(3e-05\)
+Total number of hits:                      3  \(1.27e-05\)];
 
 
 if ($output !~ /$expect/s) {

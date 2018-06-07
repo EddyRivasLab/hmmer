@@ -10,10 +10,8 @@
  *   6. Unit tests.
  *   7. Test driver.
  *   8. Example.
- *   9. Copyright and license information.
  *
  * SRE, Wed Jul 30 11:00:04 2008 [Janelia]
- * SVN $Id$
  */
 #include "p7_config.h"
 
@@ -2087,7 +2085,3 @@ main(int argc, char **argv)
 /*----------------------- end, example --------------------------*/
 
 
-
-/*****************************************************************
- * @LICENSE@
- *****************************************************************/

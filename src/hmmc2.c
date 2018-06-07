@@ -1,6 +1,5 @@
-/* hmmd: hmmc2 deamon client.
+/* daemon client.
  */
-
 #include "p7_config.h"
 
 #ifdef HMMER_THREADS
@@ -177,7 +176,7 @@ usage(char *pgm)
 int main(int argc, char *argv[])
 {
   int              i, j;
-  int              n;
+  uint64_t         n;
   int              eod;
   int              size;
 
@@ -324,9 +323,9 @@ int main(int argc, char *argv[])
 
       /* Send the string to the server */ 
       n = strlen(seq);
-      printf ("Sending data %d:\n", n);
+      printf ("Sending data %" PRIu64 ":\n", n);
       if (writen(sock, seq, n) != n) {
-        fprintf(stderr, "[%s:%d] write (size %d) error %d - %s\n", __FILE__, __LINE__, n, errno, strerror(errno));
+        fprintf(stderr, "[%s:%d] write (size %" PRIu64 ") error %d - %s\n", __FILE__, __LINE__, n, errno, strerror(errno));
         exit(1);
       }
 
@@ -434,9 +433,9 @@ int main(int argc, char *argv[])
 #endif
         /* Send the string to the server */ 
         n = strlen(seq);
-        printf ("Sending data %d:\n", n);
+        printf ("Sending data %" PRIu64 ":\n", n);
         if (writen(sock, seq, n) != n) {
-          fprintf(stderr, "[%s:%d] write (size %d) error %d - %s\n", __FILE__, __LINE__, n, errno, strerror(errno));
+          fprintf(stderr, "[%s:%d] write (size %" PRIu64 ") error %d - %s\n", __FILE__, __LINE__, n, errno, strerror(errno));
           exit(1);
         }
 
@@ -576,8 +575,8 @@ int main(int argc, char *argv[])
         //p7_tophits_Sort(th);
 		
         /* Print the results.  */
-        if (scores) p7_tophits_Targets(stdout, th, pli, 120); fprintf(stdout, "\n\n");
-        if (ali)    p7_tophits_Domains(stdout, th, pli, 120); fprintf(stdout, "\n\n");
+        if (scores) { p7_tophits_Targets(stdout, th, pli, 120); fprintf(stdout, "\n\n"); }
+        if (ali)    { p7_tophits_Domains(stdout, th, pli, 120); fprintf(stdout, "\n\n"); }
         p7_pli_Statistics(stdout, pli, w);  
 
         p7_pipeline_Destroy(pli); 
@@ -610,11 +609,6 @@ int main(int argc, char *argv[])
 
 #endif /*HMMER_THREADS*/
 
-/*****************************************************************
- * @LICENSE@
- *
- * SVN $Id$
- * SVN $URL$
- *****************************************************************/
+
 
 

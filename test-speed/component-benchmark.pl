@@ -10,7 +10,6 @@
 # stdout.
 #
 # SRE, Thu Mar 10 09:07:38 2011
-# SVN $Id$
 
 $top_builddir = shift;
 $top_srcdir   = shift;

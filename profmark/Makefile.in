@@ -3,8 +3,7 @@ srcdir     = @srcdir@
 VPATH      = @srcdir@ 
 
 CC       = @CC@
-CFLAGS   = @CFLAGS@ @PTHREAD_CFLAGS@ @PIC_FLAGS@
-SIMDFLAGS= @SIMD_CFLAGS@
+CFLAGS   = @CFLAGS@ @PTHREAD_CFLAGS@
 CPPFLAGS = @CPPFLAGS@
 LDFLAGS  = @LDFLAGS@
 DEFS     = @DEFS@
@@ -33,7 +32,7 @@ ifndef V
 	QUIET_AR      = @echo '    ' AR $@;
 	QUIET_SUBDIR0 = +@subdir=
 	QUIET_SUBDIR1 = ; echo '    ' SUBDIR $$subdir; \
-		        ${MAKE} -C $$subdir
+		        ${MAKE} -s -C $$subdir
 endif
 
 .PHONY: all dev distclean clean
@@ -41,25 +40,24 @@ endif
 all:    ${PROGS}
 dev:    ${PROGS}
 
-${PROGS}: @EXEC_DEPENDENCY@  ../${ESLDIR}/libeasel.a ../src/libhmmer.a 
+${PROGS}: % : %.o ../${ESLDIR}/libeasel.a ../src/libhmmer.a 
 	${QUIET_GEN}${CC} ${CFLAGS} ${DEFS} ${LDFLAGS} -L../${ESLDIR} -L../src -o $@ $@.o ${LIBS}
 
 ${PROGOBJS}: ../src/hmmer.h ../src/p7_config.h
 
 .c.o: 
-	${QUIET_CC}${CC} ${ESLINC} ${SRCINC} ${CFLAGS} ${SIMDFLAGS} ${DEFS} -o $@ -c $<		
-
-distclean: clean
-	-rm -f Makefile
+	${QUIET_CC}${CC} ${ESLINC} ${SRCINC} ${CFLAGS} ${DEFS} -o $@ -c $<		
 
 clean:
 	-rm -f *.o *~ ${PROGS} 
 	-rm -f *.gcno
+	for prog in ${PROGS}; do \
+	   if test -d $$prog.dSYM; then rm -rf $$prog.dSYM; fi ;\
+	done
+ifndef V
+	@echo '     ' CLEAN profmark
+endif
 
-################################################################
-# @LICENSE@
-# 
-# SVN $URL$
-# SVN $Id$
-################################################################
+distclean: clean
+	-rm -f Makefile
 

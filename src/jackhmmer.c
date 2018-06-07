@@ -18,16 +18,16 @@
 #include "esl_sqio.h"
 #include "esl_stopwatch.h"
 
-#ifdef HAVE_MPI
+#ifdef HMMER_MPI
 #include "mpi.h"
 #include "esl_mpi.h"
-#endif /*HAVE_MPI*/
+#endif 
 
 #ifdef HMMER_THREADS
 #include <unistd.h>
 #include "esl_threads.h"
 #include "esl_workqueue.h"
-#endif /*HMMER_THREADS*/
+#endif 
 
 #include "hmmer.h"
 
@@ -50,7 +50,7 @@ typedef struct {
 #define EFFOPTS     "--eent,--eentexp,--eclust,--eset,--enone"           /* Exclusive options for effective sequence number calculation */
 #define WGTOPTS     "--wgsc,--wblosum,--wpb,--wnone,--wgiven"  /* Exclusive options for relative weighting                    */
 
-#if defined (HMMER_THREADS) && defined (HAVE_MPI)
+#if defined (HMMER_THREADS) && defined (HMMER_MPI)
 #define CPUOPTS     "--mpi"
 #define MPIOPTS     "--cpu"
 #else
@@ -139,9 +139,9 @@ static ESL_OPTIONS options[] = {
   { "--tformat",    eslARG_STRING,       NULL, NULL, NULL,      NULL,    NULL,  NULL,            "assert target <seqdb> is in format <s>>: no autodetection",   12 },
 
 #ifdef HMMER_THREADS
-  { "--cpu",        eslARG_INT,       NULL,"HMMER_NCPU","n>=0", NULL,    NULL,  CPUOPTS,         "number of parallel CPU workers to use for multithreads",      12 },
+  { "--cpu",        eslARG_INT,      p7_NCPU,"HMMER_NCPU","n>=0", NULL,    NULL,  CPUOPTS,       "number of parallel CPU workers to use for multithreads",      12 },
 #endif
-#ifdef HAVE_MPI
+#ifdef HMMER_MPI
   { "--stall",      eslARG_NONE,       FALSE, NULL,  NULL,      NULL,  "--mpi", NULL,            "arrest after start: for debugging MPI under gdb",             12 },  
   { "--mpi",        eslARG_NONE,       FALSE, NULL,  NULL,      NULL,    NULL,  MPIOPTS,         "run as an MPI parallel program",                              12 },
 #endif  
@@ -174,12 +174,12 @@ static int  serial_loop(WORKER_INFO *info, ESL_SQFILE *dbfp);
 
 static int  thread_loop(ESL_THREADS *obj, ESL_WORK_QUEUE *queue, ESL_SQFILE *dbfp);
 static void pipeline_thread(void *arg);
-#endif /*HMMER_THREADS*/
+#endif 
 
-#ifdef HAVE_MPI
+#ifdef HMMER_MPI
 static int  mpi_master   (ESL_GETOPTS *go, struct cfg_s *cfg);
 static int  mpi_worker   (ESL_GETOPTS *go, struct cfg_s *cfg);
-#endif /*HAVE_MPI*/
+#endif 
 
 static void checkpoint_hmm(int nquery, P7_HMM *hmm,  char *basename, int iteration);
 static void checkpoint_msa(int nquery, ESL_MSA *msa, char *basename, int iteration);
@@ -341,7 +341,7 @@ output_header(FILE *ofp, ESL_GETOPTS *go, char *qfile, char *dbfile)
 #ifdef HMMER_THREADS
   if (esl_opt_IsUsed(go, "--cpu")        && fprintf(ofp, "# number of worker threads:        %d\n",             esl_opt_GetInteger(go, "--cpu"))      < 0) ESL_EXCEPTION_SYS(eslEWRITE, "write failed");
 #endif
-#ifdef HAVE_MPI
+#ifdef HMMER_MPI
   if (esl_opt_IsUsed(go, "--mpi")        && fprintf(ofp, "# MPI:                             on\n")                                                   < 0) ESL_EXCEPTION_SYS(eslEWRITE, "write failed");
 #endif 
   if (fprintf(ofp, "# - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -\n\n")                                                   < 0) ESL_EXCEPTION_SYS(eslEWRITE, "write failed");
@@ -373,7 +373,7 @@ main(int argc, char **argv)
   /* Figure out who we are, and send control there: 
    * we might be an MPI master, an MPI worker, or a serial program.
    */
-#ifdef HAVE_MPI
+#ifdef HMMER_MPI
   /* pause the execution of the programs execution until the user has a
    * chance to attach with a debugger and send a signal to resume execution
    * i.e. (gdb) signal SIGCONT
@@ -393,7 +393,7 @@ main(int argc, char **argv)
       MPI_Finalize();
     }
   else
-#endif /*HAVE_MPI*/
+#endif /*HMMER_MPI*/
     {
       status = serial_master(go, &cfg);
     }
@@ -510,9 +510,7 @@ serial_master(ESL_GETOPTS *go, struct cfg_s *cfg)
 
 #ifdef HMMER_THREADS
   /* initialize thread data */
-  if (esl_opt_IsOn(go, "--cpu")) ncpus = esl_opt_GetInteger(go, "--cpu");
-  else                           esl_threads_CPUCount(&ncpus);
-
+  ncpus = ESL_MIN(esl_opt_GetInteger(go, "--cpu"), esl_threads_GetCPUCount());
   if (ncpus > 0)
     {
       threadObj = esl_threads_Create(&pipeline_thread);
@@ -591,7 +589,7 @@ serial_master(ESL_GETOPTS *go, struct cfg_s *cfg)
 	  else
 	    {
 	      /* Throw away old model. Build new one. */
-	      status = p7_Builder(bld, msa, info[0].bg, ret_hmm, NULL, NULL, &om, NULL, NULL, NULL);
+	      status = p7_Builder(bld, msa, info[0].bg, ret_hmm, NULL, NULL, &om, NULL);
 	      if      (status == eslENORESULT) p7_Fail("Failed to construct new model from iteration %d results:\n%s", iteration, bld->errbuf);
 	      else if (status == eslEFORMAT)   p7_Fail("Failed to construct new model from iteration %d results:\n%s", iteration, bld->errbuf);
 	      else if (status != eslOK)        p7_Fail("Unexpected error constructing new model at iteration %d:",     iteration);
@@ -669,7 +667,10 @@ serial_master(ESL_GETOPTS *go, struct cfg_s *cfg)
 	  /* <&qsq, &qtr, 1> included in p7_tophits_Alignment args here => initial query is added to the msa at each round. */
 	  p7_tophits_Alignment(info->th, abc, &qsq, &qtr, 1, p7_ALL_CONSENSUS_COLS, &msa);
 	  esl_msa_Digitize(abc,msa,NULL);
-	  esl_msa_FormatName(msa, "%s-i%d", qsq->name, iteration);
+	  esl_msa_FormatName(msa, "%s-i%d", qsq->name, iteration);  
+	  if (qsq->acc[0]  != '\0') esl_msa_SetAccession(msa, qsq->acc,  -1);
+	  if (qsq->desc[0] != '\0') esl_msa_SetDesc     (msa, qsq->desc, -1);
+	  esl_msa_FormatAuthor(msa, "jackhmmer (HMMER %s)", HMMER_VERSION);
 
 	  /* Optional checkpointing */
 	  if (esl_opt_IsOn(go, "--chkali")) checkpoint_msa(nquery, msa, esl_opt_GetString(go, "--chkali"), iteration);
@@ -775,7 +776,7 @@ serial_master(ESL_GETOPTS *go, struct cfg_s *cfg)
   return eslFAIL;
 }
 
-#ifdef HAVE_MPI
+#ifdef HMMER_MPI
 
 /* Define common tags used by the MPI master/slave processes */
 #define HMMER_ERROR_TAG          1
@@ -1110,7 +1111,7 @@ mpi_master(ESL_GETOPTS *go, struct cfg_s *cfg)
 	  else
 	    {
 	      /* Throw away old model. Build new one. */
-	      status = p7_Builder(bld, msa, bg, ret_hmm, NULL, NULL, &om, NULL, NULL, NULL);
+	      status = p7_Builder(bld, msa, bg, ret_hmm, NULL, NULL, &om, NULL);
 	      if      (status == eslENORESULT) mpi_failure("Failed to construct new model from iteration %d results:\n%s", iteration, bld->errbuf);
 	      else if (status == eslEFORMAT)   mpi_failure("Failed to construct new model from iteration %d results:\n%s", iteration, bld->errbuf);
 	      else if (status != eslOK)        mpi_failure("Unexpected error constructing new model at iteration %d:",     iteration);
@@ -1220,7 +1221,10 @@ mpi_master(ESL_GETOPTS *go, struct cfg_s *cfg)
 	  /* Create alignment of the top hits */
 	  p7_tophits_Alignment(th, abc, &qsq, &qtr, 1, p7_ALL_CONSENSUS_COLS, &msa);
 	  esl_msa_Digitize(abc,msa,NULL);
-	  esl_msa_FormatName(msa, "%s-i%d", qsq->name, iteration);
+	  esl_msa_FormatName(msa, "%s-i%d", qsq->name, iteration);  
+	  if (qsq->acc[0]  != '\0') esl_msa_SetAccession(msa, qsq->acc,  -1);
+	  if (qsq->desc[0] != '\0') esl_msa_SetDesc     (msa, qsq->desc, -1);
+	  esl_msa_FormatAuthor(msa, "jackhmmer (HMMER %s)", HMMER_VERSION);
 
 	  /* Optional checkpointing */
 	  if (esl_opt_IsOn(go, "--chkali")) checkpoint_msa(nquery, msa, esl_opt_GetString(go, "--chkali"), iteration);
@@ -1529,7 +1533,7 @@ mpi_worker(ESL_GETOPTS *go, struct cfg_s *cfg)
   esl_alphabet_Destroy(abc);
   return eslOK;
 }
-#endif /*HAVE_MPI*/
+#endif /*HMMER_MPI*/
 
 
 /* checkpoint_hmm()
@@ -1708,6 +1712,3 @@ pipeline_thread(void *arg)
 #endif   /* HMMER_THREADS */
 
 
-/*****************************************************************
- * @LICENSE@
- *****************************************************************/

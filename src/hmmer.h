@@ -19,7 +19,6 @@
  *   16. P7_PIPELINE:    H3's accelerated seq/profile comparison pipeline
  *   17. P7_BUILDER:     configuration options for new HMM construction.
  *   18. Declaration of functions in HMMER's exposed API.
- *   19. Copyright and license information.
  *   
  * Also, see impl_{sse,vmx}/impl_{sse,vmx}.h for additional API
  * specific to the acceleration layer; in particular, the P7_OPROFILE
@@ -27,12 +26,11 @@
  */
 #ifndef P7_HMMERH_INCLUDED
 #define P7_HMMERH_INCLUDED
-
 #include "p7_config.h"
 
 #include <stdio.h>		/* FILE */
 
-#ifdef HAVE_MPI
+#ifdef HMMER_MPI
 #include "mpi.h"
 #endif
 
@@ -584,8 +582,8 @@ typedef struct p7_alidisplay_s {
   char *mline;                  /* "identities", conservation +'s, etc. */
   char *aseq;                   /* aligned target sequence              */
   char *ntseq;                  /* nucleotide target sequence if nhmmscant */
-  char *ppline;			        /* posterior prob annotation; or NULL   */
-  int   N;			            /* length of strings                    */
+  char *ppline;		        /* posterior prob annotation; or NULL   */
+  int   N;		        /* length of strings                    */
 
   char *hmmname;		/* name of HMM                          */
   char *hmmacc;			/* accession of HMM; or [0]='\0'        */
@@ -597,9 +595,9 @@ typedef struct p7_alidisplay_s {
   char *sqname;			/* name of target sequence              */
   char *sqacc;			/* accession of target seq; or [0]='\0' */
   char *sqdesc;			/* description of targ seq; or [0]='\0' */
-  long  sqfrom;			/* start position on sequence (1..L)    */
-  long  sqto;		    /* end position on sequence   (1..L)    */
-  long  L;			/* length of sequence                   */
+  int64_t  sqfrom;		/* start position on sequence (1..L)    */
+  int64_t  sqto;  	        /* end position on sequence   (1..L)    */
+  int64_t  L;			/* length of sequence                   */
 
   int   memsize;                /* size of allocated block of memory    */
   char *mem;			/* memory used for the char data above  */
@@ -611,9 +609,9 @@ typedef struct p7_alidisplay_s {
  *****************************************************************/
 
 typedef struct p7_dom_s { 
-  int            ienv, jenv;
-  int            iali, jali;
-  int            iorf, jorf; /*Used in translated search to capture the range in the DNA sequence of the ORF containing the match to a protein query */
+  int64_t        ienv, jenv;
+  int64_t        iali, jali;
+  int64_t        iorf, jorf; /*Used in translated search to capture the range in the DNA sequence of the ORF containing the match to a protein query */
   float          envsc;  	/* Forward score in envelope ienv..jenv; NATS; without null2 correction       */
   float          domcorrection;	/* null2 score when calculating a per-domain score; NATS                      */
   float          dombias;	/* FLogsum(0, log(bg->omega) + domcorrection): null2 score contribution; NATS */
@@ -819,14 +817,14 @@ typedef struct p7_hmm_window_list_s {
 
 
 /*****************************************************************
- * 14. The optimized implementation.
+ * 14. Choice of vector implementation.
  *****************************************************************/
-#if   defined (p7_IMPL_SSE)
+#if   defined (eslENABLE_SSE)
 #include "impl_sse/impl_sse.h"
-#elif defined (p7_IMPL_VMX)
+#elif defined (eslENABLE_VMX)
 #include "impl_vmx/impl_vmx.h"
 #else
-#include "impl_dummy/impl_dummy.h"
+#error "No vector implementation enabled"
 #endif
 
 
@@ -974,7 +972,7 @@ typedef struct fm_diaglist_s {
  * must precede other types
  */
 typedef struct {
-#if   defined (p7_IMPL_SSE)
+#if   defined (eslENABLE_SSE)
   /* mask arrays, and 16-byte-offsets into them */
   __m128i *fm_masks_mem;
   __m128i *fm_masks_v;
@@ -992,7 +990,7 @@ typedef struct {
   __m128i fm_m11;  //00 00 00 11
 
   /* no non-__m128i- elements above this line */
-#endif //#if   defined (p7_IMPL_SSE)
+#endif //#if   defined (eslENABLE_SSE)
 
   /*counter, to compute FM-index speed*/
   int occCallCnt;
@@ -1014,7 +1012,7 @@ typedef struct {
 } FM_CFG;
 
 
-#if   defined (p7_IMPL_SSE)
+#if   defined (eslENABLE_SSE)
 //used to convert from a byte array to an __m128i
 typedef union {
         uint8_t bytes[16];
@@ -1164,7 +1162,7 @@ typedef union {
   } while (0)
 
 
-#endif  // if  defined (p7_IMPL_SSE)
+#endif  // if  defined (eslENABLE_SSE)
 
 /*****************************************************************
  * 16. P7_PIPELINE: H3's accelerated seq/profile comparison pipeline
@@ -1396,7 +1394,7 @@ extern int hmmlogo_IndelValues (P7_HMM *hmm, float *insert_P, float *insert_expL
 
 
 /* hmmpgmd2msa.c */
-extern int hmmpgmd2msa(void *data, P7_HMM *hmm, ESL_SQ *qsq,  int *incl, int incl_size, int *excl, int excl_size, ESL_MSA **ret_msa);
+extern int hmmpgmd2msa(void *data, P7_HMM *hmm, ESL_SQ *qsq, int *incl, int incl_size, int *excl, int excl_size, int excl_all, ESL_MSA **ret_msa);
 
 
 
@@ -1435,7 +1433,7 @@ extern int    p7_hmm_CompositionKLDist(P7_HMM *hmm, P7_BG *bg, float *ret_KL, fl
 
 
 /* mpisupport.c */
-#ifdef HAVE_MPI
+#ifdef HMMER_MPI
 extern int p7_hmm_MPISend(P7_HMM *hmm, int dest, int tag, MPI_Comm comm, char **buf, int *nalloc);
 extern int p7_hmm_MPIPackSize(P7_HMM *hmm, MPI_Comm comm, int *ret_n);
 extern int p7_hmm_MPIPack(P7_HMM *hmm, char *buf, int n, int *position, MPI_Comm comm);
@@ -1457,7 +1455,7 @@ extern int p7_oprofile_MPIPackSize(P7_OPROFILE *om, MPI_Comm comm, int *ret_n);
 extern int p7_oprofile_MPIPack(P7_OPROFILE *om, char *buf, int n, int *pos, MPI_Comm comm);
 extern int p7_oprofile_MPIUnpack(char *buf, int n, int *pos, MPI_Comm comm, ESL_ALPHABET **abc, P7_OPROFILE **ret_om);
 extern int p7_oprofile_MPIRecv(int source, int tag, MPI_Comm comm, char **buf, int *nalloc, ESL_ALPHABET **abc, P7_OPROFILE **ret_om);
-#endif /*HAVE_MPI*/
+#endif /*HMMER_MPI*/
 
 /* tracealign.c */
 extern int p7_tracealign_Seqs(ESL_SQ **sq,           P7_TRACE **tr, int nseq, int M,  int optflags, P7_HMM *hmm, ESL_MSA **ret_msa);
@@ -1481,6 +1479,7 @@ extern int            p7_translated_alidisplay_Print(FILE *fp, P7_ALIDISPLAY *ad
 extern int            p7_nontranslated_alidisplay_Print(FILE *fp, P7_ALIDISPLAY *ad, int min_aliwidth, int linewidth, int show_accessions);
 
 extern int            p7_alidisplay_Backconvert(const P7_ALIDISPLAY *ad, const ESL_ALPHABET *abc, ESL_SQ **ret_sq, P7_TRACE **ret_tr);
+extern int            p7_alidisplay_Sample(ESL_RANDOMNESS *rng, int N, P7_ALIDISPLAY **ret_ad);
 extern int            p7_alidisplay_Dump(FILE *fp, const P7_ALIDISPLAY *ad);
 extern int            p7_alidisplay_Compare(const P7_ALIDISPLAY *ad1, const P7_ALIDISPLAY *ad2);
 
@@ -1505,7 +1504,7 @@ extern int         p7_builder_LoadScoreSystem(P7_BUILDER *bld, const char *matri
 extern int         p7_builder_SetScoreSystem (P7_BUILDER *bld, const char *mxfile, const char *env, double popen, double pextend, P7_BG *bg);
 extern void        p7_builder_Destroy(P7_BUILDER *bld);
 
-extern int p7_Builder      (P7_BUILDER *bld, ESL_MSA *msa, P7_BG *bg, P7_HMM **opt_hmm, P7_TRACE ***opt_trarr, P7_PROFILE **opt_gm, P7_OPROFILE **opt_om, ESL_MSA **opt_postmsa, FILE *seqweights_w_fp, FILE *seqweights_e_fp);
+extern int p7_Builder      (P7_BUILDER *bld, ESL_MSA *msa, P7_BG *bg, P7_HMM **opt_hmm, P7_TRACE ***opt_trarr, P7_PROFILE **opt_gm, P7_OPROFILE **opt_om, ESL_MSA **opt_postmsa);
 extern int p7_SingleBuilder(P7_BUILDER *bld, ESL_SQ *sq,   P7_BG *bg, P7_HMM **opt_hmm, P7_TRACE  **opt_tr,    P7_PROFILE **opt_gm, P7_OPROFILE **opt_om); 
 extern int p7_Builder_MaxLength      (P7_HMM *hmm, double emit_thresh);
 
@@ -1629,10 +1628,6 @@ extern int p7_Pipeline_LongTarget   (P7_PIPELINE *pli, P7_OPROFILE *om, P7_SCORE
                                      P7_BG *bg, P7_TOPHITS *hitlist, int64_t seqidx,
                                      const ESL_SQ *sq, int complementarity,
                                      const FM_DATA *fmf, const FM_DATA *fmb, FM_CFG *fm_cfg
-/*                                     , ESL_STOPWATCH *ssv_watch_master
-                                     , ESL_STOPWATCH *postssv_watch_master
-                                     , ESL_STOPWATCH *watch_slave
-*/
                                      );
 
 
@@ -1796,13 +1791,6 @@ extern int fm_configInit      (FM_CFG *cfg, ESL_GETOPTS *go);
 extern int fm_getOccCount     (const FM_DATA *fm, const FM_CFG *cfg, int pos, uint8_t c);
 extern int fm_getOccCountLT   (const FM_DATA *fm, const FM_CFG *cfg, int pos, uint8_t c, uint32_t *cnteq, uint32_t *cntlt);
 
-
-
 #endif /*P7_HMMERH_INCLUDED*/
 
-/*****************************************************************
- * @LICENSE@
- *
- * SVN $Id$
- * SVN $URL$
- ************************************************************/
+

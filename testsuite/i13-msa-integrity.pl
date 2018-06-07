@@ -6,7 +6,6 @@
 # Example: ./i13-msa-integrity.pl ..         ..       tmpfoo
 #
 # SRE, Tue Mar  9 09:19:22 2010 [Janelia]
-# SVN $Id$
 
 
 $builddir  = shift;
@@ -50,6 +49,7 @@ print "ok\n";
 unlink "$tmppfx.sto";
 unlink <$tmppfx.fa*>;
 unlink "$tmppfx.dtbl";
+unlink "$tmppfx.gdf";
 exit 0;
 
 
