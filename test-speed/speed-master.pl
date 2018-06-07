@@ -94,7 +94,7 @@ print SLURMSCRIPT <<EOF;
 #SBATCH -t 6-00:00
 #SBATCH --mem $memrequest
 #SBATCH -p eddy
-#SBATCH -n $nthread
+#SBATCH -c $nthread
 #SBATCH -N 1
 #SBATCH -o $resultdir/tbl.%a.slurm
 $driver $top_builddir $top_srcdir $resultdir $resultdir/tbl.\${SLURM_ARRAY_TASK_ID} $nthread $querydb $targetdb $resultdir/tbl.\${SLURM_ARRAY_TASK_ID}.out

@@ -99,7 +99,7 @@ print SLURMSCRIPT <<EOF;
 #SBATCH -t 6-00:00
 #SBATCH --mem 4000
 #SBATCH -p eddy
-#SBATCH -n 1
+#SBATCH -c 1
 #SBATCH -N 1
 #SBATCH -o $resultdir/tbl.%a.slurm
 $pmark_script $top_builddir $top_srcdir $resultdir $resultdir/tbl.\${SLURM_ARRAY_TASK_ID} $msafile $fafile $resultdir/tbl.\${SLURM_ARRAY_TASK_ID}.out

@@ -20,8 +20,8 @@ depends on the Easel library, also at
 ### to download and build the current source code release:
 
 ```bash
-   % wget http://eddylab.org/software/hmmer3/3.2/hmmer-3.2.tar.gz
-   % tar zxf hmmer-3.2.tar.gz
+   % wget http://eddylab.org/software/hmmer/hmmer.tar.gz
+   % tar zxf hmmer.tar.gz
    % cd hmmer-3.2
    % ./configure --prefix /your/install/path
    % make
