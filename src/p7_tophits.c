@@ -1460,6 +1460,7 @@ p7_tophits_Domains(FILE *ofp, P7_TOPHITS *th, P7_PIPELINE *pli, int textw)
  * Xref:      J4/29: incept.
  *            J4/76: added inc_sqarr, inc_trarr, inc_n, optflags 
  *            H4/72: iss131, segfault if top seq has no reported domains
+ *            H5/88: iss140, jackhmmer --fast segfaults
  */
 int
 p7_tophits_Alignment(const P7_TOPHITS *th, const ESL_ALPHABET *abc, 
@@ -1489,7 +1490,13 @@ p7_tophits_Alignment(const P7_TOPHITS *th, const ESL_ALPHABET *abc,
 	    if (M == 0) M = th->hit[h]->dcl[d].ad->M;
 	    ndom++;
 	  }
-  if (inc_n && M == 0)  M = inc_trarr[0]->M;          
+
+  if (inc_n)
+    {
+      if      (M == 0)  M = inc_trarr[0]->M;  // unusual case where there's an included trace, but no other aligned hits: get M from included trace
+      else if (M != inc_trarr[0]->M)          // spot check that included traces appear to have same # of consensus positions; iss#140
+	ESL_XEXCEPTION(eslECORRUPT, "top hits and included trace(s) have different profile lengths");
+    }
   if (inc_n+ndom == 0) { status = eslFAIL; goto ERROR; }
   
   /* Allocation */

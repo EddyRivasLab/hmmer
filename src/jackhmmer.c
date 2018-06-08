@@ -46,9 +46,9 @@ typedef struct {
 #define INCOPTS     "--incE,--incT,--cut_ga,--cut_nc,--cut_tc"
 #define INCDOMOPTS  "--incdomE,--incdomT,--cut_ga,--cut_nc,--cut_tc"
 #define THRESHOPTS  "-E,-T,--domE,--domT,--incE,--incT,--incdomE,--incdomT,--cut_ga,--cut_nc,--cut_tc"
-#define CONOPTS     "--fast,--hand"                            /* Exclusive options for model construction                    */
-#define EFFOPTS     "--eent,--eentexp,--eclust,--eset,--enone"           /* Exclusive options for effective sequence number calculation */
-#define WGTOPTS     "--wgsc,--wblosum,--wpb,--wnone,--wgiven"  /* Exclusive options for relative weighting                    */
+#define CONOPTS     "--fast,--hand"                                         // jackhmmer doesn't use these - but leave them for consistency 
+#define EFFOPTS     "--eent,--eentexp,--eclust,--eset,--enone"              // Exclusive options for effective sequence number calculation 
+#define WGTOPTS     "--wgsc,--wblosum,--wpb,--wnone"                        // Exclusive options for relative weighting                    
 
 #if defined (HMMER_THREADS) && defined (HMMER_MPI)
 #define CPUOPTS     "--mpi"
@@ -88,8 +88,8 @@ static ESL_OPTIONS options[] = {
   { "--incT",       eslARG_REAL,        FALSE, NULL, NULL,      NULL,    NULL,  INCOPTS,         "consider sequences >= this score threshold as significant",    5 },
   { "--incdomE",    eslARG_REAL,      "0.001", NULL, "x>0",     NULL,    NULL,  INCDOMOPTS,      "consider domains <= this E-value threshold as significant",    5 },
   { "--incdomT",    eslARG_REAL,        FALSE, NULL, NULL,      NULL,    NULL,  INCDOMOPTS,      "consider domains >= this score threshold as significant",      5 },
-/* Model-specific thresholding for both reporting and inclusion (unused in jackhmmer) */
-  { "--cut_ga",     eslARG_NONE,        FALSE, NULL, NULL,      NULL,    NULL,  THRESHOPTS,      "use profile's GA gathering cutoffs to set all thresholding",  99 },
+/* Model-specific thresholding for both reporting and inclusion (unused in jackhmmer, but p7_Builder() needs them set to defaults) */
+  { "--cut_ga",     eslARG_NONE,        FALSE, NULL, NULL,      NULL,    NULL,  THRESHOPTS,      "use profile's GA gathering cutoffs to set all thresholding",  99 },  // group=99 undocuments them; process_commandline() prohibits them.
   { "--cut_nc",     eslARG_NONE,        FALSE, NULL, NULL,      NULL,    NULL,  THRESHOPTS,      "use profile's NC noise cutoffs to set all thresholding",      99 },
   { "--cut_tc",     eslARG_NONE,        FALSE, NULL, NULL,      NULL,    NULL,  THRESHOPTS,      "use profile's TC trusted cutoffs to set all thresholding",    99 },
 /* Control of acceleration pipeline */
@@ -99,26 +99,26 @@ static ESL_OPTIONS options[] = {
   { "--F3",         eslARG_REAL,       "1e-5", NULL, NULL,      NULL,    NULL, "--max",          "Stage 3 (Fwd) threshold: promote hits w/ P <= F3",             7 },
   { "--nobias",     eslARG_NONE,         NULL, NULL, NULL,      NULL,    NULL, "--max",          "turn off composition bias filter",                             7 },
 /* Alternative model construction strategies */
-  { "--fast",       eslARG_NONE,        FALSE, NULL, NULL,   CONOPTS,    NULL,  NULL,            "assign cols w/ >= symfrac residues as consensus",              8 },
-  { "--hand",       eslARG_NONE,    "default", NULL, NULL,   CONOPTS,    NULL,  NULL,            "manual construction (requires reference annotation)",          8 },
-  { "--symfrac",    eslARG_REAL,        "0.5", NULL, "0<=x<=1", NULL,"--fast",  NULL,            "sets sym fraction controlling --fast construction",            8 },
+  { "--fast",       eslARG_NONE,        FALSE, NULL, NULL,    CONOPTS,   NULL,  NULL,            "assign cols w/ >= symfrac residues as consensus",              99 }, // unused/prohibited in jackhmmer. Models must be --hand.
+  { "--hand",       eslARG_NONE,    "default", NULL, NULL,    CONOPTS,   NULL,  NULL,            "manual construction (requires reference annotation)",          99 },
+  { "--symfrac",    eslARG_REAL,        "0.5", NULL, "0<=x<=1", NULL,"--fast",  NULL,            "sets sym fraction controlling --fast construction",            99 },
   { "--fragthresh", eslARG_REAL,        "0.5", NULL, "0<=x<=1", NULL,    NULL,  NULL,            "if L <= x*alen, tag sequence as a fragment",                   8 },
 /* Alternative relative sequence weighting strategies */
   { "--wpb",        eslARG_NONE,    "default", NULL, NULL,   WGTOPTS,    NULL,  NULL,            "Henikoff position-based weights",                              9 },
   { "--wgsc",       eslARG_NONE,         NULL, NULL, NULL,   WGTOPTS,    NULL,  NULL,            "Gerstein/Sonnhammer/Chothia tree weights",                     9 },
   { "--wblosum",    eslARG_NONE,         NULL, NULL, NULL,   WGTOPTS,    NULL,  NULL,            "Henikoff simple filter weights",                               9 },
   { "--wnone",      eslARG_NONE,         NULL, NULL, NULL,   WGTOPTS,    NULL,  NULL,            "don't do any relative weighting; set all to 1",                9 },
-  { "--wgiven",     eslARG_NONE,         NULL, NULL, NULL,   WGTOPTS,    NULL,  NULL,            "use weights as given in MSA file",                            99 }, /* no-op in jackhmmer */
+  { "--wgiven",     eslARG_NONE,         NULL, NULL, NULL,   WGTOPTS,    NULL,  NULL,            "use weights as given in MSA file",                            99 }, /* unused/prohibited in jackhmmer */
   { "--wid",        eslARG_REAL,       "0.62", NULL,"0<=x<=1", NULL,"--wblosum",NULL,            "for --wblosum: set identity cutoff",                           9 },
 /* Alternative effective sequence weighting strategies */
-  { "--eent",       eslARG_NONE,    "default", NULL, NULL,   EFFOPTS,    NULL,  NULL,            "adjust eff seq # to achieve relative entropy target",         10 },
-  { "--eentexp",    eslARG_NONE,     "default",NULL, NULL,    EFFOPTS,    NULL, NULL,            "adjust eff seq # to reach rel. ent. target using exp scaling",  10 },
-  { "--eclust",     eslARG_NONE,        FALSE, NULL, NULL,   EFFOPTS,    NULL,  NULL,            "eff seq # is # of single linkage clusters",                   10 },
-  { "--enone",      eslARG_NONE,        FALSE, NULL, NULL,   EFFOPTS,    NULL,  NULL,            "no effective seq # weighting: just use nseq",                 10 },
-  { "--eset",       eslARG_REAL,         NULL, NULL, NULL,   EFFOPTS,    NULL,  NULL,            "set eff seq # for all models to <x>",                         10 },
-  { "--ere",        eslARG_REAL,         NULL, NULL,"x>0",      NULL,    NULL, NULL,            "for --eent[exp]: set minimum rel entropy/position to <x>",         10 },
-  { "--esigma",     eslARG_REAL,       "45.0", NULL,"x>0",      NULL,    NULL, NULL,            "for --eent[exp]: set sigma param to <x>",                          10 },
-  { "--eid",        eslARG_REAL,       "0.62", NULL,"0<=x<=1",  NULL,"--eclust",NULL,            "for --eclust: set fractional identity cutoff to <x>",         10 },
+  { "--eent",       eslARG_NONE,    "default", NULL, NULL,   EFFOPTS,    NULL,  NULL,            "adjust eff seq # to achieve relative entropy target",          10 },
+  { "--eentexp",    eslARG_NONE,     "default",NULL, NULL,    EFFOPTS,    NULL, NULL,            "adjust eff seq # to reach rel. ent. target using exp scaling", 10 },
+  { "--eclust",     eslARG_NONE,        FALSE, NULL, NULL,   EFFOPTS,    NULL,  NULL,            "eff seq # is # of single linkage clusters",                    10 },
+  { "--enone",      eslARG_NONE,        FALSE, NULL, NULL,   EFFOPTS,    NULL,  NULL,            "no effective seq # weighting: just use nseq",                  10 },
+  { "--eset",       eslARG_REAL,         NULL, NULL, NULL,   EFFOPTS,    NULL,  NULL,            "set eff seq # for all models to <x>",                          10 },
+  { "--ere",        eslARG_REAL,         NULL, NULL,"x>0",      NULL,    NULL, NULL,            "for --eent[exp]: set minimum rel entropy/position to <x>",      10 },
+  { "--esigma",     eslARG_REAL,       "45.0", NULL,"x>0",      NULL,    NULL, NULL,            "for --eent[exp]: set sigma param to <x>",                       10 },
+  { "--eid",        eslARG_REAL,       "0.62", NULL,"0<=x<=1",  NULL,"--eclust",NULL,            "for --eclust: set fractional identity cutoff to <x>",          10 },
 /* Alternative prior strategies */
   { "--pnone",       eslARG_NONE,       FALSE, NULL, NULL,      NULL,    NULL,"--plaplace",      "don't use any prior; parameters are frequencies",             13 },
   { "--plaplace",    eslARG_NONE,       FALSE, NULL, NULL,      NULL,    NULL,   "--pnone",      "use a Laplace +1 prior",                                      13 },
@@ -197,6 +197,21 @@ process_commandline(int argc, char **argv, ESL_GETOPTS **ret_go, char **ret_qfil
   if (esl_opt_ProcessEnvironment(go)         != eslOK)  { if (printf("Failed to process environment: %s\n", go->errbuf) < 0) ESL_XEXCEPTION_SYS(eslEWRITE, "write failed"); goto FAILURE; }
   if (esl_opt_ProcessCmdline(go, argc, argv) != eslOK)  { if (printf("Failed to parse command line: %s\n",  go->errbuf) < 0) ESL_XEXCEPTION_SYS(eslEWRITE, "write failed"); goto FAILURE; }
   if (esl_opt_VerifyConfig(go)               != eslOK)  { if (printf("Failed to parse command line: %s\n",  go->errbuf) < 0) ESL_XEXCEPTION_SYS(eslEWRITE, "write failed"); goto FAILURE; }
+
+  /* jackhmmer prohibits setting some standard p7_Builder() options.
+   * they don't appear in documentation (they're set to help group 99)
+   * but we want to make positively sure they don't get set. Not
+   * sufficient to do ! esl_opt_IsDefault(), which only checks that
+   * the setting is at default regardless of how it was set that way;
+   * instead, verify that the option wasn't set at all.
+   */
+  if (esl_opt_GetSetter(go, "--cut_ga")  != eslARG_SETBY_DEFAULT)  { if (printf("Failed to parse command line: jackhmmer does not accept a --cut-ga option\n")  < 0) ESL_XEXCEPTION_SYS(eslEWRITE, "write failed"); goto FAILURE; }
+  if (esl_opt_GetSetter(go, "--cut_nc")  != eslARG_SETBY_DEFAULT)  { if (printf("Failed to parse command line: jackhmmer does not accept a --cut-nc option\n")  < 0) ESL_XEXCEPTION_SYS(eslEWRITE, "write failed"); goto FAILURE; }
+  if (esl_opt_GetSetter(go, "--cut_tc")  != eslARG_SETBY_DEFAULT)  { if (printf("Failed to parse command line: jackhmmer does not accept a --cut-tc option\n")  < 0) ESL_XEXCEPTION_SYS(eslEWRITE, "write failed"); goto FAILURE; }
+  if (esl_opt_GetSetter(go, "--fast")    != eslARG_SETBY_DEFAULT)  { if (printf("Failed to parse command line: jackhmmer does not accept a --fast option\n")    < 0) ESL_XEXCEPTION_SYS(eslEWRITE, "write failed"); goto FAILURE; }
+  if (esl_opt_GetSetter(go, "--hand")    != eslARG_SETBY_DEFAULT)  { if (printf("Failed to parse command line: jackhmmer does not accept a --hand option\n")    < 0) ESL_XEXCEPTION_SYS(eslEWRITE, "write failed"); goto FAILURE; }
+  if (esl_opt_GetSetter(go, "--symfrac") != eslARG_SETBY_DEFAULT)  { if (printf("Failed to parse command line: jackhmmer does not accept a --symfrac option\n") < 0) ESL_XEXCEPTION_SYS(eslEWRITE, "write failed"); goto FAILURE; }
+  if (esl_opt_GetSetter(go, "--wgiven")  != eslARG_SETBY_DEFAULT)  { if (printf("Failed to parse command line: jackhmmer does not accept a --wgiven option\n")  < 0) ESL_XEXCEPTION_SYS(eslEWRITE, "write failed"); goto FAILURE; }
 
   /* help format: */
   if (esl_opt_GetBoolean(go, "-h") == TRUE) 
