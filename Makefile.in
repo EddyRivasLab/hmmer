@@ -53,10 +53,13 @@ man1ext     = .1
 
 # Compiler configuration
 #
-CC        = @CC@
-CFLAGS    = @CFLAGS@ @PTHREAD_CFLAGS@ 
-LDFLAGS   = -static @LDFLAGS@
-CPPFLAGS  = @CPPFLAGS@
+CC             = @CC@
+CFLAGS         = @CFLAGS@ 
+PTHREAD_CFLAGS = @PTHREAD_CFLAGS@ 
+SSE_CFLAGS     = @SSE_CFLAGS@
+VMX_CFLAGS     = @VMX_CFLAGS@
+LDFLAGS        = -static @LDFLAGS@
+CPPFLAGS       = @CPPFLAGS@
 
 # Other tools
 #
