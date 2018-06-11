@@ -36,14 +36,14 @@ Some examples that I know of:
 You can obtain the source code as a compressed \mono{.tar.gz} tarball
 from \href{http://hmmer.org}{hmmer.org} in your browser, or you can also
 \mono{wget} it on the command line from
-\href{http://eddylab.org/software/hmmer/hmmer-3.2.tar.gz}{eddylab.org/software/hmmer/hmmer-3.2.tar.gz}.
-Uncompress and untar it, and switch into the \mono{hmmer-3.2}
+\href{http://eddylab.org/software/hmmer/hmmer-\HMMERversion{}.tar.gz}{eddylab.org/software/hmmer/hmmer-\HMMERversion{}.tar.gz}.
+Uncompress and untar it, and switch into the \mono{hmmer-\HMMERversion{}}
 directory.  For example:
 
   \vspace{1ex}
-  \user{\% wget http://eddylab.org/software/hmmer/hmmer-3.2.tar.gz}\\
-  \user{\% tar xf hmmer-3.2.tar.gz}\\
-  \user{\% cd hmmer-3.2}
+  \user{\% wget http://eddylab.org/software/hmmer/hmmer-\HMMERversion{}.tar.gz}\\
+  \user{\% tar xf hmmer-\HMMERversion{}.tar.gz}\\
+  \user{\% cd hmmer-\HMMERversion{}}
   \vspace{1ex}
 
 To compile:
@@ -104,8 +104,8 @@ branch:\sidenote{As of 3.2, our git master branch is the stable
   in the past.}
   
   \vspace{1ex}
-  \user{\% git clone https://github.com/EddyRivasLab/hmmer hmmer-3.2} \\
-  \user{\% cd hmmer-3.2}
+  \user{\% git clone https://github.com/EddyRivasLab/hmmer hmmer-\HMMERversion{}} \\
+  \user{\% cd hmmer-\HMMERversion{}}
   \vspace{1ex}
 
 This is now essentially the same as if you unpacked a tarball, so from
@@ -382,14 +382,14 @@ directory hierarchy all of its own, you might want to do something
 like:
 
   \vspace{1ex}
-  \user{\% ./configure {-}{-}prefix /usr/local/hmmer-3.2}
+  \user{\% ./configure {-}{-}prefix /usr/local/hmmer-\HMMERversion{}}
   \vspace{1ex}
   
 That would keep HMMER out of your system-wide directories, which might
 be desirable. This is a simple way to install multiple versions of
 HMMER, for example, without having them clobber each other.  Then
-you'd add \mono{/usr/local/hmmer-3.2/bin} to your \mono{PATH} and
-\mono{/usr/local/hmmer-3.2/share/man} to your \mono{MANPATH}.
+you'd add \mono{/usr/local/hmmer-\HMMERversion{}/bin} to your \mono{PATH} and
+\mono{/usr/local/hmmer-\HMMERversion{}/share/man} to your \mono{MANPATH}.
 
 Again, these variables only affect where \mono{make install} copies
 stuff. HMMER and Easel programs have no pathnames compiled into them.
@@ -419,7 +419,7 @@ names with incompatible HMMER3 programs: \mono{hmmalign},
 and \mono{hmmsearch}.
 
 One workaround is to install the two packages each in their own
-hierarchy, as above: \mono{./configure --prefix=somewhere/hmmer-3.2}
+hierarchy, as above: \mono{./configure --prefix=somewhere/hmmer-\HMMERversion{}}
 for HMMER3, and \mono{./configure --prefix=somewhere/hmmer-2.3.2} for
 HMMER2. One set of programs could be in your \mono{PATH}, and you
 could call the others using full pathnames.

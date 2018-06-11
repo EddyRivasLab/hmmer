@@ -16,13 +16,12 @@ depends on the Easel library, also at
 [github](https://github.com/EddyRivasLab/easel).
 
 
-
 ### to download and build the current source code release:
 
-```bash
+```
    % wget http://eddylab.org/software/hmmer/hmmer.tar.gz
    % tar zxf hmmer.tar.gz
-   % cd hmmer-3.2
+   % cd hmmer-3.2.1
    % ./configure --prefix /your/install/path
    % make
    % make check                 # optional: run automated tests
@@ -34,7 +33,7 @@ Executable programs will be installed in `/your/install/path/bin`. If
 you leave this optional `./configure` argument off, the default prefix
 is `/usr/local`.
 
-Files to read in the top-level source directory:
+Files to read in the source directory:
 
    * INSTALL - brief installation instructions.
    * Userguide.pdf - the HMMER User's Guide.
@@ -46,9 +45,12 @@ HMMER User's Guide (Userguide.pdf).
 
 ### to clone a copy of HMMER3 source from github:
 
-You need to clone both the HMMER and Easel repositories, as follows:
+The tarball way, above, is a better way to install HMMER (it includes
+a precompiled Userguide.pdf, for example), but you can also clone our
+github repo. You need to clone both the HMMER and Easel repositories,
+as follows:
 
-```bash
+```
    % git clone https://github.com/EddyRivasLab/hmmer
    % cd hmmer
    % git clone https://github.com/EddyRivasLab/easel
