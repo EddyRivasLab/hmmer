@@ -471,7 +471,6 @@ fi
 ################################################################
 # 8. Checks for types
 #################################################################
-AC_C_BIGENDIAN
 AC_TYPE_UINT8_T
 AC_TYPE_UINT16_T
 AC_TYPE_UINT32_T
@@ -487,6 +486,21 @@ AC_TYPE_OFF_T
 ################################################################
 # 10. Checks for compiler characteristics
 ################################################################
+
+AC_C_BIGENDIAN([
+  AC_DEFINE(WORDS_BIGENDIAN, 1, [Set autoconf's default WORDS_BIGENDIAN flag])
+  ],[
+  if test "$enable_vmx" = "yes"; then
+    AC_MSG_NOTICE([::::::::::--- no vector instruction set ---::::::::::])
+    AC_MSG_NOTICE([HMMER3 Altivec/VMX only supports bigendian platforms: e.g. ppc64 not ppc64le])
+    AC_MSG_ERROR([No supported vectorization found for your machine.])
+  fi
+  ],[
+    AC_MSG_NOTICE([::::::::::--- no vector instruction set ---::::::::::])
+    AC_MSG_NOTICE([Couldn't determine byte order for your platform.])
+    AC_MSG_NOTICE([HMMER3 vector code is sensitive to byte order.])
+    AC_MSG_ERROR([No supported vectorization found for your machine.])
+  ])
 
 # __attribute__() tags on function declarations
 # HAVE_FUNC_ATTRIBUTE_NORETURN 

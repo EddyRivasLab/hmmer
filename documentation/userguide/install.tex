@@ -130,22 +130,40 @@ Microsoft Windows.\sidenote{Windows 10 includes a Linux subsystem that
   add-on products available for making Windows more POSIX-compliant
   and more compatible with GNU-ish configures and builds. One such
   product is Cygwin, \href{http://www.cygwin.com}{www.cygwin.com},
-  which is freely available.}  We test most extensively on Intel/Linux
-and on Apple OS/X.
+  which is freely available.}  We develop primarily on Apple OS/X and
+x86\_64/Linux (both Intel and AMD), and we test releases on a somewhat
+wider range of platforms.
 
 \paragraph{Processor:} HMMER depends on vector parallelization methods
 that are processor-specific. H3 requires either an x86-compatible
 (Intel/AMD) processor that supports the SSE2 vector instruction set,
-or a big-endian (AIX, not Linux) PowerPC processor that supports the
-Altivec/VMX instruction set. SSE2 is supported on Intel processors
-from Pentium 4 on, and AMD processors from K8 (Athlon 64) on. This
-includes almost all Intel processors since 2000 and AMD processors
-since 2003. Altivec/VMX is supported on Motorola G4, IBM G5, and IBM
-PowerPC processors starting with the Power6, which includes almost all
+and on 32-bit ``powerpc'' or 64-bit ``ppc64'' PowerPC systems that
+support the Altivec/VMX instruction set in big-endian mode.
+
+SSE2 is supported on Intel processors from Pentium 4 on, and AMD
+processors from K8 (Athlon 64) on. This includes almost all Intel
+processors since 2000 and AMD processors since 2003.
+
+Altivec/VMX is supported on Motorola G4, IBM G5, and IBM PowerPC
+processors starting with the Power6, which includes almost all
 PowerPC-based desktop systems since 1999 and servers since
 2007.\sidenote{If your platform does not support either of these
-  vector instruction sets, the configure script will stop with an
-  error message.}
+  vector instruction sets -- or if you're on a ppc64le system that
+  supports VMX but in little-endian byte order -- the configure script
+  will stop with an error message.}
+
+HMMER3 does not support little-endian PowerPC systems (ppc64le). Alas,
+the PowerPC world has been moving toward little-endian ppc64le, away
+from big-endian ppc64 and powerpc. H3's VMX implementation was
+originally developed on an AIX Power 7 system, and Power 7 systems
+were big-endian. More recent Power 8 and 9 machines are ``bi-endian'',
+bootable into either a big-endian or little-endian system. IBM has
+stated that it really, really wants them to all be in little-endian
+mode. Among common Linux/PowerPC distros, Debian, Fedora, Red Hat, and
+openSUSE still come in either ppc64 and ppc64le flavors; HMMER3 will
+run on the former but not the latter. Recent Ubuntu and SUSE for
+PowerPC distros are only coming in ppc64le flavor, incompatible with
+H3.
 
 \paragraph{Compiler:} The source code conforms to ANSI
 C99 and POSIX standards. It should compile with any ANSI C99 compliant
