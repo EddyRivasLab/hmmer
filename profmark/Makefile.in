@@ -2,17 +2,19 @@ top_srcdir = @top_srcdir@
 srcdir     = @srcdir@
 VPATH      = @srcdir@ 
 
-CC       = @CC@
-CFLAGS   = @CFLAGS@ @PTHREAD_CFLAGS@
-CPPFLAGS = @CPPFLAGS@
-LDFLAGS  = @LDFLAGS@
-DEFS     = @DEFS@
-LIBS     = -lhmmer -leasel @LIBS@ @LIBGSL@ @PTHREAD_LIBS@ -lm
-MPILIBS  = @MPILIBS@
-IMPLDIR  = impl_@IMPL_CHOICE@
+CC             = @CC@
+CFLAGS         = @CFLAGS@ 
+SSE_CFLAGS     = @SSE_CFLAGS@ 
+VMX_CFLAGS     = @VMX_CFLAGS@ 
+PTHREAD_CFLAGS = @PTHREAD_CFLAGS@ 
+CPPFLAGS       = @CPPFLAGS@
+LDFLAGS        = @LDFLAGS@
+DEFS           = @DEFS@
+LIBS           = -lhmmer -leasel @LIBS@ @LIBGSL@ @PTHREAD_LIBS@ -lm
+MPILIBS        = @MPILIBS@
+IMPLDIR        = impl_@IMPL_CHOICE@
 
 ESLDIR    = @HMMER_ESLDIR@
-
 ESLINC   = -I../${ESLDIR} -I${top_srcdir}/easel
 SRCINC   = -I../src   -I${top_srcdir}/src
 
@@ -41,12 +43,12 @@ all:    ${PROGS}
 dev:    ${PROGS}
 
 ${PROGS}: % : %.o ../${ESLDIR}/libeasel.a ../src/libhmmer.a 
-	${QUIET_GEN}${CC} ${CFLAGS} ${DEFS} ${LDFLAGS} -L../${ESLDIR} -L../src -o $@ $@.o ${LIBS}
+	${QUIET_GEN}${CC} ${CFLAGS} ${SSE_CFLAGS} ${VMX_CFLAGS} ${PTHREAD_CFLAGS} ${DEFS} ${LDFLAGS} -L../${ESLDIR} -L../src -o $@ $@.o ${LIBS}
 
 ${PROGOBJS}: ../src/hmmer.h ../src/p7_config.h
 
 .c.o: 
-	${QUIET_CC}${CC} ${ESLINC} ${SRCINC} ${CFLAGS} ${DEFS} -o $@ -c $<		
+	${QUIET_CC}${CC} ${ESLINC} ${SRCINC} ${CFLAGS} ${SSE_CFLAGS} ${VMX_CFLAGS} ${PTHREAD_CFLAGS} ${DEFS} -o $@ -c $<		
 
 clean:
 	-rm -f *.o *~ ${PROGS} 

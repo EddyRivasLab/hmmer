@@ -4,7 +4,7 @@
 # of lots of sequence fragments.
 #
 # Usage:    ./i7-hmmbuild-fragments.pl <hmmbuild binary> <tmpfile prefix>
-# Example:  ./i7-hmmbuild-fragments.pl ../src/hmmbuild   foo
+# Example:  ./i7-hmmbuild-fragments.pl ../src/hmmbuild   tmpfoo
 # 
 # SRE, Tue Jun 16 13:37:05 2009
 

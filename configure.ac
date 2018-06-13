@@ -75,7 +75,7 @@ m4_include([easel/m4/ax_pthread.m4])
 # 2. AC_INIT
 ################################################################
 
-AC_INIT(HMMER, 3.2, sean@eddylab.org, hmmer)
+AC_INIT(HMMER, 3.2.1, sean@eddylab.org, hmmer)
 AC_MSG_NOTICE([Configuring HMMER3 for your system.])
 
 # remember if the user is overriding CFLAGS
@@ -83,8 +83,6 @@ esl_cflags_env_set=no
 if test x"$CFLAGS" != x; then 
   esl_cflags_env_set=yes
 fi
-
-
 
 ################################################################
 # 3. Info on the package
@@ -121,7 +119,7 @@ HMMER_SADIR="libdivsufsort"
 EASEL_DATE="June 2018"
 EASEL_COPYRIGHT="Copyright (C) 2018 Howard Hughes Medical Institute."
 EASEL_LICENSE="Freely distributed under the BSD open source license."
-EASEL_VERSION="0.44"
+EASEL_VERSION="0.45h"
 EASEL_URL="http://bioeasel.org/"
 
 AC_SUBST(HMMER_DATE)
@@ -253,7 +251,7 @@ elif test "$enable_debugging" != "no"; then
    if test "$GCC" = "yes"; then
       CFLAGS="-g -Wall"
    fi
-else
+elif test "$esl_cflags_env_set" != "yes"; then
    CFLAGS="-O3"
 fi
 
@@ -473,7 +471,6 @@ fi
 ################################################################
 # 8. Checks for types
 #################################################################
-AC_C_BIGENDIAN
 AC_TYPE_UINT8_T
 AC_TYPE_UINT16_T
 AC_TYPE_UINT32_T
@@ -489,6 +486,21 @@ AC_TYPE_OFF_T
 ################################################################
 # 10. Checks for compiler characteristics
 ################################################################
+
+AC_C_BIGENDIAN([
+  AC_DEFINE(WORDS_BIGENDIAN, 1, [Set autoconf's default WORDS_BIGENDIAN flag])
+  ],[
+  if test "$enable_vmx" = "yes"; then
+    AC_MSG_NOTICE([::::::::::--- no vector instruction set ---::::::::::])
+    AC_MSG_NOTICE([HMMER3 Altivec/VMX only supports bigendian platforms: e.g. ppc64 not ppc64le])
+    AC_MSG_ERROR([No supported vectorization found for your machine.])
+  fi
+  ],[
+    AC_MSG_NOTICE([::::::::::--- no vector instruction set ---::::::::::])
+    AC_MSG_NOTICE([Couldn't determine byte order for your platform.])
+    AC_MSG_NOTICE([HMMER3 vector code is sensitive to byte order.])
+    AC_MSG_ERROR([No supported vectorization found for your machine.])
+  ])
 
 # __attribute__() tags on function declarations
 # HAVE_FUNC_ATTRIBUTE_NORETURN 

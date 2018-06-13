@@ -1,4 +1,4 @@
-#! /usr/bin/perl
+#! /usr/bin/env perl
 
 # Test that hmmpgmd is correctly applying bit score thresholds;
 # in this case, the --cut_ga threshold, using an example that
@@ -26,16 +26,23 @@ $wport   = 51374;		# nondefault worker and client ports...
 
 # Only one instance of this script should be run at once.  I
 # frequently do several 'make check's in parallel for different
-# builds.  To avoid collisions, flock the script, and try to wait for
-# it to be free.
-$ntry = 10;
-open my $self, '<', $0 or die("FAIL: failed to open $0 for flocking: $1");
-while (! flock $self, LOCK_EX | LOCK_NB)
+# builds.  To avoid collisions, flock a specific lockfile, and try to
+# wait for it to be free. This file is in /tmp, in hope that this will
+# be a local filesystem, to avoid perl flock() problems with networked
+# filesystems. You don't remove this file; that would defeat the
+# purpose. The whole point is that another process might be using it
+# too, as their lock.
+#
+$ntry     = 10;
+$lockfile = "/tmp/esl-hmmpgmd-test.lock";
+open my $lock, '>>', $lockfile or die("FAIL: failed to open $lockfile for flocking: $1");
+while (! flock $lock, LOCK_EX | LOCK_NB)
 {
     if ($ntry == 0) { die("FAIL: $0 is already running"); }
     $ntry--;
-    sleep(5);
+    sleep(3);
 }
+
 
 # Verify that we have all the executables and datafiles we need for the test.
 @h3progs = ("hmmpgmd", "hmmc2", "hmmpress");
@@ -44,7 +51,7 @@ foreach $h3prog  (@h3progs) { if (! -x "$builddir/src/$h3prog")             { di
 # Verify that threads are enabled in p7_config.h
 # by looking for "#define HMMER_THREADS"
 # if not found, threads are not enabled and this
-# test would fail, but we return ok status because
+# test would fail, but we return ok status 0 because
 # we don't want the full testsuite to fail.
 $have_threads = `cat $builddir/src/p7_config.h | grep "^#define HMMER_THREADS"`;
 if($have_threads eq "") { 
@@ -57,12 +64,12 @@ if($have_threads eq "") {
 # clobber existing hmmpgmd's (or other client-server programs on those
 # ports).
 #
-# We've flocked the script, but it's possible that the caller is trying
-# to run an instance from a different copy of the script, which the
-# flock strategy doesn't detect.
+# We're using nondefault ports, but still.
 if ( IO::Socket::INET->new(PeerHost => $host, PeerPort => $wport, Proto     => 'tcp') ||
      IO::Socket::INET->new(PeerHost => $host, PeerPort => $cport, Proto     => 'tcp')) 
-{ die "FAIL: worker port $wport or client port $cport already in use"; }
+{ 
+    die "FAIL: worker port $wport or client port $cport already in use"; 
+}
 
 
 # create the files needed for the test
@@ -113,6 +120,7 @@ $expected_line = "    1.3e-43  134.8   1.6      4e-28   82.1   0.1    3.3  3  3"
 if ($nhits == 3) { die "FAIL: ga thresholds not applied?"; }
 if ($nhits != 1 && $resultline[0] ne $expected_line) { $daemon_active=1; tear_down(); die "FAIL: didn't get expected result line\nresult: $resultline[0]\nexpect: $expected_line"; }
 
+close($lock);
 unlink <$tmppfx.hmm*>;
 unlink "$tmppfx.in";
 unlink "$tmppfx.pid";
@@ -132,9 +140,9 @@ sub tear_down
         #&create_kill_script("$tmppfx.in");
         #`cat $tmppfx.in | $builddir/src/hmmc2 -i $host -p $cport -S 2>&1`;
     }
+    close($lock);
     unlink <$tmppfx.hmm*>;
     unlink "$tmppfx.in";
-	
 }
 
 # TJW: Thu Mar 31 14:30:56 EDT 2011
