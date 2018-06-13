@@ -35,7 +35,6 @@ is `/usr/local`.
 
 Files to read in the source directory:
 
->>>>>>> release-3.2
    * INSTALL - brief installation instructions.
    * Userguide.pdf - the HMMER User's Guide.
  
