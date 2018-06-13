@@ -36,14 +36,14 @@ Some examples that I know of:
 You can obtain the source code as a compressed \mono{.tar.gz} tarball
 from \href{http://hmmer.org}{hmmer.org} in your browser, or you can also
 \mono{wget} it on the command line from
-\href{http://eddylab.org/software/hmmer/hmmer-3.2.tar.gz}{eddylab.org/software/hmmer/hmmer-3.2.tar.gz}.
-Uncompress and untar it, and switch into the \mono{hmmer-3.2}
+\href{http://eddylab.org/software/hmmer/hmmer-\HMMERversion{}.tar.gz}{eddylab.org/software/hmmer/hmmer-\HMMERversion{}.tar.gz}.
+Uncompress and untar it, and switch into the \mono{hmmer-\HMMERversion{}}
 directory.  For example:
 
   \vspace{1ex}
-  \user{\% wget http://eddylab.org/software/hmmer/hmmer-3.2.tar.gz}\\
-  \user{\% tar xf hmmer-3.2.tar.gz}\\
-  \user{\% cd hmmer-3.2}
+  \user{\% wget http://eddylab.org/software/hmmer/hmmer-\HMMERversion{}.tar.gz}\\
+  \user{\% tar xf hmmer-\HMMERversion{}.tar.gz}\\
+  \user{\% cd hmmer-\HMMERversion{}}
   \vspace{1ex}
 
 To compile:
@@ -104,8 +104,8 @@ branch:\sidenote{As of 3.2, our git master branch is the stable
   in the past.}
   
   \vspace{1ex}
-  \user{\% git clone https://github.com/EddyRivasLab/hmmer hmmer-3.2} \\
-  \user{\% cd hmmer-3.2}
+  \user{\% git clone https://github.com/EddyRivasLab/hmmer hmmer-\HMMERversion{}} \\
+  \user{\% cd hmmer-\HMMERversion{}}
   \vspace{1ex}
 
 This is now essentially the same as if you unpacked a tarball, so from
@@ -130,22 +130,43 @@ Microsoft Windows.\sidenote{Windows 10 includes a Linux subsystem that
   add-on products available for making Windows more POSIX-compliant
   and more compatible with GNU-ish configures and builds. One such
   product is Cygwin, \href{http://www.cygwin.com}{www.cygwin.com},
-  which is freely available.}  We test most extensively on Intel/Linux
-and on Apple OS/X.
+  which is freely available.}  We develop primarily on Apple OS/X and
+x86\_64/Linux (both Intel and AMD), and we test releases on a wider
+range of platforms.\sidenote{Thanks to the GCC Compile Farm Project,
+  especially its Toulouse and Oregon data centers, for providing
+  access to some of the platforms that we use for testing.}
+  
 
 \paragraph{Processor:} HMMER depends on vector parallelization methods
 that are processor-specific. H3 requires either an x86-compatible
 (Intel/AMD) processor that supports the SSE2 vector instruction set,
-or a big-endian (AIX, not Linux) PowerPC processor that supports the
-Altivec/VMX instruction set. SSE2 is supported on Intel processors
-from Pentium 4 on, and AMD processors from K8 (Athlon 64) on. This
-includes almost all Intel processors since 2000 and AMD processors
-since 2003. Altivec/VMX is supported on Motorola G4, IBM G5, and IBM
-PowerPC processors starting with the Power6, which includes almost all
+and on 32-bit ``powerpc'' or 64-bit ``ppc64'' PowerPC systems that
+support the Altivec/VMX instruction set in big-endian mode.
+
+SSE2 is supported on Intel processors from Pentium 4 on, and AMD
+processors from K8 (Athlon 64) on. This includes almost all Intel
+processors since 2000 and AMD processors since 2003.
+
+Altivec/VMX is supported on Motorola G4, IBM G5, and IBM PowerPC
+processors starting with the Power6, which includes almost all
 PowerPC-based desktop systems since 1999 and servers since
 2007.\sidenote{If your platform does not support either of these
-  vector instruction sets, the configure script will stop with an
-  error message.}
+  vector instruction sets -- or if you're on a ppc64le system that
+  supports VMX but in little-endian byte order -- the configure script
+  will stop with an error message.}
+
+HMMER3 does not support little-endian PowerPC systems (ppc64le). Alas,
+the PowerPC world has been moving toward little-endian ppc64le, away
+from big-endian ppc64 and powerpc. H3's VMX implementation was
+originally developed on an AIX Power 7 system, and Power 7 systems
+were big-endian. More recent Power 8 and 9 machines are ``bi-endian'',
+bootable into either a big-endian or little-endian system. IBM has
+stated that it really, really wants them to all be in little-endian
+mode. Among common Linux/PowerPC distros, Debian, Fedora, Red Hat, and
+openSUSE still come in either ppc64 and ppc64le flavors; HMMER3 will
+run on the former but not the latter. Recent Ubuntu and SUSE for
+PowerPC distros are only coming in ppc64le flavor, incompatible with
+H3.
 
 \paragraph{Compiler:} The source code conforms to ANSI
 C99 and POSIX standards. It should compile with any ANSI C99 compliant
@@ -382,14 +403,14 @@ directory hierarchy all of its own, you might want to do something
 like:
 
   \vspace{1ex}
-  \user{\% ./configure {-}{-}prefix /usr/local/hmmer-3.2}
+  \user{\% ./configure {-}{-}prefix /usr/local/hmmer-\HMMERversion{}}
   \vspace{1ex}
   
 That would keep HMMER out of your system-wide directories, which might
 be desirable. This is a simple way to install multiple versions of
 HMMER, for example, without having them clobber each other.  Then
-you'd add \mono{/usr/local/hmmer-3.2/bin} to your \mono{PATH} and
-\mono{/usr/local/hmmer-3.2/share/man} to your \mono{MANPATH}.
+you'd add \mono{/usr/local/hmmer-\HMMERversion{}/bin} to your \mono{PATH} and
+\mono{/usr/local/hmmer-\HMMERversion{}/share/man} to your \mono{MANPATH}.
 
 Again, these variables only affect where \mono{make install} copies
 stuff. HMMER and Easel programs have no pathnames compiled into them.
@@ -419,7 +440,7 @@ names with incompatible HMMER3 programs: \mono{hmmalign},
 and \mono{hmmsearch}.
 
 One workaround is to install the two packages each in their own
-hierarchy, as above: \mono{./configure --prefix=somewhere/hmmer-3.2}
+hierarchy, as above: \mono{./configure --prefix=somewhere/hmmer-\HMMERversion{}}
 for HMMER3, and \mono{./configure --prefix=somewhere/hmmer-2.3.2} for
 HMMER2. One set of programs could be in your \mono{PATH}, and you
 could call the others using full pathnames.

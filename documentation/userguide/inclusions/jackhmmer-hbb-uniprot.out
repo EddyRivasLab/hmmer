@@ -1,5 +1,5 @@
 # jackhmmer :: iteratively search a protein sequence against a protein database
-# HMMER 3.2 (June 2018); http://hmmer.org/
+# HMMER 3.2.1 (June 2018); http://hmmer.org/
 # Copyright (C) 2018 Howard Hughes Medical Institute.
 # Freely distributed under the BSD open source license.
 # - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -

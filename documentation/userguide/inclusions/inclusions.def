@@ -1,7 +1,7 @@
 \newcommand{\UNIrelease}{2018\_02}
 \newcommand{\UNInseq}{556,825}
 
-\newcommand{\HMMERversion}{3.2}
+\newcommand{\HMMERversion}{3.2.1}
 \newcommand{\HMMERdate}{June 2018}
 
 \newcommand{\BGLnseq}{4}
@@ -12,7 +12,7 @@
 \newcommand{\BGLre}{0.589}
 
 \newcommand{\HMMERfmtversion}{f}
-\newcommand{\HMMERsavestamp}{[3.2 | June 2018]}
+\newcommand{\HMMERsavestamp}{[3.2.1 | June 2018]}
 
 \newcommand{\SGUevalue}{6.7e-65}
 \newcommand{\SGUbitscore}{222.7}
@@ -62,10 +62,10 @@
 \newcommand{\NMHbto}{302389}
 \newcommand{\NMHnres}{660000}
 \newcommand{\NMHntop}{330000}
-\newcommand{\NMHnssv}{69202}
-\newcommand{\NMHfracssv}{10.5}
-\newcommand{\NMHnbias}{57239}
-\newcommand{\NMHfracbias}{8.7}
-\newcommand{\NMHnvit}{5181}
-\newcommand{\NMHfracvit}{0.8}
-\newcommand{\NMHnfwd}{3187}
+\newcommand{\NMHnssv}{76413}
+\newcommand{\NMHfracssv}{11.6}
+\newcommand{\NMHnbias}{56984}
+\newcommand{\NMHfracbias}{8.6}
+\newcommand{\NMHnvit}{5675}
+\newcommand{\NMHfracvit}{0.9}
+\newcommand{\NMHnfwd}{3194}

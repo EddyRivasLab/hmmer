@@ -1,18 +1,13 @@
 HMMER 3.2.1 release notes    (Jun 2018)
-Update release for HMMER 3.2 (Jun 2018)
-Previous release was 3.1b2   (Mar 2015)
 http://hmmer.org
 
-
-
-Release 3.2.1:
---------------
-
-* Removes --fast and --symfrac options from jackhmmer and its
-  documentation. Fixes issue #140, jackhmmer --fast segfault.
-
-* Fixes compilation failures on i586, ppc64be. (issues #141, #120)
-
+Release 3.2.1 fixes:
+----------------------
+* iss #142: compilation fails ungracefully on unsupported ppc64le
+* iss #140: jackhmmer --fast segfault. Removes --fast 
+  and --symfrac options from jackhmmer and its documentation.
+* iss #141, #120: compilation failures on i586, ppc64be.
+* iss #132: hmmbuild miscounts transitions in final node.
 
 
 
