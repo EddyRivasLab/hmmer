@@ -938,7 +938,7 @@ forward_results(QUEUE_DATA *query, SEARCH_RESULTS *results)
     gettimeofday(&merge_time, NULL);
 
     qsort(hits, results->stats.nhits, sizeof(P7_HIT), hit_sorter);
- gettimeofday(&sort_time, NULL);
+    gettimeofday(&sort_time, NULL);
 
     th.unsrt     = NULL;
     th.N         = results->stats.nhits;
