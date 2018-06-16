@@ -3,10 +3,10 @@
  * 
  * See ssvfilter.md for notes.
  *
- * This file is conditionally compiled when eslENABLE_SSE is defined.
+ * This file is conditionally compiled when eslENABLE_SSE4 is defined.
  */
 #include "p7_config.h"
-#ifdef eslENABLE_SSE
+#ifdef eslENABLE_SSE4
 
 #include <x86intrin.h>
 #include <math.h>
@@ -587,13 +587,13 @@ p7_SSVFilter_base_sse(const ESL_DSQ *dsq, int L, const P7_OPROFILE *om, P7_FILTE
 }
 
 
-#else // ! eslENABLE_SSE
+#else // ! eslENABLE_SSE4
 /* Standard compiler-pleasing mantra for an #ifdef'd-out, empty code file. */
 void p7_ssvfilter_sse_silence_hack(void) { return; }
 #if defined p7SSVFILTER_SSE_TESTDRIVE || p7SSVFILTER_SSE_EXAMPLE
 int main(void) { return 0; }
 #endif 
-#endif // eslENABLE_SSE or not
+#endif // eslENABLE_SSE4 or not
 
 
 

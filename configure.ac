@@ -43,6 +43,10 @@
 #    wget -O config.guess 'http://git.savannah.gnu.org/gitweb/?p=config.git;a=blob_plain;f=config.guess;hb=HEAD'
 #    wget -O config.sub   'http://git.savannah.gnu.org/gitweb/?p=config.git;a=blob_plain;f=config.sub;hb=HEAD'
 # 
+# Use full 3-arg form of AC_DEFINE() macros. autoheader chokes if you
+# don't.  We don't use autoheader (we only use autoconf, out of the
+# GNU build tools, to limit complexity) but some packagers do,
+# including Debian.
 
 
 
@@ -50,6 +54,7 @@
 # 1. autoconf requirements
 ################################################################
 # autoconf 2.61 has a bug in AC_FUNC_FSEEKO; make sure we don't use it.
+# 2.63 was released in 2008.
 AC_PREREQ(2.63)
 
 # Our extra macros are with Easel, in easel/m4
@@ -58,7 +63,7 @@ AC_PREREQ(2.63)
 m4_include([lib/easel/m4/ax_compiler_vendor.m4])
 m4_include([lib/easel/m4/ax_gcc_func_attribute.m4])
 
-m4_include([lib/easel/m4/esl_sse.m4])
+m4_include([lib/easel/m4/esl_sse4.m4])
 m4_include([lib/easel/m4/esl_avx.m4])
 m4_include([lib/easel/m4/esl_avx512.m4])
 m4_include([lib/easel/m4/esl_neon.m4])
@@ -73,7 +78,7 @@ m4_include([lib/easel/m4/ax_pthread.m4])
 # 2. AC_INIT
 ################################################################
 
-AC_INIT(HMMER, 4.0dev, sean@eddylab.org, hmmer)
+AC_INIT(HMMER, 4.0-nwo, sean@eddylab.org, hmmer)
 AC_MSG_NOTICE([Configuring HMMER4 for your system.])
 
 esl_cflags_env_set=no
@@ -105,8 +110,8 @@ fi
 # to use HMMER as a library inside other packages, with no name clashes.
 ################################################################
 
-HMMER_DATE="January 2017"
-HMMER_COPYRIGHT="Copyright (C) 2017 Howard Hughes Medical Institute."
+HMMER_DATE="June 2018"
+HMMER_COPYRIGHT="Copyright (C) 2018 Howard Hughes Medical Institute."
 HMMER_LICENSE="Freely distributed under the BSD open source license."
 HMMER_VERSION=$PACKAGE_VERSION
 HMMER_URL="http://hmmer.org"
@@ -114,10 +119,10 @@ HMMER_URL="http://hmmer.org"
 HMMER_ESLDIR="lib/easel"
 HMMER_SADIR="lib/libdivsufsort"
 
-EASEL_DATE="January 2017"
-EASEL_COPYRIGHT="Copyright (C) 2017 Howard Hughes Medical Institute."
+EASEL_DATE="January 2018"
+EASEL_COPYRIGHT="Copyright (C) 2018 Howard Hughes Medical Institute."
 EASEL_LICENSE="Freely distributed under the BSD open source license."
-EASEL_VERSION="h$PACKAGE_VERSION"
+EASEL_VERSION="0.46-dev"
 EASEL_URL="http://bioeasel.org/"
 
 AC_SUBST(HMMER_DATE)
@@ -204,7 +209,7 @@ fi
 AC_ARG_ENABLE(gcov,    [AS_HELP_STRING([--enable-gcov],    [compile for code coverage testing])],        enable_gcov=$enableval,    enable_gcov=no)
 AC_ARG_ENABLE(gprof,   [AS_HELP_STRING([--enable-gprof],   [compile for gcc code profiling])],           enable_gprof=$enableval,   enable_gprof=no)
 
-AC_ARG_ENABLE(sse,     [AS_HELP_STRING([--enable-sse],     [enable our SSE vector code])],               enable_sse=$enableval,     enable_sse=check)
+AC_ARG_ENABLE(sse,     [AS_HELP_STRING([--enable-sse],     [enable our SSE vector code])],               enable_sse4=$enableval,    enable_sse4=check)
 AC_ARG_ENABLE(avx,     [AS_HELP_STRING([--enable-avx],     [enable our AVX vector code])],               enable_avx=$enableval,     enable_avx=check)
 AC_ARG_ENABLE(avx512,  [AS_HELP_STRING([--enable-avx512],  [enable our AVX-512 vector code])],           enable_avx512=$enableval,  enable_avx512=check)
 AC_ARG_ENABLE(neon,    [AS_HELP_STRING([--enable-neon],    [enable our NEON vector code])],              enable_neon=$enableval,    enable_neon=check)
@@ -218,7 +223,7 @@ AC_ARG_WITH(gsl,       [AS_HELP_STRING([--with-gsl],       [use the GSL, GNU Sci
 
 
 # Is the following shell code portable? Specifically, incrementing with $((n++)).
-if test "$enable_sse" = "yes" || test "$enable_avx" = "yes" || test "$enable_avx512" = "yes"; then
+if test "$enable_sse4" = "yes" || test "$enable_avx" = "yes" || test "$enable_avx512" = "yes"; then
   enable_intel=yes
 fi
 n=0
@@ -318,17 +323,17 @@ fi
 #    - set shell variable $esl_have_foo to "yes"
 #    - set shell var $esl_foo_cflags to any necessary compiler flags
 #
-if test "$enable_sse" = "yes" || test "$enable_sse" = "check"; then
-  ESL_SSE([
-    AC_DEFINE(eslENABLE_SSE)
-    SSE_CFLAGS=$esl_sse_cflags
-    AC_SUBST(SSE_CFLAGS)
-    enable_sse=yes
+if test "$enable_sse4" = "yes" || test "$enable_sse4" = "check"; then
+  ESL_SSE4([
+    AC_DEFINE(eslENABLE_SSE4)
+    SSE4_CFLAGS=$esl_sse4_cflags
+    AC_SUBST(SSE4_CFLAGS)
+    enable_sse4=yes
     ],[
-    if test "$enable_sse" = "yes"; then
+    if test "$enable_sse4" = "yes"; then
       AC_MSG_FAILURE([Unable to compile SSE. Try another compiler, or --disable-sse])
     fi
-    enable_sse=no
+    enable_sse4=no
     ])
 fi
 
@@ -388,13 +393,15 @@ if test "$enable_vmx" = "yes" || test "$enable_vmx" = "check"; then
     ])
 fi
 
+# H4 uses Easel's "SSE4" implementation. Define SSE_CFLAGS as blank.
+AC_SUBST(SSE_CFLAGS)
 
 # For x86 platforms, check if we can set floating point math to not
 # use denormalized floats. On some platforms, denormalized math incurs
 # a large performance penalty. See HMMER's simdvec.md for notes.
 #
 esl_save_cflags="$CFLAGS"
-CFLAGS="$CFLAGS $SSE_CFLAGS"
+CFLAGS="$CFLAGS $SSE4_CFLAGS"
 
 AC_MSG_CHECKING([whether flush-to-zero (FTZ) is supported])
 AC_COMPILE_IFELSE(
@@ -597,7 +604,6 @@ AC_CONFIG_FILES([
   benchmarks/Makefile
   benchmarks/profmark/Makefile
   benchmarks/speed/Makefile
-  lib/easel/LICENSE.sh
   lib/easel/miniapps/Makefile
   lib/easel/testsuite/Makefile
   lib/easel/documentation/Makefile
@@ -627,7 +633,7 @@ HMMER configuration:
                CC : ${CC}
            CFLAGS : ${CFLAGS}
    PTHREAD_CFLAGS : ${PTHREAD_CFLAGS}
-       SSE_CFLAGS : ${SSE_CFLAGS}
+      SSE4_CFLAGS : ${SSE4_CFLAGS}
        AVX_CFLAGS : ${AVX_CFLAGS}
     AVX512_CFLAGS : ${AVX512_CFLAGS}
       NEON_CFLAGS : ${NEON_CFLAGS}
@@ -635,7 +641,7 @@ HMMER configuration:
              LIBS : ${LIBGSL} ${MPILIBS} ${PTHREAD_LIBS} ${LIBS}
 
   Vector implementations enabled:
-              sse : $enable_sse
+             sse4 : $enable_sse4
               avx : $enable_avx
            avx512 : $enable_avx512
              neon : $enable_neon

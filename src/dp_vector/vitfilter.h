@@ -9,7 +9,7 @@
 
 extern int (*p7_ViterbiFilter)(const ESL_DSQ *dsq, int L, const P7_OPROFILE *om, P7_FILTERMX *ox, float *ret_sc);
 
-#ifdef eslENABLE_SSE
+#ifdef eslENABLE_SSE4
 extern int p7_ViterbiFilter_sse(const ESL_DSQ *dsq, int L, const P7_OPROFILE *om, P7_FILTERMX *ox, float *ret_sc);
 #endif
 

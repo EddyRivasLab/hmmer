@@ -12,7 +12,7 @@
 void
 p7_simdvec_Init(void)
 {
-#if defined eslENABLE_SSE || eslENABLE_AVX || eslENABLE_AVX512
+#if defined eslENABLE_SSE4 || eslENABLE_AVX || eslENABLE_AVX512
   p7_simdvec_x86_Init();
 #endif
 }
@@ -45,8 +45,8 @@ p7_simdvec_Width(void)
 #ifdef eslENABLE_AVX
       if (esl_cpu_has_avx())    { V = 32;  goto DONE; }
 #endif
-#ifdef eslENABLE_SSE
-      if (esl_cpu_has_sse())    { V = 16;  goto DONE; }
+#ifdef eslENABLE_SSE4
+      if (esl_cpu_has_sse4())   { V = 16;  goto DONE; }
 #endif
 #ifdef eslENABLE_NEON
       V = 16; goto DONE;

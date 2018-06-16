@@ -2,7 +2,7 @@
  * 
  * See fwdfilter.md for notes.
  *
- * This file is conditionally compiled when eslENABLE_SSE is defined.
+ * This file is conditionally compiled when eslENABLE_SSE4 is defined.
  *
  * Contents:
  *    1. Forward and Backward filter: SSE implementations.
@@ -10,7 +10,7 @@
  *    3. Internal debugging tools.
  */
 #include "p7_config.h"
-#ifdef eslENABLE_SSE
+#ifdef eslENABLE_SSE4
 
 #include <x86intrin.h>
 
@@ -1030,11 +1030,11 @@ save_debug_row_fb_sse(P7_CHECKPTMX *ox, P7_REFMX *gx, __m128 *dpc, int i, float 
 #endif // eslDEBUGLEVEL > 0
 /*---------------------------- end, debugging tools ---------------------------*/
 
-#else // ! eslENABLE_SSE
+#else // ! eslENABLE_SSE4
 
 /* Standard compiler-pleasing mantra for an #ifdef'd-out, empty code file. */
 void p7_fwdfilter_sse_silence_hack(void) { return; }
 #if defined p7FWDFILTER_SSE_TESTDRIVE || p7FWDFILTER_SSE_EXAMPLE
 int main(void) { return 0; }
 #endif 
-#endif // eslENABLE_SSE or not
+#endif // eslENABLE_SSE4 or not

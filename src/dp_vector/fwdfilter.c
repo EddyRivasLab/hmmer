@@ -123,8 +123,8 @@ fwdfilter_dispatcher(const ESL_DSQ *dsq, int L, const P7_OPROFILE *om, P7_CHECKP
     }
 #endif
 
-#ifdef eslENABLE_SSE
-  if (esl_cpu_has_sse())
+#ifdef eslENABLE_SSE4
+  if (esl_cpu_has_sse4())
     {
       p7_ForwardFilter = p7_ForwardFilter_sse;
       return p7_ForwardFilter_sse(dsq, L, om, ox, opt_sc);
@@ -166,8 +166,8 @@ bckfilter_dispatcher(const ESL_DSQ *dsq, int L, const P7_OPROFILE *om, P7_CHECKP
     }
 #endif
 
-#ifdef eslENABLE_SSE
-  if (esl_cpu_has_sse())
+#ifdef eslENABLE_SSE4
+  if (esl_cpu_has_sse4())
     {
       p7_BackwardFilter = p7_BackwardFilter_sse;
       return p7_BackwardFilter_sse(dsq, L, om, ox, sm, sm_thresh);

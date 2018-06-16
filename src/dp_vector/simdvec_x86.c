@@ -1,5 +1,5 @@
 #include "p7_config.h"
-#if defined eslENABLE_SSE || eslENABLE_AVX || eslENABLE_AVX512
+#if defined eslENABLE_SSE4 || eslENABLE_AVX || eslENABLE_AVX512
 
 #ifdef HAVE_FLUSH_ZERO_MODE
 #include <xmmintrin.h>    // x86 SSE 
