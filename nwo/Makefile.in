@@ -1,0 +1,4 @@
+
+
+all:
+	gcc -o hmmer -I ../lib/easel -L ../lib/easel -I. hmmer.c h4_cmd_build.c -leasel

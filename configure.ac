@@ -609,10 +609,12 @@ AC_CONFIG_FILES([
   lib/easel/documentation/Makefile
   lib/easel/Makefile
   lib/libdivsufsort/Makefile
+  nwo/Makefile
 ])
   
 AC_CONFIG_HEADERS([
   src/p7_config.h
+  nwo/h4_config.h
   lib/easel/esl_config.h
   lib/libdivsufsort/divsufsort.h
 ])
