@@ -657,14 +657,24 @@ simply regurgitated as \mono{CS} or \mono{RF} annotation lines
 here. The \mono{fn3} profile had a consensus structure annotation line.
 
 The line starting with \mono{fn3} is the consensus of the query
-profile. Capital letters represent the most conserved (high information
-content) positions. Dots (\mono{.}) in this line indicate insertions
+profile: the residue with the highest emission probability at each
+position.\sidenote{For a single sequence query in \mono{phmmer}, the
+  consensus is the sequence itself. Oddly, this is not necessarily the
+  highest probability sequence; for example, under a BLOSUM62 scoring
+  matrix, where the query has an M, you are more likely to see an
+  aligned L, not an M.} Capital letters represent particularly
+highly conserved positions.\sidenote{For protein models, $\geq$ 50\%
+  emission probability; for DNA/DNA, $\geq$ 90\%.}
+Dots (\mono{.}) in this line indicate insertions
 in the target sequence with respect to the profile.
 
 The midline indicates matches between the query profile and target
-sequence. A \mono{+} indicates positive score, which can be
-interpreted as ``conservative substitution'', with respect to what the
-profile expects at that position.
+sequence. A letter indicates an exact match to the profile consensus.
+A \mono{+} indicates that this residue has a positive log-odds
+emission score, a ``conservative substitution'' given what the profile
+expects at that position.\sidenote{That is, the emission probability
+  $e(a)$ for this aligned residue $a$ is $> f_a$, its background
+  frequency: it's a likely residue, just not the most likely one.}
 
 The line starting with \mono{7LESS\_DROME} is the target sequence.
 Dashes (\mono{-}) in this line indicate deletions in the target
