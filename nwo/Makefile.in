@@ -1,4 +1,14 @@
 
+PROGS = hmmer
+
 
 all:
 	gcc -o hmmer -I ../lib/easel -L ../lib/easel -I. hmmer.c h4_cmd_build.c -leasel
+
+clean:
+	-rm -f *~
+	-rm -f *.gcno *.gcda *.gcov
+	-rm -f ${PROGS}
+	for prog in ${PROGS}; do\
+	  if test -d $$prog.dSYM; then rm -rf $$prog.dSYM; fi; \
+	done
