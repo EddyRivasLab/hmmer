@@ -23,6 +23,7 @@ enum h4_statetypes_e {
   h4_C    = 14,
   h4_T    = 15
 };
+#define h4_NSTATETYPES 16
 
 typedef struct {
   int     Z;      // length of <st>, <r> (actual; i.e. inclusive of run length compression)

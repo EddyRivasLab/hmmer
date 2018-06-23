@@ -524,7 +524,7 @@ p7_trace_DecodeStatetype(char st)
  *
  * Purpose:   Validate the internal data in a trace structure <tr>
  *            representing an alignment of an HMM to a 
- *            digital sequence <sq>. The digital sequence may be either
+ *            digital sequence <dsq>. The digital sequence may be either
  *            unaligned (usually) or aligned (in the case of "fake"
  *            tracebacks generated from an MSA during a
  *            model construction process). 
@@ -536,11 +536,11 @@ p7_trace_DecodeStatetype(char st)
  *
  *            Intended for debugging/development/testing only.
  *            
- * Args:      tr     - trace to validate
- *            abc    - alphabet corresponding to sequence <sq>
- *            dsq    - digital sequence that <tr> is explaining
- *            errbuf - NULL, or an error message buffer allocated
- *                     for at least eslERRBUFSIZE chars.           
+ * Args:      tr     : trace to validate
+ *            abc    : alphabet corresponding to sequence <dsq>
+ *            dsq    : digital sequence that <tr> is explaining
+ *            errbuf : <NULL>, or an error message buffer allocated
+ *                     for at least <eslERRBUFSIZE> chars.           
  *
  * Returns:   <eslOK> if trace appears fine.
  *            Returns <eslFAIL> if a problem is detected; if <errbuf> is

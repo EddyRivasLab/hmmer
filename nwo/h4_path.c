@@ -247,10 +247,10 @@ h4_path_Destroy(H4_PATH *pi)
 int
 h4_path_InferLocal(ESL_ALPHABET *abc, ESL_DSQ *ax, int alen, int8_t *matassign, H4_PATH *pi)
 {
-  int lcol;          // position of first consensus column, 1..alen, though it isn't necessarily MLk.
-  int rcol;          // position of last MLk state (lcol..alen), or lcol if none
-  int did_M = FALSE; // used to ignore leading L->DDDD->MLk; flips to TRUE upon first MLk.
-  int i;             // index over 1..alen
+  int lcol;              // position of first consensus column, 1..alen, though it isn't necessarily MLk.
+  int rcol;              // position of last MLk state (lcol..alen), or lcol if none
+  int did_entry = FALSE; // used to ignore leading L->DDDD->MLk; flips to TRUE upon first MLk, or (edge case) in an empty seq upon first C.
+  int i;                 // index over 1..alen
   int status;
 
   for (lcol = 1;    lcol <= alen; lcol++) if (matassign[lcol]) break;
@@ -268,24 +268,21 @@ h4_path_InferLocal(ESL_ALPHABET *abc, ESL_DSQ *ax, int alen, int8_t *matassign, 
 	{
 	  if (esl_abc_XIsGap(abc, ax[i]))
 	    {
-	      if      (! did_M)   { if ((status = h4_path_Append(pi, h4_L))  != eslOK) return status; } // RLE field of L = k of L->MLk transition.
-	      else if (i <= rcol) { if ((status = h4_path_Append(pi, h4_DL)) != eslOK) return status; }
+	      if      (! did_entry) { if ((status = h4_path_Append(pi, h4_L))  != eslOK) return status; } // RLE field of L = k of L->MLk transition.
+	      else if (i <= rcol)   { if ((status = h4_path_Append(pi, h4_DL)) != eslOK) return status; }
 	      // local paths ignore deletions in consensus columns to right of last MLk.
-	      // for empty homology region, did_M = FALSE, so first line always executes and adds to L for each delete col.
+	      // for empty homology region, did_entry = FALSE until we hit first C-assigned residue, so first line always executes and adds to L for each delete col.
 	    }
 	  else /* residue, nonresidue *, or missing data ~ */
-	    {
-	      if ((status = h4_path_Append(pi, h4_ML)) != eslOK) return status;
-	      did_M = TRUE;
-	    }
+	    { did_entry = TRUE; if ((status = h4_path_Append(pi, h4_ML)) != eslOK) return status; }
 	}	  
       else // nonconsensus (insert) column
 	{
 	  if (! esl_abc_XIsGap(abc, ax[i]))
 	    {
-	      if      (i > rcol)          { if ((status = h4_path_Append(pi, h4_C))  != eslOK) return status; }
-	      else if (did_M && i > lcol) { if ((status = h4_path_Append(pi, h4_IL)) != eslOK) return status; }
-	      else                        { if ((status = h4_path_Append(pi, h4_N))  != eslOK) return status; }
+	      if      (i > rcol)              { did_entry = TRUE; if ((status = h4_path_Append(pi, h4_C))  != eslOK) return status; }
+	      else if (did_entry && i > lcol) {                   if ((status = h4_path_Append(pi, h4_IL)) != eslOK) return status; }
+	      else                            {                   if ((status = h4_path_Append(pi, h4_N))  != eslOK) return status; }
 	    }
 	}
     }
@@ -378,6 +375,46 @@ h4_path_DecodeStatetype(int8_t st)
 }
 
 
+/* Function:  h4_path_Validate()
+ * Synopsis:  Validate an H4_PATH object
+ * Incept:    SRE, Fri 22 Jun 2018 [World Cup, Nigeria vs. Iceland]
+ *
+ * Purpose:   Validate the internal data in a path structure <pi>,
+ *            representing an alignment of a profile to a digital
+ *            sequence <dsq>. The digital sequence may be either
+ *            unaligned (usually) or aligned (as in the case of paths
+ *            inferred from an MSA during model construction).
+ *            
+ * Args:      pi     : path to validate
+ *            abc    : alphabet for <dsq>
+ *            dsq    : digital sequence that <pi> is explaining
+ *            errbuf : <NULL>, or an error message buffer allocated 
+ *                     for at least <eslERRBUFSIZE> chars.
+ * 
+ * Returns:   <eslOK> if path looks fine.
+ *            <eslFAIL> if a problem is detected, and <errbuf> (if provided)
+ *            says why.
+ */
+int
+h4_path_Validate(const H4_PATH *pi, const ESL_ALPHABET *abc, const ESL_DSQ *dsq, char *errbuf)
+{
+  int z;
+
+  if (pi == NULL) ESL_FAIL(eslFAIL, errbuf, "path is NULL");    // unlike H3, paths can't be NULL
+  if (pi->Z < 3)  ESL_FAIL(eslFAIL, errbuf, "path too short");  // shortest is N L C empty edge case.
+
+
+  for (z = 0; z < pi->Z; z++)
+    {
+
+    **  SRE STOPPED HERE **
+
+    }
+  return eslOK;
+}
+
+
+
 int
 h4_path_Dump(FILE *fp, const H4_PATH *pi)
 {
@@ -391,7 +428,8 @@ h4_path_Dump(FILE *fp, const H4_PATH *pi)
       fprintf(fp, "%4d %2s %4d\n", z, h4_path_DecodeStatetype(pi->st[z]), pi->rle[z]);
     }
 
-  fprintf(fp, "\n# Zalloc   = %d\n", pi->Zalloc);
+  fprintf(fp, "\n# Z        = %d\n", pi->Z);
+  fprintf(fp,   "# Zalloc   = %d\n", pi->Zalloc);
   fprintf(fp,   "# Zredline = %d\n", pi->Zredline);
   return eslOK;
 }
@@ -404,10 +442,121 @@ h4_path_Dump(FILE *fp, const H4_PATH *pi)
  *****************************************************************/
 #ifdef h4PATH_TESTDRIVE
 
-static int
-utest_dirtyseqs(void)
+#include <string.h>
+
+#include "esl_random.h"
+#include "esl_randomseq.h"
+
+static void
+utest_zerolength(ESL_ALPHABET *abc)
 {
-  return eslOK;
+  char     msg[]      = "h4_path zerolength unit test failed";
+  char     seq_cons[] =   "...xxx...xxx...";
+  char    *aseq[]     = { "...............",    // entirely empty sequence
+			  "aaa.........aaa",    // sequence with only N,C
+			  "......aaa......",    // sequence with only insert 
+			  "aaa...aaa...aaa",    // sequence with N,C,insert
+                        }; 
+  int      nseq       = sizeof(aseq) / sizeof(char *);
+  int      alen       = strlen(seq_cons);
+  int8_t  *matassign  = NULL;
+  ESL_DSQ *ax         = NULL;
+  H4_PATH *pi         = h4_path_Create();
+  int      i,c;
+  int      status;
+
+  ESL_ALLOC(ax, sizeof(ESL_DSQ) * (alen+2));
+  ESL_ALLOC(matassign, sizeof(int8_t) * (alen+1));
+
+  matassign[0] = 0;
+  for (c = 1; c <= alen; c++)
+    matassign[c] = esl_abc_CIsGap(abc, seq_cons[c-1]) ? 0 : 1;
+  
+  for (i = 0; i < nseq; i++)
+    {
+      if ( esl_abc_Digitize(abc, aseq[i], ax) != eslOK) esl_fatal(msg);
+
+      // N L C: Z=3
+      if ( h4_path_InferLocal(abc, ax, alen, matassign, pi)  != eslOK) esl_fatal(msg);
+      if ( pi->Z             != 3)     esl_fatal(msg);
+      if ( pi->st[0]         != h4_N)  esl_fatal(msg);
+      if ( pi->st[1]         != h4_L)  esl_fatal(msg);
+      if ( pi->st[2]         != h4_C)  esl_fatal(msg);
+      if ( h4_path_Reuse(pi) != eslOK) esl_fatal(msg);
+
+      // N G DG(6) C          : Z=4
+      // N G DG(3) IG DG(3) C : Z=6
+      if ( h4_path_InferGlocal(abc, ax, alen, matassign, pi) != eslOK) esl_fatal(msg);
+      if ( pi->Z != 4 && pi->Z != 6)   esl_fatal(msg); 
+      if ( pi->st[0]         != h4_N)  esl_fatal(msg);
+      if ( pi->st[1]         != h4_G)  esl_fatal(msg);
+      if ( pi->st[2]         != h4_DG) esl_fatal(msg);
+      if ( pi->st[pi->Z-2]   != h4_DG) esl_fatal(msg);
+      if ( pi->st[pi->Z-1]   != h4_C)  esl_fatal(msg);
+      if ( h4_path_Reuse(pi) != eslOK) esl_fatal(msg);
+    }
+
+  h4_path_Destroy(pi);
+  free(ax);
+  free(matassign);
+  return;
+
+ ERROR:
+  esl_fatal(msg);
+}
+  
+ 
+
+static void
+utest_dirtyseqs(ESL_RANDOMNESS *rng, ESL_ALPHABET *abc)
+{
+  char     msg[]     = "h4_path dirtyseqs unit test failed";
+  ESL_DSQ *ax        = NULL;
+  double  *p         = NULL;
+  int8_t  *matassign = NULL;     
+  H4_PATH *pi        = h4_path_Create();
+  int      N         = 100;
+  int      L         = 1 + esl_rnd_Roll(rng, 100);   // 1..100. Shorter matassigns might exercise more edgy cases.
+  int      ncons;
+  int      i,c;
+  int      status;
+
+  ESL_ALLOC(p,         sizeof(double) *  abc->Kp);
+  ESL_ALLOC(matassign, sizeof(int8_t) *  (L+1));   // (0) 1..L
+  ESL_ALLOC(ax,        sizeof(ESL_DSQ) * (L+2));   // sentinels at 0,L+1.
+
+  /* choose <p> such that all symbols are possible, including gaps, nonresidue, missing data */
+  esl_rnd_Dirichlet(rng, NULL, abc->Kp, p);
+
+  matassign[0] = 0; // convention. matassign[0] is unused.
+  do {
+    ncons = 0;
+    for (c = 1; c <= L; c++)
+      {
+	matassign[c] = esl_rnd_Roll(rng, 2);
+	if (matassign[c]) ncons++;
+      }
+  } while (ncons == 0);  // do loop makes sure we have at least 1 consensus col.
+
+  for (i = 0; i < N; i++)
+    {
+      if ( esl_rsq_SampleDirty(rng, abc, &p, L, ax)       != eslOK) esl_fatal(msg);
+
+      if ( h4_path_InferLocal(abc, ax, L, matassign, pi)  != eslOK) esl_fatal(msg);
+      if ( h4_path_Reuse(pi)                              != eslOK) esl_fatal(msg);
+
+      if ( h4_path_InferGlocal(abc, ax, L, matassign, pi) != eslOK) esl_fatal(msg);
+      if ( h4_path_Reuse(pi)                              != eslOK) esl_fatal(msg);
+    }
+
+  h4_path_Destroy(pi);
+  free(matassign);
+  free(p);
+  free(ax);
+  return;
+
+ ERROR:
+  esl_fatal(msg);
 }
 
 #endif // h4PATH_TESTDRIVE
@@ -421,19 +570,43 @@ utest_dirtyseqs(void)
 #include "h4_config.h"
 
 #include "easel.h"
+#include "esl_getopts.h"
 #include "esl_random.h"
 
+#include "general.h"
 #include "h4_path.h"
 
 static ESL_OPTIONS options[] = {
-  /* name           type      default  env  range toggles reqs incomp  help                                       docgroup*/
-  { "--help",  eslARG_NONE,   FALSE, NULL, NULL,  NULL,  NULL, NULL, "show brief help on version and usage",             0 },
+  /* name           type      default  env  range toggles reqs incomp  help                          docgroup*/
+  { "--help",     eslARG_NONE,   NULL, NULL, NULL,  NULL,  NULL, NULL, "show brief help summary",             0 },
+  { "--seed",     eslARG_INT,     "0", NULL, NULL,  NULL,  NULL, NULL, "set random number generator seed",    0 },
+  { "--version",  eslARG_NONE,   NULL, NULL, NULL,  NULL,  NULL, NULL, "show HMMER version number",           0 },
   {  0, 0, 0, 0, 0, 0, 0, 0, 0, 0 },
 
 };
 
+int
+main(int argc, char **argv)
+{
+  ESL_GETOPTS    *go  = h4_CreateDefaultApp(options, 0, argc, argv,
+					    "test driver for H4_PATH",
+					    "[-options]");
+  ESL_ALPHABET   *abc = esl_alphabet_Create(eslAMINO);
+  ESL_RANDOMNESS *rng = esl_randomness_Create(esl_opt_GetInteger(go, "--seed"));
 
+  esl_fprintf(stderr, "## %s\n", argv[0]);
+  esl_fprintf(stderr, "#  rng seed = %" PRIu32 "\n", esl_randomness_GetSeed(rng));
 
+  utest_zerolength(     abc);
+  utest_dirtyseqs (rng, abc);
+
+  esl_fprintf(stderr, "#  status   = ok\n");
+
+  esl_randomness_Destroy(rng);
+  esl_alphabet_Destroy(abc);
+  esl_getopts_Destroy(go);
+  exit(0);
+}
 #endif // h4PATH_TESTDRIVE
 /*----------------- end, test driver ----------------------------*/
 

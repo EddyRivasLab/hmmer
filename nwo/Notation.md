@@ -40,7 +40,7 @@
 | .. $k^a(d)$ | start of domain $d$ on model |
 | .. $k^0(d)$ | anchor point for domain $d$ in model |
 | .. $k^b(d)$ | end of domain $d$ on model |
-| $l$         | _unused. easily confused with 1._ |
+| $l$         | _unused. too easily confused with 1._ |
 | $o$         | outer envelope coordinates for a domain |
 | .. $o^a(d)$ | outer envelope start for domain $d$ |
 | .. $o^b(d)$ | outer envelope end for domain $d$ |
@@ -52,7 +52,7 @@
 | $t$         | transition probability $t_k(y)$ |
 | $x$         | sequence   $x_1..x_L$ |
 | $y$         | index/code for a state |
-| $z$         | index in a path $\pi_{1..Z}$\\
+| $z$         | index in a path $\pi_{1..Z}$ |
 
 
 ### math font, upper case (includes sizes of arrays)
