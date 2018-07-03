@@ -77,7 +77,7 @@ You can change the \mono{/usr/local} prefix to any directory you want
 when you do the \mono{./configure} step, using the \mono{./configure
   {-}{-}prefix} option, as in \mono{./configure {-}{-}prefix
   /the/directory/you/want}. For example, you might do
-\mono{./configure {-}{-}prefix=\$\{HOME}\}, for installation in
+\mono{./configure {-}{-}prefix=\$\{HOME\}}, for installation in
 \mono{bin/} and \mono{share/man/man1} subdirectories in your own home
 directory.
 
@@ -105,8 +105,12 @@ branch:\sidenote{As of 3.2, our git master branch is the stable
   
   \vspace{1ex}
   \user{\% git clone https://github.com/EddyRivasLab/hmmer hmmer-\HMMERversion{}} \\
-  \user{\% cd hmmer-\HMMERversion{}}
+  \user{\% cd hmmer-\HMMERversion{}} \\
+  \user{\% git clone https://github.com/EddyRivasLab/easel}
   \vspace{1ex}
+
+If no \mono{./configure} script is present, you need to generate one by running
+\mono{autoconf}.
 
 This is now essentially the same as if you unpacked a tarball, so from
 here, follow the \mono{./configure; make} instructions above.
