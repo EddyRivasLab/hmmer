@@ -77,7 +77,7 @@ You can change the \mono{/usr/local} prefix to any directory you want
 when you do the \mono{./configure} step, using the \mono{./configure
   {-}{-}prefix} option, as in \mono{./configure {-}{-}prefix
   /the/directory/you/want}. For example, you might do
-\mono{./configure {-}{-}prefix=\$\{HOME}\}, for installation in
+\mono{./configure {-}{-}prefix=\$\{HOME\}}, for installation in
 \mono{bin/} and \mono{share/man/man1} subdirectories in your own home
 directory.
 
@@ -105,7 +105,9 @@ branch:\sidenote{As of 3.2, our git master branch is the stable
   
   \vspace{1ex}
   \user{\% git clone https://github.com/EddyRivasLab/hmmer hmmer-\HMMERversion{}} \\
-  \user{\% cd hmmer-\HMMERversion{}}
+  \user{\% cd hmmer-\HMMERversion{}} \\
+  \user{\% git clone https://github.com/EddyRivasLab/easel } \\
+  \user{\% autoconf }
   \vspace{1ex}
 
 This is now essentially the same as if you unpacked a tarball, so from
@@ -115,6 +117,19 @@ One difference is that our distribution tarballs include this user
 guide as a PDF, in addition to its \LaTeX\ source code. The github
 repo only has the source \LaTeX\ files. To compile the PDF, see
 ``compiling the user guide'' in the gory details below.
+
+You need our Easel library, in addition to the HMMER repository. We
+don't guarantee that the two master branches are necessarily
+compatible at all times. It's possible that the Easel master branch
+has advanced in support of an Infernal release, for example. You might
+have to check out the Easel tag that corresponds to the more recent
+stable HMMER release. These Easel tags end in ``h'': for example,
+\mono{easel-0.45h}.
+
+If you want to suggest changes to us by submitting a pull request on
+GitHub, please base your changes against our \mono{develop} branches.
+Our master branches are for stable releases.
+
 
 
 \section{Gory details}

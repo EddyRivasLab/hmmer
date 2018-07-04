@@ -74,7 +74,9 @@ includes three main branches:
 
 To build the most recent official release, leave both HMMER and Easel
 on their default **master** branch.  To contribute to HMMER3
-development, you want to be on the **develop** branches.
+development, you want to be on the **develop** branches. If you want
+to send us a pull request on GitHub, please base your changes on our
+**develop** branches.
 
 
 ### to report a problem:
