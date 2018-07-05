@@ -45,6 +45,9 @@ main(int argc, char **argv)
     if      (strcmp(outfmt, "3/a") == 0) fmtcode = p7_HMMFILE_3a;
     else if (strcmp(outfmt, "3/b") == 0) fmtcode = p7_HMMFILE_3b;
     else if (strcmp(outfmt, "3/c") == 0) fmtcode = p7_HMMFILE_3c;
+    else if (strcmp(outfmt, "3/d") == 0) fmtcode = p7_HMMFILE_3d;
+    else if (strcmp(outfmt, "3/e") == 0) fmtcode = p7_HMMFILE_3e;
+    else if (strcmp(outfmt, "3/f") == 0) fmtcode = p7_HMMFILE_3f;
     else    p7_Fail("No such 3.x output format code %s.\n", outfmt);
   }
 
