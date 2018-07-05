@@ -37,6 +37,7 @@
 
 #include "easel.h"
 #include "esl_alphabet.h"
+#include "esl_dirichlet.h"
 #include "esl_getopts.h"
 #include "esl_vectorops.h"
 

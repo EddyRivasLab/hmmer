@@ -40,12 +40,12 @@
 
 #include "easel.h"
 #include "esl_alphabet.h"	/* ESL_DSQ, ESL_ALPHABET */
-#include "esl_dirichlet.h"	/* ESL_MIXDCHLET         */
 #include "esl_dmatrix.h"	/* ESL_DMATRIX           */
 #include "esl_getopts.h"	/* ESL_GETOPTS           */
 #include "esl_histogram.h"      /* ESL_HISTOGRAM         */
 #include "esl_hmm.h"	        /* ESL_HMM               */
 #include "esl_keyhash.h"        /* ESL_KEYHASH           */
+#include "esl_mixdchlet.h"	/* ESL_MIXDCHLET         */
 #include "esl_msa.h"		/* ESL_MSA               */
 #include "esl_random.h"		/* ESL_RANDOMNESS        */
 #include "esl_sq.h"		/* ESL_SQ                */
