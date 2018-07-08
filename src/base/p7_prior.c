@@ -4,7 +4,7 @@
 
 #include "easel.h"
 #include "esl_alphabet.h"
-#include "esl_dirichlet.h"
+#include "esl_mixdchlet.h"
 #include "esl_vectorops.h"
 
 #include "base/p7_prior.h"
@@ -100,16 +100,16 @@ p7_prior_CreateAmino(void)
   /* Transition priors: originally from Graeme Mitchison. Notes are lost, but we believe
    * they were trained on an early version of Pfam. 
    */
-  pri->tm->pq[0]       = 1.0;
+  pri->tm->q[0]        = 1.0;
   pri->tm->alpha[0][0] = 0.7939; /* TMM */
   pri->tm->alpha[0][1] = 0.0278; /* TMI */ /* Markus suggests ~10x MD, ~0.036; test! */
   pri->tm->alpha[0][2] = 0.0135; /* TMD */ /* Markus suggests 0.1x MI, ~0.004; test! */
 
-  pri->ti->pq[0]       = 1.0;
+  pri->ti->q[0]        = 1.0;
   pri->ti->alpha[0][0] = 0.1551; /* TIM */
   pri->ti->alpha[0][1] = 0.1331; /* TII */
 
-  pri->td->pq[0]       = 1.0;
+  pri->td->q[0]        = 1.0;
   pri->td->alpha[0][0] = 0.9002; /* TDM */
   pri->td->alpha[0][1] = 0.5630; /* TDD */
 
@@ -118,7 +118,7 @@ p7_prior_CreateAmino(void)
    */  
   for (q = 0; q < 9; q++)
     {
-      pri->em->pq[q] = defmq[q];
+      pri->em->q[q] = defmq[q];
       esl_vec_DCopy(defm[q], 20, pri->em->alpha[q]);
     }
 
@@ -127,7 +127,7 @@ p7_prior_CreateAmino(void)
    * Inserts are slightly biased towards polar residues and away from
    * hydrophobic residues.
    */
-  pri->ei->pq[0] = 1.0;
+  pri->ei->q[0] = 1.0;
   pri->ei->alpha[0][0]  = 681.;         /* A */
   pri->ei->alpha[0][1]  = 120.;         /* C */
   pri->ei->alpha[0][2]  = 623.;         /* D */
@@ -218,17 +218,17 @@ p7_prior_CreateNucleic(void)
 
   /* Transition priors: roughly, learned from rmark benchmark - hand-beautified (trimming overspecified significant digits)
    */
-  pri->tm->pq[0]       = 1.0;
+  pri->tm->q[0]        = 1.0;
   pri->tm->alpha[0][0] = 2.0; // TMM
   pri->tm->alpha[0][1] = 0.1; // TMI
   pri->tm->alpha[0][2] = 0.1; // TMD
 
 
-  pri->ti->pq[0]       = 1.0;
+  pri->ti->q[0]        = 1.0;
   pri->ti->alpha[0][0] = 0.06; // TIM
   pri->ti->alpha[0][1] = 0.2; // TII
 
-  pri->td->pq[0]       = 1.0;
+  pri->td->q[0]        = 1.0;
   pri->td->alpha[0][0] = 0.1; // TDM
   pri->td->alpha[0][1] = 0.2; // TDD
 
@@ -237,14 +237,14 @@ p7_prior_CreateNucleic(void)
   /* Match emission priors  */
   for (q = 0; q < num_comp; q++)
     {
-      pri->em->pq[q] = defmq[q];
+      pri->em->q[q] = defmq[q];
       esl_vec_DCopy(defm[q], 4, pri->em->alpha[q]);
     }
 
 
   /* Insert emission priors. Should that alphas be lower? higher?
    */
-  pri->ei->pq[0] = 1.0;
+  pri->ei->q[0] = 1.0;
   esl_vec_DSet(pri->ei->alpha[0], 4, 1.0);
 
   return pri;
@@ -279,11 +279,11 @@ p7_prior_CreateLaplace(const ESL_ALPHABET *abc)
 
   if (pri->tm == NULL || pri->ti == NULL || pri->td == NULL || pri->em == NULL || pri->ei == NULL) goto ERROR;
 
-  pri->tm->pq[0] = 1.0;   esl_vec_DSet(pri->tm->alpha[0], 3,      1.0);  /* match transitions  */
-  pri->ti->pq[0] = 1.0;   esl_vec_DSet(pri->ti->alpha[0], 2,      1.0);  /* insert transitions */
-  pri->td->pq[0] = 1.0;   esl_vec_DSet(pri->td->alpha[0], 2,      1.0);  /* delete transitions */
-  pri->em->pq[0] = 1.0;   esl_vec_DSet(pri->em->alpha[0], abc->K, 1.0);  /* match emissions    */
-  pri->ei->pq[0] = 1.0;   esl_vec_DSet(pri->ei->alpha[0], abc->K, 1.0);  /* insert emissions   */
+  pri->tm->q[0] = 1.0;   esl_vec_DSet(pri->tm->alpha[0], 3,      1.0);  /* match transitions  */
+  pri->ti->q[0] = 1.0;   esl_vec_DSet(pri->ti->alpha[0], 2,      1.0);  /* insert transitions */
+  pri->td->q[0] = 1.0;   esl_vec_DSet(pri->td->alpha[0], 2,      1.0);  /* delete transitions */
+  pri->em->q[0] = 1.0;   esl_vec_DSet(pri->em->alpha[0], abc->K, 1.0);  /* match emissions    */
+  pri->ei->q[0] = 1.0;   esl_vec_DSet(pri->ei->alpha[0], abc->K, 1.0);  /* insert emissions   */
   return pri;
 
  ERROR:
@@ -334,7 +334,6 @@ p7_ParameterEstimation(P7_HMM *hmm, const P7_PRIOR *pri)
   int   k;
   double c[p7_MAXABET];
   double p[p7_MAXABET];
-  double mix[p7_MAXDCHLET];
   
   /* Special case of pri=NULL: convert to frequencies.*/  
   if (pri==NULL) return p7_hmm_Renormalize(hmm);
@@ -344,7 +343,7 @@ p7_ParameterEstimation(P7_HMM *hmm, const P7_PRIOR *pri)
    */
   for (k = 0; k <= hmm->M; k++) {
     esl_vec_F2D(hmm->t[k], 3, c);
-    esl_mixdchlet_MPParameters(c, 3, pri->tm, mix, p);
+    esl_mixdchlet_MPParameters(pri->tm, c, p);
     esl_vec_D2F(p, 3, hmm->t[k]);
   }
   hmm->t[hmm->M][p7H_MD] = 0.0;
@@ -354,7 +353,7 @@ p7_ParameterEstimation(P7_HMM *hmm, const P7_PRIOR *pri)
    */
   for (k = 0; k <= hmm->M; k++) {
     esl_vec_F2D(hmm->t[k]+3, 2, c);
-    esl_mixdchlet_MPParameters(c, 2, pri->ti, mix, p);
+    esl_mixdchlet_MPParameters(pri->ti, c, p);
     esl_vec_D2F(p, 2, hmm->t[k]+3);
   }
 
@@ -364,7 +363,7 @@ p7_ParameterEstimation(P7_HMM *hmm, const P7_PRIOR *pri)
    */
   for (k = 1; k < hmm->M; k++) {
     esl_vec_F2D(hmm->t[k]+5, 2, c);
-    esl_mixdchlet_MPParameters(c, 2, pri->td, mix, p);
+    esl_mixdchlet_MPParameters(pri->td, c, p);
     esl_vec_D2F(p, 2, hmm->t[k]+5);
   }
   hmm->t[0][p7H_DM] = hmm->t[hmm->M][p7H_DM] = 1.0;
@@ -375,7 +374,7 @@ p7_ParameterEstimation(P7_HMM *hmm, const P7_PRIOR *pri)
    */
   for (k = 1; k <= hmm->M; k++) {
     esl_vec_F2D(hmm->mat[k], hmm->abc->K, c);
-    esl_mixdchlet_MPParameters(c, hmm->abc->K, pri->em, mix, p);
+    esl_mixdchlet_MPParameters(pri->em, c, p);
     esl_vec_D2F(p, hmm->abc->K, hmm->mat[k]);
   }
   esl_vec_FSet(hmm->mat[0], hmm->abc->K, 0.);
@@ -385,7 +384,7 @@ p7_ParameterEstimation(P7_HMM *hmm, const P7_PRIOR *pri)
    */
   for (k = 0; k <= hmm->M; k++) {
     esl_vec_F2D(hmm->ins[k], hmm->abc->K, c);
-    esl_mixdchlet_MPParameters(c, hmm->abc->K, pri->ei, mix, p);
+    esl_mixdchlet_MPParameters(pri->ei, c, p);
     esl_vec_D2F(p, hmm->abc->K, hmm->ins[k]);
   }
   return eslOK;

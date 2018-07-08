@@ -143,27 +143,27 @@ p7_modelsample_Prior(ESL_RANDOMNESS *r, int M, const ESL_ALPHABET *abc, const P7
   for (k = 0; k <= M; k++)
     {
       if (k) {
-	q = esl_rnd_DChoose(r, pri->em->pq, pri->em->N); 
+	q = esl_rnd_DChoose(r, pri->em->q, pri->em->Q); 
 	esl_dirichlet_DSample(r, pri->em->alpha[q], pri->em->K, ep); /* extra D2F step because Easel Dirichlet module is double-precision */
 	esl_vec_D2F(ep, abc->K, hmm->mat[k]);
       }
 
-      q = esl_rnd_DChoose(r, pri->ei->pq, pri->ei->N); 
+      q = esl_rnd_DChoose(r, pri->ei->q, pri->ei->Q); 
       esl_dirichlet_DSample(r, pri->ei->alpha[q], pri->ei->K, ep);
       esl_vec_D2F(ep, abc->K, hmm->ins[k]);
 
-      q = esl_rnd_DChoose(r, pri->tm->pq, pri->tm->N); 
+      q = esl_rnd_DChoose(r, pri->tm->q, pri->tm->Q); 
       esl_dirichlet_DSample(r, pri->tm->alpha[q], pri->tm->K, tp);
       esl_vec_D2F(tp, p7H_NTMAT, P7H_TMAT(hmm,k));
 
       do {
-	q = esl_rnd_DChoose(r, pri->ti->pq, pri->ti->N); 
+	q = esl_rnd_DChoose(r, pri->ti->q, pri->ti->Q); 
 	esl_dirichlet_DSample(r, pri->ti->alpha[q], pri->ti->K, tp);
 	esl_vec_D2F(tp, p7H_NTINS, P7H_TINS(hmm,k));
       } while (hmm->t[k][p7H_II] > p7H_II_SAMPLE_MAX); /* put a cap on tII, because tII~1 gives us infinite-length sequence samples */
 
       if (k) {
-	q = esl_rnd_DChoose(r, pri->td->pq, pri->td->N); 
+	q = esl_rnd_DChoose(r, pri->td->q, pri->td->Q); 
 	esl_dirichlet_DSample(r, pri->td->alpha[q], pri->td->K, tp);
 	esl_vec_D2F(tp, p7H_NTDEL, P7H_TDEL(hmm,k));
       }

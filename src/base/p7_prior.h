@@ -5,7 +5,7 @@
 
 #include "easel.h"
 #include "esl_alphabet.h"
-#include "esl_dirichlet.h"
+#include "esl_mixdchlet.h"
 
 #include "base/p7_hmm.h"
 
