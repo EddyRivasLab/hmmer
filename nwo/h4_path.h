@@ -4,6 +4,8 @@
 #include "easel.h"
 #include "esl_alphabet.h"
 
+#include "h4_profile.h"
+
 /* Codes used in H4_PATH pi->st[] */
 enum h4_statetypes_e {
   h4_NONE = 0,
@@ -40,10 +42,14 @@ extern int      h4_path_Append (H4_PATH *pi, int8_t st);
 extern int      h4_path_Reuse  (H4_PATH *pi);
 extern void     h4_path_Destroy(H4_PATH *pi);
 
-extern int h4_path_InferLocal (ESL_ALPHABET *abc, ESL_DSQ *ax, int alen, int8_t *matassign, H4_PATH *pi);
-extern int h4_path_InferGlocal(ESL_ALPHABET *abc, ESL_DSQ *ax, int alen, int8_t *matassign, H4_PATH *pi);
+extern int h4_path_InferLocal (const ESL_ALPHABET *abc, const ESL_DSQ *ax, int alen, const int8_t *matassign, H4_PATH *pi);
+extern int h4_path_InferGlocal(const ESL_ALPHABET *abc, const ESL_DSQ *ax, int alen, const int8_t *matassign, H4_PATH *pi);
+
+extern int h4_path_Count(const H4_PATH *pi, const ESL_DSQ *dsq, float wgt, H4_PROFILE *hmm);
+
 
 extern char *h4_path_DecodeStatetype(int8_t st);
+extern int   h4_path_Validate(const H4_PATH *pi, const ESL_ALPHABET *abc, int M, int L, char *errbuf);
 extern int   h4_path_Dump(FILE *fp, const H4_PATH *pi);
 
 
