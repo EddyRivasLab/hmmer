@@ -147,6 +147,7 @@ AC_DEFINE_UNQUOTED([EASEL_DATE],      ["$EASEL_DATE"],      [Easel release date]
 AC_DEFINE_UNQUOTED([EASEL_COPYRIGHT], ["$EASEL_COPYRIGHT"], [Easel copyright])
 AC_DEFINE_UNQUOTED([EASEL_LICENSE],   ["$EASEL_LICENSE"],   [Easel license])
 AC_DEFINE_UNQUOTED([EASEL_VERSION],   ["$EASEL_VERSION"],   [Easel version])
+AC_DEFINE_UNQUOTED([EASEL_URL],       ["$EASEL_URL"],       [Easel web URL])
 
 
 # Figure out what host we're compiling on.
