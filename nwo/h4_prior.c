@@ -1,3 +1,9 @@
+/* H4_PRIOR : mixture Dirichlet priors for profile HMMs
+ * 
+ * Contents:
+ *    1. H4_PRIOR : mixture Dirichlet priors for a profile HMM
+ *    2. internal functions for creating default priors
+ */
 #include "h4_config.h"
 
 #include "easel.h"
@@ -7,8 +13,54 @@
 
 #include "h4_prior.h"
 
+static H4_PRIOR *create_amino  (void);
+static H4_PRIOR *create_nucleic(void);
+static H4_PRIOR *create_laplace(const ESL_ALPHABET *abc);
 
-/* Function:  h4_prior_CreateAmino()
+
+
+/*****************************************************************
+ * 1. H4_PRIOR : mixture Dirichlet priors for a profile HMM
+ *****************************************************************/
+
+/* Function:  h4_prior_Create()
+ * Synopsis:  Create a new default prior
+ * Incept:    SRE, Mon 23 Jul 2018 [Benasque]
+ *
+ * Purpose:   Create a default prior for alphabet <abc>.
+ */
+H4_PRIOR *
+h4_prior_Create(const ESL_ALPHABET *abc)
+{
+  if      (abc->type == eslAMINO) return create_amino();
+  else if (abc->type == eslDNA)   return create_nucleic();
+  else if (abc->type == eslRNA)   return create_nucleic();
+  else                            return create_laplace(abc);
+}
+
+/* Function:  h4_prior_Destroy()
+ * Synopsis:  Frees mixture Dirichlet priors.
+ * Incept:    SRE, Sun 24 Jun 2018 
+ */
+void
+h4_prior_Destroy(H4_PRIOR *pri)
+{
+  if (pri)
+    {
+      esl_mixdchlet_Destroy(pri->tm);
+      esl_mixdchlet_Destroy(pri->ti);
+      esl_mixdchlet_Destroy(pri->td);
+      esl_mixdchlet_Destroy(pri->em);
+      free(pri);
+    }
+}
+
+
+/*****************************************************************
+ * 2. internal functions for creating default priors
+ *****************************************************************/
+
+/* create_amino()
  * Synopsis:  Create the default protein Dirichlet priors.
  * Incept:    SRE, Sun 24 Jun 2018 [World Cup, Poland v. Colombia]
  *
@@ -31,8 +83,8 @@
  *            
  * Xref:      Adapted from H3's p7_prior.c::p7_prior_CreateAmino()
  */
-H4_PRIOR *
-h4_prior_CreateAmino(void)
+static H4_PRIOR *
+create_amino(void)
 {
   H4_PRIOR *pri = NULL;
   int       q;
@@ -64,17 +116,17 @@ h4_prior_CreateAmino(void)
   /* Transition priors: originally from Graeme Mitchison. Notes are lost, but we believe
    * they were trained on an early version of Pfam. 
    */
-  pri->tm->pq[0]       = 1.0;
+  pri->tm->q[0]        = 1.0;
   pri->tm->alpha[0][0] = 0.7939; /* TMM */
   pri->tm->alpha[0][1] = 0.0278; /* TMI */ /* Markus suggests ~10x MD, ~0.036; test! */
   pri->tm->alpha[0][2] = 0.0135; /* TMD */ /* Markus suggests 0.1x MI, ~0.004; test! */
 
-  pri->ti->pq[0]       = 1.0;
+  pri->ti->q[0]        = 1.0;
   pri->ti->alpha[0][0] = 0.1551; /* TIM */
   pri->ti->alpha[0][1] = 0.1331; /* TII */
   pri->ti->alpha[0][2] = 0.05;   /* TID */  // SRE: FIXME. I made this up for Plan9.
 
-  pri->td->pq[0]       = 1.0;
+  pri->td->q[0]        = 1.0;
   pri->td->alpha[0][0] = 0.9002; /* TDM */
   pri->td->alpha[0][1] = 0.05;   /* TDI */  // SRE: FIXME. Made this up for Plan9.
   pri->td->alpha[0][2] = 0.5630; /* TDD */
@@ -84,7 +136,7 @@ h4_prior_CreateAmino(void)
    */  
   for (q = 0; q < 9; q++)
     {
-      pri->em->pq[q] = defmq[q];
+      pri->em->q[q] = defmq[q];
       esl_vec_DCopy(defm[q], 20, pri->em->alpha[q]);
     }
   return pri;
@@ -95,7 +147,7 @@ h4_prior_CreateAmino(void)
 }
 
 
-/* Function:  h4_prior_CreateNucleic()
+/* create_nucleic()
  * Synopsis:  Creates default DNA/RNA Dirichlet priors
  * Incept:    SRE, Sun 24 Jun 2018
  *
@@ -114,10 +166,10 @@ h4_prior_CreateAmino(void)
  *            
  * Xref:      Adapted from H3's p7_prior.c::p7_prior_CreateNucleic()
  */
-H4_PRIOR *
-h4_prior_CreateNucleic(void)
+static H4_PRIOR *
+create_nucleic(void)
 {
-  P7_PRIOR *pri = NULL;
+  H4_PRIOR *pri = NULL;
   int       q;
   int       status;
 
@@ -144,17 +196,17 @@ h4_prior_CreateNucleic(void)
   /* Transition priors: roughly, learned from rmark benchmark 
    * and hand-beautified (trimming overspecified significant digits)
    */
-  pri->tm->pq[0]       = 1.0;
+  pri->tm->q[0]        = 1.0;
   pri->tm->alpha[0][0] = 2.0; // TMM
   pri->tm->alpha[0][1] = 0.1; // TMI
   pri->tm->alpha[0][2] = 0.1; // TMD
 
-  pri->ti->pq[0]       = 1.0;
+  pri->ti->q[0]        = 1.0;
   pri->ti->alpha[0][0] = 0.06; // TIM
   pri->ti->alpha[0][1] = 0.2;  // TII
   pri->ti->alpha[0][2] = 0.03; // TID  SRE FIXME: made up for Plan 9
 
-  pri->td->pq[0]       = 1.0;
+  pri->td->q[0]        = 1.0;
   pri->td->alpha[0][0] = 0.1;  // TDM
   pri->td->alpha[0][1] = 0.05; // TDI  SRE FIXME: made up for Plan 9
   pri->td->alpha[0][2] = 0.2;  // TDD
@@ -162,7 +214,7 @@ h4_prior_CreateNucleic(void)
   /* Match emission priors  */
   for (q = 0; q < 4; q++)
     {
-      pri->em->pq[q] = defmq[q];
+      pri->em->q[q] = defmq[q];
       esl_vec_DCopy(defm[q], 4, pri->em->alpha[q]);
     }
   return pri;
@@ -173,12 +225,12 @@ h4_prior_CreateNucleic(void)
 }
 
 
-/* Function:  h4_prior_CreateLaplace()
+/* create_laplace()
  * Synopsis:  Creates Laplace plus-one priors for any alphabet.
  * Incept:    SRE, Sun 24 Jun 2018
  */
-H4_PRIOR *
-h4_prior_CreateLaplace(const ESL_ALPHABET *abc)
+static H4_PRIOR *
+create_laplace(const ESL_ALPHABET *abc)
 {
   H4_PRIOR *pri = NULL;
   int       status;
@@ -191,10 +243,10 @@ h4_prior_CreateLaplace(const ESL_ALPHABET *abc)
   if ((pri->td = esl_mixdchlet_Create(1, 3))      == NULL) goto ERROR;	
   if ((pri->em = esl_mixdchlet_Create(1, abc->K)) == NULL) goto ERROR; 
 
-  pri->tm->pq[0] = 1.0;   esl_vec_DSet(pri->tm->alpha[0], 3,      1.0);  /* match transitions  */
-  pri->ti->pq[0] = 1.0;   esl_vec_DSet(pri->ti->alpha[0], 3,      1.0);  /* insert transitions */
-  pri->td->pq[0] = 1.0;   esl_vec_DSet(pri->td->alpha[0], 3,      1.0);  /* delete transitions */
-  pri->em->pq[0] = 1.0;   esl_vec_DSet(pri->em->alpha[0], abc->K, 1.0);  /* match emissions    */
+  pri->tm->q[0] = 1.0;   esl_vec_DSet(pri->tm->alpha[0], 3,      1.0);  /* match transitions  */
+  pri->ti->q[0] = 1.0;   esl_vec_DSet(pri->ti->alpha[0], 3,      1.0);  /* insert transitions */
+  pri->td->q[0] = 1.0;   esl_vec_DSet(pri->td->alpha[0], 3,      1.0);  /* delete transitions */
+  pri->em->q[0] = 1.0;   esl_vec_DSet(pri->em->alpha[0], abc->K, 1.0);  /* match emissions    */
   return pri;
 
  ERROR:
@@ -202,23 +254,5 @@ h4_prior_CreateLaplace(const ESL_ALPHABET *abc)
   return NULL;
 }
 
-
-
-/* Function:  h4_prior_Destroy()
- * Synopsis:  Frees mixture Dirichlet priors.
- * Incept:    SRE, Sun 24 Jun 2018 
- */
-void
-h4_prior_Destroy(H4_PRIOR *pri)
-{
-  if (pri)
-    {
-      esl_mixdchlet_Destroy(pri->tm);
-      esl_mixdchlet_Destroy(pri->ti);
-      esl_mixdchlet_Destroy(pri->td);
-      esl_mixdchlet_Destroy(pri->em);
-      free(pri);
-    }
-}
 
 

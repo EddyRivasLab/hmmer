@@ -6,12 +6,12 @@
 
 #include "h4_profile.h"
 
-/* Codes used in H4_PATH pi->st[] */
+/* Codes for states, esp. states used in H4_PATH pi->st[] */
 enum h4_statetypes_e {
   h4_NONE = 0,
-  h4_S    = 1,
-  h4_N    = 2,
-  h4_B    = 3,
+  h4_S    = 1,   // unused in paths
+  h4_N    = 2,   
+  h4_B    = 3,   // unused
   h4_G    = 4, 
   h4_MG   = 5,
   h4_IG   = 6,
@@ -20,10 +20,10 @@ enum h4_statetypes_e {
   h4_ML   = 9,
   h4_IL   = 10,
   h4_DL   = 11,
-  h4_E    = 12,
+  h4_E    = 12,  // unused
   h4_J    = 13,
-  h4_C    = 14,
-  h4_T    = 15
+  h4_C    = 14,  
+  h4_T    = 15   // unused
 };
 #define h4_NSTATETYPES 16
 

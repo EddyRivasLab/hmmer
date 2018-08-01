@@ -6,8 +6,10 @@ OBJS   = \
 	h4_build.o     \
 	h4_cmd_build.o \
 	h4_path.o      \
-	h4_profile.o   
-
+	h4_prior.o     \
+	h4_profile.o   \
+	modelio.o      \
+	parameterize.o
 
 UTESTS = \
 	h4_path_utest
@@ -15,6 +17,7 @@ UTESTS = \
 STATS  =
 
 EXPERIMENTS = \
+	h4_build_experiment  \
 	h4_build_experiment2
 
 BENCHMARKS =
@@ -34,7 +37,10 @@ HDRS = \
 	general.h     \
 	h4_build.h    \
 	h4_path.h     \
-	h4_profile.h 
+	h4_prior.h    \
+	h4_profile.h  \
+	modelio.h     \
+	parameterize.h
 
 top_srcdir     = @top_srcdir@
 top_builddir   = @top_builddir@

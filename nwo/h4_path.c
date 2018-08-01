@@ -417,17 +417,24 @@ h4_path_Count(const H4_PATH *pi, const ESL_DSQ *dsq, float wgt, H4_PROFILE *hmm)
 	      while (esl_abc_XIsGap(hmm->abc, dsq[i])) i++;      // dsq might be aligned, with gap columns
 	      esl_abc_FCount(hmm->abc, hmm->e[k], dsq[i], wgt);  // handles counting degenerate residues. *,~: no-op.
 	      k++;
+	      i++;
 	    }
 	}
       else if (pi->st[z] == h4_IG || pi->st[z] == h4_IL) 
 	{
 	  for (r = 0; r < pi->rle[z]; r++)
-	    while (esl_abc_XIsGap(hmm->abc, dsq[i])) i++;
+	    {
+	      while (esl_abc_XIsGap(hmm->abc, dsq[i])) i++;
+	      i++;
+	    }
 	}
       else if (pi->st[z] == h4_N || pi->st[z] == h4_J || pi->st[z] == h4_C)
 	{
 	  for (r = 0; r < pi->rle[z]-1; r++)    // note -1, because N/J/C emit on transition
-	    while (esl_abc_XIsGap(hmm->abc, dsq[i])) i++;
+	    {
+	      while (esl_abc_XIsGap(hmm->abc, dsq[i])) i++;
+	      i++;
+	    }
 	}
       else if (pi->st[z] == h4_DG || pi->st[z] == h4_DL) { k += pi->rle[z]; }
       else if (pi->st[z] == h4_L  || pi->st[z] == h4_G)  { k  = pi->rle[z]; }
@@ -437,6 +444,7 @@ h4_path_Count(const H4_PATH *pi, const ESL_DSQ *dsq, float wgt, H4_PROFILE *hmm)
    * Only transitions into M/I/D states need to be counted.
    */
   yprv = h4_N;
+  // don't need to init k. it gets init'ed on G/L
   for (z = 1; z < pi->Z-1; z++)
     {
       ycur = pi->st[z];
@@ -450,7 +458,7 @@ h4_path_Count(const H4_PATH *pi, const ESL_DSQ *dsq, float wgt, H4_PROFILE *hmm)
 	      case h4_MG: case h4_ML: hmm->t[k][h4_TMM] += wgt; break;
 	      case h4_IG: case h4_IL: hmm->t[k][h4_TIM] += wgt; break;
 	      case h4_DG: case h4_DL: hmm->t[k][h4_TDM] += wgt; break;
-	      case h4_G:              hmm->t[0][h4_TMM] += wgt; break;
+	      case h4_G:              hmm->t[0][h4_TMM] += wgt; break;  // t[0] includes data-dependent G->{MD}
 	      case h4_L:                                        break;
 	      default: ESL_EXCEPTION(eslEINVAL, "invalid transition to M in path");
 	      }
@@ -476,14 +484,17 @@ h4_path_Count(const H4_PATH *pi, const ESL_DSQ *dsq, float wgt, H4_PROFILE *hmm)
 	      case h4_G:              hmm->t[0][h4_TMD] += wgt; break;
 	      default: ESL_EXCEPTION(eslEINVAL, "invalid transition to D in path");
 	      }
+	      k++;
 	      break;
 
 	    case h4_G:
 	    case h4_L:
-	      k = pi->rle[z];
+	      k = pi->rle[z] - 1;  // -1, because of how we're doing prv->cur
 	      break;
 
-	    /* other possible cur states (N,J,C) are ignored. */
+	    /* other possible cur states (N,J,C) are ignored. 
+	     * no counts accumulate in t[M], which has no data-dependent probability.
+	     */
 	  }
 	  yprv = ycur;
 	}
@@ -656,6 +667,10 @@ h4_path_Dump(FILE *fp, const H4_PATH *pi)
 #include "esl_random.h"
 #include "esl_randomseq.h"
 
+/* utest_zerolength()
+ * 
+ * Exercise _InferLocal() and _InferGlocal() on edge cases of L=0 sequences.
+ */
 static void
 utest_zerolength(ESL_ALPHABET *abc)
 {
@@ -723,7 +738,10 @@ utest_zerolength(ESL_ALPHABET *abc)
 }
   
  
-
+/* utest_dirtyseqs()
+ * 
+ * Exercise _InferLocal() and _InferGlocal() on nasty inputs.
+ */
 static void
 utest_dirtyseqs(ESL_RANDOMNESS *rng, ESL_ALPHABET *abc)
 {
@@ -780,6 +798,71 @@ utest_dirtyseqs(ESL_RANDOMNESS *rng, ESL_ALPHABET *abc)
   esl_fatal(msg);
 }
 
+/* utest_counting()
+ * Exercises h4_path_Count(). 
+ */
+static void
+utest_counting(void)
+{
+  char          msg[]     = "h4_path counting test failed";
+  ESL_ALPHABET *abc       = esl_alphabet_Create(eslDNA);
+  char         *aseq[]    = { "..GAA..TTC..",
+	 	              "aaGAA..TTCaa",
+		              "..GAAccTTC.." };
+  char          cons[]    =   "..xxx..xxx..";
+  int           nseq      = sizeof(aseq) / sizeof(char *);
+  int           alen      = strlen(cons);
+  ESL_DSQ      *ax        = malloc(sizeof(ESL_DSQ) * (alen+2));
+  int8_t       *matassign = malloc(sizeof(int8_t) * (alen+1));
+  H4_PATH      *pi        = h4_path_Create();
+  H4_PROFILE   *hmm       = NULL;
+  int           M         = 0;
+  int           idx, apos, k;
+  char          errbuf[eslERRBUFSIZE];
+
+  matassign[0] = 0;
+  for (apos = 1; apos <= alen; apos++)
+    {
+      matassign[apos] = (esl_abc_CIsGap(abc, cons[apos-1]) ? FALSE : TRUE );
+      if (matassign[apos]) M++;
+    }
+
+  if ((hmm = h4_profile_Create(abc, M)) == NULL) esl_fatal(msg);
+
+  for (idx = 0; idx < nseq; idx++)
+    {
+      if ( esl_abc_Digitize(abc, aseq[idx], ax)                           != eslOK) esl_fatal(msg);
+      if ( h4_path_InferGlocal(abc, ax, alen, matassign, pi)              != eslOK) esl_fatal(msg);
+      if ( h4_path_Validate(pi, abc, M, esl_abc_dsqrlen(abc, ax), errbuf) != eslOK) esl_fatal("%s:\n  %s", msg, errbuf);
+      if ( h4_path_Count(pi, ax, 1.0, hmm)                                != eslOK) esl_fatal(msg);
+      h4_path_Reuse(pi);
+    }
+
+  //h4_profile_Dump(stdout, hmm);
+
+  /* For the emissions, every sequence has a "GAATTC" consensus */
+  if (hmm->e[1][2] != (float) nseq) esl_fatal(msg);
+  if (hmm->e[2][0] != (float) nseq) esl_fatal(msg);
+  if (hmm->e[3][0] != (float) nseq) esl_fatal(msg);
+  if (hmm->e[4][3] != (float) nseq) esl_fatal(msg);
+  if (hmm->e[5][3] != (float) nseq) esl_fatal(msg);
+  if (hmm->e[6][1] != (float) nseq) esl_fatal(msg);
+
+  /* For the transitions, one basic test condition (for this test)
+   * is that occupancy at each k == nseq 
+   */
+  for (k = 1; k < M; k++)
+    {
+      if (hmm->t[k][h4_TMM] + hmm->t[k][h4_TMI] + hmm->t[k][h4_TMD] + 
+	  hmm->t[k][h4_TDM] + hmm->t[k][h4_TDI] + hmm->t[k][h4_TDD] != nseq) esl_fatal(msg);
+    }
+
+  free(ax);
+  free(matassign);
+  h4_profile_Destroy(hmm);
+  h4_path_Destroy(pi);
+  esl_alphabet_Destroy(abc);
+}  
 #endif // h4PATH_TESTDRIVE
 /*----------------- end, unit tests -----------------------------*/
 
@@ -820,6 +903,7 @@ main(int argc, char **argv)
 
   utest_zerolength(     abc);
   utest_dirtyseqs (rng, abc);
+  utest_counting  ();
 
   esl_fprintf(stderr, "#  status   = ok\n");
 

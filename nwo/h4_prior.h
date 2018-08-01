@@ -1,3 +1,5 @@
+/* H4_PRIOR : mixture Dirichlet priors for profile HMMs
+ */
 #ifndef h4PRIOR_INCLUDED
 #define h4PRIOR_INCLUDED
 
@@ -5,7 +7,7 @@
 
 #include "easel.h"
 #include "esl_alphabet.h"
-#include "esl_dirichlet.h"
+#include "esl_mixdchlet.h"
 
 typedef struct {
   ESL_MIXDCHLET *tm;		/*  match transitions */
@@ -14,9 +16,7 @@ typedef struct {
   ESL_MIXDCHLET *em;		/*  match emissions   */
 } H4_PRIOR;
 
-extern H4_PRIOR *h4_prior_CreateAmino(void);
-extern H4_PRIOR *h4_prior_CreateNucleic(void);
-extern H4_PRIOR *h4_prior_CreateLaplace(const ESL_ALPHABET *abc);
+extern H4_PRIOR *h4_prior_Create(const ESL_ALPHABET *abc);
 extern void      h4_prior_Destroy(H4_PRIOR *pri);
 
 
