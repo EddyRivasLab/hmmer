@@ -2,20 +2,20 @@ ID   7LESS_DROME             Reviewed;        2554 AA.
 AC   P13368; Q9TYI0; Q9U5V7; Q9VZ36;
 DT   01-JAN-1990, integrated into UniProtKB/Swiss-Prot.
 DT   20-JUN-2001, sequence version 2.
-DT   16-DEC-2008, entry version 99.
+DT   25-APR-2018, entry version 172.
 DE   RecName: Full=Protein sevenless;
 DE            EC=2.7.10.1;
 GN   Name=sev; Synonyms=HD-265; ORFNames=CG18085;
 OS   Drosophila melanogaster (Fruit fly).
-OC   Eukaryota; Metazoa; Arthropoda; Hexapoda; Insecta; Pterygota;
-OC   Neoptera; Endopterygota; Diptera; Brachycera; Muscomorpha;
+OC   Eukaryota; Metazoa; Ecdysozoa; Arthropoda; Hexapoda; Insecta;
+OC   Pterygota; Neoptera; Holometabola; Diptera; Brachycera; Muscomorpha;
 OC   Ephydroidea; Drosophilidae; Drosophila; Sophophora.
 OX   NCBI_TaxID=7227;
 RN   [1]
 RP   NUCLEOTIDE SEQUENCE [GENOMIC DNA], FUNCTION, AND MUTAGENESIS OF
 RP   LYS-2242.
 RC   STRAIN=Canton-S;
-RX   MEDLINE=88282538; PubMed=2840202; DOI=10.1016/0092-8674(88)90193-6;
+RX   PubMed=2840202; DOI=10.1016/0092-8674(88)90193-6;
 RA   Basler K., Hafen E.;
 RT   "Control of photoreceptor cell fate by the sevenless protein requires
 RT   a functional tyrosine kinase domain.";
@@ -23,7 +23,7 @@ RL   Cell 54:299-311(1988).
 RN   [2]
 RP   NUCLEOTIDE SEQUENCE [MRNA].
 RC   STRAIN=Oregon-R;
-RX   MEDLINE=88329706; PubMed=3138161;
+RX   PubMed=3138161; DOI=10.1101/gad.2.6.620;
 RA   Bowtell D.L.L., Simon M.A., Rubin G.M.;
 RT   "Nucleotide sequence and structure of the sevenless gene of Drosophila
 RT   melanogaster.";
@@ -31,7 +31,7 @@ RL   Genes Dev. 2:620-634(1988).
 RN   [3]
 RP   NUCLEOTIDE SEQUENCE [LARGE SCALE GENOMIC DNA].
 RC   STRAIN=Berkeley;
-RX   MEDLINE=20196006; PubMed=10731132; DOI=10.1126/science.287.5461.2185;
+RX   PubMed=10731132; DOI=10.1126/science.287.5461.2185;
 RA   Adams M.D., Celniker S.E., Holt R.A., Evans C.A., Gocayne J.D.,
 RA   Amanatides P.G., Scherer S.E., Li P.W., Hoskins R.A., Galle R.F.,
 RA   George R.A., Lewis S.E., Richards S., Ashburner M., Henderson S.N.,
@@ -72,7 +72,8 @@ RT   "The genome sequence of Drosophila melanogaster.";
 RL   Science 287:2185-2195(2000).
 RN   [4]
 RP   GENOME REANNOTATION.
-RX   MEDLINE=22426069; PubMed=12537572;
+RC   STRAIN=Berkeley;
+RX   PubMed=12537572; DOI=10.1186/gb-2002-3-12-research0083;
 RA   Misra S., Crosby M.A., Mungall C.J., Matthews B.B., Campbell K.S.,
 RA   Hradecky P., Huang Y., Kaminker J.S., Millburn G.H., Prochnik S.E.,
 RA   Smith C.D., Tupy J.L., Whitfield E.J., Bayraktaroglu L., Berman B.P.,
@@ -85,20 +86,20 @@ RT   systematic review.";
 RL   Genome Biol. 3:RESEARCH0083.1-RESEARCH0083.22(2002).
 RN   [5]
 RP   NUCLEOTIDE SEQUENCE [GENOMIC DNA] OF 2349-2408.
-RX   MEDLINE=98401146; PubMed=9731193; DOI=10.1006/bbrc.1998.9003;
+RX   PubMed=9731193; DOI=10.1006/bbrc.1998.9003;
 RA   Oates A.C., Wollberg P., Achen M.G., Wilks A.F.;
 RT   "Sampling the genomic pool of protein tyrosine kinase genes using the
 RT   polymerase chain reaction with genomic DNA.";
 RL   Biochem. Biophys. Res. Commun. 249:660-667(1998).
 RN   [6]
 RP   IDENTIFICATION OF FN-III REPEATS.
-RX   MEDLINE=90199889; PubMed=2317871; DOI=10.1016/0092-8674(90)90209-W;
+RX   PubMed=2317871; DOI=10.1016/0092-8674(90)90209-W;
 RA   Norton P.A., Hynes R.O., Ress D.J.G.;
 RT   "Sevenless: seven found?";
 RL   Cell 61:15-16(1990).
 RN   [7]
 RP   INTERACTION WITH DAB.
-RX   MEDLINE=98336289; PubMed=9671493;
+RX   PubMed=9671493; DOI=10.1128/MCB.18.8.4844;
 RA   Le N., Simon M.A.;
 RT   "Disabled is a putative adaptor protein that functions during
 RT   signaling by the sevenless receptor tyrosine kinase.";
@@ -106,22 +107,24 @@ RL   Mol. Cell. Biol. 18:4844-4854(1998).
 CC   -!- FUNCTION: Receptor for an extracellular signal required to
 CC       instruct a cell to differentiate into an R7 photoreceptor. The
 CC       ligand for sev is the boss (bride of sevenless) protein on the
-CC       surface of the neighboring R8 cell.
+CC       surface of the neighboring R8 cell. {ECO:0000269|PubMed:2840202}.
 CC   -!- CATALYTIC ACTIVITY: ATP + a [protein]-L-tyrosine = ADP + a
-CC       [protein]-L-tyrosine phosphate.
+CC       [protein]-L-tyrosine phosphate. {ECO:0000255|PROSITE-
+CC       ProRule:PRU10028}.
 CC   -!- SUBUNIT: May form a complex with drk and Sos. Binds the
 CC       phosphotyrosine interaction domain (PID) of Dab.
-CC   -!- SUBCELLULAR LOCATION: Cell membrane; Single-pass membrane protein
-CC       (Potential).
+CC   -!- SUBCELLULAR LOCATION: Cell membrane {ECO:0000305}; Single-pass
+CC       membrane protein {ECO:0000305}.
 CC   -!- DOMAIN: It is unclear whether the potential membrane spanning
 CC       region near the N-terminus is present as a transmembrane domain in
 CC       the native protein or serves as a cleaved signal sequence.
 CC   -!- SIMILARITY: Belongs to the protein kinase superfamily. Tyr protein
-CC       kinase family. Insulin receptor subfamily.
-CC   -!- SIMILARITY: Contains 7 fibronectin type-III domains.
-CC   -!- SIMILARITY: Contains 1 protein kinase domain.
+CC       kinase family. Insulin receptor subfamily. {ECO:0000255|PROSITE-
+CC       ProRule:PRU00159}.
+CC   -!- SEQUENCE CAUTION:
+CC       Sequence=CAA31960.1; Type=Erroneous initiation; Evidence={ECO:0000305};
 CC   -----------------------------------------------------------------------
-CC   Copyrighted by the UniProt Consortium, see http://www.uniprot.org/terms
+CC   Copyrighted by the UniProt Consortium, see https://www.uniprot.org/terms
 CC   Distributed under the Creative Commons Attribution-NoDerivs License
 CC   -----------------------------------------------------------------------
 DR   EMBL; J03158; AAA28882.1; -; Genomic_DNA.
@@ -130,49 +133,73 @@ DR   EMBL; X13666; CAB55310.1; -; mRNA.
 DR   EMBL; AE014298; AAF47992.2; -; Genomic_DNA.
 DR   EMBL; AJ002917; CAA05752.1; -; Genomic_DNA.
 DR   PIR; A28912; TVFF7L.
-DR   RefSeq; NP_511114.2; -.
-DR   UniGene; Dm.2618; -.
-DR   HSSP; P08069; 1JQH.
-DR   IntAct; P13368; 5.
-DR   Ensembl; CG18085; Drosophila melanogaster.
+DR   RefSeq; NP_511114.2; NM_078559.3.
+DR   ProteinModelPortal; P13368; -.
+DR   BioGrid; 58454; 44.
+DR   IntAct; P13368; 10.
+DR   STRING; 7227.FBpp0073249; -.
+DR   PaxDb; P13368; -.
+DR   PRIDE; P13368; -.
 DR   GeneID; 32039; -.
 DR   KEGG; dme:Dmel_CG18085; -.
+DR   UCSC; CG18085-RA; d. melanogaster.
+DR   CTD; 32039; -.
 DR   FlyBase; FBgn0003366; sev.
-DR   HOGENOM; P13368; -.
-DR   NextBio; 776500; -.
-DR   ArrayExpress; P13368; -.
-DR   GermOnline; CG18085; Drosophila melanogaster.
-DR   GO; GO:0016021; C:integral to membrane; IEA:UniProtKB-KW.
-DR   GO; GO:0005886; C:plasma membrane; IEA:UniProtKB-KW.
-DR   GO; GO:0005524; F:ATP binding; IEA:InterPro.
-DR   GO; GO:0005515; F:protein binding; IPI:UniProtKB.
-DR   GO; GO:0004714; F:transmembrane receptor protein tyrosine kin...; IEA:InterPro.
-DR   GO; GO:0008595; P:determination of anterior/posterior axis, e...; TAS:FlyBase.
-DR   GO; GO:0046534; P:positive regulation of photoreceptor cell d...; IMP:FlyBase.
-DR   GO; GO:0006468; P:protein amino acid phosphorylation; IEA:InterPro.
+DR   eggNOG; KOG1095; Eukaryota.
+DR   eggNOG; ENOG410XPVX; LUCA.
+DR   InParanoid; P13368; -.
+DR   KO; K05088; -.
+DR   OrthoDB; EOG091G003T; -.
+DR   PhylomeDB; P13368; -.
+DR   BRENDA; 2.7.10.1; 1994.
+DR   SignaLink; P13368; -.
+DR   ChiTaRS; sev; fly.
+DR   GenomeRNAi; 32039; -.
+DR   PRO; PR:P13368; -.
+DR   Proteomes; UP000000803; Chromosome X.
+DR   Bgee; FBgn0003366; -.
+DR   ExpressionAtlas; P13368; differential.
+DR   Genevisible; P13368; DM.
+DR   GO; GO:0005887; C:integral component of plasma membrane; IDA:FlyBase.
+DR   GO; GO:0005886; C:plasma membrane; IDA:FlyBase.
+DR   GO; GO:0005524; F:ATP binding; IEA:UniProtKB-KW.
+DR   GO; GO:0004713; F:protein tyrosine kinase activity; IDA:FlyBase.
+DR   GO; GO:0004714; F:transmembrane receptor protein tyrosine kinase activity; IDA:FlyBase.
+DR   GO; GO:0008595; P:anterior/posterior axis specification, embryo; TAS:FlyBase.
+DR   GO; GO:0042067; P:establishment of ommatidial planar polarity; IMP:FlyBase.
+DR   GO; GO:0018108; P:peptidyl-tyrosine phosphorylation; IDA:FlyBase.
+DR   GO; GO:0046534; P:positive regulation of photoreceptor cell differentiation; IMP:FlyBase.
+DR   GO; GO:0045678; P:positive regulation of R7 cell differentiation; IMP:FlyBase.
+DR   GO; GO:0006468; P:protein phosphorylation; NAS:FlyBase.
 DR   GO; GO:0045467; P:R7 cell development; NAS:FlyBase.
+DR   GO; GO:0045466; P:R7 cell differentiation; TAS:FlyBase.
+DR   GO; GO:0007465; P:R7 cell fate commitment; IMP:FlyBase.
 DR   GO; GO:0045464; P:R8 cell fate specification; IMP:FlyBase.
-DR   GO; GO:0050896; P:response to stimulus; IEA:UniProtKB-KW.
 DR   GO; GO:0008293; P:torso signaling pathway; NAS:FlyBase.
 DR   GO; GO:0007601; P:visual perception; IEA:UniProtKB-KW.
+DR   CDD; cd00063; FN3; 5.
+DR   Gene3D; 2.120.10.30; -; 1.
+DR   Gene3D; 2.60.40.10; -; 5.
 DR   InterPro; IPR011042; 6-blade_b-propeller_TolB-like.
-DR   InterPro; IPR008957; Fibronectin_typ-III-like_fold.
-DR   InterPro; IPR003961; FN_III.
-DR   InterPro; IPR000033; LDLR.
-DR   InterPro; IPR000719; Prot_kinase_core.
-DR   InterPro; IPR017441; Protein_kinase_ATP_bd_CS.
-DR   InterPro; IPR002011; Recept_tyr_kinase-II_CS.
-DR   InterPro; IPR001245; Tyr_pkinase.
-DR   InterPro; IPR008266; Tyr_pkinase_AS.
-DR   Gene3D; G3DSA:2.120.10.30; 6-blade_b-propeller_TolB-like; 1.
-DR   Gene3D; G3DSA:2.60.40.30; FN_III-like; 3.
-DR   Pfam; PF00041; fn3; 6.
+DR   InterPro; IPR003961; FN3_dom.
+DR   InterPro; IPR036116; FN3_sf.
+DR   InterPro; IPR013783; Ig-like_fold.
+DR   InterPro; IPR011009; Kinase-like_dom_sf.
+DR   InterPro; IPR000033; LDLR_classB_rpt.
+DR   InterPro; IPR000719; Prot_kinase_dom.
+DR   InterPro; IPR017441; Protein_kinase_ATP_BS.
+DR   InterPro; IPR001245; Ser-Thr/Tyr_kinase_cat_dom.
+DR   InterPro; IPR008266; Tyr_kinase_AS.
+DR   InterPro; IPR020635; Tyr_kinase_cat_dom.
+DR   InterPro; IPR002011; Tyr_kinase_rcpt_2_CS.
+DR   Pfam; PF00041; fn3; 2.
 DR   Pfam; PF07714; Pkinase_Tyr; 1.
 DR   PRINTS; PR00109; TYRKINASE.
-DR   ProDom; PD000001; Prot_kinase; 1.
 DR   SMART; SM00060; FN3; 7.
 DR   SMART; SM00135; LY; 2.
 DR   SMART; SM00219; TyrKc; 1.
+DR   SUPFAM; SSF49265; SSF49265; 7.
+DR   SUPFAM; SSF56112; SSF56112; 1.
 DR   PROSITE; PS50853; FN3; 7.
 DR   PROSITE; PS00107; PROTEIN_KINASE_ATP; 1.
 DR   PROSITE; PS50011; PROTEIN_KINASE_DOM; 1.
@@ -180,55 +207,99 @@ DR   PROSITE; PS00109; PROTEIN_KINASE_TYR; 1.
 DR   PROSITE; PS00239; RECEPTOR_TYR_KIN_II; 1.
 PE   1: Evidence at protein level;
 KW   ATP-binding; Cell membrane; Complete proteome; Glycoprotein; Kinase;
-KW   Membrane; Nucleotide-binding; Phosphoprotein; Receptor; Repeat;
-KW   Sensory transduction; Transferase; Transmembrane;
-KW   Tyrosine-protein kinase; Vision.
+KW   Membrane; Nucleotide-binding; Phosphoprotein; Receptor;
+KW   Reference proteome; Repeat; Sensory transduction; Transferase;
+KW   Transmembrane; Transmembrane helix; Tyrosine-protein kinase; Vision.
 FT   CHAIN         1   2554       Protein sevenless.
 FT                                /FTId=PRO_0000058928.
-FT   TOPO_DOM      1   2123       Extracellular (Potential).
-FT   TRANSMEM   2124   2147       Potential.
-FT   TOPO_DOM   2148   2554       Cytoplasmic (Potential).
-FT   DOMAIN      311    431       Fibronectin type-III 1.
-FT   DOMAIN      436    528       Fibronectin type-III 2.
-FT   DOMAIN      822    921       Fibronectin type-III 3.
-FT   DOMAIN     1298   1392       Fibronectin type-III 4.
-FT   DOMAIN     1680   1794       Fibronectin type-III 5.
-FT   DOMAIN     1797   1897       Fibronectin type-III 6.
-FT   DOMAIN     1898   1988       Fibronectin type-III 7.
-FT   DOMAIN     2209   2485       Protein kinase.
-FT   NP_BIND    2215   2223       ATP (By similarity).
-FT   COMPBIAS   2038   2046       Poly-Arg.
-FT   ACT_SITE   2343   2343       Proton acceptor (By similarity).
-FT   BINDING    2242   2242       ATP (By similarity).
-FT   MOD_RES    2380   2380       Phosphotyrosine; by autocatalysis (By
-FT                                similarity).
-FT   CARBOHYD     30     30       N-linked (GlcNAc...) (Potential).
-FT   CARBOHYD    129    129       N-linked (GlcNAc...) (Potential).
-FT   CARBOHYD    481    481       N-linked (GlcNAc...) (Potential).
-FT   CARBOHYD    505    505       N-linked (GlcNAc...) (Potential).
-FT   CARBOHYD    617    617       N-linked (GlcNAc...) (Potential).
-FT   CARBOHYD    647    647       N-linked (GlcNAc...) (Potential).
-FT   CARBOHYD    966    966       N-linked (GlcNAc...) (Potential).
-FT   CARBOHYD   1228   1228       N-linked (GlcNAc...) (Potential).
-FT   CARBOHYD   1313   1313       N-linked (GlcNAc...) (Potential).
-FT   CARBOHYD   1353   1353       N-linked (GlcNAc...) (Potential).
-FT   CARBOHYD   1550   1550       N-linked (GlcNAc...) (Potential).
-FT   CARBOHYD   1557   1557       N-linked (GlcNAc...) (Potential).
-FT   CARBOHYD   1639   1639       N-linked (GlcNAc...) (Potential).
-FT   CARBOHYD   1725   1725       N-linked (GlcNAc...) (Potential).
-FT   CARBOHYD   1756   1756       N-linked (GlcNAc...) (Potential).
-FT   CARBOHYD   1804   1804       N-linked (GlcNAc...) (Potential).
-FT   CARBOHYD   1889   1889       N-linked (GlcNAc...) (Potential).
-FT   CARBOHYD   1947   1947       N-linked (GlcNAc...) (Potential).
-FT   CARBOHYD   2073   2073       N-linked (GlcNAc...) (Potential).
+FT   TOPO_DOM      1   2123       Extracellular. {ECO:0000255}.
+FT   TRANSMEM   2124   2147       Helical. {ECO:0000255}.
+FT   TOPO_DOM   2148   2554       Cytoplasmic. {ECO:0000255}.
+FT   DOMAIN      440    533       Fibronectin type-III 1.
+FT                                {ECO:0000255|PROSITE-ProRule:PRU00316}.
+FT   DOMAIN      824    924       Fibronectin type-III 2.
+FT                                {ECO:0000255|PROSITE-ProRule:PRU00316}.
+FT   REPEAT     1010   1053       LDL-receptor class B.
+FT                                {ECO:0000269|PubMed:2317871}.
+FT   DOMAIN     1202   1290       Fibronectin type-III 3.
+FT                                {ECO:0000255|PROSITE-ProRule:PRU00316}.
+FT   DOMAIN     1294   1397       Fibronectin type-III 4.
+FT                                {ECO:0000255|PROSITE-ProRule:PRU00316}.
+FT   DOMAIN     1801   1901       Fibronectin type-III 5.
+FT                                {ECO:0000255|PROSITE-ProRule:PRU00316}.
+FT   DOMAIN     1902   1988       Fibronectin type-III 6.
+FT                                {ECO:0000255|PROSITE-ProRule:PRU00316}.
+FT   DOMAIN     1995   2117       Fibronectin type-III 7.
+FT                                {ECO:0000255|PROSITE-ProRule:PRU00316}.
+FT   DOMAIN     2209   2485       Protein kinase. {ECO:0000255|PROSITE-
+FT                                ProRule:PRU00159}.
+FT   NP_BIND    2215   2223       ATP. {ECO:0000255|PROSITE-
+FT                                ProRule:PRU00159}.
+FT   COMPBIAS     58     64       Poly-Ser.
+FT   COMPBIAS    112    118       Poly-Leu.
+FT   COMPBIAS    166    169       Poly-Ala.
+FT   COMPBIAS   2034   2046       Arg-rich.
+FT   ACT_SITE   2343   2343       Proton acceptor. {ECO:0000255|PROSITE-
+FT                                ProRule:PRU00159, ECO:0000255|PROSITE-
+FT                                ProRule:PRU10028}.
+FT   BINDING    2242   2242       ATP. {ECO:0000255|PROSITE-
+FT                                ProRule:PRU00159}.
+FT   MOD_RES    2380   2380       Phosphotyrosine; by autocatalysis.
+FT                                {ECO:0000250}.
+FT   CARBOHYD     30     30       N-linked (GlcNAc...) asparagine.
+FT                                {ECO:0000255}.
+FT   CARBOHYD    129    129       N-linked (GlcNAc...) asparagine.
+FT                                {ECO:0000255}.
+FT   CARBOHYD    481    481       N-linked (GlcNAc...) asparagine.
+FT                                {ECO:0000255}.
+FT   CARBOHYD    505    505       N-linked (GlcNAc...) asparagine.
+FT                                {ECO:0000255}.
+FT   CARBOHYD    617    617       N-linked (GlcNAc...) asparagine.
+FT                                {ECO:0000255}.
+FT   CARBOHYD    647    647       N-linked (GlcNAc...) asparagine.
+FT                                {ECO:0000255}.
+FT   CARBOHYD    966    966       N-linked (GlcNAc...) asparagine.
+FT                                {ECO:0000255}.
+FT   CARBOHYD   1228   1228       N-linked (GlcNAc...) asparagine.
+FT                                {ECO:0000255}.
+FT   CARBOHYD   1313   1313       N-linked (GlcNAc...) asparagine.
+FT                                {ECO:0000255}.
+FT   CARBOHYD   1353   1353       N-linked (GlcNAc...) asparagine.
+FT                                {ECO:0000255}.
+FT   CARBOHYD   1550   1550       N-linked (GlcNAc...) asparagine.
+FT                                {ECO:0000255}.
+FT   CARBOHYD   1557   1557       N-linked (GlcNAc...) asparagine.
+FT                                {ECO:0000255}.
+FT   CARBOHYD   1639   1639       N-linked (GlcNAc...) asparagine.
+FT                                {ECO:0000255}.
+FT   CARBOHYD   1725   1725       N-linked (GlcNAc...) asparagine.
+FT                                {ECO:0000255}.
+FT   CARBOHYD   1756   1756       N-linked (GlcNAc...) asparagine.
+FT                                {ECO:0000255}.
+FT   CARBOHYD   1804   1804       N-linked (GlcNAc...) asparagine.
+FT                                {ECO:0000255}.
+FT   CARBOHYD   1889   1889       N-linked (GlcNAc...) asparagine.
+FT                                {ECO:0000255}.
+FT   CARBOHYD   1947   1947       N-linked (GlcNAc...) asparagine.
+FT                                {ECO:0000255}.
+FT   CARBOHYD   2073   2073       N-linked (GlcNAc...) asparagine.
+FT                                {ECO:0000255}.
 FT   MUTAGEN    2242   2242       K->M: Inactivates the protein.
+FT                                {ECO:0000269|PubMed:2840202}.
 FT   CONFLICT    392    392       V -> M (in Ref. 1; AAA28882).
+FT                                {ECO:0000305}.
 FT   CONFLICT    663    663       A -> T (in Ref. 3; AAF47992).
+FT                                {ECO:0000305}.
 FT   CONFLICT   1703   1703       N -> H (in Ref. 3; AAF47992).
+FT                                {ECO:0000305}.
 FT   CONFLICT   1730   1731       RG -> KE (in Ref. 3; AAF47992).
+FT                                {ECO:0000305}.
 FT   CONFLICT   1741   1741       V -> M (in Ref. 3; AAF47992).
+FT                                {ECO:0000305}.
 FT   CONFLICT   1823   1823       E -> Q (in Ref. 2; CAA31960/CAB55310).
+FT                                {ECO:0000305}.
 FT   CONFLICT   2271   2271       C -> R (in Ref. 1; AAA28882).
+FT                                {ECO:0000305}.
 SQ   SEQUENCE   2554 AA;  287025 MW;  09E238A0F27684F8 CRC64;
      MTMFWQQNVD HQSDEQDKQA KGAAPTKRLN ISFNVKIAVN VNTKMTTTHI NQQAPGTSSS
      SSNSQNASPS KIVVRQQSSS FDLRQQLARL GRQLASGQDG HGGISTILII NLLLLILLSI

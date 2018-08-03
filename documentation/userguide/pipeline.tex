@@ -1,18 +1,17 @@
 
-\section{The HMMER profile/sequence comparison pipeline}
-\label{section:pipeline}
+\chapter{The HMMER profile/sequence comparison pipeline}
+\label{chapter:pipeline}
 \setcounter{footnote}{0}
 
-In this section, we briefly outline the processing pipeline for a
-single profile/sequence comparison.\footnote{Code gurus and
-  masochists: you can follow along in \ccode{src/p7\_pipeline.c}.} This
-should help give you a sense of what HMMER is doing under the hood,
-what sort of mistakes it may make (rarely, of course!), and what the
-various results in the output actually mean. We'll first describe the 
-pipeline in the context of protein search (\prog{phmmer}, \prog{hmmsearch},
-\prog{hmmscan}, \prog{jackhmmer}), then wrap back around to discuss the
-modified pipeline used in \prog{nhmmer} and \prog{nhmmscan}.
-
+Now I'll briefly outline the processing pipeline for a single
+profile/sequence comparison.\marginnote{Code gurus, masochists: you
+  can follow along in \mono{src/p7\_pipeline.c}.} This should help
+give you a sense of what HMMER is doing under the hood, what sort of
+mistakes it may make (rarely, of course!), and what the various
+results in the output actually mean. I'll first describe the pipeline
+in the context of protein search (\mono{phmmer}, \mono{hmmsearch},
+\mono{hmmscan}, \mono{jackhmmer}), then wrap back around to discuss
+the modified pipeline used in \mono{nhmmer} and \mono{nhmmscan}.
 
 In briefest outline, the comparison pipeline takes the following
 steps:
@@ -73,10 +72,9 @@ steps:
 
 \end{description}
 
-In more detail, each step is described in subsections that follow. Even more
-detail may be found in \citep{Eddy11}.
+In more detail, each step is described below.
 
-\subsection{Null model.}
+\section{Null model}
 
 The ``null model'' calculates the probability that the target sequence
 is \emph{not} homologous to the query profile. A HMMER bit score is
@@ -101,7 +99,7 @@ and toting them up into a bit score correction.  The null model
 calculation is fast, because it only depends on the length of the
 target sequence, not its sequence.
 
-\subsection{MSV filter.}
+\section{MSV filter}
 
 The sequence is aligned to the profile using a specialized model that
 allows multiple high-scoring local ungapped segments to match.  The
@@ -120,19 +118,19 @@ scores scaled to 8-bit integers, enabling acceleration via 16-way
 parallel SIMD vector instructions. 
 
 The MSV score is a true log-odds likelihood ratio, so it obeys
-conjectures about the expected score distribution \citep{Eddy08} that
+conjectures about the expected score distribution\cite{Eddy08} that
 allow immediate and accurate calculation of the statistical
 significance (P-value) of the MSV bit score.
 
 By default, comparisons with a P-value of $\leq$ 0.02 pass this
 filter, meaning that about $2\%$ of nonhomologous sequences are
-expected to pass. You can use the \ccode{--F1 <x>} option to change
-this threshold. For example, \ccode{--F1 <0.05>} would pass 5\% of the
+expected to pass. You can use the \mono{-{}-F1 <x>} option to change
+this threshold. For example, \mono{-{}-F1 0.05} would pass 5\% of the
 comparisons, making a search more sensitive but slower. Setting the
-threshold to $\ge 1.0$ (\ccode{--F1 99} for example) assures that all
+threshold to $\ge 1.0$ (\mono{-{}-F1 99} for example) assures that all
 comparisons will pass. Shutting off the MSV filter may be worthwhile
 if you want to make sure you don't miss comparisons that have a lot of
-scattered insertions and deletions. Alternatively, the \ccode{--max}
+scattered insertions and deletions. Alternatively, the \mono{-{}-max}
 option causes the MSV filter step (and all other filter steps) to be
 bypassed.
 
@@ -151,12 +149,12 @@ like:
  MSV filter, versus how many (and what fraction) were expected. 
 
 
-\subsection{Biased composition filter.}
+\section{Biased composition filter}
 
 It's possible for profiles and/or sequences to have biased residue
 compositions that result in ``significant'' log-odds bit scores not
-because the profile matches the sequence particularly well, but
-because the \emph{null model} matches the sequence particularly badly.
+because the sequence matches the profile well, but because the
+sequence matches the null model badly.
 
 HMMER uses fairly good methods to compensate its scores for biased
 composition, but these methods are computationally expensive and
@@ -170,9 +168,8 @@ account a ``null2'' model of biased composition and simple repetition,
 the null2 model is dependent on a full alignment ensemble calculation
 via the Forward/Backward algorithm, making it computationally complex,
 so it won't get calculated until the very end. The treatment of biased
-composition comparisons is probably the most serious problem remaining
-in HMMER. Solving it well will require more research. As a stopgap
-solution to rescuing most of the speed degradation while not
+composition comparisons is an inadequately solved problem in HMMER. As
+a stopgap solution to rescuing most of the speed degradation while not
 sacrificing too much sensitivity, an \emph{ad hoc} biased composition
 filtering step is applied to remove highly biased comparisons.
 
@@ -180,15 +177,15 @@ On the fly, a two-state HMM is constructed. One state emits residues
 from the background frequency distribution (same as the null1 model),
 and the other state emits residues from the mean residue composition
 of the profile (i.e. the expected composition of sequences generated
-by the core model, including match and insert states
-[\ccode{p7\_hmm.c:p7\_hmm\_SetComposition()}]). Thus if the profile is
-highly biased (cysteine-rich, for example; or highly hydrophobic with
-many transmembrane segments), this composition bias will be captured
-by this second state. This model's transitions are arbitrarily set
-such that state 1 emits an expected length of 400 at a time, and state
-2 emits an expected length of M/8 at a time (for a profile of length
-M). An overall target sequence length distribution is set to a mean of
-$L$, identical to the null1 model.
+by the core model, including match and insert
+states.\sidenote{\mono{p7\_hmm.c:p7\_hmm\_SetComposition()}} Thus if
+the profile is highly biased (cysteine-rich, for example; or highly
+hydrophobic with many transmembrane segments), this composition bias
+will be captured by this second state. This model's transitions are
+arbitrarily set such that state 1 emits an expected length of 400 at a
+time, and state 2 emits an expected length of M/8 at a time (for a
+profile of length M). An overall target sequence length distribution
+is set to a mean of $L$, identical to the null1 model.
 
 The sequence is then rescored using this ``bias filter model'' in
 place of the null1 model, using the HMM Forward algorithm. (This
@@ -199,14 +196,14 @@ score is obtained.
 If the P-value of this still satisfies the MSV thresholds, the
 sequence passes the biased composition filter. 
 
-The \ccode{--F1 <x>} option controls the P-value threshold for
+The \mono{-{}-F1 <x>} option controls the P-value threshold for
 passing the MSV filter score, both before (with the simple null1
 model) and after the bias composition filter is applied.
 
-The \ccode{--max} option bypasses all filters in the pipeline,
+The \mono{-{}-max} option bypasses all filters in the pipeline,
 including the bias filter.
 
-The \ccode{--nobias} option turns off (bypasses) the biased
+The \mono{-{}-nobias} option turns off (bypasses) the biased
 composition filter.  The simple null model is used as a null
 hypothesis for MSV and in subsequent filter steps. The biased
 composition filter step compromises a small amount of sensitivity.
@@ -224,7 +221,7 @@ biased composition filter, versus how many were expected. (If the
 filter was turned off, all comparisons pass.)
 
 
-\subsection{Viterbi filter.}
+\section{Viterbi filter}
 
 The sequence is now aligned to the profile using a fast Viterbi
 algorithm for optimal gapped alignment.
@@ -245,9 +242,9 @@ the null model score). If the P-value of this score passes the Viterbi
 filter threshold, the sequence passes on to the next step of the
 pipeline.
  
-The \ccode{--F2 <x>} option controls the P-value threshold for passing
+The \mono{-{}-F2 <x>} option controls the P-value threshold for passing
 the Viterbi filter score. The default is 0.001.
-The \ccode{--max} option bypasses all filters in the pipeline.
+The \mono{-{}-max} option bypasses all filters in the pipeline.
 
 
 At the end of a search output, you will see a line like:
@@ -261,7 +258,7 @@ Viterbi filter, versus how many were expected.
  
   
 
-\subsection{Forward filter/parser.}
+\section{Forward filter/parser}
 
 The sequence is now aligned to the profile using the full Forward
 algorithm, which calculates the likelihood of the target sequence
@@ -290,8 +287,8 @@ bit scores or P-values. Biased composition compensation for final bit
 scores is done by a more complex domain-specific algorithm, described
 below.
 
-The \ccode{--F3 <x>} option controls the P-value threshold for passing
-the Forward filter score. The default is 1e-5.  The \ccode{--max}
+The \mono{-{}-F3 <x>} option controls the P-value threshold for passing
+the Forward filter score. The default is 1e-5.  The \mono{-{}-max}
 option bypasses all filters in the pipeline.
 
 At the end of a search output, you will see a line like:
@@ -304,7 +301,7 @@ which tells you how many and what fraction of comparisons passed the
 Forward filter, versus how many were expected.
 
 
-\subsection{Domain definition.}
+\section{Domain definition}
 
 A target sequence that reaches this point is very likely to contain
 one or more significant matches to the profile. These matches are
@@ -315,10 +312,9 @@ a multidomain target sequence into its multiple nonoverlapping hits to
 the same domain model.
 
 The domain definition step is essentially its own pipeline, with steps
-as follows:\footnote{Code gurus and masochists can follow along in 
-\ccode{src/p7\_domaindef.c}.}
+as follows:\sidenote{\mono{src/p7\_domaindef.c}}
 
-\paragraph{Backward parser.}
+\paragraph{Backward parser}
 The counterpart of the Forward parser algorithm is calculated in an
 analogous time- and memory-efficient implementation. The Forward
 algorithm gives the likelihood of all \emph{prefixes} of the target
@@ -340,8 +336,8 @@ The sum of the posterior probabilities of alignment starts (B states)
 over the entire target sequence is the \emph{expected number of
   domains} in the sequence.
 
-In a tabular output (\ccode{--tblout}) file, this number is in the
-column labeled \ccode{exp}.
+In a tabular output (\mono{-{}-tblout}) file, this number is in the
+column labeled \mono{exp}.
 
 \paragraph{Region identification.}
 
@@ -354,10 +350,10 @@ by posterior decoding on the Forward/Backward parser results). This
 number should be about 1: we expect each region to contain one local
 alignment to the profile. 
 
-In a tabular output (\ccode{--tblout}) file, the number of discrete
+In a tabular output (\mono{-{}-tblout}) file, the number of discrete
 regions identified by this posterior decoding step is in the column
-labeled \ccode{reg}. It ought to be almost the same as the expectation
-\ccode{exp}. If it is not, there may be something funny going on, like
+labeled \mono{reg}. It ought to be almost the same as the expectation
+\mono{exp}. If it is not, there may be something funny going on, like
 a tandem repetitive element in the target sequence (which can produce
 so many overlapping weak hits that the sequence appears to be a
 significant hit with lots of domains expected \emph{somewhere}, but
@@ -376,7 +372,7 @@ identification is already done: the region's start and end points are
 converted directly to the envelope coordinates of a putative domain.
 
 There are a few cases where the region appears to contain more than
-one expected domain -- where more than one domain is closely spaced on
+one expected domain -{}- where more than one domain is closely spaced on
 the target sequence and/or the domain scores are weak and the
 probability masses are ill-resolved from each other. These
 ``multidomain regions'', when they occur, are passed off to an even
@@ -392,22 +388,21 @@ These envelopes identified by stochastic traceback clustering are
 \emph{not} guaranteed to be nonoverlapping. It's possible that there
 are alternative ``solutions'' for parsing the sequence into domains,
 when the correct parsing is ambiguous. HMMER will report all
-high-likelihood solutions, not just a single nonoverlapping parse.
-
+high-likelihood solutions, not just a single nonoverlapping parse.\marginnote{
 It's also possible (though rare) for stochastic clustering to identify
-\emph{no} envelopes in the region.
+\emph{no} envelopes in the region.}
 
-In a tabular output (\ccode{--tblout}) file, the number of regions
+In a tabular output (\mono{-{}-tblout}) file, the number of regions
 that had to be subjected to stochastic traceback clustering is given
-in the column labeled \ccode{clu}. This ought to be a small number
+in the column labeled \mono{clu}. This ought to be a small number
 (often it's zero). The number of envelopes identified by stochastic
 traceback clustering that overlap with other envelopes is in the
-column labeled \ccode{ov}. If this number is non-zero, you need to be
+column labeled \mono{ov}. If this number is non-zero, you need to be
 careful when you interpret the details of alignments in the output,
 because HMMER is going to be showing overlapping alternative
 solutions. The total number of domain envelopes identified (either by
 the simple method or by stochastic traceback clustering) is in the
-column labeled \ccode{env}. It ought to be almost the same as the
+column labeled \mono{env}. It ought to be almost the same as the
 expectation and the number of regions.
 
 \paragraph{Maximum expected accuracy alignment.}
@@ -425,25 +420,25 @@ Currently, the Forward, Backward, and posterior decoding calculations
 at this step are \emph{not} memory efficient. They calculate matrices
 requiring roughly $36 ML$ bytes, where $M$ is the profile length and
 $L$ is the length of the envelope subsequence. Usually in
-\prog{hmmsearch} and \prog{hmmscan}, profiles and envelopes are small
+\mono{hmmsearch} and \mono{hmmscan}, profiles and envelopes are small
 enough that this is not a problem. For example, a typical Pfam domain
 model is about 200 residues long, matching to individual target
 envelopes of about 200 residues each; this requires about 1.4 MB of
-memory in MEA alignment. However, in \prog{phmmer} and
-\prog{jackhmmer} programs, it's often going to be the case that you're
+memory in MEA alignment. However, in \mono{phmmer} and
+\mono{jackhmmer} programs, it's often going to be the case that you're
 aligning an entire query sequence to an entire target sequence in a
 single unresolved ``domain'' alignment. If this is titin (about 40,000
 residues), it would require 57.6 GB of RAM. For this reason,
-currently, \prog{phmmer} and \prog{jackhmmer} can only handle query
+currently, \mono{phmmer} and \mono{jackhmmer} can only handle query
 sequences of up to a few thousand residues. If you see a ``fatal
 exception'' error complaining about failure of a large memory
 allocation, you're almost certainly seeing a prohibitive memory
-requirement at this stage.\footnote{We know how to fix this, with
-  memory-efficient algorithms, and are working on it.}
+requirement at this stage.\footnote{I know how to fix this with
+  memory-efficient algorithms, and I'm working on it.}
 
-In a tabular output (\ccode{--tblout}) file, the number of domains in
+In a tabular output (\mono{-{}-tblout}) file, the number of domains in
 envelopes (before any significance thresholding) is in the column
-labeled \ccode{dom}. This will generally be the same as the number of
+labeled \mono{dom}. This will generally be the same as the number of
 envelopes.
 
 \paragraph{Biased composition score correction (``null2'')}
@@ -460,24 +455,26 @@ sequence level and per-domain.
 
 
 
-\subsection{Modifications to the pipeline as used for DNA search.}
+\section{Modifications to the pipeline as used for DNA search}
 
-\subsubsection{SSV, not MSV.}
+\subsection{SSV, not MSV.}
 
-In the MSV filter, one or more high-scoring ungapped segments contribute to a
-score that, if sufficiently high, casues the entire sequence to be passed on to
-the next stage (the bias filter). This strategy won't work for long
-DNA sequences; it doesn't filter the human genome much to say ``there's a hit on
-chromosome 1, now process the whole thing''. In the scanning-SSV (``Single
-ungapped Segment Viterbi'') algorithm used in \prog{nhmmer} and
-\prog{nhmmscan}, each comparison between a query and target is
-scanned for high-scoring ungapped alignment segments, and a window around each 
-such segment is extracted, merging overlapping windows. Each window is then
-passed on to the remaining filter cascade, where it is (for the most part)
-treated as described above. As with the MSV filter, the default P-value 
-threshold is $0.02$, and can be controlled with the \ccode{--F1} flag.
+In the MSV filter, one or more high-scoring ungapped segments
+contribute to a score that, if sufficiently high, causes the entire
+sequence to be passed on to the next stage (the bias filter). This
+strategy won't work for long DNA sequences; it doesn't filter the
+human genome much to say ``there's a hit on chromosome 1, now
+postprocess the whole thing''. In the scanning-SSV (``Single ungapped
+Segment Viterbi'') algorithm used in \mono{nhmmer} and
+\mono{nhmmscan}, each comparison between a query and target is scanned
+for high-scoring ungapped alignment segments, and a window around each
+such segment is extracted, merging overlapping windows. Each window is
+then passed on to the remaining filter cascade, where it is treated as
+described above for the most part. As with the MSV filter, the default
+P-value threshold is $0.02$, and can be controlled with the
+\mono{-{}-F1} flag.
 
-The \ccode{--max} flag also controls the amount of the sequence database that
+The \mono{-{}-max} flag also controls the amount of the sequence database that
 passes the SSV filter, but instead of the threshold being set to $1.0$, as
 described for the protein pipeline, it is set to $0.4$.
 %, which allows passage to anything with a sniff of a chance of passing the
@@ -492,34 +489,36 @@ described for the protein pipeline, it is set to $0.4$.
 %shared hits as necessary to avoid duplicates).
 
 
-\subsubsection{There are no domains, but there are envelopes.}
+\subsection{There are no domains, but there are envelopes}
 
-In HMMER's protein-search programs, multiple matches of the model to a target
-sequence are treated as domains contained within a single hit for that
-sequence. In the DNA-search programs, each match of the model to a subsequence
-is treated as an independent hit - there's no notion of a domain. This is
-largely a difference in reporting; both pipelines rely on essentially the same 
-envelope detection code; envelopes lead to domains in protein search, and
-hits in DNA search.
-
-
-\subsubsection{Biased composition.}
-
-DNA sequence is littered with regions containing tandem simple repeats or other 
-low complexity sequence. Without accounting for such composition bias, we see
-many cases in which one part of a hit is obviously legitimate, and serves as the
-anchor for a neighboring alignment segment that is clearly low-complexity
-garbage, one form of a problem known as homologous overextension
-\citep{Gonzalez10}. The null2 method used in protein search delays score
-modification until after the alignment is complete, but we know that
-this kind of overextension can be (mostly) avoided if the model's log odds
-scores account for the composition bias of the target region while constructing
-the alignment. The DNA search pipeline therefore does just this: it modifies
-the scoring scheme for each target envelope as a function of that envelope's
-sequence composition, then builds the alignment according to that scheme.
+In HMMER's protein-search programs, multiple matches of the model to a
+target sequence are treated as domains contained within a single hit
+for that sequence. In the DNA-search programs, each match of the model
+to a subsequence is treated as an independent hit - there's no notion
+of a domain. This is largely a difference in reporting. Both pipelines
+rely on essentially the same envelope detection code; envelopes lead
+to domains in protein search, and hits in DNA search.
 
 
-%\subsubsection{More about envelopes.}
+\subsection{Biased composition.}
+
+DNA sequence is littered with regions containing tandem simple repeats
+or other low complexity sequence. Without accounting for such
+composition bias, we see many cases in which one part of a hit is
+obviously legitimate, and serves as the anchor for a neighboring
+alignment segment that is clearly low-complexity garbage, one form of
+a problem known as homologous overextension.\cite{Gonzalez10}. The
+null2 method used in protein search delays score modification until
+after the alignment is complete, but we know that this kind of
+overextension can be (mostly) avoided if the model's log odds scores
+account for the composition bias of the target region while
+constructing the alignment. The DNA search pipeline therefore does
+just this: it modifies the scoring scheme for each target envelope as
+a function of that envelope's sequence composition, then builds the
+alignment according to that scheme.
+
+
+%\subsection{More about envelopes.}
 
 %DNA sequence is littered with regions containing tandem simple repeats or other 
 %low complexity sequence. When an HMM contains a regions with similar bias, the

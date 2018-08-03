@@ -45,8 +45,6 @@ typedef struct {
 #define CPUOPTS     NULL
 #define MPIOPTS     NULL
 
-//#define DAEMONOPTS  "-o,--tblout,--domtblout"
-
 static ESL_OPTIONS options[] = {
   /* name           type          default  env  range toggles  reqs   incomp                         help                                           docgroup*/
   { "-h",           eslARG_NONE,   FALSE, NULL, NULL,    NULL,  NULL,  NULL,            "show brief help on version and usage",                          1 },
@@ -109,9 +107,6 @@ static ESL_OPTIONS options[] = {
   { "--domZ",       eslARG_REAL,   FALSE, NULL, "x>0",   NULL,  NULL,  NULL,           "set # of significant seqs, for domain E-value calculation",      99 },
   { "--notrans",    eslARG_NONE,   FALSE, NULL, NULL,      NULL,  NULL,  NULL,          "don't show the translated DNA sequence in domain alignment",    99 }, /*for nhmmscant */
   { "--vertcodon",  eslARG_NONE,   FALSE, NULL, NULL,      NULL,  NULL,  NULL,          "show the DNA vertically in domain alignment",                   99 }, /*for nhmmscant */
-
-//  { "--daemon",     eslARG_NONE,    NULL, NULL, NULL,    NULL,  NULL,  DAEMONOPTS,      "run program as a daemon",                                      12 },
-
 
 #ifdef HMMER_THREADS
   { "--cpu",        eslARG_INT, p7_NCPU,"HMMER_NCPU","n>=0",NULL,  NULL,  CPUOPTS,         "number of parallel CPU workers to use for multithreads",       12 },
@@ -263,7 +258,6 @@ output_header(FILE *ofp, ESL_GETOPTS *go, char *hmmfile, char *seqfile)
   if (esl_opt_IsUsed(go, "--qformat")   && fprintf(ofp, "# input seqfile format asserted:   %s\n",            esl_opt_GetString(go, "--qformat"))   < 0) ESL_EXCEPTION_SYS(eslEWRITE, "write failed");
   if (esl_opt_IsUsed(go, "--w_beta")     && fprintf(ofp, "# window length beta value:        %g\n",             esl_opt_GetReal(go, "--w_beta"))      < 0) ESL_EXCEPTION_SYS(eslEWRITE, "write failed");
   if (esl_opt_IsUsed(go, "--w_length")   && fprintf(ofp, "# window length :                  %d\n",             esl_opt_GetInteger(go, "--w_length")) < 0) ESL_EXCEPTION_SYS(eslEWRITE, "write failed");
-//  if (esl_opt_IsUsed(go, "--daemon")    && fprintf(ofp, "run as a daemon process\n")                                                                < 0) ESL_EXCEPTION_SYS(eslEWRITE, "write failed");
 #ifdef HMMER_THREADS
   if (esl_opt_IsUsed(go, "--cpu")       && fprintf(ofp, "# number of worker threads:        %d\n",            esl_opt_GetInteger(go, "--cpu"))      < 0) ESL_EXCEPTION_SYS(eslEWRITE, "write failed");  
 #endif
@@ -356,16 +350,6 @@ serial_master(ESL_GETOPTS *go, struct cfg_s *cfg)
     seqfmt = esl_sqio_EncodeFormat(esl_opt_GetString(go, "--qformat"));
     if (seqfmt == eslSQFILE_UNKNOWN) p7_Fail("%s is not a recognized input sequence file format\n", esl_opt_GetString(go, "--qformat"));
   }
-
-  /* validate options if running as a daemon */
-//  if (esl_opt_IsOn(go, "--daemon")) {
-    /* running as a daemon, the input format must be type daemon */
-//    if (seqfmt != eslSQFILE_UNKNOWN && seqfmt != eslSQFILE_DAEMON)
-//      esl_fatal("Input format %s not supported.  Must be daemon\n", esl_opt_GetString(go, "--qformat"));
-//    seqfmt = eslSQFILE_DAEMON;
-
-//    if (strcmp(cfg->seqfile, "-") != 0) esl_fatal("Query sequence file must be '-'\n");
-//  }
 
   /* Open the target profile database to get the sequence alphabet */
   status = p7_hmmfile_OpenE(cfg->hmmfile, p7_HMMDBENV, &hfp, errbuf);

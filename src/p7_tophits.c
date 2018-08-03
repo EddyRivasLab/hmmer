@@ -269,8 +269,11 @@ hit_sorter_by_sortkey(const void *vh1, const void *vh2)
     int dir1 = (h1->dcl[0].iali < h1->dcl[0].jali ? 1 : -1);
     int dir2 = (h2->dcl[0].iali < h2->dcl[0].jali ? 1 : -1);
     if (dir1 != dir2) return dir2; // so if dir1 is pos (1), and dir2 is neg (-1), this will return -1, placing h1 before h2;  otherwise, vice versa
-    else              return (h1->dcl[0].iali > h2->dcl[0].iali ? 1 : -1 );
-
+    else { 
+      if     (h1->dcl[0].iali > h2->dcl[0].iali) return  1; 
+      else if(h1->dcl[0].iali < h2->dcl[0].iali) return -1; 
+      else                                       return  0;
+    }
   }
 }
 
@@ -288,8 +291,16 @@ hit_sorter_by_seqidx_aliposition(const void *vh1, const void *vh2)
 
   if (dir1 != dir2) return dir2; // so if dir1 is pos (1), and dir2 is neg (-1), this will return -1, placing h1 before h2;  otherwise, vice versa
 
-  if ( h1->dcl[0].iali == h2->dcl[0].iali)    return  (h1->dcl[0].jali < h2->dcl[0].jali ? 1 : -1 );
-  else                                        return  (h1->dcl[0].iali > h2->dcl[0].iali ? 1 : -1 );
+  if ( h1->dcl[0].iali == h2->dcl[0].iali) { 
+    if     (h1->dcl[0].jali < h2->dcl[0].jali) return  1; 
+    else if(h1->dcl[0].jali > h2->dcl[0].jali) return -1; 
+    else                                       return  0;
+  }
+  else { 
+    if     (h1->dcl[0].iali > h2->dcl[0].iali) return  1; 
+    else if(h1->dcl[0].iali < h2->dcl[0].iali) return -1;
+    else                                       return  0;
+  }
 }
 
 static int
@@ -308,8 +319,16 @@ hit_sorter_by_modelname_aliposition(const void *vh1, const void *vh2)
 
   if (dir1 != dir2) return dir2; // so if dir1 is pos (1), and dir2 is neg (-1), this will return -1, placing h1 before h2;  otherwise, vice versa
 
-  if ( h1->dcl[0].iali == h2->dcl[0].iali)    return  (h1->dcl[0].jali < h2->dcl[0].jali ? 1 : -1 );
-  else                                        return  (h1->dcl[0].iali > h2->dcl[0].iali ? 1 : -1 );
+  if ( h1->dcl[0].iali == h2->dcl[0].iali) { 
+    if     (h1->dcl[0].jali < h2->dcl[0].jali) return  1; 
+    else if(h1->dcl[0].jali > h2->dcl[0].jali) return -1; 
+    else                                       return  0;
+  }
+  else { 
+    if     (h1->dcl[0].iali > h2->dcl[0].iali) return  1; 
+    else if(h1->dcl[0].iali < h2->dcl[0].iali) return -1;
+    else                                       return  0;
+  }
 }
 
 
@@ -1150,8 +1169,9 @@ p7_tophits_Targets(FILE *ofp, P7_TOPHITS *th, P7_PIPELINE *pli, int textw)
   }
 
   for (h = 0; h < th->N; h++)
-    if (th->hit[h]->flags & p7_IS_REPORTED)
-    {
+  {
+      if (th->hit[h]->flags & p7_IS_REPORTED)
+      {
         d    = th->hit[h]->best_domain;
 
         if (! (th->hit[h]->flags & p7_IS_INCLUDED) && ! have_printed_incthresh) 
@@ -1228,9 +1248,10 @@ p7_tophits_Targets(FILE *ofp, P7_TOPHITS *th, P7_PIPELINE *pli, int textw)
          * have an fprintf() bug here (we found one on an Opteron/SUSE Linux
          * system (#h66)
          */
-    }
+      }
+  }
 
-    if (th->nreported == 0)
+  if (th->nreported == 0)
     { 
       if (fprintf(ofp, "\n   [No hits detected that satisfy reporting thresholds]\n") < 0)
         ESL_EXCEPTION_SYS(eslEWRITE, "per-sequence hit list: write failed");
@@ -1263,301 +1284,206 @@ p7_tophits_Domains(FILE *ofp, P7_TOPHITS *th, P7_PIPELINE *pli, int textw)
   int   status;
 
   if (pli->long_targets) 
-  {
+    {
       if (fprintf(ofp, "Annotation for each hit %s:\n",
-      pli->show_alignments ? " (and alignments)" : "") < 0)
+		  pli->show_alignments ? " (and alignments)" : "") < 0)
         ESL_EXCEPTION_SYS(eslEWRITE, "domain hit list: write failed");
-  }
+    }
   else 
-  {
+    {
       if (fprintf(ofp, "Domain annotation for each %s%s:\n",
-      pli->mode == p7_SEARCH_SEQS ? "sequence" : "model",
-      pli->show_alignments ? " (and alignments)" : "") < 0)
+		  pli->mode == p7_SEARCH_SEQS ? "sequence" : "model",
+		  pli->show_alignments ? " (and alignments)" : "") < 0)
         ESL_EXCEPTION_SYS(eslEWRITE, "domain hit list: write failed");
-  }
+    }
 
   for (h = 0; h < th->N; h++)
     if (th->hit[h]->flags & p7_IS_REPORTED)
-    {
-      if (pli->show_accessions && th->hit[h]->acc != NULL && th->hit[h]->acc[0] != '\0')
       {
-        showname = th->hit[h]->acc;
-        namew    = strlen(th->hit[h]->acc);
-      }
-      else
-      {
-        showname = th->hit[h]->name;
-        namew = strlen(th->hit[h]->name);
-      }
-
-      if (textw > 0)
-      {
-        descw = ESL_MAX(32, textw - namew - 5);
-        if (fprintf(ofp, ">> %s  %-.*s\n", showname, descw, (th->hit[h]->desc == NULL ? "" : th->hit[h]->desc)) < 0)
-          ESL_EXCEPTION_SYS(eslEWRITE, "domain hit list: write failed");
-      }
-      else
-      {
-        if (fprintf(ofp, ">> %s  %s\n",    showname,        (th->hit[h]->desc == NULL ? "" : th->hit[h]->desc)) < 0)
-          ESL_EXCEPTION_SYS(eslEWRITE, "domain hit list: write failed");
-      }
-
-      if (th->hit[h]->nreported == 0)
-      {
-        if (fprintf(ofp,"   [No individual domains that satisfy reporting thresholds (although complete target did)]\n\n") < 0)
-          ESL_EXCEPTION_SYS(eslEWRITE, "domain hit list: write failed");
-        continue;
-      }
+	if (pli->show_accessions && th->hit[h]->acc != NULL && th->hit[h]->acc[0] != '\0')
+	  {
+	    showname = th->hit[h]->acc;
+	    namew    = strlen(th->hit[h]->acc);
+	  }
+	else
+	  {
+	    showname = th->hit[h]->name;
+	    namew = strlen(th->hit[h]->name);
+	  }
 
 
-      if (pli->long_targets) {
-        /* The dna hit table is 119 char wide:
-    score  bias    Evalue hmmfrom  hmm to     alifrom    ali to      envfrom    env to       hqfrom     hq to   sq len      acc
-   ------ ----- --------- ------- -------    --------- ---------    --------- ---------    --------- --------- ---------    ----
- !   82.7 104.4   4.9e-22     782     998 .. 241981174 241980968 .. 241981174 241980966 .. 241981174 241980968 234234233   0.78
-        */
-        if (fprintf(ofp, "   %6s %5s %9s %9s %9s %2s %9s %9s %2s %9s %9s    %9s %2s %4s\n",  "score",  "bias",  "  Evalue", "hmmfrom",  "hmm to", "  ", " alifrom ",  " ali to ", "  ",  " envfrom ",  " env to ",  (pli->mode == p7_SEARCH_SEQS ? "  sq len " : " mod len "), "  ",  "acc")  < 0)
-          ESL_EXCEPTION_SYS(eslEWRITE, "domain hit list: write failed");
-        if (fprintf(ofp, "   %6s %5s %9s %9s %9s %2s %9s %9s %2s %9s %9s    %9s %2s %4s\n",  "------", "-----", "---------", "-------", "-------", "  ", "---------", "---------", "  ", "---------", "---------",  "---------", "  ", "----") < 0)
-          ESL_EXCEPTION_SYS(eslEWRITE, "domain hit list: write failed");
-      } else {
+	if (textw > 0)
+	  {
+	    descw = ESL_MAX(32, textw - namew - 5);
+	    if (fprintf(ofp, ">> %s  %-.*s\n", showname, descw, (th->hit[h]->desc == NULL ? "" : th->hit[h]->desc)) < 0)
+	      ESL_EXCEPTION_SYS(eslEWRITE, "domain hit list: write failed");
+	  }
+	else
+	  {
+	    if (fprintf(ofp, ">> %s  %s\n",    showname,        (th->hit[h]->desc == NULL ? "" : th->hit[h]->desc)) < 0)
+	      ESL_EXCEPTION_SYS(eslEWRITE, "domain hit list: write failed");
+	  }
 
-        if (th->hit[h]->dcl[0].ad->ntseq != NULL && pli->show_translated_sequence ) {
-          /* The domain table is  char wide:
-                  #     score  bias    Evalue hmmfrom   hmmto    aminofrom  amino to      alifrom    ali to      envfrom    env to     orffrom    orf to   acc
-                 ---   ------ ----- --------- ------- -------    --------- ---------    --------- ---------    --------- ---------   --------- ---------  ----
-                   1 ?  123.4  23.1    6.8e-9       3    1230 ..       1         492 []         1       492 []         2      490 .]         2       490  0.90
-                 123 ! 1234.5 123.4 123456789 1234567 1234567 .. 123456789 123456789 [] 123456789 123456789 [] 123456789 12345689 .] 123456789 123456789  0.12
-          */
-           if (fprintf(ofp, " %3s   %6s %5s %9s %7s %7s %2s %9s %9s %2s %9s %9s %2s %9s %9s %2s %9s %9s %2s %5s %2s %4s\n",    "#",  "score",  "bias",  "i-Evalue", "hmmfrom",  "hmm to", "  ", "aminofm",  "aminoto", "  ", "alifrom",  "ali to", "  ", "envfrom",  "env to", "  ", "orffrom",  "orf to", "  ",  "frame", "  ",  "acc")  < 0)
-          ESL_EXCEPTION_SYS(eslEWRITE, "domain hit list: write failed");
-           if (fprintf(ofp, " %3s   %6s %5s %9s %7s %7s %2s %9s %9s %2s %9s %9s %2s %9s %9s %2s %9s %9s %2s %5s %2s %4s\n",  "---", "------", "-----", "---------", "-------", "-------", "  ", "---------", "---------", "  ", "---------", "---------", "  ", "---------", "---------", "  ", "---------", "---------", "  ", "-----", "  ", "----")  < 0)
-          ESL_EXCEPTION_SYS(eslEWRITE, "domain hit list: write failed");
-        }
-        else {
-          if (th->hit[h]->dcl[0].ad->ntseq != NULL) {
-               /* The domain table is  char wide:
-                       #     score  bias    Evalue hmmfrom   hmmto      alifrom    ali to      envfrom    env to     orffrom    orf to   acc
-                      ---   ------ ----- --------- ------- -------    --------- ---------    --------- ---------   --------- ---------  ----
-                        1 ?  123.4  23.1    6.8e-9       3    1230 ..         1       492 []         2      490 .]         2       490  0.90
-                      123 ! 1234.5 123.4 123456789 1234567 1234567 .. 123456789 123456789 [] 123456789 12345689 .] 123456789 123456789  0.12
-               */
-               if (fprintf(ofp, " %3s   %6s %5s %9s %7s %7s %2s %9s %9s %2s %9s %9s %2s %9s %9s %2s %5s %2s %4s\n",    "#",  "score",  "bias",  "i-Evalue", "hmmfrom",  "hmm to", "  ", "alifrom",  "ali to", "  ", "envfrom",  "env to", "  ", "orffrom",  "orf to", "  ",  "frame", "  ",  "acc")  < 0)
-                 ESL_EXCEPTION_SYS(eslEWRITE, "domain hit list: write failed");
-               if (fprintf(ofp, " %3s   %6s %5s %9s %7s %7s %2s %9s %9s %2s %9s %9s %2s %9s %9s %2s %5s %2s %4s\n",  "---", "------", "-----", "---------", "-------", "-------", "  ", "---------", "---------", "  ", "---------", "---------", "  ", "---------", "---------", "  ", "-----", "  ", "----")  < 0)
-                 ESL_EXCEPTION_SYS(eslEWRITE, "domain hit list: write failed");
-          }
-          else {
-                 /* The domain table is 101 char wide:
-                    #     score  bias  c-Evalue  i-Evalue hmmfrom   hmmto    alifrom  ali to    envfrom  env to     acc
-                   ---   ------ ----- --------- --------- ------- -------    ------- -------    ------- -------    ----
-                     1 ?  123.4  23.1   9.7e-11    6.8e-9       3    1230 ..       1     492 []       2     490 .] 0.90
-                   123 ! 1234.5 123.4 123456789 123456789 1234567 1234567 .. 1234567 1234567 [] 1234567 1234568 .] 0.12
-                 */
-              if (fprintf(ofp, " %3s   %6s %5s %9s %9s %7s %7s %2s %7s %7s %2s %7s %7s %2s %4s\n",    "#",  "score",  "bias",  "c-Evalue",  "i-Evalue", "hmmfrom",  "hmm to", "  ", "alifrom",  "ali to", "  ", "envfrom",  "env to", "  ",  "acc")  < 0)
-                  ESL_EXCEPTION_SYS(eslEWRITE, "domain hit list: write failed");
-              if (fprintf(ofp, " %3s   %6s %5s %9s %9s %7s %7s %2s %7s %7s %2s %7s %7s %2s %4s\n",  "---", "------", "-----", "---------", "---------", "-------", "-------", "  ", "-------", "-------", "  ", "-------", "-------", "  ", "----")  < 0)
-                 ESL_EXCEPTION_SYS(eslEWRITE, "domain hit list: write failed");
-          }
-        }
-      }
+	if (th->hit[h]->nreported == 0)
+	  {
+	    if (fprintf(ofp,"   [No individual domains that satisfy reporting thresholds (although complete target did)]\n\n") < 0)
+	      ESL_EXCEPTION_SYS(eslEWRITE, "domain hit list: write failed");
+	    continue;
+	  }
 
-      nd = 0;
-      for (d = 0; d < th->hit[h]->ndom; d++)
-          if (th->hit[h]->dcl[d].is_reported)
-          {
-            nd++;
-            if (pli->long_targets)
-            {
 
-               if (fprintf(ofp, " %c %6.1f %5.1f %9.2g %9d %9d %c%c %9" PRId64 " %9" PRId64 " %c%c %9" PRId64 " %9" PRId64 " %c%c %9" PRId64 "    %4.2f\n",
-                    //nd,
-                    th->hit[h]->dcl[d].is_included ? '!' : '?',
-                    th->hit[h]->dcl[d].bitscore,
-                    th->hit[h]->dcl[d].dombias * eslCONST_LOG2R, /* convert NATS to BITS at last moment */
-                    exp(th->hit[h]->dcl[d].lnP),
-                    th->hit[h]->dcl[d].ad->hmmfrom,
-                    th->hit[h]->dcl[d].ad->hmmto,
-                    (th->hit[h]->dcl[d].ad->hmmfrom == 1) ? '[' : '.',
-                    (th->hit[h]->dcl[d].ad->hmmto   == th->hit[h]->dcl[d].ad->M) ? ']' : '.',
-                    th->hit[h]->dcl[d].ad->sqfrom,
-                    th->hit[h]->dcl[d].ad->sqto,
-                    (th->hit[h]->dcl[d].ad->sqfrom == 1) ? '[' : '.',
-                    (th->hit[h]->dcl[d].ad->sqto   == th->hit[h]->dcl[d].ad->L) ? ']' : '.',
-                    th->hit[h]->dcl[d].ienv,
-                    th->hit[h]->dcl[d].jenv,
-                    (th->hit[h]->dcl[d].ienv == 1) ? '[' : '.',
-                    (th->hit[h]->dcl[d].jenv == th->hit[h]->dcl[d].ad->L) ? ']' : '.',
-                    th->hit[h]->dcl[d].ad->L,
-                    (th->hit[h]->dcl[d].oasc / (1.0 + fabs((float) (th->hit[h]->dcl[d].jenv - th->hit[h]->dcl[d].ienv))))) < 0)
-                         ESL_EXCEPTION_SYS(eslEWRITE, "domain hit list: write failed");
-
-            }
-            else
-            {
-              if( th->hit[h]->dcl[d].ad->ntseq != NULL) 
-                 {
-                   if (fprintf(ofp, " %3d %c %6.1f %5.1f %9.2g %7d %7d %c%c",
-                         nd,
-                         th->hit[h]->dcl[d].is_included ? '!' : '?',
-                         th->hit[h]->dcl[d].bitscore,
-                         th->hit[h]->dcl[d].dombias * eslCONST_LOG2R, /* convert NATS to BITS at last moment */
-                         exp(th->hit[h]->dcl[d].lnP) * pli->Z,
-                         th->hit[h]->dcl[d].ad->hmmfrom,
-                         th->hit[h]->dcl[d].ad->hmmto,
-                         (th->hit[h]->dcl[d].ad->hmmfrom == 1) ? '[' : '.',
-                         (th->hit[h]->dcl[d].ad->hmmto   == th->hit[h]->dcl[d].ad->M ) ? ']' : '.') < 0)
-                             ESL_EXCEPTION_SYS(eslEWRITE, "domain hit list: write failed");
-                 }
-                 else
-                 {
-                   if (fprintf(ofp, " %3d %c %6.1f %5.1f %9.2g %9.2g %7d %7d %c%c",
-                         nd,
-                         th->hit[h]->dcl[d].is_included ? '!' : '?',
-                         th->hit[h]->dcl[d].bitscore,
-                         th->hit[h]->dcl[d].dombias * eslCONST_LOG2R, /* convert NATS to BITS at last moment */
-                         exp(th->hit[h]->dcl[d].lnP) * pli->domZ,
-                         exp(th->hit[h]->dcl[d].lnP) * pli->Z,
-                         th->hit[h]->dcl[d].ad->hmmfrom,
-                         th->hit[h]->dcl[d].ad->hmmto,
-                         (th->hit[h]->dcl[d].ad->hmmfrom == 1) ? '[' : '.',
-                         (th->hit[h]->dcl[d].ad->hmmto   == th->hit[h]->dcl[d].ad->M ) ? ']' : '.') < 0)
-                             ESL_EXCEPTION_SYS(eslEWRITE, "domain hit list: write failed");
-                 }  
-              /* if ntseq is NULL then we are not using nhmmscant so print amino sequence, otherwise we are using nhmmscant */
-              /* and if option set to print amino sequence then print it */	
-              if( th->hit[h]->dcl[d].ad->ntseq != NULL && pli->show_translated_sequence) 
-                 {
-                    if (fprintf(ofp, " %9" PRId64 " %9" PRId64 " %c%c",
-                       (th->hit[h]->dcl[d].ad->sqfrom+2)/3,
-                       (th->hit[h]->dcl[d].ad->sqto+2)/3,
-                       (th->hit[h]->dcl[d].ad->sqfrom == 1) ? '[' : '.',
-                       ((th->hit[h]->dcl[d].ad->sqto+2)/3   == th->hit[h]->dcl[d].ad->L) ? ']' : '.') < 0)
-                         ESL_EXCEPTION_SYS(eslEWRITE, "domain hit list: write failed");
-                 }
-
-              if( th->hit[h]->dcl[d].ad->ntseq != NULL)  
-                 {
-                   if (fprintf(ofp, " %9" PRId64 " %9" PRId64 " %c%c",
-                      th->hit[h]->dcl[d].ad->sqfrom,
-                      th->hit[h]->dcl[d].ad->sqto,
-                      (th->hit[h]->dcl[d].ad->sqfrom == 1) ? '[' : '.',
-                      (th->hit[h]->dcl[d].ad->sqto   == th->hit[h]->dcl[d].ad->L*3) ? ']' : '.') < 0)
-                          ESL_EXCEPTION_SYS(eslEWRITE, "domain hit list: write failed");
-                 }
-              else
-                 {
-                     if (fprintf(ofp, " %7" PRId64 " %7" PRId64 " %c%c",
-                       th->hit[h]->dcl[d].ad->sqfrom,
-                       th->hit[h]->dcl[d].ad->sqto,
-                      (th->hit[h]->dcl[d].ad->sqfrom == 1) ? '[' : '.',
-                      (th->hit[h]->dcl[d].ad->sqto   == th->hit[h]->dcl[d].ad->L) ? ']' : '.') < 0)
-                          ESL_EXCEPTION_SYS(eslEWRITE, "domain hit list: write failed");
-                }
-
-              if( th->hit[h]->dcl[d].ad->ntseq != NULL)  
-                {
-                 if (fprintf(ofp, " %9" PRId64 " %9" PRId64 " %c%c",
-                    th->hit[h]->dcl[d].ienv,
-                    th->hit[h]->dcl[d].jenv,
-                    (th->hit[h]->dcl[d].ienv == 1) ? '[' : '.',
-                    (th->hit[h]->dcl[d].jenv == th->hit[h]->dcl[d].ad->L*3) ? ']' : '.') < 0)
-                       ESL_EXCEPTION_SYS(eslEWRITE, "domain hit list: write failed");
-                }
-              else
-                {
-                   if (fprintf(ofp, " %7" PRId64 " %7" PRId64 " %c%c",
-                    th->hit[h]->dcl[d].ienv,
-                    th->hit[h]->dcl[d].jenv,
-                    (th->hit[h]->dcl[d].ienv == 1) ? '[' : '.',
-                    (th->hit[h]->dcl[d].jenv == th->hit[h]->dcl[d].ad->L) ? ']' : '.') < 0)
-                       ESL_EXCEPTION_SYS(eslEWRITE, "domain hit list: write failed");
-                }
-
-             if( th->hit[h]->dcl[d].ad->ntseq != NULL)  
-                {
-                   if (fprintf(ofp, " %9" PRId64 " %9" PRId64 " %c%c",
-                       th->hit[h]->dcl[d].iorf,
-                       th->hit[h]->dcl[d].jorf,
-                       (th->hit[h]->dcl[d].iorf == 1) ? '[' : '.',
-                       (th->hit[h]->dcl[d].jorf == th->hit[h]->dcl[d].ad->L*3) ? ']' : '.') < 0)
-                          ESL_EXCEPTION_SYS(eslEWRITE, "domain hit list: write failed");
-
-                   int frame = p7_tophits_frame(th->hit[h]->dcl[d].iorf, th->hit[h]->dcl[d].jorf);
-                   if (fprintf(ofp, " %+5d", frame) < 0) 
-                          ESL_EXCEPTION_SYS(eslEWRITE, "domain hit list: write failed");
-
-                }
-
-              if( th->hit[h]->dcl[d].ad->ntseq != NULL) {
-                if (fprintf(ofp, "    %4.2f\n",
-                  (th->hit[h]->dcl[d].oasc / (1.0 + fabs((float) (th->hit[h]->dcl[d].jenv - th->hit[h]->dcl[d].ienv))))) < 0)
-                        ESL_EXCEPTION_SYS(eslEWRITE, "domain hit list: write failed");
-              }
-              else {
-               if (fprintf(ofp, " %4.2f\n",
-                  (th->hit[h]->dcl[d].oasc / (1.0 + fabs((float) (th->hit[h]->dcl[d].jenv - th->hit[h]->dcl[d].ienv))))) < 0)
-                        ESL_EXCEPTION_SYS(eslEWRITE, "domain hit list: write failed");
-              }
-            }
-          }
-
-          if (pli->show_alignments)
-          {
-            if (pli->long_targets)
-            {
-              if (fprintf(ofp, "\n  Alignment:\n") < 0)
-                ESL_EXCEPTION_SYS(eslEWRITE, "domain hit list: write failed");
-            }
-            else
-            {
-              if (fprintf(ofp, "\n  Alignments for each domain:\n") < 0)
-                ESL_EXCEPTION_SYS(eslEWRITE, "domain hit list: write failed");
-              nd = 0;
-            }
-
-            for (d = 0; d < th->hit[h]->ndom; d++)
-              if (th->hit[h]->dcl[d].is_reported)
-              {
-                nd++;
-
-                if (!pli->long_targets && th->hit[h]->dcl[d].ad->ntseq == NULL)
-                {
-                  if (fprintf(ofp, "  == domain %d", nd ) < 0)
-                    ESL_EXCEPTION_SYS(eslEWRITE, "domain hit list: write failed");
-                }
-                if (fprintf(ofp, "  score: %.1f bits", th->hit[h]->dcl[d].bitscore) < 0)
-                  ESL_EXCEPTION_SYS(eslEWRITE, "domain hit list: write failed");
-                if (!pli->long_targets && th->hit[h]->dcl[d].ad->ntseq == NULL)
-                {
-                  if (fprintf(ofp, ";  conditional E-value: %.2g\n",  exp(th->hit[h]->dcl[d].lnP) * pli->domZ) < 0)
-                    ESL_EXCEPTION_SYS(eslEWRITE, "domain hit list: write failed");
-                }
-                else
-                {
-                  if (fprintf(ofp, "\n") < 0)
-                    ESL_EXCEPTION_SYS(eslEWRITE, "domain hit list: write failed");
-                }
-
-                if ((status = p7_alidisplay_Print(ofp, th->hit[h]->dcl[d].ad, 40, textw, pli)) != eslOK) return status;
-
-                if (fprintf(ofp, "\n") < 0)
-                  ESL_EXCEPTION_SYS(eslEWRITE, "domain hit list: write failed");
-              }
-          }
-          else
-          { 
-            if (fprintf(ofp, "\n") < 0)
+	if (pli->long_targets)
+	  {
+	    /* The dna hit table is 119 char wide:
+                   score  bias    Evalue hmmfrom  hmm to     alifrom    ali to      envfrom    env to       hqfrom     hq to   sq len      acc
+                   ------ ----- --------- ------- -------    --------- ---------    --------- ---------    --------- --------- ---------    ----
+               !     82.7 104.4   4.9e-22     782     998 .. 241981174 241980968 .. 241981174 241980966 .. 241981174 241980968 234234233   0.78
+             */
+	    if (fprintf(ofp, "   %6s %5s %9s %9s %9s %2s %9s %9s %2s %9s %9s    %9s %2s %4s\n",  "score",  "bias",  "  Evalue", "hmmfrom",  "hmm to", "  ", " alifrom ",  " ali to ", "  ",  " envfrom ",  " env to ",  (pli->mode == p7_SEARCH_SEQS ? "  sq len " : " mod len "), "  ",  "acc")  < 0)
+	      ESL_EXCEPTION_SYS(eslEWRITE, "domain hit list: write failed");
+	    if (fprintf(ofp, "   %6s %5s %9s %9s %9s %2s %9s %9s %2s %9s %9s    %9s %2s %4s\n",  "------", "-----", "---------", "-------", "-------", "  ", "---------", "---------", "  ", "---------", "---------",  "---------", "  ", "----") < 0)
+	      ESL_EXCEPTION_SYS(eslEWRITE, "domain hit list: write failed");
+	  }
+	else
+	  {
+	    /* The domain table is 101 char wide:
+                #     score  bias  c-Evalue  i-Evalue hmmfrom   hmmto    alifrom  ali to    envfrom  env to     acc
+               ---   ------ ----- --------- --------- ------- -------    ------- -------    ------- -------    ----
+                 1 ?  123.4  23.1   9.7e-11    6.8e-9       3    1230 ..       1     492 []       2     490 .] 0.90
+               123 ! 1234.5 123.4 123456789 123456789 1234567 1234567 .. 1234567 1234567 [] 1234567 1234568 .] 0.12
+	    */
+	    if (fprintf(ofp, " %3s   %6s %5s %9s %9s %7s %7s %2s %7s %7s %2s %7s %7s %2s %4s\n",    "#",  "score",  "bias",  "c-Evalue",  "i-Evalue", "hmmfrom",  "hmm to", "  ", "alifrom",  "ali to", "  ", "envfrom",  "env to", "  ",  "acc")  < 0)
               ESL_EXCEPTION_SYS(eslEWRITE, "domain hit list: write failed");
-          }
-    }
+	    if (fprintf(ofp, " %3s   %6s %5s %9s %9s %7s %7s %2s %7s %7s %2s %7s %7s %2s %4s\n",  "---", "------", "-----", "---------", "---------", "-------", "-------", "  ", "-------", "-------", "  ", "-------", "-------", "  ", "----")  < 0)
+	      ESL_EXCEPTION_SYS(eslEWRITE, "domain hit list: write failed");
+	  }
+		
+	  
+	/* Domain hit table for each reported domain in this reported sequence. */
+	nd = 0;
+	for (d = 0; d < th->hit[h]->ndom; d++)
+	  {
+	    if (th->hit[h]->dcl[d].is_reported)
+	      {
+		nd++;
+		if (pli->long_targets)
+		  {
+		    if (fprintf(ofp, " %c %6.1f %5.1f %9.2g %9d %9d %c%c %9" PRId64 " %9" PRId64 " %c%c %9" PRId64 " %9" PRId64 " %c%c %9" PRId64 "    %4.2f\n",
+				//nd,
+				th->hit[h]->dcl[d].is_included ? '!' : '?',
+				th->hit[h]->dcl[d].bitscore,
+				th->hit[h]->dcl[d].dombias * eslCONST_LOG2R, /* convert NATS to BITS at last moment */
+				exp(th->hit[h]->dcl[d].lnP),
+				th->hit[h]->dcl[d].ad->hmmfrom,
+				th->hit[h]->dcl[d].ad->hmmto,
+				(th->hit[h]->dcl[d].ad->hmmfrom == 1) ? '[' : '.',
+				(th->hit[h]->dcl[d].ad->hmmto   == th->hit[h]->dcl[d].ad->M) ? ']' : '.',
+				th->hit[h]->dcl[d].ad->sqfrom,
+				th->hit[h]->dcl[d].ad->sqto,
+				(th->hit[h]->dcl[d].ad->sqfrom == 1) ? '[' : '.',
+				(th->hit[h]->dcl[d].ad->sqto   == th->hit[h]->dcl[d].ad->L) ? ']' : '.',
+				th->hit[h]->dcl[d].ienv,
+				th->hit[h]->dcl[d].jenv,
+				(th->hit[h]->dcl[d].ienv == 1) ? '[' : '.',
+				(th->hit[h]->dcl[d].jenv == th->hit[h]->dcl[d].ad->L) ? ']' : '.',
+				th->hit[h]->dcl[d].ad->L,
+				(th->hit[h]->dcl[d].oasc / (1.0 + fabs((float) (th->hit[h]->dcl[d].jenv - th->hit[h]->dcl[d].ienv))))) < 0)
+		      ESL_EXCEPTION_SYS(eslEWRITE, "domain hit list: write failed");
+		  }
+		else
+		  {
+		    if (fprintf(ofp, " %3d %c %6.1f %5.1f %9.2g %9.2g %7d %7d %c%c",
+				nd,
+				th->hit[h]->dcl[d].is_included ? '!' : '?',
+				th->hit[h]->dcl[d].bitscore,
+				th->hit[h]->dcl[d].dombias * eslCONST_LOG2R, /* convert NATS to BITS at last moment */
+				exp(th->hit[h]->dcl[d].lnP) * pli->domZ,
+				exp(th->hit[h]->dcl[d].lnP) * pli->Z,
+				th->hit[h]->dcl[d].ad->hmmfrom,
+				th->hit[h]->dcl[d].ad->hmmto,
+				(th->hit[h]->dcl[d].ad->hmmfrom == 1) ? '[' : '.',
+				(th->hit[h]->dcl[d].ad->hmmto   == th->hit[h]->dcl[d].ad->M ) ? ']' : '.') < 0)
+		      ESL_EXCEPTION_SYS(eslEWRITE, "domain hit list: write failed");
+			
+		    if (fprintf(ofp, " %7" PRId64 " %7" PRId64 " %c%c",
+				th->hit[h]->dcl[d].ad->sqfrom,
+				th->hit[h]->dcl[d].ad->sqto,
+				(th->hit[h]->dcl[d].ad->sqfrom == 1) ? '[' : '.',
+				(th->hit[h]->dcl[d].ad->sqto   == th->hit[h]->dcl[d].ad->L) ? ']' : '.') < 0)
+		      ESL_EXCEPTION_SYS(eslEWRITE, "domain hit list: write failed");
+						
+		    if (fprintf(ofp, " %7" PRId64 " %7" PRId64 " %c%c",
+				th->hit[h]->dcl[d].ienv,
+				th->hit[h]->dcl[d].jenv,
+				(th->hit[h]->dcl[d].ienv == 1) ? '[' : '.',
+				(th->hit[h]->dcl[d].jenv == th->hit[h]->dcl[d].ad->L) ? ']' : '.') < 0)
+		      ESL_EXCEPTION_SYS(eslEWRITE, "domain hit list: write failed");						   
+		    
+		    if (fprintf(ofp, " %4.2f\n",
+				(th->hit[h]->dcl[d].oasc / (1.0 + fabs((float) (th->hit[h]->dcl[d].jenv - th->hit[h]->dcl[d].ienv))))) < 0)
+		      ESL_EXCEPTION_SYS(eslEWRITE, "domain hit list: write failed");
+		  }
+            
+	      }
+	  } // end of domain table in this reported sequence.
 
-    if (th->nreported == 0)
+	/* Alignment data for each reported domain in this reported sequence. */
+	if (pli->show_alignments)
+	  {
+	    if (pli->long_targets)
+	      {
+		if (fprintf(ofp, "\n  Alignment:\n") < 0)
+		  ESL_EXCEPTION_SYS(eslEWRITE, "domain hit list: write failed");
+	      }
+	    else
+	      {
+		if (fprintf(ofp, "\n  Alignments for each domain:\n") < 0)
+		  ESL_EXCEPTION_SYS(eslEWRITE, "domain hit list: write failed");
+		nd = 0;
+	      }
+
+	    for (d = 0; d < th->hit[h]->ndom; d++)
+	      if (th->hit[h]->dcl[d].is_reported)
+		{
+		  nd++;
+		  if (!pli->long_targets)
+		    {
+		      if (fprintf(ofp, "  == domain %d", nd ) < 0)
+			ESL_EXCEPTION_SYS(eslEWRITE, "domain hit list: write failed");
+		    }
+		  if (fprintf(ofp, "  score: %.1f bits", th->hit[h]->dcl[d].bitscore) < 0)
+		    ESL_EXCEPTION_SYS(eslEWRITE, "domain hit list: write failed");
+		  if (!pli->long_targets)
+		    {
+		      if (fprintf(ofp, ";  conditional E-value: %.2g\n",  exp(th->hit[h]->dcl[d].lnP) * pli->domZ) < 0)
+			ESL_EXCEPTION_SYS(eslEWRITE, "domain hit list: write failed");
+		    }
+		  else
+		    {
+		      if (fprintf(ofp, "\n") < 0)
+			ESL_EXCEPTION_SYS(eslEWRITE, "domain hit list: write failed");
+		    }
+
+		  if ((status = p7_alidisplay_Print(ofp, th->hit[h]->dcl[d].ad, 40, textw, pli)) != eslOK) return status;
+		  
+		  if (fprintf(ofp, "\n") < 0)
+		    ESL_EXCEPTION_SYS(eslEWRITE, "domain hit list: write failed");
+		}
+	  }
+	else // alignment reporting is off:
+	  { 
+	    if (fprintf(ofp, "\n") < 0)
+	      ESL_EXCEPTION_SYS(eslEWRITE, "domain hit list: write failed");
+	  }
+
+      } // end, loop over all reported hits
+
+  if (th->nreported == 0)
     {
       if (fprintf(ofp, "\n   [No targets detected that satisfy reporting thresholds]\n") < 0) 
         ESL_EXCEPTION_SYS(eslEWRITE, "domain hit list: write failed");
     }
-    return eslOK;
+  return eslOK;
 }
 
 
@@ -1589,6 +1515,7 @@ p7_tophits_Domains(FILE *ofp, P7_TOPHITS *th, P7_PIPELINE *pli, int textw)
  * Xref:      J4/29: incept.
  *            J4/76: added inc_sqarr, inc_trarr, inc_n, optflags 
  *            H4/72: iss131, segfault if top seq has no reported domains
+ *            H5/88: iss140, jackhmmer --fast segfaults
  */
 int
 p7_tophits_Alignment(const P7_TOPHITS *th, const ESL_ALPHABET *abc, 
@@ -1612,14 +1539,19 @@ p7_tophits_Alignment(const P7_TOPHITS *th, const ESL_ALPHABET *abc,
    */
   for (h = 0; h < th->N; h++)
     if (th->hit[h]->flags & p7_IS_INCLUDED)
+      for (d = 0; d < th->hit[h]->ndom; d++)
+	if (th->hit[h]->dcl[d].is_included)
+	  {
+	    if (M == 0) M = th->hit[h]->dcl[d].ad->M;
+	    ndom++;
+	  }
+
+  if (inc_n)
     {
-        for (d = 0; d < th->hit[h]->ndom; d++)
-          if (th->hit[h]->dcl[d].is_included)
-            if (M == 0) M = th->hit[h]->dcl[d].ad->M;
-            ndom++;
+      if      (M == 0)  M = inc_trarr[0]->M;  // unusual case where there's an included trace, but no other aligned hits: get M from included trace
+      else if (M != inc_trarr[0]->M)          // spot check that included traces appear to have same # of consensus positions; iss#140
+	ESL_XEXCEPTION(eslECORRUPT, "top hits and included trace(s) have different profile lengths");
     }
-  if (inc_n && M == 0)  M = inc_trarr[0]->M;          
-  
   if (inc_n+ndom == 0) { status = eslFAIL; goto ERROR; }
   
   /* Allocation */

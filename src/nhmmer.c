@@ -28,12 +28,8 @@
 #include "hmmer.h"
 
 /* set the max residue count to 1/4 meg when reading a block */
-#ifdef P7_IMPL_DUMMY_INCLUDED
-#include "esl_vectorops.h"
-#define NHMMER_MAX_RESIDUE_COUNT (1024 * 100)
-#else
 #define NHMMER_MAX_RESIDUE_COUNT (1024 * 256)  /* 1/4 Mb */
-#endif
+
 
 /* These aid in the manual indication of query format for nhmmer
  * and are used to override autodetection of the query as being an
@@ -513,10 +509,12 @@ serial_master(ESL_GETOPTS *go, struct cfg_s *cfg)
   WORKER_INFO     *info     = NULL;
 #ifdef HMMER_THREADS
   ESL_SQ_BLOCK    *block    = NULL;
+#ifdef eslENABLE_SSE
   FM_THREAD_INFO  *fminfo   = NULL;
+#endif // eslENABLE_SSE
   ESL_THREADS     *threadObj= NULL;
   ESL_WORK_QUEUE  *queue    = NULL;
-#endif
+#endif // HMMER_THREADS
   char   errbuf[eslERRBUFSIZE];
   double window_beta = -1.0 ;
   int window_length  = -1;

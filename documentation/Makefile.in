@@ -7,7 +7,7 @@ QUIET_SUBDIR1 =
 ifndef V
 	QUIET_SUBDIR0 = +@subdir=
 	QUIET_SUBDIR1 = ; echo '    ' SUBDIR $$subdir; \
-		        ${MAKE} -C $$subdir
+		        ${MAKE} -s -C $$subdir
 endif
 
 
@@ -16,26 +16,27 @@ endif
 pdf:
 	${QUIET_SUBDIR0}userguide ${QUIET_SUBDIR1} pdf
 
+# install, uninstall are always verbose; do not use quiet beautification
 install: 
-	${QUIET_SUBDIR0}man       ${QUIET_SUBDIR1} install
+	${MAKE} -C man install
 
 uninstall:
-	${QUIET_SUBDIR0}man       ${QUIET_SUBDIR1} uninstall
+	${MAKE} -C man uninstall
 
 clean:
-#Use 'ifneq' instead of 'test -e' because the '+@' in QUIET_SUBDIR0 can't
-#be passed to the shell. Note that ifneq breaks if indented.
-ifneq (,$(wildcard userguide/.))
 	${QUIET_SUBDIR0}userguide ${QUIET_SUBDIR1} clean
-endif
-	${QUIET_SUBDIR0}man       ${QUIET_SUBDIR1} clean;
+	${QUIET_SUBDIR0}man       ${QUIET_SUBDIR1} clean
 	-rm -f *~
+ifndef V
+	@echo '     ' CLEAN documentation
+endif
+
 
 distclean:
-#See above for explanation of 'ifneq' usage
-ifneq (,$(wildcard userguide/.))
 	${QUIET_SUBDIR0}userguide ${QUIET_SUBDIR1} distclean
-endif
 	${QUIET_SUBDIR0}man       ${QUIET_SUBDIR1} distclean
+	-rm -f *~
 	-rm -f Makefile
-
+ifndef V
+	@echo '     ' CLEAN documentation
+endif

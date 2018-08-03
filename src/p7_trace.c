@@ -1453,12 +1453,42 @@ p7_trace_Doctor(P7_TRACE *tr, int *opt_ndi, int *opt_nid)
 int
 p7_trace_Count(P7_HMM *hmm, ESL_DSQ *dsq, float wt, P7_TRACE *tr)
 {
-  int z;                        /* position in tr         */
+  int z;			/* position index in trace */
   int i;			/* symbol position in seq */
   int st,st2;     		/* state type (cur, nxt)  */
   int k,k2,ktmp;		/* node index (cur, nxt)  */
+  int z1 = 0;			/* left bound - may get set to an M position for a left fragment */
+  int z2 = tr->N-1;		/* right bound, ditto for a right fragment. N-1 not N, because main loop accesses z,z+1 */
   
-  for (z = 0; z < tr->N-1; z++) 
+  /* If this is a core fragment trace (it has B->X and/or X->E) then
+   * set z1 and/or z2 bound on first and/or last M state, so we don't
+   * count incomplete flanking insertions. A fragment doesn't
+   * necessarily have X's on both sides because of the way they get
+   * set from ~'s in an input alignment.
+   * 
+   * A local alignment profile trace has B->X and X->E, and may have
+   * >1 domain, but is guaranteed to be B->X->Mk, Mk->X->E, so
+   * limiting trace counting to z1..z2 would have no effect... nonetheless,
+   * we check, differentiating core vs. profile trace by the lead B vs S.
+   * 
+   * It's possible for a core trace to have no M's at all, just
+   * B->(X)->III->(X)->E, as in bug #h82, so watch out for that; we don't
+   * count anything in such a trace, even the II transitions, because
+   * we don't get to see the complete length of the insertion (or the
+   * IM transition), so we don't want to be estimating the I-state
+   * geometric distribution from it.
+   * 
+   * We assume the core trace has already been through TraceDoctor(),
+   * so it has no DI or ID transitions.
+   */
+  if (tr->st[0] == p7T_B && tr->st[1] == p7T_X)
+    for (z = 2; z < tr->N-1; z++)
+      if (tr->st[z] == p7T_M) { z1 = z; break; }
+  if (tr->st[tr->N-1] == p7T_E && tr->st[tr->N-2] == p7T_X)
+    for (z = tr->N-3; z > 0; z--)
+      if (tr->st[z] == p7T_M) { z2 = z; break; }
+
+  for (z = z1; z < z2; z++) 
     {
       if (tr->st[z] == p7T_X) continue; /* skip missing data */
 
