@@ -191,7 +191,7 @@ main(int argc, char **argv)
    */
   cfg.hmmfile  = esl_opt_GetArg(go, 1);
   cfg.r        = esl_randomness_Create(esl_opt_GetInteger(go, "--seed"));
-  //cfg.abc      = esl_alphabet_Create(eslAMINO);
+  cfg.abc      = NULL;
 
   cfg.my_rank  = 0;		/* MPI init will change this soon, if --mpi was set */
   cfg.nproc    = 0;		/* MPI init will change this soon, if --mpi was set */
@@ -536,7 +536,6 @@ mpi_master(ESL_GETOPTS *go, struct cfg_s *cfg)
 static void
 mpi_worker(ESL_GETOPTS *go, struct cfg_s *cfg)
 {
-  int             xstatus = eslOK;
   int             status;
   P7_HMM         *hmm     = NULL;
   char           *wbuf    = NULL;
@@ -548,7 +547,7 @@ mpi_worker(ESL_GETOPTS *go, struct cfg_s *cfg)
   double          mu, lambda;
  
   /* Worker initializes */
-  if ((status = minimum_mpi_working_buffer(go, cfg->N, &wn)) != eslOK) xstatus = status;
+  if ((status = minimum_mpi_working_buffer(go, cfg->N, &wn)) != eslOK) goto ERROR;
   ESL_ALLOC(wbuf, wn * sizeof(char));
   ESL_ALLOC(xv,   cfg->N * sizeof(double) + 2);	
   if (esl_opt_GetBoolean(go, "-a"))
@@ -916,18 +915,18 @@ minimum_mpi_working_buffer(ESL_GETOPTS *go, int N, int *ret_wn)
   int nresult = 0;
 
   /* error packet */
-  if (MPI_Pack_size(eslERRBUFSIZE, MPI_CHAR,   MPI_COMM_WORLD, &nerr)!= 0)return eslESYS;   
+  if (MPI_Pack_size(eslERRBUFSIZE, MPI_CHAR,   MPI_COMM_WORLD, &nerr)!= 0) return eslESYS; 
   
   /* results packet */
-  if (MPI_Pack_size(N,             MPI_DOUBLE, MPI_COMM_WORLD, &n)  != 0) return eslESYS;   nresult += n;   /* scores */
+  if (MPI_Pack_size(N, MPI_DOUBLE, MPI_COMM_WORLD, &n)  != 0) return eslESYS; else nresult += n;     /* scores */
   if (esl_opt_GetBoolean(go, "-a")) {
-    if (MPI_Pack_size(N,           MPI_INT,    MPI_COMM_WORLD, &n)  != 0) return eslESYS;   nresult += n;   /* alignment lengths */
+    if (MPI_Pack_size(N, MPI_INT,  MPI_COMM_WORLD, &n)  != 0) return eslESYS; else nresult += n;     /* alignment lengths */
   }
-  if (MPI_Pack_size(1,             MPI_DOUBLE, MPI_COMM_WORLD, &n)  != 0) return eslESYS;   nresult += n*2; /* mu, lambda */
+  if (MPI_Pack_size(1, MPI_DOUBLE, MPI_COMM_WORLD, &n)  != 0) return eslESYS; else nresult += n*2;   /* mu, lambda */
 
   /* add the shared status code to the max of the two possible kinds of packets */
   *ret_wn =  ESL_MAX(nresult, nerr);
-  if (MPI_Pack_size(1,             MPI_INT,    MPI_COMM_WORLD, &n)  != 0) return eslESYS;   *ret_wn += n;   /* status code */
+  if (MPI_Pack_size(1, MPI_INT, MPI_COMM_WORLD, &n)  != 0) return eslESYS; else *ret_wn += n;   
   return eslOK;
 }
 #endif

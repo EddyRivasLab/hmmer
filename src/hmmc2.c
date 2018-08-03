@@ -575,8 +575,8 @@ int main(int argc, char *argv[])
         //p7_tophits_Sort(th);
 		
         /* Print the results.  */
-        if (scores) p7_tophits_Targets(stdout, th, pli, 120); fprintf(stdout, "\n\n");
-        if (ali)    p7_tophits_Domains(stdout, th, pli, 120); fprintf(stdout, "\n\n");
+        if (scores) { p7_tophits_Targets(stdout, th, pli, 120); fprintf(stdout, "\n\n"); }
+        if (ali)    { p7_tophits_Domains(stdout, th, pli, 120); fprintf(stdout, "\n\n"); }
         p7_pli_Statistics(stdout, pli, w);  
 
         p7_pipeline_Destroy(pli); 

@@ -854,7 +854,7 @@ get_xE(const ESL_DSQ *dsq, int L, const P7_OPROFILE *om)
 #endif
   };
 
-  beginv =  _mm_set1_epi8(128);
+  beginv =  _mm_set1_epi8(-128);
   xEv    =  beginv;
 
   /* Use the highest number of bands but no more than MAX_BANDS */

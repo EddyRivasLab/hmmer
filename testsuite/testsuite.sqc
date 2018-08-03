@@ -40,7 +40,7 @@
 1 exercise p7_profile         @src/p7_profile_utest@
 1 exercise p7_tophits         @src/p7_tophits_utest@
 1 exercise p7_trace           @src/p7_trace_utest@
-1 exercise p7_scoredata         @src/p7_scoredata_utest@
+1 exercise p7_scoredata       @src/p7_scoredata_utest@
 
 1 exercise decoding           @src/impl/decoding_utest@
 1 exercise fwdback            @src/impl/fwdback_utest@
@@ -68,8 +68,16 @@
 
 
 ################################################################
-# Option tests
+# Option tests 
 ################################################################
+
+# Prep a press'ed "minifam" that's used here and also in some integration tests,
+# and extract an individual 'typical' model Caudal_act.
+1 prep      Caudal                @easel/miniapps/esl-afetch@ !testsuite/minifam! Caudal_act > %CAUDAL.STO%
+1 prep      hmm                   @src/hmmbuild@ %CAUDAL.HMM% %CAUDAL.STO%
+1 prep      minifam               @src/hmmbuild@ %MINIFAM.HMM% !testsuite/minifam!
+1 prep      minifam_press         @src/hmmpress@ %MINIFAM.HMM% 
+
 
 # hmmalign  xxxxxxxxxxxxxxxxxxxx
 1 prep      testseq              @src/hmmemit@  -p --unilocal -L0 -N 4 --seed 42 !testsuite/Caudal_act.hmm! > %TESTSEQ%
@@ -83,7 +91,7 @@
 1 exercise  hmmalign/--outformat @src/hmmalign@ --outformat a2m                      !testsuite/Caudal_act.hmm! %TESTSEQ%
 
 # hmmbuild  xxxxxxxxxxxxxxxxxxxx
-1 exercise  build                @src/hmmbuild@                    --EmL 10 --EvL 10 --EfL 10 %HMMBUILD.hmm% !testsuite/20aa.sto!
+1 exercise  hmmbuild             @src/hmmbuild@                    --EmL 10 --EvL 10 --EfL 10 %HMMBUILD.hmm% !testsuite/20aa.sto!
 1 exercise  build/-h             @src/hmmbuild@  -h
 1 exercise  build/-n             @src/hmmbuild@  -n foo            --EmL 10 --EvL 10 --EfL 10 %HMMBUILD.hmm% !testsuite/20aa.sto!
 1 exercise  build/-o             @src/hmmbuild@  -o %HMMBUILD.out% --EmL 10 --EvL 10 --EfL 10 %HMMBUILD.hmm% !testsuite/20aa.sto!
@@ -120,18 +128,6 @@
 1 exercise  build/--informat     @src/hmmbuild@  --informat stockholm --EmL 10 --EvL 10 --EfL 10 %HMMBUILD.hmm% !testsuite/20aa.sto!
 1 exercise  build/--seed         @src/hmmbuild@  --seed 42             --EmL 10 --EvL 10 --EfL 10 %HMMBUILD.hmm% !testsuite/20aa.sto!
 
-# hmmemit   xxxxxxxxxxxxxxxxxxxx
-1 exercise  hmmemit              @src/hmmemit@                !testsuite/Caudal_act.hmm!
-1 exercise  hmmemit/-h           @src/hmmemit@ -h
-1 exercise  hmmemit/-c           @src/hmmemit@ -c             !testsuite/Caudal_act.hmm!
-1 exercise  hmmemit/-o           @src/hmmemit@ -o /dev/null   !testsuite/Caudal_act.hmm!
-1 exercise  hmmemit/-p           @src/hmmemit@ -p             !testsuite/Caudal_act.hmm!
-1 exercise  hmmemit/-N           @src/hmmemit@ -N 10          !testsuite/Caudal_act.hmm!
-1 exercise  hmmemit/-L           @src/hmmemit@ -p -L 50       !testsuite/Caudal_act.hmm!
-1 exercise  hmmemit/--local      @src/hmmemit@ -p --local     !testsuite/Caudal_act.hmm!
-1 exercise  hmmemit/--unilocal   @src/hmmemit@ -p --unilocal  !testsuite/Caudal_act.hmm!
-1 exercise  hmmemit/--glocal     @src/hmmemit@ -p --glocal    !testsuite/Caudal_act.hmm!
-1 exercise  hmmemit/--uniglocal  @src/hmmemit@ -p --uniglocal !testsuite/Caudal_act.hmm!
 
 # hmmsearch xxxxxxxxxxxxxxxxxxxx
 1 prep      rnddb                @easel/miniapps/esl-shuffle@ -G --amino -L 100 -N 2 -o %RNDDB% 
@@ -169,6 +165,41 @@
 1 exercise  search/--tformat     @src/hmmsearch@  --tformat fasta           !tutorial/globins4.hmm! %RNDDB%
 # --cpu: threads only
 # --mpi: MPI only
+
+# hmmscan   xxxxxxxxxxxxxxxxxxxx
+1 exercise  hmmscan             @src/hmmscan@    %MINIFAM.HMM% !tutorial/HBB_HUMAN! 
+1 exercise  scan/-h             @src/hmmscan@    -h
+1 exercise  scan/-o             @src/hmmscan@    -o %SCAN.out%            %MINIFAM.HMM% !tutorial/HBB_HUMAN! 
+1 exercise  scan/--tblout       @src/hmmscan@    --tblout %SCAN.tbl%      %MINIFAM.HMM% !tutorial/HBB_HUMAN!
+1 exercise  scan/--domtblout    @src/hmmscan@    --domtblout %SCAN.dtbl%  %MINIFAM.HMM% !tutorial/HBB_HUMAN! 
+1 exercise  scan/--pfamtblout   @src/hmmscan@    --pfamtblout %SCAN.ptbl% %MINIFAM.HMM% !tutorial/HBB_HUMAN! 
+1 exercise  scan/--acc          @src/hmmscan@    --acc                    %MINIFAM.HMM% !tutorial/HBB_HUMAN! 
+1 exercise  scan/--noali        @src/hmmscan@    --noali                  %MINIFAM.HMM% !tutorial/HBB_HUMAN! 
+1 exercise  scan/--notextw      @src/hmmscan@    --notextw                %MINIFAM.HMM% !tutorial/HBB_HUMAN! 
+1 exercise  scan/--textw        @src/hmmscan@    --textw 120              %MINIFAM.HMM% !tutorial/HBB_HUMAN! 
+1 exercise  scan/-E             @src/hmmscan@    -E 0.01                  %MINIFAM.HMM% !tutorial/HBB_HUMAN! 
+1 exercise  scan/-T             @src/hmmscan@    -T 20                    %MINIFAM.HMM% !tutorial/HBB_HUMAN! 
+1 exercise  scan/--domE         @src/hmmscan@    --domE 0.01              %MINIFAM.HMM% !tutorial/HBB_HUMAN! 
+1 exercise  scan/--domT         @src/hmmscan@    --domT 20                %MINIFAM.HMM% !tutorial/HBB_HUMAN! 
+1 exercise  scan/--incE         @src/hmmscan@    --incE 0.01              %MINIFAM.HMM% !tutorial/HBB_HUMAN! 
+1 exercise  scan/--incT         @src/hmmscan@    --incT 20                %MINIFAM.HMM% !tutorial/HBB_HUMAN! 
+1 exercise  scan/--incdomE      @src/hmmscan@    --incdomE 0.01           %MINIFAM.HMM% !tutorial/HBB_HUMAN! 
+1 exercise  scan/--incdomT      @src/hmmscan@    --incdomT 20             %MINIFAM.HMM% !tutorial/HBB_HUMAN! 
+1 exercise  scan/--incdomT      @src/hmmscan@    --incdomT 20             %MINIFAM.HMM% !tutorial/HBB_HUMAN! 
+1 exercise  scan/--cut_ga       @src/hmmscan@    --cut_ga                 %MINIFAM.HMM% !tutorial/HBB_HUMAN!
+1 exercise  scan/--cut_nc       @src/hmmscan@    --cut_nc                 %MINIFAM.HMM% !tutorial/HBB_HUMAN!
+1 exercise  scan/--cut_tc       @src/hmmscan@    --cut_tc                 %MINIFAM.HMM% !tutorial/HBB_HUMAN! 
+1 exercise  scan/--max          @src/hmmscan@    --max                    %MINIFAM.HMM% !tutorial/HBB_HUMAN! 
+1 exercise  scan/--F1           @src/hmmscan@    --F1 0.03                %MINIFAM.HMM% !tutorial/HBB_HUMAN!
+1 exercise  scan/--F2           @src/hmmscan@    --F2 0.002               %MINIFAM.HMM% !tutorial/HBB_HUMAN!
+1 exercise  scan/--F3           @src/hmmscan@    --F3 0.0002              %MINIFAM.HMM% !tutorial/HBB_HUMAN! 
+1 exercise  scan/--nobias       @src/hmmscan@    --nobias                 %MINIFAM.HMM% !tutorial/HBB_HUMAN!
+1 exercise  scan/--nonull2      @src/hmmscan@    --nonull2                %MINIFAM.HMM% !tutorial/HBB_HUMAN!
+1 exercise  scan/-Z             @src/hmmscan@    -Z 45000000              %MINIFAM.HMM% !tutorial/HBB_HUMAN!
+1 exercise  scan/--domZ         @src/hmmscan@    --domZ 45000000          %MINIFAM.HMM% !tutorial/HBB_HUMAN!
+1 exercise  scan/--seed         @src/hmmscan@    --seed 42                %MINIFAM.HMM% !tutorial/HBB_HUMAN!
+1 exercise  scan/--qformat      @src/hmmscan@    --qformat fasta          %MINIFAM.HMM% !tutorial/HBB_HUMAN! 
+1 exercise  scan/--cpu          @src/hmmscan@    --cpu 2                  %MINIFAM.HMM% !tutorial/HBB_HUMAN! 
 
 
 # jackhmmer xxxxxxxxxxxxxxxxxxxx
@@ -290,7 +321,7 @@
 1 exercise  nhmmer/--seed        @src/nhmmer@  --seed 42                  !tutorial/MADE1.hmm! %RNDDB%
 
 
-# nhmmscan    xxxxxxxxxxxxxxxxxxxx
+# nhmmscan  xxxxxxxxxxxxxxxxxxxx
 1 prep      rnddb                  @easel/miniapps/esl-shuffle@ -G --dna   -L 10000 -N 2 -o %RNDDB%
 1 prep      press                  @src/hmmpress@  -f                           !tutorial/MADE1.hmm!
 1 exercise  nhmmscan               @src/nhmmscan@                               !tutorial/MADE1.hmm! %RNDDB%
@@ -316,16 +347,29 @@
 1 exercise  nhmmscan/--seed        @src/nhmmscan@  --seed 42                    !tutorial/MADE1.hmm! %RNDDB%
 1 prep      cleanup                rm !tutorial/MADE1.hmm!.h3?
 
+# hmmemit   xxxxxxxxxxxxxxxxxxxx
+1 exercise  hmmemit              @src/hmmemit@                !testsuite/Caudal_act.hmm!
+1 exercise  hmmemit/-h           @src/hmmemit@ -h
+1 exercise  hmmemit/-c           @src/hmmemit@ -c             !testsuite/Caudal_act.hmm!
+1 exercise  hmmemit/-o           @src/hmmemit@ -o /dev/null   !testsuite/Caudal_act.hmm!
+1 exercise  hmmemit/-p           @src/hmmemit@ -p             !testsuite/Caudal_act.hmm!
+1 exercise  hmmemit/-N           @src/hmmemit@ -N 10          !testsuite/Caudal_act.hmm!
+1 exercise  hmmemit/-L           @src/hmmemit@ -p -L 50       !testsuite/Caudal_act.hmm!
+1 exercise  hmmemit/--local      @src/hmmemit@ -p --local     !testsuite/Caudal_act.hmm!
+1 exercise  hmmemit/--unilocal   @src/hmmemit@ -p --unilocal  !testsuite/Caudal_act.hmm!
+1 exercise  hmmemit/--glocal     @src/hmmemit@ -p --glocal    !testsuite/Caudal_act.hmm!
+1 exercise  hmmemit/--uniglocal  @src/hmmemit@ -p --uniglocal !testsuite/Caudal_act.hmm!
+
+# xxxxxxxxx xxxxxxxxxxxxxxxxxxxx
+1 exercise  hmmfetch             @src/hmmfetch@   %MINIFAM.HMM% Caudal_act
+1 exercise  hmmstat              @src/hmmstat@    !testsuite/Caudal_act.hmm!
+1 exercise  hmmlogo              @src/hmmlogo@    !testsuite/Caudal_act.hmm!
+1 exercise  hmmconvert           @src/hmmconvert@ !testsuite/Caudal_act.hmm!
+1 exercise  hmmsim               @src/hmmsim@     !testsuite/Caudal_act.hmm!
+
 #################################################################
 # Integration tests
 ################################################################
-
-# Prep a press'ed "minifam" that's used in several integration tests,
-# and extract an individual 'typical' model Caudal_act.
-1 prep      Caudal                @easel/miniapps/esl-afetch@ !testsuite/minifam! Caudal_act > %CAUDAL.STO%
-1 prep      hmm                   @src/hmmbuild@ %CAUDAL.HMM% %CAUDAL.STO%
-1 prep      minifam               @src/hmmbuild@ %MINIFAM.HMM% !testsuite/minifam!
-1 prep      minifam_press         @src/hmmpress@ %MINIFAM.HMM% 
 
 # Run-to-run variation tests
 # By default, stochastic simulations are seeded reproducibly, so there

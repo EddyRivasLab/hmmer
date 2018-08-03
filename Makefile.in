@@ -6,11 +6,13 @@
 # Optionally, you can run a test suite:
 #     % make check
 #
-# And optionally, you can install everything more permanently:
+# Optionally, you can install programs and man pages more permanently:
 #     % make install
 #
-# For more information, see the Installation chapter of the HMMER
-# User's Guide.
+# Optionally, you can install some small tools ("miniapps") from our Easel library:
+#     % (cd easel; make install)
+#
+# For more information, see the Installation section in the User's Guide.
 #
 
 
@@ -51,10 +53,13 @@ man1ext     = .1
 
 # Compiler configuration
 #
-CC        = @CC@
-CFLAGS    = @CFLAGS@ @PTHREAD_CFLAGS@ 
-LDFLAGS   = -static @LDFLAGS@
-CPPFLAGS  = @CPPFLAGS@
+CC             = @CC@
+CFLAGS         = @CFLAGS@ 
+PTHREAD_CFLAGS = @PTHREAD_CFLAGS@ 
+SSE_CFLAGS     = @SSE_CFLAGS@
+VMX_CFLAGS     = @VMX_CFLAGS@
+LDFLAGS        = -static @LDFLAGS@
+CPPFLAGS       = @CPPFLAGS@
 
 # Other tools
 #
@@ -67,32 +72,14 @@ INSTALL   = @INSTALL@
 QUIET_SUBDIR0 = +${MAKE} -C #space separator after -c
 QUIET_SUBDIR1 = 
 ifndef V
+	QUIET         = @
 	QUIET_CC      = @echo '    ' CC $@;
 	QUIET_GEN     = @echo '    ' GEN $@;
 	QUIET_AR      = @echo '    ' AR $@;
 	QUIET_SUBDIR0 = +@subdir=
 	QUIET_SUBDIR1 = ; echo '    ' SUBDIR $$subdir; \
-		        ${MAKE} -C $$subdir
+		        ${MAKE} -s -C $$subdir
 endif
-
-# Programs installed by HMMER (stable, documented)
-#
-PROGS = alimask\
-	hmmalign\
-	hmmbuild\
-	hmmconvert\
-	hmmemit\
-	hmmfetch\
-	hmmpress\
-	hmmscan\
-	hmmsearch\
-	hmmsim\
-	hmmstat\
-	jackhmmer\
-	phmmer\
-	nhmmer\
-	nhmmscan\
-	hmmpgmd
 
 .PHONY: all dev check pdf install uninstall clean distclean TAGS
 
@@ -133,25 +120,25 @@ check:
 pdf:
 	${QUIET_SUBDIR0}documentation ${QUIET_SUBDIR1} pdf
 
-# install: installs the binaries in ${bindir}/
-#          When man pages are done, will install man pages in MANDIR/man1/  (e.g. if MANSUFFIX is 1)
+# install: binaries in ${bindir}/, man pages in ${man1dir}/
 #          Creates these directories if they don't exist.
-#          Prefix those paths with ${DESTDIR} (rarely used, usually null;
-#          may be set on a make command line when building contrib RPMs).
+#
+#          Prefix paths with optional ${DESTDIR}, which
+#          downstream packagers may set on make command line when
+#          building packages.
+#
+#          Does not use quiet beautification magic; always verbose.
 install: 
 	${INSTALL} -d ${DESTDIR}${bindir}
-	${INSTALL} -d ${DESTDIR}${libdir}
-	${INSTALL} -d ${DESTDIR}${includedir}
 	${INSTALL} -d ${DESTDIR}${man1dir}
-	${INSTALL} -d ${DESTDIR}${pdfdir}
-	${QUIET_SUBDIR0}src           ${QUIET_SUBDIR1} install
-	${QUIET_SUBDIR0}documentation ${QUIET_SUBDIR1} install
+	${MAKE} -C src install
+	${MAKE} -C documentation install
 
-# uninstall: Reverses the steps of "make install".
+# uninstall: reverses the steps of "make install".
 #
 uninstall: 
-	${QUIET_SUBDIR0}src           ${QUIET_SUBDIR1} uninstall
-	${QUIET_SUBDIR0}documentation ${QUIET_SUBDIR1} uninstall
+	${MAKE} -C src uninstall
+	${MAKE} -C documentation uninstall
 
 # "make clean" removes almost everything except configuration files.
 #
@@ -162,7 +149,10 @@ clean:
 	${QUIET_SUBDIR0}documentation ${QUIET_SUBDIR1} clean
 	${QUIET_SUBDIR0}${ESLDIR}     ${QUIET_SUBDIR1} clean
 	${QUIET_SUBDIR0}${SADIR}      ${QUIET_SUBDIR1} clean
-	-rm -f *.o *~ Makefile.bak core TAGS gmon.out
+	${QUIET}-rm -f *.o *~ Makefile.bak core TAGS gmon.out
+ifndef V
+	@echo '     ' CLEAN hmmer
+endif
 
 # "make distclean" leaves a pristine source distribution.
 #
@@ -173,18 +163,15 @@ distclean:
 	${QUIET_SUBDIR0}documentation ${QUIET_SUBDIR1} distclean
 	${QUIET_SUBDIR0}${ESLDIR}     ${QUIET_SUBDIR1} distclean
 	${QUIET_SUBDIR0}${SADIR}      ${QUIET_SUBDIR1} distclean
-	-rm config.log config.status
-	-rm -rf autom4te.cache
-	-rm -f *.o *~ Makefile.bak core TAGS gmon.out
-	-rm -f cscope.po.out cscope.out cscope.in.out cscope.files
-	-rm -f src/impl
-	-rm Makefile
-#Use 'ifneq' instead of 'test -e' because the '+@' in QUIET_SUBDIR0 can't
-#be passed to the shell. Note that ifneq breaks if indented.
-ifneq (,$(wildcard ./release-notes/LICENSE.sh))
-	-rm -f release-notes/LICENSE.sh
+	${QUIET}-rm config.log config.status
+	${QUIET}-rm -rf autom4te.cache
+	${QUIET}-rm -f *.o *~ Makefile.bak core TAGS gmon.out
+	${QUIET}-rm -f cscope.po.out cscope.out cscope.in.out cscope.files
+	${QUIET}-rm -f src/impl
+	${QUIET}-rm Makefile
+ifndef V
+	@echo '     ' CLEAN hmmer
 endif
-
 
 TAGS:
 	./makeTAGS.sh

@@ -1,55 +1,51 @@
-\documentclass[10pt]{article}
-%\usepackage{helvetic}
-\usepackage{times}
-\usepackage{fullpage}
-\usepackage{fancybox}  % Must include fancybox *before* fancyvrb;
-\usepackage{fancyvrb}  % don't know why.
-\usepackage[pdftex]{graphicx}
-\usepackage{url}
-%\usepackage[backref,colorlinks]{hyperref}
-\usepackage[authoryear]{natbib}
+\documentclass[notoc]{tufte-book}    % `notoc` suppresses TL custom TOC, reverts to standard LaTeX
 
-\setcounter{secnumdepth}{1}
-\renewcommand{\familydefault}{\sfdefault}
-\input{macros}
+\hyphenation{HMMER}
+
+\input{titlepage}                    % definitions for \maketitle 
+\bibliographystyle{unsrtnat-brief}   % customized natbib unsrtnat. Abbrev 3+ authors to ``et al.'' 
 
 \begin{document}
-\bibliographystyle{apalike}
+\setcounter{tocdepth}{2}             % 0=chapters 1=sections 2=subsections 3=subsubsections? 4=paragraphs
+\input{inclusions/inclusions.def}    % snippets captured from output, by gen-inclusions.py 
 
-\input{titlepage}
+\maketitle
+
 \input{copyright}
-\newpage
-\tableofcontents
 
-\newpage
+\begin{adjustwidth}{}{-1in}          % TL \textwidth is quite narrow. Expand it manually for TOC and man pages.
+\tableofcontents                     
+\end{adjustwidth}
+
 \input{introduction}
-
-\newpage
 \input{install}
-
-\newpage
 \input{tutorial}
-
-\newpage
 \input{pipeline}
-
-\newpage
 \input{tabular}
 
-\newpage
-\input{more}
-
-\newpage
+\begin{adjustwidth}{}{-1in}   
+\chapter{Manual pages for HMMER programs}             
 \input{manpages}
+\end{adjustwidth}
 
-\newpage
+\begin{adjustwidth}{}{-1in}   
+\chapter{Manual pages for Easel miniapps}             
+\input{easel_manpages}
+\end{adjustwidth}
+
 \input{formats}
 
-\newpage
 \input{ack}
+\label{manualend}
 
-\newpage
-\bibliography{master,lab,books}
+% To create distributable/gitted 'distilled.bib' from lab's bibtex dbs:
+%   # uncomment the {master,lab,books}
+%   pdflatex main
+%   bibdistill main.aux > distilled.bib
+%   # restore the {distilled} 
+% 
+\nobibliography{distilled}
+%\nobibliography{master,lab,books}
 
 \end{document}
 
