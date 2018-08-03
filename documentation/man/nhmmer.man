@@ -155,7 +155,7 @@ By default, if a query is a single sequence from a file in
 format,
 .B nhmmer 
 uses a search model constructed from that sequence and a standard
-20x20 substitution matrix for residue probabilities, along with two
+substitution matrix for residue probabilities, along with two
 additional parameters for position-independent gap open and gap extend
 probabilities. These options allow the default single-sequence scoring
 parameters to be changed, and for single-sequence scoring options to

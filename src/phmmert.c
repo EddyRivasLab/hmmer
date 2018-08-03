@@ -137,7 +137,9 @@ static ESL_OPTIONS options[] = {
 };
 
 static char usage[]  = "[options] <hmmfile> <seqdb>";
-static char banner[] = "search profile(s) against DNA sequence database";
+static char banner[] = "search protein profile(s) against DNA sequence database";
+
+
 
 /* struct cfg_s : "Global" application configuration shared by all threads/processes
  * 
