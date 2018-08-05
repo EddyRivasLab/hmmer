@@ -65,7 +65,6 @@ PROGS = alimask\
 	nhmmer\
 	nhmmscan\
 	nhmmscant\
-	makehmmerdb\
 	makehmmerdb
 
 # "auxprogs" are built but not installed.

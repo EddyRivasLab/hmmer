@@ -650,28 +650,6 @@ support turned off.
 
 
 
-
-.TP
-.BI \-\-stall
-For debugging the MPI master/worker version: pause after start, to
-enable the developer to attach debuggers to the running master and
-worker(s) processes. Send SIGCONT signal to release the pause.
-(Under gdb: 
-.BR "(gdb) signal SIGCONT" )
-(Only available if optional MPI support was enabled at compile-time.)
-
-.TP
-.BI \-\-mpi
-Run under MPI control with master/worker parallelization (using
-.BR mpirun ,
-for example, or equivalent). Only available if optional MPI support
-was enabled at compile-time.
-
-
-
-
-
-
 .SH SEE ALSO 
 
 See 
