@@ -70,7 +70,7 @@ p7_ViterbiFilter_sse(const ESL_DSQ *dsq, int L, const P7_OPROFILE *om, P7_FILTER
   ox->M    = om->M;
   ox->Vw   = p7_VWIDTH_SSE / sizeof(int16_t);
   ox->type = p7F_VITFILTER;
-  ESL_DASSERT1(( ox->Vw = om->V / sizeof(int16_t)));
+  ESL_DASSERT1(( ox->Vw == om->V / sizeof(int16_t)));
 
   /* Initialization. In int16_t, our -infinity is -32768  */
   for (q = 0; q < Q; q++)

@@ -62,7 +62,7 @@ p7_ViterbiFilter_avx512(const ESL_DSQ *dsq, int L, const P7_OPROFILE *om, P7_FIL
   ox->M    = om->M;
   ox->Vw   = p7_VWIDTH_AVX512 / sizeof(int16_t);
   ox->type = p7F_VITFILTER;
-  ESL_DASSERT1(( ox->Vw = om->V / sizeof(int16_t)));
+  ESL_DASSERT1(( ox->Vw == om->V / sizeof(int16_t)));
 
   /* Initialization. In unsigned arithmetic, -infinity is -32768n  */
   for (q = 0; q < Q; q++)
