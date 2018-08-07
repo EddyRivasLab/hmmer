@@ -54,6 +54,7 @@ PROGS = alimask\
 	hmmfetch\
 	hmmlogo\
 	hmmpgmd\
+	hmmpgmd_shard\
 	hmmpress\
 	hmmscan\
 	hmmsearch\
@@ -121,7 +122,9 @@ OBJS =  build.o\
 	heatmap.o\
 	hmmlogo.o\
 	hmmdmstr.o\
+	hmmdmstr_shard.o\
 	hmmdwrkr.o\
+	hmmdwrkr_shard.o\
 	hmmdutils.o\
 	hmmer.o\
 	logsum.o\
