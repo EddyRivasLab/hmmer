@@ -28,7 +28,7 @@
  * Throws:    <NULL> on allocation failure.
  */
 H4_PROFILE *
-h4_profile_Create(ESL_ALPHABET *abc, int M)
+h4_profile_Create(const ESL_ALPHABET *abc, int M)
 {
   H4_PROFILE *hmm = NULL;
 
@@ -82,6 +82,10 @@ h4_profile_CreateShell(void)
  *            data-dependent probability parameters to 0,
  *            and set data-independent boundary conditions
  *            as described in {h4_profile.md}.
+ *            
+ *            <hmm->M> is set, and a copy of <abc> is kept.  Caller
+ *            remains responsible for <abc>, but must not free it
+ *            until this profile is freed.
  *
  * Returns:   <eslOK> on success, and allocations in
  *            <hmm> are done.
@@ -94,6 +98,7 @@ h4_profile_CreateBody(H4_PROFILE *hmm, const ESL_ALPHABET *abc, int M)
   if ((hmm->t = esl_mat_FCreate((M+1), h4_NTRANSITIONS)) == NULL) goto ERROR;
   if ((hmm->e = esl_mat_FCreate((M+1), abc->K))          == NULL) goto ERROR;
 
+  /* Initialize to 0. */
   esl_mat_FSet(hmm->t, M+1, h4_NTRANSITIONS, 0.);
   esl_mat_FSet(hmm->e, M+1, abc->K,          0.);
 
@@ -133,25 +138,29 @@ h4_profile_Destroy(H4_PROFILE *hmm)
 
 
 
+/* Function:  h4_profile_SetConventions()
+ * Synopsis:  Set the fixed edge conditions in a H4 profile HMM.
+ * Incept:    SRE, Mon 06 Aug 2018
+ */
 int
 h4_profile_SetConventions(H4_PROFILE *hmm)
 {
-  esl_vec_FSet(hmm->e[0], hmm->abc->K, 0.0);
+  esl_vec_FSet(hmm->e[0], hmm->abc->K, 0.0);         // e[0] is unused; we make it a valid probability vector anyway
   hmm->e[0][0] = 1.0;
 
-  hmm->t[0][h4_TMI] = 0.;        // at [0] TMM,TMD are G->{MD}1.
+  hmm->t[0][h4_TMI] = 0.;                            // at [0] TMM,TMD are G->{MD}1; no I0 state, so G->MI0 = 0
 
-  hmm->t[hmm->M][h4_TMM] = 1.0; 
-  hmm->t[hmm->M][h4_TMI] = 0.0;
-  hmm->t[hmm->M][h4_TMD] = 0.0;
-
-  hmm->t[0][h4_TIM] = hmm->t[hmm->M][h4_TIM] = 1.0;  // at [0] and [M], there is no insert state; 
-  hmm->t[0][h4_TII] = hmm->t[hmm->M][h4_TII] = 0.0;  //   these settings are documented conventions.
+  hmm->t[0][h4_TIM] = hmm->t[hmm->M][h4_TIM] = 1.0;  // at [0] and [M], there is no insert state;
+  hmm->t[0][h4_TII] = hmm->t[hmm->M][h4_TII] = 0.0;  //   we make the transitions valid prob vectors anyway
   hmm->t[0][h4_TID] = hmm->t[hmm->M][h4_TID] = 0.0;
 
-  hmm->t[0][h4_TDM] = hmm->t[hmm->M][h4_TDM] = 1.0;  // at [0] there is no delete state; 
-  hmm->t[0][h4_TDI] = hmm->t[hmm->M][h4_TDI] = 0.0;  // at [M], delete -> E.
-  hmm->t[0][h4_TDD] = hmm->t[hmm->M][h4_TDD] = 0.0;  // these settings are documented conventions.
+  hmm->t[0][h4_TDM] = hmm->t[hmm->M][h4_TDM] = 1.0;  // at [0] there is no delete state; at [M], delete -> E.
+  hmm->t[0][h4_TDI] = hmm->t[hmm->M][h4_TDI] = 0.0;  
+  hmm->t[0][h4_TDD] = hmm->t[hmm->M][h4_TDD] = 0.0;  
+
+  hmm->t[hmm->M][h4_TMM] = 1.0;                      // at [M], match state must go M->E.
+  hmm->t[hmm->M][h4_TMI] = 0.0;
+  hmm->t[hmm->M][h4_TMD] = 0.0;
 
   return eslOK;
 }
@@ -187,6 +196,7 @@ h4_profile_Renormalize(H4_PROFILE *hmm)
  * x. Debugging and development tools
  *****************************************************************/
 
+
 /* Function:  h4_profile_Dump()
  * Synopsis:  Dump contents of an H4_PROFILE for inspection
  * Incept:    SRE, Mon 16 Jul 2018 [Benasque]
@@ -217,5 +227,65 @@ h4_profile_Dump(FILE *fp, H4_PROFILE *hmm)
       for (z = 0; z < h4_NTRANSITIONS; z++)
 	fprintf(fp, "%10.2f%c", hmm->t[k][z], z == h4_NTRANSITIONS-1 ? '\n':' ');
     }
+  return eslOK;
+}
+
+
+
+/* Function:  h4_profile_Validate()
+ * Synopsis:  Validate an <H4_PROFILE> data structure
+ * Incept:    SRE, Mon 06 Aug 2018 [Nick Cave and Warren Ellis, Mountain Lion Mean]
+ */
+int
+h4_profile_Validate(const H4_PROFILE *hmm, char *errbuf)
+{
+  int   k;
+  float tol = 1e-4;
+
+  if (hmm->M < 1) ESL_FAIL(eslFAIL, errbuf, "invalid model size M");
+  if (! hmm->abc) ESL_FAIL(eslFAIL, errbuf, "no model alphabet");
+
+  /* emissions and transitions */
+  for (k = 0; k <= hmm->M; k++)
+    if ( esl_vec_FValidate(hmm->e[k],   hmm->abc->K, tol, NULL) != eslOK ||
+	 esl_vec_FValidate(hmm->t[k],   3,           tol, NULL) != eslOK ||
+         esl_vec_FValidate(hmm->t[k]+3, 3,           tol, NULL) != eslOK ||
+	 esl_vec_FValidate(hmm->t[k]+6, 3,           tol, NULL) != eslOK)
+      ESL_FAIL(eslFAIL, errbuf, "something awry at state %d", k);
+
+  /* edge conventions */
+  if (hmm->e[0][0]           != 1. ||
+      hmm->t[0][h4_TMI]      != 0. ||
+      hmm->t[0][h4_TIM]      != 1. ||
+      hmm->t[0][h4_TDM]      != 1. ||
+      hmm->t[hmm->M][h4_TMM] != 1. ||
+      hmm->t[hmm->M][h4_TIM] != 1. ||
+      hmm->t[hmm->M][h4_TDM] != 1.)
+    ESL_FAIL(eslFAIL, errbuf, "something awry in edge conventions");
+
+  return eslOK;
+}
+
+/* Function:  h4_profile_Compare()
+ * Synopsis:  Compare two <H4_PROFILE>'s for equality
+ * Incept:    SRE, Mon 06 Aug 2018 [Colter Wall, Sleeping on the Blacktop]
+ */
+int
+h4_profile_Compare(const H4_PROFILE *h1, const H4_PROFILE *h2)
+{
+  int   k;
+  float tol = 1e-4;
+
+  if (h1->abc->type != h2->abc->type) ESL_FAIL(eslFAIL, NULL, "different alphabets");
+  if (h1->M         != h2->M)         ESL_FAIL(eslFAIL, NULL, "different M");
+
+  for (k = 0; k <= h1->M; k++)
+    if ( esl_vec_FCompare(h1->e[k], h2->e[k], h1->abc->K, tol) != eslOK)
+      ESL_FAIL(eslFAIL, NULL, "difference in match emission vector %d", k);
+
+  for (k = 0; k <= h1->M; k++) 
+    if ( esl_vec_FCompare(h1->t[k], h2->t[k], h4_NTRANSITIONS, tol) != eslOK)
+      ESL_FAIL(eslFAIL, NULL, "difference in state transition vector %d", k);
+
   return eslOK;
 }

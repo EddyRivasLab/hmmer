@@ -13,7 +13,7 @@
  * Purpose:   Based on <esl_getopts_CreateDefaultApp()> but specialized for HMMER.
  *            See documentation in <easel/esl_getopts.c>.
  * 
- *            The <options> list is assumed to contain '--help' (help) and '--version' (version).
+ *            The <options> list is assumed to contain '-h' (help) and '--version' (version).
  *
  * Args:      options : Easel options structures
  *            nargs   : expected number of command line arguments, aside from options
@@ -27,7 +27,7 @@
  *            On command line parsing errors, print an error message
  *            to <stderr> and exit with abnormal (1) status.
  *            
- *            When the standard `--help` option is seen, print a help
+ *            When the standard `-h` option is seen, print a help
  *            page to <stdout> and exit with normal (0) status.
  *            
  *            When the standard `--version` option is seen, print the
@@ -51,7 +51,7 @@ h4_CreateDefaultApp(ESL_OPTIONS *options, int nargs, int argc, char **argv, char
     {
       if ( esl_fprintf(stderr,   "Failed to parse command line: %s\n", go->errbuf)                    != eslOK) goto ERROR;
       if ( esl_fprintf(stderr, "\nUsage: %s %s\n", progname, usage)                                   != eslOK) goto ERROR;
-      if ( esl_fprintf(stderr, "\nTo see more help on available options, do %s --help\n\n", progname) != eslOK) goto ERROR;
+      if ( esl_fprintf(stderr, "\nTo see more help on available options, do %s -h\n\n", progname) != eslOK) goto ERROR;
       free(progname);
       exit(1);
     }
@@ -62,7 +62,7 @@ h4_CreateDefaultApp(ESL_OPTIONS *options, int nargs, int argc, char **argv, char
       exit(0);
     }
 
-  if (esl_opt_GetBoolean(go, "--help") == TRUE) 
+  if (esl_opt_GetBoolean(go, "-h") == TRUE) 
     {
       if (banner)
 	{
@@ -86,7 +86,7 @@ h4_CreateDefaultApp(ESL_OPTIONS *options, int nargs, int argc, char **argv, char
     {
       if ( esl_fprintf(stderr, "Incorrect number of command line arguments.")                         != eslOK) goto ERROR;
       if ( esl_fprintf(stderr, "\nUsage: %s %s\n", progname, usage)                                   != eslOK) goto ERROR;
-      if ( esl_fprintf(stderr, "\nTo see more help on available options, do %s --help\n\n", progname) != eslOK) goto ERROR;
+      if ( esl_fprintf(stderr, "\nTo see more help on available options, do %s -h\n\n", progname) != eslOK) goto ERROR;
       free(progname);
       exit(1);
     }

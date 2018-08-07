@@ -10,7 +10,7 @@
 #include "esl_subcmd.h"
 
 #include "h4_profile.h"
-#include "modelio.h"
+#include "h4_hmmfile.h"
 
 #include "h4_build.h"
 
@@ -57,7 +57,7 @@ h4_cmd_build(const char *topcmd, const ESL_SUBCMD *sub, int argc, char **argv)
 
       h4_Build(NULL, msa, &hmm, NULL);
   
-      h4_modelio_Write(stdout, hmm);
+      h4_hmmfile_Write(stdout, hmm);
 
       esl_msa_Destroy(msa);
       h4_profile_Destroy(hmm);

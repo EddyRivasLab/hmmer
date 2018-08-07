@@ -2,17 +2,19 @@
 PROGS = hmmer
 
 OBJS   = \
-	general.o      \
 	h4_build.o     \
 	h4_cmd_build.o \
+	h4_hmmfile.o   \
 	h4_path.o      \
 	h4_prior.o     \
 	h4_profile.o   \
-	modelio.o      \
+	general.o      \
+	modelsample.o  \
 	parameterize.o
 
 UTESTS = \
-	h4_path_utest
+	h4_hmmfile_utest \
+	h4_path_utest 
 
 STATS  =
 
@@ -22,8 +24,8 @@ EXPERIMENTS = \
 
 BENCHMARKS =
 
-EXAMPLES = 
-
+EXAMPLES = \
+	h4_hmmfile_example
 
 
 SSE4_OBJS   =
@@ -34,12 +36,13 @@ VMX_OBJS    =
 
 HDRS = \
 	h4_config.h   \
-	general.h     \
 	h4_build.h    \
+	h4_hmmfile.h  \
 	h4_path.h     \
 	h4_prior.h    \
 	h4_profile.h  \
-	modelio.h     \
+	general.h     \
+	modelsample.h \
 	parameterize.h
 
 top_srcdir     = @top_srcdir@
@@ -162,6 +165,19 @@ libhmmer.a: ${ALL_OBJS}
 
 ${ALL_OBJS}:  %.o : %.c ${HDRS} 
 	${QUIET_CC}${CC} ${CFLAGS} ${SIMD_CFLAGS} ${PTHREAD_CFLAGS} ${CPPFLAGS} ${DEFS} ${MYINCDIRS} -c $<
+
+${ALL_EXAMPLES}: libhmmer.a ${top_builddir}/lib/easel/libeasel.a ${HDRS} h4_config.h
+	@BASENAME=`echo $@ | sed -e 's/_example[0-9]*//' | sed -e 's/^h4_//'` ;\
+	DFLAG=h4`echo $@ | sed -e 's/^h4_//' | sed -e 'y/abcdefghijklmnopqrstuvwxyz/ABCDEFGHIJKLMNOPQRSTUVWXYZ/'`;\
+	if test -e ${srcdir}/h4_$${BASENAME}.c    ;\
+	   then DFILE=${srcdir}/h4_$${BASENAME}.c ;\
+	   else DFILE=${srcdir}/$${BASENAME}.c    ;\
+	fi;\
+	if test ${V} ;\
+	   then echo "${CC} ${CFLAGS} ${SIMD_CFLAGS} ${PTHREAD_CFLAGS} ${CPPFLAGS} ${DEFS} ${MYINCDIRS} ${LDFLAGS} ${MYLIBDIRS} -D$${DFLAG} -o $@ $${DFILE} ${LIBS}" ;\
+	   else echo '    ' GEN $@ ;\
+        fi ;\
+	${CC} ${CFLAGS} ${SIMD_CFLAGS} ${PTHREAD_CFLAGS} ${CPPFLAGS} ${DEFS} ${MYINCDIRS} ${LDFLAGS} ${MYLIBDIRS} -D$${DFLAG} -o $@ $${DFILE} ${LIBS}
 
 ${ALL_UTESTS}: libhmmer.a ${HDRS} h4_config.h
 	@BASENAME=`echo $@ | sed -e 's/_utest//' | sed -e 's/^h4_//'` ;\
