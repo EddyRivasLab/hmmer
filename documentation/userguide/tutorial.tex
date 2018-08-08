@@ -62,13 +62,16 @@ In rough order of importance, the 18 HMMER programs are:
 \begin{tabular}{rp{4in}}
 \monob{hmmbuild}    & build profile from input multiple alignment\\
 \monob{hmmalign}    & make multiple sequence alignment using a profile\\
-\monob{hmmsearch}   & search profile against sequence database\\
-\monob{hmmscan}     & search sequence against profile database\\
+\monob{hmmsearch}   & search protein profile against protein sequence database\\
+\monob{hmmscan}     & search protein sequence against protein profile database\\
 \monob{hmmpress}    & prepare profile database for \mono{hmmscan}\\
 \monob{phmmer}      & search single sequence against sequence database\\
-\monob{jackhmmer}   & iteratively search single sequence against database\\
+\monob{jackhmmer}   & iteratively search single protein sequence against
+database\\
 \monob{nhmmer}      & search DNA query against DNA sequence database\\
 \monob{nhmmscan}    & search DNA sequence against a DNA profile database\\
+\monob{phmmert}     & search protein profile(s) against DNA sequence database\\
+\monob{nhmmscant}   & search DNA sequence against a protein profile database\\
 \monob{hmmfetch}    & retrieve profile(s) from a profile file \\
 \monob{hmmstat}     & show summary statistics for a profile file \\
 \monob{hmmemit}     & generate (sample) sequences from a profile \\
@@ -94,11 +97,17 @@ query sequence, then run profile searches.)
 
 \mono{nhmmer} is the equivalent of \mono{hmmsearch} and \mono{phmmer},
 but is capable of searching long, chromosome-size target DNA
-sequences.  \mono{nhmmscan} is the equivalent of \mono{hmmscan},
-capable of using chromosome-size DNA sequences as a query into a
-profile database.
+sequences with DNA sequences/profiles. \mono{nhmmscan} is the equivalent of
+\mono{hmmscan}, capable of using chromosome-size DNA sequences as a query into a
+DNA profile database.
 \marginnote{\mono{nhmmer} and \mono{nhmmscan} were added in HMMER3.1.}
 
+\mono{phmmert} is analagous to \mono{hmmsearch} and \mono{nhmmer},
+but searches long, chromosome-size target DNA
+sequences with proten profile(s).  \mono{nhmmscant} is the equivalent of
+\mono{hmmscan} and \mono{nhmmscan}, capable of using chromosome-size DNA
+sequences as a query into a protein profile database.
+\marginnote{\mono{phmmert} and \mono{nhmmscant} were added in HMMER3.3??.}
 
 
 
@@ -152,7 +161,7 @@ change into that directory now.
 If you do a \mono{ls}, you'll see there are several example files in
 the \mono{tutorial} directory:
 
-\begin{sreitems}{\monob{dna\_target.fa}}
+\begin{sreitems}{\monob{dna\_made1\_target.fa}}
 \item[\monob{globins4.sto}] An example alignment of four globin sequences, in
   Stockholm format. This alignment is a subset of a famous old
   published structural alignment from Don Bashford.\cite{Bashford87}
@@ -177,8 +186,12 @@ the \mono{tutorial} directory:
 \item[\monob{MADE1.sto}] An example DNA alignment, a subset
 of the Dfam seed alignment for the MADE1 transposable element family. 
 %
-\item[\monob{dna\_target.fa}] A 330Kb sequence from human chromosome
+\item[\monob{dna\_made1\_target.fa}] A 330Kb sequence from human chromosome
   1 in FASTA format, containing four MADE1 elements.
+%
+\item[\monob{dna\_pkinase\_target.fa}] A 5Kb sequence from human chromosome
+  22 in FASTA format, containing one segment of a pkinase domain.
+\item[]
 \end{sreitems}
 
 
@@ -226,7 +239,7 @@ chapter on page \pageref{chapter:formats}.
  
 
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-\section{Searching a sequence database with a profile}
+\section{Searching a protein sequence database with a protein profile}
 
 Now let's go through the \mono{hmmbuild}/\mono{hmmsearch} example in a
 bit more detail.
@@ -903,7 +916,7 @@ automating lots of searches and you want to be sure that they worked.
 
 
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-\section{Searching a profile database with a query sequence}
+\section{Searching a protein profile database with a protein query sequence}
 
 Rather than searching a single profile against a collection of
 sequences, you might want to wish to annotate a single sequence by
@@ -1084,7 +1097,344 @@ have this property (hmmbuild and the four search programs).
 
 
 
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+\section{Searching nucleotide sequences vs. nucleotide sequences/profiles}
 
+HMMER was originally developed for protein sequence analysis. The
+\mono{hmmsearch} and \mono{hmmscan} programs assume that it's sensible
+to ask if the entire target sequence is homologous (or not) to a query
+profile. It makes sense to say ``this sequence is a probable protein
+kinase'' because we find a protein kinase domain in it.  What if you
+want to use a DNA profile to search a very long (chromosome-sized)
+piece of DNA for homologous regions?  We might want to identify Alu
+and L1 elements in human chromosome sequences, for example. It's not
+super useful to see the 24 chromosomes ranked by E-values in
+\mono{hmmsearch} output -- we're only interested in the element
+locations. Also, if we can avoid having to align the entire target
+chromosome sequence at once, we can scan the profile along the target
+sequence in a much more memory-efficient manner than
+\mono{hmmsearch}/\mono{hmmscan} would do.
+
+The \mono{nhmmer} and \mono{nhmmscan} programs are designed for
+memory-efficient DNA profile searches of long DNA sequences. They were
+developed in concert with the Dfam database (\url{dfam.org}), which
+provides of alignments and profiles of many common DNA repeat elements
+for several important genomes.  The alignment
+\mono{tutorial/MADE1.sto} is a representative alignment of 100 human
+MADE1 transposable elements, a subset of the Dfam MADE1
+alignment. We'll use the MADE1 alignment to show how
+\mono{nhmmer}/\mono{nhmmscan} work; they work similarly to
+\mono{hmmsearch}/\mono{hmmscan}.
+
+\subsection{Step 1: build a DNA profile with hmmbuild}
+
+\mono{hmmbuild} works for both protein and DNA profiles, so:
+
+   \vspace{1ex}
+   \user{\% hmmbuild MADE1.hmm MADE1.sto}
+   \vspace{1ex}
+
+and you'll see some output that looks like:
+
+   \xsreoutput{inclusions/hmmbuild-made1.out}
+
+
+Notice the new output column with the header ``W'', which is only
+present when the input sequence alignment is DNA/RNA. This represents
+an upper bound on the length at which nhmmer expects to find an
+instance of the family\marginnote{W is based on position-specific insert
+  rates: only $10^{-7}$ of all sequences generated from the profile 
+  are expected to be longer than W.}.  It is always larger than mlen,
+though the ratio of mlen to W depends on the observed insert rate in
+the seed alignment. This length is used deep in the acceleration
+pipeline, and modest changes are not expected to impact results, but
+larger values of W do lead to longer run time. The value can be
+overridden with the \mono{-{}-w\_length} or \mono{-{}-w\_beta} flags, at
+the risk of possibly missing instances of the family that happen to be
+longer than W due to plentiful insertions.
+
+
+
+\subsection{Step 2: search the DNA sequence database with nhmmer}
+
+We'll use \mono{dna\_made1\_target.fa} as the target sequence
+database. It is a FASTA format file containing one 330Kb long DNA
+sequence extracted from human chromosome 1.
+
+\mono{nhmmer} accepts a target DNA sequence database in the same
+formats as \mono{hmmsearch} (typically FASTA). For the query, it accepts
+either a profile file as produced above by hmmbuild, or a file
+containing either one DNA sequence or an alignment of multiple DNA
+sequences.
+
+If a sequence or alignment is used as query input, \mono{nhmmer}
+internally produces the profile for that alignment\marginnote{Using
+  default hmmbuild parameters; if you want more control, explicitly
+  built the profile with hmmbuild.}, then searches with that
+profile. The profile produced in this way is automatically saved to
+disk, and the default file name is chosen by appending ``.hmm'' to the
+name of the sequence file name. This can be overridden with the
+\mono{-{}-hmmout} flag.
+
+To search \mono{dna\_made1\_target.fa} with our \mono{MADE1.hmm} profile:
+
+   \vspace{1ex}
+   \user{\% nhmmer MADE1.hmm dna\_made1\_target.fa}
+   \vspace{1ex}
+
+This output is largely similar to that of hmmsearch. The key
+difference is that each hit is not to a full sequence in the target
+database, but one local alignment of the profile to a subsequence of a
+target database sequence.
+
+The first section is the \emph{header} that tells you what program you
+ran, on what, and with what options, as above.
+
+The second section is the \emph{top hits} list. It is a list
+of ranked top hits (sorted by E-value, most significant hit first),
+formatted much like the \mono{hmmsearch} output \emph{top hits} list:
+
+   \xsreoutput{inclusions/nhmmer-made1.out}
+
+For each hit, the table shows its \emph{E-value}, \emph{bit score},
+\emph{bias}, \emph{target sequence name} and \emph{target sequence
+  description}, much like \mono{hmmsearch}.
+
+The ``start'' and ``end'' columns are the coordinates in the target
+sequence where the hit is found. When the ``end'' is smaller than
+``start'', this means the hit found on the reverse complement of the
+target database sequence.\marginnote{\mono{nhmmer} automatically
+  searches both strands.}
+
+For example, note that the top hits here are coming in overlapping
+pairs, corresponding to the forward and reverse strands, like the hit
+to \NMHafrom{}..\NMHato{} on the forward strand and a hit to
+\NMHbfrom{}..\NMHbto{} on the reverse strand. This is because the
+MADE1 DNA element is a near-perfect palindrome.\marginnote{DNA
+  elements that have a unique orientation will only hit on one strand.
+  \mono{nhmmer} treats the two strands independently. Palindromic
+  elements will hit the same region on both strands and \mono{nhmmer}
+  will not filter the overlapping hits.}
+
+Then comes the third output section, which starts with
+
+   \xsreoutput{inclusions/nhmmer-made1.out2}
+
+For each hit in the top hits list, there is a tabular line
+providing detailed information about the hit, followed by the alignment
+inferred for the hit. The first \mono{MADE1} hit
+looks like: 
+
+   \xsreoutput{inclusions/nhmmer-made1.out3}
+
+All these pieces of information are as described for \mono{hmmsearch},
+plus a column for ``sq len'' that indicates the full length of the
+target sequence.
+
+Under each one-line hit table is displayed the alignment inferred
+between the profile and the hit envelope. For example, the top hit
+from above is shown as:
+
+   \xsreoutput{inclusions/nhmmer-made1.out4}
+
+The alignment format is the same as for \mono{hmmsearch}.
+
+At the end of the output, you'll see summary statistics:
+
+   \xsreoutput{inclusions/nhmmer-made1.out5}
+
+This gives you some idea of what's going on in nhmmer's acceleration
+pipeline. You've got one query profile, and \NMHnres{} residues were
+searched (there are \NMHntop{} bases in the single sequence found in
+the file; the search includes the reverse complement, doubling the
+search space). The sequences in the database go through a gauntlet of
+three scoring algorithms called SSV, Viterbi, and Forward, in order of
+increasing sensitivity and increasing computational requirement.
+
+SSV (the ``Single ungapped Segment Viterbi'' algorithm) as used in
+nhmmer is closely related to the MSV algorithm used in
+\mono{hmmsearch}, in that it depends on ungapped alignment
+segments. The difference lies in how those alignments are used. Using
+MSV, a sequence is either rejected or accepted in its entirety. In the
+scanning-SSV filter of \mono{nhmmer}, each sequence in the database is
+scanned for high-scoring ungapped alignment segments, and a window
+around each such segment is extracted (merging overlapping windows),
+and passed on to the next stage. By default, nhmmer is configured to
+allow sequence segments with a P-value of $\leq 0.02$ through the SSV
+score filter.\sidenote{Thus, if the database contained no homologs and P-values
+were accurately calculated, the highest scoring 2\% of the sequence
+will pass the filter.} Here, \NMHnssv{} bases,
+or about \NMHfracssv{}\% of the database, got through the SSV filter.
+
+The ``bias filter'' is then applied, as in \mono{hmmsearch}. Here, 
+\NMHnbias{} bases, roughly \NMHfracbias{}\% of the database
+pass through the bias filter.
+
+The Viterbi filter then calculates a gapped optimal alignment score
+for each window that survived the earlier stages. This score is a
+closer approximation than the SSV score of the final score that the
+window will achieve if it survives to final processing, but the
+Viterbi filter is about four-fold slower than SSV. By default, nhmmer
+lets windows with a P-value of $\leq 0.001$ through this stage. Here,
+\NMHnvit{} bases, about \NMHfracvit{}\% of the database gets through.
+
+Then the full Forward score is calculated, which sums over all
+possible alignments of the profile to the window. The default allows
+windows with a P-value of $\leq 10^{-5}$ through; \NMHnfwd{} bases
+passed.
+
+All windows that make it through these filters are then subjected to a
+full probabilistic analysis using the HMM Forward/Backward algorithms,
+to identify hit envelopes, then determine posterior probabilities for
+each aligned residue, followed by optimal accuracy alignment. The
+results of this step are what you finally see on the output. The final
+number of hits and fractional coverage of the database is shown
+next. This is typically smaller than the fraction of the database
+passing the Forward filter, as hit identification typically trims
+windows down to a smaller envelope.
+
+Finally, nhmmer reports the speed of the search in units of Mc/sec
+(million dynamic programming cells per second), the CPU time, and the
+elapsed time.
+
+\mono{nhmmscan} is to \mono{hmmscan} as \mono{nhmmer} is to
+\mono{hmmsearch}.  There is not currently a iterative DNA search
+analog to \mono{jackhmmer}.
+
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+\section{Searching nucleotide sequences vs. protein profiles}
+
+So far, we've discussed tools for comparing protein profile(s) to
+protein sequence(s), and for comparing DNA profile(s) to DNA
+sequences(s). When we seek to match protein-coding regions in 
+DNA (or RNA) sequence, we need new tools. While it is possible to 
+identify those regions with a nucleotide profile using
+\mono{nhmmer} (see previous section), a more powerful strategy 
+is to search the nucleotide sequence using the nuanced scoring of protein
+search. This approach, called translated search, avoids penalizing synonymous 
+nucleotide substitutions, and accounts for relationships between 
+amino acids that may be missed in a less subtle nucleotide comparison. 
+
+Translated search in HMMER is performed with two tools. The tool 
+\mono{phmmert} is used to compare one or more protein profiles to a 
+nucleotide target database (e.g. a file of chromosomes), and is 
+analgous to \mono{nhmmer} and \mono{hmmsearch}. The tool 
+\mono{nhmmscant} is used to compare one or more nucleotide 
+sequences to a database of protein profiles (e.g. Pfam), and is 
+analgous to \mono{nhmmcan} and \mono{hmmscan}.
+
+Here, we'll go through the \mono{hmmbuild}/\mono{phmmert} example in
+some detail.
+
+\subsection{Step 1: build a profile with \mono{hmmbuild}}
+
+Run \mono{hmmbuild} to build a profile from the Pkinase
+alignment:
+
+   \vspace{1ex}
+   \user{\% hmmbuild Pkinase.hmm Pkinase.sto}
+   \vspace{1ex}
+
+and you got some output that looks like:
+
+  \xsreoutput{inclusions/hmmbuild-Pkinase.out}
+
+This is exactly the same as Step 1 in the section entitled 
+``Searching a protein sequence database with a protein profile''
+(see that section for more details). Here we present the highlights.
+
+
+\subsection{Step 2: search the DNA sequence database with phmmert}
+
+We'll use \mono{dna\_pkinase\_target.fa} as the target sequence
+database. It is a FASTA format file containing one 5Kb long DNA
+sequence extracted from human chromosome 22.
+
+\mono{phmmert} accepts a target DNA sequence database in the same
+formats as \mono{hmmsearch} (typically FASTA). For the query, it accepts
+a protein profile file as produced above by hmmbuild.
+
+To search \mono{dna\_pkinase\_target.fa} with our \mono{Pkinase.hmm} profile:
+
+   \vspace{1ex}
+   \user{\% phmmert Pkinase.hmm dna\_pkinase\_target.fa}
+   \vspace{1ex}
+
+This output is largely similar to that of \mono{hmmsearch}. The key
+differences are that (1) each hit is not to a full sequence in the 
+target database, but to a single open reading frame (ORF) among all 
+the ORFs found on both strands of the nucleotide sequence, and 
+(2) the output is adjusted to account for the fact that nucleotide
+triples (codons) from the DNA are aligned to amino acid positions from the
+protein profile.
+
+The first section is the \emph{header} that tells you what program you
+ran, on what, and with what options, as in \mono{hmmsearch}.
+
+The second section is the \emph{top hits} list. It is a list
+of ranked top hits (sorted by E-value, most significant hit first),
+formatted much like the \mono{hmmsearch} output \emph{top hits} list:
+
+   \xsreoutput{inclusions/phmmert-pkinase.out}
+   
+For each hit, the table shows its \emph{E-value}, \emph{bit score},
+\emph{bias}, \emph{target sequence name} and \emph{target sequence
+  description}, much like \mono{hmmsearch}.
+
+The ``start'' and ``end'' columns are the coordinates in the nucleotide
+sequence where the ORF containing the hit is found. When the ``end'' is smaller
+than ``start'', this means the ORF is found on the reverse complement of the
+target database sequence.\marginnote{\mono{phmmert} automatically
+  searches both strands.}
+   
+In the third output section, for each hit in the top hits list, there 
+is a table providing detailed information about the hit, with a line for 
+each infered domain, followed by the alignment(s) inferred for the hit. 
+The \mono{Pkinase} hit looks like:
+   
+   \xsreoutput{inclusions/phmmert-pkinase.out2}
+
+All these pieces of information are as described for \mono{hmmsearch}. 
+
+Under the domain table, an ``optimal posterior accuracy'' alignment
+is computed within each domain's envelope and displayed. For example,
+Pkinase domain 1 in the \monob{dna\_pkinase\_target.fa} 
+output is shown as:
+
+      \xsreoutput{inclusions/phmmert-pkinase.out3}
+      
+This largely agrees with the output from \mono{hmmsearch}, though 
+the alignment is spread out to accommodate the codons in the
+protein-coding DNA. The initial header line starts with a == 
+as a handle for a parsing script to grab hold of. The second line
+regurgitates reference line annotation inherited from the multiple
+alignment (as in \mono{hmmsearch}), while the third line (starting 
+with Pkinase) is the consensus of the profile. The fourth line 
+indicates matches between the profile and target sequence and 
+the fifth line presents the amino acid sequence encoded by the 
+matched DNA.  In each of these lines, the printed character is 
+surrounded by an extra preceding and following space character, 
+so that each position fills 3 characters in order to remain in 
+sync with the 6th line, which presents the DNA that encodes 
+the amino acids in the 5th line. The bottom line
+represents the posterior probability (essentially the expected 
+accuracy) of each aligned residue.
+
+
+Finally, at the bottom of the file, you'll see some summary statistics. For
+example, at the bottom of the Pkinase search output, you'll find something
+like:
+      
+   \xsreoutput{inclusions/phmmert-pkinase.out4}
+
+These are similar to the summary statistics from \mono{hmmsearch}, 
+with the number of sequences matching each stage being simply the
+number of ORFs passing each stage.
+
+\mono{nhmmscant} is to \mono{hmmscan} as \mono{phmmert} is to
+\mono{hmmsearch}.  There is not currently a iterative translated
+search (protein\textendash{}DNA) analog to \mono{jackhmmer}.
 
 
 
@@ -1200,215 +1550,6 @@ assigned to each column.
 The \mono{\#=GC RF} line is Stockholm-format \emph{reference
   coordinate annotation}, with an x marking each column that the
 profile considered to be consensus.
-
-
-
-%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-\section{Searching DNA sequences}
-
-HMMER was originally developed for protein sequence analysis. The
-\mono{hmmsearch} and \mono{hmmscan} programs assume that it's sensible
-to ask if the entire target sequence is homologous (or not) to a query
-profile. It makes sense to say ``this sequence is a probable protein
-kinase'' because we find a protein kinase domain in it.  What if you
-want to use a DNA profile to search a very long (chromosome-sized)
-piece of DNA for homologous regions?  We might want to identify Alu
-and L1 elements in human chromosome sequences, for example. It's not
-super useful to see the 24 chromosomes ranked by E-values in
-\mono{hmmsearch} output -- we're only interested in the element
-locations. Also, if we can avoid having to align the entire target
-chromosome sequence at once, we can scan the profile along the target
-sequence in a much more memory-efficient manner than
-\mono{hmmsearch}/\mono{hmmscan} would do.
-
-The \mono{nhmmer} and \mono{nhmmscan} programs are designed for
-memory-efficient DNA profile searches of long DNA sequences. They were
-developed in concert with the Dfam database (\url{dfam.org}), which
-provides of alignments and profiles of many common DNA repeat elements
-for several important genomes.  The alignment
-\mono{tutorial/MADE1.sto} is a representative alignment of 100 human
-MADE1 transposable elements, a subset of the Dfam MADE1
-alignment. We'll use the MADE1 alignment to show how
-\mono{nhmmer}/\mono{nhmmscan} work, which are similar to
-\mono{hmmsearch}/\mono{hmmscan}.
-
-\subsection{Step 1: build a profile with hmmbuild}
-
-\mono{hmmbuild} works for both protein and DNA profiles, so:
-
-   \vspace{1ex}
-   \user{\% hmmbuild MADE1.hmm MADE1.sto}
-   \vspace{1ex}
-
-and you'll see some output that looks like:
-
-   \xsreoutput{inclusions/hmmbuild-made1.out}
-
-
-Notice the new output column with the header ``W'', which is only
-present when the input sequence alignment is DNA/RNA. This represents
-an upper bound on the length at which nhmmer expects to find an
-instance of the family\marginnote{W is based on position-specific insert
-  rates: only $10^{-7}$ of all sequences generated from the profile 
-  are expected to be longer than W.}.  It is always larger than mlen,
-though the ratio of mlen to W depends on the observed insert rate in
-the seed alignment. This length is used deep in the acceleration
-pipeline, and modest changes are not expected to impact results, but
-larger values of W do lead to longer run time. The value can be
-overridden with the \mono{-{}-w\_length} or \mono{-{}-w\_beta} flags, at
-the risk of possibly missing instances of the family that happen to be
-longer than W due to plentiful insertions.
-
-
-
-\subsection{Step 2: search the DNA sequence database with nhmmer}
-
-We'll use \mono{dna\_target.fa} as the target sequence
-database. It is a FASTA format file containing one 330Kb long DNA
-sequence extracted from human chromosome 1.
-
-\mono{nhmmer} accepts a target DNA sequence database in the same
-formats as hmmsearch (typically FASTA). For the query, it accepts
-either a profile file as produced above by hmmbuild, or a file
-containing either one DNA sequence or an alignment of multiple DNA
-sequences.
-
-If a sequence or alignment is used as query input, \mono{nhmmer}
-internally produces the profile for that alignment\marginnote{Using
-  default hmmbuild parameters; if you want more control, explicitly
-  built the profile with hmmbuild.}, then searches with that
-profile. The profile produced in this way is automatically saved to
-disk, and the default file name is chosen by appending ``.hmm'' to the
-name of the sequence file name. This can be overridden with the
-\mono{-{}-hmmout} flag.
-
-To search \mono{dna\_target.fa} with our \mono{MADE1.hmm} profile:
-
-   \vspace{1ex}
-   \user{\% nhmmer MADE1.hmm dna\_target.fa}
-   \vspace{1ex}
-
-This output is largely similar to that of hmmsearch. The key
-difference is that each hit is not to a full sequence in the target
-database, but one local alignment of the profile to a subsequence of a
-target database sequence.
-
-The first section is the \emph{header} that tells you what program you
-ran, on what, and with what options, as above.
-
-The second section is the \emph{top hits} list. It is a list
-of ranked top hits (sorted by E-value, most significant hit first),
-formatted much like the \mono{hmmsearch} output \emph{top hits} list:
-
-   \xsreoutput{inclusions/nhmmer-made1.out}
-
-For each hit, the table shows its \emph{E-value}, \emph{bit score},
-\emph{bias}, \emph{target sequence name} and \emph{target sequence
-  description}, much like \mono{hmmsearch}.
-
-The ``start'' and ``end'' columns are the coordinates in the target
-sequence where the hit is found. When the ``end'' is smaller than
-``start'', this means the hit found on the reverse complement of the
-target database sequence.\marginnote{\mono{nhmmer} automatically
-  searches both strands.}
-
-For example, note that the top hits here are coming in overlapping
-pairs, corresponding to the forward and reverse strands, like the hit
-to \NMHafrom{}..\NMHato on the forward strand and a hit to
-\NMHbfrom{}..\NMHbto{} on the reverse strand. This is because the
-MADE1 DNA element is a near-perfect palindrome.\marginnote{DNA
-  elements that have a unique orientation will only hit on one strand.
-  \mono{nhmmer} treats the two strands independently. Palindromic
-  elements will hit the same region on both strands and \mono{nhmmer}
-  will not filter the overlapping hits.}
-
-Then comes the third output section, which starts with
-
-   \xsreoutput{inclusions/nhmmer-made1.out2}
-
-For each hit in the top hits list, there is a tabular line
-providing detailed information about the hit, followed by the alignment
-inferred for the hit. The first \mono{MADE1} hit
-looks like: 
-
-   \xsreoutput{inclusions/nhmmer-made1.out3}
-
-All these pieces of information are as described for \mono{hmmsearch},
-plus a column for ``sq len'' that indicates the full length of the
-target sequence.
-
-Under each one-line hit table is displayed the alignment inferred
-between the profile and the hit envelope. For example, the top hit
-from above is shown as:
-
-   \xsreoutput{inclusions/nhmmer-made1.out4}
-
-The alignment format is the same as for \mono{hmmsearch}.
-
-At the end of the output, you'll see summary statistics:
-
-   \xsreoutput{inclusions/nhmmer-made1.out5}
-
-This gives you some idea of what's going on in nhmmer's acceleration
-pipeline. You've got one query profile, and \NMHnres{} residues were
-searched (there are \NMHntop{} bases in the single sequence found in
-the file; the search includes the reverse complement, doubling the
-search space). The sequences in the database go through a gauntlet of
-three scoring algorithms called SSV, Viterbi, and Forward, in order of
-increasing sensitivity and increasing computational requirement.
-
-SSV (the ``Single ungapped Segment Viterbi'' algorithm) as used in
-nhmmer is closely related to the MSV algorithm used in
-\mono{hmmsearch}, in that it depends on ungapped alignment
-segments. The difference lies in how those alignments are used. Using
-MSV, a sequence is either rejected or accepted in its entirety. In the
-scanning-SSV filter of \mono{nhmmer}, each sequence in the database is
-scanned for high-scoring ungapped alignment segments, and a window
-around each such segment is extracted (merging overlapping windows),
-and passed on to the next stage. By default, nhmmer is configured to
-allow sequence segments with a P-value of $\leq 0.02$ through the SSV
-score filter.\sidenote{Thus, if the database contained no homologs and P-values
-were accurately calculated, the highest scoring 2\% of the sequence
-will pass the filter.} Here, \NMHnssv{} bases,
-or about \NMHfracssv{}\% of the database, got through the SSV filter.
-
-The ``bias filter'' is then applied, as in \mono{hmmsearch}. Here, 
-\NMHnbias{} bases, roughly \NMHfracbias{}\% of the database
-pass through the bias filter.
-
-The Viterbi filter then calculates a gapped optimal alignment score
-for each window that survived the earlier stages. This score is a
-closer approximation than the SSV score of the final score that the
-window will achieve if it survives to final processing, but the
-Viterbi filter is about four-fold slower than SSV. By default, nhmmer
-lets windows with a P-value of $\leq 0.001$ through this stage. Here,
-\NMHnvit{} bases, about \NMHfracvit{}\% of the database gets through.
-
-Then the full Forward score is calculated, which sums over all
-possible alignments of the profile to the window. The default allows
-windows with a P-value of $\leq 10^{-5}$ through; \NMHnfwd{} bases
-passed.
-
-All windows that make it through these filters are then subjected to a
-full probabilistic analysis using the HMM Forward/Backward algorithms,
-to identify hit envelopes, then determine posterior probabilities for
-each aligned residue, followed by optimal accuracy alignment. The
-results of this step are what you finally see on the output. The final
-number of hits and fractional coverage of the database is shown
-next. This is typically smaller than the fraction of the database
-passing the Forward filter, as hit identification typically trims
-windows down to a smaller envelope.
-
-Finally, nhmmer reports the speed of the search in units of Mc/sec
-(million dynamic programming cells per second), the CPU time, and the
-elapsed time.
-
-\mono{nhmmscan} is to \mono{hmmscan} as \mono{nhmmer} is to
-\mono{hmmsearch}.  There is not currently a iterative DNA search
-analog to \mono{jackhmmer}.
-
-
-
 
 
 

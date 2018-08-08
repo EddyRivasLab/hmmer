@@ -61,8 +61,10 @@ PROGS = alimask\
 	hmmstat\
 	jackhmmer\
 	phmmer\
+	phmmert\
 	nhmmer\
 	nhmmscan\
+	nhmmscant\
 	makehmmerdb
 
 # "auxprogs" are built but not installed.
@@ -86,8 +88,10 @@ PROGOBJS =\
 	hmmstat.o\
 	jackhmmer.o\
 	phmmer.o\
+	phmmert.o\
 	nhmmer.o\
 	nhmmscan.o\
+	nhmmscant.o\
 	makehmmerdb.o
 
 AUXPROGOBJS = \

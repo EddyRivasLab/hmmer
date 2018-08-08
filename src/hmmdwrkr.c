@@ -32,6 +32,9 @@
 #include "esl_stopwatch.h"
 #include "esl_threads.h"
 
+/* for nhmmscant */
+#include "esl_gencode.h"
+
 #include "hmmer.h"
 #include "hmmpgmd.h"
 #include "cachedb.h"
@@ -64,6 +67,8 @@ typedef struct {
 
   double            elapsed;     /* elapsed search time              */
 
+  ESL_SQ           *ntseq;    /* DNA query sequence that will be in text mode for printing when doing nhmmscant */
+
   /* Structure created and populated by the individual threads.
    * The main thread is responsible for freeing up the memory.
    */
@@ -80,6 +85,7 @@ typedef struct {
 } WORKER_ENV;
 
 static void process_InitCmd(HMMD_COMMAND *cmd, WORKER_ENV *env);
+static void process_TranslatedSearchCmd(HMMD_COMMAND *cmd, WORKER_ENV *env, QUEUE_DATA *query);
 static void process_SearchCmd(HMMD_COMMAND *cmd, WORKER_ENV *env, QUEUE_DATA *query);
 static void process_Shutdown(HMMD_COMMAND *cmd, WORKER_ENV *env);
 
@@ -163,20 +169,34 @@ worker_process(ESL_GETOPTS *go)
     {
       if ((status = read_Command(&cmd, &env)) != eslOK) break;
 
-
       switch (cmd->hdr.command) {
-      case HMMD_CMD_INIT:      process_InitCmd  (cmd, &env);                break;
+      case HMMD_CMD_INIT:      
+              process_InitCmd  (cmd, &env);             break;
       case HMMD_CMD_SCAN: 
 	  {	  
- 		   query = process_QueryCmd(cmd, &env);
- 		   process_SearchCmd(cmd, &env, query);
- 		   free_QueueData(query);
+              query = process_QueryCmd(cmd, &env);
+              if (esl_opt_IsUsed(query->opts, "--nhmmscant")) {
+	          process_TranslatedSearchCmd(cmd, &env, query);
+              }
+              else {
+	          process_SearchCmd(cmd, &env, query);
+              }
+              free_QueueData(query);
 	  }
-		 break;
+          break;
       case HMMD_CMD_SEARCH:
-		   query = process_QueryCmd(cmd, &env);
-	     process_SearchCmd(cmd, &env, query);
-         break;
+          {
+              query = process_QueryCmd(cmd, &env);
+              process_SearchCmd(cmd, &env, query);
+//              if (esl_opt_IsUsed(query->opts, "--phmmert")) {
+//	          process_TranslatedSearchCmd(cmd, &env, query);
+//              }
+//              else {
+//                  process_SearchCmd(cmd, &env, query);
+//              }
+              free_QueueData(query);
+          }
+          break;
       case HMMD_CMD_SHUTDOWN:  process_Shutdown (cmd, &env);  shutdown = 1; break;
       default: p7_syslog(LOG_ERR,"[%s:%d] - unknown command %d (%d)\n", __FILE__, __LINE__, cmd->hdr.command, cmd->hdr.length);
       }
@@ -191,6 +211,270 @@ worker_process(ESL_GETOPTS *go)
   return;
 }
 
+static int
+do_sq_by_sequences(ESL_GENCODE *gcode, ESL_GENCODE_WORKSTATE *wrk, ESL_SQ *sq)
+{
+      if (wrk->do_watson) {
+	esl_gencode_ProcessStart(gcode, wrk, sq);
+	esl_gencode_ProcessPiece(gcode, wrk, sq);
+	esl_gencode_ProcessEnd(wrk, sq);
+      }
+
+      if (wrk->do_crick) {
+	esl_sq_ReverseComplement(sq);
+	esl_gencode_ProcessStart(gcode, wrk, sq);
+	esl_gencode_ProcessPiece(gcode, wrk, sq);
+	esl_gencode_ProcessEnd(wrk, sq);
+      }
+
+  return eslOK;
+}
+
+static void 
+process_TranslatedSearchCmd(HMMD_COMMAND *cmd, WORKER_ENV *env, QUEUE_DATA *query)
+{ 
+  int              i;
+  int              cnt;
+  int              limit;
+  int              status;
+  int              blk_size;
+  WORKER_INFO     *info       = NULL;
+  ESL_ALPHABET    *abc;
+  ESL_STOPWATCH   *w;
+  ESL_THREADS     *threadObj  = NULL;
+  pthread_mutex_t  inx_mutex;
+  int              current_index;
+  time_t           date;
+  char             timestamp[32];
+
+  int              k;
+  ESL_ALPHABET     *abcDNA = NULL;       /* DNA sequence alphabet                               */
+  ESL_GENCODE      *gcode       = NULL;
+  ESL_GENCODE_WORKSTATE *wrk    = NULL;
+  ESL_SQ           *qsqDNATxt = NULL;    /* DNA query sequence that will be in text mode for printing */
+  ESL_SQ           *qsq      = NULL;		 /* query sequence */
+  P7_TOPHITS       *tophits_accumulator = NULL; /* to hold the top hits information from all 6 frame translations */
+  P7_PIPELINE      *pipelinehits_accumulator = NULL; /* to hold the pipeline hit information from all 6 frame translations */
+  RANGE_LIST       *range_list;  /* (optional) list of ranges searched within the seqdb */
+ 
+  w = esl_stopwatch_Create();
+  abc = esl_alphabet_Create(eslAMINO);
+  abcDNA = esl_alphabet_Create(eslDNA); 
+
+  if (pthread_mutex_init(&inx_mutex, NULL) != 0) p7_Fail("mutex init failed");
+  ESL_ALLOC(info, sizeof(*info) * (env->ncpus));
+
+  /* Log the current time (at search start) */
+  date = time(NULL);
+  ctime_r(&date, timestamp);
+  printf("\n%s", timestamp);	/* note that ctime_r() leaves \n on end of timestamp  */
+
+  /* initialize thread data */
+  esl_stopwatch_Start(w);
+
+  range_list = NULL;
+        
+  if (esl_opt_IsUsed(query->opts, "--seqdb_ranges")) {
+  ESL_ALLOC(range_list, sizeof(RANGE_LIST));
+     hmmpgmd_GetRanges(range_list, esl_opt_GetString(query->opts, "--seqdb_ranges"));
+  }
+
+    /* Set up the genetic code. Default = NCBI 1, the standard code; allow ORFs to start at any aa
+   */
+  gcode = esl_gencode_Create(abcDNA, abc);
+  esl_gencode_Set(gcode, esl_opt_GetInteger(query->opts, "-c"));  // default = 1, the standard genetic code
+
+  if      (esl_opt_GetBoolean(query->opts, "-m"))   esl_gencode_SetInitiatorOnlyAUG(gcode);
+  else if (! esl_opt_GetBoolean(query->opts, "-M")) esl_gencode_SetInitiatorAny(gcode);      // note this is the default, if neither -m or -M are set
+
+
+  /* Set up the workstate structure, which contains both stateful 
+   * info about our position in <sqfp> and the DNA <sq>, as well as
+   * one-time config info from options
+   */
+  wrk = esl_gencode_WorkstateCreate(query->opts, gcode);
+
+  if (query->cmd_type == HMMD_CMD_SEARCH) threadObj = esl_threads_Create(&search_thread);
+  else                                    threadObj = esl_threads_Create(&scan_thread);
+
+  if (query->query_type == HMMD_SEQUENCE) {
+    fprintf(stdout, "Search seq %s  [L=%ld]", query->seq->name, (long) query->seq->n);
+  } else {
+    fprintf(stdout, "Search hmm %s  [M=%d]", query->hmm->name, query->hmm->M);
+  }
+  fprintf(stdout, " vs %s DB %d [%d - %d]",
+          (query->cmd_type == HMMD_CMD_SEARCH) ? "SEQ" : "HMM", 
+          query->dbx, query->inx, query->inx + query->cnt - 1);
+
+
+  if (range_list)
+     fprintf(stdout, " in range(s) %s", esl_opt_GetString(query->opts, "--seqdb_ranges"));
+
+  fprintf(stdout, "\n");
+
+
+  /* copy and convert the DNA sequence to text so we can print it in the domain alignment display */
+  qsqDNATxt = esl_sq_Create();
+  esl_sq_Copy(query->seq, qsqDNATxt);
+
+  printf("Creating 6 frame translations\n");
+  /* create sequence block to hold translated ORFs */
+  wrk->orf_block = esl_sq_CreateDigitalBlock(1024, abc);
+
+  /* translate DNA sequence to 6 frame ORFs */
+  do_sq_by_sequences(gcode, wrk, query->seq);
+
+  /* Create processing pipeline and hit list accumulators */
+  tophits_accumulator  = p7_tophits_Create(); 
+
+  if (query->cmd_type == HMMD_CMD_SEARCH) {
+      pipelinehits_accumulator = p7_pipeline_Create(query->opts, 100, 100, FALSE, p7_SEARCH_SEQS);
+  }
+  else {
+      pipelinehits_accumulator = p7_pipeline_Create(query->opts, 100, 100, FALSE, p7_SCAN_MODELS);
+  }
+
+  /* process each 6 frame translated sequence */
+  for (k = 0; k < wrk->orf_block->count; ++k)
+   {
+     qsq = &(wrk->orf_block->list[k]);
+
+	 /* 
+	   use the name, accession, and description from the DNA sequence and
+	   not from the ORF which is generated by gencode and only for internal use
+	 */
+     if ((status = esl_sq_SetName(qsq, query->seq->name))   != eslOK)  p7_Fail("Set query sequence name failed in hmmdwrkr.c");
+     if ((status = esl_sq_SetAccession(qsq, query->seq->acc))    != eslOK)  p7_Fail("Set query sequence accession failed in hmmdwrkr.c");
+     if ((status = esl_sq_SetDesc(qsq, query->seq->desc))   != eslOK)  p7_Fail("Set query sequence description failed in hmmdwrkr.c");
+
+	 
+     /* Create processing pipeline and hit list */   
+     for (i = 0; i < env->ncpus; ++i) {
+        info[i].abc   = abc;
+        info[i].hmm   = query->hmm;
+        info[i].seq   = qsq;
+        info[i].opts  = query->opts;
+
+        info[i].range_list  = range_list;
+           
+        info[i].th    = NULL;
+        info[i].pli   = NULL;
+
+        info[i].ntseq = qsqDNATxt; /* for printing the DNA target sequence in the domain hits display */
+	
+        info[i].inx_mutex = &inx_mutex;
+        info[i].inx       = &current_index;/* this is confusing trickery - to share a single variable across all threads */
+        info[i].blk_size  = &blk_size;     /* ditto */
+        info[i].limit     = &limit;	       /* ditto. TODO: come back and clean this up. */
+
+        if (query->cmd_type == HMMD_CMD_SEARCH) {
+          HMMER_SEQ **list  = env->seq_db->db[query->dbx].list;
+          info[i].sq_list   = &list[query->inx];
+          info[i].sq_cnt    = query->cnt;
+          info[i].db_Z      = env->seq_db->db[query->dbx].K;
+          info[i].om_list   = NULL;
+          info[i].om_cnt    = 0;
+        } else {
+          info[i].sq_list   = NULL;
+          info[i].sq_cnt    = 0;
+          info[i].db_Z      = 0;
+          info[i].om_list   = &env->hmm_db->list[query->inx];
+          info[i].om_cnt    = query->cnt;
+        }
+
+        esl_threads_AddThread(threadObj, &info[i]);
+
+     } /* end for (i = 0; i < env->ncpus+1; ++i) */
+
+     /* try block size of 5000.  we will need enough sequences for four
+      * blocks per thread or better.
+      */
+     blk_size = 5000;
+     cnt = query->cnt / env->ncpus / blk_size;
+     limit = query->cnt * 2 / 3;
+     if (cnt < 4) {
+        /* try block size of 1000  */
+        blk_size /= 5;
+        cnt = query->cnt / env->ncpus / blk_size;
+        if (cnt < 4) {
+           /* still not enough.  just divide it up into one block per thread */
+           blk_size = query->cnt / env->ncpus + 1;
+           limit = query->cnt * 2;
+        }
+     }
+     current_index = 0;
+
+     esl_threads_WaitForStart(threadObj);
+     esl_threads_WaitForFinish(threadObj);
+
+     /* merge the results of each translated sequence search results */
+     for (i = 0; i < env->ncpus; ++i) {
+	    p7_tophits_Merge(tophits_accumulator, info[i].th);
+        p7_pipeline_Merge(pipelinehits_accumulator, info[i].pli);
+     }
+					
+#if 1
+    fprintf (stdout, " Translated sequence frame %d\n", k);
+    fprintf (stdout, "   Sequences  Residues                              Elapsed\n");
+    for (i = 0; i < env->ncpus; ++i) {
+       print_timings(i, info[i].elapsed, info[i].pli);
+    }
+#endif
+
+	/* get rid of the other pli and th to get ready for the next frame */
+    for (i = 0; i < env->ncpus; ++i) {
+       p7_pipeline_Destroy(info[i].pli);
+       p7_tophits_Destroy(info[i].th);
+    }  
+
+  }  /* end of  for (k = 0; k < wrk->orf_block->count; ++k)... */
+
+  esl_stopwatch_Stop(w);
+
+  if(wrk->orf_block != NULL) {
+     esl_sq_DestroyBlock(wrk->orf_block);
+     wrk->orf_block = NULL;
+  }
+
+  if (qsqDNATxt  != NULL) esl_sq_Destroy(qsqDNATxt);  
+  
+  /* Sort and remove duplicates */
+  p7_tophits_SortBySeqidxAndAlipos(tophits_accumulator);
+  p7_tophits_RemoveDuplicates(tophits_accumulator, pipelinehits_accumulator->use_bit_cutoffs);
+  
+  
+  print_timings(99, w->elapsed, pipelinehits_accumulator);
+  send_results(env->fd, w, tophits_accumulator, pipelinehits_accumulator);
+
+  /* free the last of the pipeline data */
+  /* also destroys accumulators */
+  p7_pipeline_Destroy(pipelinehits_accumulator);
+  p7_tophits_Destroy(tophits_accumulator);
+
+  esl_threads_Destroy(threadObj);
+
+  pthread_mutex_destroy(&inx_mutex);
+
+  if (range_list) {
+    if (range_list->starts)  free(range_list->starts);
+    if (range_list->ends)    free(range_list->ends);
+    free (range_list);
+  }
+
+  free(info);
+
+  esl_gencode_WorkstateDestroy(wrk);
+  esl_gencode_Destroy(gcode);
+
+  esl_stopwatch_Destroy(w);
+  esl_alphabet_Destroy(abc);
+  esl_alphabet_Destroy(abcDNA); 
+
+  return;
+
+ ERROR:
+  LOG_FATAL_MSG("malloc", errno);
+}
 
 static void 
 process_SearchCmd(HMMD_COMMAND *cmd, WORKER_ENV *env, QUEUE_DATA *query)
@@ -258,6 +542,8 @@ process_SearchCmd(HMMD_COMMAND *cmd, WORKER_ENV *env, QUEUE_DATA *query)
 
     info[i].th    = NULL;
     info[i].pli   = NULL;
+
+    info[i].ntseq = NULL; /* for printing the DNA target sequence in the domain hits display */
 
     info[i].inx_mutex = &inx_mutex;
     info[i].inx       = &current_index;/* this is confusing trickery - to share a single variable across all threads */
@@ -382,7 +668,12 @@ process_QueryCmd(HMMD_COMMAND *cmd, WORKER_ENV *env)
   query->hmm = NULL;
   query->seq = NULL;
 
-  query->abc = esl_alphabet_Create(eslAMINO);
+  //if (esl_opt_IsUsed(query->opts, "--nhmmscant") ||
+  //    esl_opt_IsUsed(query->opts, "--phmmert"))
+  if (esl_opt_IsUsed(query->opts, "--nhmmscant"))
+     query->abc = esl_alphabet_Create(eslDNA);
+  else
+     query->abc = esl_alphabet_Create(eslAMINO);
 
   /* check if we are processing a sequence or hmm */
   if (cmd->srch.query_type == HMMD_SEQUENCE) {
@@ -562,6 +853,7 @@ search_thread(void *arg)
   esl_threads_Started(obj, &workeridx);
 
   info = (WORKER_INFO *) esl_threads_GetData(obj, workeridx);
+
   w    = esl_stopwatch_Create();
   bg   = p7_bg_Create(info->abc);
   esl_stopwatch_Start(w);
@@ -637,6 +929,7 @@ search_thread(void *arg)
     count = info->sq_cnt - inx;
     if (count > blksz) count = blksz;
 
+
     /* Main loop: */
     for (i = 0; i < count; ++i, ++sq) {
       if ( !(info->range_list) || hmmpgmd_IsWithinRanges ((*sq)->idx, info->range_list)) {
@@ -646,10 +939,27 @@ search_thread(void *arg)
         dbsq.idx   = (*sq)->idx;
         if((*sq)->desc != NULL) dbsq.desc  = (*sq)->desc;
 
+        /* 
+         * if there is an ntseq sequence then we must be doing
+         * translated search where we search a DNA query sequence against a
+         * protein sequence database. In this case the ORF from a 6 frame translation 
+         * of the DNA query sequence has been converted to an optimized profile (om) 
+         * but the start and end of the ORF in the translation of the DNA
+         * query sequence has not been saved. We need these locations
+         * to print the DNA codons for the hit in the alignment display,
+         * so we save them in the sequence structure of the sequence from
+         * the sequence database that we are currently searching against.
+         */
+        if (info->ntseq != NULL)
+        {
+          dbsq.start = (info->seq)->start;
+          dbsq.end   = (info->seq)->end;
+//          printf("\ndbsq start %d dbsq end:%d\n", dbsq.start, dbsq.end);
+        }
+
         p7_bg_SetLength(bg, dbsq.n);
         p7_oprofile_ReconfigLength(om, dbsq.n);
-
-        p7_Pipeline(pli, om, bg, &dbsq, NULL, th);
+        p7_Pipeline(pli, om, bg, &dbsq,  info->ntseq, th, NULL);
 
         p7_pipeline_Reuse(pli);
       }
@@ -742,7 +1052,7 @@ scan_thread(void *arg)
       p7_bg_SetLength(bg, info->seq->n);
       p7_oprofile_ReconfigLength(*om, info->seq->n);
 	      
-      p7_Pipeline(pli, *om, bg, info->seq, NULL, th);
+      p7_Pipeline(pli, *om, bg, info->seq, info->ntseq, th, NULL);
       p7_pipeline_Reuse(pli);
     }
   }
