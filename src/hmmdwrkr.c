@@ -941,14 +941,8 @@ search_thread(void *arg)
 
         /* 
          * if there is an ntseq sequence then we must be doing
-         * translated search where we search a DNA query sequence against a
-         * protein sequence database. In this case the ORF from a 6 frame translation 
-         * of the DNA query sequence has been converted to an optimized profile (om) 
-         * but the start and end of the ORF in the translation of the DNA
-         * query sequence has not been saved. We need these locations
-         * to print the DNA codons for the hit in the alignment display,
-         * so we save them in the sequence structure of the sequence from
-         * the sequence database that we are currently searching against.
+         * translated search. In this case, capture the start and end
+         * of the corresponding ORF.
          */
         if (info->ntseq != NULL)
         {

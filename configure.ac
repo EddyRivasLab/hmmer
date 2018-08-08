@@ -625,6 +625,7 @@ AC_CONFIG_FILES([ \
   documentation/man/nhmmer.man      \
   documentation/man/nhmmscan.man    \
   documentation/man/phmmert.man     \
+  documentation/man/nhmmscant.man     \  
   documentation/man/phmmer.man      \
   ])
 
