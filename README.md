@@ -1,9 +1,5 @@
 ## HMMER - biological sequence analysis using profile HMMs
 
-
-*** Warning:  This is not the primary repository of HMMER. Please find the official repo at: https://github.com/EddyRivasLab/hmmer ***
-
-
 [HMMER](http://hmmer.org) searches biological sequence databases for
 homologous sequences, using either single sequences or multiple
 sequence alignments as queries. HMMER implements a technology called
@@ -54,14 +50,11 @@ a precompiled Userguide.pdf, for example), but you can also clone our
 github repo. You need to clone both the HMMER and Easel repositories,
 as follows:
 
-
-```bash
-   $ git clone https://github.com/TravisWheelerLab/hmmer
-   $ cd hmmer
-   $ git clone https://github.com/TravisWheelerLab/easel
-   $ git checkout translatedsearch
-   $ (cd easel; git checkout develop)
-   $ autoconf
+```
+   % git clone https://github.com/EddyRivasLab/hmmer
+   % cd hmmer
+   % git clone https://github.com/EddyRivasLab/easel
+   % autoconf
 ```
 
 and to build:
@@ -71,7 +64,7 @@ and to build:
    % make
 ```
 
-Our [git workflow](https://github.com/TravisWheelerLab/hmmer/wiki/Git-workflow)
+Our [git workflow](https://github.com/EddyRivasLab/hmmer/wiki/Git-workflow)
 includes three main branches:
 
  * **master** is the stable branch for HMMER3 releases (including when
@@ -88,6 +81,6 @@ to send us a pull request on GitHub, please base your changes on our
 
 ### to report a problem:
 
-Visit the main HMMER repo
+Visit our
 [issues tracking page at github](https://github.com/EddyRivasLab/hmmer/issues).
 
