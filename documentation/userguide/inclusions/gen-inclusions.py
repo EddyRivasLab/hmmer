@@ -1,4 +1,4 @@
-#! /usr/bin/env python
+#! /usr/bin/env python3
 
 # gen-inclusions.py : generate .tex inclusions for user guide
 #
@@ -71,7 +71,7 @@ if args.tutupdate:
 # make symlinks to tutorial files in cwd (i.e. in inclusions/ in the source directory)
 # exception: globins4.sto is included verbatim in userguide, so copy it.
 #
-tutorial_files = [ '7LESS_DROME', 'HBB_HUMAN', 'MADE1.sto', 'Pkinase.sto', 'dna_target.fa', 'fn3.sto', 'globins45.fa' ]
+tutorial_files = [ '7LESS_DROME', 'HBB_HUMAN', 'MADE1.sto', 'Pkinase.sto', 'dna_made1_target.fa', 'dna_pkinase_target.fa', 'fn3.sto', 'globins45.fa' ]
 for file in tutorial_files:
     if not os.path.exists(file): os.symlink('{0}/tutorial/{1}'.format(top_srcdir, file), file)
 for file in ['globins4.sto']:
@@ -87,9 +87,9 @@ if os.path.exists(swissprot_dir):
     if not os.path.exists('uniprot_sprot.fasta'): os.symlink('{0}/uniprot_sprot.fasta'.format(swissprot_dir), 'uniprot_sprot.fasta')
     if not os.path.exists('relnotes.txt'):        os.symlink('{0}/relnotes.txt'.format(swissprot_dir),        'relnotes.txt')
 else:
-    subprocess.run('wget ftp://ftp.uniprot.org/pub/databases/uniprot/current_release/knowledgebase/complete/uniprot_sprot.fasta.gz', shell=True)
-    subprocess.run('wget ftp://ftp.uniprot.org/pub/databases/uniprot/current_release/relnotes.txt',                                  shell=True)
-    subprocess.run('gunzip -f uniprot_sprot.fasta.gz',  shell=True)
+   subprocess.run('wget ftp://ftp.uniprot.org/pub/databases/uniprot/current_release/knowledgebase/complete/uniprot_sprot.fasta.gz', shell=True)
+   subprocess.run('wget ftp://ftp.uniprot.org/pub/databases/uniprot/current_release/relnotes.txt',                                  shell=True)
+   subprocess.run('gunzip -f uniprot_sprot.fasta.gz',  shell=True)
 
 
 
@@ -571,11 +571,12 @@ def hmmbuild_made1():
     content = re.sub(r'(MADE1 \(MAriner Derived Element 1\), a TcMar-Mariner).+\n', r'\1 ...\n', r.stdout)
     with open('hmmbuild-made1.out', 'w') as f:
         print(content, file=f, end='')
+        
 
 def nhmmer_made1(deffp):
-    print('running nhmmer MADE1.hmm dna_target.fa')
+    print('running nhmmer MADE1.hmm dna_made1_target.fa')
 
-    r = subprocess.run('nhmmer MADE1.hmm dna_target.fa',
+    r = subprocess.run('nhmmer MADE1.hmm dna_made1_target.fa',
                        shell=True, stdout=subprocess.PIPE, check=True, encoding='utf-8',
                        env={"PATH": "{0}/src".format(top_builddir)})
 
@@ -628,6 +629,43 @@ def nhmmer_made1(deffp):
 
 
 
+def phmmert_pkinase(deffp):
+    print('running hmmbuild Pkinase.hmm Pkinase.sto')
+
+    r = subprocess.run('hmmbuild Pkinase.hmm Pkinase.sto',
+                       shell=True, stdout=subprocess.PIPE, check=True, encoding='utf-8',
+                       env={"PATH": "{0}/src".format(top_builddir)})
+    with open('hmmbuild-Pkinase.out', 'w') as f:
+        print(r.stdout, file=f, end='')
+
+
+
+
+    print('running phmmert Pkinase.hmm dna_pkinase_target.fa')
+
+    r = subprocess.run('phmmert Pkinase.hmm dna_pkinase_target.fa',
+                       shell=True, stdout=subprocess.PIPE, check=True, encoding='utf-8',
+                       env={"PATH": "{0}/src".format(top_builddir)})
+
+    m = re.search(r'\n(\s*E-value\s*score.+\n(?:.+\n){2})', r.stdout)
+    with open('phmmert-pkinase.out', 'w') as f:
+        print(m.group(1), file=f, end='')
+    
+
+    m = re.search('\n(>> humanchr22_frag.+\n(.+\n){3})', r.stdout)  
+    with open('phmmert-pkinase.out2', 'w') as f:
+        print(m.group(1), file=f, end='')
+    
+    m = re.search(r'\n(  ==\s+domain\s+1(?s:.+?) PP\s*)\n', r.stdout)
+    with open('phmmert-pkinase.out3', 'w') as f:
+        print(m.group(1), file=f, end='')
+
+    m = re.search(r'(Internal pipeline statistics summary:(?s:.+\n)+)', r.stdout)
+    with open('phmmert-pkinase.out4', 'w') as f:
+        print(m.group(1), file=f, end='')
+
+
+
 with open("inclusions.def", "w") as deffp:
     uniprot_relnotes(deffp)
     hmmscan_noargs(deffp)
@@ -642,6 +680,7 @@ with open("inclusions.def", "w") as deffp:
     hmmalign_globins()
     hmmbuild_made1()
     nhmmer_made1(deffp)
+    phmmert_pkinase(deffp)
 
 
 for fname in [ 'relnotes.txt', 'uniprot_sprot.fasta',
