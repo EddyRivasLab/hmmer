@@ -47,6 +47,7 @@ typedef struct {
 extern H4_PROFILE *h4_profile_Create(const ESL_ALPHABET *abc, int M);
 extern H4_PROFILE *h4_profile_CreateShell(void);
 extern int         h4_profile_CreateBody(H4_PROFILE *hmm, const ESL_ALPHABET *abc, int M);
+extern size_t      h4_profile_Sizeof (H4_PROFILE *hmm);
 extern void        h4_profile_Destroy(H4_PROFILE *hmm);
 
 extern int         h4_profile_SetConventions(H4_PROFILE *hmm);

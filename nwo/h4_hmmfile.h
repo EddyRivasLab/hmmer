@@ -12,6 +12,7 @@
 
 #include "h4_profile.h"
 
+
 typedef struct {
   ESL_BUFFER      *bf;    // open input stream
   ESL_JSON_PARSER *jprs;  // precise state of JSON parse after last byte read
@@ -22,7 +23,7 @@ typedef struct {
   int              nmap;      // = the number of unique keys in an H4 profile file. 
   int              nmapalloc;
 
-  char errmsg[eslERRBUFSIZE]; // user-directed error message on parse failure
+  char  errmsg[eslERRBUFSIZE]; // user-directed error message on parse failure
 } H4_HMMFILE;
 
 
@@ -35,3 +36,4 @@ extern int  h4_hmmfile_Write(FILE *fp, const H4_PROFILE *hmm);
 
 
 #endif /* h4HMMFILE_INCLUDED */
+

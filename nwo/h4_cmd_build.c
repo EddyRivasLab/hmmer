@@ -1,6 +1,7 @@
 #include "h4_config.h"
 
 #include <stdio.h>
+#include <string.h>
 
 #include "easel.h"
 #include "esl_alphabet.h"
@@ -30,12 +31,13 @@ h4_cmd_build(const char *topcmd, const ESL_SUBCMD *sub, int argc, char **argv)
 {
   ESL_GETOPTS  *go      = esl_subcmd_CreateDefaultApp(topcmd, sub, build_options, argc, argv);
   char         *msafile = esl_opt_GetArg(go, 1);
-  //  char         *hmmfile = esl_opt_GetArg(go, 2);
+  char         *hmmfile = esl_opt_GetArg(go, 2);
   int           infmt   = eslMSAFILE_UNKNOWN;
   ESL_ALPHABET *abc     = NULL;
   ESL_MSAFILE  *afp     = NULL;
   ESL_MSA      *msa     = NULL;
   H4_PROFILE   *hmm     = NULL;
+  FILE         *ofp     = NULL;
   int           nali    = 0;
   int           status;
 
@@ -48,8 +50,12 @@ h4_cmd_build(const char *topcmd, const ESL_SUBCMD *sub, int argc, char **argv)
     esl_fatal("%s is not a valid MSA file format for --informat", esl_opt_GetString(go, "--informat"));
   // SRE: check the esl_fatal().
 
-  status = esl_msafile_Open(&abc, msafile, NULL, infmt, NULL, &afp);
-  if (status != eslOK) esl_msafile_OpenFailure(afp, status);
+  if (strcmp(hmmfile, "-") == 0) ofp = stdout;
+  else if (( ofp = fopen(hmmfile, "w")) == NULL)
+    esl_fatal("couldn't open output HMM file %s for writing", hmmfile);
+
+  if (( status = esl_msafile_Open(&abc, msafile, NULL, infmt, NULL, &afp)) != eslOK)
+    esl_msafile_OpenFailure(afp, status);
 
   while ((status = esl_msafile_Read(afp, &msa)) == eslOK)
     {
@@ -57,7 +63,7 @@ h4_cmd_build(const char *topcmd, const ESL_SUBCMD *sub, int argc, char **argv)
 
       h4_Build(NULL, msa, &hmm, NULL);
   
-      h4_hmmfile_Write(stdout, hmm);
+      h4_hmmfile_Write(ofp, hmm);
 
       esl_msa_Destroy(msa);
       h4_profile_Destroy(hmm);
@@ -65,6 +71,7 @@ h4_cmd_build(const char *topcmd, const ESL_SUBCMD *sub, int argc, char **argv)
   if (nali == 0 || status != eslEOF) esl_msafile_ReadFailure(afp, status); /* a convenience, like esl_msafile_OpenFailure() */
   esl_msafile_Close(afp);
   
+  if (ofp != stdout) fclose(ofp);
   esl_alphabet_Destroy(abc);
   esl_getopts_Destroy(go);
   return 0;

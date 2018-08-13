@@ -179,9 +179,6 @@ static int read_ascii4a   (H4_HMMFILE *hfp, ESL_ALPHABET **ret_abc, H4_PROFILE *
  *            output, including and <hfp->bf->filename> and
  *            <hfp->bf->cmdline>.
  *            
- *            <eslEINCOMPAT> if caller provided an expected alphabet
- *            and it doesn't match.
- *            
  *            For any return other than <eslOK>, <*opt_hmm> is <NULL>,
  *            and <*ret_abc> is left unchanged from what caller passed.
  *
@@ -221,7 +218,7 @@ h4_hmmfile_Read(H4_HMMFILE *hfp, ESL_ALPHABET **ret_abc, H4_PROFILE **opt_hmm)
  *                at the start of the unsuccessfully parsed chunk.
  *    hfp->pi     state is undefined, and is probably an incomplete parse tree.
  *    hfp->kh     hasn't been touched
- *
+ *    
  * Throws:  <eslEMEM> on allocation error.
  *          <eslESYS> on system call failure.
  */
@@ -243,7 +240,7 @@ load_json_data(H4_HMMFILE *hfp)
       /* Load next chunk of input data. */
       status = esl_buffer_Get(hfp->bf, &s, &n);
       if (status == eslEOF && hfp->jprs->state != eslJSON_OBJ_NONE) 
-	ESL_XFAIL(eslEFORMAT, hfp->errmsg, "incomplete model (?) starting at line %d", startline); 
+	ESL_XFAIL(eslEFORMAT, hfp->errmsg, "incomplete model (?) starting at line %d", startline); // {bad.3:1}
       else if (status != eslOK) goto ERROR;
 
       /* Parse that chunk of data. 
@@ -252,7 +249,7 @@ load_json_data(H4_HMMFILE *hfp)
        * and we'll break out of the loop after setting buffer to consume <nused>
        */
       pstatus = esl_json_PartialParse(hfp->jprs, hfp->pi, s, n, &nused, hfp->errmsg);
-      if  (pstatus != eslEOD && pstatus != eslOK) goto ERROR; 
+      if  (pstatus != eslEOD && pstatus != eslOK) { status = pstatus; goto ERROR; }
 
       /* Update the buffer, advance point by <nused> bytes */
       if (( status = esl_buffer_Set(hfp->bf, s, nused)) != eslOK) goto ERROR; 
@@ -274,14 +271,15 @@ load_json_data(H4_HMMFILE *hfp)
 static int
 index_json_data(H4_HMMFILE *hfp)
 {
-  int idx, keyi;
-  int status;
+  int   idx, keyi;
+  int   status;
 
   for (idx = hfp->pi->tok[0].firstchild;  idx != -1; idx = hfp->pi->tok[idx].nextsib)
     {
       status = esl_keyhash_Store(hfp->kh, esl_json_GetMem(hfp->pi, idx,  hfp->bf), esl_json_GetLen(hfp->pi, idx, hfp->bf), &keyi);
-      if      (status == eslEDUP) ESL_FAIL(eslEFORMAT, hfp->errmsg, "profile HMM data contains a duplicated key");
-      else if (status != eslOK)   return status;
+      if      (status == eslEDUP)  ESL_FAIL(eslEFORMAT, hfp->errmsg, "duplicate key (`%.*s`) at line %d",            // {bad.7:25}
+					    esl_json_GetLen(hfp->pi, idx, hfp->bf), esl_json_GetMem(hfp->pi, idx,  hfp->bf), hfp->pi->tok[idx].linenum);
+      else if (status != eslOK)    return status;
 			       
       idx =  hfp->pi->tok[idx].nextsib;   // advance to the value for this key
       while (keyi >= hfp->nmapalloc) {    // make sure we have space in the tokmap for this new <keyi>
@@ -304,22 +302,31 @@ new_model(H4_HMMFILE *hfp, ESL_ALPHABET **ret_abc, H4_PROFILE **ret_hmm)
   ESL_ALPHABET *abc = NULL;
   int alphatype;
   int M;
-  int keyi;
+  int keyi, idx;
   int status;
 
-  if (( status = esl_keyhash_Lookup(hfp->kh, "length", 6, &keyi))           != eslOK)  ESL_FAIL(eslEFORMAT, hfp->errmsg, "no 'length' key:value found");
-  if (( status = esl_json_ReadInt(hfp->pi, hfp->tokmap[keyi], hfp->bf, &M)) != eslOK)  ESL_FAIL(eslEFORMAT, hfp->errmsg, "bad value in 'length' key:value");
+  if (( status = esl_keyhash_Lookup(hfp->kh, "length", -1, &keyi))   != eslOK)  ESL_FAIL(eslEFORMAT, hfp->errmsg, "no `length` key:val in model starting at line %d",   hfp->pi->tok[0].linenum);   // {bad.8:21}
+  idx = hfp->tokmap[keyi];
+  if (  hfp->pi->tok[idx].type != eslJSON_NUMBER )                              ESL_FAIL(eslEFORMAT, hfp->errmsg, "value for `length` isn't a number at line %d",       hfp->pi->tok[idx].linenum); // {bad.9:24}
+  if (( status = esl_json_ReadInt(hfp->pi, idx, hfp->bf, &M))        != eslOK)  ESL_FAIL(eslEFORMAT, hfp->errmsg, "non-integer value for `length` at line %d",          hfp->pi->tok[idx].linenum); // {bad.10:24}
+  if ( M <= 0 )                                                                 ESL_FAIL(eslEFORMAT, hfp->errmsg, "M must be >= 0 for 'length' key:value, line %d",     hfp->pi->tok[idx].linenum); // {bad.11:24}                                        
 
-  if (( status = esl_keyhash_Lookup(hfp->kh, "alphabet", 8, &keyi))         != eslOK)  ESL_FAIL(eslEFORMAT, hfp->errmsg, "no 'alphabet' key:value found");
-  alphatype = esl_abc_EncodeTypeMem( esl_json_GetMem(hfp->pi, hfp->tokmap[keyi], hfp->bf), esl_json_GetLen(hfp->pi, hfp->tokmap[keyi], hfp->bf));  
-  if (alphatype == eslUNKNOWN) ESL_FAIL(eslEFORMAT, hfp->errmsg, "alphabet type not recognized (line %d)", hfp->pi->tok[hfp->tokmap[keyi]].linenum);
+  if (( status = esl_keyhash_Lookup(hfp->kh, "alphabet", -1, &keyi)) != eslOK)  ESL_FAIL(eslEFORMAT, hfp->errmsg, "no 'alphabet' key:val in model starting at line %d", hfp->pi->tok[0].linenum);   // {bad.12:23}
+  idx = hfp->tokmap[keyi];
+  if ( hfp->pi->tok[idx].type != eslJSON_STRING )                               ESL_FAIL(eslEFORMAT, hfp->errmsg, "value for `alphabet` isn't a string at line %d",     hfp->pi->tok[idx].linenum); // {bad.13:25}
+  alphatype = esl_abc_EncodeTypeMem( esl_json_GetMem(hfp->pi, idx, hfp->bf),
+				     esl_json_GetLen(hfp->pi, idx, hfp->bf));  
+  if (alphatype == eslUNKNOWN) ESL_FAIL(eslEFORMAT, hfp->errmsg, "invalid alphabet type `%.*s` (line %d)",   // {bad.14:25}
+					esl_json_GetLen(hfp->pi, idx, hfp->bf),
+					esl_json_GetMem(hfp->pi, idx, hfp->bf),
+					hfp->pi->tok[idx].linenum);
 
   /* The caller either provided an alphabet (and we validate it), or we create a new one to return */
   if (*ret_abc) {
-    if ((*ret_abc)->type != alphatype)
-      ESL_XFAIL(eslEINCOMPAT, hfp->errmsg, "alphabet type mismatch: expected %s but HMM says %s", esl_abc_DecodeType((*ret_abc)->type), esl_abc_DecodeType(alphatype));
+    if ((*ret_abc)->type != alphatype) ESL_XFAIL(eslEFORMAT, hfp->errmsg, "alphabet type mismatch: expected %s but profile says %s (line %d)",    // {bad.15:25}
+						 esl_abc_DecodeType((*ret_abc)->type), esl_abc_DecodeType(alphatype), hfp->pi->tok[idx].linenum);
     abc = *ret_abc;
-  } else if ((abc = esl_alphabet_Create(alphatype)) == NULL) ESL_XFAIL(eslEMEM, hfp->errmsg, "failed to create alphabet");
+  } else if ((abc = esl_alphabet_Create(alphatype)) == NULL) { status = eslEMEM; goto ERROR; }
   
   /* Allocate the new model */
   if ((hmm = h4_profile_Create(abc, M)) == NULL) { status = eslEMEM; goto ERROR; }
@@ -342,9 +349,9 @@ read_ascii4a(H4_HMMFILE *hfp, ESL_ALPHABET **ret_abc, H4_PROFILE **opt_hmm)
   ESL_ALPHABET *abc = *ret_abc;  // might be NULL.
   H4_PROFILE   *hmm = NULL;
   int       keyi, idx;
-  int       k,ki;         // indices over states 1..M, and tokens for them
-  int       a,ai;         // indices over residues 0..K-1, and tokens for them
-  int       z,zi;         // indices over transitions 0..8, and tokens for them
+  int       k,ki;         // indices over states 1..M, and token indices for them
+  int       a,ai;         // indices over residues 0..K-1, and token indices for them
+  int       z,zi;         // indices over transitions 0..8, and token indices for them
   float     v;            // a parsed floating point value
   int       status;
 
@@ -355,41 +362,50 @@ read_ascii4a(H4_HMMFILE *hfp, ESL_ALPHABET **ret_abc, H4_PROFILE **opt_hmm)
   if (( status = new_model(hfp, &abc, &hmm)) != eslOK) return status;
     
   /* Match state emissions [1..M][0..K-1] */
-  if (( status = esl_keyhash_Lookup(hfp->kh, "match", 5, &keyi)) != eslOK) ESL_FAIL(eslEFORMAT, hfp->errmsg, "model has no 'match' key");
+  status = esl_keyhash_Lookup(hfp->kh, "match", -1, &keyi);
+  if ( status                   != eslOK)          ESL_FAIL(eslEFORMAT, hfp->errmsg, "model starting at line %d has no `match` key",               hfp->pi->tok[0].linenum);    // {bad.16:21}
   idx = hfp->tokmap[keyi];
+  if ( hfp->pi->tok[idx].type   != eslJSON_ARRAY ) ESL_FAIL(eslEFORMAT, hfp->errmsg, "expected `match` key to have array value (line %d)",         hfp->pi->tok[idx].linenum);  // {bad.17:26}
+  if ( hfp->pi->tok[idx].nchild != hmm->M)         ESL_FAIL(eslEFORMAT, hfp->errmsg, "expected M (%d) rows for match emissions (line %d)", hmm->M, hfp->pi->tok[idx].linenum);  // {bad.18:6,26}
   for (k = 1, ki = hfp->pi->tok[idx].firstchild; ki != -1; ki = hfp->pi->tok[ki].nextsib, k++)
     {
+      if ( hfp->pi->tok[ki].type   != eslJSON_ARRAY) ESL_FAIL(eslEFORMAT, hfp->errmsg, "expected match emission row %d to be an array (line %d)",        k,         hfp->pi->tok[ki].linenum);  // {bad.19:6,32}
+      if ( hfp->pi->tok[ki].nchild != abc->K)        ESL_FAIL(eslEFORMAT, hfp->errmsg, "expected match emission row %d to have K (%d) values (line %d)", k, abc->K, hfp->pi->tok[ki].linenum);  // {bad.20:6,4,32}
       for (a = 0, ai = hfp->pi->tok[ki].firstchild; ai != -1; ai = hfp->pi->tok[ai].nextsib, a++)
-	if  (hfp->pi->tok[ai].type == eslJSON_NUMBER)
-	  { 
-	    if (( status = esl_json_ReadFloat(hfp->pi, ai, hfp->bf, &v)) != eslOK) ESL_FAIL(eslEFORMAT, hfp->errmsg, "bad emission log probability at (k,a) = (%d,%d)", k, a);
-	    hmm->e[k][a] = expf(-v);
-	  }
+	if  (hfp->pi->tok[ai].type == eslJSON_NUMBER) {
+	  if (( status = esl_json_ReadFloat(hfp->pi, ai, hfp->bf, &v)) != eslOK) goto ERROR; // esl_json_ReadFloat() currently can't fail, on a validated JSON number
+	  hmm->e[k][a] = expf(-v);
+	}
 	else if (hfp->pi->tok[ai].type == eslJSON_NULL)  hmm->e[k][a] = 0.0;
-	else ESL_XFAIL(eslEFORMAT, hfp->errmsg, "bad match emission value at (k,a) = (%d,%d), line %d char %d", k, a, hfp->pi->tok[ai].linenum, hfp->pi->tok[ai].linepos);
+	else ESL_XFAIL(eslEFORMAT, hfp->errmsg, "match emission val neither number nor null, (k,a) = (%d,%d), line %d char %d", k, a, hfp->pi->tok[ai].linenum, hfp->pi->tok[ai].linepos); // {bad.21:4,2,30,26}
       ESL_DASSERT1(( a == abc->K ));
     }  
   ESL_DASSERT1(( k == hmm->M+1 ));
 
   /* Transitions [0..M-1][0..8] */
-  if (( status = esl_keyhash_Lookup(hfp->kh, "t", 1, &keyi)) != eslOK) ESL_FAIL(eslEFORMAT, hfp->errmsg, "model has no 't' transition key");
+  status = esl_keyhash_Lookup(hfp->kh, "t", -1, &keyi);
+  if ( status                   != eslOK)          ESL_FAIL(eslEFORMAT, hfp->errmsg, "model starting at line %d has no `t` transition key",              hfp->pi->tok[0].linenum);   // {bad.22:21}
   idx = hfp->tokmap[keyi];
+  if ( hfp->pi->tok[idx].type   != eslJSON_ARRAY ) ESL_FAIL(eslEFORMAT, hfp->errmsg, "expected `t` to have array value (line %d)",                       hfp->pi->tok[idx].linenum); // {bad.23:33}
+  if ( hfp->pi->tok[idx].nchild != hmm->M)         ESL_FAIL(eslEFORMAT, hfp->errmsg, "expected M (%d) rows in state transition array (line %d)", hmm->M, hfp->pi->tok[idx].linenum); // {bad.24:6,33}
   for (k = 0, ki = hfp->pi->tok[idx].firstchild; ki != -1; ki = hfp->pi->tok[ki].nextsib, k++)
     {
+      if ( hfp->pi->tok[ki].type   != eslJSON_ARRAY)   ESL_FAIL(eslEFORMAT, hfp->errmsg, "expected state transition row k=%d to be an array (line %d)",    k,                  hfp->pi->tok[ki].linenum); // {bad.25,1,35}
+      if ( hfp->pi->tok[ki].nchild != h4_NTRANSITIONS) ESL_FAIL(eslEFORMAT, hfp->errmsg, "expected state transition row k=%d to have %d values (line %d)", k, h4_NTRANSITIONS, hfp->pi->tok[ki].linenum); // {bad.26,2,9,36}
       for (z = 0, zi = hfp->pi->tok[ki].firstchild; zi != -1; zi = hfp->pi->tok[zi].nextsib, z++)
-	if  (hfp->pi->tok[zi].type == eslJSON_NUMBER)
-	  {
-	    if ((status = esl_json_ReadFloat(hfp->pi, zi, hfp->bf, &v)) != eslOK)  ESL_FAIL(eslEFORMAT, hfp->errmsg, "bad transition log probability at (k,z) = (%d,%d)", k, z);
-	    hmm->t[k][z] = expf(-v);
-	  }
+	if  (hfp->pi->tok[zi].type == eslJSON_NUMBER) {
+	  if ((status = esl_json_ReadFloat(hfp->pi, zi, hfp->bf, &v)) != eslOK) goto ERROR; // a validated JSON number is a subset of valid floats; esl_json_ReadFloat() can't fail.
+	  hmm->t[k][z] = expf(-v);
+	}
       	else if (hfp->pi->tok[zi].type == eslJSON_NULL)  hmm->t[k][z] = 0.0;
-	else ESL_XFAIL(eslEFORMAT, hfp->errmsg, "bad state transition value at (k,z) = (%d,%d)", k, z);
+	else ESL_XFAIL(eslEFORMAT, hfp->errmsg, "state transition val neither number nor null at (k,z) = (%d,%d), line %d char %d", k, z, hfp->pi->tok[zi].linenum, hfp->pi->tok[zi].linepos); // {bad.27:4,3,38,38}
       ESL_DASSERT1(( z == 9 ));
     }
   ESL_DASSERT1(( k == hmm->M ));
 
-
-
+  /* For now the other fields are unused, but we still error out if they're missing, because we have tests for err reporting */
+  if (( status = esl_keyhash_Lookup(hfp->kh, "format",  -1, &keyi)) != eslOK) ESL_FAIL(eslEFORMAT, hfp->errmsg, "model starting at line %d has no `format` key",  hfp->pi->tok[0].linenum); // {bad.4:1}
+  if (( status = esl_keyhash_Lookup(hfp->kh, "version", -1, &keyi)) != eslOK) ESL_FAIL(eslEFORMAT, hfp->errmsg, "model starting at line %d has no `version` key", hfp->pi->tok[0].linenum); // {bad.28:21}
 
   if (! *ret_abc) *ret_abc = abc;  // caller may have provided its own <abc>
   if (opt_hmm)    *opt_hmm = hmm; else h4_profile_Destroy(hmm);
@@ -600,28 +616,39 @@ main(int argc, char **argv)
 int
 main(int argc, char **argv)
 {
-  H4_HMMFILE   *hfp  = NULL;
-  H4_PROFILE   *hmm  = NULL;
-  ESL_ALPHABET *abc  = NULL;
-  int           nhmm = 0;
+  char         *infile  = argv[1];
+  char         *outfile = argv[2];
+  FILE         *ofp     = NULL;
+  H4_HMMFILE   *hfp     = NULL;
+  H4_PROFILE   *hmm     = NULL;
+  ESL_ALPHABET *abc     = NULL;
+  int           nhmm    = 0;
   int status;
 
-  status = h4_hmmfile_Open(argv[1], NULL, &hfp);
-  if      (status == eslENOTFOUND) esl_fatal("Couldn't open profile HMM file %s for reading\n   %s",       argv[1], hfp->errmsg);
-  else if (status == eslFAIL)      esl_fatal("gzip -dc failed trying to decompress %s\n   %s",             argv[1], hfp->errmsg);
-  else if (status != eslOK)        esl_fatal("unexpected error trying to open profile HMM file %s\n   %s", argv[1], hfp->errmsg);
+  if (( ofp = fopen(outfile, "w"))  == NULL)
+    esl_fatal("Couldn't open output file %s for writing", outfile);
+
+  if (( status = h4_hmmfile_Open(infile, NULL, &hfp)) != eslOK)
+    esl_fatal("profile HMM input failed: %s", hfp->errmsg);
 
   while (( status = h4_hmmfile_Read(hfp, &abc, &hmm) ) == eslOK)
     {
-      if (( status = h4_hmmfile_Write(stdout, hmm)) != eslOK) esl_fatal("Unexpected problem writing profile HMM file.");
+      printf("%5d %6d %.3f %.3f %.3f\n",
+	     hmm->M,
+	     hfp->pi->ntok,
+	     (double) esl_json_MinSizeof(hfp->pi) / 1.0e6,
+	     (double) esl_json_Sizeof(hfp->pi)    / 1.0e6,
+	     (double) h4_profile_Sizeof(hmm)      / 1.0e6);
+
+      if (( status = h4_hmmfile_Write(ofp, hmm)) != eslOK) esl_fatal("Unexpected problem writing profile HMM file.");
       h4_profile_Destroy(hmm);
       nhmm++;
     }
-  if       (status == eslEFORMAT)   esl_fatal("Parsing problem - bad profile HMM file format in %s\n   %s", argv[1], hfp->errmsg);
-  else if  (status == eslEINCOMPAT) esl_fatal("Unexpected alphabet in %s\n", argv[1]);
-  else if  (nhmm == 0)              esl_fatal("No profiles read from %s", argv[1]);
-  else if  (status != eslEOF )      esl_fatal("Unexpected end of file trying to read a profile");
+  if       (status == eslEFORMAT)   esl_fatal("Parse failed, bad profile HMM file format in %s:\n   %s", argv[1], hfp->errmsg);
+  else if  (nhmm == 0)              esl_fatal("Empty input? no profiles read from %s", argv[1]);
+  else if  (status != eslEOF )      esl_fatal("Unexpected error in profile HMM reader");
   
+  fclose(ofp);
   esl_alphabet_Destroy(abc);
   h4_hmmfile_Close(hfp);
   return 0;

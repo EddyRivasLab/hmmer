@@ -119,6 +119,18 @@ h4_profile_CreateBody(H4_PROFILE *hmm, const ESL_ALPHABET *abc, int M)
   return eslEMEM;
 }
 
+/* Function:  h4_profile_Sizeof()
+ * Synopsis:  Returns allocated size of a profile, in bytes.
+ */
+size_t
+h4_profile_Sizeof(H4_PROFILE *hmm)
+{
+  size_t n = 0;
+  n += sizeof(H4_PROFILE);
+  n += esl_mat_FSizeof((hmm->M+1), h4_NTRANSITIONS);
+  n += esl_mat_FSizeof((hmm->M+1), hmm->abc->K);
+  return n;
+}
 
 
 /* Function:  h4_profile_Destroy()
