@@ -104,6 +104,7 @@ HDRS =  hmmer.h \
 
 OBJS =  build.o\
 	cachedb.o\
+	cachedb_shard.o\
 	emit.o\
 	errors.o\
 	evalues.o\

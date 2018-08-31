@@ -25,7 +25,6 @@
 #ifndef HMMER_THREADS
 #error "Program requires pthreads be enabled."
 #endif /*HMMER_THREADS*/
-
 #include "easel.h"
 #include "esl_alphabet.h"
 #include "esl_getopts.h"
@@ -37,14 +36,17 @@
 
 #include "hmmer.h"
 #include "hmmpgmd.h"
+#include "hmmpgmd_shard.h"
 #include "cachedb.h"
+#include "cachedb_shard.h"
 #include "p7_hmmcache.h"
 
 #define MAX_WORKERS  64
 #define MAX_BUFFER   4096
 
 #define CONF_FILE "/etc/hmmpgmd.conf"
-
+#define INVALID_IP 0xfefefefe // 254.254.254.254 is supposed to be in the "reserved for future use" range of IPs, so we
+  // should never see one
 typedef struct {
   uint32_t        count;
   uint32_t        data_size;
@@ -94,6 +96,9 @@ typedef struct {
   RANGE_LIST       *range_list;  /* (optional) list of ranges searched within the seqdb */
 
   int              completed;
+  uint32_t         num_shards;  // new for sharding
+  uint32_t         *worker_ips;  // IP addresses of the workers we've connected to
+
 } WORKERSIDE_ARGS;
 
 typedef struct worker_s {
@@ -102,7 +107,7 @@ typedef struct worker_s {
   
   int                   completed;
   int                   terminated;
-  HMMD_COMMAND         *cmd;
+  HMMD_COMMAND_SHARD         *cmd;
 
   uint32_t              srch_inx;
   uint32_t              srch_cnt;
@@ -118,8 +123,23 @@ typedef struct worker_s {
 
   struct worker_s      *next;
   struct worker_s      *prev;
+  uint32_t             num_shards;  // New for sharding
+  uint32_t             my_shard;    // New for sharding
 } WORKER_DATA;
 
+static void
+free_QueueData_shard(QUEUE_DATA_SHARD *data)
+{
+  /* free the query data */
+  esl_getopts_Destroy(data->opts);
+
+  if (data->abc != NULL) esl_alphabet_Destroy(data->abc);
+  if (data->hmm != NULL) p7_hmm_Destroy(data->hmm);
+  if (data->seq != NULL) esl_sq_Destroy(data->seq);
+  if (data->cmd != NULL) free(data->cmd);
+  memset(data, 0, sizeof(*data));
+  free(data);
+}
 
 static void setup_clientside_comm(ESL_GETOPTS *opts, CLIENTSIDE_ARGS  *args);
 static void setup_workerside_comm(ESL_GETOPTS *opts, WORKERSIDE_ARGS  *args);
@@ -128,8 +148,8 @@ static void destroy_worker(WORKER_DATA *worker);
 
 static void init_results(SEARCH_RESULTS *results);
 static void clear_results(WORKERSIDE_ARGS *comm, SEARCH_RESULTS *results);
-static void gather_results(QUEUE_DATA *query, WORKERSIDE_ARGS *comm, SEARCH_RESULTS *results);
-static void forward_results(QUEUE_DATA *query, SEARCH_RESULTS *results);
+static void gather_results(QUEUE_DATA_SHARD *query, WORKERSIDE_ARGS *comm, SEARCH_RESULTS *results);
+static void forward_results(QUEUE_DATA_SHARD *query, SEARCH_RESULTS *results);
 
 static void
 print_client_msg(int fd, int status, char *format, va_list ap)
@@ -268,6 +288,7 @@ update_workers(WORKERSIDE_ARGS *args)
     if (worker->terminated) {
       --args->failed;
       --args->ready;
+      args->worker_ips[worker->my_shard] = INVALID_IP; // This worker is no longer responsible for a shard
       if (args->head == worker && args->tail == worker) {
         args->head = NULL;
         args->tail = NULL;
@@ -290,7 +311,7 @@ update_workers(WORKERSIDE_ARGS *args)
 }
 
 static void
-process_search(WORKERSIDE_ARGS *args, QUEUE_DATA *query)
+process_search(WORKERSIDE_ARGS *args, QUEUE_DATA_SHARD *query)
 {
   ESL_STOPWATCH  *w          = NULL;      /* timer used for profiling statistics             */
   WORKER_DATA    *worker     = NULL;
@@ -337,8 +358,8 @@ process_search(WORKERSIDE_ARGS *args, QUEUE_DATA *query)
     /* build a list of the currently available workers */
     update_workers(args);
 
-    /* if there are no workers, report an error */
-    if (args->ready > 0) {
+    /* if there aren't enough workers ready, report an error */
+    if (args->ready == args->num_shards) {
       ready_workers = args->ready;
 
       /* update the workers search information */
@@ -364,10 +385,17 @@ process_search(WORKERSIDE_ARGS *args, QUEUE_DATA *query)
           }
           cnt -= curr;
         } else {
-          // default - split evenly among workers
-          worker->srch_cnt = cnt / ready_workers;
-          inx += worker->srch_cnt;
-          cnt -= worker->srch_cnt;
+          if(query->cmd_type == HMMD_CMD_SEARCH){
+            // This is a sharded hmmsearch, so each worker should be told to search the entire db range, which
+            // will cause them to search their entire shard
+            worker->srch_cnt = cnt;
+          }
+          else{
+            // This is a hmmscan, so the database is not sharded and each worker should be told to search a fraction of it     
+            worker->srch_cnt = cnt / ready_workers;
+            inx += worker->srch_cnt;
+            cnt -= worker->srch_cnt;
+          }
         }
 
         --ready_workers;
@@ -414,8 +442,8 @@ process_search(WORKERSIDE_ARGS *args, QUEUE_DATA *query)
   results.stats.sys     = w->sys;
 
   /* TODO: check for errors */
-  if (args->ready == 0) {
-    client_msg(query->sock, eslFAIL, "No compute nodes available\n");
+  if (args->ready != args->num_shards) {
+    client_msg(query->sock, eslFAIL, "Not enough compute nodes available for the number of shards specified.  %d nodes available, %d required\n", args->ready, args->num_shards);
   } else if (args->failed > 0) {
     client_msg(query->sock, eslFAIL, "Errors running search\n");
     clear_results(args, &results);
@@ -427,7 +455,7 @@ process_search(WORKERSIDE_ARGS *args, QUEUE_DATA *query)
 }
 
 static void
-process_reset(WORKERSIDE_ARGS *args, QUEUE_DATA *query)
+process_reset(WORKERSIDE_ARGS *args, QUEUE_DATA_SHARD *query)
 {
   int n;
   int cnt;
@@ -508,13 +536,13 @@ process_reset(WORKERSIDE_ARGS *args, QUEUE_DATA *query)
 }
 
 static void
-process_load(WORKERSIDE_ARGS *args, QUEUE_DATA *query)
+process_load(WORKERSIDE_ARGS *args, QUEUE_DATA_SHARD *query)
 {
   void          *tmp;
   P7_SEQCACHE   *seq_db  = NULL;
   P7_HMMCACHE   *hmm_db  = NULL;
   WORKER_DATA   *worker  = NULL;
-  HMMD_COMMAND   cmd;
+  HMMD_COMMAND_SHARD   cmd;
   int            n, cnt;
   char           errbuf[eslERRBUFSIZE];
   int            status;
@@ -628,12 +656,12 @@ process_load(WORKERSIDE_ARGS *args, QUEUE_DATA *query)
 }
 
 static void
-process_shutdown(WORKERSIDE_ARGS *args, QUEUE_DATA *query)
+process_shutdown(WORKERSIDE_ARGS *args, QUEUE_DATA_SHARD *query)
 {
   int n;
   int cnt;
 
-  HMMD_COMMAND cmd;
+  HMMD_COMMAND_SHARD cmd;
 
   WORKER_DATA *worker  = NULL;
 
@@ -701,10 +729,10 @@ master_process_shard(ESL_GETOPTS *go)
   P7_SEQCACHE        *seq_db     = NULL;
   P7_HMMCACHE        *hmm_db     = NULL;
   ESL_STACK          *cmdstack   = NULL; /* stack of commands that clients want done */
-  QUEUE_DATA         *query      = NULL;
+  QUEUE_DATA_SHARD         *query      = NULL;
   CLIENTSIDE_ARGS     client_comm;
   WORKERSIDE_ARGS     worker_comm;
-  int                 n;
+  int                 n, i;
   int                 shutdown;
   char                errbuf[eslERRBUFSIZE]; 
   int                 status     = eslOK;
@@ -714,7 +742,7 @@ master_process_shard(ESL_GETOPTS *go)
 
   if (esl_opt_IsUsed(go, "--seqdb")) {
     char *name = esl_opt_GetString(go, "--seqdb");
-    if ((status = p7_seqcache_Open(name, &seq_db, errbuf)) != eslOK) 
+    if ((status = p7_seqcache_Open_master(name, &seq_db, errbuf)) != eslOK) 
       p7_Fail("Failed to cache %s (%d)", name, status);
 
   }
@@ -764,6 +792,11 @@ master_process_shard(ESL_GETOPTS *go)
   worker_comm.seq_db     = seq_db;
   worker_comm.hmm_db     = hmm_db;
   worker_comm.db_version = 1;
+  worker_comm.num_shards = esl_opt_GetInteger(go, "--num_shards");
+  ESL_ALLOC(worker_comm.worker_ips, worker_comm.num_shards * sizeof(uint32_t));
+  for(i = 0; i < worker_comm.num_shards; i++){
+    worker_comm.worker_ips[i] = INVALID_IP;
+  }
 
   worker_comm.ready      = 0;
   worker_comm.failed     = 0;
@@ -802,7 +835,7 @@ master_process_shard(ESL_GETOPTS *go)
       break;
     }
 
-    free_QueueData(query);
+    free_QueueData_shard(query);
   }
 
   esl_stack_ReleaseCond(cmdstack);
@@ -871,7 +904,7 @@ init_results(SEARCH_RESULTS *results)
 }
 
 static void
-gather_results(QUEUE_DATA *query, WORKERSIDE_ARGS *comm, SEARCH_RESULTS *results)
+gather_results(QUEUE_DATA_SHARD *query, WORKERSIDE_ARGS *comm, SEARCH_RESULTS *results)
 {
   int cnt;
   int n;
@@ -890,6 +923,7 @@ gather_results(QUEUE_DATA *query, WORKERSIDE_ARGS *comm, SEARCH_RESULTS *results
   worker = comm->head;
   while (worker != NULL) {
     if (worker->completed) {
+      printf("worker returned %d hits, %d met reporting threshold\n", worker->stats.nhits, worker->stats.nreported);
       results->stats.nhits        += worker->stats.nhits;
       results->stats.nreported    += worker->stats.nreported;
       results->stats.nincluded    += worker->stats.nincluded;
@@ -943,7 +977,7 @@ gather_results(QUEUE_DATA *query, WORKERSIDE_ARGS *comm, SEARCH_RESULTS *results
 }
 
 static void
-forward_results(QUEUE_DATA *query, SEARCH_RESULTS *results)
+forward_results(QUEUE_DATA_SHARD *query, SEARCH_RESULTS *results)
 {
   uint32_t           adj;
   esl_pos_t          offset;
@@ -965,6 +999,7 @@ forward_results(QUEUE_DATA *query, SEARCH_RESULTS *results)
     
   /* sort the hits and apply score and E-value thresholds */
   if (results->nhits > 0) {
+    printf("Merged into %d hits\n", results->nhits);
     P7_HIT *h1;
 
     /* at this point h1->offset's are the offset of the domain structure
@@ -1023,7 +1058,7 @@ forward_results(QUEUE_DATA *query, SEARCH_RESULTS *results)
     results->stats.nincluded = th.nincluded;
     results->stats.domZ      = pli->domZ;
     results->stats.Z         = pli->Z;
-
+    printf("%d hits reported after re-thresholding\n", results->stats.nreported);
     /* at this point the domain pointers need to be converted back to offsets
      * within the binary data stream.
      */
@@ -1161,8 +1196,8 @@ clear_results(WORKERSIDE_ARGS *args, SEARCH_RESULTS *results)
 static void
 process_ServerCmd(char *ptr, CLIENTSIDE_ARGS *data)
 {
-  QUEUE_DATA    *parms    = NULL;     /* cmd to queue           */
-  HMMD_COMMAND  *cmd      = NULL;     /* parsed cmd to process  */
+  QUEUE_DATA_SHARD    *parms    = NULL;     /* cmd to queue           */
+  HMMD_COMMAND_SHARD  *cmd      = NULL;     /* parsed cmd to process  */
   int            fd       = data->sock_fd;
   ESL_STACK     *cmdstack = data->cmdstack;
   int            n;
@@ -1222,7 +1257,7 @@ process_ServerCmd(char *ptr, CLIENTSIDE_ARGS *data)
 	  while (*ptr == ' ' || *ptr == '\t') ++ptr;
 	}
 
-      n = sizeof(HMMD_COMMAND);
+      n = sizeof(HMMD_COMMAND_SHARD);
       if (seqdb) n += strlen(seqdb) + 1;
       if (hmmdb) n += strlen(hmmdb) + 1;
 
@@ -1263,7 +1298,7 @@ process_ServerCmd(char *ptr, CLIENTSIDE_ARGS *data)
 	while (ptr && (*ptr == ' ' || *ptr == '\t')) ++ptr;
       }
 
-      n = sizeof(HMMD_COMMAND) + strlen(ip_addr) + 1;
+      n = sizeof(HMMD_COMMAND_SHARD) + strlen(ip_addr) + 1;
       if ((cmd = malloc(n)) == NULL) LOG_FATAL_MSG("malloc", errno);
       memset(cmd, 0, n);	/* remove if we ever serialize structs correctly */
       cmd->hdr.length  = n - sizeof(HMMD_HEADER);
@@ -1277,8 +1312,8 @@ process_ServerCmd(char *ptr, CLIENTSIDE_ARGS *data)
       return;
     }
 
-  if ((parms = malloc(sizeof(QUEUE_DATA))) == NULL) LOG_FATAL_MSG("malloc", errno);
-  memset(parms, 0, sizeof(QUEUE_DATA)); /* avoid valgrind bitches about uninit bytes; remove if structs are serialized properly */
+  if ((parms = malloc(sizeof(QUEUE_DATA_SHARD))) == NULL) LOG_FATAL_MSG("malloc", errno);
+  memset(parms, 0, sizeof(QUEUE_DATA_SHARD)); /* avoid valgrind bitches about uninit bytes; remove if structs are serialized properly */
 
   parms->hmm  = NULL;
   parms->seq  = NULL;
@@ -1323,10 +1358,10 @@ clientside_loop(CLIENTSIDE_ARGS *data)
   P7_HMMFILE        *hfp     = NULL;
   ESL_ALPHABET      *abc     = NULL;     /* digital alphabet               */
   ESL_GETOPTS       *opts    = NULL;     /* search specific options        */
-  HMMD_COMMAND      *cmd     = NULL;     /* search cmd to send to workers  */
+  HMMD_COMMAND_SHARD      *cmd     = NULL;     /* search cmd to send to workers  */
 
   ESL_STACK         *cmdstack = data->cmdstack;
-  QUEUE_DATA        *parms;
+  QUEUE_DATA_SHARD        *parms;
   jmp_buf            jmp_env;
   time_t             date;
   char               timestamp[32];
@@ -1476,10 +1511,10 @@ clientside_loop(CLIENTSIDE_ARGS *data)
     return 0;
   }
 
-  if ((parms = malloc(sizeof(QUEUE_DATA))) == NULL) LOG_FATAL_MSG("malloc", errno);
+  if ((parms = malloc(sizeof(QUEUE_DATA_SHARD))) == NULL) LOG_FATAL_MSG("malloc", errno);
 
   /* build the search structure that will be sent to all the workers */
-  n = sizeof(HMMD_COMMAND);
+  n = sizeof(HMMD_COMMAND_SHARD);
   n = n + strlen(opt_str) + 1;
 
   if (seq != NULL) {
@@ -1606,12 +1641,12 @@ clientside_loop(CLIENTSIDE_ARGS *data)
 static int
 discard_function(void *elemp, void *args)
 {
-  QUEUE_DATA  *elem = (QUEUE_DATA *) elemp;
+  QUEUE_DATA_SHARD  *elem = (QUEUE_DATA_SHARD *) elemp;
   int          fd   = * (int *) args;
 
   if (elem->sock == fd) 
     {
-      free_QueueData(elem);
+      free_QueueData_shard(elem);
       return TRUE;
     }
   return FALSE;
@@ -1724,13 +1759,13 @@ workerside_loop(WORKERSIDE_ARGS *data, WORKER_DATA *worker)
 {
   ESL_STOPWATCH      *w     = NULL;
   HMMD_SEARCH_STATS  *stats = NULL;
-  HMMD_COMMAND        cmd;
+  HMMD_COMMAND_SHARD        cmd;
   int    n;
   int    size;
   int    total;
   char  *ptr;
 
-  memset(&cmd, 0, sizeof(HMMD_COMMAND)); /* silence valgrind. if we ever serialize structs properly, remove */
+  memset(&cmd, 0, sizeof(HMMD_COMMAND_SHARD)); /* silence valgrind. if we ever serialize structs properly, remove */
   w = esl_stopwatch_Create();
 
   for ( ; ; ) {
@@ -1880,7 +1915,7 @@ workerside_loop(WORKERSIDE_ARGS *data, WORKER_DATA *worker)
 static void *
 workerside_thread(void *arg)
 {
-  HMMD_COMMAND     *cmd     = NULL;
+  HMMD_COMMAND_SHARD     *cmd     = NULL;
   WORKER_DATA      *worker  = (WORKER_DATA *)arg;
   WORKERSIDE_ARGS  *parent  = (WORKERSIDE_ARGS *)worker->parent;
   HMMD_HEADER       hdr;
@@ -1896,7 +1931,7 @@ workerside_thread(void *arg)
   /* Guarantees that thread resources are deallocated upon return */
   pthread_detach(pthread_self()); 
 
-  printf("Handling worker %s (%d)\n", worker->ip_addr, worker->sock_fd);
+  printf("Handling worker %s (%d), which gets shard %d out of %d\n", worker->ip_addr, worker->sock_fd, worker->my_shard, worker->num_shards);
   fflush(stdout);
 
   updated = 0;
@@ -1906,7 +1941,7 @@ workerside_thread(void *arg)
     version = parent->db_version;
     if ((n = pthread_mutex_unlock (&parent->work_mutex)) != 0)  LOG_FATAL_MSG("mutex unlock", n);
 
-    n = sizeof(HMMD_COMMAND);
+    n = sizeof(HMMD_COMMAND_SHARD);
     if (parent->seq_db != NULL) n += strlen(parent->seq_db->name) + 1;
     if (parent->hmm_db != NULL) n += strlen(parent->hmm_db->name) + 1;
 
@@ -1932,6 +1967,8 @@ workerside_thread(void *arg)
 
       strcpy(p, parent->seq_db->name);
       p += strlen(parent->seq_db->name) + 1;
+      cmd->init.num_shards = worker->num_shards;
+      cmd->init.my_shard = worker->my_shard;
     }
 
     if (parent->hmm_db != NULL) {
@@ -1957,11 +1994,11 @@ workerside_thread(void *arg)
       status = eslFAIL;
     }
 
-    /* cmd is a HMMD_COMMAND.
+    /* cmd is a HMMD_COMMAND_SHARD.
      *    consists of HMMD_HEADER:  length, command, status
      *    and a union of HMMD_INIT_CMD, HMMD_SEARCH_COMMAND, HMMD_INIT_RESET.
      *    we know which is valid, from hdr.command
-     *    the total malloc size for an HMMD_COMMAND is calculated from the header, using MSG_SIZE(cmd)
+     *    the total malloc size for an HMMD_COMMAND_SHARD is calculated from the header, using MSG_SIZE(cmd)
      */
     n = MSG_SIZE(&hdr);
     if ((cmd = realloc(cmd, n)) == NULL) {
@@ -2048,7 +2085,7 @@ workerside_thread(void *arg)
 static void *
 worker_comm_thread(void *arg)
 {
-  int                  n;
+  int                  n, i, j;
   int                  fd;
   int                  addrlen;
   pthread_t            thread_id;
@@ -2056,7 +2093,8 @@ worker_comm_thread(void *arg)
   struct sockaddr_in   addr;
 
   WORKERSIDE_ARGS     *data  = (WORKERSIDE_ARGS *)arg;
-  WORKER_DATA         *worker;
+  WORKER_DATA         *worker, *dead_worker;
+  int new_worker_shard;
 
   for ( ;; ) {
 
@@ -2073,8 +2111,30 @@ worker_comm_thread(void *arg)
     addrlen = sizeof(worker->ip_addr);
     strncpy(worker->ip_addr, inet_ntoa(addr.sin_addr), addrlen);
     worker->ip_addr[addrlen-1] = 0;
+    new_worker_shard = -1;
+    update_workers(data);  // Check the status of the existing workers to remove any that have died
+    // Figure out which shard to assign to the new worker
+    for(i = 0; i < data->num_shards; i++){
+      if (data->worker_ips[i] == addr.sin_addr.s_addr){ // This IP has connected to this server in the past,
+                                                                  // so re-use its old shard
+        printf("Found a shard assigned to the same worker as one that just tried to join.  This shouldn't happen\n");
+      }
+      if(data->worker_ips[i] == INVALID_IP){
+        // There is no worker node assigned to this shard, so assign it to the new worker
+        new_worker_shard = i;
+        break;
+      }
+    }
 
-    if ((n = pthread_create(&thread_id, NULL, workerside_thread, worker)) != 0) LOG_FATAL_MSG("thread create", n);
+    if(new_worker_shard == -1){  // We're unable to find a shard for this worker because all of the shards are taken
+      LOG_FATAL_MSG("Attempt to add a new worker node when there were already as many workers as shards", 1);
+    }
+    else{
+      worker->num_shards = data->num_shards;
+      worker->my_shard = new_worker_shard;
+      data->worker_ips[new_worker_shard] = addr.sin_addr.s_addr;  // record the IP of the new warker
+      if ((n = pthread_create(&thread_id, NULL, workerside_thread, worker)) != 0) LOG_FATAL_MSG("thread create", n);
+    }
   }
   
   pthread_exit(NULL);

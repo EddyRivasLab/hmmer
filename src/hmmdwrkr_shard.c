@@ -34,7 +34,9 @@
 
 #include "hmmer.h"
 #include "hmmpgmd.h"
+#include "hmmpgmd_shard.h"
 #include "cachedb.h"
+#include "cachedb_shard.h"
 #include "p7_hmmcache.h"
 
 #define MAX_WORKERS  64
@@ -79,11 +81,26 @@ typedef struct {
   P7_HMMCACHE *hmm_db;           /* cached hmm database              */
 } WORKER_ENV;
 
-static void process_InitCmd(HMMD_COMMAND *cmd, WORKER_ENV *env);
-static void process_SearchCmd(HMMD_COMMAND *cmd, WORKER_ENV *env, QUEUE_DATA *query);
-static void process_Shutdown(HMMD_COMMAND *cmd, WORKER_ENV *env);
 
-static QUEUE_DATA *process_QueryCmd(HMMD_COMMAND *cmd, WORKER_ENV *env);
+static void
+free_QueueData_shard(QUEUE_DATA_SHARD *data)
+{
+  /* free the query data */
+  esl_getopts_Destroy(data->opts);
+
+  if (data->abc != NULL) esl_alphabet_Destroy(data->abc);
+  if (data->hmm != NULL) p7_hmm_Destroy(data->hmm);
+  if (data->seq != NULL) esl_sq_Destroy(data->seq);
+  if (data->cmd != NULL) free(data->cmd);
+  memset(data, 0, sizeof(*data));
+  free(data);
+}
+
+static void process_InitCmd(HMMD_COMMAND_SHARD *cmd, WORKER_ENV *env);
+static void process_SearchCmd(HMMD_COMMAND_SHARD *cmd, WORKER_ENV *env, QUEUE_DATA_SHARD *query);
+static void process_Shutdown(HMMD_COMMAND_SHARD *cmd, WORKER_ENV *env);
+
+static QUEUE_DATA_SHARD *process_QueryCmd(HMMD_COMMAND_SHARD *cmd, WORKER_ENV *env);
 
 static int  setup_masterside_comm(ESL_GETOPTS *opts);
 
@@ -110,10 +127,10 @@ print_timings(int i, double elapsed, P7_PIPELINE *pli)
 }
 
 static int
-read_Command(HMMD_COMMAND **ret_cmd, WORKER_ENV *env)
+read_Command(HMMD_COMMAND_SHARD **ret_cmd, WORKER_ENV *env)
 {
   HMMD_HEADER   hdr;
-  HMMD_COMMAND *cmd = NULL;
+  HMMD_COMMAND_SHARD *cmd = NULL;
   int           n;
 
   /* read the command header */  
@@ -142,12 +159,12 @@ read_Command(HMMD_COMMAND **ret_cmd, WORKER_ENV *env)
 void
 worker_process_shard(ESL_GETOPTS *go)
 {
-  HMMD_COMMAND *cmd      = NULL;  /* see hmmpgmd.h */
+  HMMD_COMMAND_SHARD *cmd      = NULL;  /* see hmmpgmd.h */
   int           shutdown = 0;
   WORKER_ENV    env;
   int           status;
    
-  QUEUE_DATA      *query      = NULL;   
+  QUEUE_DATA_SHARD      *query      = NULL;   
   
   /* Initializations */
   impl_Init();
@@ -165,12 +182,12 @@ worker_process_shard(ESL_GETOPTS *go)
 
 
       switch (cmd->hdr.command) {
-      case HMMD_CMD_INIT:      process_InitCmd  (cmd, &env);                break;
+      case HMMD_CMD_INIT:  printf("Worker received init command\n");    process_InitCmd  (cmd, &env);                break;
       case HMMD_CMD_SCAN: 
 	  {	  
  		   query = process_QueryCmd(cmd, &env);
  		   process_SearchCmd(cmd, &env, query);
- 		   free_QueueData(query);
+ 		   free_QueueData_shard(query);
 	  }
 		 break;
       case HMMD_CMD_SEARCH:
@@ -193,7 +210,7 @@ worker_process_shard(ESL_GETOPTS *go)
 
 
 static void 
-process_SearchCmd(HMMD_COMMAND *cmd, WORKER_ENV *env, QUEUE_DATA *query)
+process_SearchCmd(HMMD_COMMAND_SHARD *cmd, WORKER_ENV *env, QUEUE_DATA_SHARD *query)
 { 
   int              i;
   int              cnt;
@@ -267,7 +284,8 @@ process_SearchCmd(HMMD_COMMAND *cmd, WORKER_ENV *env, QUEUE_DATA *query)
     if (query->cmd_type == HMMD_CMD_SEARCH) {
       HMMER_SEQ **list  = env->seq_db->db[query->dbx].list;
       info[i].sq_list   = &list[query->inx];
-      info[i].sq_cnt    = query->cnt;
+      //info[i].sq_cnt    = query->cnt;
+      info[i].sq_cnt = env->seq_db->db[query->dbx].count;
       info[i].db_Z      = env->seq_db->db[query->dbx].K;
       info[i].om_list   = NULL;
       info[i].om_cnt    = 0;
@@ -346,8 +364,8 @@ process_SearchCmd(HMMD_COMMAND *cmd, WORKER_ENV *env, QUEUE_DATA *query)
   LOG_FATAL_MSG("malloc", errno);
 }
 
-static QUEUE_DATA *
-process_QueryCmd(HMMD_COMMAND *cmd, WORKER_ENV *env)
+static QUEUE_DATA_SHARD *
+process_QueryCmd(HMMD_COMMAND_SHARD *cmd, WORKER_ENV *env)
 {
   int                i;
   int                n;
@@ -358,10 +376,10 @@ process_QueryCmd(HMMD_COMMAND *cmd, WORKER_ENV *env)
   char              *desc;
   ESL_DSQ           *dsq;
 
-  QUEUE_DATA        *query  = NULL;
+  QUEUE_DATA_SHARD        *query  = NULL;
 
-  if ((query = malloc(sizeof(QUEUE_DATA))) == NULL) LOG_FATAL_MSG("malloc", errno);
-  memset(query, 0, sizeof(QUEUE_DATA));	 /* avoid uninitialized bytes. remove this, if we ever serialize/deserialize structures properly */
+  if ((query = malloc(sizeof(QUEUE_DATA_SHARD))) == NULL) LOG_FATAL_MSG("malloc", errno);
+  memset(query, 0, sizeof(QUEUE_DATA_SHARD));	 /* avoid uninitialized bytes. remove this, if we ever serialize/deserialize structures properly */
 
   printf("CMD: %d %d\n", cmd->hdr.command, cmd->srch.query_type);
 
@@ -444,7 +462,7 @@ process_QueryCmd(HMMD_COMMAND *cmd, WORKER_ENV *env)
 }
 
 static void
-process_Shutdown(HMMD_COMMAND *cmd, WORKER_ENV  *env)
+process_Shutdown(HMMD_COMMAND_SHARD *cmd, WORKER_ENV  *env)
 {
   int            n;
 
@@ -456,7 +474,7 @@ process_Shutdown(HMMD_COMMAND *cmd, WORKER_ENV  *env)
 }
 
 static void
-process_InitCmd(HMMD_COMMAND *cmd, WORKER_ENV  *env)
+process_InitCmd(HMMD_COMMAND_SHARD *cmd, WORKER_ENV  *env)
 {
   char *p;
   int   n;
@@ -471,28 +489,30 @@ process_InitCmd(HMMD_COMMAND *cmd, WORKER_ENV  *env)
   /* load the sequence database */
   if (cmd->init.db_cnt != 0) {
     P7_SEQCACHE *sdb = NULL;
+    printf("This worker assigned shard %d out of %d\n", cmd->init.my_shard, cmd->init.num_shards);
 
     p  = cmd->init.data + cmd->init.seqdb_off;
-    status = p7_seqcache_Open(p, &sdb, NULL);
+    printf("Opening database file %s\n", p);
+    status = p7_seqcache_Open_shard(p, &sdb, NULL, cmd->init.my_shard, cmd->init.num_shards);
     if (status != eslOK) {
       p7_syslog(LOG_ERR,"[%s:%d] - p7_seqcache_Open %s error %d\n", __FILE__, __LINE__, p, status);
       LOG_FATAL_MSG("cache seqdb error", status);
     }
-
+    printf("Database opened\n");
     /* validate the sequence database */
     cmd->init.sid[MAX_INIT_DESC-1] = 0;
-    if (strcmp (cmd->init.sid, sdb->id) != 0 || cmd->init.db_cnt != sdb->db_cnt || cmd->init.seq_cnt != sdb->count) {
+    if (strcmp (cmd->init.sid, sdb->id) != 0 || cmd->init.db_cnt != sdb->db_cnt /*|| cmd->init.seq_cnt != sdb->count*/) {
       p7_syslog(LOG_ERR,"[%s:%d] - seq db %s: integrity error %s - %s\n", __FILE__, __LINE__, p, cmd->init.sid, sdb->id);
       LOG_FATAL_MSG("database integrity error", 0);
     }
-
+    printf("Database validated\n");
     env->seq_db = sdb;
   }
 
   /* load the hmm database */
   if (cmd->init.hmm_cnt != 0) {
     P7_HMMCACHE *hcache = NULL;
-
+    printf("Opening HMM database %s\n", p);
     p  = cmd->init.data + cmd->init.hmmdb_off;
 
     status = p7_hmmcache_Open(p, &hcache, NULL);
