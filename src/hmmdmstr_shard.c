@@ -339,14 +339,15 @@ process_search(WORKERSIDE_ARGS *args, QUEUE_DATA_SHARD *query)
   init_results(&results);
 
   //if range(s) are given, count how many of the seqdb's sequences are within supplied range(s)
-  if (args->range_list) { // can only happen in HMMD_CMD_SEARCH case
-    int range_cnt = 0; // this will now count how many of the seqs in the db are within the range
+ /* if (args->range_list) { // can only happen in HMMD_CMD_SEARCH case
+   int range_cnt = 0; // this will now count how many of the seqs in the db are within the range
     for (i=0; i<cnt; i++) {
       if ( hmmpgmd_IsWithinRanges(args->seq_db->list[i].idx, args->range_list ) )
         range_cnt++;
     }
     cnt = range_cnt;
   }
+  */
 
 
   inx = 0;
@@ -373,6 +374,8 @@ process_search(WORKERSIDE_ARGS *args, QUEUE_DATA_SHARD *query)
         /* assign each worker a portion of the database */
         worker->srch_inx = inx;
         if (args->range_list) {
+      /*  old code for non-sharded database.  For sharded database, each worker should be told to search the entire range of the 
+          search, because a worker only has 1/nth of the database 
           // if ranges are given, need to split the db list based on which elements in the list are within the given range(s)
           int goal = cnt / ready_workers; //how many within-range sequences do I want to ask this worker to handle
           int curr = 0;                   //how many within-range sequences have I seen since the start of this full-db range
@@ -384,6 +387,8 @@ process_search(WORKERSIDE_ARGS *args, QUEUE_DATA_SHARD *query)
             inx++;
           }
           cnt -= curr;
+          */ 
+          worker->srch_cnt = cnt;
         } else {
           if(query->cmd_type == HMMD_CMD_SEARCH){
             // This is a sharded hmmsearch, so each worker should be told to search the entire db range, which
@@ -553,7 +558,7 @@ process_load(WORKERSIDE_ARGS *args, QUEUE_DATA_SHARD *query)
     char *name = (char *)&query->cmd;
     name += query->cmd->init.seqdb_off;
 
-    if ((status = p7_seqcache_Open(name, &seq_db, errbuf)) != eslOK) {
+    if ((status = p7_seqcache_Open_master(name, &seq_db, errbuf)) != eslOK) {
       client_msg(query->sock, status, "Failed to load sequence database %s\n  %s", name, errbuf);
       return;
     }
@@ -923,7 +928,7 @@ gather_results(QUEUE_DATA_SHARD *query, WORKERSIDE_ARGS *comm, SEARCH_RESULTS *r
   worker = comm->head;
   while (worker != NULL) {
     if (worker->completed) {
-      printf("worker returned %d hits, %d met reporting threshold\n", worker->stats.nhits, worker->stats.nreported);
+ //     printf("worker returned %d hits, %d met reporting threshold\n", worker->stats.nhits, worker->stats.nreported);
       results->stats.nhits        += worker->stats.nhits;
       results->stats.nreported    += worker->stats.nreported;
       results->stats.nincluded    += worker->stats.nincluded;
@@ -1058,7 +1063,7 @@ forward_results(QUEUE_DATA_SHARD *query, SEARCH_RESULTS *results)
     results->stats.nincluded = th.nincluded;
     results->stats.domZ      = pli->domZ;
     results->stats.Z         = pli->Z;
-    printf("%d hits reported after re-thresholding\n", results->stats.nreported);
+//    printf("%d hits reported after re-thresholding\n", results->stats.nreported);
     /* at this point the domain pointers need to be converted back to offsets
      * within the binary data stream.
      */

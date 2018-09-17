@@ -433,7 +433,7 @@ p7_seqcache_Open_shard(char *seqfile, P7_SEQCACHE **ret_cache, char *errbuf, int
   strcpy(buffer, "000000001");
 printf("Worker starting to read DB\n");
   inx = 0;
-  sequence_number = 0;
+  sequence_number = 1;
   res_mem_used = 0;
   hdr_mem_used = 0;
   while ((status = esl_sqio_Read(sqfp, sq)) == eslOK) {
@@ -514,6 +514,9 @@ printf("Worker starting to read DB\n");
     
     esl_sq_Reuse(sq);
     sequence_number++;
+    if(strtol(buffer, NULL, 10) != (long)sequence_number){
+      printf("Miss-match between sequence name of %s and number of %d\n", buffer, sequence_number);
+    }
   }
 printf("Starting final reallocs\n");
   ESL_REALLOC(cache->header_mem, hdr_mem_used); // trim any unused memory in this array
@@ -547,6 +550,7 @@ printf("Worker done reading DB\n");
   *res_ptr++ = eslDSQ_SENTINEL;
   --res_size;
 
+  seq_cnt = inx;  //Record number of sequences actually loaded into memory with sharding
   /* sort the order of the database sequences */
   rnd = esl_randomness_CreateFast(seq_cnt);
   for (i = 0 ; i < seq_cnt; ++i) {
@@ -570,7 +574,8 @@ printf("Worker done reading DB\n");
       db_key >>= 1;
       ++inx;
     }
-    cache->list[i].idx = (cache->list[i].name - cache->header_mem) / 10 + 1;
+    //cache->list[i].idx = (cache->list[i].name - cache->header_mem) / 10 + 1;
+    cache->list[i].idx = strtol(cache->list[i].name, NULL, 10);
   }
 
   for (i = 0; i < cache->db_cnt; ++i) {

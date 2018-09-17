@@ -244,7 +244,15 @@ process_SearchCmd(HMMD_COMMAND_SHARD *cmd, WORKER_ENV *env, QUEUE_DATA_SHARD *qu
   if (esl_opt_IsUsed(query->opts, "--seqdb_ranges")) {
     ESL_ALLOC(info->range_list, sizeof(RANGE_LIST));
     hmmpgmd_GetRanges(info->range_list, esl_opt_GetString(query->opts, "--seqdb_ranges"));
-  }
+ /*   printf("Range-list query detected, with ranges: ");
+    for(int temp = 0; temp < info->range_list->N; temp++){
+      if(temp > 0){
+        printf(", ");
+      }
+      printf("%d..%d", info->range_list->starts[temp], info->range_list->ends[temp]);
+    }
+    printf("\n");  */
+  }  
 
 
   if (query->cmd_type == HMMD_CMD_SEARCH) threadObj = esl_threads_Create(&search_thread);
@@ -283,7 +291,7 @@ process_SearchCmd(HMMD_COMMAND_SHARD *cmd, WORKER_ENV *env, QUEUE_DATA_SHARD *qu
 
     if (query->cmd_type == HMMD_CMD_SEARCH) {
       HMMER_SEQ **list  = env->seq_db->db[query->dbx].list;
-      info[i].sq_list   = &list[query->inx];
+      info[i].sq_list   = &list[0];  // Always search the whole DB in sharded mode
       //info[i].sq_cnt    = query->cnt;
       info[i].sq_cnt = env->seq_db->db[query->dbx].count;
       info[i].db_Z      = env->seq_db->db[query->dbx].K;
@@ -628,7 +636,9 @@ search_thread(void *arg)
   p7_pli_NewModel(pli, om, bg);
 
   if (pli->Z_setby == p7_ZSETBY_NTARGETS) pli->Z = info->db_Z;
-
+  if (info->range_list){
+    printf("Worker thread starting range-list search\n");
+  }
   /* loop until all sequences have been processed */
   count = 1;
   while (count > 0) {
@@ -659,6 +669,9 @@ search_thread(void *arg)
 
     /* Main loop: */
     for (i = 0; i < count; ++i, ++sq) {
+      if( strtol((*sq)->name, NULL, 10) != (*sq)->idx){
+        printf("Sequence with index %d had name %s\n", (*sq)->idx, (*sq)->name);
+      }
       if ( !(info->range_list) || hmmpgmd_IsWithinRanges ((*sq)->idx, info->range_list)) {
         dbsq.name  = (*sq)->name;
         dbsq.dsq   = (*sq)->dsq;
