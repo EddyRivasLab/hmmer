@@ -431,7 +431,7 @@ p7_seqcache_Open_shard(char *seqfile, P7_SEQCACHE **ret_cache, char *errbuf, int
   for (i = 0; i < db_cnt; ++i) db_inx[i] = 0;
 
   strcpy(buffer, "000000001");
-printf("Worker starting to read DB\n");
+//printf("Worker starting to read DB\n");
   inx = 0;
   sequence_number = 1;
   res_mem_used = 0;
@@ -514,15 +514,15 @@ printf("Worker starting to read DB\n");
     
     esl_sq_Reuse(sq);
     sequence_number++;
-    if(strtol(buffer, NULL, 10) != (long)sequence_number){
+ /*   if(strtol(buffer, NULL, 10) != (long)sequence_number){
       printf("Miss-match between sequence name of %s and number of %d\n", buffer, sequence_number);
-    }
+    } */
   }
-printf("Starting final reallocs\n");
+//printf("Starting final reallocs\n");
   ESL_REALLOC(cache->header_mem, hdr_mem_used); // trim any unused memory in this array
   ESL_REALLOC(cache->residue_mem, res_mem_used);  // ditto
 
-printf("Worker done reading DB\n");
+//printf("Worker done reading DB\n");
 
   // Need to patch all of the header and sequence pointers in the cache list because they may have gotten mangled by reallocs
   hdr_ptr = cache->header_mem; // reset to base

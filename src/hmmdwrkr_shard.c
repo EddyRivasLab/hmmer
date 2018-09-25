@@ -182,7 +182,7 @@ worker_process_shard(ESL_GETOPTS *go)
 
 
       switch (cmd->hdr.command) {
-      case HMMD_CMD_INIT:  printf("Worker received init command\n");    process_InitCmd  (cmd, &env);                break;
+      case HMMD_CMD_INIT: /* printf("Worker received init command\n"); */   process_InitCmd  (cmd, &env);                break;
       case HMMD_CMD_SCAN: 
 	  {	  
  		   query = process_QueryCmd(cmd, &env);
@@ -497,30 +497,30 @@ process_InitCmd(HMMD_COMMAND_SHARD *cmd, WORKER_ENV  *env)
   /* load the sequence database */
   if (cmd->init.db_cnt != 0) {
     P7_SEQCACHE *sdb = NULL;
-    printf("This worker assigned shard %d out of %d\n", cmd->init.my_shard, cmd->init.num_shards);
+    //printf("This worker assigned shard %d out of %d\n", cmd->init.my_shard, cmd->init.num_shards);
 
     p  = cmd->init.data + cmd->init.seqdb_off;
-    printf("Opening database file %s\n", p);
+//   printf("Opening database file %s\n", p);
     status = p7_seqcache_Open_shard(p, &sdb, NULL, cmd->init.my_shard, cmd->init.num_shards);
     if (status != eslOK) {
       p7_syslog(LOG_ERR,"[%s:%d] - p7_seqcache_Open %s error %d\n", __FILE__, __LINE__, p, status);
       LOG_FATAL_MSG("cache seqdb error", status);
     }
-    printf("Database opened\n");
+//    printf("Database opened\n");
     /* validate the sequence database */
     cmd->init.sid[MAX_INIT_DESC-1] = 0;
     if (strcmp (cmd->init.sid, sdb->id) != 0 || cmd->init.db_cnt != sdb->db_cnt /*|| cmd->init.seq_cnt != sdb->count*/) {
       p7_syslog(LOG_ERR,"[%s:%d] - seq db %s: integrity error %s - %s\n", __FILE__, __LINE__, p, cmd->init.sid, sdb->id);
       LOG_FATAL_MSG("database integrity error", 0);
     }
-    printf("Database validated\n");
+//    printf("Database validated\n");
     env->seq_db = sdb;
   }
 
   /* load the hmm database */
   if (cmd->init.hmm_cnt != 0) {
     P7_HMMCACHE *hcache = NULL;
-    printf("Opening HMM database %s\n", p);
+  //  printf("Opening HMM database %s\n", p);
     p  = cmd->init.data + cmd->init.hmmdb_off;
 
     status = p7_hmmcache_Open(p, &hcache, NULL);
@@ -637,7 +637,7 @@ search_thread(void *arg)
 
   if (pli->Z_setby == p7_ZSETBY_NTARGETS) pli->Z = info->db_Z;
   if (info->range_list){
-    printf("Worker thread starting range-list search\n");
+  //  printf("Worker thread starting range-list search\n");
   }
   /* loop until all sequences have been processed */
   count = 1;
@@ -669,9 +669,9 @@ search_thread(void *arg)
 
     /* Main loop: */
     for (i = 0; i < count; ++i, ++sq) {
-      if( strtol((*sq)->name, NULL, 10) != (*sq)->idx){
+ /*     if( strtol((*sq)->name, NULL, 10) != (*sq)->idx){
         printf("Sequence with index %d had name %s\n", (*sq)->idx, (*sq)->name);
-      }
+      }  */
       if ( !(info->range_list) || hmmpgmd_IsWithinRanges ((*sq)->idx, info->range_list)) {
         dbsq.name  = (*sq)->name;
         dbsq.dsq   = (*sq)->dsq;

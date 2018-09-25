@@ -1004,7 +1004,7 @@ forward_results(QUEUE_DATA_SHARD *query, SEARCH_RESULTS *results)
     
   /* sort the hits and apply score and E-value thresholds */
   if (results->nhits > 0) {
-    printf("Merged into %d hits\n", results->nhits);
+  //  printf("Merged into %d hits\n", results->nhits);
     P7_HIT *h1;
 
     /* at this point h1->offset's are the offset of the domain structure
@@ -1936,7 +1936,7 @@ workerside_thread(void *arg)
   /* Guarantees that thread resources are deallocated upon return */
   pthread_detach(pthread_self()); 
 
-  printf("Handling worker %s (%d), which gets shard %d out of %d\n", worker->ip_addr, worker->sock_fd, worker->my_shard, worker->num_shards);
+  //printf("Handling worker %s (%d), which gets shard %d out of %d\n", worker->ip_addr, worker->sock_fd, worker->my_shard, worker->num_shards);
   fflush(stdout);
 
   updated = 0;
