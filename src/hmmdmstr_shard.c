@@ -1936,7 +1936,7 @@ workerside_thread(void *arg)
   /* Guarantees that thread resources are deallocated upon return */
   pthread_detach(pthread_self()); 
 
-  //printf("Handling worker %s (%d), which gets shard %d out of %d\n", worker->ip_addr, worker->sock_fd, worker->my_shard, worker->num_shards);
+  printf("Handling worker %s (%d), which gets shard %d out of %d\n", worker->ip_addr, worker->sock_fd, worker->my_shard, worker->num_shards);
   fflush(stdout);
 
   updated = 0;
