@@ -407,7 +407,7 @@
 #comment out fmindex test until it's been returned to life
 #1 exercise  fmindex-core          !testsuite/i20-fmindex-core.pl!       @@ !! %OUTFILES%
 1 exercise  rewind                !testsuite/i21-rewind.pl!             @@ !! %OUTFILES%
-
+1 exercise  hmmpgmd_shard_ga            !testsuite/i22-hmmpgmd-shard-ga.pl!         @@ !! %OUTFILES% 
 1 exercise  brute-itest           @src/itest_brute@  
 1 exercise  hmmpress-itest        !src/hmmpress.itest.pl! @src/hmmpress@ %MINIFAM.HMM% %TMPPFX%
 
