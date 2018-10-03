@@ -154,7 +154,7 @@ By default, if a query is a single sequence from a file in
 fasta format,
 .B nhmmer 
 uses a search model constructed from that sequence and a standard
-20x20 substitution matrix for residue probabilities, along with two
+substitution matrix for residue probabilities, along with two
 additional parameters for position-independent gap open and gap extend
 probabilities. These options allow the default single-sequence scoring
 parameters to be changed, and for single-sequence scoring options to
@@ -647,28 +647,6 @@ HMMER spawns is
 
 This option is not available if HMMER was compiled with POSIX threads
 support turned off.
-
-
-
-
-.TP
-.BI \-\-stall
-For debugging the MPI master/worker version: pause after start, to
-enable the developer to attach debuggers to the running master and
-worker(s) processes. Send SIGCONT signal to release the pause.
-(Under gdb: 
-.BR "(gdb) signal SIGCONT" )
-(Only available if optional MPI support was enabled at compile-time.)
-
-.TP
-.BI \-\-mpi
-Run under MPI control with master/worker parallelization (using
-.BR mpirun ,
-for example, or equivalent). Only available if optional MPI support
-was enabled at compile-time.
-
-
-
 
 
 

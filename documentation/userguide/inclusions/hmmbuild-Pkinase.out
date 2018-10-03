@@ -3,12 +3,12 @@
 # Copyright (C) 2018 Howard Hughes Medical Institute.
 # Freely distributed under the BSD open source license.
 # - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
-# input alignment file:             globins4.sto
-# output HMM file:                  globins4.hmm
+# input alignment file:             Pkinase.sto
+# output HMM file:                  Pkinase.hmm
 # - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
 
 # idx name                  nseq  alen  mlen eff_nseq re/pos description
 #---- -------------------- ----- ----- ----- -------- ------ -----------
-1     globins4                 4   171   149     0.96  0.589 
+1     Pkinase                 38   419   264     2.63  0.591 Protein kinase domain
 
-# CPU time: 0.12u 0.00s 00:00:00.12 Elapsed: 00:00:00.12
+# CPU time: 0.27u 0.00s 00:00:00.27 Elapsed: 00:00:00.27

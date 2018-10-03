@@ -1,5 +1,5 @@
-\newcommand{\UNIrelease}{2018\_02}
-\newcommand{\UNInseq}{556,825}
+\newcommand{\UNIrelease}{2018\_07}
+\newcommand{\UNInseq}{557,992}
 
 \newcommand{\HMMERversion}{3.2.1}
 \newcommand{\HMMERdate}{June 2018}
@@ -14,17 +14,17 @@
 \newcommand{\HMMERfmtversion}{f}
 \newcommand{\HMMERsavestamp}{[3.2.1 | June 2018]}
 
-\newcommand{\SGUevalue}{6.7e-65}
+\newcommand{\SGUevalue}{6.8e-65}
 \newcommand{\SGUbitscore}{222.7}
 \newcommand{\SGUbias}{3.2}
 \newcommand{\SGUorigscore}{225.9}
 \newcommand{\SGUdombitscore}{222.6}
 \newcommand{\SGUseqname}{MYG\_PHYCD}
 \newcommand{\SGUmsvpass}{3.8}
-\newcommand{\SGUbiaspass}{17546}
-\newcommand{\SGUvitpass}{2368}
+\newcommand{\SGUbiaspass}{17573}
+\newcommand{\SGUvitpass}{2369}
 \newcommand{\SGUfwdpass}{1127}
-\newcommand{\SGUelapsed}{1.1}
+\newcommand{\SGUelapsed}{2.3}
 
 \newcommand{\SFSevalue}{6.2e-56}
 \newcommand{\SFSbitscore}{173.1}

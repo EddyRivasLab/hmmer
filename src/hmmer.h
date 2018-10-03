@@ -734,6 +734,7 @@ typedef struct p7_hit_s {
 
   int64_t  seqidx;          /*unique identifier to track the database sequence from which this hit came*/
   int64_t  subseq_start; /*used to track which subsequence of a full_length target this hit came from, for purposes of removing duplicates */
+  int64_t  target_len;   /* used in translated search to hold the length of the nucleotide sequence */
 
   P7_DOMAIN *dcl;	/* domain coordinate list and alignment display */
   esl_pos_t  offset;	/* used in socket communications, in serialized communication: offset of P7_DOMAIN msg for this P7_HIT */
@@ -1244,6 +1245,8 @@ typedef struct p7_pipeline_s {
 
   int           show_accessions;/* TRUE to output accessions not names      */
   int           show_alignments;/* TRUE to output alignments (default)      */
+  int           show_translated_sequence; /* TRUE to display translated DNA sequence in domain display for nhmmscant */
+  int           show_vertical_codon; /* TRUE to display the DNA codon vertically in the alignment display */
 
   P7_HMMFILE   *hfp;		/* COPY of open HMM database (if scan mode) */
   char          errbuf[eslERRBUFSIZE];
@@ -1623,7 +1626,7 @@ extern int p7_pli_DomainIncludable  (P7_PIPELINE *pli, float dom_score, double l
 extern int p7_pli_NewModel          (P7_PIPELINE *pli, const P7_OPROFILE *om, P7_BG *bg);
 extern int p7_pli_NewModelThresholds(P7_PIPELINE *pli, const P7_OPROFILE *om);
 extern int p7_pli_NewSeq            (P7_PIPELINE *pli, const ESL_SQ *sq);
-extern int p7_Pipeline              (P7_PIPELINE *pli, P7_OPROFILE *om, P7_BG *bg, const ESL_SQ *sq, const ESL_SQ *ntsq, P7_TOPHITS *th);
+extern int p7_Pipeline              (P7_PIPELINE *pli, P7_OPROFILE *om, P7_BG *bg, const ESL_SQ *sq, const ESL_SQ *ntsq, P7_TOPHITS *th, const P7_SCOREDATA *data);
 extern int p7_Pipeline_LongTarget   (P7_PIPELINE *pli, P7_OPROFILE *om, P7_SCOREDATA *data,
                                      P7_BG *bg, P7_TOPHITS *hitlist, int64_t seqidx,
                                      const ESL_SQ *sq, int complementarity,

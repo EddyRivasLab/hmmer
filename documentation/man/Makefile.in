@@ -36,6 +36,8 @@ MANS =  hmmer\
 	jackhmmer\
 	makehmmerdb\
 	phmmer\
+	phmmert\
+	nhmmscant\
 	nhmmer\
 	nhmmscan\
 	alimask

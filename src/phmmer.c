@@ -123,6 +123,9 @@ static ESL_OPTIONS options[] = {
   { "--restrictdb_stkey", eslARG_STRING, "0",  NULL, NULL,    NULL,  NULL,  NULL,       "Search starts at the sequence with name <s> (not with MPI)",     99 },
   { "--restrictdb_n",eslARG_INT,        "-1",  NULL, NULL,    NULL,  NULL,  NULL,       "Search <j> target sequences (starting at --restrictdb_stkey)",   99 },
   { "--ssifile",    eslARG_STRING,       NULL, NULL, NULL,    NULL,  NULL,  NULL,       "restrictdb_x values require ssi file. Override default to <s>",  99 },
+   /* Not used, but retained because esl option-handling code errors if it isn't kept here.  Placed in group 99 so it doesn't print to help*/
+  { "--notrans",    eslARG_NONE,        FALSE, NULL, NULL,      NULL,  NULL,  NULL,        "don't show the translated DNA sequence in domain alignment",  99 }, /*for nhmmscant */
+  { "--vertcodon",  eslARG_NONE,        FALSE, NULL, NULL,      NULL,  NULL,  NULL,        "show the DNA vertically in domain alignment",                 99 }, /*for nhmmscant */
 
  {  0, 0, 0, 0, 0, 0, 0, 0, 0, 0 },
 };
@@ -1335,7 +1338,7 @@ mpi_worker(ESL_GETOPTS *go, struct cfg_s *cfg)
 	      p7_bg_SetLength(bg, dbsq->n);
 	      p7_oprofile_ReconfigLength(om, dbsq->n);
       
-	      p7_Pipeline(pli, om, bg, dbsq, NULL, th);
+	      p7_Pipeline(pli, om, bg, dbsq, NULL, th, NULL);
 
 	      esl_sq_Reuse(dbsq);
 	      p7_pipeline_Reuse(pli);
@@ -1406,7 +1409,7 @@ serial_loop(WORKER_INFO *info, ESL_SQFILE *dbfp, int n_targetseqs)
       p7_bg_SetLength(info->bg, dbsq->n);
       p7_oprofile_ReconfigLength(info->om, dbsq->n);
       
-      p7_Pipeline(info->pli, info->om, info->bg, dbsq, NULL, info->th);
+      p7_Pipeline(info->pli, info->om, info->bg, dbsq, NULL, info->th, NULL);
 
       seq_cnt++;
       esl_sq_Reuse(dbsq);
@@ -1511,7 +1514,7 @@ pipeline_thread(void *arg)
 	  p7_bg_SetLength(info->bg, dbsq->n);
 	  p7_oprofile_ReconfigLength(info->om, dbsq->n);
 	  
-	  p7_Pipeline(info->pli, info->om, info->bg, dbsq, NULL, info->th);
+	  p7_Pipeline(info->pli, info->om, info->bg, dbsq, NULL, info->th, NULL);
 	  
 	  esl_sq_Reuse(dbsq);
 	  p7_pipeline_Reuse(info->pli);

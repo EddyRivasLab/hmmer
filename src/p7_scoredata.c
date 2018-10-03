@@ -254,8 +254,8 @@ p7_hmm_ScoreDataClone(P7_SCOREDATA *src, int Kp) {
      memcpy(new->suffix_lengths, src->suffix_lengths, (src->M+1) * sizeof(float));
   }
   if (src->fwd_scores != NULL) {
-     ESL_ALLOC(new->fwd_scores, (src->M+1) * sizeof(float));
-     memcpy(new->fwd_scores, src->fwd_scores, (src->M+1) * sizeof(float));
+     ESL_ALLOC(new->fwd_scores, sizeof(float) *  Kp * (src->M+1));
+     memcpy(new->fwd_scores, src->fwd_scores, sizeof(float) *  Kp * (src->M+1));
   }
 
 

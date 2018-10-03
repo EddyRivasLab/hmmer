@@ -1,0 +1,4 @@
+>> humanchr22_frag  
+   #    score  bias  c-Evalue  i-Evalue hmmfrom  hmm to    alifrom  ali to    envfrom  env to     acc
+ ---   ------ ----- --------- --------- ------- -------    ------- -------    ------- -------    ----
+   1 !   16.2   0.1   2.8e-07   3.2e-05       2      25 ..    4455    4526 ..    4452    4529 .. 0.30

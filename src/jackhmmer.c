@@ -145,6 +145,11 @@ static ESL_OPTIONS options[] = {
   { "--stall",      eslARG_NONE,       FALSE, NULL,  NULL,      NULL,  "--mpi", NULL,            "arrest after start: for debugging MPI under gdb",             12 },  
   { "--mpi",        eslARG_NONE,       FALSE, NULL,  NULL,      NULL,    NULL,  MPIOPTS,         "run as an MPI parallel program",                              12 },
 #endif  
+  /* Not used, but retained because esl option-handling code errors if it isn't kept here.  Placed in group 99 so it doesn't print to help*/
+  { "--notrans",    eslARG_NONE,        FALSE, NULL, NULL,      NULL,  NULL,  NULL,              "don't show the translated DNA sequence in domain alignment",  99 }, /*for nhmmscant */
+  { "--vertcodon",  eslARG_NONE,        FALSE, NULL, NULL,      NULL,  NULL,  NULL,              "show the DNA vertically in domain alignment",                 99 }, /*for nhmmscant */
+
+
  {  0, 0, 0, 0, 0, 0, 0, 0, 0, 0 },
 };
 
@@ -1487,7 +1492,7 @@ mpi_worker(ESL_GETOPTS *go, struct cfg_s *cfg)
 		  p7_bg_SetLength(bg, dbsq->n);
 		  p7_oprofile_ReconfigLength(om, dbsq->n);
       
-		  p7_Pipeline(pli, om, bg, dbsq, NULL, th);
+		  p7_Pipeline(pli, om, bg, dbsq, NULL, th, NULL);
 
 		  esl_sq_Reuse(dbsq);
 		  p7_pipeline_Reuse(pli);
@@ -1612,7 +1617,7 @@ serial_loop(WORKER_INFO *info, ESL_SQFILE *dbfp)
       p7_bg_SetLength(info->bg, dbsq->n);
       p7_oprofile_ReconfigLength(info->om, dbsq->n);
       
-      p7_Pipeline(info->pli, info->om, info->bg, dbsq, NULL, info->th);
+      p7_Pipeline(info->pli, info->om, info->bg, dbsq, NULL, info->th, NULL);
 
       esl_sq_Reuse(dbsq);
       p7_pipeline_Reuse(info->pli);
@@ -1706,7 +1711,7 @@ pipeline_thread(void *arg)
 	  p7_bg_SetLength(info->bg, dbsq->n);
 	  p7_oprofile_ReconfigLength(info->om, dbsq->n);
 
-	  p7_Pipeline(info->pli, info->om, info->bg, dbsq, NULL, info->th);
+	  p7_Pipeline(info->pli, info->om, info->bg, dbsq, NULL, info->th, NULL);
 
 	  esl_sq_Reuse(dbsq);
 	  p7_pipeline_Reuse(info->pli);

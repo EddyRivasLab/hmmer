@@ -788,8 +788,24 @@ master_process(ESL_GETOPTS *go)
 
 
     switch(query->cmd_type) {
-    case HMMD_CMD_SEARCH:      process_search(&worker_comm, query); break;
-    case HMMD_CMD_SCAN:        process_search(&worker_comm, query); break;
+    case HMMD_CMD_SEARCH:      
+        {
+        if (esl_opt_IsUsed(go, "--hmmdb")) {
+            client_msg(query->sock, eslFAIL, "Database type specified in query, 'seqdb', does not match loaded database type: 'hmmdb'\n");
+            break;
+        }
+        else
+           process_search(&worker_comm, query); break;
+        }
+    case HMMD_CMD_SCAN:
+        {
+        if (esl_opt_IsUsed(go, "--seqdb")) {
+            client_msg(query->sock, eslFAIL, "Database type specified in query, 'hmmdb', does not match loaded database type: 'seqdb'\n");
+            break;
+        }
+        else
+           process_search(&worker_comm, query); break;
+        }
     case HMMD_CMD_INIT:        process_load  (&worker_comm, query); break;
     case HMMD_CMD_RESET:       process_reset (&worker_comm, query); break;
     case HMMD_CMD_SHUTDOWN:    
@@ -1331,6 +1347,9 @@ clientside_loop(CLIENTSIDE_ARGS *data)
   time_t             date;
   char               timestamp[32];
 
+  ESL_ALPHABET      *abcDNA = NULL;       /* DNA sequence alphabet         */
+
+
   buf_size = MAX_BUFFER;
   if ((buffer  = malloc(buf_size))   == NULL) LOG_FATAL_MSG("malloc", errno);
   ptr = buffer;
@@ -1440,7 +1459,16 @@ clientside_loop(CLIENTSIDE_ARGS *data)
 
     if (*ptr == '>') {
       /* try to parse the input buffer as a FASTA sequence */
-      seq = esl_sq_CreateDigital(abc);
+//      if (esl_opt_IsUsed(opts, "--nhmmscant") ||
+//          esl_opt_IsUsed(opts, "--phmmert")) {
+      if (esl_opt_IsUsed(opts, "--nhmmscant")) {
+        abcDNA = esl_alphabet_Create(eslDNA);
+        seq = esl_sq_CreateDigital(abcDNA);
+        if (abcDNA  != NULL) esl_alphabet_Destroy(abcDNA);
+      }
+      else {
+        seq = esl_sq_CreateDigital(abc);
+      }
       /* try to parse the input buffer as a FASTA sequence */
       status = esl_sqio_Parse(ptr, strlen(ptr), seq, eslSQFILE_DAEMON);
       if (status != eslOK) client_msg_longjmp(data->sock_fd, status, &jmp_env, "Error parsing FASTA sequence");
