@@ -328,27 +328,27 @@ int main(int argc, char *argv[])
         fprintf(stderr, "[%s:%d] write (size %" PRIu64 ") error %d - %s\n", __FILE__, __LINE__, n, errno, strerror(errno));
         exit(1);
       }
-
       n = sizeof(sstatus);
       total += n;
-      if ((size = readn(sock, &sstatus, n)) == -1) {
-        fprintf(stderr, "[%s:%d] read error %d - %s\n", __FILE__, __LINE__, errno, strerror(errno));
-        exit(1);
-      }
+      if(strncmp(ptr+1, "shutdown", 8)){ //this wasn't a shutdown command, so expect a result
+	  if ((size = readn(sock, &sstatus, n)) == -1) {
+	    fprintf(stderr, "[%s:%d] read error %d - %s\n", __FILE__, __LINE__, errno, strerror(errno));
+	    exit(1);
+	  }
 
-      if (sstatus.status != eslOK) {
-        char *ebuf;
-        n = sstatus.msg_size;
-        total += n; 
-        ebuf = malloc(n);
-        if ((size = readn(sock, ebuf, n)) == -1) {
-          fprintf(stderr, "[%s:%d] read error %d - %s\n", __FILE__, __LINE__, errno, strerror(errno));
-          exit(1);
-        }
-        fprintf(stderr, "ERROR (%d): %s\n", sstatus.status, ebuf);
-        free(ebuf);
-      }
-
+	  if (sstatus.status != eslOK) {
+	    char *ebuf;
+	    n = sstatus.msg_size;
+	    total += n; 
+	    ebuf = malloc(n);
+	    if ((size = readn(sock, ebuf, n)) == -1) {
+	      fprintf(stderr, "[%s:%d] read error %d - %s\n", __FILE__, __LINE__, errno, strerror(errno));
+	      exit(1);
+	    }
+	    fprintf(stderr, "ERROR (%d): %s\n", sstatus.status, ebuf);
+	    free(ebuf);
+	  }
+	}
       continue;
     }
 

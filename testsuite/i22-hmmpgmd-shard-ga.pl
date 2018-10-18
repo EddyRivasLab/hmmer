@@ -90,6 +90,7 @@ sleep 2;
 # Run the test script
 @output = `cat $tmppfx.in | $builddir/src/hmmc2 -i $host -p $cport -S 2>&1`;
 # Currently, hmmc2 returns nonzero exit code even upon clean !shutdown command... don't check $?
+if ($? != 0) { die "FAIL: hmmc2 returned non-zero return code of %d\n", $?; }
 $daemon_active = 0;
 
 
@@ -163,6 +164,7 @@ sub create_kill_script
 //
 !shutdown
 //
+//
 EOF
     close SCRIPTFILE;
     1;
@@ -183,6 +185,7 @@ WYHGPVSRNAAEYLLSSGINGSFLVRESESSPGQRSISLRYELYVSSE
 SRFNTLAELVHHHSTVADGLITTLHYPAPZZMM
 //
 !shutdown
+//
 //
 EOF
     close SCRIPTFILE;

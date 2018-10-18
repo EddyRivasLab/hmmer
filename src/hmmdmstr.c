@@ -781,15 +781,21 @@ master_process(ESL_GETOPTS *go)
     fflush(stdout);
 
     worker_comm.range_list = NULL;
-    if (esl_opt_IsUsed(query->opts, "--seqdb_ranges")) {
-      ESL_ALLOC(worker_comm.range_list, sizeof(RANGE_LIST));
-      hmmpgmd_GetRanges(worker_comm.range_list, esl_opt_GetString(query->opts, "--seqdb_ranges"));
-    }
-
 
     switch(query->cmd_type) {
-    case HMMD_CMD_SEARCH:      process_search(&worker_comm, query); break;
-    case HMMD_CMD_SCAN:        process_search(&worker_comm, query); break;
+    case HMMD_CMD_SEARCH:     
+      if (esl_opt_IsUsed(query->opts, "--seqdb_ranges")) {
+	ESL_ALLOC(worker_comm.range_list, sizeof(RANGE_LIST));
+	hmmpgmd_GetRanges(worker_comm.range_list, esl_opt_GetString(query->opts, "--seqdb_ranges"));
+      }
+      process_search(&worker_comm, query); break;
+    case HMMD_CMD_SCAN:        
+      if (esl_opt_IsUsed(query->opts, "--seqdb_ranges")) {
+	ESL_ALLOC(worker_comm.range_list, sizeof(RANGE_LIST));
+	hmmpgmd_GetRanges(worker_comm.range_list, esl_opt_GetString(query->opts, "--seqdb_ranges"));
+      }
+      process_search(&worker_comm, query); break;
+
     case HMMD_CMD_INIT:        process_load  (&worker_comm, query); break;
     case HMMD_CMD_RESET:       process_reset (&worker_comm, query); break;
     case HMMD_CMD_SHUTDOWN:    
