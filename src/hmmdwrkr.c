@@ -668,8 +668,6 @@ process_QueryCmd(HMMD_COMMAND *cmd, WORKER_ENV *env)
   query->hmm = NULL;
   query->seq = NULL;
 
-  //if (esl_opt_IsUsed(query->opts, "--nhmmscant") ||
-  //    esl_opt_IsUsed(query->opts, "--phmmert"))
   if (esl_opt_IsUsed(query->opts, "--nhmmscant"))
      query->abc = esl_alphabet_Create(eslDNA);
   else

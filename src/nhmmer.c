@@ -201,17 +201,12 @@ static ESL_OPTIONS options[] = {
 /* struct cfg_s : "Global" application configuration shared by all threads/processes
  * 
  * This structure is passed to routines within main.c, as a means of semi-encapsulation
- * of shared data amongst different parallel processes (threads or MPI processes).
+ * of shared data amongst different parallel processes (threads).
  */
 struct cfg_s {
   char            *dbfile;            /* target sequence database file                   */
   char            *queryfile;         /* query file (hmm, fasta, or some MSA)            */
   int              qfmt;
-
-
-  int              do_mpi;            /* TRUE if we're doing MPI parallelization         */
-  int              nproc;             /* how many MPI processes, total                   */
-  int              my_rank;           /* who am I, in 0..nproc-1                         */
 
   char             *firstseq_key;     /* name of the first sequence in the restricted db range */
   int              n_targetseq;       /* number of sequences in the restricted range */
@@ -412,9 +407,6 @@ main(int argc, char **argv)
   cfg.queryfile  = NULL;
   cfg.dbfile     = NULL;
   cfg.qfmt       = NHMMER_QFORMAT_UNKNOWN;
-  cfg.do_mpi     = FALSE;               /* this gets reset below, if we init MPI */
-  cfg.nproc      = 0;                   /* this gets reset below, if we init MPI */
-  cfg.my_rank    = 0;                   /* this gets reset below, if we init MPI */
 
   cfg.firstseq_key = NULL;
   cfg.n_targetseq  = -1;
@@ -1292,7 +1284,7 @@ serial_master(ESL_GETOPTS *go, struct cfg_s *cfg)
    return eslFAIL;
 }
 
-//TODO: MPI code needs to be added here
+
 static int
 serial_loop(WORKER_INFO *info, ID_LENGTH_LIST *id_length_list, ESL_SQFILE *dbfp, char *firstseq_key, int n_targetseqs)
 {

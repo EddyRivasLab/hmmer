@@ -1,9 +1,5 @@
 /* phmmert: search profile HMM(s) against a sequence database.
  *
- * To do:
- *  - in MPI mode, add a check to make sure ncpus >= 2. If 1, then we
- *    only have a master, no workers. See Infernal commit r3972 on the
- *    same point; and same note in hmmscan.c's to do list.
  */
 #include "p7_config.h"
 
@@ -22,11 +18,6 @@
 
 /* for phmmert */
 #include "esl_gencode.h"
-
-#ifdef HAVE_MPI
-#include "mpi.h"
-#include "esl_mpi.h"
-#endif /*HAVE_MPI*/
 
 #ifdef HMMER_THREADS
 #include <unistd.h>
@@ -54,13 +45,8 @@ typedef struct {
 #define INCDOMOPTS  "--incdomE,--incdomT,--cut_ga,--cut_nc,--cut_tc"
 #define THRESHOPTS  "-E,-T,--domE,--domT,--incE,--incT,--incdomE,--incdomT,--cut_ga,--cut_nc,--cut_tc"
 
-#if defined (HMMER_THREADS) && defined (HAVE_MPI)
-#define CPUOPTS     "--mpi"
-#define MPIOPTS     "--cpu"
-#else
 #define CPUOPTS     NULL
 #define MPIOPTS     NULL
-#endif
 
 static ESL_OPTIONS options[] = {
   /* name           type      default  env  range     toggles   reqs   incomp              help                                                      docgroup*/
@@ -109,10 +95,6 @@ static ESL_OPTIONS options[] = {
 #ifdef HMMER_THREADS 
   { "--cpu",        eslARG_INT, NULL,"HMMER_NCPU","n>=0",NULL,  NULL,  CPUOPTS,         "number of parallel CPU workers to use for multithreads",      12 },
 #endif
-#ifdef HAVE_MPI
-  { "--stall",      eslARG_NONE,   FALSE, NULL, NULL,    NULL,"--mpi", NULL,            "arrest after start: for debugging MPI under gdb",             12 },  
-  { "--mpi",        eslARG_NONE,   FALSE, NULL, NULL,    NULL,  NULL,  MPIOPTS,         "run as an MPI parallel program",                              12 },
-#endif
 
   /* name           type        default  env  range toggles reqs incomp  help                                          docgroup*/
   { "-c",         eslARG_INT,       "1", NULL, NULL, NULL,  NULL, NULL,  "use alt genetic code of NCBI transl table <n>", 15 },
@@ -126,9 +108,8 @@ static ESL_OPTIONS options[] = {
   /* Restrict search to subset of database - hidden because these flags are
    *   (a) currently for internal use
    *   (b) probably going to change
-   * Doesn't work with MPI
    */
-  { "--restrictdb_stkey", eslARG_STRING, "0",  NULL, NULL,    NULL,  NULL,  NULL,       "Search starts at the sequence with name <s> (not with MPI)",     99 },
+  { "--restrictdb_stkey", eslARG_STRING, "0",  NULL, NULL,    NULL,  NULL,  NULL,       "Search starts at the sequence with name <s> ",     99 },
   { "--restrictdb_n",eslARG_INT,        "-1",  NULL, NULL,    NULL,  NULL,  NULL,       "Search <j> target sequences (starting at --restrictdb_stkey)",   99 },
   { "--ssifile",    eslARG_STRING,       NULL, NULL, NULL,    NULL,  NULL,  NULL,       "restrictdb_x values require ssi file. Override default to <s>",  99 },
 
@@ -144,15 +125,11 @@ static char banner[] = "search protein profile(s) against DNA sequence database"
 /* struct cfg_s : "Global" application configuration shared by all threads/processes
  * 
  * This structure is passed to routines within main.c, as a means of semi-encapsulation
- * of shared data amongst different parallel processes (threads or MPI processes).
+ * of shared data amongst different parallel processes (threads).
  */
 struct cfg_s {
   char            *dbfile;            /* target sequence database file                   */
   char            *hmmfile;           /* query HMM file                                  */
-
-  int              do_mpi;            /* TRUE if we're doing MPI parallelization         */
-  int              nproc;             /* how many MPI processes, total                   */
-  int              my_rank;           /* who am I, in 0..nproc-1                         */
 
   char             *firstseq_key;     /* name of the first sequence in the restricted db range */
   int              n_targetseq;       /* number of sequences in the restricted range */
@@ -166,11 +143,6 @@ static int  serial_loop  (WORKER_INFO *info, ESL_SQFILE *dbfp, ESL_SQ_BLOCK  *or
 static int  thread_loop(ESL_THREADS *obj, ESL_WORK_QUEUE *queue, ESL_SQFILE *dbfp, ESL_SQ_BLOCK  *orf_block);
 static void pipeline_thread(void *arg);
 #endif /*HMMER_THREADS*/
-
-#ifdef HAVE_MPI
-static int  mpi_master   (ESL_GETOPTS *go, struct cfg_s *cfg);
-static int  mpi_worker   (ESL_GETOPTS *go, struct cfg_s *cfg);
-#endif /*HAVE_MPI*/
 
 
 static int
@@ -290,9 +262,6 @@ output_header(FILE *ofp, const ESL_GETOPTS *go, char *hmmfile, char *seqfile)
 #ifdef HMMER_THREADS
   if (esl_opt_IsUsed(go, "--cpu")        && fprintf(ofp, "# number of worker threads:        %d\n",             esl_opt_GetInteger(go, "--cpu"))       < 0) ESL_EXCEPTION_SYS(eslEWRITE, "write failed");  
 #endif
-#ifdef HAVE_MPI
-  if (esl_opt_IsUsed(go, "--mpi")        && fprintf(ofp, "# MPI:                             on\n")                                                    < 0) ESL_EXCEPTION_SYS(eslEWRITE, "write failed");
-#endif
   if (esl_opt_IsUsed(go, "-c")           && fprintf(ofp, "# use alt genetic code of NCBI transl table: %d\n",             esl_opt_GetInteger(go, "-c")) < 0) ESL_EXCEPTION_SYS(eslEWRITE, "write failed");
   if (esl_opt_IsUsed(go, "-l")           && fprintf(ofp, "# minimum ORF length: %d\n",                           esl_opt_GetInteger(go, "-l"))          < 0) ESL_EXCEPTION_SYS(eslEWRITE, "write failed");
   if (esl_opt_IsUsed(go, "-m")           && fprintf(ofp, "# ORFs must initiate with AUG only:    yes\n")                                                < 0) ESL_EXCEPTION_SYS(eslEWRITE, "write failed");
@@ -321,9 +290,6 @@ main(int argc, char **argv)
    */
   cfg.hmmfile    = NULL;
   cfg.dbfile     = NULL;
-  cfg.do_mpi     = FALSE;	           /* this gets reset below, if we init MPI */
-  cfg.nproc      = 0;		           /* this gets reset below, if we init MPI */
-  cfg.my_rank    = 0;		           /* this gets reset below, if we init MPI */
   cfg.firstseq_key = NULL;
   cfg.n_targetseq  = -1;
 
@@ -347,33 +313,7 @@ main(int argc, char **argv)
 #endif
 
 
-  /* Figure out who we are, and send control there: 
-   * we might be an MPI master, an MPI worker, or a serial program.
-   */
-#ifdef HAVE_MPI
-  /* pause the execution of the programs execution until the user has a
-   * chance to attach with a debugger and send a signal to resume execution
-   * i.e. (gdb) signal SIGCONT
-   */
-  if (esl_opt_GetBoolean(go, "--stall")) pause();
-
-  if (esl_opt_GetBoolean(go, "--mpi")) 
-    {
-      cfg.do_mpi     = TRUE;
-      MPI_Init(&argc, &argv);
-      MPI_Comm_rank(MPI_COMM_WORLD, &(cfg.my_rank));
-      MPI_Comm_size(MPI_COMM_WORLD, &(cfg.nproc));
-
-      if (cfg.my_rank > 0)  status = mpi_worker(go, &cfg);
-      else 		    status = mpi_master(go, &cfg);
-
-      MPI_Finalize();
-    }
-  else
-#endif /*HAVE_MPI*/
-    {
-      status = serial_master(go, &cfg);
-    }
+  status = serial_master(go, &cfg);
 
   esl_getopts_Destroy(go);
 
@@ -797,652 +737,6 @@ serial_master(ESL_GETOPTS *go, struct cfg_s *cfg)
   return eslFAIL;
 }
 
-#ifdef HAVE_MPI
-
-/* Define common tags used by the MPI master/slave processes */
-#define HMMER_ERROR_TAG          1
-#define HMMER_HMM_TAG            2
-#define HMMER_SEQUENCE_TAG       3
-#define HMMER_BLOCK_TAG          4
-#define HMMER_PIPELINE_TAG       5
-#define HMMER_TOPHITS_TAG        6
-#define HMMER_HIT_TAG            7
-#define HMMER_TERMINATING_TAG    8
-#define HMMER_READY_TAG          9
-
-/* mpi_failure()
- * Generate an error message.  If the clients rank is not 0, a
- * message is created with the error message and sent to the
- * master process for handling.
- */
-static void
-mpi_failure(char *format, ...)
-{
-  va_list  argp;
-  int      status = eslFAIL;
-  int      len;
-  int      rank;
-  char     str[512];
-
-  MPI_Comm_rank(MPI_COMM_WORLD, &rank);
-
-  /* format the error mesg */
-  va_start(argp, format);
-  len = vsnprintf(str, sizeof(str), format, argp);
-  va_end(argp);
-
-  /* make sure the error string is terminated */
-  str[sizeof(str)-1] = '\0';
-
-  /* if the caller is the master, print the results and abort */
-  if (rank == 0)
-    {
-      if (fprintf(stderr, "\nError: ") < 0) exit(eslEWRITE);
-      if (fprintf(stderr, "%s", str)   < 0) exit(eslEWRITE);
-      if (fprintf(stderr, "\n")        < 0) exit(eslEWRITE);
-      fflush(stderr);
-
-      MPI_Abort(MPI_COMM_WORLD, status);
-      exit(1);
-    }
-  else
-    {
-      MPI_Send(str, len, MPI_CHAR, 0, HMMER_ERROR_TAG, MPI_COMM_WORLD);
-      pause();
-    }
-}
-
-#define MAX_BLOCK_SIZE (512*1024)
-
-typedef struct {
-  uint64_t  offset;
-  uint64_t  length;
-  uint64_t  count;
-} SEQ_BLOCK;
-
-typedef struct {
-  int        complete;
-  int        size;
-  int        current;
-  int        last;
-  SEQ_BLOCK *blocks;
-} BLOCK_LIST;
-
-/* this routine parses the database keeping track of the blocks
- * offset within the file, number of sequences and the length
- * of the block.  These blocks are passed as work units to the
- * MPI workers.  If multiple hmm's are in the query file, the
- * blocks are reused without parsing the database a second time.
- */
-int next_block(ESL_SQFILE *sqfp, ESL_SQ *sq, BLOCK_LIST *list, SEQ_BLOCK *block, int n_targetseqs)
-{
-  int      status   = eslOK;
-
-  /* if the list has been calculated, use it instead of parsing the database */
-  if (list->complete)
-    {
-      if (list->current == list->last)
-      {
-        block->offset = 0;
-        block->length = 0;
-        block->count  = 0;
-
-        status = eslEOF;
-      }
-      else
-      {
-        int inx = list->current++;
-
-        block->offset = list->blocks[inx].offset;
-        block->length = list->blocks[inx].length;
-        block->count  = list->blocks[inx].count;
-
-        status = eslOK;
-      }
-
-      return status;
-    }
-
-  block->offset = 0;
-  block->length = 0;
-  block->count = 0;
-
-  esl_sq_Reuse(sq);
-  if (n_targetseqs == 0) status = eslEOF; //this is to handle the end-case of a restrictdb scenario, where no more targets are required, and we want to mark the list as complete
-  while (block->length < MAX_BLOCK_SIZE && (n_targetseqs <0 || block->count < n_targetseqs) && (status = esl_sqio_ReadInfo(sqfp, sq)) == eslOK)
-    {
-      if (block->count == 0) block->offset = sq->roff;
-      block->length = sq->eoff - block->offset + 1;
-      block->count++;
-      esl_sq_Reuse(sq);
-    }
-
-  if (block->count > 0)
-    if (status == eslEOF || block->count == n_targetseqs)
-      status = eslOK;
-  if (status == eslEOF) list->complete = 1;
-
-  /* add the block to the list of known blocks */
-  if (status == eslOK)
-    {
-      int inx;
-
-      if (list->last >= list->size)
-	{
-	  void *tmp;
-	  list->size += 500;
-	  ESL_RALLOC(list->blocks, tmp, sizeof(SEQ_BLOCK) * list->size);
-	}
-
-      inx = list->last++;
-      list->blocks[inx].offset = block->offset;
-      list->blocks[inx].length = block->length;
-      list->blocks[inx].count  = block->count;
-    }
-
-  return status;
-
- ERROR:
-  return eslEMEM;
-}
-
-/* mpi_master()
- * The MPI version of hmmbuild.
- * Follows standard pattern for a master/worker load-balanced MPI program (J1/78-79).
- * 
- * A master can only return if it's successful. 
- * Errors in an MPI master come in two classes: recoverable and nonrecoverable.
- * 
- * Recoverable errors include all worker-side errors, and any
- * master-side error that do not affect MPI communication. Error
- * messages from recoverable messages are delayed until we've cleanly
- * shut down the workers.
- * 
- * Unrecoverable errors are master-side errors that may affect MPI
- * communication, meaning we cannot count on being able to reach the
- * workers and shut them down. Unrecoverable errors result in immediate
- * p7_Fail()'s, which will cause MPI to shut down the worker processes
- * uncleanly.
- */
-static int
-mpi_master(ESL_GETOPTS *go, struct cfg_s *cfg)
-{
-  FILE            *ofp      = stdout;            /* results output file (-o)                        */
-  FILE            *afp      = NULL;              /* alignment output file (-A)                      */
-  FILE            *tblfp    = NULL;              /* output stream for tabular per-seq (--tblout)    */
-  FILE            *domtblfp = NULL;              /* output stream for tabular per-dom (--domtblout) */
-  FILE            *pfamtblfp= NULL;              /* output stream for pfam-style tabular output  (--pfamtblout) */
-  P7_BG           *bg       = NULL;	         /* null model                                      */
-  P7_HMMFILE      *hfp      = NULL;              /* open input HMM file                             */
-  ESL_SQFILE      *dbfp     = NULL;              /* open input sequence file                        */
-  P7_HMM          *hmm      = NULL;              /* one HMM query                                   */
-  ESL_SQ          *dbsq     = NULL;              /* one target sequence (digital)                   */
-  ESL_ALPHABET    *abc      = NULL;              /* digital alphabet                                */
-  int              dbfmt    = eslSQFILE_UNKNOWN; /* format code for sequence database file          */
-  ESL_STOPWATCH   *w;
-  int              textw    = 0;
-  int              nquery   = 0;
-  int              status   = eslOK;
-  int              hstatus  = eslOK;
-  int              sstatus  = eslOK;
-  int              dest;
-
-  char            *mpi_buf  = NULL;              /* buffer used to pack/unpack structures */
-  int              mpi_size = 0;                 /* size of the allocated buffer */
-  BLOCK_LIST      *list     = NULL;
-  SEQ_BLOCK        block;
-
-  int              i;
-  int              size;
-  MPI_Status       mpistatus;
-  char             errbuf[eslERRBUFSIZE];
-
-  int              n_targets;
-
-  w = esl_stopwatch_Create();
-
-  if (esl_opt_GetBoolean(go, "--notextw")) textw = 0;
-  else                                     textw = esl_opt_GetInteger(go, "--textw");
-
-  if (esl_opt_IsOn(go, "--tformat")) {
-    dbfmt = esl_sqio_EncodeFormat(esl_opt_GetString(go, "--tformat"));
-    if (dbfmt == eslSQFILE_UNKNOWN) mpi_failure("%s is not a recognized sequence database file format\n", esl_opt_GetString(go, "--tformat"));
-  }
-
-  /* Open the target sequence database */
-  status = esl_sqfile_Open(cfg->dbfile, dbfmt, p7_SEQDBENV, &dbfp);
-  if      (status == eslENOTFOUND) mpi_failure("Failed to open sequence file %s for reading\n",          cfg->dbfile);
-  else if (status == eslEFORMAT)   mpi_failure("Sequence file %s is empty or misformatted\n",            cfg->dbfile);
-  else if (status == eslEINVAL)    mpi_failure("Can't autodetect format of a stdin or .gz seqfile");
-  else if (status != eslOK)        mpi_failure("Unexpected error %d opening sequence file %s\n", status, cfg->dbfile);  
-
-  if (esl_opt_IsUsed(go, "--restrictdb_stkey") || esl_opt_IsUsed(go, "--restrictdb_n")) {
-      if (esl_opt_IsUsed(go, "--ssifile"))
-        esl_sqfile_OpenSSI(dbfp, esl_opt_GetString(go, "--ssifile"));
-      else
-        esl_sqfile_OpenSSI(dbfp, NULL);
-  }
-
-
-  /* Open the query profile HMM file */
-  status = p7_hmmfile_OpenE(cfg->hmmfile, NULL, &hfp, errbuf);
-  if      (status == eslENOTFOUND) mpi_failure("File existence/permissions problem in trying to open HMM file %s.\n%s\n", cfg->hmmfile, errbuf);
-  else if (status == eslEFORMAT)   mpi_failure("File format problem in trying to open HMM file %s.\n%s\n",                cfg->hmmfile, errbuf);
-  else if (status != eslOK)        mpi_failure("Unexpected error %d in opening HMM file %s.\n%s\n",               status, cfg->hmmfile, errbuf);  
-
-  /* Open the results output files */
-  if (esl_opt_IsOn(go, "-o") && (ofp = fopen(esl_opt_GetString(go, "-o"), "w")) == NULL)
-    mpi_failure("Failed to open output file %s for writing\n",    esl_opt_GetString(go, "-o"));
-
-  if (esl_opt_IsOn(go, "-A") && (afp = fopen(esl_opt_GetString(go, "-A"), "w")) == NULL) 
-    mpi_failure("Failed to open alignment file %s for writing\n", esl_opt_GetString(go, "-A"));
-
-  if (esl_opt_IsOn(go, "--tblout") && (tblfp = fopen(esl_opt_GetString(go, "--tblout"), "w")) == NULL)
-    mpi_failure("Failed to open tabular per-seq output file %s for writing\n", esl_opt_GetString(go, "--tblout"));
-
-  if (esl_opt_IsOn(go, "--domtblout") && (domtblfp = fopen(esl_opt_GetString(go, "--domtblout"), "w")) == NULL)
-    mpi_failure("Failed to open tabular per-dom output file %s for writing\n", esl_opt_GetString(go, "--domtblout"));
-
-  if (esl_opt_IsOn(go, "--pfamtblout") && (pfamtblfp = fopen(esl_opt_GetString(go, "--pfamtblout"), "w")) == NULL)
-    mpi_failure("Failed to open pfam-style tabular output file %s for writing\n", esl_opt_GetString(go, "--pfamtblout"));
-
-  ESL_ALLOC(list, sizeof(BLOCK_LIST));
-  list->complete = 0;
-  list->size     = 0;
-  list->current  = 0;
-  list->last     = 0;
-  list->blocks   = NULL;
-
-  /* <abc> is not known 'til first HMM is read. */
-  hstatus = p7_hmmfile_Read(hfp, &abc, &hmm);
-  if (hstatus == eslOK)
-    {
-      /* One-time initializations after alphabet <abc> becomes known */
-      output_header(ofp, go, cfg->hmmfile, cfg->dbfile);
-      dbsq = esl_sq_CreateDigital(abc);
-      bg = p7_bg_Create(abc);
-    }
-  
-
-  if ( cfg->firstseq_key != NULL ) { //it's tempting to want to do this once and capture the offset position for future passes, but ncbi files make this non-trivial, so this keeps it general
-    sstatus = esl_sqfile_PositionByKey(dbfp, cfg->firstseq_key);
-    if (sstatus != eslOK)
-      p7_Fail("Failure setting restrictdb_stkey to %d\n", cfg->firstseq_key);
-  }
-
-  /* Outer loop: over each query HMM in <hmmfile>. */
-  while (hstatus == eslOK) 
-    {
-      P7_PROFILE      *gm      = NULL;
-      P7_OPROFILE     *om      = NULL;       /* optimized query profile                  */
-      P7_PIPELINE     *pli     = NULL;
-      P7_TOPHITS      *th      = NULL;
-      int              seq_cnt = 0;
-      nquery++;
-      esl_stopwatch_Start(w);
-
-      n_targets = cfg->n_targetseq;
-
-      /* seqfile may need to be rewound (multiquery mode) */
-      if (nquery > 1)   list->current = 0;
-
-      if (fprintf(ofp, "Query:       %s  [M=%d]\n", hmm->name, hmm->M)  < 0) ESL_EXCEPTION_SYS(eslEWRITE, "write failed");
-      if (hmm->acc)  { if (fprintf(ofp, "Accession:   %s\n", hmm->acc)  < 0) ESL_EXCEPTION_SYS(eslEWRITE, "write failed"); }
-      if (hmm->desc) { if (fprintf(ofp, "Description: %s\n", hmm->desc) < 0) ESL_EXCEPTION_SYS(eslEWRITE, "write failed"); }
-
-      /* Convert to an optimized model */
-      gm = p7_profile_Create (hmm->M, abc);
-      om = p7_oprofile_Create(hmm->M, abc);
-      p7_ProfileConfig(hmm, bg, gm, 100, p7_LOCAL);
-      p7_oprofile_Convert(gm, om);
-
-      /* Create processing pipeline and hit list */
-      th  = p7_tophits_Create(); 
-      pli = p7_pipeline_Create(go, hmm->M, 100, FALSE, p7_SEARCH_SEQS);
-      p7_pli_NewModel(pli, om, bg);
-
-      /* Main loop: */
-      while ((n_targets==-1 || seq_cnt<=n_targets) && (sstatus = next_block(dbfp, dbsq, list, &block, n_targets-seq_cnt)) == eslOK )
-      {
-        seq_cnt += block.count;
-
-        if (MPI_Probe(MPI_ANY_SOURCE, MPI_ANY_TAG, MPI_COMM_WORLD, &mpistatus) != 0)
-          mpi_failure("MPI error %d receiving message from %d\n", mpistatus.MPI_SOURCE);
-
-        MPI_Get_count(&mpistatus, MPI_PACKED, &size);
-        if (mpi_buf == NULL || size > mpi_size) {
-          void *tmp;
-          ESL_RALLOC(mpi_buf, tmp, sizeof(char) * size);
-          mpi_size = size;
-        }
-
-        dest = mpistatus.MPI_SOURCE;
-        MPI_Recv(mpi_buf, size, MPI_PACKED, dest, mpistatus.MPI_TAG, MPI_COMM_WORLD, &mpistatus);
-
-        if (mpistatus.MPI_TAG == HMMER_ERROR_TAG)
-          mpi_failure("MPI client %d raised error:\n%s\n", dest, mpi_buf);
-        if (mpistatus.MPI_TAG != HMMER_READY_TAG)
-          mpi_failure("Unexpected tag %d from %d\n", mpistatus.MPI_TAG, dest);
-
-        MPI_Send(&block, 3, MPI_LONG_LONG_INT, dest, HMMER_BLOCK_TAG, MPI_COMM_WORLD);
-      }
-
-      if (n_targets!=-1 && seq_cnt==n_targets)
-        sstatus = eslEOF;
-
-      switch(sstatus)
-      {
-      case eslEFORMAT:
-        mpi_failure("Parse failed (sequence file %s):\n%s\n", dbfp->filename, esl_sqfile_GetErrorBuf(dbfp));
-        break;
-      case eslEOF:
-        break;
-      default:
-        mpi_failure("Unexpected error %d reading sequence file %s", sstatus, dbfp->filename);
-      }
-
-      block.offset = 0;
-      block.length = 0;
-      block.count  = 0;
-
-      /* wait for all workers to finish up their work blocks */
-      for (i = 1; i < cfg->nproc; ++i)
-	{
-	  if (MPI_Probe(MPI_ANY_SOURCE, MPI_ANY_TAG, MPI_COMM_WORLD, &mpistatus) != 0) 
-	    mpi_failure("MPI error %d receiving message from %d\n", mpistatus.MPI_SOURCE);
-
-	  MPI_Get_count(&mpistatus, MPI_PACKED, &size);
-	  if (mpi_buf == NULL || size > mpi_size) {
-	    void *tmp;
-	    ESL_RALLOC(mpi_buf, tmp, sizeof(char) * size);
-	    mpi_size = size; 
-	  }
-
-	  dest = mpistatus.MPI_SOURCE;
-	  MPI_Recv(mpi_buf, size, MPI_PACKED, dest, mpistatus.MPI_TAG, MPI_COMM_WORLD, &mpistatus);
-
-	  if (mpistatus.MPI_TAG == HMMER_ERROR_TAG)
-	    mpi_failure("MPI client %d raised error:\n%s\n", dest, mpi_buf);
-	  if (mpistatus.MPI_TAG != HMMER_READY_TAG)
-	    mpi_failure("Unexpected tag %d from %d\n", mpistatus.MPI_TAG, dest);
-	}
-
-      /* merge the results of the search results */
-      for (dest = 1; dest < cfg->nproc; ++dest)
-	{
-	  P7_PIPELINE     *mpi_pli   = NULL;
-	  P7_TOPHITS      *mpi_th    = NULL;
-
-	  /* send an empty block to signal the worker they are done */
-	  MPI_Send(&block, 3, MPI_LONG_LONG_INT, dest, HMMER_BLOCK_TAG, MPI_COMM_WORLD);
-
-	  /* wait for the results */
-	  if ((status = p7_tophits_MPIRecv(dest, HMMER_TOPHITS_TAG, MPI_COMM_WORLD, &mpi_buf, &mpi_size, &mpi_th)) != eslOK)
-	    mpi_failure("Unexpected error %d receiving tophits from %d", status, dest);
-
-	  if ((status = p7_pipeline_MPIRecv(dest, HMMER_PIPELINE_TAG, MPI_COMM_WORLD, &mpi_buf, &mpi_size, go, &mpi_pli)) != eslOK)
-	    mpi_failure("Unexpected error %d receiving pipeline from %d", status, dest);
-
-	  p7_tophits_Merge(th, mpi_th);
-	  p7_pipeline_Merge(pli, mpi_pli);
-
-	  p7_pipeline_Destroy(mpi_pli);
-	  p7_tophits_Destroy(mpi_th);
-	}
-
-      /* Print the results.  */
-      p7_tophits_SortBySortkey(th);
-      p7_tophits_Threshold(th, pli);
-      p7_tophits_Targets(ofp, th, pli, textw); if (fprintf(ofp, "\n\n") < 0) ESL_EXCEPTION_SYS(eslEWRITE, "write failed");
-      p7_tophits_Domains(ofp, th, pli, textw); if (fprintf(ofp, "\n\n") < 0) ESL_EXCEPTION_SYS(eslEWRITE, "write failed");
-
-      if (tblfp)    p7_tophits_TabularTargets(tblfp,    hmm->name, hmm->acc, th, pli, (nquery == 1));
-      if (domtblfp) p7_tophits_TabularDomains(domtblfp, hmm->name, hmm->acc, th, pli, (nquery == 1));
-      if (pfamtblfp) p7_tophits_TabularXfam(pfamtblfp, hmm->name, hmm->acc, th, pli);
-
-      esl_stopwatch_Stop(w);
-      p7_pli_Statistics(ofp, pli, w);
-      if (fprintf(ofp, "//\n") < 0) ESL_EXCEPTION_SYS(eslEWRITE, "write failed");
-
-      /* Output the results in an MSA (-A option) */
-      if (afp) {
-	ESL_MSA *msa = NULL;
-
-	if (p7_tophits_Alignment(th, abc, NULL, NULL, 0, p7_ALL_CONSENSUS_COLS, &msa) == eslOK)
-	  {
-	    if (textw > 0) esl_msafile_Write(afp, msa, eslMSAFILE_STOCKHOLM);
-	    else           esl_msafile_Write(afp, msa, eslMSAFILE_PFAM);
-	  
-	    if (fprintf(ofp, "# Alignment of %d hits satisfying inclusion thresholds saved to: %s\n", msa->nseq, esl_opt_GetString(go, "-A")) < 0) ESL_EXCEPTION_SYS(eslEWRITE, "write failed");
-	  } 
-	else { if (fprintf(ofp, "# No hits satisfy inclusion thresholds; no alignment saved\n") < 0) ESL_EXCEPTION_SYS(eslEWRITE, "write failed"); }
-	  
-	esl_msa_Destroy(msa);
-      }
-
-      p7_pipeline_Destroy(pli);
-      p7_tophits_Destroy(th);
-      p7_hmm_Destroy(hmm);
-
-      hstatus = p7_hmmfile_Read(hfp, &abc, &hmm);
-    } /* end outer loop over query HMMs */
-
-  switch(hstatus) {
-  case eslEOD:       mpi_failure("read failed, HMM file %s may be truncated?", cfg->hmmfile);      break;
-  case eslEFORMAT:   mpi_failure("bad file format in HMM file %s",             cfg->hmmfile);      break;
-  case eslEINCOMPAT: mpi_failure("HMM file %s contains different alphabets",   cfg->hmmfile);      break;
-  case eslEOF:       /* EOF is good, that's what we expect here */                                 break;
-  default:           mpi_failure("Unexpected error (%d) in reading HMMs from %s", hstatus, cfg->hmmfile);
-  }
-
-  /* monitor all the workers to make sure they have ended */
-  for (i = 1; i < cfg->nproc; ++i)
-    {
-      if (MPI_Probe(MPI_ANY_SOURCE, MPI_ANY_TAG, MPI_COMM_WORLD, &mpistatus) != 0) 
-	mpi_failure("MPI error %d receiving message from %d\n", mpistatus.MPI_SOURCE);
-
-      MPI_Get_count(&mpistatus, MPI_PACKED, &size);
-      if (mpi_buf == NULL || size > mpi_size) {
-	void *tmp;
-	ESL_RALLOC(mpi_buf, tmp, sizeof(char) * size);
-	mpi_size = size; 
-      }
-
-      dest = mpistatus.MPI_SOURCE;
-      MPI_Recv(mpi_buf, size, MPI_PACKED, dest, mpistatus.MPI_TAG, MPI_COMM_WORLD, &mpistatus);
-
-      if (mpistatus.MPI_TAG == HMMER_ERROR_TAG)
-	mpi_failure("MPI client %d raised error:\n%s\n", dest, mpi_buf);
-      if (mpistatus.MPI_TAG != HMMER_TERMINATING_TAG)
-	mpi_failure("Unexpected tag %d from %d\n", mpistatus.MPI_TAG, dest);
-    }
-
-  /* Terminate outputs... any last words?
-   */
-  if (tblfp)    p7_tophits_TabularTail(tblfp,     "phmmert", p7_SEARCH_SEQS, cfg->hmmfile, cfg->dbfile, go);
-  if (domtblfp) p7_tophits_TabularTail(domtblfp,  "phmmert", p7_SEARCH_SEQS, cfg->hmmfile, cfg->dbfile, go);
-  if (pfamtblfp)p7_tophits_TabularTail(pfamtblfp, "phmmert", p7_SEARCH_SEQS, cfg->hmmfile, cfg->dbfile, go);
-  if (ofp)     { if (fprintf(ofp, "[ok]\n") < 0) ESL_EXCEPTION_SYS(eslEWRITE, "write failed"); }
-
-  /* Cleanup - prepare for exit
-   */
-  free(list);
-  if (mpi_buf != NULL) free(mpi_buf);
-
-  p7_hmmfile_Close(hfp);
-  esl_sqfile_Close(dbfp);
-
-  p7_bg_Destroy(bg);
-  esl_sq_Destroy(dbsq);
-  esl_stopwatch_Destroy(w);
-
-  if (ofp != stdout) fclose(ofp);
-  if (afp)           fclose(afp);
-  if (tblfp)         fclose(tblfp);
-  if (domtblfp)      fclose(domtblfp);
-  if (pfamtblfp)     fclose(pfamtblfp);
-
-  return eslOK;
-
- ERROR:
-  return eslEMEM;
-}
-
-
-static int
-mpi_worker(ESL_GETOPTS *go, struct cfg_s *cfg)
-{
-  P7_HMM          *hmm      = NULL;              /* one HMM query                                   */
-  ESL_SQ          *dbsq     = NULL;              /* one target sequence (digital)                   */
-  ESL_ALPHABET    *abc      = NULL;              /* digital alphabet                                */
-  P7_BG           *bg       = NULL;	         /* null model                                      */
-  P7_HMMFILE      *hfp      = NULL;              /* open input HMM file                             */
-  ESL_SQFILE      *dbfp     = NULL;              /* open input sequence file                        */
-  int              dbfmt    = eslSQFILE_UNKNOWN; /* format code for sequence database file          */
-  ESL_STOPWATCH   *w;
-  int              status   = eslOK;
-  int              hstatus  = eslOK;
-  int              sstatus  = eslOK;
-
-  char            *mpi_buf  = NULL;              /* buffer used to pack/unpack structures           */
-  int              mpi_size = 0;                 /* size of the allocated buffer                    */
-
-  MPI_Status       mpistatus;
-  char             errbuf[eslERRBUFSIZE];
-
-  w = esl_stopwatch_Create();
-
-  /* Open the target sequence database */
-  status = esl_sqfile_Open(cfg->dbfile, dbfmt, p7_SEQDBENV, &dbfp);
-  if      (status == eslENOTFOUND) mpi_failure("Failed to open sequence file %s for reading\n",          cfg->dbfile);
-  else if (status == eslEFORMAT)   mpi_failure("Sequence file %s is empty or misformatted\n",            cfg->dbfile);
-  else if (status == eslEINVAL)    mpi_failure("Can't autodetect format of a stdin or .gz seqfile");
-  else if (status != eslOK)        mpi_failure("Unexpected error %d opening sequence file %s\n", status, cfg->dbfile);  
-
-  /* Open the query profile HMM file */
-  status = p7_hmmfile_OpenE(cfg->hmmfile, NULL, &hfp, errbuf);
-  if      (status == eslENOTFOUND) mpi_failure("File existence/permissions problem in trying to open HMM file %s.\n%s\n", cfg->hmmfile, errbuf);
-  else if (status == eslEFORMAT)   mpi_failure("File format problem in trying to open HMM file %s.\n%s\n",                cfg->hmmfile, errbuf);
-  else if (status != eslOK)        mpi_failure("Unexpected error %d in opening HMM file %s.\n%s\n",               status, cfg->hmmfile, errbuf);  
-
-  /* <abc> is not known 'til first HMM is read. */
-  hstatus = p7_hmmfile_Read(hfp, &abc, &hmm);
-  if (hstatus == eslOK)
-    {
-      /* One-time initializations after alphabet <abc> becomes known */
-      dbsq = esl_sq_CreateDigital(abc);
-      bg = p7_bg_Create(abc);
-      esl_sqfile_SetDigital(dbfp, abc);
-    }
-  
-  /* Outer loop: over each query HMM in <hmmfile>. */
-  while (hstatus == eslOK) 
-    {
-      P7_PROFILE      *gm      = NULL;
-      P7_OPROFILE     *om      = NULL;       /* optimized query profile                  */
-      P7_PIPELINE     *pli     = NULL;
-      P7_TOPHITS      *th      = NULL;
-
-      SEQ_BLOCK        block;
-
-      esl_stopwatch_Start(w);
-
-      status = 0;
-      MPI_Send(&status, 1, MPI_INT, 0, HMMER_READY_TAG, MPI_COMM_WORLD);
-
-      /* Convert to an optimized model */
-      gm = p7_profile_Create (hmm->M, abc);
-      om = p7_oprofile_Create(hmm->M, abc);
-      p7_ProfileConfig(hmm, bg, gm, 100, p7_LOCAL);
-      p7_oprofile_Convert(gm, om);
-
-      th  = p7_tophits_Create(); 
-      pli = p7_pipeline_Create(go, om->M, 100, FALSE, p7_SEARCH_SEQS); /* L_hint = 100 is just a dummy for now */
-      p7_pli_NewModel(pli, om, bg);
-
-      /* receive a sequence block from the master */
-      MPI_Recv(&block, 3, MPI_LONG_LONG_INT, 0, HMMER_BLOCK_TAG, MPI_COMM_WORLD, &mpistatus);
-      while (block.count > 0)
-	{
-	  uint64_t length = 0;
-	  uint64_t count  = block.count;
-
-	  status = esl_sqfile_Position(dbfp, block.offset);
-	  if (status != eslOK) mpi_failure("Cannot position sequence database to %ld\n", block.offset);
-
-	  while (count > 0 && (sstatus = esl_sqio_Read(dbfp, dbsq)) == eslOK)
-	    {
-	      length = dbsq->eoff - block.offset + 1;
-
-	      p7_pli_NewSeq(pli, dbsq);
-	      p7_bg_SetLength(bg, dbsq->n);
-	      p7_oprofile_ReconfigLength(om, dbsq->n);
-      
-	      p7_Pipeline(pli, om, bg, dbsq, NULL, th, NULL);
-
-	      esl_sq_Reuse(dbsq);
-	      p7_pipeline_Reuse(pli);
-
-	      --count;
-	    }
-
-	  /* lets do a little bit of sanity checking here to make sure the blocks are the same */
-	  if (count > 0)              mpi_failure("Block count mismatch - expected %ld found %ld at offset %ld\n",  block.count,  block.count - count, block.offset);
-	  if (block.length != length) mpi_failure("Block length mismatch - expected %ld found %ld at offset %ld\n", block.length, length,              block.offset);
-
-	  /* inform the master we need another block of sequences */
-	  status = 0;
-	  MPI_Send(&status, 1, MPI_INT, 0, HMMER_READY_TAG, MPI_COMM_WORLD);
-
-	  /* wait for the next block of sequences */
-	  MPI_Recv(&block, 3, MPI_LONG_LONG_INT, 0, HMMER_BLOCK_TAG, MPI_COMM_WORLD, &mpistatus);
-	}
-
-      esl_stopwatch_Stop(w);
-
-      /* Send the top hits back to the master. */
-      p7_tophits_MPISend(th, 0, HMMER_TOPHITS_TAG, MPI_COMM_WORLD,  &mpi_buf, &mpi_size);
-      p7_pipeline_MPISend(pli, 0, HMMER_PIPELINE_TAG, MPI_COMM_WORLD,  &mpi_buf, &mpi_size);
-
-      p7_pipeline_Destroy(pli);
-      p7_tophits_Destroy(th);
-      p7_oprofile_Destroy(om);
-      p7_profile_Destroy(gm);
-      p7_hmm_Destroy(hmm);
-
-      hstatus = p7_hmmfile_Read(hfp, &abc, &hmm);
-    } /* end outer loop over query HMMs */
-
-  switch(hstatus)
-    {
-    case eslEOF:
-      /* do nothing */
-      break;
-    case eslEFORMAT:
-      mpi_failure("bad file format in HMM file %s", cfg->hmmfile);
-      break;
-    case eslEINCOMPAT:
-      mpi_failure("HMM file %s contains different alphabets", cfg->hmmfile);
-      break;
-    default:
-      mpi_failure("Unexpected error (%d) in reading HMMs from %s", hstatus, cfg->hmmfile);
-    }
-
-  status = 0;
-  MPI_Send(&status, 1, MPI_INT, 0, HMMER_TERMINATING_TAG, MPI_COMM_WORLD);
-
-  if (mpi_buf != NULL) free(mpi_buf);
-
-  p7_hmmfile_Close(hfp);
-  esl_sqfile_Close(dbfp);
-
-  p7_bg_Destroy(bg);
-  esl_sq_Destroy(dbsq);
-  esl_stopwatch_Destroy(w);
-
-  return eslOK;
-}
-#endif /*HAVE_MPI*/
 
 static int
 serial_loop(WORKER_INFO *info, ESL_SQFILE *dbfp, ESL_SQ_BLOCK  *orf_block)

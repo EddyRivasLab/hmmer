@@ -85,10 +85,10 @@ static ESL_OPTIONS searchOpts[] = {
   { "-Z",           eslARG_REAL,        FALSE, NULL, "x>0",   NULL,  NULL,  NULL,            "set # of comparisons done, for E-value calculation",          12 },
   { "--domZ",       eslARG_REAL,        FALSE, NULL, "x>0",   NULL,  NULL,  NULL,            "set # of significant seqs, for domain E-value calculation",   12 },
   { "--hmmdb",      eslARG_INT,         NULL,  NULL, "n>0",   NULL,  NULL,  "--seqdb",       "hmm database to search",                                      12 },
-  { "--nhmmscant",  eslARG_NONE,        NULL,  NULL, NULL,    NULL,  NULL,  "--seqdb",       "search hmm database with a 6 frame translated DNA sequence",  12 },
-  //{ "--phmmert",    eslARG_NONE,        NULL,  NULL, NULL,    NULL,  NULL,  "--hmmdb",       "search sequence database with a 6 frame translated DNA sequence",  12 },
   { "--seqdb",      eslARG_INT,         NULL,  NULL, "n>0",   NULL,  NULL,  "--hmmdb",       "protein database to search",                                  12 },
   { "--seqdb_ranges",eslARG_STRING,     NULL,  NULL,  NULL,   NULL, "--seqdb", NULL,         "range(s) of sequences within --seqdb that will be searched",  12 },
+  { "--nhmmscant",  eslARG_NONE,        NULL,  NULL, NULL,    NULL,  NULL,  "--seqdb",       "search hmm database with a 6 frame translated DNA sequence",  12 },
+  { "--phmmert",    eslARG_NONE,        NULL,  NULL, NULL,    NULL,  NULL,  NULL/*"--hmmdb"*/, "search sequence database with a 6 frame translated DNA sequence",  12 },
 
   /* name           type        default  env  range toggles reqs incomp  help                                          docgroup*/
   { "-c",         eslARG_INT,       "1", NULL, NULL, NULL,  NULL, "--seqdb",  "use alt genetic code of NCBI transl table <n>", 15 },
@@ -377,6 +377,10 @@ int main(int argc, char *argv[])
       if (esl_getopts_Reuse(go) != eslOK) p7_Die("Internal failure reusing options object");
       if (esl_opt_ProcessSpoof(go, opts) != eslOK) { 
         printf("Failed to parse options string: %s\n", go->errbuf);
+        continue;
+      }
+      if (esl_opt_IsUsed(go, "--phmmert")) {
+        printf("The translated search variant --phmmert is not currently implemented by the HMMER daemon\n");
         continue;
       }
       if (esl_opt_VerifyConfig(go) != eslOK) { 

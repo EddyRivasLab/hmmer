@@ -1459,8 +1459,6 @@ clientside_loop(CLIENTSIDE_ARGS *data)
 
     if (*ptr == '>') {
       /* try to parse the input buffer as a FASTA sequence */
-//      if (esl_opt_IsUsed(opts, "--nhmmscant") ||
-//          esl_opt_IsUsed(opts, "--phmmert")) {
       if (esl_opt_IsUsed(opts, "--nhmmscant")) {
         abcDNA = esl_alphabet_Create(eslDNA);
         seq = esl_sq_CreateDigital(abcDNA);
