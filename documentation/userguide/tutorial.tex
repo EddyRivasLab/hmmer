@@ -70,7 +70,7 @@ In rough order of importance, the 18 HMMER programs are:
 database\\
 \monob{nhmmer}      & search DNA query against DNA sequence database\\
 \monob{nhmmscan}    & search DNA sequence against a DNA profile database\\
-\monob{phmmert}     & search protein profile(s) against DNA sequence database\\
+\monob{hmmsearcht}     & search protein profile(s) against DNA sequence database\\
 \monob{nhmmscant}   & search DNA sequence against a protein profile database\\
 \monob{hmmfetch}    & retrieve profile(s) from a profile file \\
 \monob{hmmstat}     & show summary statistics for a profile file \\
@@ -102,12 +102,12 @@ sequences with DNA sequences/profiles. \mono{nhmmscan} is the equivalent of
 DNA profile database.
 \marginnote{\mono{nhmmer} and \mono{nhmmscan} were added in HMMER3.1.}
 
-\mono{phmmert} is analagous to \mono{hmmsearch} and \mono{nhmmer},
+\mono{hmmsearcht} is analagous to \mono{hmmsearch} and \mono{nhmmer},
 but searches long, chromosome-size target DNA
 sequences with proten profile(s).  \mono{nhmmscant} is the equivalent of
 \mono{hmmscan} and \mono{nhmmscan}, capable of using chromosome-size DNA
 sequences as a query into a protein profile database.
-\marginnote{\mono{phmmert} and \mono{nhmmscant} were added in HMMER3.3??.}
+\marginnote{\mono{hmmsearcht} and \mono{nhmmscant} were added in HMMER3.3??.}
 
 
 
@@ -1317,14 +1317,14 @@ nucleotide substitutions, and accounts for relationships between
 amino acids that may be missed in a less subtle nucleotide comparison. 
 
 Translated search in HMMER is performed with two tools. The tool 
-\mono{phmmert} is used to compare one or more protein profiles to a 
+\mono{hmmsearcht} is used to compare one or more protein profiles to a 
 nucleotide target database (e.g. a file of chromosomes), and is 
 analgous to \mono{nhmmer} and \mono{hmmsearch}. The tool 
 \mono{nhmmscant} is used to compare one or more nucleotide 
 sequences to a database of protein profiles (e.g. Pfam), and is 
 analgous to \mono{nhmmcan} and \mono{hmmscan}.
 
-Here, we'll go through the \mono{hmmbuild}/\mono{phmmert} example in
+Here, we'll go through the \mono{hmmbuild}/\mono{hmmsearcht} example in
 some detail.
 
 \subsection{Step 1: build a profile with \mono{hmmbuild}}
@@ -1345,20 +1345,20 @@ This is exactly the same as Step 1 in the section entitled
 (see that section for more details). Here we present the highlights.
 
 
-\subsection{Step 2: search the DNA sequence database with phmmert}
+\subsection{Step 2: search the DNA sequence database with hmmsearcht}
 
 We'll use \mono{dna\_pkinase\_target.fa} as the target sequence
 database. It is a FASTA format file containing one 5Kb long DNA
 sequence extracted from human chromosome 22.
 
-\mono{phmmert} accepts a target DNA sequence database in the same
+\mono{hmmsearcht} accepts a target DNA sequence database in the same
 formats as \mono{hmmsearch} (typically FASTA). For the query, it accepts
 a protein profile file as produced above by hmmbuild.
 
 To search \mono{dna\_pkinase\_target.fa} with our \mono{Pkinase.hmm} profile:
 
    \vspace{1ex}
-   \user{\% phmmert Pkinase.hmm dna\_pkinase\_target.fa}
+   \user{\% hmmsearcht Pkinase.hmm dna\_pkinase\_target.fa}
    \vspace{1ex}
 
 This output is largely similar to that of \mono{hmmsearch}. The key
@@ -1376,7 +1376,7 @@ The second section is the \emph{top hits} list. It is a list
 of ranked top hits (sorted by E-value, most significant hit first),
 formatted much like the \mono{hmmsearch} output \emph{top hits} list:
 
-   \xsreoutput{inclusions/phmmert-pkinase.out}
+   \xsreoutput{inclusions/hmmsearcht-pkinase.out}
    
 For each hit, the table shows its \emph{E-value}, \emph{bit score},
 \emph{bias}, \emph{target sequence name} and \emph{target sequence
@@ -1385,7 +1385,7 @@ For each hit, the table shows its \emph{E-value}, \emph{bit score},
 The ``start'' and ``end'' columns are the coordinates in the nucleotide
 sequence where the ORF containing the hit is found. When the ``end'' is smaller
 than ``start'', this means the ORF is found on the reverse complement of the
-target database sequence.\marginnote{\mono{phmmert} automatically
+target database sequence.\marginnote{\mono{hmmsearcht} automatically
   searches both strands.}
    
 In the third output section, for each hit in the top hits list, there 
@@ -1393,7 +1393,7 @@ is a table providing detailed information about the hit, with a line for
 each infered domain, followed by the alignment(s) inferred for the hit. 
 The \mono{Pkinase} hit looks like:
    
-   \xsreoutput{inclusions/phmmert-pkinase.out2}
+   \xsreoutput{inclusions/hmmsearcht-pkinase.out2}
 
 All these pieces of information are as described for \mono{hmmsearch}. 
 
@@ -1402,7 +1402,7 @@ is computed within each domain's envelope and displayed. For example,
 Pkinase domain 1 in the \monob{dna\_pkinase\_target.fa} 
 output is shown as:
 
-      \xsreoutput{inclusions/phmmert-pkinase.out3}
+      \xsreoutput{inclusions/hmmsearcht-pkinase.out3}
       
 This largely agrees with the output from \mono{hmmsearch}, though 
 the alignment is spread out to accommodate the codons in the
@@ -1426,13 +1426,13 @@ Finally, at the bottom of the file, you'll see some summary statistics. For
 example, at the bottom of the Pkinase search output, you'll find something
 like:
       
-   \xsreoutput{inclusions/phmmert-pkinase.out4}
+   \xsreoutput{inclusions/hmmsearcht-pkinase.out4}
 
 These are similar to the summary statistics from \mono{hmmsearch}, 
 with the number of sequences matching each stage being simply the
 number of ORFs passing each stage.
 
-\mono{nhmmscant} is to \mono{hmmscan} as \mono{phmmert} is to
+\mono{nhmmscant} is to \mono{hmmscan} as \mono{hmmsearcht} is to
 \mono{hmmsearch}.  There is not currently a iterative translated
 search (protein\textendash{}DNA) analog to \mono{jackhmmer}.
 

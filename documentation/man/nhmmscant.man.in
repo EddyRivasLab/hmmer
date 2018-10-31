@@ -199,7 +199,7 @@ round.
 In 
 .BR nhmmscant ,
 which does not have any alignment output (like 
-.BR phmmert ) 
+.BR hmmsearcht ) 
 nor any iterative search steps (like 
 .BR jackhmmer ),
 inclusion thresholds have little effect. They only affect what domains

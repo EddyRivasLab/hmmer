@@ -88,7 +88,7 @@ static ESL_OPTIONS searchOpts[] = {
   { "--seqdb",      eslARG_INT,         NULL,  NULL, "n>0",   NULL,  NULL,  "--hmmdb",       "protein database to search",                                  12 },
   { "--seqdb_ranges",eslARG_STRING,     NULL,  NULL,  NULL,   NULL, "--seqdb", NULL,         "range(s) of sequences within --seqdb that will be searched",  12 },
   { "--nhmmscant",  eslARG_NONE,        NULL,  NULL, NULL,    NULL,  NULL,  "--seqdb",       "search hmm database with a 6 frame translated DNA sequence",  12 },
-  { "--phmmert",    eslARG_NONE,        NULL,  NULL, NULL,    NULL,  NULL,  NULL/*"--hmmdb"*/, "search sequence database with a 6 frame translated DNA sequence",  12 },
+  { "--hmmsearcht",    eslARG_NONE,        NULL,  NULL, NULL,    NULL,  NULL,  NULL/*"--hmmdb"*/, "search sequence database with a 6 frame translated DNA sequence",  12 },
 
   /* name           type        default  env  range toggles reqs incomp  help                                          docgroup*/
   { "-c",         eslARG_INT,       "1", NULL, NULL, NULL,  NULL, "--seqdb",  "use alt genetic code of NCBI transl table <n>", 15 },
@@ -379,8 +379,8 @@ int main(int argc, char *argv[])
         printf("Failed to parse options string: %s\n", go->errbuf);
         continue;
       }
-      if (esl_opt_IsUsed(go, "--phmmert")) {
-        printf("The translated search variant --phmmert is not currently implemented by the HMMER daemon\n");
+      if (esl_opt_IsUsed(go, "--hmmsearcht")) {
+        printf("The translated search variant --hmmsearcht is not currently implemented by the HMMER daemon\n");
         continue;
       }
       if (esl_opt_VerifyConfig(go) != eslOK) { 

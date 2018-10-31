@@ -1,4 +1,4 @@
-/* phmmert: search profile HMM(s) against a sequence database.
+/* hmmsearcht: search profile HMM(s) against a sequence database.
  *
  */
 #include "p7_config.h"
@@ -16,7 +16,7 @@
 #include "esl_sqio.h"
 #include "esl_stopwatch.h"
 
-/* for phmmert */
+/* for hmmsearcht */
 #include "esl_gencode.h"
 
 #ifdef HMMER_THREADS
@@ -56,12 +56,12 @@ static ESL_OPTIONS options[] = {
   { "-A",           eslARG_OUTFILE, NULL, NULL, NULL,    NULL,  NULL,  NULL,            "save multiple alignment of all hits to file <f>",              2 },
   { "--tblout",     eslARG_OUTFILE, NULL, NULL, NULL,    NULL,  NULL,  NULL,            "save parseable table of per-sequence hits to file <f>",        2 },
   { "--domtblout",  eslARG_OUTFILE, NULL, NULL, NULL,    NULL,  NULL,  NULL,            "save parseable table of per-domain hits to file <f>",          2 },
-  { "--pfamtblout", eslARG_OUTFILE, NULL, NULL, NULL,    NULL,  NULL,  NULL,            "save table of hits and domains to file, in Pfam format <f>",  99 }, /* not for phmmert */
+  { "--pfamtblout", eslARG_OUTFILE, NULL, NULL, NULL,    NULL,  NULL,  NULL,            "save table of hits and domains to file, in Pfam format <f>",  99 }, /* not for hmmsearcht */
   //{ "--aliscoresout", eslARG_OUTFILE, NULL,NULL,NULL,    NULL,  NULL,  NULL,              "save scores for each position in each alignment to <f>",       2 },
   { "--acc",        eslARG_NONE,   FALSE, NULL, NULL,    NULL,  NULL,  NULL,            "prefer accessions over names in output",                       2 },
   { "--noali",      eslARG_NONE,   FALSE, NULL, NULL,    NULL,  NULL,  NULL,            "don't output alignments, so output is smaller",                2 },
-  { "--notrans",    eslARG_NONE,   FALSE, NULL, NULL,    NULL,  NULL,  NULL,            "don't show the translated DNA sequence in domain alignment",   2 }, /*for phmmert */
-  { "--vertcodon",  eslARG_NONE,   FALSE,  NULL, NULL,   NULL,  NULL,  NULL,            "show the DNA codon vertically in domain alignment",            2 }, /*for phmmert */
+  { "--notrans",    eslARG_NONE,   FALSE, NULL, NULL,    NULL,  NULL,  NULL,            "don't show the translated DNA sequence in domain alignment",   2 }, /*for hmmsearcht */
+  { "--vertcodon",  eslARG_NONE,   FALSE,  NULL, NULL,   NULL,  NULL,  NULL,            "show the DNA codon vertically in domain alignment",            2 }, /*for hmmsearcht */
   { "--notextw",    eslARG_NONE,    NULL, NULL, NULL,    NULL,  NULL, "--textw",        "unlimit ASCII text output line width",                         2 },
   { "--textw",      eslARG_INT,    "120", NULL, "n>=120",NULL,  NULL, "--notextw",      "set max width of ASCII text output lines",                     2 },
   /* Control of reporting thresholds */
@@ -340,7 +340,7 @@ do_sq_by_sequences(ESL_GENCODE *gcode, ESL_GENCODE_WORKSTATE *wrk, ESL_SQ *sq)
 }
 
 /* serial_master()
- * The serial version of phmmert.
+ * The serial version of hmmsearcht.
  * For each query HMM in <hmmfile> search the database for hits.
  * 
  * A master can only return if it's successful. All errors are handled
@@ -384,7 +384,7 @@ serial_master(ESL_GETOPTS *go, struct cfg_s *cfg)
 #endif
   char             errbuf[eslERRBUFSIZE];
 
-  /* phmmert */
+  /* hmmsearcht */
   P7_TOPHITS       *tophits_accumulator = NULL; /* to hold the top hits information from all 6 frame translations */
   P7_PIPELINE      *pipelinehits_accumulator = NULL; /* to hold the pipeline hit information from all 6 frame translations */
   ESL_ALPHABET    *abcDNA = NULL;       /* DNA sequence alphabet                               */
@@ -394,7 +394,7 @@ serial_master(ESL_GETOPTS *go, struct cfg_s *cfg)
   int             n_targetseqs = 0;
   ESL_GENCODE     *gcode       = NULL;
   ESL_GENCODE_WORKSTATE *wrk    = NULL;
-  /* end phmmert */
+  /* end hmmsearcht */
 
   w = esl_stopwatch_Create();
 
@@ -462,7 +462,7 @@ serial_master(ESL_GETOPTS *go, struct cfg_s *cfg)
 
   /* <abc> is not known 'til first HMM is read. */
   hstatus = p7_hmmfile_Read(hfp, &abc, &hmm);
-  if (abc->type != eslAMINO) p7_Fail("phmmert only supports amino acid HMMs; %s uses a different alphabet", cfg->hmmfile); 
+  if (abc->type != eslAMINO) p7_Fail("hmmsearcht only supports amino acid HMMs; %s uses a different alphabet", cfg->hmmfile);
 
   if (hstatus == eslOK)
     {
@@ -688,9 +688,9 @@ serial_master(ESL_GETOPTS *go, struct cfg_s *cfg)
 
   /* Terminate outputs... any last words?
    */
-  if (tblfp)    p7_tophits_TabularTail(tblfp,    "phmmert", p7_SEARCH_SEQS, cfg->hmmfile, cfg->dbfile, go);
-  if (domtblfp) p7_tophits_TabularTail(domtblfp, "phmmert", p7_SEARCH_SEQS, cfg->hmmfile, cfg->dbfile, go);
-  if (pfamtblfp) p7_tophits_TabularTail(pfamtblfp,"phmmert", p7_SEARCH_SEQS, cfg->hmmfile, cfg->dbfile, go);
+  if (tblfp)    p7_tophits_TabularTail(tblfp,    "hmmsearcht", p7_SEARCH_SEQS, cfg->hmmfile, cfg->dbfile, go);
+  if (domtblfp) p7_tophits_TabularTail(domtblfp, "hmmsearcht", p7_SEARCH_SEQS, cfg->hmmfile, cfg->dbfile, go);
+  if (pfamtblfp) p7_tophits_TabularTail(pfamtblfp,"hmmsearcht", p7_SEARCH_SEQS, cfg->hmmfile, cfg->dbfile, go);
   if (ofp)      { if (fprintf(ofp, "[ok]\n") < 0) ESL_EXCEPTION_SYS(eslEWRITE, "write failed"); }
 
   /* Cleanup - prepare for exit

@@ -629,7 +629,7 @@ def nhmmer_made1(deffp):
 
 
 
-def phmmert_pkinase(deffp):
+def hmmsearcht_pkinase(deffp):
     print('running hmmbuild Pkinase.hmm Pkinase.sto')
 
     r = subprocess.run('hmmbuild Pkinase.hmm Pkinase.sto',
@@ -641,27 +641,27 @@ def phmmert_pkinase(deffp):
 
 
 
-    print('running phmmert Pkinase.hmm dna_pkinase_target.fa')
+    print('running hmmsearcht Pkinase.hmm dna_pkinase_target.fa')
 
-    r = subprocess.run('phmmert Pkinase.hmm dna_pkinase_target.fa',
+    r = subprocess.run('hmmsearcht Pkinase.hmm dna_pkinase_target.fa',
                        shell=True, stdout=subprocess.PIPE, check=True, encoding='utf-8',
                        env={"PATH": "{0}/src".format(top_builddir)})
 
     m = re.search(r'\n(\s*E-value\s*score.+\n(?:.+\n){2})', r.stdout)
-    with open('phmmert-pkinase.out', 'w') as f:
+    with open('hmmsearcht-pkinase.out', 'w') as f:
         print(m.group(1), file=f, end='')
     
 
     m = re.search('\n(>> humanchr22_frag.+\n(.+\n){3})', r.stdout)  
-    with open('phmmert-pkinase.out2', 'w') as f:
+    with open('hmmsearcht-pkinase.out2', 'w') as f:
         print(m.group(1), file=f, end='')
     
     m = re.search(r'\n(  ==\s+domain\s+1(?s:.+?) PP\s*)\n', r.stdout)
-    with open('phmmert-pkinase.out3', 'w') as f:
+    with open('hmmsearcht-pkinase.out3', 'w') as f:
         print(m.group(1), file=f, end='')
 
     m = re.search(r'(Internal pipeline statistics summary:(?s:.+\n)+)', r.stdout)
-    with open('phmmert-pkinase.out4', 'w') as f:
+    with open('hmmsearcht-pkinase.out4', 'w') as f:
         print(m.group(1), file=f, end='')
 
 
@@ -680,7 +680,7 @@ with open("inclusions.def", "w") as deffp:
     hmmalign_globins()
     hmmbuild_made1()
     nhmmer_made1(deffp)
-    phmmert_pkinase(deffp)
+    hmmsearcht_pkinase(deffp)
 
 
 for fname in [ 'relnotes.txt', 'uniprot_sprot.fasta',

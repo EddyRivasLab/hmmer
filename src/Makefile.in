@@ -62,7 +62,7 @@ PROGS = alimask\
 	hmmstat\
 	jackhmmer\
 	phmmer\
-	phmmert\
+	hmmsearcht\
 	nhmmer\
 	nhmmscan\
 	nhmmscant\
@@ -89,7 +89,7 @@ PROGOBJS =\
 	hmmstat.o\
 	jackhmmer.o\
 	phmmer.o\
-	phmmert.o\
+	hmmsearcht.o\
 	nhmmer.o\
 	nhmmscan.o\
 	nhmmscant.o\

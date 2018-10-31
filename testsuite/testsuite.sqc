@@ -381,48 +381,48 @@
 1 exercise  nhmmscant/--watson      @src/nhmmscant@  --watson                   !testsuite/2OG-FeII_Oxy_3.hmm! %TESTDB%
 1 exercise  nhmmscant/--crick       @src/nhmmscant@  --crick                    !testsuite/2OG-FeII_Oxy_3.hmm! %TESTDB%
 
-# phmmert    xxxxxxxxxxxxxxxxxxxx
+# hmmsearcht    xxxxxxxxxxxxxxxxxxxx
 1 prep      press                   @src/hmmpress@  -f                          !testsuite/2OG-FeII_Oxy_3.hmm!
 1 prep      makedb                  @src/hmmemit@   --seed 35 -N 10             !testsuite/2OG-FeII_Oxy_3-nt.hmm!  > %TESTDB%
-1 exercise  phmmert                 @src/phmmert@                               !testsuite/2OG-FeII_Oxy_3.hmm! %TESTDB%
-1 exercise  phmmert/-h              @src/phmmert@  -h
-1 exercise  phmmert/-o              @src/phmmert@  -o           %phmmert.out%  !testsuite/2OG-FeII_Oxy_3.hmm! %TESTDB%
-1 exercise  phmmert/-A              @src/phmmert@  -A           %phmmertmsa.out%  !testsuite/2OG-FeII_Oxy_3.hmm! %TESTDB%
-1 exercise  phmmert/--tblout        @src/phmmert@  --tblout     %phmmert.tbl%  !testsuite/2OG-FeII_Oxy_3.hmm! %TESTDB%
-1 exercise  phmmert/--domtblout     @src/phmmert@  --domtblout  %phmmert.dtbl%  !testsuite/2OG-FeII_Oxy_3.hmm! %TESTDB%
-1 exercise  phmmert/--acc           @src/phmmert@  --acc                        !testsuite/2OG-FeII_Oxy_3.hmm! %TESTDB%
-1 exercise  phmmert/--noali         @src/phmmert@  --noali                      !testsuite/2OG-FeII_Oxy_3.hmm! %TESTDB%
-1 exercise  phmmert/--notrans       @src/phmmert@  --notrans                    !testsuite/2OG-FeII_Oxy_3.hmm! %TESTDB%
-1 exercise  phmmert/--vertcodon     @src/phmmert@  --vertcodon                  !testsuite/2OG-FeII_Oxy_3.hmm! %TESTDB%
-1 exercise  phmmert/--notextw       @src/phmmert@  --notextw                    !testsuite/2OG-FeII_Oxy_3.hmm! %TESTDB%
-1 exercise  phmmert/--textw         @src/phmmert@  --textw 256                  !testsuite/2OG-FeII_Oxy_3.hmm! %TESTDB%
-1 exercise  phmmert/-E              @src/phmmert@  -E 0.01                      !testsuite/2OG-FeII_Oxy_3.hmm! %TESTDB%
-1 exercise  phmmert/-T              @src/phmmert@  -T 20                        !testsuite/2OG-FeII_Oxy_3.hmm! %TESTDB%
-1 exercise  phmmert/--domE          @src/phmmert@  --domE 0.01                  !testsuite/2OG-FeII_Oxy_3.hmm! %TESTDB%
-1 exercise  phmmert/--domT          @src/phmmert@  --domT 20                    !testsuite/2OG-FeII_Oxy_3.hmm! %TESTDB%
-1 exercise  phmmert/--incE          @src/phmmert@  --incE 0.01                  !testsuite/2OG-FeII_Oxy_3.hmm! %TESTDB%
-1 exercise  phmmert/--incT          @src/phmmert@  --incT 20                    !testsuite/2OG-FeII_Oxy_3.hmm! %TESTDB%
-1 exercise  phmmert/--incdomE       @src/phmmert@  --incdomE 0.01               !testsuite/2OG-FeII_Oxy_3.hmm! %TESTDB%
-1 exercise  phmmert/--incdomT       @src/phmmert@  --incdomT 20                 !testsuite/2OG-FeII_Oxy_3.hmm! %TESTDB%
-1 exercise  phmmert/--cut_ga        @src/phmmert@  --cut_ga                     !testsuite/2OG-FeII_Oxy_3.hmm! %TESTDB%
-1 exercise  phmmert/--cut_nc        @src/phmmert@  --cut_nc                     !testsuite/2OG-FeII_Oxy_3.hmm! %TESTDB%
-1 exercise  phmmert/--cut_tc        @src/phmmert@  --cut_tc                     !testsuite/2OG-FeII_Oxy_3.hmm! %TESTDB%
-1 exercise  phmmert/--max           @src/phmmert@  --max                        !testsuite/2OG-FeII_Oxy_3.hmm! %TESTDB%
-1 exercise  phmmert/--F1            @src/phmmert@  --F1 0.03                    !testsuite/2OG-FeII_Oxy_3.hmm! %TESTDB%
-1 exercise  phmmert/--F2            @src/phmmert@  --F2 0.002                   !testsuite/2OG-FeII_Oxy_3.hmm! %TESTDB%
-1 exercise  phmmert/--F3            @src/phmmert@  --F3 0.0002                  !testsuite/2OG-FeII_Oxy_3.hmm! %TESTDB%
-1 exercise  phmmert/--nobias        @src/phmmert@  --nobias                     !testsuite/2OG-FeII_Oxy_3.hmm! %TESTDB%
-1 exercise  phmmert/--nonull2       @src/phmmert@  --nonull2                    !testsuite/2OG-FeII_Oxy_3.hmm! %TESTDB%
-1 exercise  phmmert/-Z              @src/phmmert@  -Z 45000000                  !testsuite/2OG-FeII_Oxy_3.hmm! %TESTDB%
-1 exercise  phmmert/--seed          @src/phmmert@  --seed 42                    !testsuite/2OG-FeII_Oxy_3.hmm! %TESTDB%
-1 exercise  phmmert/--tformat       @src/phmmert@  --tformat fasta              !testsuite/2OG-FeII_Oxy_3.hmm! %TESTDB%
-1 exercise  phmmert/-c              @src/phmmert@  -c 5                         !testsuite/2OG-FeII_Oxy_3.hmm! %TESTDB%
-1 exercise  phmmert/-l              @src/phmmert@  -l -95                          !testsuite/2OG-FeII_Oxy_3.hmm! %TESTDB%
-1 exercise  phmmert/-m              @src/phmmert@  -m                           !testsuite/2OG-FeII_Oxy_3.hmm! %TESTDB%
-1 exercise  phmmert/-M              @src/phmmert@  -M                           !testsuite/2OG-FeII_Oxy_3.hmm! %TESTDB%
-1 exercise  phmmert/--informat      @src/phmmert@  --informat    fasta          !testsuite/2OG-FeII_Oxy_3.hmm! %TESTDB%
-1 exercise  phmmert/--watson        @src/phmmert@  --watson                     !testsuite/2OG-FeII_Oxy_3.hmm! %TESTDB%
-1 exercise  phmmert/--crick         @src/phmmert@  --crick                      !testsuite/2OG-FeII_Oxy_3.hmm! %TESTDB%
+1 exercise  hmmsearcht                 @src/hmmsearcht@                               !testsuite/2OG-FeII_Oxy_3.hmm! %TESTDB%
+1 exercise  hmmsearcht/-h              @src/hmmsearcht@  -h
+1 exercise  hmmsearcht/-o              @src/hmmsearcht@  -o           %hmmsearcht.out%  !testsuite/2OG-FeII_Oxy_3.hmm! %TESTDB%
+1 exercise  hmmsearcht/-A              @src/hmmsearcht@  -A           %hmmsearchtmsa.out%  !testsuite/2OG-FeII_Oxy_3.hmm! %TESTDB%
+1 exercise  hmmsearcht/--tblout        @src/hmmsearcht@  --tblout     %hmmsearcht.tbl%  !testsuite/2OG-FeII_Oxy_3.hmm! %TESTDB%
+1 exercise  hmmsearcht/--domtblout     @src/hmmsearcht@  --domtblout  %hmmsearcht.dtbl%  !testsuite/2OG-FeII_Oxy_3.hmm! %TESTDB%
+1 exercise  hmmsearcht/--acc           @src/hmmsearcht@  --acc                        !testsuite/2OG-FeII_Oxy_3.hmm! %TESTDB%
+1 exercise  hmmsearcht/--noali         @src/hmmsearcht@  --noali                      !testsuite/2OG-FeII_Oxy_3.hmm! %TESTDB%
+1 exercise  hmmsearcht/--notrans       @src/hmmsearcht@  --notrans                    !testsuite/2OG-FeII_Oxy_3.hmm! %TESTDB%
+1 exercise  hmmsearcht/--vertcodon     @src/hmmsearcht@  --vertcodon                  !testsuite/2OG-FeII_Oxy_3.hmm! %TESTDB%
+1 exercise  hmmsearcht/--notextw       @src/hmmsearcht@  --notextw                    !testsuite/2OG-FeII_Oxy_3.hmm! %TESTDB%
+1 exercise  hmmsearcht/--textw         @src/hmmsearcht@  --textw 256                  !testsuite/2OG-FeII_Oxy_3.hmm! %TESTDB%
+1 exercise  hmmsearcht/-E              @src/hmmsearcht@  -E 0.01                      !testsuite/2OG-FeII_Oxy_3.hmm! %TESTDB%
+1 exercise  hmmsearcht/-T              @src/hmmsearcht@  -T 20                        !testsuite/2OG-FeII_Oxy_3.hmm! %TESTDB%
+1 exercise  hmmsearcht/--domE          @src/hmmsearcht@  --domE 0.01                  !testsuite/2OG-FeII_Oxy_3.hmm! %TESTDB%
+1 exercise  hmmsearcht/--domT          @src/hmmsearcht@  --domT 20                    !testsuite/2OG-FeII_Oxy_3.hmm! %TESTDB%
+1 exercise  hmmsearcht/--incE          @src/hmmsearcht@  --incE 0.01                  !testsuite/2OG-FeII_Oxy_3.hmm! %TESTDB%
+1 exercise  hmmsearcht/--incT          @src/hmmsearcht@  --incT 20                    !testsuite/2OG-FeII_Oxy_3.hmm! %TESTDB%
+1 exercise  hmmsearcht/--incdomE       @src/hmmsearcht@  --incdomE 0.01               !testsuite/2OG-FeII_Oxy_3.hmm! %TESTDB%
+1 exercise  hmmsearcht/--incdomT       @src/hmmsearcht@  --incdomT 20                 !testsuite/2OG-FeII_Oxy_3.hmm! %TESTDB%
+1 exercise  hmmsearcht/--cut_ga        @src/hmmsearcht@  --cut_ga                     !testsuite/2OG-FeII_Oxy_3.hmm! %TESTDB%
+1 exercise  hmmsearcht/--cut_nc        @src/hmmsearcht@  --cut_nc                     !testsuite/2OG-FeII_Oxy_3.hmm! %TESTDB%
+1 exercise  hmmsearcht/--cut_tc        @src/hmmsearcht@  --cut_tc                     !testsuite/2OG-FeII_Oxy_3.hmm! %TESTDB%
+1 exercise  hmmsearcht/--max           @src/hmmsearcht@  --max                        !testsuite/2OG-FeII_Oxy_3.hmm! %TESTDB%
+1 exercise  hmmsearcht/--F1            @src/hmmsearcht@  --F1 0.03                    !testsuite/2OG-FeII_Oxy_3.hmm! %TESTDB%
+1 exercise  hmmsearcht/--F2            @src/hmmsearcht@  --F2 0.002                   !testsuite/2OG-FeII_Oxy_3.hmm! %TESTDB%
+1 exercise  hmmsearcht/--F3            @src/hmmsearcht@  --F3 0.0002                  !testsuite/2OG-FeII_Oxy_3.hmm! %TESTDB%
+1 exercise  hmmsearcht/--nobias        @src/hmmsearcht@  --nobias                     !testsuite/2OG-FeII_Oxy_3.hmm! %TESTDB%
+1 exercise  hmmsearcht/--nonull2       @src/hmmsearcht@  --nonull2                    !testsuite/2OG-FeII_Oxy_3.hmm! %TESTDB%
+1 exercise  hmmsearcht/-Z              @src/hmmsearcht@  -Z 45000000                  !testsuite/2OG-FeII_Oxy_3.hmm! %TESTDB%
+1 exercise  hmmsearcht/--seed          @src/hmmsearcht@  --seed 42                    !testsuite/2OG-FeII_Oxy_3.hmm! %TESTDB%
+1 exercise  hmmsearcht/--tformat       @src/hmmsearcht@  --tformat fasta              !testsuite/2OG-FeII_Oxy_3.hmm! %TESTDB%
+1 exercise  hmmsearcht/-c              @src/hmmsearcht@  -c 5                         !testsuite/2OG-FeII_Oxy_3.hmm! %TESTDB%
+1 exercise  hmmsearcht/-l              @src/hmmsearcht@  -l -95                          !testsuite/2OG-FeII_Oxy_3.hmm! %TESTDB%
+1 exercise  hmmsearcht/-m              @src/hmmsearcht@  -m                           !testsuite/2OG-FeII_Oxy_3.hmm! %TESTDB%
+1 exercise  hmmsearcht/-M              @src/hmmsearcht@  -M                           !testsuite/2OG-FeII_Oxy_3.hmm! %TESTDB%
+1 exercise  hmmsearcht/--informat      @src/hmmsearcht@  --informat    fasta          !testsuite/2OG-FeII_Oxy_3.hmm! %TESTDB%
+1 exercise  hmmsearcht/--watson        @src/hmmsearcht@  --watson                     !testsuite/2OG-FeII_Oxy_3.hmm! %TESTDB%
+1 exercise  hmmsearcht/--crick         @src/hmmsearcht@  --crick                      !testsuite/2OG-FeII_Oxy_3.hmm! %TESTDB%
 
 # hmmemit   xxxxxxxxxxxxxxxxxxxx
 1 exercise  hmmemit              @src/hmmemit@                !testsuite/Caudal_act.hmm!

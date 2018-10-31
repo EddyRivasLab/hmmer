@@ -46,7 +46,7 @@ MANPAGES = \
 	nhmmer.man      \
 	nhmmscan.man    \
 	nhmmscant.man   \
-	phmmert.man     \
+	hmmsearcht.man  \
 	phmmer.man      
 
 # ./configure puts Easel .man pages in ${top_builddir}/easel/miniapps

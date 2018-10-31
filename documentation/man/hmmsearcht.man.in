@@ -1,11 +1,11 @@
-.TH "phmmert" 1 "@HMMER_DATE@" "HMMER @HMMER_VERSION@" "HMMER Manual"
+.TH "hmmsearcht" 1 "@HMMER_DATE@" "HMMER @HMMER_VERSION@" "HMMER Manual"
 
 .SH NAME
-phmmert - search protein profile(s) against a DNA sequence database
+hmmsearcht - search protein profile(s) against a DNA sequence database
 
 
 .SH SYNOPSIS
-.B phmmert
+.B hmmsearcht
 .I [options]
 .I <hmmfile>
 .I <seqdb>
@@ -14,7 +14,7 @@ phmmert - search protein profile(s) against a DNA sequence database
 .SH DESCRIPTION
 
 .PP
-.B phmmert 
+.B hmmsearcht 
 is used to search one or more protein profiles against a DNA sequence database.
 For each profile in 
 .IR <hmmfile> ,

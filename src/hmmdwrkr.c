@@ -188,7 +188,7 @@ worker_process(ESL_GETOPTS *go)
           {
               query = process_QueryCmd(cmd, &env);
 
-//              if (esl_opt_IsUsed(query->opts, "--phmmert")) {
+//              if (esl_opt_IsUsed(query->opts, "--hmmsearcht")) {
 //	          process_TranslatedSearchCmd(cmd, &env, query);
 //              }
 //              else {
@@ -259,7 +259,7 @@ process_TranslatedSearchCmd(HMMD_COMMAND *cmd, WORKER_ENV *env, QUEUE_DATA *quer
  
 
   if (query->cmd_type == HMMD_CMD_SEARCH) {
-    LOG_FATAL_MSG("ERROR: phmmert option is not implemented", EPERM);
+    LOG_FATAL_MSG("ERROR: hmmsearcht option is not implemented", EPERM);
     return;
   }
 
