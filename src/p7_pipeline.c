@@ -822,6 +822,23 @@ p7_Pipeline(P7_PIPELINE *pli, P7_OPROFILE *om, P7_BG *bg, const ESL_SQ *sq, cons
   if (pli->ddef->nenvelopes == 0) return eslOK; /* rarer: region was found, stochastic clustered, no envelopes found */
   if (pli->ddef->ndom       == 0) return eslOK; /* even rarer: envelope found, no domain identified {iss131}         */
 
+  if (ntsq != NULL)  // translated search, protein query, nucleotide target
+  {
+     P7_DOMAIN  *dom    = NULL;
+     int        removed = 0;
+     for (d = 0; d < pli->ddef->ndom; d++)
+     {
+       dom = pli->ddef->dcl + d;
+       int ali_len = dom->jali - dom->iali + 1;
+       if (ali_len < 4) { // anything less than this is a funny byproduct of the Forward score passing a very low threshold, but no reliable alignment existing that supports it
+         p7_alidisplay_Destroy(dom->ad);
+         removed++;
+       }
+     }
+     pli->ddef->ndom -= removed;
+  }
+
+
   if (pli->do_alignment_score_calc) {
     for (d = 0; d < pli->ddef->ndom; d++)
       p7_pli_computeAliScores(pli->ddef->dcl + d, sq->dsq, data, om->abc->Kp);
@@ -995,50 +1012,7 @@ p7_Pipeline(P7_PIPELINE *pli, P7_OPROFILE *om, P7_BG *bg, const ESL_SQ *sq, cons
       if (ntsq != NULL)
       {
          hit->target_len = ntsq->n;
-#if 0
-         for (d = 0; d < hit->ndom; d++)
-         {
-            if (pli->mode == p7_SEARCH_SEQS)
-              {
-                sq_from = hit->dcl[d].ad->hmmfrom;
-                sq_to = hit->dcl[d].ad->hmmto;
-                printf("search set from hmmi\n");
-              }
-            else
-              {
-                sq_from = hit->dcl[d].ad->sqfrom;
-                sq_to = hit->dcl[d].ad->sqto;
-                printf("scan set form ad->\n");
-              }
 
-            printf("sq from:%ld sq to:%ld\n",sq_from, sq_to); //DEBUG !!!!!!
-            printf("start:%ld end:%ld\n",sq->start, sq->end); //DEBUG !!!!!!
-
-            if (sq->start < sq->end)
-            {				
-               hit->dcl[d].iorf       = sq->start;
-               hit->dcl[d].jorf       = sq->end;
-               hit->dcl[d].ienv       = (hit->dcl[d].ienv*3-2) + sq->start-1;
-               hit->dcl[d].jenv       = (hit->dcl[d].jenv*3) + sq->start-1;			
-               hit->dcl[d].ad->sqfrom = (sq_from*3-2) + sq->start-1;
-               hit->dcl[d].ad->sqto   = (sq_to*3) + sq->start-1;
-            }
-            else
-            {
-               hit->dcl[d].iorf       = sq->start;
-               hit->dcl[d].jorf       = sq->end;
-			
-               hit->dcl[d].ienv       = sq->start - (hit->dcl[d].ienv - 1)*3;
-               hit->dcl[d].jenv       = sq->start - (hit->dcl[d].jenv - 1)*3 - 2;			
-
-               hit->dcl[d].ad->sqfrom = sq->start - (sq_from -1)*3;
-               hit->dcl[d].ad->sqto   = sq->start - (sq_to -1)*3 - 2;				
-            }
-
-            printf("ad sq from:%ld ad sq to:%ld\n",hit->dcl[d].ad->sqfrom, hit->dcl[d].ad->sqto); //DEBUG !!!!!!
-         }		
-#endif
-//#if 0
          for (d = 0; d < hit->ndom; d++)
          {
             if (sq->start < sq->end)
@@ -1062,7 +1036,6 @@ p7_Pipeline(P7_PIPELINE *pli, P7_OPROFILE *om, P7_BG *bg, const ESL_SQ *sq, cons
                hit->dcl[d].ad->sqto   = sq->start - (hit->dcl[d].ad->sqto -1)*3 - 2;				
             }
          }		
-//#endif
       }
 	  
     }
