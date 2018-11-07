@@ -321,8 +321,6 @@ process_search(WORKERSIDE_ARGS *args, QUEUE_DATA_SHARD *query)
   int inx;
   int ready_workers;    /* counter variable used to track the number of workers currently available to receive work; short for "remaining", I imagine */
   int tries;
-  int i;
-
 
   memset(&results, 0, sizeof(SEARCH_RESULTS)); /* avoid valgrind bitching about uninit bytes; remove, if we ever serialize structs properly */
 
@@ -2090,19 +2088,16 @@ workerside_thread(void *arg)
 static void *
 worker_comm_thread(void *arg)
 {
-  int                  n, i, j;
+  WORKERSIDE_ARGS     *data  = (WORKERSIDE_ARGS *)arg;
+  WORKER_DATA         *worker;
+  int                  n, i;
   int                  fd;
   int                  addrlen;
   pthread_t            thread_id;
-
   struct sockaddr_in   addr;
-
-  WORKERSIDE_ARGS     *data  = (WORKERSIDE_ARGS *)arg;
-  WORKER_DATA         *worker, *dead_worker;
-  int new_worker_shard;
+  int                  new_worker_shard;
 
   for ( ;; ) {
-
     /* Wait for a worker to connect */
     n = sizeof(addr);
     if ((fd = accept(data->sock_fd, (struct sockaddr *)&addr, (unsigned int *)&n)) < 0) LOG_FATAL_MSG("accept", errno);
