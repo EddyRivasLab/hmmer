@@ -58,6 +58,9 @@ output_header(FILE *ofp, const ESL_GETOPTS *go)
      }
   }
 
+  /* SRE TODO: The line below shows up as a duplicate because p7_banner() was called above.
+   * These options aren't being handled right, and arguably don't belong in hmmstat.
+   */
   if (fprintf(ofp, "# - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -\n\n")                                                   < 0) ESL_EXCEPTION_SYS(eslEWRITE, "write failed");
   return eslOK;
 }
