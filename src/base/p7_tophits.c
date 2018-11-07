@@ -173,7 +173,7 @@ p7_tophits_CreateNextHit(P7_TOPHITS *h, P7_HIT **ret_hit)
 static int
 hit_sorter_by_sortkey(const void *vh1, const void *vh2)
 {
-  P7_HIT *h1 = *((P7_HIT **) vh1);  /* don't ask. don't change. Don't Panic. */
+  P7_HIT *h1 = *((P7_HIT **) vh1);  
   P7_HIT *h2 = *((P7_HIT **) vh2);
   int     c;
 
@@ -186,15 +186,18 @@ hit_sorter_by_sortkey(const void *vh1, const void *vh2)
     int dir1 = (h1->dcl[0].ia < h1->dcl[0].ib ? 1 : -1);
     int dir2 = (h2->dcl[0].ia < h2->dcl[0].ib ? 1 : -1);
     if (dir1 != dir2) return dir2; // so if dir1 is pos (1), and dir2 is neg (-1), this will return -1, placing h1 before h2;  otherwise, vice versa
-    else              return (h1->dcl[0].ia > h2->dcl[0].ia ? 1 : -1 );
-
+    else {
+      if     (h1->dcl[0].ia > h2->dcl[0].ia) return  1; 
+      else if(h1->dcl[0].ia < h2->dcl[0].ia) return -1; 
+      else                                   return  0;
+    }
   }
 }
 
 static int
 hit_sorter_by_seqidx_aliposition(const void *vh1, const void *vh2)
 {
-  P7_HIT *h1 = *((P7_HIT **) vh1);  /* don't ask. don't change. Don't Panic. */
+  P7_HIT *h1 = *((P7_HIT **) vh1);  
   P7_HIT *h2 = *((P7_HIT **) vh2);
 
   if      (h1->seqidx > h2->seqidx) return  1; /* first key, seq_idx (unique id for sequences), low to high */
@@ -205,14 +208,17 @@ hit_sorter_by_seqidx_aliposition(const void *vh1, const void *vh2)
 
   if (dir1 != dir2) return dir2; // so if dir1 is pos (1), and dir2 is neg (-1), this will return -1, placing h1 before h2;  otherwise, vice versa
 
-  if ( h1->dcl[0].ia == h2->dcl[0].ia)    return  (h1->dcl[0].ib < h2->dcl[0].ib ? 1 : -1 );
-  else                                        return  (h1->dcl[0].ia > h2->dcl[0].ia ? 1 : -1 );
+  if      (h1->dcl[0].ia > h2->dcl[0].ia) return  1; 
+  else if (h1->dcl[0].ia < h2->dcl[0].ia) return -1;
+  else if (h1->dcl[0].ib < h2->dcl[0].ib) return  1; 
+  else if (h1->dcl[0].ib > h2->dcl[0].ib) return -1; 
+  return  0;
 }
 
 static int
 hit_sorter_by_modelname_aliposition(const void *vh1, const void *vh2)
 {
-  P7_HIT *h1 = *((P7_HIT **) vh1);  /* don't ask. don't change. Don't Panic. */
+  P7_HIT *h1 = *((P7_HIT **) vh1);  
   P7_HIT *h2 = *((P7_HIT **) vh2);
 
   int res = esl_strcmp( h1->name, h2->name);
@@ -225,8 +231,11 @@ hit_sorter_by_modelname_aliposition(const void *vh1, const void *vh2)
 
   if (dir1 != dir2) return dir2; // so if dir1 is pos (1), and dir2 is neg (-1), this will return -1, placing h1 before h2;  otherwise, vice versa
 
-  if ( h1->dcl[0].ia == h2->dcl[0].ia)    return  (h1->dcl[0].ib < h2->dcl[0].ib ? 1 : -1 );
-  else                                        return  (h1->dcl[0].ia > h2->dcl[0].ia ? 1 : -1 );
+  if      (h1->dcl[0].ia > h2->dcl[0].ia) return  1; 
+  else if (h1->dcl[0].ia < h2->dcl[0].ia) return -1;
+  else if (h1->dcl[0].ib < h2->dcl[0].ib) return  1; 
+  else if (h1->dcl[0].ib > h2->dcl[0].ib) return -1; 
+  return  0;
 }
 
 

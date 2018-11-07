@@ -23,8 +23,8 @@ sort_seq(const void *p1, const void *p2)
 {
   int cmp;
 
-  cmp  = (((HMMER_SEQ *)p1)->idx < ((HMMER_SEQ *)p2)->idx);
-  cmp -= (((HMMER_SEQ *)p1)->idx > ((HMMER_SEQ *)p2)->idx);
+  cmp  = (((HMMER_SEQ *)p1)->idx < ((HMMER_SEQ *)p2)->idx);  // as in hmmdmstr.c::hit_sorter(), this is Farrar trickery.
+  cmp -= (((HMMER_SEQ *)p1)->idx > ((HMMER_SEQ *)p2)->idx);  // it correctly returns 0 if p1's idx == p2's.
 
   return cmp;
 }
