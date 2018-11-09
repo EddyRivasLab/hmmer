@@ -600,6 +600,7 @@ AC_CONFIG_FILES([ \
 # HMMER_VERSION, HMMER_DATE, HMMER_COPYRIGHT
 AC_CONFIG_FILES([ \
   documentation/userguide/titlepage.tex  \
+  documentation/userguide/titlepage_daemon.tex  \
   documentation/userguide/copyright.tex  \
   ])
 
@@ -615,6 +616,7 @@ AC_CONFIG_FILES([ \
   documentation/man/hmmfetch.man    \
   documentation/man/hmmlogo.man     \
   documentation/man/hmmpgmd.man     \
+  documentation/man/hmmpgmd_shard.man     \
   documentation/man/hmmpress.man    \
   documentation/man/hmmscan.man     \
   documentation/man/hmmsearch.man   \

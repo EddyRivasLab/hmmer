@@ -28,6 +28,7 @@ MANS =  hmmer\
 	hmmfetch\
 	hmmlogo\
 	hmmpgmd\
+	hmmpgmd_shard\
 	hmmpress\
 	hmmscan\
 	hmmsearch\
