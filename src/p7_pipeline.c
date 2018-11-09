@@ -825,7 +825,6 @@ p7_Pipeline(P7_PIPELINE *pli, P7_OPROFILE *om, P7_BG *bg, const ESL_SQ *sq, cons
   if (ntsq != NULL)  // translated search, protein query, nucleotide target
   {
      P7_DOMAIN  *dom    = NULL;
-     int        removed = 0;
      for (d = 0; d < pli->ddef->ndom; d++)
      {
        dom = pli->ddef->dcl + d;
