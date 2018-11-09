@@ -26,6 +26,15 @@ INSTALL       = @INSTALL@
 RMAN          = rman
 RMANPROCESS   = ${top_srcdir}/easel/devkit/rmanprocess.py
 
+# beautification magic stolen from git
+QUIET_SUBDIR0 = +${MAKE} -C #space separator after -c
+QUIET_SUBDIR1 = 
+ifndef V
+	QUIET_SUBDIR0 = +@subdir=
+	QUIET_SUBDIR1 = ; echo '    ' SUBDIR $$subdir; \
+		        ${MAKE} -s -C $$subdir
+endif
+
 # ./configure puts HMMER .man pages in ${top_builddir}/documentation/man
 MANPAGES = \
 	alimask.man     \
@@ -130,6 +139,7 @@ manpages:
 	done
 
 clean:
+	${QUIET_SUBDIR0}inclusions   ${QUIET_SUBDIR1} clean
 	-rm -f latex.log
 	-rm -f main.aux main.bbl main.blg main.log main.toc main.brf main.out x.log *~
 ifndef V
@@ -138,6 +148,7 @@ endif
 
 
 distclean: clean
+	${QUIET_SUBDIR0}inclusions   ${QUIET_SUBDIR1} distclean
 	if test "x${srcdir}" != "x."; then \
 	   for texfile in ${TEXFILES}; do \
 	      rm -f $$texfile ;\

@@ -1429,7 +1429,7 @@ extern double p7_MeanMatchEntropy        (const P7_HMM *hmm);
 extern double p7_MeanMatchRelativeEntropy(const P7_HMM *hmm, const P7_BG *bg);
 extern double p7_MeanForwardScore        (const P7_HMM *hmm, const P7_BG *bg);
 extern int    p7_MeanPositionRelativeEntropy(const P7_HMM *hmm, const P7_BG *bg, double *ret_entropy);
-extern int    p7_hmm_CompositionKLDist(P7_HMM *hmm, P7_BG *bg, float *ret_KL, float **opt_avp);
+extern int    p7_hmm_CompositionKLD(const P7_HMM *hmm, const P7_BG *bg, float *ret_KL, float **opt_avp);
 
 
 /* mpisupport.c */
