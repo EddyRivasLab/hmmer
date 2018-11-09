@@ -665,17 +665,17 @@ p7_alidisplay_Print(FILE *fp, P7_ALIDISPLAY *ad, int min_aliwidth, int linewidth
 	/* if there is a target sequence then we must be calling from nhmmscant to print the target sequence in the domain alignment display */
 	if( ad->ntseq == NULL)
    {	   
-      if ((status = p7_nontranslated_alidisplay_Print(fp, ad, min_aliwidth, linewidth, pli->show_accessions)) != eslOK) return status;
+      if ((status = p7_alidisplay_nontranslated_Print(fp, ad, min_aliwidth, linewidth, pli->show_accessions)) != eslOK) return status;
    }
    else
    {
-      if ((status = p7_translated_alidisplay_Print(fp, ad, min_aliwidth, linewidth, pli)) != eslOK) return status;
+      if ((status = p7_alidisplay_translated_Print(fp, ad, min_aliwidth, linewidth, pli)) != eslOK) return status;
    }
 
 	return status;
 }
 
-/* Function:  p7_translated_alidisplay_Print()
+/* Function:  p7_alidisplay_translated_Print()
  * Synopsis:  Human readable output of <P7_ALIDISPLAY> for nhmmscant
  *
  * Purpose:   Prints alignment <ad> to stream <fp>.
@@ -696,7 +696,7 @@ p7_alidisplay_Print(FILE *fp, P7_ALIDISPLAY *ad, int min_aliwidth, int linewidth
  * Throws:    <eslEWRITE> on write error, such as filling the disk.
  */
 int
-p7_translated_alidisplay_Print(FILE *fp, P7_ALIDISPLAY *ad, int min_aliwidth, int linewidth, P7_PIPELINE *pli)
+p7_alidisplay_translated_Print(FILE *fp, P7_ALIDISPLAY *ad, int min_aliwidth, int linewidth, P7_PIPELINE *pli)
 {
   char *buf          = NULL;
   char *show_hmmname = NULL;
@@ -946,7 +946,7 @@ p7_translated_alidisplay_Print(FILE *fp, P7_ALIDISPLAY *ad, int min_aliwidth, in
  * Throws:    <eslEWRITE> on write error, such as filling the disk.
  */
 int
-p7_nontranslated_alidisplay_Print(FILE *fp, P7_ALIDISPLAY *ad, int min_aliwidth, int linewidth, int show_accessions)
+p7_alidisplay_nontranslated_Print(FILE *fp, P7_ALIDISPLAY *ad, int min_aliwidth, int linewidth, int show_accessions)
 {
   char *buf          = NULL;
   char *show_hmmname = NULL;
