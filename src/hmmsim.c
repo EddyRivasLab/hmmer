@@ -634,7 +634,7 @@ process_workunit(ESL_GETOPTS *go, struct cfg_s *cfg, char *errbuf, P7_HMM *hmm, 
       float *p = NULL;
       float  KL;
 
-      p7_hmm_CompositionKLDist(hmm, cfg->bg, &KL, &p);
+      p7_hmm_CompositionKLD(hmm, cfg->bg, &KL, &p);
       esl_vec_FCopy(p, cfg->abc->K, cfg->bg->f);
     }
 

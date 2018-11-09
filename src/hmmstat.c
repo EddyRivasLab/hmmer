@@ -211,7 +211,7 @@ main(int argc, char **argv)
       if (bg == NULL) bg = p7_bg_Create(abc);
 
       p7_MeanPositionRelativeEntropy(hmm, bg, &x); 
-      p7_hmm_CompositionKLDist(hmm, bg, &KL, NULL);
+      p7_hmm_CompositionKLD(hmm, bg, &KL, NULL);
 
       printf("%-6d %-20s %-12s %8d %8.2f %6d %6.2f %6.2f %6.2f %6.2f",
 	     nhmm,
