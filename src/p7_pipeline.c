@@ -825,17 +825,13 @@ p7_Pipeline(P7_PIPELINE *pli, P7_OPROFILE *om, P7_BG *bg, const ESL_SQ *sq, cons
   if (ntsq != NULL)  // translated search, protein query, nucleotide target
   {
      P7_DOMAIN  *dom    = NULL;
-     int        removed = 0;
      for (d = 0; d < pli->ddef->ndom; d++)
      {
        dom = pli->ddef->dcl + d;
        int ali_len = dom->jali - dom->iali + 1;
-       if (ali_len < 4) { // anything less than this is a funny byproduct of the Forward score passing a very low threshold, but no reliable alignment existing that supports it
-         p7_alidisplay_Destroy(dom->ad);
-         removed++;
-       }
+       if (ali_len < 4)  // anything less than this is a funny byproduct of the Forward score passing a very low threshold, but no reliable alignment existing that supports it
+         dom->is_reported = FALSE;
      }
-     pli->ddef->ndom -= removed;
   }
 
 
