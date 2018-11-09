@@ -30,6 +30,7 @@
 #
 # Options:
 #    -t, --tutupdate : update tutorial files from Pfam, UniProt
+#        --noclean   : don't clean up the files it generates
 
 
 import sys
@@ -43,6 +44,7 @@ import argparse
 #
 parser = argparse.ArgumentParser(description='generate .tex inclusions for user guide')
 parser.add_argument('-t', '--tutupdate', action='store_true')
+parser.add_argument(      '--noclean',   action='store_true')
 parser.add_argument('top_builddir', nargs='?', default='../../..')
 parser.add_argument('top_srcdir',   nargs='?', default='../../..')
 args         = parser.parse_args()
@@ -535,6 +537,21 @@ def hmmscan_sevenless():
         print(m.group(1), file=f, end='')
 
 
+
+
+def hmmstat_minifam():
+    print('running hmmstat minifam...')
+
+    r = subprocess.run('hmmstat minifam',  
+                       shell=True, stdout=subprocess.PIPE, check=True, encoding='utf-8',
+                       env={"PATH": "{0}/src".format(top_builddir)})
+    with open('hmmstat-minifam.out', 'w') as f:
+        print(r.stdout, file=f, end='')
+   
+
+
+
+
 def hmmalign_globins():
     print('running hmmalign globins4.hmm globins45.fa...')
 
@@ -571,6 +588,8 @@ def hmmbuild_made1():
     content = re.sub(r'(MADE1 \(MAriner Derived Element 1\), a TcMar-Mariner).+\n', r'\1 ...\n', r.stdout)
     with open('hmmbuild-made1.out', 'w') as f:
         print(content, file=f, end='')
+
+
 
 def nhmmer_made1(deffp):
     print('running nhmmer MADE1.hmm dna_target.fa')
@@ -639,15 +658,15 @@ with open("inclusions.def", "w") as deffp:
     sevenless_table()
     jackhmmer_hbb_uniprot(deffp)
     hmmscan_sevenless()
+    hmmstat_minifam()
     hmmalign_globins()
     hmmbuild_made1()
     nhmmer_made1(deffp)
 
-
-for fname in [ 'relnotes.txt', 'uniprot_sprot.fasta',
-               'fn3.hmm', 'globins4.hmm', 'Pkinase.hmm', 'MADE1.hmm',
-               'minifam', 'minifam.h3f',  'minifam.h3i', 'minifam.h3m', 'minifam.h3p'
-             ]:
-    if os.path.exists(fname): os.remove(fname)
-for fname in tutorial_files:
-    if os.path.exists(fname): os.remove(fname)
+if not args.noclean:
+    for fname in [ 'relnotes.txt', 'uniprot_sprot.fasta',
+                   'fn3.hmm', 'globins4.hmm', 'Pkinase.hmm', 'MADE1.hmm',
+                   'minifam', 'minifam.h3f',  'minifam.h3i', 'minifam.h3m', 'minifam.h3p' ]:
+        if os.path.exists(fname): os.remove(fname)
+    for fname in tutorial_files:
+        if os.path.exists(fname): os.remove(fname)

@@ -31,7 +31,7 @@ The columns are:
 
 .TP
 .B idx
-The index of this profile, numbering each on in the file starting from 1.
+The index of this profile, numbering each profile in the file starting from 1.
 
 .TP
 .B name
@@ -79,8 +79,9 @@ per model consensus position.
 
 .TP
 .B compKL
-Kullback-Leibler distance between the model's overall average
-residue composition and the default background frequency distribution.
+Kullback-Leibler divergence from
+the default background frequency distribution to
+the average composition of the profile's consensus match states, in bits.
 The higher this number, the more biased the residue composition of the
 profile is. Highly biased profiles can slow the HMMER3 acceleration
 pipeline, by causing too many nonhomologous sequences to pass the filters.

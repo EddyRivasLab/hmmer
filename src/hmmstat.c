@@ -9,7 +9,6 @@
 
 #include "easel.h"
 #include "esl_getopts.h"
-#include "esl_exponential.h"
 
 #include "hmmer.h"
 

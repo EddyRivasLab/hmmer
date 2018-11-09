@@ -1,5 +1,5 @@
 # hmmbuild :: profile HMM construction from multiple sequence alignments
-# HMMER 3.2.1 (June 2018); http://hmmer.org/
+# HMMER 3.3dev (November 2018); http://hmmer.org/
 # Copyright (C) 2018 Howard Hughes Medical Institute.
 # Freely distributed under the BSD open source license.
 # - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
@@ -11,4 +11,4 @@
 #---- -------------------- ----- ----- ----- ----- -------- ------ -----------
 1     MADE1                  100   304    80   474     3.58  0.708 MADE1 (MAriner Derived Element 1), a TcMar-Mariner ...
 
-# CPU time: 0.01u 0.00s 00:00:00.01 Elapsed: 00:00:00.01
+# CPU time: 0.06u 0.01s 00:00:00.06 Elapsed: 00:00:00.07

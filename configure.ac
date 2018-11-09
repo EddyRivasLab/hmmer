@@ -577,15 +577,16 @@ AC_SYS_LARGEFILE
 
 # HMMER Makefiles.
 AC_CONFIG_FILES([ \
-  Makefile                          \
-  src/Makefile                      \
-  testsuite/Makefile                \
-  profmark/Makefile                 \
-  src/impl_${impl_choice}/Makefile  \
-  documentation/Makefile            \
-  documentation/man/Makefile        \
-  documentation/userguide/Makefile  \
-  libdivsufsort/Makefile            \
+  Makefile                                     \
+  src/Makefile                                 \
+  testsuite/Makefile                           \
+  profmark/Makefile                            \
+  src/impl_${impl_choice}/Makefile             \
+  documentation/Makefile                       \
+  documentation/man/Makefile                   \
+  documentation/userguide/Makefile             \
+  documentation/userguide/inclusions/Makefile  \
+  libdivsufsort/Makefile                       \
   ])
 
 # Easel Makefiles.
