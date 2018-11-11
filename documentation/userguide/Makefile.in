@@ -45,6 +45,7 @@ MANPAGES = \
 	hmmfetch.man    \
 	hmmlogo.man     \
 	hmmpgmd.man     \
+	hmmpgmd_shard.man \
 	hmmpress.man    \
 	hmmscan.man     \
 	hmmsearch.man   \
@@ -84,6 +85,7 @@ EASEL_MANPAGES = \
 TEXFILES =\
 	ack.tex          \
 	copyright.tex    \
+	daemon.tex       \
 	formats.tex      \
 	glossary.tex     \
 	install.tex      \
@@ -93,11 +95,12 @@ TEXFILES =\
 	pipeline.tex     \
 	tabular.tex      \
 	titlepage.tex    \
+	titlepage_daemon.tex \
 	tutorial.tex
 
 .PHONY: pdf manpages clean distclean TAGS
 
-pdf:    Userguide.pdf
+pdf:    Userguide.pdf Daemon_userguide.pdf
 
 # We add ${srcdir} to TEXINPUTS, etc so we can build userguide in a build tree, with input files in source tree.
 Userguide.pdf: manpages ${TEXFILES}
@@ -110,6 +113,17 @@ Userguide.pdf: manpages ${TEXFILES}
 	@TEXINPUTS=${TEXINPUTS}:${srcdir} pdflatex main                                >> latex.log 2>&1 
 	@TEXINPUTS=${TEXINPUTS}:${srcdir} pdflatex main                                >> latex.log 2>&1 
 	@mv main.pdf Userguide.pdf
+
+Daemon_userguide.pdf: manpages ${TEXFILES}
+	@for prog in pdflatex bibtex; do \
+	  command -v $$prog >/dev/null 2>&1 || { echo >&2 "$$prog is required to build Userguide, but it's not installed. Aborting."; exit 1; } \
+	done
+	@echo "     LATEX Daemon_userguide.pdf  (see latex.log for output)"
+	@TEXINPUTS=${TEXINPUTS}:${srcdir} pdflatex daemon                                >  latex.log 2>&1 
+	@BIBINPUTS=${BIBINPUTS}:${srcdir} BSTINPUTS=${BSTINPUTS}:${srcdir} bibtex main >> latex.log 2>&1 
+	@TEXINPUTS=${TEXINPUTS}:${srcdir} pdflatex daemon                                >> latex.log 2>&1 
+	@TEXINPUTS=${TEXINPUTS}:${srcdir} pdflatex daemon                                >> latex.log 2>&1 
+	@mv daemon.pdf Daemon_userguide.pdf
 
 # manpages: convert man pages to LaTeX chapter in User Guide.
 #    uses PolyglotMan 3.2 "rman", and rmanprocess.py script in easel's devkit

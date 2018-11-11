@@ -1,0 +1,46 @@
+\documentclass[notoc]{tufte-book}    % `notoc` suppresses TL custom TOC, reverts to standard LaTeX
+
+\hyphenation{HMMER}
+
+\input{titlepage_daemon}                    % definitions for \maketitle 
+\bibliographystyle{unsrtnat-brief}   % customized natbib unsrtnat. Abbrev 3+ authors to ``et al.'' 
+
+\begin{document}
+\setcounter{tocdepth}{2}             % 0=chapters 1=sections 2=subsections 3=subsubsections? 4=paragraphs
+\input{inclusions/inclusions.def}    % snippets captured from output, by gen-inclusions.py 
+
+\maketitle
+
+\input{copyright}
+
+\begin{adjustwidth}{}{-1in}          % TL \textwidth is quite narrow. Expand it manually for TOC and man pages.
+\tableofcontents                     
+\end{adjustwidth}
+
+In addition to command-line homology search tools such as hmmsearch, hmmscan, and phmmer, the HMMER package provides {\em hmmpgmd}, a tool that allows a set of computers to provide a high-performance homology search service that client machines can send searches to and receive results from using internet sockets.  Unlike HMMER's command-line search tools, which read their sequence or HMM databases from disk on every search, hmmpgmd reads its input database(s) once when it starts and caches them in RAM for the duration of its execution.  This avoids the performance bottleneck created by disk I/O bandwidth and the time required to parse input data files, allowing hmmpgmd to take full advantage of many-core CPUs and multi-CPU servers.  Distributing the work of each search across multiple computers further improves performance, allowing many searches to be completed in only a few seconds.
+
+This manual describes the design implementation, and usage of hmmpgmd.  It assumes that the reader is familiar with HMMER and homology search in general; readers unfamiliar with those topics should read the {\em HMMER User's Guide} first.  This manual is intended for individuals who are interested in either running an hmmpgmd server of their own or in writing clients that communicate with an existing hmmpgmd server, and thus assumes a fair amount of familiarity with computer systems and programming.  Biologists who wish to use an hmmpgmd server in their research without the complexity of configuring one themselves should consider using the European Bioinformatics Institute's HMMER server {\tt www.ebi.ac.uk/Tools/hmmer/}, which provides a web interface to hmmpgmd servers that load a number of common genetic databases.
+ 
+
+\chapter{Overview}
+
+
+\chapter{Usage}
+
+\chapter{Design}
+\input{ack}
+\label{manualend}
+
+% To create distributable/gitted 'distilled.bib' from lab's bibtex dbs:
+%   # uncomment the {master,lab,books}
+%   pdflatex main
+%   bibdistill main.aux > distilled.bib
+%   # restore the {distilled} 
+% 
+\nobibliography{distilled}
+%\nobibliography{master,lab,books}
+
+\end{document}
+
+
+
