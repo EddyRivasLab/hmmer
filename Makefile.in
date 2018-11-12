@@ -128,7 +128,7 @@ pdf:
 #          building packages.
 #
 #          Does not use quiet beautification magic; always verbose.
-install: 
+install: all
 	${INSTALL} -d ${DESTDIR}${bindir}
 	${INSTALL} -d ${DESTDIR}${man1dir}
 	${MAKE} -C src install
