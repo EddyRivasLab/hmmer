@@ -319,7 +319,7 @@ p7_seqcache_Open_shard(char *seqfile, P7_SEQCACHE **ret_cache, char *errbuf, int
   int32_t            db_inx[32];
   uint32_t           db_key;
 
-  // uint64_t           res_cnt;
+  uint64_t           res_cnt;
   uint64_t           res_size;
   uint64_t           hdr_size;
 
@@ -364,8 +364,7 @@ p7_seqcache_Open_shard(char *seqfile, P7_SEQCACHE **ret_cache, char *errbuf, int
   if (buffer[0] != '#')                                 return eslEFORMAT;
 
   ptr = buffer + 1;
-  //res_cnt = strtoll(ptr, &ptr, 10);
-  strtoll(ptr, &ptr, 10);   // SRE: res_cnt is unused, but we still have to advance <ptr>.
+  res_cnt = strtoll(ptr, &ptr, 10);
   seq_cnt = strtol(ptr, &ptr, 10);
   db_cnt  = strtol(ptr, &ptr, 10);
 
