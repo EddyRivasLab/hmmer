@@ -404,10 +404,9 @@ p7_seqcache_Open_shard(char *seqfile, P7_SEQCACHE **ret_cache, char *errbuf, int
   strcpy(cache->id, ptr);
   while (--i > 0 && isspace(cache->id[i])) cache->id[i] = 0;
 
-  res_size = 1024;  //tiny value to force many reallocs during testing
-  //res_size = (res_cnt + seq_cnt + 1)/num_shards;  // starting guesses about how much memory we'll need
-  //hdr_size = (seq_cnt * 10) / num_shards; // starting guesses about how much memory we'll need
-  hdr_size = 100;  // For testing to force many realocs
+  res_size = (res_cnt + seq_cnt + 1)/num_shards;  // starting guesses about how much memory we'll need
+  hdr_size = (seq_cnt * 10) / num_shards; // starting guesses about how much memory we'll need
+
  // total_mem += res_size + hdr_size;    (we'll update this later, once we know how much memory we're really using)
   ESL_ALLOC(cache->residue_mem, res_size);
   ESL_ALLOC(cache->header_mem, hdr_size);
