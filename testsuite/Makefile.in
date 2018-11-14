@@ -4,7 +4,8 @@ VPATH          = @srcdir@
 
 SQCLEVEL = 2
 
-ESLDIR = @HMMER_ESLDIR@
+ESLDIR  = @HMMER_ESLDIR@
+PYTHON3 = @PYTHON3@
 
 ALIS = 	20aa\
 	Caudal_act\
@@ -34,6 +35,10 @@ endif
 .PHONY: check hmms clean distclean
 
 check: 
+	@if ! test ${PYTHON3}; then\
+	    echo "No python3 found. 'make check' self tests are disabled.";\
+	    exit 1;\
+	fi
 	@echo 
 	@echo Running HMMER test suite...
 	@echo
