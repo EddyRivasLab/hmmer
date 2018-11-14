@@ -697,12 +697,14 @@ if test ${PYTHON3}; then echo "
 Now do 'make'  to build HMMER, and optionally:
        'make check'  to run self tests,
        'make install'  to install programs and man pages,
-       '(cd easel; make install)'  to install Easel tools.";
+       '(cd easel; make install)'  to install Easel tools.
+";
 else echo "
    (No python3 found, so 'make check' self tests are disabled.)
 
 Now do 'make'  to build HMMER, and optionally:
        'make install'  to install programs and man pages,
-       '(cd easel; make install)'  to install Easel tools.";
+       '(cd easel; make install)'  to install Easel tools.
+";
 fi
 

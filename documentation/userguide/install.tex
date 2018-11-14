@@ -53,7 +53,13 @@ To compile:
   \user{\% make}
   \vspace{1ex}
 
-Optionally, to compile and run a test suite:
+Optionally, to compile and run a test suite:\sidenote{Our self test
+  suite uses Python3 scripts, in part. If you don't have
+  \mono{python3} in your environment, the \mono{./configure} step
+  detects that, and \mono{make check} gives you an error message.
+  If you then do something clever to get \mono{python3} into your
+  environment (\mono{module load python}, say, on one of our HPC
+  systems), you'll need to \mono{./configure} again.}
 
   \vspace{1ex}
   \user{\% make check}
@@ -220,10 +226,13 @@ your bets and install up-to-date versions of GNU command line tools
 such as GNU make and GNU grep.
 
 Running the test suite (and some of our development tools, if you
-delve deep into our codebase) requires Perl and Python to be
-installed.  If you don't have them (which should be rare), \mono{make
-  check} won't work for you, but that's ok because \mono{make} and
-\mono{make install} will still work fine.
+delve that deep into our codebase) requires \mono{perl} and
+\mono{python3}\sidenote{Specifically, our \mono{./configure} script
+  tests for you having a \mono{python3} command, for Python 3, in case
+  of mixed Python 2 versus 3 environments.}
+to be installed.  If you don't have them (which should be rare),
+\mono{make check} won't work for you, but that's ok because
+\mono{make} and \mono{make install} will still work fine.
 
 Compiling the user guide itself (this document) does require
 additional tools to be installed, including \mono{rman} and some extra
