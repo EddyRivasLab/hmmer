@@ -410,6 +410,14 @@ else
   AC_DEFINE(HAVE_GZIP, 1, [Support external gzip decompression])
 fi
 
+
+# We need python, specifically python3, for 'make check' and
+# some dev tools. Define @PYTHON3@ output variable to be the
+# path to python3, or the empty string.
+# 
+AC_PATH_PROG([PYTHON3], [python3])
+
+
 ################################################################
 # 6. Checks for libraries
 #################################################################
@@ -677,17 +685,24 @@ AC_OUTPUT
 echo "
 
 HMMER configuration:
-     compiler:             ${CC} ${CFLAGS} ${SSE_CFLAGS} ${VMX_CFLAGS} ${PTHREAD_CFLAGS} 
-     host:                 $host
-     linker:               ${LDFLAGS}
-     libraries:            ${LIBS} ${LIBGSL} ${PTHREAD_LIBS}
-     DP implementation:    ${impl_choice}
-
-Do 'make'  to build HMMER, and optionally:
-   'make check'  to run self tests,
-   'make install'  to install programs and man pages,
-   '(cd easel; make install)'  to install Easel tools.
-"
+   compiler:             ${CC} ${CFLAGS} ${SSE_CFLAGS} ${VMX_CFLAGS} ${PTHREAD_CFLAGS} 
+   host:                 $host
+   linker:               ${LDFLAGS}
+   libraries:            ${LIBS} ${LIBGSL} ${PTHREAD_LIBS}
+   DP implementation:    ${impl_choice}
+   python3:		 ${ac_cv_path_PYTHON3}"
 
 
+if test ${PYTHON3}; then echo "
+Now do 'make'  to build HMMER, and optionally:
+       'make check'  to run self tests,
+       'make install'  to install programs and man pages,
+       '(cd easel; make install)'  to install Easel tools.";
+else echo "
+   (No python3 found, so 'make check' self tests are disabled.)
+
+Now do 'make'  to build HMMER, and optionally:
+       'make install'  to install programs and man pages,
+       '(cd easel; make install)'  to install Easel tools.";
+fi
 
