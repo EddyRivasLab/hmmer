@@ -410,10 +410,10 @@ else
   AC_DEFINE(HAVE_GZIP, 1, [Support external gzip decompression])
 fi
 
-
 # We need python, specifically python3, for 'make check' and
-# some dev tools. Define @PYTHON3@ output variable to be the
-# path to python3, or the empty string.
+# some dev tools. Makefiles check for themselves, but we 
+# also check in ./configure, so we don't recommend
+# 'make check' to the user if they can't use it.
 # 
 AC_PATH_PROG([PYTHON3], [python3])
 
