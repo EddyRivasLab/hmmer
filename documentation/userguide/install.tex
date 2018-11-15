@@ -55,11 +55,9 @@ To compile:
 
 Optionally, to compile and run a test suite:\sidenote{Our self test
   suite uses Python3 scripts, in part. If you don't have
-  \mono{python3} in your environment, the \mono{./configure} step
-  detects that, and \mono{make check} gives you an error message.
-  If you then do something clever to get \mono{python3} into your
-  environment (\mono{module load python}, say, on one of our HPC
-  systems), you'll need to \mono{./configure} again.}
+  \mono{python3} in your environment, 
+  \mono{make check} gives you an error message. You can still build
+  and install HMMER just fine; you just can't run the test suite.}
 
   \vspace{1ex}
   \user{\% make check}
@@ -227,9 +225,9 @@ such as GNU make and GNU grep.
 
 Running the test suite (and some of our development tools, if you
 delve that deep into our codebase) requires \mono{perl} and
-\mono{python3}\sidenote{Specifically, our \mono{./configure} script
-  tests for you having a \mono{python3} command, for Python 3, in case
-  of mixed Python 2 versus 3 environments.}
+\mono{python3}\sidenote{Specifically, the self tests that \mono{make
+    check} runs require that you have \mono{python3} in your
+    \mono{PATH}, in case of mixed Python 2 versus 3 environments.}
 to be installed.  If you don't have them (which should be rare),
 \mono{make check} won't work for you, but that's ok because
 \mono{make} and \mono{make install} will still work fine.
