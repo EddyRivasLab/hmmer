@@ -142,6 +142,7 @@ clean:
 	${QUIET_SUBDIR0}inclusions   ${QUIET_SUBDIR1} clean
 	-rm -f latex.log
 	-rm -f main.aux main.bbl main.blg main.log main.toc main.brf main.out x.log *~
+	-rm -f daemon.aux daemon.log daemon.toc daemon.out
 ifndef V
 	@echo '     ' CLEAN userguide
 endif
@@ -155,6 +156,7 @@ distclean: clean
 	   done ;\
 	fi
 	-rm -f titlepage.tex copyright.tex manpages.tex easel_manpages.tex
+	-rm -f titlepage_daemon.tex
 	-rm -f Userguide.pdf
+	-rm -f Daemon_userguide.pdf
 	-rm -f Makefile
-
