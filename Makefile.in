@@ -57,7 +57,6 @@ CPPFLAGS  = @CPPFLAGS@
 AR        = @AR@ 
 RANLIB    = @RANLIB@
 INSTALL   = @INSTALL@
-PYTHON3   = @PYTHON3@
 
 # beautification magic stolen from git 
 #
@@ -100,10 +99,7 @@ tests:
 # check: Run test suites.
 #
 check:
-	@if ! test ${PYTHON3}; then\
-	    echo "No python3 found. 'make check' self tests are disabled.";\
-	    exit 1;\
-	fi
+	@command -v python3 >/dev/null 2>&1 || { echo >&2 "python3 is required for 'make check', but is not in your PATH. Aborting."; exit 1; }
 	${QUIET_SUBDIR0}${ESLDIR}  ${QUIET_SUBDIR1} tests
 	${QUIET_SUBDIR0}${SADIR}   ${QUIET_SUBDIR1} all	
 	${QUIET_SUBDIR0}src        ${QUIET_SUBDIR1} tests

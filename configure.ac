@@ -436,8 +436,9 @@ fi
 
 
 # We need python, specifically python3, for 'make check' and
-# some dev tools. Define @PYTHON3@ output variable to be the
-# path to python3, or the empty string.
+# some dev tools. Makefiles check for themselves, but we 
+# also check in ./configure, so we don't recommend
+# 'make check' to the user if they can't use it.
 # 
 AC_PATH_PROG([PYTHON3], [python3])
 
@@ -661,11 +662,13 @@ HMMER configuration:
 if test ${PYTHON3}; then echo "
 Now do 'make'  to build HMMER, and optionally:
        'make check'  to run self tests,
-       'make install'  to install programs and man pages.";
+       'make install'  to install programs and man pages.
+";
 else echo "
    (No python3 found, so 'make check' self tests are disabled.)
 
 Now do 'make'  to build HMMER, and optionally:
-       'make install'  to install programs and man pages.";
+       'make install'  to install programs and man pages.
+";
 fi
 
