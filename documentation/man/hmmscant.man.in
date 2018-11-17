@@ -1,11 +1,11 @@
-.TH "nhmmscant" 1 "@HMMER_DATE@" "HMMER @HMMER_VERSION@" "HMMER Manual"
+.TH "hmmscant" 1 "@HMMER_DATE@" "HMMER @HMMER_VERSION@" "HMMER Manual"
 
 .SH NAME
-nhmmscant - search DNA sequence(s) against a protein profile database
+hmmscant - search DNA sequence(s) against a protein profile database
 
 
 .SH SYNOPSIS
-.B nhmmscant
+.B hmmscant
 .I [options]
 .I <hmmfile>
 .I <seqdb>
@@ -14,7 +14,7 @@ nhmmscant - search DNA sequence(s) against a protein profile database
 .SH DESCRIPTION
 
 .PP
-.B nhmmscant 
+.B hmmscant 
 is used to search nucleotide sequences against collections 
 of protein profiles. For each sequence in 
 .IR seqfile ,
@@ -197,7 +197,7 @@ Inclusion thresholds control which hits are considered to be reliable
 enough to be included in an output alignment or a subsequent search
 round.
 In 
-.BR nhmmscant ,
+.BR hmmscant ,
 which does not have any alignment output (like 
 .BR hmmsearcht ) 
 nor any iterative search steps (like 
@@ -222,7 +222,7 @@ use a bit score of >=
 .I <x>
 as the per-target inclusion threshold.
 It would be unusual to use bit score thresholds with
-.IR nhmmscant ,
+.IR hmmscant ,
 because you don't expect a single score threshold to work for
 different profiles; different profiles have slightly different
 expected score distributions.
@@ -245,7 +245,7 @@ As with
 .B \-\-incT 
 above,
 it would be unusual to use a single bit score threshold in
-.BR nhmmscant .
+.BR hmmscant .
 
 
 

@@ -71,7 +71,7 @@ database\\
 \monob{nhmmer}      & search DNA query against DNA sequence database\\
 \monob{nhmmscan}    & search DNA sequence against a DNA profile database\\
 \monob{hmmsearcht}     & search protein profile(s) against DNA sequence database\\
-\monob{nhmmscant}   & search DNA sequence against a protein profile database\\
+\monob{hmmscant}   & search DNA sequence against a protein profile database\\
 \monob{hmmfetch}    & retrieve profile(s) from a profile file \\
 \monob{hmmstat}     & show summary statistics for a profile file \\
 \monob{hmmemit}     & generate (sample) sequences from a profile \\
@@ -104,10 +104,10 @@ DNA profile database.
 
 \mono{hmmsearcht} is analagous to \mono{hmmsearch} and \mono{nhmmer},
 but searches long, chromosome-size target DNA
-sequences with proten profile(s).  \mono{nhmmscant} is the equivalent of
+sequences with proten profile(s).  \mono{hmmscant} is the equivalent of
 \mono{hmmscan} and \mono{nhmmscan}, capable of using chromosome-size DNA
 sequences as a query into a protein profile database.
-\marginnote{\mono{hmmsearcht} and \mono{nhmmscant} were added in HMMER3.3??.}
+\marginnote{\mono{hmmsearcht} and \mono{hmmscant} were added in HMMER3.3??.}
 
 
 
@@ -1320,7 +1320,7 @@ Translated search in HMMER is performed with two tools. The tool
 \mono{hmmsearcht} is used to compare one or more protein profiles to a 
 nucleotide target database (e.g. a file of chromosomes), and is 
 analgous to \mono{nhmmer} and \mono{hmmsearch}. The tool 
-\mono{nhmmscant} is used to compare one or more nucleotide 
+\mono{hmmscant} is used to compare one or more nucleotide 
 sequences to a database of protein profiles (e.g. Pfam), and is 
 analgous to \mono{nhmmcan} and \mono{hmmscan}.
 
@@ -1432,7 +1432,7 @@ These are similar to the summary statistics from \mono{hmmsearch},
 with the number of sequences matching each stage being simply the
 number of ORFs passing each stage.
 
-\mono{nhmmscant} is to \mono{hmmscan} as \mono{hmmsearcht} is to
+\mono{hmmscant} is to \mono{hmmscan} as \mono{hmmsearcht} is to
 \mono{hmmsearch}.  There is not currently a iterative translated
 search (protein\textendash{}DNA) analog to \mono{jackhmmer}.
 
