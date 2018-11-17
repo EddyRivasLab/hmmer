@@ -32,7 +32,7 @@ typedef struct {
   ESL_WORK_QUEUE   *queue;
 #endif /*HMMER_THREADS*/
   P7_BG            *bg;	         /* null model                              */
-  ESL_SQ           *ntqsq;      /* query or target sequence; this is a DNA sequence in the case of nhmmscant */
+  ESL_SQ           *ntqsq;      /* query or target sequence; this is a DNA sequence in the case of hmmscant */
   P7_PIPELINE      *pli;         /* work pipeline                           */
   P7_TOPHITS       *th;          /* top hit results                         */
   P7_OPROFILE      *om;          /* optimized query profile                 */

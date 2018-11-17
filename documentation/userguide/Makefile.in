@@ -45,7 +45,7 @@ MANPAGES = \
 	makehmmerdb.man \
 	nhmmer.man      \
 	nhmmscan.man    \
-	nhmmscant.man   \
+	hmmscant.man   \
 	hmmsearcht.man  \
 	phmmer.man      
 

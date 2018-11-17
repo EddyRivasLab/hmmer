@@ -1,4 +1,4 @@
-/* nhmmscant: search sequence(s) against a profile HMM database
+/* hmmscant: search sequence(s) against a profile HMM database
  *
  */
 #include "p7_config.h"
@@ -14,7 +14,7 @@
 #include "esl_sqio.h"
 #include "esl_stopwatch.h"
 
-/* for nhmmscant */
+/* for hmmscant */
 #include "esl_gencode.h"
 
 #ifdef HMMER_THREADS
@@ -30,7 +30,7 @@ typedef struct {
   ESL_WORK_QUEUE   *queue;
 #endif /*HMMER_THREADS*/
   ESL_SQ           *qsq;
-  ESL_SQ           *ntqsq;      /* query or target sequence; this is a DNA sequence in the case of nhmmscant */
+  ESL_SQ           *ntqsq;      /* query or target sequence; this is a DNA sequence in the case of hmmscant */
   P7_BG            *bg;	         /* null model                              */
   P7_PIPELINE      *pli;         /* work pipeline                           */
   P7_TOPHITS       *th;          /* top hit results                         */
@@ -56,13 +56,13 @@ static ESL_OPTIONS options[] = {
   { "-o",           eslARG_OUTFILE, NULL, NULL, NULL,    NULL,  NULL,  NULL,            "direct output to file <f>, not stdout",                         2 },
   { "--tblout",     eslARG_OUTFILE, NULL, NULL, NULL,    NULL,  NULL,  NULL,            "save parseable table of per-sequence hits to file <f>",         2 },
   { "--domtblout",  eslARG_OUTFILE, NULL, NULL, NULL,    NULL,  NULL,  NULL,            "save parseable table of per-domain hits to file <f>",           2 },
-  { "--pfamtblout", eslARG_OUTFILE, NULL, NULL, NULL,    NULL,  NULL,  NULL,            "save table of hits and domains to file, in Pfam format <f>",   99 }, /* not used in nhmmscant */
+  { "--pfamtblout", eslARG_OUTFILE, NULL, NULL, NULL,    NULL,  NULL,  NULL,            "save table of hits and domains to file, in Pfam format <f>",   99 }, /* not used in hmmscant */
   { "--acc",        eslARG_NONE,   FALSE, NULL, NULL,    NULL,  NULL,  NULL,            "prefer accessions over names in output",                        2 },
   { "--noali",      eslARG_NONE,   FALSE, NULL, NULL,    NULL,  NULL,  NULL,            "don't output alignments, so output is smaller",                 2 },
   { "--notextw",    eslARG_NONE,    NULL, NULL, NULL,    NULL,  NULL, "--textw",        "unlimit ASCII text output line width",                          2 },
   { "--textw",      eslARG_INT,    "120", NULL, "n>=120",NULL,  NULL, "--notextw",      "set max width of ASCII text output lines",                      2 },
-  { "--notrans",    eslARG_NONE,   FALSE, NULL, NULL,    NULL,  NULL,  NULL,            "don't show the translated DNA sequence in domain alignment",    2 }, /*for nhmmscant */
-  { "--vertcodon",  eslARG_NONE,   FALSE,  NULL, NULL,   NULL,  NULL,  NULL,            "show the DNA vertically in domain alignment",                   2 }, /*for nhmmscant */
+  { "--notrans",    eslARG_NONE,   FALSE, NULL, NULL,    NULL,  NULL,  NULL,            "don't show the translated DNA sequence in domain alignment",    2 }, /*for hmmscant */
+  { "--vertcodon",  eslARG_NONE,   FALSE,  NULL, NULL,   NULL,  NULL,  NULL,            "show the DNA vertically in domain alignment",                   2 }, /*for hmmscant */
   /* Control of reporting thresholds */
   { "-E",           eslARG_REAL,  "10.0", NULL, "x>0",   NULL,  NULL,  REPOPTS,         "report models <= this E-value threshold in output",             4 },
   { "-T",           eslARG_REAL,   FALSE, NULL, NULL,    NULL,  NULL,  REPOPTS,         "report models >= this score threshold in output",               4 },
@@ -304,7 +304,7 @@ do_sq_by_sequences(ESL_GENCODE *gcode, ESL_GENCODE_WORKSTATE *wrk, ESL_SQ *sq)
 }
 
 /* serial_master()
- * The serial version of nhmmscant.
+ * The serial version of hmmscant.
  * For each query HMM in <hmmdb> search the database for hits.
  * 
  * A master can only return if it's successful. All errors are handled
@@ -342,7 +342,7 @@ serial_master(ESL_GETOPTS *go, struct cfg_s *cfg)
 #endif
   char             errbuf[eslERRBUFSIZE];
 
-  /* nhmmscant */
+  /* hmmscant */
   P7_TOPHITS       *tophits_accumulator = NULL; /* to hold the top hits information from all 6 frame translations */
   P7_PIPELINE      *pipelinehits_accumulator = NULL; /* to hold the pipeline hit information from all 6 frame translations */
 
@@ -355,7 +355,7 @@ serial_master(ESL_GETOPTS *go, struct cfg_s *cfg)
   int             k;
   ESL_GENCODE     *gcode       = NULL;
   ESL_GENCODE_WORKSTATE *wrk    = NULL;
-  /* end nhmmscant */
+  /* end hmmscant */
 
   w = esl_stopwatch_Create();
 
@@ -398,7 +398,7 @@ serial_master(ESL_GETOPTS *go, struct cfg_s *cfg)
   else if (hstatus == eslEINCOMPAT) p7_Fail("HMM file %s contains different alphabets", cfg->hmmfile);
   else if (hstatus != eslOK)        p7_Fail("Unexpected error in reading HMMs from %s", cfg->hmmfile); 
 
-  if (abc->type != eslAMINO) p7_Fail("nhmmscant only supports amino acid HMMs; %s uses a different alphabet", cfg->hmmfile); 
+  if (abc->type != eslAMINO) p7_Fail("hmmscant only supports amino acid HMMs; %s uses a different alphabet", cfg->hmmfile);
   
   p7_oprofile_Destroy(om);
   p7_hmmfile_Close(hfp);
@@ -603,7 +603,7 @@ serial_master(ESL_GETOPTS *go, struct cfg_s *cfg)
      }
 	 
 	 
-  } /*end nhmmscant while loop */
+  } /*end hmmscant while loop */
 
   if      (sstatus == eslEFORMAT) esl_fatal("Parse failed (sequence file %s):\n%s\n",
 					    sqfp->filename, esl_sqfile_GetErrorBuf(sqfp));
@@ -612,9 +612,9 @@ serial_master(ESL_GETOPTS *go, struct cfg_s *cfg)
 
   /* Terminate outputs - any last words?
    */
-  if (tblfp)    p7_tophits_TabularTail(tblfp,    "nhmmscant", p7_SCAN_MODELS, cfg->seqfile, cfg->hmmfile, go);
-  if (domtblfp) p7_tophits_TabularTail(domtblfp, "nhmmscant", p7_SCAN_MODELS, cfg->seqfile, cfg->hmmfile, go);
-  if (pfamtblfp)p7_tophits_TabularTail(pfamtblfp,"nhmmscant", p7_SCAN_MODELS, cfg->seqfile, cfg->hmmfile, go);
+  if (tblfp)    p7_tophits_TabularTail(tblfp,    "hmmscant", p7_SCAN_MODELS, cfg->seqfile, cfg->hmmfile, go);
+  if (domtblfp) p7_tophits_TabularTail(domtblfp, "hmmscant", p7_SCAN_MODELS, cfg->seqfile, cfg->hmmfile, go);
+  if (pfamtblfp)p7_tophits_TabularTail(pfamtblfp,"hmmscant", p7_SCAN_MODELS, cfg->seqfile, cfg->hmmfile, go);
   if (ofp)      { if (fprintf(ofp, "[ok]\n") < 0) ESL_EXCEPTION_SYS(eslEWRITE, "write failed"); }
 
   /* Cleanup - prepare for successful exit
@@ -638,11 +638,11 @@ serial_master(ESL_GETOPTS *go, struct cfg_s *cfg)
   esl_gencode_WorkstateDestroy(wrk);
   esl_gencode_Destroy(gcode);
 
-  esl_sq_Destroy(qsqDNA);  /* nhmmscant */
-  esl_sq_Destroy(qsqDNATxt);  /* nhmmscant */
+  esl_sq_Destroy(qsqDNA);  /* hmmscant */
+  esl_sq_Destroy(qsqDNATxt);  /* hmmscant */
   esl_stopwatch_Destroy(w);
   esl_alphabet_Destroy(abc);
-  esl_alphabet_Destroy(abcDNA); /* nhmmscant */
+  esl_alphabet_Destroy(abcDNA); /* hmmscant */
   esl_sqfile_Close(sqfp);
 
   if (ofp != stdout) fclose(ofp);

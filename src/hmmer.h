@@ -581,7 +581,7 @@ typedef struct p7_alidisplay_s {
   char *model;                  /* aligned query consensus sequence     */
   char *mline;                  /* "identities", conservation +'s, etc. */
   char *aseq;                   /* aligned target sequence              */
-  char *ntseq;                  /* nucleotide target sequence if nhmmscant */
+  char *ntseq;                  /* nucleotide target sequence if hmmscant */
   char *ppline;		        /* posterior prob annotation; or NULL   */
   int   N;		        /* length of strings                    */
 
@@ -1245,7 +1245,7 @@ typedef struct p7_pipeline_s {
 
   int           show_accessions;/* TRUE to output accessions not names      */
   int           show_alignments;/* TRUE to output alignments (default)      */
-  int           show_translated_sequence; /* TRUE to display translated DNA sequence in domain display for nhmmscant */
+  int           show_translated_sequence; /* TRUE to display translated DNA sequence in domain display for hmmscant */
   int           show_vertical_codon; /* TRUE to display the DNA codon vertically in the alignment display */
 
   P7_HMMFILE   *hfp;		/* COPY of open HMM database (if scan mode) */

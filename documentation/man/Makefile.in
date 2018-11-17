@@ -37,7 +37,7 @@ MANS =  hmmer\
 	makehmmerdb\
 	phmmer\
 	hmmsearcht\
-	nhmmscant\
+	hmmscant\
 	nhmmer\
 	nhmmscan\
 	alimask

@@ -44,8 +44,8 @@ static ESL_OPTIONS searchOpts[] = {
   { "--noali",      eslARG_NONE,        FALSE, NULL, NULL,    NULL,  NULL,  NULL,            "don't output alignments, so output is smaller",                2 },
   { "--notextw",    eslARG_NONE,         NULL, NULL, NULL,    NULL,  NULL, "--textw",        "unlimit ASCII text output line width",                         2 },
   { "--textw",      eslARG_INT,         "120", NULL, "n>=120",NULL,  NULL, "--notextw",      "set max width of ASCII text output lines",                     2 },
-  { "--notrans",    eslARG_NONE,        FALSE, NULL, NULL,    NULL,  NULL,  NULL,            "don't show the translated DNA sequence in domain alignment",   2 }, /*for nhmmscant */
-  { "--vertcodon",  eslARG_NONE,        FALSE, NULL, NULL,    NULL,  NULL,  NULL,            "show the DNA vertically in domain alignment",                  2 }, /*for nhmmscant */
+  { "--notrans",    eslARG_NONE,        FALSE, NULL, NULL,    NULL,  NULL,  NULL,            "don't show the translated DNA sequence in domain alignment",   2 }, /*for hmmscant */
+  { "--vertcodon",  eslARG_NONE,        FALSE, NULL, NULL,    NULL,  NULL,  NULL,            "show the DNA vertically in domain alignment",                  2 }, /*for hmmscant */
   /* Control of scoring system */
   { "--popen",      eslARG_REAL,       "0.02", NULL, "0<=x<0.5",NULL,  NULL,  NULL,          "gap open probability",                                         3 },
   { "--pextend",    eslARG_REAL,        "0.4", NULL, "0<=x<1",  NULL,  NULL,  NULL,          "gap extend probability",                                       3 },
@@ -87,8 +87,8 @@ static ESL_OPTIONS searchOpts[] = {
   { "--hmmdb",      eslARG_INT,         NULL,  NULL, "n>0",   NULL,  NULL,  "--seqdb",       "hmm database to search",                                      12 },
   { "--seqdb",      eslARG_INT,         NULL,  NULL, "n>0",   NULL,  NULL,  "--hmmdb",       "protein database to search",                                  12 },
   { "--seqdb_ranges",eslARG_STRING,     NULL,  NULL,  NULL,   NULL, "--seqdb", NULL,         "range(s) of sequences within --seqdb that will be searched",  12 },
-  { "--nhmmscant",  eslARG_NONE,        NULL,  NULL, NULL,    NULL,  NULL,  "--seqdb",       "search hmm database with a 6 frame translated DNA sequence",  12 },
-  { "--hmmsearcht",    eslARG_NONE,        NULL,  NULL, NULL,    NULL,  NULL,  NULL/*"--hmmdb"*/, "search sequence database with a 6 frame translated DNA sequence",  12 },
+  { "--hmmscant",   eslARG_NONE,        NULL,  NULL, NULL,    NULL,  NULL,  "--seqdb",       "search hmm database with a 6 frame translated DNA sequence",  12 },
+  { "--hmmsearcht", eslARG_NONE,        NULL,  NULL, NULL,    NULL,  NULL,  NULL/*"--hmmdb"*/, "search sequence database with a 6 frame translated DNA sequence",  12 },
 
   /* name           type        default  env  range toggles reqs incomp  help                                          docgroup*/
   { "-c",         eslARG_INT,       "1", NULL, NULL, NULL,  NULL, "--seqdb",  "use alt genetic code of NCBI transl table <n>", 15 },

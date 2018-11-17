@@ -32,7 +32,7 @@
 #include "esl_stopwatch.h"
 #include "esl_threads.h"
 
-/* for nhmmscant */
+/* for hmmscant */
 #include "esl_gencode.h"
 
 #include "hmmer.h"
@@ -67,7 +67,7 @@ typedef struct {
 
   double            elapsed;     /* elapsed search time              */
 
-  ESL_SQ           *ntseq;    /* DNA query sequence that will be in text mode for printing when doing nhmmscant */
+  ESL_SQ           *ntseq;    /* DNA query sequence that will be in text mode for printing when doing hmmscant */
 
   /* Structure created and populated by the individual threads.
    * The main thread is responsible for freeing up the memory.
@@ -175,7 +175,7 @@ worker_process(ESL_GETOPTS *go)
       case HMMD_CMD_SCAN: 
 	  {	  
               query = process_QueryCmd(cmd, &env);
-              if (esl_opt_IsUsed(query->opts, "--nhmmscant")) {
+              if (esl_opt_IsUsed(query->opts, "--hmmscant")) {
                 process_TranslatedSearchCmd(cmd, &env, query);
               }
               else {
@@ -678,7 +678,7 @@ process_QueryCmd(HMMD_COMMAND *cmd, WORKER_ENV *env)
   query->hmm = NULL;
   query->seq = NULL;
 
-  if (esl_opt_IsUsed(query->opts, "--nhmmscant"))
+  if (esl_opt_IsUsed(query->opts, "--hmmscant"))
      query->abc = esl_alphabet_Create(eslDNA);
   else
      query->abc = esl_alphabet_Create(eslAMINO);

@@ -178,7 +178,7 @@ p7_alidisplay_Create(const P7_TRACE *tr, int which, const P7_OPROFILE *om, const
   }
 
   /*
-     If this is a nhmmscant scan; i.e. scan using a DNA
+     If this is a hmmscant scan; i.e. scan using a DNA
 	 query, put the ORF in a buffer so that if
 	 the hit is in a reverse compliment of the query, i.e.
 	 the other DNA strand, we can take the reverse complement
@@ -662,7 +662,7 @@ int
 p7_alidisplay_Print(FILE *fp, P7_ALIDISPLAY *ad, int min_aliwidth, int linewidth, P7_PIPELINE *pli)
 {
    int status;
-	/* if there is a target sequence then we must be calling from nhmmscant to print the target sequence in the domain alignment display */
+	/* if there is a target sequence then we must be calling from hmmscant to print the target sequence in the domain alignment display */
 	if( ad->ntseq == NULL)
    {	   
       if ((status = p7_alidisplay_nontranslated_Print(fp, ad, min_aliwidth, linewidth, pli->show_accessions)) != eslOK) return status;
@@ -676,7 +676,7 @@ p7_alidisplay_Print(FILE *fp, P7_ALIDISPLAY *ad, int min_aliwidth, int linewidth
 }
 
 /* Function:  p7_alidisplay_translated_Print()
- * Synopsis:  Human readable output of <P7_ALIDISPLAY> for nhmmscant
+ * Synopsis:  Human readable output of <P7_ALIDISPLAY> for hmmscant
  *
  * Purpose:   Prints alignment <ad> to stream <fp>.
  *            

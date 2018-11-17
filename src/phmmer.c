@@ -124,8 +124,8 @@ static ESL_OPTIONS options[] = {
   { "--restrictdb_n",eslARG_INT,        "-1",  NULL, NULL,    NULL,  NULL,  NULL,       "Search <j> target sequences (starting at --restrictdb_stkey)",   99 },
   { "--ssifile",    eslARG_STRING,       NULL, NULL, NULL,    NULL,  NULL,  NULL,       "restrictdb_x values require ssi file. Override default to <s>",  99 },
    /* Not used, but retained because esl option-handling code errors if it isn't kept here.  Placed in group 99 so it doesn't print to help*/
-  { "--notrans",    eslARG_NONE,        FALSE, NULL, NULL,      NULL,  NULL,  NULL,        "don't show the translated DNA sequence in domain alignment",  99 }, /*for nhmmscant */
-  { "--vertcodon",  eslARG_NONE,        FALSE, NULL, NULL,      NULL,  NULL,  NULL,        "show the DNA vertically in domain alignment",                 99 }, /*for nhmmscant */
+  { "--notrans",    eslARG_NONE,        FALSE, NULL, NULL,      NULL,  NULL,  NULL,        "don't show the translated DNA sequence in domain alignment",  99 }, /*for hmmscant */
+  { "--vertcodon",  eslARG_NONE,        FALSE, NULL, NULL,      NULL,  NULL,  NULL,        "show the DNA vertically in domain alignment",                 99 }, /*for hmmscant */
 
  {  0, 0, 0, 0, 0, 0, 0, 0, 0, 0 },
 };
