@@ -333,7 +333,15 @@ documentation of NC lines. \textbf{Optional.}
   for Forward scores.  $\lambda$ values must be positive.  All three
   lines or none of them must be present: when all three are present,
   the model is considered to be calibrated for E-value
-  statistics. \textbf{Optional.}
+  statistics. \textbf{Mandatory.}\sidenote{Currently, HMMER's input
+    parser treats these fields as optional: they don't have to be
+    present just to read the HMM file. However, if \mono{STATS}
+    calibration parameters aren't present, searches won't work (no
+    hits will be found) because the HMMER3 acceleration filters depend
+    on being able to calculate E-values. \mono{hmmbuild} always
+    includes these parameters. If you're somehow creating your own HMM
+    files outside of HMMER, you'll want to use \mono{p7\_Calibrate()}
+    to determine these parameters in your model before writing it out.}
 
 \item [\monob{HMM }] Flags the start of the main model
 section. Solely for human readability of the tabular model data, the
