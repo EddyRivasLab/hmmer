@@ -40,6 +40,7 @@ MANPAGES = \
 	alimask.man     \
 	hmmalign.man    \
 	hmmbuild.man    \
+	hmmc2.man       \
 	hmmconvert.man  \
 	hmmemit.man     \
 	hmmfetch.man    \
@@ -56,6 +57,11 @@ MANPAGES = \
 	nhmmer.man      \
 	nhmmscan.man    \
 	phmmer.man      
+
+MANPAGES_DAEMON = \
+	hmmc2.man       \
+	hmmpgmd.man     \
+	hmmpgmd_shard.man
 
 # ./configure puts Easel .man pages in ${top_builddir}/easel/miniapps
 EASEL_MANPAGES = \
@@ -130,6 +136,7 @@ Daemon_userguide.pdf: manpages ${TEXFILES}
 manpages:
 	@command -v ${RMAN} >/dev/null 2>&1 || { echo >&2 "${RMAN} is required to build Userguide, but it's not installed. Aborting."; exit 1; }
 	@echo '%% Manual pages chapter automatically generated. Do not edit.'           > manpages.tex
+	@echo '%% Manual pages chapter automatically generated. Do not edit.'           > manpages_daemon.tex
 	@echo '%% Easel miniapps manpage chapter automatically generated. Do not edit.' > easel_manpages.tex
 	@for file in ${MANPAGES}; do\
 	   ${RMAN} -f latex2e ../man/$$file 2>/dev/null | ${RMANPROCESS} >> manpages.tex ;\
@@ -137,12 +144,14 @@ manpages:
 	@for file in ${EASEL_MANPAGES}; do\
 	   ${RMAN} -f latex2e ../../easel/miniapps/$$file 2>/dev/null | ${RMANPROCESS} >> easel_manpages.tex ;\
 	done
+	@for file in ${MANPAGES_DAEMON}; do\
+	   ${RMAN} -f latex2e ../man/$$file 2>/dev/null | ${RMANPROCESS} >> manpages_daemon.tex ;\
+	done
 
 clean:
 	${QUIET_SUBDIR0}inclusions   ${QUIET_SUBDIR1} clean
 	-rm -f latex.log
 	-rm -f main.aux main.bbl main.blg main.log main.toc main.brf main.out x.log *~
-	-rm -f daemon.aux daemon.log daemon.toc daemon.out
 ifndef V
 	@echo '     ' CLEAN userguide
 endif
@@ -156,7 +165,6 @@ distclean: clean
 	   done ;\
 	fi
 	-rm -f titlepage.tex copyright.tex manpages.tex easel_manpages.tex
-	-rm -f titlepage_daemon.tex
 	-rm -f Userguide.pdf
-	-rm -f Daemon_userguide.pdf
 	-rm -f Makefile
+
