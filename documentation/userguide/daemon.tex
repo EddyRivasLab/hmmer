@@ -27,7 +27,18 @@ This manual describes the design implementation, and usage of hmmpgmd.  It assum
 
 \chapter{Usage}
 
-\chapter{Design}
+\chapter{Daemon-Client Interface}
+Client machines use internet sockets to send commands to and receive results from a daemon's master node.  When a client opens a connection to the master node's client communication port (port 51371 by default), the master node forks a thread to manage the connection with the client.  This thread configures a socket to communicate with the client and then repeatedly calls the {\tt clientside\_loop} function, which monitors the socket for commands from the client, until either the client detatches from the port or the daemon shuts down.  This approach allows multiple clients to connect to a daemon simultaneously without interfering with each other, although requests from one client may impact the amount of time it takes for the daemon to respond to requests from other clients.
+
+\section{Daemon Command Format}
+Commands from a client to a daemon are variable-length sequences of ASCII text that are terminated by a line containing only two forward slashes ("{\tt //}").  When a command arrives from a client, the daemon reads bytes from the appropriate socket into a buffer until it sees the end-of-command sequence, growing the buffer as necessary\sidenote{This is a security vulnerability that should be addressed in HMMER4, as it allows an adversarial or erroneous client to consume arbitrary amounts of RAM, potentially exceeding the capacity of the master node.}, and then parses the contents of the buffer in order to execute the command.   
+
+\section{Search Results Format}
+The results from each search are split across two sockets messages.  The first is a fixed-length {\tt HMMD\_SEARCH\_STATUS} structure that contains two fields: a {\em status} field that contains any error information from the search, and a {\em msg\_size} field, which tells the client how large (in bytes) the second message will be.  The format of the second message depends on whether any errors were encountered during the search.  If an error occurs, the second message is simply a text string containing a description of the error.  In this case, the {\em status} field of the first message contans one of the Easel error codes, and the {\tt msg\_length} field contains the length of the error description string, including its termination character.
+
+If the search succeeds, the {\tt status} field of the first message is set to "eslOK\sidenote{This assignment is done by the {\tt init\_results} function.}" and the second message contains the results of the search.  This message begins with   
+
+
 \input{ack}
 \label{manualend}
 
