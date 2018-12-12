@@ -1099,8 +1099,11 @@ p7_tophits_Targets(FILE *ofp, P7_TOPHITS *th, P7_PIPELINE *pli, int textw)
   int    d;
   int    namew;
   int    posw;
+  int    orfw;
+  int    srcw;
   int    descw;
-  char  *showname;
+  char   *showname;
+  char   *showorfid;
 
   int    have_printed_incthresh = FALSE;
 
@@ -1131,6 +1134,8 @@ p7_tophits_Targets(FILE *ofp, P7_TOPHITS *th, P7_PIPELINE *pli, int textw)
       if (th->N > 0 && th->hit[0]->ndom > 0 && th->hit[0]->dcl[0].ad->ntseq != NULL) /* translated-search hit*/
       {
          posw = ESL_MAX(6, p7_tophits_GetMaxPositionLength(th));
+         orfw = 10;
+         srcw = 15;
          if (textw >  0)           descw = ESL_MAX(32, textw - namew - 2*posw - 32); /* 32 chars excluding desc and two posw's is from the format: 2 + 9+2 +6+2 +5+2 +<name>+1 +<startpos>+1 +<endpos>+1 +1 */
          else                      descw = 0;                               /* unlimited desc length is handled separately */
 
@@ -1138,13 +1143,13 @@ p7_tophits_Targets(FILE *ofp, P7_TOPHITS *th, P7_PIPELINE *pli, int textw)
          /* The minimum width of the target table is 111 char: 47 from fields, 8 from min name, 32 from min desc, 13 spaces */
          if (fprintf(ofp, "Scores for complete sequence%s (score includes all domains):\n", pli->mode == p7_SEARCH_SEQS ? "s" : "") < 0)
            ESL_EXCEPTION_SYS(eslEWRITE, "per-sequence hit list: write failed");
-         if (fprintf(ofp, "  %22s  \n",                              " --- full sequence ---") < 0)
+         if (fprintf(ofp, "  %22s  %22s  %8s %-*s\n",                              " --- full sequence ---",        " --- best 1 domain ---",   "-#dom-", orfw+srcw+posw+posw, "------- ORF source and coordinates -------") < 0)
            ESL_EXCEPTION_SYS(eslEWRITE, "per-sequence hit list: write failed");
-         if (fprintf(ofp, "  %9s %6s %5s  %-*s %*s %*s  %s\n",
-         "E-value", " score", " bias", namew, (pli->mode == p7_SEARCH_SEQS ? "Sequence":"Model"), posw, "start", posw, "end", "Description") < 0)
+         if (fprintf(ofp, "  %9s %6s %5s  %9s %6s %5s  %5s %2s  %-*s %-*s %-*s %-*s %s\n",
+         "E-value", " score", " bias", "E-value", " score", " bias", "  exp",  "N", namew, "orf", srcw, "source", posw, "start", posw, "end",  "Description") < 0)
            ESL_EXCEPTION_SYS(eslEWRITE, "per-sequence hit list: write failed");
-         if (fprintf(ofp, "  %9s %6s %5s  %-*s %*s %*s  %s\n",
-         "-------", "------", "-----", namew, "--------", posw, "-----", posw, "-----", "-----------") < 0)
+         if (fprintf(ofp, "  %9s %6s %5s  %9s %6s %5s  %5s %2s  %-*s %-*s %-*s %-*s %s\n",
+         "-------", "------", "-----", "-------", "------", "-----", " ----", "--", namew, "--------", srcw, "---------------", posw, "-----", posw, "-----", "-----------") < 0)
            ESL_EXCEPTION_SYS(eslEWRITE, "per-sequence hit list: write failed");
 
       }
@@ -1210,14 +1215,21 @@ p7_tophits_Targets(FILE *ofp, P7_TOPHITS *th, P7_PIPELINE *pli, int textw)
         {
           if(th->hit[h]->dcl[0].ad->ntseq != NULL) /* translated-search hit*/
           {
-            if (fprintf(ofp, "%c %9.2g %6.1f %5.1f  %-*s %*" PRId64 " %*" PRId64 "",
+            if (fprintf(ofp, "%c %9.2g %6.1f %5.1f  %9.2g %6.1f %5.1f  %5.1f %2d  %-*s %-*s %*" PRId64 " %*" PRId64 " %s",
               newness,
               exp(th->hit[h]->lnP) * pli->Z,
               th->hit[h]->score,
               th->hit[h]->pre_score - th->hit[h]->score, /* bias correction */
+              exp(th->hit[h]->dcl[d].lnP) * pli->Z,
+              th->hit[h]->dcl[d].bitscore,
+              eslCONST_LOG2R * th->hit[h]->dcl[d].dombias, /* convert NATS to BITS at last moment */
+              th->hit[h]->nexpected,
+              th->hit[h]->nreported,
+              namew, showname,
               namew, showname,
               posw, th->hit[h]->dcl[d].iorf,
-              posw, th->hit[h]->dcl[d].jorf) < 0)
+              posw, th->hit[h]->dcl[d].jorf,
+              th->hit[h]->desc == NULL ? "" : th->hit[h]->desc) < 0)
                 ESL_EXCEPTION_SYS(eslEWRITE, "per-sequence hit list: write failed");
           }
           else

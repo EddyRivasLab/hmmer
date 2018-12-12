@@ -324,16 +324,16 @@ static int
 do_sq_by_sequences(ESL_GENCODE *gcode, ESL_GENCODE_WORKSTATE *wrk, ESL_SQ *sq)
 {
       if (wrk->do_watson) {
-	esl_gencode_ProcessStart(gcode, wrk, sq);
-	esl_gencode_ProcessPiece(gcode, wrk, sq);
-	esl_gencode_ProcessEnd(wrk, sq);
+        esl_gencode_ProcessStart(gcode, wrk, sq);
+        esl_gencode_ProcessPiece(gcode, wrk, sq);
+        esl_gencode_ProcessEnd(wrk, sq);
       }
 
       if (wrk->do_crick) {
-	esl_sq_ReverseComplement(sq);
-	esl_gencode_ProcessStart(gcode, wrk, sq);
-	esl_gencode_ProcessPiece(gcode, wrk, sq);
-	esl_gencode_ProcessEnd(wrk, sq);
+        esl_sq_ReverseComplement(sq);
+        esl_gencode_ProcessStart(gcode, wrk, sq);
+        esl_gencode_ProcessPiece(gcode, wrk, sq);
+        esl_gencode_ProcessEnd(wrk, sq);
       }
 
   return eslOK;
@@ -540,28 +540,21 @@ serial_master(ESL_GETOPTS *go, struct cfg_s *cfg)
       p7_ProfileConfig(hmm, info->bg, gm, 100, p7_LOCAL); /* 100 is a dummy length for now; and MSVFilter requires local mode */
       p7_oprofile_Convert(gm, om);                  /* <om> is now p7_LOCAL, multihit */
 
-      /*
-      if (esl_opt_IsOn(go, "--aliscoresout") ) {
-        scoredata = p7_hmm_ScoreDataCreate(om, NULL);
-        p7_hmm_ScoreDataComputeRest(om, scoredata);
-      }
-      */
 
       /* Create processing pipeline and hit list accumulators */
       tophits_accumulator  = p7_tophits_Create(); 
       pipelinehits_accumulator = p7_pipeline_Create(go, 100, 100, FALSE, p7_SEARCH_SEQS);
 
       /* Outside loop: over each query sequence in <seqfile>. */
-	  n_targetseqs = 0;
+      n_targetseqs = 0;
       while ((cfg->n_targetseq < 0 || (cfg->n_targetseq > 0 && n_targetseqs < cfg->n_targetseq)) && (sstatus = esl_sqio_Read(dbfp, qsqDNA)) == eslOK )
       {
-		n_targetseqs++;
+        n_targetseqs++;
         if (qsqDNA->n < 3) continue; /* do not process sequence of less than 1 codon */
 
 	     /* copy and convert the DNA sequence to text so we can print it in the domain alignment display */
          esl_sq_Copy(qsqDNA, qsqDNATxt);
 
-	     //printf("Creating 6 frame translations\n");
          /* create sequence block to hold translated ORFs */
          wrk->orf_block = esl_sq_CreateDigitalBlock(3, abcAMINO);
 
@@ -578,11 +571,6 @@ serial_master(ESL_GETOPTS *go, struct cfg_s *cfg)
            info[i].pli = p7_pipeline_Create(go, om->M, 100, FALSE, p7_SEARCH_SEQS); /* L_hint = 100 is just a dummy for now */
            status = p7_pli_NewModel(info[i].pli, info[i].om, info[i].bg);
            if (status == eslEINVAL) p7_Fail(info->pli->errbuf);
-
-//           info[i].pli->do_alignment_score_calc = esl_opt_IsOn(go, "--aliscoresout") ;
-
-//           if (esl_opt_IsOn(go, "--aliscoresout") )
-//             info[i].scoredata = p7_hmm_ScoreDataClone(scoredata, om->abc->Kp);
 
 
 #ifdef HMMER_THREADS
@@ -611,8 +599,8 @@ serial_master(ESL_GETOPTS *go, struct cfg_s *cfg)
          /* merge the results of the search results */
          for (i = 0; i < infocnt; ++i)
          {
-	       p7_tophits_Merge(tophits_accumulator, info[i].th);
-	       p7_pipeline_Merge(pipelinehits_accumulator, info[i].pli);
+           p7_tophits_Merge(tophits_accumulator, info[i].th);
+           p7_pipeline_Merge(pipelinehits_accumulator, info[i].pli);
 
            p7_pipeline_Destroy(info[i].pli);
            p7_tophits_Destroy(info[i].th);
@@ -745,6 +733,12 @@ serial_loop(WORKER_INFO *info, ESL_SQFILE *dbfp, ESL_SQ_BLOCK  *orf_block)
   ESL_SQ   *dbsq     = NULL;   /* one target sequence (digital)  */
   int      k;
 
+  for (k = 0; k < orf_block->count; ++k)
+    {
+    printf("ORFBLOCK: %s\n", orf_block->list[k].name);
+    }
+  exit(0);
+
   /* Main loop: */
   for (k = 0; k < orf_block->count; ++k)
   {
@@ -756,7 +750,8 @@ serial_loop(WORKER_INFO *info, ESL_SQFILE *dbfp, ESL_SQ_BLOCK  *orf_block)
       if ((sstatus = esl_sq_SetName     (dbsq, info->ntqsq->name))   != eslOK)  ESL_EXCEPTION_SYS(eslEWRITE, "Set query sequence name failed");
       if ((sstatus = esl_sq_SetAccession(dbsq, info->ntqsq->acc))    != eslOK)  ESL_EXCEPTION_SYS(eslEWRITE, "Set query sequence accession failed");
       if ((sstatus = esl_sq_SetDesc     (dbsq, info->ntqsq->desc))   != eslOK)  ESL_EXCEPTION_SYS(eslEWRITE, "Set query sequence description failed");
-	 	  
+      if ((sstatus = esl_sq_SetORFid    (dbsq, dbsq->name))          != eslOK)  ESL_EXCEPTION_SYS(eslEWRITE, "Set query sequence ORF id failed");
+
       p7_pli_NewSeq(info->pli, dbsq);
       p7_bg_SetLength(info->bg, dbsq->n);
       p7_oprofile_ReconfigLength(info->om, dbsq->n);

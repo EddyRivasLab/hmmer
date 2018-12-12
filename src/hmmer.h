@@ -709,6 +709,7 @@ typedef struct p7_hit_s {
   char   *name;			/* name of the target               (mandatory)           */
   char   *acc;			/* accession of the target          (optional; else NULL) */
   char   *desc;			/* description of the target        (optional; else NULL) */
+  char   *orfid;    /* unique ORF identifier            (mandatory for translated search, not used otherwise)           */
   int    window_length;         /* for later use in e-value computation, when splitting long sequences */
   double sortkey;		/* number to sort by; big is better                       */
 
