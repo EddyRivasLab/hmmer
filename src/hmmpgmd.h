@@ -40,7 +40,6 @@ typedef struct {
 #define HMMD_CMD_SCAN       10002
 #define HMMD_CMD_INIT       10003
 #define HMMD_CMD_SHUTDOWN   10004
-#define HMMD_CMD_RESET      10005
 
 #define MAX_INIT_DESC 32
 

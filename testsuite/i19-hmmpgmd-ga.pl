@@ -103,8 +103,8 @@ if ($?) { die "FAIL: hmmpgmd worker failed to start";  }
 sleep 2;
 
 # Run the test script
-@output = `cat $tmppfx.in | $builddir/src/hmmc2 -i $host -p $cport -S 2>&1`;
-# Currently, hmmc2 returns nonzero exit code even upon clean !shutdown command... don't check $?
+@output = qx(cat $tmppfx.in | $builddir/src/hmmc2 -i $host -p $cport -S 2>&1);
+if ($?) { die "FAIL: hmmc2 returned non-zero exit code of $?";  }
 $daemon_active = 0;
 
 

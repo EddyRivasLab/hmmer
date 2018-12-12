@@ -332,6 +332,11 @@ int main(int argc, char *argv[])
       n = sizeof(sstatus);
       total += n;
       if ((size = readn(sock, &sstatus, n)) == -1) {
+        if(errno == 104){
+          // connection was reset, usually because server exited
+          fprintf(stderr, "Daemon exited, shutting down\n");
+          exit(0);
+        }
         fprintf(stderr, "[%s:%d] read error %d - %s\n", __FILE__, __LINE__, errno, strerror(errno));
         exit(1);
       }
