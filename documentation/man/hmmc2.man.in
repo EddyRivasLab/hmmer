@@ -12,7 +12,7 @@ hmmc2 \- example client for the HMMER daemon
 .SH DESCRIPTION
 
 .PP
-.B hmmc2
+.B Hmmc2
 is a text client for the hmmpgmd or hmmpgmd_shard daemons.  When run, it opens a connection to a daemon at the specified
 IP address and port, and then enters an interactive loop waiting for the user to input commands to be sent to the daemon.
 See the User's Guide for the HMMER Daemon for a discussion of hmmpgmd's command format.
@@ -29,9 +29,11 @@ Specify the IP address of the daemon that hmmc2 should connect to.  Defaults to 
 .B \-p <port number>
 Specify the port number that the daemon is listening on.  Defaults to 51371 if not provided
 
+
 .TP
 .B \-S
 Print the scores of any hits found during searches.
+
 
 .TP
 .B \-A
