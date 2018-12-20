@@ -619,6 +619,7 @@ AC_CONFIG_FILES([ \
   documentation/man/alimask.man     \
   documentation/man/hmmalign.man    \
   documentation/man/hmmbuild.man    \
+  documentation/man/hmmc2.man       \
   documentation/man/hmmconvert.man  \
   documentation/man/hmmemit.man     \
   documentation/man/hmmer.man       \
