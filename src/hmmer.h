@@ -593,10 +593,13 @@ typedef struct p7_alidisplay_s {
   int   M;			/* length of model                      */
 
   char *sqname;			/* name of target sequence              */
+  char *orfname;        /* name of ORF within target sequence (assigned by hmmer pipeline)  */
   char *sqacc;			/* accession of target seq; or [0]='\0' */
   char *sqdesc;			/* description of targ seq; or [0]='\0' */
   int64_t  sqfrom;		/* start position on sequence (1..L)    */
-  int64_t  sqto;  	        /* end position on sequence   (1..L)    */
+  int64_t  sqto;        /* end position on sequence   (1..L)    */
+  int64_t  orffrom;     /* start position on sequence (1..L)    */
+  int64_t  orfto;       /* end position on sequence   (1..L)    */
   int64_t  L;			/* length of sequence                   */
 
   int   memsize;                /* size of allocated block of memory    */
