@@ -429,7 +429,6 @@ serial_master(ESL_GETOPTS *go, struct cfg_s *cfg)
   if      (esl_opt_GetBoolean(go, "-m"))   esl_gencode_SetInitiatorOnlyAUG(gcode);
   else if (! esl_opt_GetBoolean(go, "-M")) esl_gencode_SetInitiatorAny(gcode);      // note this is the default, if neither -m or -M are set
 
-
   /* Set up the workstate structure, which contains both stateful 
    * info about our position in <sqfp> and the DNA <sq>, as well as
    * one-time config info from options
@@ -477,11 +476,10 @@ serial_master(ESL_GETOPTS *go, struct cfg_s *cfg)
 
      nquery++;
      esl_stopwatch_Start(w);	                          
-	  
+
      /* copy and convert the DNA sequence to text so we can print it in the domain alignment display */
      esl_sq_Copy(qsqDNA, qsqDNATxt);
 
-     //printf("Creating 6 frame translations\n");
      /* create sequence block to hold translated ORFs */
      wrk->orf_block = esl_sq_CreateDigitalBlock(3, abcAMINO);
 
@@ -509,8 +507,6 @@ serial_master(ESL_GETOPTS *go, struct cfg_s *cfg)
         if ((status = esl_sq_SetName     (qsq, qsqDNA->name))   != eslOK)  ESL_EXCEPTION_SYS(eslEWRITE, "Set query sequence name failed");
         if ((status = esl_sq_SetAccession(qsq, qsqDNA->acc))    != eslOK)  ESL_EXCEPTION_SYS(eslEWRITE, "Set query sequence accession failed");
         if ((status = esl_sq_SetDesc     (qsq, qsqDNA->desc))   != eslOK)  ESL_EXCEPTION_SYS(eslEWRITE, "Set query sequence description failed");
-
-
 
 
         /* Open the target profile database */
@@ -572,7 +568,7 @@ serial_master(ESL_GETOPTS *go, struct cfg_s *cfg)
 
      } /* end for (k = 0; k < block->count; ++k)... loop */
      
-	 
+
      /* Sort and remove duplicates */
      p7_tophits_SortBySeqidxAndAlipos(tophits_accumulator);
      p7_tophits_RemoveDuplicates(tophits_accumulator, pipelinehits_accumulator->use_bit_cutoffs);
@@ -580,7 +576,7 @@ serial_master(ESL_GETOPTS *go, struct cfg_s *cfg)
      p7_tophits_SortBySortkey(tophits_accumulator);
      p7_tophits_Threshold(tophits_accumulator, pipelinehits_accumulator);
 	 
-	 
+
      /* Print results */	 
      p7_tophits_Targets(ofp, tophits_accumulator, pipelinehits_accumulator, textw); if (fprintf(ofp, "\n\n") < 0) ESL_EXCEPTION_SYS(eslEWRITE, "write failed");
      p7_tophits_Domains(ofp, tophits_accumulator, pipelinehits_accumulator, textw); if (fprintf(ofp, "\n\n") < 0) ESL_EXCEPTION_SYS(eslEWRITE, "write failed");

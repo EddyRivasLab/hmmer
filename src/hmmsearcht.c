@@ -627,7 +627,6 @@ serial_master(ESL_GETOPTS *go, struct cfg_s *cfg)
       if (tblfp)     p7_tophits_TabularTargets(tblfp,    hmm->name, hmm->acc, tophits_accumulator, pipelinehits_accumulator, (nquery == 1));
       if (domtblfp)  p7_tophits_TabularDomains(domtblfp, hmm->name, hmm->acc, tophits_accumulator, pipelinehits_accumulator, (nquery == 1));
       if (pfamtblfp) p7_tophits_TabularXfam(pfamtblfp, hmm->name, hmm->acc, tophits_accumulator, pipelinehits_accumulator);
-//      if (aliscoresfp) p7_tophits_AliScores(aliscoresfp, hmm->name, tophits_accumulator);
 
       esl_stopwatch_Stop(w);
       p7_pli_Statistics(ofp, pipelinehits_accumulator, w);

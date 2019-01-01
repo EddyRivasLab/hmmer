@@ -758,9 +758,6 @@ p7_Pipeline(P7_PIPELINE *pli, P7_OPROFILE *om, P7_BG *bg, const ESL_SQ *sq, cons
   int              d;
   int              status;
 
-  long             sq_from;        /* start location in query in amino acids */
-  long             sq_to;          /* end llocation in query in amino acids */
-
   if (sq->n == 0) return eslOK;    /* silently skip length 0 seqs; they'd cause us all sorts of weird problems */
 
   p7_omx_GrowTo(pli->oxf, om->M, 0, sq->n);    /* expand the one-row omx if needed */
@@ -996,7 +993,7 @@ p7_Pipeline(P7_PIPELINE *pli, P7_OPROFILE *om, P7_BG *bg, const ESL_SQ *sq, cons
       }
 	  
       /*
-        if performing translated search, we want to record the location
+        if performing translates search, we want to record the location
         of the hit in both the full DNA sequence and in the ORF provided by
         esl_gencode_ProcessOrf (esl_gencode.c) used in p7_alidisplay_Create
         in p7_alidisplay.c. 
@@ -1030,6 +1027,7 @@ p7_Pipeline(P7_PIPELINE *pli, P7_OPROFILE *om, P7_BG *bg, const ESL_SQ *sq, cons
 
                hit->dcl[d].ad->orffrom=  hit->dcl[d].ad->sqfrom;
                hit->dcl[d].ad->orfto  =  hit->dcl[d].ad->sqto;
+
                hit->dcl[d].ad->sqfrom = sq->start - (hit->dcl[d].ad->sqfrom -1)*3;
                hit->dcl[d].ad->sqto   = sq->start - (hit->dcl[d].ad->sqto -1)*3 - 2;				
             }
