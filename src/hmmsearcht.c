@@ -544,6 +544,8 @@ serial_master(ESL_GETOPTS *go, struct cfg_s *cfg)
       /* Create processing pipeline and hit list accumulators */
       tophits_accumulator  = p7_tophits_Create(); 
       pipelinehits_accumulator = p7_pipeline_Create(go, 100, 100, FALSE, p7_SEARCH_SEQS);
+      pipelinehits_accumulator->nmodels = 1;
+      pipelinehits_accumulator->nnodes = hmm->M;
 
       /* Outside loop: over each query sequence in <seqfile>. */
       n_targetseqs = 0;

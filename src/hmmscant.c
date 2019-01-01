@@ -489,6 +489,8 @@ serial_master(ESL_GETOPTS *go, struct cfg_s *cfg)
      /* Create processing pipeline and hit list accumulators */
      tophits_accumulator  = p7_tophits_Create(); 
      pipelinehits_accumulator = p7_pipeline_Create(go, 100, 100, FALSE, p7_SCAN_MODELS);
+     pipelinehits_accumulator->nseqs = 1;
+     pipelinehits_accumulator->nres = qsqDNA->n;
 
      if (fprintf(ofp, "Query:       %s  [L=%ld]\n", qsqDNA->name, (long) qsqDNA->n) < 0) ESL_EXCEPTION_SYS(eslEWRITE, "write failed");
      if (qsqDNA->acc[0]  != 0 && fprintf(ofp, "Accession:   %s\n", qsqDNA->acc)     < 0) ESL_EXCEPTION_SYS(eslEWRITE, "write failed");
