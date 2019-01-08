@@ -324,15 +324,30 @@ process_search(WORKERSIDE_ARGS *args, QUEUE_DATA_SHARD *query)
 
   memset(&results, 0, sizeof(SEARCH_RESULTS)); /* avoid valgrind bitching about uninit bytes; remove, if we ever serialize structs properly */
 
-  w = esl_stopwatch_Create();
-  esl_stopwatch_Start(w);
-
   /* figure out the size of the database we are searching */
   if (query->cmd_type == HMMD_CMD_SEARCH) {
-    cnt = args->seq_db->db[query->dbx].count;
+    if((args->seq_db == NULL)||(args->seq_db->db == NULL)|| (query->dbx >= args->seq_db->db_cnt) || (query->dbx < 0)){
+      // Client is attempting to search a database that does not exist, complain and abort search
+      client_msg(query->sock, eslFAIL, "Specified sequence database has not been loaded into the daemon. \n");
+      return;
+    }
+    else{ 
+      cnt = args->seq_db->db[query->dbx].count;
+    }
   } else {
-    cnt = args->hmm_db->n;
+    if(args->hmm_db == NULL){
+      // Client is attempting to search a database that does not exist, complain and abort search
+      client_msg(query->sock, eslFAIL, "No HMM database has been loaded into the daemon. \n");
+      return;
+    }
+    else{ 
+     cnt = args->hmm_db->n;
+    }
   }
+
+  // Start stopwatch after we've determined that the search can proceed to simplify cleanup when it can't
+  w = esl_stopwatch_Create();
+  esl_stopwatch_Start(w);
 
   init_results(&results);
 
