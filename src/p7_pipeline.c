@@ -666,7 +666,7 @@ p7_pipeline_Merge(P7_PIPELINE *p1, P7_PIPELINE *p2)
  * Xref:      J4/25.
  */
 int
-p7_Pipeline(P7_PIPELINE *pli, P7_OPROFILE *om, P7_BG *bg, const ESL_SQ *sq, const ESL_SQ *ntsq, P7_TOPHITS *hitlist)
+p7_Pipeline(P7_PIPELINE *pli, P7_OPROFILE *om, P7_BG *bg, const ESL_SQ *sq, const ESL_SQ *ntsq, P7_TOPHITS *hitlist, const P7_SCOREDATA *data)
 {
   P7_HIT          *hit     = NULL;     /* ptr to the current hit output data      */
   float            usc, vfsc, fwdsc;   /* filter scores                           */

@@ -371,7 +371,6 @@ serial_master(ESL_GETOPTS *go, struct cfg_s *cfg)
   ESL_ALPHABET    *abc      = NULL;              /* digital alphabet                                */
   int              dbfmt    = eslSQFILE_UNKNOWN; /* format code for sequence database file          */
   ESL_STOPWATCH   *w;
-  //P7_SCOREDATA    *scoredata = NULL;
 
   int              textw    = 0;
   int              nquery   = 0;
@@ -398,7 +397,6 @@ serial_master(ESL_GETOPTS *go, struct cfg_s *cfg)
   ESL_ALPHABET    *abcAMINO = NULL;       /* DNA sequence alphabet                               */
   ESL_SQ          *qsqDNA = NULL;		 /* DNA query sequence                                  */
   ESL_SQ          *qsqDNATxt = NULL;    /* DNA query sequence that will be in text mode for printing */
-  //int             n_targetseqs = 0;
   ESL_GENCODE     *gcode       = NULL;
   ESL_GENCODE_WORKSTATE *wrk    = NULL;
   /* end hmmsearcht */
