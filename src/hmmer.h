@@ -593,10 +593,13 @@ typedef struct p7_alidisplay_s {
   int   M;			/* length of model                      */
 
   char *sqname;			/* name of target sequence              */
+  char *orfname;        /* name of ORF within target sequence (assigned by hmmer pipeline)  */
   char *sqacc;			/* accession of target seq; or [0]='\0' */
   char *sqdesc;			/* description of targ seq; or [0]='\0' */
   int64_t  sqfrom;		/* start position on sequence (1..L)    */
-  int64_t  sqto;  	        /* end position on sequence   (1..L)    */
+  int64_t  sqto;        /* end position on sequence   (1..L)    */
+  int64_t  orffrom;     /* start position on sequence (1..L)    */
+  int64_t  orfto;       /* end position on sequence   (1..L)    */
   int64_t  L;			/* length of sequence                   */
 
   int   memsize;                /* size of allocated block of memory    */
@@ -709,6 +712,7 @@ typedef struct p7_hit_s {
   char   *name;			/* name of the target               (mandatory)           */
   char   *acc;			/* accession of the target          (optional; else NULL) */
   char   *desc;			/* description of the target        (optional; else NULL) */
+  char   *orfid;    /* unique ORF identifier            (mandatory for translated search, not used otherwise)           */
   int    window_length;         /* for later use in e-value computation, when splitting long sequences */
   double sortkey;		/* number to sort by; big is better                       */
 
@@ -1240,7 +1244,7 @@ typedef struct p7_pipeline_s {
   enum p7_pipemodes_e mode;    	/* p7_SCAN_MODELS | p7_SEARCH_SEQS          */
   int           long_targets;   /* TRUE if the target sequences are expected to be very long (e.g. dna chromosome search in nhmmer) */
   int           strands;         /*  p7_STRAND_TOPONLY  | p7_STRAND_BOTTOMONLY |  p7_STRAND_BOTH */
-  int 		    	W;              /* window length for nhmmer scan - essentially maximum length of model that we expect to find*/
+  int           W;              /* window length for nhmmer scan - essentially maximum length of model that we expect to find*/
   int           block_length;   /* length of overlapping blocks read in the multi-threaded variant (default MAX_RESIDUE_COUNT) */
 
   int           show_accessions;/* TRUE to output accessions not names      */
