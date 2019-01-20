@@ -20,8 +20,6 @@
 
 #include "hmmer.h"
 
-#include "esl_sqio.h" //!!!!DEBUG
-
 /* Struct used to pass a collection of useful temporary objects around
  * within the LongTarget functions
  *  */
@@ -247,6 +245,8 @@ p7_pipeline_Create(ESL_GETOPTS *go, int M_hint, int L_hint, int long_targets, en
   pli->mode            = mode;
   pli->show_accessions = (go && esl_opt_GetBoolean(go, "--acc")   ? TRUE  : FALSE);
   pli->show_alignments = (go && esl_opt_GetBoolean(go, "--noali") ? FALSE : TRUE);
+  pli->show_translated_sequence = (go && esl_opt_GetBoolean(go, "--notrans") ? FALSE : TRUE); /* TRUE to display translated DNA sequence in domain display for hmmscant */
+  pli->show_vertical_codon = (go && esl_opt_GetBoolean(go, "--vertcodon") ? TRUE : FALSE); /* TRUE to display translated DNA sequence in domain display for hmmscant */
   pli->hfp             = NULL;
   pli->errbuf[0]       = '\0';
 
@@ -638,6 +638,82 @@ p7_pipeline_Merge(P7_PIPELINE *p1, P7_PIPELINE *p2)
   return eslOK;
 }
 
+/* Function:  p7_pli_computeAliScores()
+ * Synopsis:  Compute per-position scores for the alignment for a domain
+ *
+ * Purpose:   Compute per-position (Viterbi) scores for the alignment for a domain,
+ *            for the purpose of optionally printing these scores out in association
+ *            with each alignment. Such scores can, for example, be used to detangle
+ *            overlapping alignments (from different models)
+ *
+ * Args:      dom             - domain with the alignment for which we wish to compute scores
+ *            seq             - sequence in which domain resides
+ *            data            - contains model's emission and transition values in unstriped form
+ *            K               - alphabet size
+ *
+ * Returns:   <eslOK> on success.
+ *
+ * Throws:    <eslEMEM> on allocation failure.
+ */
+static int
+p7_pli_computeAliScores(P7_DOMAIN *dom, ESL_DSQ *seq, const P7_SCOREDATA *data, int K)
+{
+  int status;
+  int i, j, k;
+  float sc;
+
+  //Compute score contribution of each position in the alignment to the overall Viterbi score
+  ESL_ALLOC( dom->scores_per_pos, sizeof(float) * dom->ad->N );
+  for (i=0; i<dom->ad->N; i++)  dom->scores_per_pos[i] = 0.0;
+  i = dom->iali - 1;        //sequence position
+  j = dom->ad->hmmfrom - 1; //model position
+  k = 0;
+  while ( k<dom->ad->N) {
+    if (dom->ad->model[k] != '.' && dom->ad->aseq[k] != '-') { //match
+      i++;  j++;
+      // Including the MM cost is a hack. The cost of getting to/from this match
+      // state does matter, but an IM or DM transition would improperly deflate
+      // the score of this column, so just give MM. That amount is offset out of
+      // the score shown for preceding indels
+      dom->scores_per_pos[k] = data->fwd_scores[K * j + seq[i]]
+                             +  (j==1 ? 0 : log(data->fwd_transitions[p7O_MM][j]) );
+      k++;
+    } else if (dom->ad->model[k] == '.' ) { // insert
+      //spin through the insert, accumulating cost;  only assign to final column in gap
+      dom->scores_per_pos[k] = -eslINFINITY;
+
+      sc = log(data->fwd_transitions[p7O_MI][j]);
+      i++; k++;
+      while (k<dom->ad->N && dom->ad->model[k] == '.') { //extend insert
+        dom->scores_per_pos[k] = -eslINFINITY;
+        sc += log(data->fwd_transitions[p7O_II][j]);
+        i++; k++;
+      }
+      sc += log(data->fwd_transitions[p7O_IM][j+1]) - log(data->fwd_transitions[p7O_MM][j+1]);
+      dom->scores_per_pos[k-1] = sc;
+
+    } else if (dom->ad->aseq[k] == '-' ) { // delete
+      dom->scores_per_pos[k] = -eslINFINITY;
+      sc = log(data->fwd_transitions[p7O_MD][j]);
+      j++; k++;
+      while (k<dom->ad->N && dom->ad->aseq[k] == '-')  { //extend delete
+        dom->scores_per_pos[k] = -eslINFINITY;
+        sc += log(data->fwd_transitions[p7O_DD][j]);
+        j++; k++;
+      }
+      sc += log(data->fwd_transitions[p7O_DM][j+1]) - log(data->fwd_transitions[p7O_MM][j+1]);
+      dom->scores_per_pos[k-1] = sc;
+    }
+  }
+
+  return eslOK;
+
+ERROR:
+  return eslEMEM;
+
+}
+
+
 /* Function:  p7_Pipeline()
  * Synopsis:  HMMER3's accelerated seq/profile comparison pipeline.
  *
@@ -681,7 +757,7 @@ p7_Pipeline(P7_PIPELINE *pli, P7_OPROFILE *om, P7_BG *bg, const ESL_SQ *sq, cons
   int              Ld;               /* # of residues in envelopes */
   int              d;
   int              status;
-  
+
   if (sq->n == 0) return eslOK;    /* silently skip length 0 seqs; they'd cause us all sorts of weird problems */
 
   p7_omx_GrowTo(pli->oxf, om->M, 0, sq->n);    /* expand the one-row omx if needed */
@@ -725,7 +801,6 @@ p7_Pipeline(P7_PIPELINE *pli, P7_OPROFILE *om, P7_BG *bg, const ESL_SQ *sq, cons
     }
   pli->n_past_vit++;
 
-
   /* Parse it with Forward and obtain its real Forward score. */
   p7_ForwardParser(sq->dsq, sq->n, om, pli->oxf, &fwdsc);
   seq_score = (fwdsc-filtersc) / eslCONST_LOG2;
@@ -742,7 +817,22 @@ p7_Pipeline(P7_PIPELINE *pli, P7_OPROFILE *om, P7_BG *bg, const ESL_SQ *sq, cons
   if (pli->ddef->nregions   == 0) return eslOK; /* score passed threshold but there's no discrete domains here       */
   if (pli->ddef->nenvelopes == 0) return eslOK; /* rarer: region was found, stochastic clustered, no envelopes found */
   if (pli->ddef->ndom       == 0) return eslOK; /* even rarer: envelope found, no domain identified {iss131}         */
+  if (ntsq != NULL)  // translated search, protein query, nucleotide target
+  {
+     P7_DOMAIN  *dom    = NULL;
+     for (d = 0; d < pli->ddef->ndom; d++)
+     {
+       dom = pli->ddef->dcl + d;
+       int ali_len = dom->jali - dom->iali + 1;
+       if (ali_len < 4)  // anything less than this is a funny byproduct of the Forward score passing a very low threshold, but no reliable alignment existing that supports it
+         dom->is_reported = FALSE;
+     }
+  }
 
+  if (pli->do_alignment_score_calc) {
+    for (d = 0; d < pli->ddef->ndom; d++)
+      p7_pli_computeAliScores(pli->ddef->dcl + d, sq->dsq, data, om->abc->Kp);
+  }
 
   /* Calculate the null2-corrected per-seq score */
   if (pli->do_null2)
@@ -810,9 +900,10 @@ p7_Pipeline(P7_PIPELINE *pli, P7_OPROFILE *om, P7_BG *bg, const ESL_SQ *sq, cons
     {
       p7_tophits_CreateNextHit(hitlist, &hit);
       if (pli->mode == p7_SEARCH_SEQS) {
-        if (                       (status  = esl_strdup(sq->name, -1, &(hit->name)))  != eslOK) ESL_EXCEPTION(eslEMEM, "allocation failure");
-        if (sq->acc[0]  != '\0' && (status  = esl_strdup(sq->acc,  -1, &(hit->acc)))   != eslOK) ESL_EXCEPTION(eslEMEM, "allocation failure");
-        if (sq->desc[0] != '\0' && (status  = esl_strdup(sq->desc, -1, &(hit->desc)))  != eslOK) ESL_EXCEPTION(eslEMEM, "allocation failure");
+        if (                        (status  = esl_strdup(sq->name,  -1, &(hit->name)))  != eslOK) ESL_EXCEPTION(eslEMEM, "allocation failure");
+        if (sq->acc[0]   != '\0' && (status  = esl_strdup(sq->acc,   -1, &(hit->acc)))   != eslOK) ESL_EXCEPTION(eslEMEM, "allocation failure");
+        if (sq->desc[0]  != '\0' && (status  = esl_strdup(sq->desc,  -1, &(hit->desc)))  != eslOK) ESL_EXCEPTION(eslEMEM, "allocation failure");
+        if (sq->orfid[0] != '\0' && (status  = esl_strdup(sq->orfid, -1, &(hit->orfid))) != eslOK) ESL_EXCEPTION(eslEMEM, "allocation failure");
       } else {
         if ((status  = esl_strdup(om->name, -1, &(hit->name)))  != eslOK) esl_fatal("allocation failure");
         if ((status  = esl_strdup(om->acc,  -1, &(hit->acc)))   != eslOK) esl_fatal("allocation failure");
@@ -901,88 +992,49 @@ p7_Pipeline(P7_PIPELINE *pli, P7_OPROFILE *om, P7_BG *bg, const ESL_SQ *sq, cons
         }
       }
 	  
+      /*
+        if performing translated search, we want to record the location
+        of the hit in both the full DNA sequence and in the ORF provided by
+        esl_gencode_ProcessOrf (esl_gencode.c) used in p7_alidisplay_Create
+        in p7_alidisplay.c.
+        sq->start is the start location of the ORF in the nucleotide sequence and
+        ad->sqfrom is the start of the hit in the ORF in amino acid locations
+      */
+      if (ntsq != NULL)
+      {
+         hit->target_len = ntsq->n;
+         for (d = 0; d < hit->ndom; d++)
+         {
+            if (sq->start < sq->end)
+            {
+               hit->dcl[d].iorf       = sq->start;
+               hit->dcl[d].jorf       = sq->end;
+               hit->dcl[d].ienv       = (hit->dcl[d].ienv*3-2) + sq->start-1;
+               hit->dcl[d].jenv       = (hit->dcl[d].jenv*3) + sq->start-1;
+               hit->dcl[d].ad->orffrom=  hit->dcl[d].ad->sqfrom;
+               hit->dcl[d].ad->orfto  =  hit->dcl[d].ad->sqto;
+               hit->dcl[d].ad->sqfrom = (hit->dcl[d].ad->sqfrom*3-2) + sq->start-1;
+               hit->dcl[d].ad->sqto   = (hit->dcl[d].ad->sqto*3) + sq->start-1;
+            }
+            else
+            {
+               hit->dcl[d].iorf       = sq->start;
+               hit->dcl[d].jorf       = sq->end;
+               hit->dcl[d].ienv       = sq->start - (hit->dcl[d].ienv - 1)*3;
+               hit->dcl[d].jenv       = sq->start - (hit->dcl[d].jenv - 1)*3 - 2;
+               hit->dcl[d].ad->orffrom=  hit->dcl[d].ad->sqfrom;
+               hit->dcl[d].ad->orfto  =  hit->dcl[d].ad->sqto;
+               hit->dcl[d].ad->sqfrom = sq->start - (hit->dcl[d].ad->sqfrom -1)*3;
+               hit->dcl[d].ad->sqto   = sq->start - (hit->dcl[d].ad->sqto -1)*3 - 2;
+            }
+         }
+      }
+
     }
 
   return eslOK;
 }
 
-
-
-/* Function:  p7_pli_computeAliScores()
- * Synopsis:  Compute per-position scores for the alignment for a domain
- *
- * Purpose:   Compute per-position (Viterbi) scores for the alignment for a domain,
- *            for the purpose of optionally printing these scores out in association
- *            with each alignment. Such scores can, for example, be used to detangle
- *            overlapping alignments (from different models)
- *
- * Args:      dom             - domain with the alignment for which we wish to compute scores
- *            seq             - sequence in which domain resides
- *            data            - contains model's emission and transition values in unstriped form
- *            K               - alphabet size
- *
- * Returns:   <eslOK> on success.
- *
- * Throws:    <eslEMEM> on allocation failure.
- */
-static int
-p7_pli_computeAliScores(P7_DOMAIN *dom, ESL_DSQ *seq, const P7_SCOREDATA *data, int K)
-{
-  int status;
-  int i, j, k;
-  float sc;
-
-  //Compute score contribution of each position in the alignment to the overall Viterbi score
-  ESL_ALLOC( dom->scores_per_pos, sizeof(float) * dom->ad->N );
-  for (i=0; i<dom->ad->N; i++)  dom->scores_per_pos[i] = 0.0;
-
-  i = dom->iali - 1;        //sequence position
-  j = dom->ad->hmmfrom - 1; //model position
-  k = 0;
-  while ( k<dom->ad->N) {
-    if (dom->ad->model[k] != '.' && dom->ad->aseq[k] != '-') { //match
-      i++;  j++;
-      // Including the MM cost is a hack. The cost of getting to/from this match
-      // state does matter, but an IM or DM transition would improperly deflate
-      // the score of this column, so just give MM. That amount is offset out of
-      // the score shown for preceding indels
-      dom->scores_per_pos[k] = data->fwd_scores[K * j + seq[i]]
-                             +  (j==1 ? 0 : log(data->fwd_transitions[p7O_MM][j]) );
-      k++;
-    } else if (dom->ad->model[k] == '.' ) { // insert
-      //spin through the insert, accumulating cost;  only assign to final column in gap
-      dom->scores_per_pos[k] = -eslINFINITY;
-
-      sc = log(data->fwd_transitions[p7O_MI][j]);
-      i++; k++;
-      while (k<dom->ad->N && dom->ad->model[k] == '.') { //extend insert
-        dom->scores_per_pos[k] = -eslINFINITY;
-        sc += log(data->fwd_transitions[p7O_II][j]);
-        i++; k++;
-      }
-      sc += log(data->fwd_transitions[p7O_IM][j+1]) - log(data->fwd_transitions[p7O_MM][j+1]);
-      dom->scores_per_pos[k-1] = sc;
-
-    } else if (dom->ad->aseq[k] == '-' ) { // delete
-      dom->scores_per_pos[k] = -eslINFINITY;
-      sc = log(data->fwd_transitions[p7O_MD][j]);
-      j++; k++;
-      while (k<dom->ad->N && dom->ad->aseq[k] == '-')  { //extend delete
-        dom->scores_per_pos[k] = -eslINFINITY;
-        sc += log(data->fwd_transitions[p7O_DD][j]);
-        j++; k++;
-      }
-      sc += log(data->fwd_transitions[p7O_DM][j+1]) - log(data->fwd_transitions[p7O_MM][j+1]);
-      dom->scores_per_pos[k-1] = sc;
-    }
-  }
-
-  return eslOK;
-
-ERROR:
-  return eslEMEM;
-
-}
 
 
 /* Function:  p7_pli_postViterbi_LongTarget()
@@ -1865,7 +1917,7 @@ main(int argc, char **argv)
       p7_bg_SetLength(bg, sq->n);
       p7_oprofile_ReconfigLength(om, sq->n);
   
-      p7_Pipeline(pli, om, bg, sq, NULL, hitlist);
+      p7_Pipeline(pli, om, bg, sq, NULL, hitlist, NULL);
 
       esl_sq_Reuse(sq);
       p7_pipeline_Reuse(pli);
@@ -2006,7 +2058,7 @@ main(int argc, char **argv)
       p7_bg_SetLength(bg, sq->n); /* SetLength() call MUST follow NewModel() call, because NewModel() resets the filter HMM, including its default expected length; see bug #h85 */
       p7_oprofile_ReconfigLength(om, sq->n);
 
-      p7_Pipeline(pli, om, bg, sq, hitlist);
+      p7_Pipeline(pli, om, bg, sq, NULL, hitlist, NULL);
       
       p7_oprofile_Destroy(om);
       p7_pipeline_Reuse(pli);
