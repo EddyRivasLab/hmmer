@@ -144,6 +144,7 @@ OBJS =  build.o\
 	p7_gmxchk.o\
 	p7_hmm.o\
 	p7_hmmcache.o\
+	p7_hmmd_search_stats.o\
 	p7_hmmfile.o\
 	p7_hmmwindow.o\
 	p7_pipeline.o\
@@ -191,6 +192,7 @@ UTESTS =\
 	p7_bg_utest\
 	p7_gmx_utest\
 	p7_gmxchk_utest\
+	p7_hmmd_search_stats_utest\
 	p7_hmm_utest\
 	p7_hmmfile_utest\
 	p7_profile_utest\
