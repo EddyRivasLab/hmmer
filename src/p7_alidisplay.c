@@ -25,6 +25,31 @@
  * 1. The P7_ALIDISPLAY object
  *****************************************************************/
 
+/* A P7_ALIDISPLAY structure originally had two possible states: 
+ * "serialized", in which all of the variable-length fields of the structure
+ * were pointers into one block of allocated memory, which was pointed to by the
+ * structure's "mem" field, and
+ * "deserialized", in which each of the variable-length fields of the structure
+ * were separate regions of allocated memory.  The intent of this was that 
+ * "serialized" structures would be faster to create, as they only require one
+ * memory allocation, and easier to send over sockets, but that "deserialized"
+ * structures would be easier to modify and/or reuse.  However, HMMER currently
+ * does not ever modify or reuse P7_ALIDISPLAY structures.
+ * 
+ * P7_ALIDISPLAY structures are created in "serialized" mode. The only time they 
+ * were ever converted into "deserialized" mode was in hmmpgmd2msa, and this was
+ * somewhat unnecessary. 
+ *
+ * Now, we have added _Serialize() and _Deserialize() functions that have the more
+ * traditional behavior of converting P7_ALIDISPLAY structures to and from 
+ * contiguous blocks of bytes for transmission over sockets.  With this change,
+ * P7_ALIDISPLAY structures will always be in "serialized" mode, and will never be 
+ * converted to their "deserialized" mode.  (Yes, this terminology is confusing.)
+ * 
+ * For H3, we will leave the existing code to handle the "serialized" and "deserialized"
+ * modes in place.  HMMER's output code is being heavily revised for H4, and we will
+ * revisit how these modes are handled in H4 once that portion of the code stabilizes.
+ */ 
 
 /* Function:  p7_alidisplay_Create()
  * Synopsis:  Create an alignment display, from trace and oprofile.
@@ -347,6 +372,121 @@ p7_alidisplay_Sizeof(const P7_ALIDISPLAY *ad)
   return n;
 }
 
+/* Function:  p7_alidisplay_Serialize
+ * Synopsis:  Serializes a HMMD_SEARCH_STATS object into a stream of bytes
+ *.           that can be reliably transmitted over internet sockets
+ *
+ * Purpose:   Converts an architecture-dependent P7_SEARCH_STATS object into a contiguous stream
+ *            of bytes with each field of the data structure in network byte order for transmission
+ *            over sockets.  The serialized byte stream may be part of a larger allocated buffer.
+ *            If the provided buffer is NULL, allocates a new buffer large enough for the serialized object
+ *            If the provided buffer is not large enough to hold the serialized object and its existing data, re-allocates
+ *            a larger buffer
+ *
+ * Inputs:    obj: A pointer to the HMMD_SEARCH_STATS object to be serialized
+ *            buf: Handle to the buffer that the object should be serialized into.  If *buf is NULL,
+ *                 a new buffer will be allocated.  buf == NULL is not allowed.
+ *            n:   Offset (in bytes) from the start of the buffer to where the serialized object should start.
+ *            nalloc: size (in bytes) of the buffer passed in buf 
+ *
+ *Returns:    On success: returns eslOK, sets *buf to the base of the buffer containing the object
+ *            if allocation or re-allocation was requried, sets *n to the offset from the start of the buffer
+ *            to the first position after the serialized object and sets *nalloc to the new size of the buffer 
+ *            if allocation or re-allocation was required.
+ *
+ * Throws:    Returns eslEMEM if unable to allocate or re-allocate memory.  Returns eslEINVAL if obj == NULL, or buf == NULL
+ */
+int p7_alidisplay_Serialize(const P7_ALIDISPLAY *obj, uint8_t **buf, uint32_t *n, uint32_t *nalloc){
+
+  int status; // error variable used by ESL_ALLOC
+  uint32_t ser_size; // size of the structure when serialized
+  uint8_t *ptr; // current position within the buffer
+  uint32_t network_32bit; // hold 32-bit fields after conversion to network order
+  uint64_t network_64bit; // hold 64-bit fields after conversion to network order
+  // check to make sure we were passed a valid pointer 
+  if(obj == NULL){ // no object to serialize
+    return(eslEINVAL);
+  }
+
+  ser_size = (11 * sizeof(int)) + (3 * sizeof(uint64_t)); // Size of the 14 fixed-length fields in the serialized structure
+
+  // This method will work regardless of whether the object is in "serialized" or "deserialized" format
+  // it's also blatantly stolen from the _Sizeof() routine.  
+  // Note that we can't just call _Sizeof() to figure out how big the serialized data structure will be because
+  // the serialized structure has some fields that differ from the base P7_ALIDISPLAY structure
+
+  if (obj->rfline) ser_size += obj->N+1; /* +1 for \0 */
+  if (obj->mmline) ser_size += obj->N+1;
+  if (obj->csline) ser_size += obj->N+1; 
+  if (obj->ppline) ser_size += obj->N+1; 
+  ser_size += 3 * (obj->N+1);           /* model, mline, aseq */
+  if (obj->ntseq)  ser_size += (3 * obj->N) + 1;           /* ntseq */
+  ser_size += 1 + strlen(obj->hmmname);   
+  ser_size += 1 + strlen(obj->hmmacc);    /* optional acc, desc fields: when not present, just "" ("\0") */
+  ser_size += 1 + strlen(obj->hmmdesc);
+  ser_size += 1 + strlen(obj->sqname);
+  ser_size += 1 + strlen(obj->sqacc);  
+  ser_size += 1 + strlen(obj->sqdesc); 
+
+  // Now that we know how big the serialized data structure will be, determine if we have enough buffer space to hold it.
+  if(buf == NULL){ // No place to put the pointer to a buffer, so fail
+    return eslEINVAL;
+  }
+
+  if(*buf == NULL){ // have no buffer, so allocate one
+    ESL_ALLOC(*buf, ser_size);
+  }
+
+  if((n + ser_size) < nalloc){ //have a buffer, but it's not big enough
+    ESL_REALLOC(*buf, (*n + ser_size));
+  }
+
+  ptr = *buf + *n; // point to the start of empty space in the buffer
+
+  network_32bit = esl_hton32(ser_size); // first field in the serialized object is its size
+  memcpy(ptr, &network_32bit, sizeof(uint32_t)); // Write size of the serialized object into the buffer
+  ptr += sizeof(uint32_t);
+
+  // Field 2: N
+  network_32bit = esl_hton32(obj->N);
+  memcpy(ptr, &network_32bit, sizeof(uint32_t)); // Write size of the serialized object into the buffer
+  ptr += sizeof(uint32_t);
+ 
+  // Field 3: Length of the hmmname string, if any
+  if(obj->hmmname != NULL){
+    network_32bit = esl_hton32(strlen(obj->hmmname) + 1);
+  }
+  else{
+    network_32bit = esl_hton32(0); // hton32 call isn't strictly necessary, but do it for pedanticness in case we port to a
+    // system with a truly bizarre number representation
+  }
+  memcpy(ptr, &network_32bit, sizeof(uint32_t)); // Write size of the serialized object into the buffer
+  ptr += sizeof(uint32_t);
+ 
+   // Field 4: Length of the hmmacc string
+  if(obj->hmmacc != NULL){
+    network_32bit = esl_hton32(strlen(obj->hmmacc) + 1);
+  }
+  else{
+    network_32bit = esl_hton32(0); // hton32 call isn't strictly necessary, but do it for pedanticness in case we port to a
+    // system with a truly bizarre number representation
+  }
+  memcpy(ptr, &network_32bit, sizeof(uint32_t)); // Write size of the serialized object into the buffer
+  ptr += sizeof(uint32_t);
+ 
+  // Field 5: Length of the hmmdesc string
+  network_32bit = esl_hton32(strlen(obj->hmmname) + 1);
+  memcpy(ptr, &network_32bit, sizeof(uint32_t)); // Write size of the serialized object into the buffer
+  ptr += sizeof(uint32_t);
+ 
+
+  return eslOK; // If we make it here, everything succeeded, so return a pass
+
+  ERROR:
+    return eslEMEM;
+}
+
+
 /* Function:  p7_alidisplay_Serialize()
  * Synopsis:  Serialize a P7_ALIDISPLAY, using internal memory.
  *
@@ -365,7 +505,7 @@ p7_alidisplay_Sizeof(const P7_ALIDISPLAY *ad)
  *            its original (deserialized) state.
  */
 int
-p7_alidisplay_Serialize(P7_ALIDISPLAY *ad)
+p7_alidisplay_Serialize_old(P7_ALIDISPLAY *ad)
 {
   int pos;
   int n;
@@ -418,7 +558,7 @@ p7_alidisplay_Serialize(P7_ALIDISPLAY *ad)
  *            its original (serialized) state.
  */
 int
-p7_alidisplay_Deserialize(P7_ALIDISPLAY *ad)
+p7_alidisplay_Deserialize_old(P7_ALIDISPLAY *ad)
 {
   int pos;
   int n;
@@ -1220,10 +1360,10 @@ utest_Serialize(ESL_RANDOMNESS *rng, int ntrials, int N)
       if ( (ad2 = p7_alidisplay_Clone(ad))   == NULL)  esl_fatal(msg);
       if ( p7_alidisplay_Compare(ad, ad2)    != eslOK) esl_fatal(msg);
 
-      if ( p7_alidisplay_Serialize(ad)       != eslOK) esl_fatal(msg);
+      if ( p7_alidisplay_Serialize_old(ad)       != eslOK) esl_fatal(msg);
       if ( p7_alidisplay_Compare(ad, ad2)    != eslOK) esl_fatal(msg);
 
-      if ( p7_alidisplay_Deserialize(ad)     != eslOK) esl_fatal(msg);
+      if ( p7_alidisplay_Deserialize_old(ad)     != eslOK) esl_fatal(msg);
       if ( p7_alidisplay_Compare(ad, ad2)    != eslOK) esl_fatal(msg);
 
       p7_alidisplay_Destroy(ad);
@@ -1244,7 +1384,7 @@ utest_Backconvert(int be_verbose, ESL_RANDOMNESS *rng, ESL_ALPHABET *abc, int nt
   for (trial = 0; trial < ntrials; trial++)
     {
       if ( p7_alidisplay_Sample(rng, N, &ad)                     != eslOK) esl_fatal(msg);
-      if ( p7_alidisplay_Serialize(ad)                           != eslOK) esl_fatal(msg);
+      if ( p7_alidisplay_Serialize_old(ad)                           != eslOK) esl_fatal(msg);
       if (be_verbose && p7_alidisplay_Dump(stdout, ad)           != eslOK) esl_fatal(msg);
       if ( p7_alidisplay_Backconvert(ad, abc, &sq, &tr)          != eslOK) esl_fatal(msg);
       if (be_verbose && p7_trace_Dump(stdout, tr, NULL, sq->dsq) != eslOK) esl_fatal(msg);

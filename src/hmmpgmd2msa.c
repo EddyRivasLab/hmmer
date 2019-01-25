@@ -236,7 +236,7 @@ hmmpgmd2msa(void *data, P7_HMM *hmm, ESL_SQ *qsq, int *incl, int incl_size, int 
       memcpy(ad2->mem, p, ad->memsize);
       
       p += ad2->memsize;
-      p7_alidisplay_Deserialize(ad2);
+      p7_alidisplay_Deserialize_old(ad2);
     }
   }
 
@@ -442,7 +442,7 @@ int hmmpgmd2stats(void *data, P7_HMM *hmm, float** statsOut)
       
       p += ad2->memsize;
       
-      p7_alidisplay_Deserialize(ad2);
+      p7_alidisplay_Deserialize_old(ad2);
       
       if(th.hit[i]->flags & p7_IS_INCLUDED && th.hit[i]->dcl[j].is_included)
       {
