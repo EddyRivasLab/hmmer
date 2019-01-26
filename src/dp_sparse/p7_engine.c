@@ -491,43 +491,49 @@ int p7_engine_Compare_Sequence_HMM(P7_ENGINE *eng, ESL_DSQ *dsq, int L, P7_PROFI
 
 #include "hmmer.h"
 
-#if 0
+
+/* trace_dump_runlengths()
+ * Used in testing zigar compression strategies.
+ */
 static int
 trace_dump_runlengths(P7_TRACE *tr)
 {
-  int in_domain = FALSE;
-  int last_st   = p7T_S;
   int nrun      = 0;
   int z;
 
-  for (z = 0; z < tr->N; z++)
-    {
-      if (! in_domain && p7_trace_IsMain(tr->st[z]))
-  {
-    in_domain = TRUE;
-    nrun      = 1;
-    last_st   = tr->st[z];
-  } 
-      else if (in_domain)
-  {
-    if   (tr->st[z] == last_st) nrun++;
-    else {
-      printf("%5d %-2s ", nrun, p7_trace_DecodeStatetype(last_st));
-      last_st = tr->st[z];
-      nrun    = 1;
-    }
-    if (tr->st[z] == p7T_E) { printf("\n"); in_domain = FALSE; }
-  }
-    }
+  for (z = 1; z < tr->N; z++)                                // starts at z=1 (S state); we use z-1.
+    if ( p7_trace_IsMain(tr->st[z]) || tr->st[z] == p7T_E)   // we're in a domain; or ending one.
+      {
+	if (! p7_trace_IsMain(tr->st[z-1]) ) nrun = 1;       // start of a new domain? reset counter.
+	else if (tr->st[z] == tr->st[z-1])   nrun++;         // extending a run of the same state? bump counter.
+	else {                                               // finished previous run (including E)? print cigar element.
+	  printf("%5d %-2s%c", nrun, p7_trace_DecodeStatetype(tr->st[z-1]), tr->st[z] == p7T_E ? '\n' : ' ');
+	  nrun = 1;
+	}
+      }
   return eslOK;
 }
-#endif
+
+static int
+trace_dump_postprobs(P7_TRACE *tr)
+{
+  int z;
+
+  for (z = 1; z < tr->N; z++)
+    if      (p7_trace_IsM(tr->st[z]) || p7_trace_IsI(tr->st[z])) printf("%.6f ", tr->pp[z]);
+    else if (tr->st[z] == p7T_E)                                 printf("\n");
+  return eslOK;
+}
+
 
 
 static ESL_OPTIONS options[] = {
   /* name           type      default  env  range  toggles reqs incomp  help                                       docgroup*/
-  { "-h",        eslARG_NONE,   FALSE, NULL, NULL,   NULL,  NULL, NULL, "show brief help on version and usage",             0 },
-  { "-s",        eslARG_INT,      "0",  NULL, NULL,   NULL,  NULL, NULL, "set random number seed to <n>",                   0 },
+  { "-h",        eslARG_NONE,   FALSE, NULL, NULL,   NULL,  NULL, NULL, "show brief help on version and usage",            0 },
+  { "-s",        eslARG_INT,      "0", NULL, NULL,   NULL,  NULL, NULL, "set random number seed to <n>",                   0 },
+  { "-T",        eslARG_NONE,   FALSE, NULL, NULL,   NULL,  NULL, NULL, "dump trace structure(s)",                         0 },
+  { "--Zcig",    eslARG_NONE,   FALSE, NULL, NULL,   NULL,  NULL, NULL, "dump CIGAR strings",                              0 },  // xref projects/zigar
+  { "--Zpp",     eslARG_NONE,   FALSE, NULL, NULL,   NULL,  NULL, NULL, "dump posterior probability lines",                0 },  // ditto
   {  0, 0, 0, 0, 0, 0, 0, 0, 0, 0 },
 };
 static char usage[]  = "[-options] <hmmfile> <seqfile>";
@@ -551,71 +557,67 @@ main(int argc, char **argv)
   P7_ENGINE      *eng     = NULL;
   int             status;
 
-  /* Read in one HMM */
   if (p7_hmmfile_OpenE(hmmfile, NULL, &hfp, NULL) != eslOK) p7_Fail("Failed to open HMM file %s", hmmfile);
-  if (p7_hmmfile_Read(hfp, &abc, &hmm)            != eslOK) p7_Fail("Failed to read HMM");
+
+  while ( p7_hmmfile_Read(hfp, &abc, &hmm) == eslOK) 
+    {
+      /* Configure a profile from the HMM */
+      bg = p7_bg_Create(abc);
+      gm = p7_profile_Create (hmm->M, abc);
+      om = p7_oprofile_Create(hmm->M, abc);
+      p7_profile_Config   (gm, hmm, bg);
+      p7_oprofile_Convert (gm, om);
+
+      p7_bg_SetFilter(bg, om->M, om->compo);
+
+      /* Open sequence file */
+      sq     = esl_sq_CreateDigital(abc);
+      status = esl_sqfile_Open(seqfile, format, NULL, &sqfp);
+      if      (status == eslENOTFOUND) p7_Fail("No such file.");
+      else if (status == eslEFORMAT)   p7_Fail("Format unrecognized.");
+      else if (status == eslEINVAL)    p7_Fail("Can't autodetect stdin or .gz.");
+      else if (status != eslOK)        p7_Fail("Open failed, code %d.", status);
  
-  /* Configure a profile from the HMM */
-  bg = p7_bg_Create(abc);
-  gm = p7_profile_Create (hmm->M, abc);
-  om = p7_oprofile_Create(hmm->M, abc);
-  p7_profile_Config   (gm, hmm, bg);
-  p7_oprofile_Convert (gm, om);
+      /* Create the comparison engine */
+      eng   = p7_engine_Create(abc, /*params=*/NULL, /*stats=*/NULL, gm->M, /*L_hint=*/400);
 
-  p7_bg_SetFilter(bg, om->M, om->compo);
+      /* For each sequence in <sqfile>: */
+      while ((status = esl_sqio_Read(sqfp, sq)) == eslOK)
+	{ 
+	  p7_bg_SetLength(bg, sq->n);
+	  p7_oprofile_ReconfigLength(om, sq->n);
 
-  /* Open sequence file */
-  sq     = esl_sq_CreateDigital(abc);
-  status = esl_sqfile_Open(seqfile, format, NULL, &sqfp);
-  if      (status == eslENOTFOUND) p7_Fail("No such file.");
-  else if (status == eslEFORMAT)   p7_Fail("Format unrecognized.");
-  else if (status == eslEINVAL)    p7_Fail("Can't autodetect stdin or .gz.");
-  else if (status != eslOK)        p7_Fail("Open failed, code %d.", status);
- 
-  /* Create the comparison engine */
-  eng   = p7_engine_Create(abc, /*params=*/NULL, /*stats=*/NULL, gm->M, /*L_hint=*/400);
+	  status = p7_engine_Overthruster(eng, sq->dsq, sq->n, om, bg);
+	  if      (status == eslFAIL) { 
+	    p7_engine_Reuse(eng);
+	    esl_sq_Reuse(sq); 
+	    continue; 
+	  }
+	  else if (status != eslOK)   p7_Fail("overthruster failed with code %d\n", status);
 
-  /* For each sequence in <sqfile>: */
-  while ((status = esl_sqio_Read(sqfp, sq)) == eslOK)
-    { 
-      //printf("working on %s (len=%d)... ", sq->name, (int) sq->n);
+	  p7_profile_SetLength(gm, sq->n);
+	  status = p7_engine_Main(eng, sq->dsq, sq->n, gm);
 
-      p7_bg_SetLength     (bg, sq->n);
-      p7_oprofile_ReconfigLength(om, sq->n);
+	  if (esl_opt_GetBoolean(go, "-T"))     p7_trace_DumpAnnotated(stdout, eng->tr, gm, sq->dsq);
+	  if (esl_opt_GetBoolean(go, "--Zcig")) trace_dump_runlengths(eng->tr);
+	  if (esl_opt_GetBoolean(go, "--Zpp"))  trace_dump_postprobs(eng->tr);
 
-      status = p7_engine_Overthruster(eng, sq->dsq, sq->n, om, bg);
-      if      (status == eslFAIL) { 
-  //printf("skip\n");
-  p7_engine_Reuse(eng);
-  esl_sq_Reuse(sq); 
-  continue; 
-      }
-      else if (status != eslOK)   p7_Fail("overthruster failed with code %d\n", status);
-
-      //printf("over to MAIN\n");
-      p7_profile_SetLength(gm, sq->n);
-      status = p7_engine_Main(eng, sq->dsq, sq->n, gm);
-
-      //p7_trace_DumpAnnotated(stdout, eng->tr, gm, sq->dsq);
-      //trace_dump_runlengths(eng->tr);
-
-      p7_engine_Reuse(eng);
-      esl_sq_Reuse(sq);
-    }
-  if      (status == eslEFORMAT) esl_fatal("Parse failed (sequence file %s)\n%s\n",
-             sqfp->filename, sqfp->get_error(sqfp));     
-  else if (status != eslEOF)     esl_fatal("Unexpected error %d reading sequence file %s",
-             status, sqfp->filename);
-
+	  p7_engine_Reuse(eng);
+	  esl_sq_Reuse(sq);
+	}
+      if      (status == eslEFORMAT) esl_fatal("Parse failed (sequence file %s)\n%s\n",	   sqfp->filename, sqfp->get_error(sqfp));     
+      else if (status != eslEOF)     esl_fatal("Unexpected error %d reading sequence file %s", status, sqfp->filename);
   
-  p7_engine_Destroy(eng);
-  esl_sqfile_Close(sqfp);
-  esl_sq_Destroy(sq);
-  p7_oprofile_Destroy(om);
-  p7_profile_Destroy(gm);
-  p7_bg_Destroy(bg);
-  p7_hmm_Destroy(hmm);
-  p7_hmmfile_Close(hfp);
+      p7_engine_Destroy(eng);     eng  = NULL;
+      esl_sqfile_Close(sqfp);     sqfp = NULL;
+      esl_sq_Destroy(sq);         sq   = NULL;
+      p7_oprofile_Destroy(om);    om   = NULL;
+      p7_profile_Destroy(gm);     gm   = NULL;
+      p7_bg_Destroy(bg);          bg   = NULL;
+      p7_hmm_Destroy(hmm);        hmm  = NULL;
+    }
+
+  p7_hmmfile_Close(hfp);      
   esl_alphabet_Destroy(abc);
   esl_getopts_Destroy(go);
   return 0;
