@@ -735,7 +735,8 @@ serial_loop(WORKER_INFO *info, ESL_SQFILE *dbfp, int n_targetseqs)
   int  sstatus = eslOK;
   int seq_id = 0;
   int          k;
-  ESL_SQ       *dbsq_dna    = esl_sq_CreateDigital(esl_alphabet_Create(eslDNA));   /* (digital) nucleotide sequence, to be translated into ORFs  */
+  ESL_ALPHABET *abc = esl_alphabet_Create(eslDNA);
+  ESL_SQ       *dbsq_dna    = esl_sq_CreateDigital(abc);   /* (digital) nucleotide sequence, to be translated into ORFs  */
   ESL_SQ       *dbsq_dnatxt = esl_sq_Create();
   ESL_SQ_BLOCK *block       = NULL;   /* for translated ORFs */
   ESL_SQ       *dbsq_aa     = NULL;   /* used to hold a current ORF  */
@@ -818,6 +819,9 @@ serial_loop(WORKER_INFO *info, ESL_SQFILE *dbfp, int n_targetseqs)
 
   }
 
+  esl_alphabet_Destroy(abc);
+  esl_sq_Destroy(dbsq_dna);
+  esl_sq_Destroy(dbsq_dnatxt);
 
   return sstatus;
 }

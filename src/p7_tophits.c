@@ -130,6 +130,7 @@ p7_tophits_CreateNextHit(P7_TOPHITS *h, P7_HIT **ret_hit)
   hit->name         = NULL;
   hit->acc          = NULL;
   hit->desc         = NULL;
+  hit->orfid        = NULL;
   hit->sortkey      = 0.0;
 
   hit->score        = 0.0;
@@ -458,6 +459,7 @@ p7_tophits_Merge(P7_TOPHITS *h1, P7_TOPHITS *h2)
       h2->unsrt[i].name = NULL;
       h2->unsrt[i].acc  = NULL;
       h2->unsrt[i].desc = NULL;
+      h2->unsrt[i].orfid = NULL;
       h2->unsrt[i].dcl  = NULL;
   }
 
@@ -537,7 +539,7 @@ p7_tophits_GetMaxORFposLength(P7_TOPHITS *h)
   char buffer [13];
 
   for (i = 0; i < h->N; i++) {
-    if (h->unsrt[i].dcl[0].iorf > 0) {
+    if (h->unsrt[i].nreported>0 && h->unsrt[i].dcl[0].iorf > 0) {
       n = sprintf (buffer, "%" PRId64 "", h->unsrt[i].dcl[0].iorf);
       max = ESL_MAX(n, max);
       n = sprintf (buffer, "%" PRId64 "", h->unsrt[i].dcl[0].jorf);
@@ -605,7 +607,7 @@ p7_tophits_GetMaxORFnameLength(P7_TOPHITS *h)
 {
   int i, max, n;
   for (max = 0, i = 0; i < h->N; i++)
-    if (h->unsrt[i].orfid != NULL) {
+    if (h->unsrt[i].nreported > 0 && h->unsrt[i].orfid != NULL) {
       n   = strlen(h->unsrt[i].orfid);
       max = ESL_MAX(n, max);
     }
@@ -664,6 +666,7 @@ p7_tophits_Reuse(P7_TOPHITS *h)
       if (h->unsrt[i].name != NULL) free(h->unsrt[i].name);
       if (h->unsrt[i].acc  != NULL) free(h->unsrt[i].acc);
       if (h->unsrt[i].desc != NULL) free(h->unsrt[i].desc);
+      if (h->unsrt[i].orfid!= NULL) free(h->unsrt[i].orfid);
       if (h->unsrt[i].dcl  != NULL) {
         for (j = 0; j < h->unsrt[i].ndom; j++)
           if (h->unsrt[i].dcl[j].ad != NULL) p7_alidisplay_Destroy(h->unsrt[i].dcl[j].ad);
@@ -691,10 +694,11 @@ p7_tophits_Destroy(P7_TOPHITS *h)
   {
     for (i = 0; i < h->N; i++)
     {
-      if (h->unsrt[i].name != NULL) free(h->unsrt[i].name);
-      if (h->unsrt[i].acc  != NULL) free(h->unsrt[i].acc);
-      if (h->unsrt[i].desc != NULL) free(h->unsrt[i].desc);
-      if (h->unsrt[i].dcl  != NULL) {
+      if (h->unsrt[i].name  != NULL) free(h->unsrt[i].name);
+      if (h->unsrt[i].acc   != NULL) free(h->unsrt[i].acc);
+      if (h->unsrt[i].desc  != NULL) free(h->unsrt[i].desc);
+      if (h->unsrt[i].orfid != NULL) free(h->unsrt[i].orfid);
+      if (h->unsrt[i].dcl   != NULL) {
         for (j = 0; j < h->unsrt[i].ndom; j++) {
           if (h->unsrt[i].dcl[j].ad             != NULL) p7_alidisplay_Destroy(h->unsrt[i].dcl[j].ad);
 	  if (h->unsrt[i].dcl[j].scores_per_pos != NULL) free (h->unsrt[i].dcl->scores_per_pos);
