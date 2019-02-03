@@ -2,18 +2,23 @@
 PROGS = hmmer
 
 OBJS   = \
-	h4_build.o     \
-	h4_cmd_build.o \
-	h4_hmmfile.o   \
-	h4_path.o      \
-	h4_prior.o     \
-	h4_profile.o   \
-	general.o      \
-	modelsample.o  \
-	parameterize.o
+	h4_build.o          \
+	h4_cmd_build.o      \
+	h4_hmmfile.o        \
+	h4_mode.o           \
+	h4_path.o           \
+	h4_prior.o          \
+	h4_profile.o        \
+	h4_refmx.o          \
+	general.o           \
+	modelsample.o       \
+	parameterize.o      \
+	reference_trace.o   \
+	reference_viterbi.o
 
 UTESTS = \
 	h4_hmmfile_utest \
+	h4_mode_utest    \
 	h4_path_utest 
 
 STATS  =
@@ -25,7 +30,8 @@ EXPERIMENTS = \
 BENCHMARKS =
 
 EXAMPLES = \
-	h4_hmmfile_example
+	h4_hmmfile_example \
+	reference_viterbi_example 
 
 
 SSE4_OBJS   =
@@ -35,15 +41,20 @@ NEON_OBJS   =
 VMX_OBJS    = 
 
 HDRS = \
-	h4_config.h   \
-	h4_build.h    \
-	h4_hmmfile.h  \
-	h4_path.h     \
-	h4_prior.h    \
-	h4_profile.h  \
-	general.h     \
-	modelsample.h \
-	parameterize.h
+	h4_config.h         \
+	h4_build.h          \
+	h4_hmmfile.h        \
+	h4_mode.h           \
+	h4_path.h           \
+	h4_prior.h          \
+	h4_profile.h        \
+	h4_refmx.h          \
+	general.h           \
+	modelsample.h       \
+	parameterize.h      \
+	reference_trace.h   \
+	reference_viterbi.h 
+
 
 top_srcdir     = @top_srcdir@
 top_builddir   = @top_builddir@

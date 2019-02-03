@@ -2,12 +2,12 @@
  * 
  * Contents:
  *    1. The H4_PATH structure
- *    x. Inferring paths from existing alignments
- *    x. Counting paths into new HMMs
- *    x. Debugging and development tools
- *    x. Unit tests
- *    x. Test driver
- *    x. Example
+ *    2. Inferring paths from existing alignments
+ *    3. Counting paths into new HMMs
+ *    4. Debugging and development tools
+ *    5. Unit tests
+ *    6. Test driver
+ *    7. Example
  */
 
 #include "h4_config.h"
@@ -96,6 +96,8 @@ h4_path_Append(H4_PATH *pi, int8_t st)
 {
   int status;
 
+  if (st == h4P_S || st == h4P_B || st == h4P_E) return eslOK;  // S,B,E are implicit; attempting to add them is a no-op
+
   if (pi->Z > 0 && st == pi->st[pi->Z-1]) 
     { // run length encoding:
       pi->rle[pi->Z-1]++;
@@ -114,6 +116,32 @@ h4_path_Append(H4_PATH *pi, int8_t st)
 }
 
 
+/* Function:  h4_path_Reverse()
+ * Synopsis:  Reverses a path (after a traceback, probably)
+ * Incept:    SRE, Sat 02 Feb 2019
+ *
+ * Purpose:   Reverse the arrays in a path. Paths from DP algorithms are
+ *            collected backwards, and they call this function when
+ *            they're done.
+ *
+ * Returns:   <eslOK> on success.
+ */
+int
+h4_path_Reverse(H4_PATH *pi)
+{
+  int    z;
+  int8_t tmps;
+  int    tmpr;
+
+  for (z = 0; z < pi->Z/2; z++)
+    {
+      tmps = pi->st[pi->Z-z-1];   pi->st[pi->Z-z-1]  = pi->st[z];  pi->st[z]  = tmps;
+      tmpr = pi->rle[pi->Z-z-1];  pi->rle[pi->Z-z-1] = pi->rle[z]; pi->rle[z] = tmpr;
+    }
+  return eslOK;
+}
+      
+  
 
 /* Function:  h4_path_Reuse()
  * Synopsis:  Reinitialize and reuse an existing path
@@ -169,7 +197,7 @@ h4_path_Destroy(H4_PATH *pi)
 
 
 /*****************************************************************
- * x. Inferring paths from existing alignments
+ * 2. Inferring paths from existing alignments
  *****************************************************************/
 
 
@@ -274,7 +302,7 @@ h4_path_InferLocal(const ESL_ALPHABET *abc, const ESL_DSQ *ax, int alen, const i
   /* Now build the path. 
    * All residues left of <lcol> are assigned to N; all right of <rcol> are C.
    */
-  if ((status = h4_path_Append(pi, h4_N)) != eslOK) return status;
+  if ((status = h4_path_Append(pi, h4P_N)) != eslOK) return status;
   for (c = 1; c <= alen; c++)
     {
       if (matassign[c])
@@ -282,24 +310,24 @@ h4_path_InferLocal(const ESL_ALPHABET *abc, const ESL_DSQ *ax, int alen, const i
 	  ncons++;
 
 	  if (c == lcol) {
-	    if ((status = h4_path_Append(pi, h4_L)) != eslOK) return status;
+	    if ((status = h4_path_Append(pi, h4P_L)) != eslOK) return status;
 	    pi->rle[pi->Z-1] = ncons;  // we store the k of L->MLk in rle
 	  }
 
-	  if (! esl_abc_XIsGap(abc, ax[c])) { if ((status = h4_path_Append(pi, h4_ML)) != eslOK) return status; }
-	  else if (c >= lcol && c <= rcol)  { if ((status = h4_path_Append(pi, h4_DL)) != eslOK) return status; }
+	  if (! esl_abc_XIsGap(abc, ax[c])) { if ((status = h4_path_Append(pi, h4P_ML)) != eslOK) return status; }
+	  else if (c >= lcol && c <= rcol)  { if ((status = h4_path_Append(pi, h4P_DL)) != eslOK) return status; }
 
 	  if (c == rcol) {
-	    if ((status = h4_path_Append(pi, h4_C)) != eslOK) return status;
+	    if ((status = h4_path_Append(pi, h4P_C)) != eslOK) return status;
 	  }
 	}
       else // nonconsensus (insert) column
 	{
 	  if (! esl_abc_XIsGap(abc, ax[c]))
 	    {
-	      if      (c < lcol) { if ((status = h4_path_Append(pi, h4_N))  != eslOK) return status; } // for zerolen path, lcol = alen+1, so all residues go to N
-	      else if (c > rcol) { if ((status = h4_path_Append(pi, h4_C))  != eslOK) return status; }
-	      else               { if ((status = h4_path_Append(pi, h4_IL)) != eslOK) return status; }
+	      if      (c < lcol) { if ((status = h4_path_Append(pi, h4P_N))  != eslOK) return status; } // for zerolen path, lcol = alen+1, so all residues go to N
+	      else if (c > rcol) { if ((status = h4_path_Append(pi, h4P_C))  != eslOK) return status; }
+	      else               { if ((status = h4_path_Append(pi, h4P_IL)) != eslOK) return status; }
 	    }
 	}
     }
@@ -307,9 +335,9 @@ h4_path_InferLocal(const ESL_ALPHABET *abc, const ESL_DSQ *ax, int alen, const i
 
   /* If zerolen, we have N[n+1] so far. Add L[m+1] C. */
   if (lcol == alen+1) {
-    if ((status = h4_path_Append(pi, h4_L)) != eslOK) return status;
+    if ((status = h4_path_Append(pi, h4P_L)) != eslOK) return status;
     pi->rle[pi->Z-1] = ncons+1;  
-    if ((status = h4_path_Append(pi, h4_C)) != eslOK) return status; 
+    if ((status = h4_path_Append(pi, h4P_C)) != eslOK) return status; 
   }
 
   return eslOK;
@@ -331,26 +359,26 @@ h4_path_InferGlocal(const ESL_ALPHABET *abc, const ESL_DSQ *ax, int alen, const 
   /* if none: then now lcol=alen+1, rcol=0. don't let this happen */
   if (rcol == 0) ESL_EXCEPTION(eslEINVAL, "matassign defined no consensus columns");
 
-  if ((status = h4_path_Append(pi, h4_N)) != eslOK) return status;
+  if ((status = h4_path_Append(pi, h4P_N)) != eslOK) return status;
   for (i = 1; i <= alen; i++) 
     {
-      if (i == lcol) { if ((status = h4_path_Append(pi, h4_G)) != eslOK) return status; }
+      if (i == lcol) { if ((status = h4_path_Append(pi, h4P_G)) != eslOK) return status; }
       
       if (matassign[i])
 	{
 	  if (esl_abc_XIsGap(abc, ax[i]))
-	    { if ((status = h4_path_Append(pi, h4_DG)) != eslOK) return status; } 
+	    { if ((status = h4_path_Append(pi, h4P_DG)) != eslOK) return status; } 
 	  else
-	    { if ((status = h4_path_Append(pi, h4_MG)) != eslOK) return status; }
+	    { if ((status = h4_path_Append(pi, h4P_MG)) != eslOK) return status; }
 	}	  
       else if (! esl_abc_XIsGap(abc, ax[i]))  // nonconsensus (insert) column
 	{
-	  if      (i > rcol) h4_path_Append(pi, h4_C);
-	  else if (i > lcol) h4_path_Append(pi, h4_IG);
-	  else               h4_path_Append(pi, h4_N);
+	  if      (i > rcol) h4_path_Append(pi, h4P_C);
+	  else if (i > lcol) h4_path_Append(pi, h4P_IG);
+	  else               h4_path_Append(pi, h4P_N);
 	}
 
-      if (i == rcol) { if ((status = h4_path_Append(pi, h4_C)) != eslOK) return status; }
+      if (i == rcol) { if ((status = h4_path_Append(pi, h4P_C)) != eslOK) return status; }
     }
   return eslOK;
 }
@@ -359,7 +387,7 @@ h4_path_InferGlocal(const ESL_ALPHABET *abc, const ESL_DSQ *ax, int alen, const 
 
 
 /*****************************************************************
- * x. Counting paths into new HMMs
+ * 3. Counting paths into new HMMs
  *****************************************************************/
 
 /* Function:  h4_path_Count()
@@ -410,7 +438,7 @@ h4_path_Count(const H4_PATH *pi, const ESL_DSQ *dsq, float wgt, H4_PROFILE *hmm)
    */
   for (z = 0; z < pi->Z; z++)
     {
-      if (pi->st[z] == h4_MG || pi->st[z] == h4_ML)
+      if (pi->st[z] == h4P_MG || pi->st[z] == h4P_ML)
 	{
 	  for (r = 0; r < pi->rle[z]; r++)
 	    {
@@ -420,7 +448,7 @@ h4_path_Count(const H4_PATH *pi, const ESL_DSQ *dsq, float wgt, H4_PROFILE *hmm)
 	      i++;
 	    }
 	}
-      else if (pi->st[z] == h4_IG || pi->st[z] == h4_IL) 
+      else if (pi->st[z] == h4P_IG || pi->st[z] == h4P_IL) 
 	{
 	  for (r = 0; r < pi->rle[z]; r++)
 	    {
@@ -428,7 +456,7 @@ h4_path_Count(const H4_PATH *pi, const ESL_DSQ *dsq, float wgt, H4_PROFILE *hmm)
 	      i++;
 	    }
 	}
-      else if (pi->st[z] == h4_N || pi->st[z] == h4_J || pi->st[z] == h4_C)
+      else if (pi->st[z] == h4P_N || pi->st[z] == h4P_J || pi->st[z] == h4P_C)
 	{
 	  for (r = 0; r < pi->rle[z]-1; r++)    // note -1, because N/J/C emit on transition
 	    {
@@ -436,14 +464,14 @@ h4_path_Count(const H4_PATH *pi, const ESL_DSQ *dsq, float wgt, H4_PROFILE *hmm)
 	      i++;
 	    }
 	}
-      else if (pi->st[z] == h4_DG || pi->st[z] == h4_DL) { k += pi->rle[z]; }
-      else if (pi->st[z] == h4_L  || pi->st[z] == h4_G)  { k  = pi->rle[z]; }
+      else if (pi->st[z] == h4P_DG || pi->st[z] == h4P_DL) { k += pi->rle[z]; }
+      else if (pi->st[z] == h4P_L  || pi->st[z] == h4P_G)  { k  = pi->rle[z]; }
     }
 
   /* Count transitions prv->cur.
    * Only transitions into M/I/D states need to be counted.
    */
-  yprv = h4_N;
+  yprv = h4P_N;
   // don't need to init k. it gets init'ed on G/L
   for (z = 1; z < pi->Z-1; z++)
     {
@@ -452,43 +480,43 @@ h4_path_Count(const H4_PATH *pi, const ESL_DSQ *dsq, float wgt, H4_PROFILE *hmm)
 	{
 	  switch (ycur)
 	  {
-	    case h4_MG:
-	    case h4_ML:
+	    case h4P_MG:
+	    case h4P_ML:
 	      switch (yprv) {
-	      case h4_MG: case h4_ML: hmm->t[k][h4_TMM] += wgt; break;
-	      case h4_IG: case h4_IL: hmm->t[k][h4_TIM] += wgt; break;
-	      case h4_DG: case h4_DL: hmm->t[k][h4_TDM] += wgt; break;
-	      case h4_G:              hmm->t[0][h4_TMM] += wgt; break;  // t[0] includes data-dependent G->{MD}
-	      case h4_L:                                        break;
+	      case h4P_MG: case h4P_ML: hmm->t[k][h4_TMM] += wgt; break;
+	      case h4P_IG: case h4P_IL: hmm->t[k][h4_TIM] += wgt; break;
+	      case h4P_DG: case h4P_DL: hmm->t[k][h4_TDM] += wgt; break;
+	      case h4P_G:               hmm->t[0][h4_TMM] += wgt; break;  // t[0] includes data-dependent G->{MD}
+	      case h4P_L:                                         break;
 	      default: ESL_EXCEPTION(eslEINVAL, "invalid transition to M in path");
 	      }
 	      k++;
 	      break;
 
-	    case h4_IG:
-	    case h4_IL:
+	    case h4P_IG:
+	    case h4P_IL:
 	      switch (yprv) {
-	      case h4_MG: case h4_ML: hmm->t[k][h4_TMI] += wgt; break;
-	      case h4_IG: case h4_IL: hmm->t[k][h4_TII] += wgt; break;
-	      case h4_DG: case h4_DL: hmm->t[k][h4_TDI] += wgt; break;
+	      case h4P_MG: case h4P_ML: hmm->t[k][h4_TMI] += wgt; break;
+	      case h4P_IG: case h4P_IL: hmm->t[k][h4_TII] += wgt; break;
+	      case h4P_DG: case h4P_DL: hmm->t[k][h4_TDI] += wgt; break;
 	      default: ESL_EXCEPTION(eslEINVAL, "invalid transition to I in path");
 	      }
 	      break;
 
-	    case h4_DG:
-	    case h4_DL:
+	    case h4P_DG:
+	    case h4P_DL:
 	      switch (yprv) {
-	      case h4_MG: case h4_ML: hmm->t[k][h4_TMD] += wgt; break;
-	      case h4_IG: case h4_IL: hmm->t[k][h4_TID] += wgt; break;
-	      case h4_DG: case h4_DL: hmm->t[k][h4_TDD] += wgt; break;
-	      case h4_G:              hmm->t[0][h4_TMD] += wgt; break;
+	      case h4P_MG: case h4P_ML: hmm->t[k][h4_TMD] += wgt; break;
+	      case h4P_IG: case h4P_IL: hmm->t[k][h4_TID] += wgt; break;
+	      case h4P_DG: case h4P_DL: hmm->t[k][h4_TDD] += wgt; break;
+	      case h4P_G:               hmm->t[0][h4_TMD] += wgt; break;
 	      default: ESL_EXCEPTION(eslEINVAL, "invalid transition to D in path");
 	      }
 	      k++;
 	      break;
 
-	    case h4_G:
-	    case h4_L:
+	    case h4P_G:
+	    case h4P_L:
 	      k = pi->rle[z] - 1;  // -1, because of how we're doing prv->cur
 	      break;
 
@@ -507,7 +535,7 @@ h4_path_Count(const H4_PATH *pi, const ESL_DSQ *dsq, float wgt, H4_PROFILE *hmm)
 
 
 /*****************************************************************
- * x. Debugging and development tools
+ * 4. Debugging and development tools
  *****************************************************************/
 
 /* Function:  h4_path_DecodeStatetype()
@@ -523,22 +551,22 @@ char *
 h4_path_DecodeStatetype(int8_t st)
 {
   switch (st) {
-  case h4_NONE: return "(none)";
-  case h4_S:    return "S";   // S, B, E, T are not explicitly represented in H4_PATH
-  case h4_N:    return "N";
-  case h4_B:    return "B";
-  case h4_G:    return "G";
-  case h4_MG:   return "MG";
-  case h4_IG:   return "IG";
-  case h4_DG:   return "DG";
-  case h4_L:    return "L";
-  case h4_ML:   return "ML";
-  case h4_IL:   return "IL";
-  case h4_DL:   return "DL";
-  case h4_E:    return "E";
-  case h4_J:    return "J";
-  case h4_C:    return "C";
-  case h4_T:    return "T";
+  case h4P_NONE: return "(none)";
+  case h4P_S:    return "S";   // S, B, E, T are not explicitly represented in H4_PATH
+  case h4P_N:    return "N";
+  case h4P_B:    return "B";
+  case h4P_G:    return "G";
+  case h4P_MG:   return "MG";
+  case h4P_IG:   return "IG";
+  case h4P_DG:   return "DG";
+  case h4P_L:    return "L";
+  case h4P_ML:   return "ML";
+  case h4P_IL:   return "IL";
+  case h4P_DL:   return "DL";
+  case h4P_E:    return "E";
+  case h4P_J:    return "J";
+  case h4P_C:    return "C";
+  case h4P_T:    return "T";
   default:      break;
   }
   esl_exception(eslEINVAL, FALSE, __FILE__, __LINE__, "no such statetype code %d", st);
@@ -568,11 +596,11 @@ h4_path_DecodeStatetype(int8_t st)
 int
 h4_path_Validate(const H4_PATH *pi, const ESL_ALPHABET *abc, int M, int L, char *errbuf)
 {
-                                              /* -  S  N  B  G MG IG DG  L ML IL DL  E  J  C  T */
-  static int is_valid_inside[h4_NSTATETYPES] = { 0, 0, 0, 0, 1, 1, 1, 1, 1, 1, 1, 1, 0, 1, 0, 0 }; // valid in positions 1..Z-2 of path
-  static int valid_transition[h4_NSTATETYPES][h4_NSTATETYPES] = {
+                                       /* -  S  N  B  G MG IG DG  L ML IL DL  E  J  C  T */
+  static int is_valid_inside[h4P_NST] = { 0, 0, 0, 0, 1, 1, 1, 1, 1, 1, 1, 1, 0, 1, 0, 0 }; // valid in positions 1..Z-2 of path
+  static int valid_transition[h4P_NST][h4P_NST] = {
     /*         -  S  N  B  G MG IG DG  L ML IL DL  E  J  C  T */
-    /* -  */ { 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0 }, // h4_NONE doesn't appear.
+    /* -  */ { 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0 }, // NONE doesn't appear.
     /* S  */ { 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0 }, // S is implicit.
     /* N  */ { 0, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0 }, // N->(B)->{G,L}. All paths start with N at z=0.
     /* B  */ { 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0 }, // B is implicit.
@@ -594,11 +622,11 @@ h4_path_Validate(const H4_PATH *pi, const ESL_ALPHABET *abc, int M, int L, char 
   int is_local;
   int z;
 
-  if (pi == NULL)              ESL_FAIL(eslFAIL, errbuf, "path is NULL");                     // unlike H3, paths can't be NULL
-  if (pi->Z < 3)               ESL_FAIL(eslFAIL, errbuf, "path too short");                   // shortest is N L C empty edge case.
-  if (pi->Z > pi->Zalloc)      ESL_FAIL(eslFAIL, errbuf, "path length exceeds allocation"); 
-  if (pi->st[0]       != h4_N) ESL_FAIL(eslFAIL, errbuf, "first state should be N");
-  if (pi->st[pi->Z-1] != h4_C) ESL_FAIL(eslFAIL, errbuf, "last state should be C");
+  if (pi == NULL)               ESL_FAIL(eslFAIL, errbuf, "path is NULL");                     // unlike H3, paths can't be NULL
+  if (pi->Z < 3)                ESL_FAIL(eslFAIL, errbuf, "path too short");                   // shortest is N L C empty edge case.
+  if (pi->Z > pi->Zalloc)       ESL_FAIL(eslFAIL, errbuf, "path length exceeds allocation"); 
+  if (pi->st[0]       != h4P_N) ESL_FAIL(eslFAIL, errbuf, "first state should be N");
+  if (pi->st[pi->Z-1] != h4P_C) ESL_FAIL(eslFAIL, errbuf, "last state should be C");
 
 
   for (z = 0; z < pi->Z; z++)
@@ -610,24 +638,24 @@ h4_path_Validate(const H4_PATH *pi, const ESL_ALPHABET *abc, int M, int L, char 
 	ESL_FAIL(eslFAIL, errbuf, "invalid state at %d", z);
 
       switch (pi->st[z]) {
-      case h4_L:                pathM += pi->rle[z]-1;                        is_local = TRUE;  break;
-      case h4_G:                                                              is_local = FALSE; break;
-      case h4_MG:  case h4_ML:  pathM += pi->rle[z];   pathL += pi->rle[z];                     break;
-      case h4_IG:  case h4_IL:                         pathL += pi->rle[z];                     break;
-      case h4_DG:  case h4_DL:  pathM += pi->rle[z];                                            break;
-      case h4_N:   case h4_J:  case h4_C:              pathL += pi->rle[z]-1;                   break;
+      case h4P_L:                pathM += pi->rle[z]-1;                        is_local = TRUE;  break;
+      case h4P_G:                                                              is_local = FALSE; break;
+      case h4P_MG:  case h4P_ML: pathM += pi->rle[z];   pathL += pi->rle[z];                     break;
+      case h4P_IG:  case h4P_IL:                        pathL += pi->rle[z];                     break;
+      case h4P_DG:  case h4P_DL: pathM += pi->rle[z];                                            break;
+      case h4P_N:   case h4P_J:  case h4P_C:            pathL += pi->rle[z]-1;                   break;
       default: break;
       }
 	  
-      if (pi->st[z] == h4_J || pi->st[z] == h4_C)
+      if (pi->st[z] == h4P_J || pi->st[z] == h4P_C)
 	{ // glocal M must exactly match, but MLk->E local end transition means M is only an upper bound on pathM.
 	  if (is_local) { if (! (pathM <= M)) ESL_FAIL(eslFAIL, errbuf, "local alignment length exceeds profile length"); }
 	  else          { if (   pathM != M)  ESL_FAIL(eslFAIL, errbuf, "glocal alignment length != M");                  }
 	  pathM = 0;
 	}
 
-      if (pi->st[z] == h4_G && pi->rle[z] != 1) ESL_FAIL(eslFAIL, errbuf, "RLE!=1 for G at %d", z);
-      if (pi->rle[z] < 1)                       ESL_FAIL(eslFAIL, errbuf, "RLE<1 at %d", z);
+      if (pi->st[z] == h4P_G && pi->rle[z] != 1) ESL_FAIL(eslFAIL, errbuf, "RLE!=1 for G at %d", z);
+      if (pi->rle[z] < 1)                        ESL_FAIL(eslFAIL, errbuf, "RLE<1 at %d", z);
     }
   if (pathL != L) ESL_FAIL(eslFAIL, errbuf, "pathL %d != L %d", pathL, L);
   return eslOK;
@@ -658,7 +686,7 @@ h4_path_Dump(FILE *fp, const H4_PATH *pi)
 
 
 /*****************************************************************
- * x. Unit tests
+ * 5. Unit tests
  *****************************************************************/
 #ifdef h4PATH_TESTDRIVE
 
@@ -710,22 +738,22 @@ utest_zerolength(ESL_ALPHABET *abc)
       if ( h4_path_InferLocal(abc, ax, alen, matassign, pi)  != eslOK) esl_fatal(msg);
       if ( h4_path_Validate(pi, abc, M, L, errbuf)           != eslOK) esl_fatal("%s: %s", msg, errbuf);
       if ( pi->Z             != 3)     esl_fatal(msg);
-      if ( pi->st[0]         != h4_N)  esl_fatal(msg);
-      if ( pi->st[1]         != h4_L)  esl_fatal(msg);
-      if ( pi->st[2]         != h4_C)  esl_fatal(msg);
+      if ( pi->st[0]         != h4P_N) esl_fatal(msg);
+      if ( pi->st[1]         != h4P_L) esl_fatal(msg);
+      if ( pi->st[2]         != h4P_C) esl_fatal(msg);
       if ( h4_path_Reuse(pi) != eslOK) esl_fatal(msg);
 
       // N G DG(6) C          : Z=4
       // N G DG(3) IG DG(3) C : Z=6
       if ( h4_path_InferGlocal(abc, ax, alen, matassign, pi) != eslOK) esl_fatal(msg);
       if ( h4_path_Validate(pi, abc, M, L, errbuf)           != eslOK) esl_fatal("%s: %s", msg, errbuf);
-      if ( pi->Z != 4 && pi->Z != 6)   esl_fatal(msg); 
-      if ( pi->st[0]         != h4_N)  esl_fatal(msg);
-      if ( pi->st[1]         != h4_G)  esl_fatal(msg);
-      if ( pi->st[2]         != h4_DG) esl_fatal(msg);
-      if ( pi->st[pi->Z-2]   != h4_DG) esl_fatal(msg);
-      if ( pi->st[pi->Z-1]   != h4_C)  esl_fatal(msg);
-      if ( h4_path_Reuse(pi) != eslOK) esl_fatal(msg);
+      if ( pi->Z != 4 && pi->Z != 6 )   esl_fatal(msg); 
+      if ( pi->st[0]         != h4P_N)  esl_fatal(msg);
+      if ( pi->st[1]         != h4P_G)  esl_fatal(msg);
+      if ( pi->st[2]         != h4P_DG) esl_fatal(msg);
+      if ( pi->st[pi->Z-2]   != h4P_DG) esl_fatal(msg);
+      if ( pi->st[pi->Z-1]   != h4P_C)  esl_fatal(msg);
+      if ( h4_path_Reuse(pi) != eslOK)  esl_fatal(msg);
     }
 
   h4_path_Destroy(pi);
@@ -866,8 +894,10 @@ utest_counting(void)
 #endif // h4PATH_TESTDRIVE
 /*----------------- end, unit tests -----------------------------*/
 
+
+
 /*****************************************************************
- * x. Test driver
+ * 6. Test driver
  *****************************************************************/
 #ifdef h4PATH_TESTDRIVE
 
@@ -918,7 +948,7 @@ main(int argc, char **argv)
 
 
 /*****************************************************************
- * x. Example
+ * 7. Example
  *****************************************************************/
 #ifdef h4PATH_EXAMPLE
 

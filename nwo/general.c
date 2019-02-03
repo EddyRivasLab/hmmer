@@ -84,8 +84,8 @@ h4_CreateDefaultApp(ESL_OPTIONS *options, int nargs, int argc, char **argv, char
 
   if (nargs != -1 && esl_opt_ArgNumber(go) != nargs) 
     {
-      if ( esl_fprintf(stderr, "Incorrect number of command line arguments.")                         != eslOK) goto ERROR;
-      if ( esl_fprintf(stderr, "\nUsage: %s %s\n", progname, usage)                                   != eslOK) goto ERROR;
+      if ( esl_fprintf(stderr, "Incorrect number of command line arguments.")                     != eslOK) goto ERROR;
+      if ( esl_fprintf(stderr, "\nUsage: %s %s\n", progname, usage)                               != eslOK) goto ERROR;
       if ( esl_fprintf(stderr, "\nTo see more help on available options, do %s -h\n\n", progname) != eslOK) goto ERROR;
       free(progname);
       exit(1);
@@ -96,4 +96,44 @@ h4_CreateDefaultApp(ESL_OPTIONS *options, int nargs, int argc, char **argv, char
 
  ERROR: // only reached if a nondefault, nonfatal exception handler happens to be in use
   esl_fatal("internal failure in h4_CreateDefaultApp()");
+}
+
+
+
+/* Function:  h4_AminoFrequencies()
+ *
+ * Purpose:   Fills a vector <f> with amino acid background frequencies,
+ *            in [A..Y] alphabetic order, same order that Easel digital
+ *            alphabet uses. Caller must provide <f> allocated for at
+ *            least 20 floats.
+ *            
+ *            These were updated 4 Sept 2007, from Swiss-Prot 50.8,
+ *            (Oct 2006), counting over 85956127 (86.0M) residues.
+ *
+ * Returns:   <eslOK> on success.
+ */
+int
+h4_AminoFrequencies(float *f)
+{
+  f[0] = 0.0787945;	// A
+  f[1] = 0.0151600;	// C
+  f[2] = 0.0535222;	// D
+  f[3] = 0.0668298;	// E
+  f[4] = 0.0397062;	// F
+  f[5] = 0.0695071;	// G
+  f[6] = 0.0229198;	// H
+  f[7] = 0.0590092;	// I
+  f[8] = 0.0594422;	// K
+  f[9] = 0.0963728;	// L
+  f[10]= 0.0237718;	// M
+  f[11]= 0.0414386;	// N
+  f[12]= 0.0482904;	// P
+  f[13]= 0.0395639;	// Q
+  f[14]= 0.0540978;	// R
+  f[15]= 0.0683364;	// S
+  f[16]= 0.0540687;	// T
+  f[17]= 0.0673417;	// V
+  f[18]= 0.0114135;	// W
+  f[19]= 0.0304133;	// Y
+  return eslOK;
 }

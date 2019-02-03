@@ -393,7 +393,7 @@ main(int argc, char **argv)
   ESL_ALPHABET   *abc     = NULL;
   ESL_MSAFILE    *afp     = NULL;
   ESL_MSA        *msa     = NULL;
-  H4_BUILD_CONFIG *cfg    = h4_build_config_Create();
+  H4_BUILD_CONFIG *cfg    = NULL;
   H4_PROFILE     *hmm     = NULL;
   char           *efile   = NULL;                      // counts file for match emissions
   char           *mtfile  = NULL;                      //             ... match transitions
@@ -408,7 +408,7 @@ main(int argc, char **argv)
   char            errbuf[eslERRBUFSIZE];
   int             status;
 
-  cfg->stop_after_counting = TRUE;
+  
 
   if      (esl_opt_GetBoolean(go, "--rna"))   abc = esl_alphabet_Create(eslRNA);
   else if (esl_opt_GetBoolean(go, "--dna"))   abc = esl_alphabet_Create(eslDNA);
@@ -426,6 +426,9 @@ main(int argc, char **argv)
 
   status = esl_msafile_Open(&abc, msafile, NULL, infmt, NULL, &afp);
   if (status != eslOK) esl_msafile_OpenFailure(afp, status);
+
+  cfg = h4_build_config_Create(abc);
+  cfg->stop_after_counting = TRUE;
 
   while ((status = esl_msafile_Read(afp, &msa)) == eslOK)
     {
@@ -504,7 +507,6 @@ main(int argc, char **argv)
   ESL_MSAFILE  *afp    = NULL;
   ESL_MSA      *msa    = NULL;
   int           nali   = 0;
-  float         occthresh = 0.01;
   float         fragthresh = 0.5;
   int           nold, nnew;
   int           idx;
@@ -544,7 +546,7 @@ main(int argc, char **argv)
 	  if (old_fragassign[idx]) nold++;
 	}
       
-      printf("%20s %10d %10d %10.1f %10d %10.4f %10.4f\n",
+      printf("%20s %10d %10d %10d %10d %10.4f %10.4f\n",
 	     msa->name, msa->nseq, (int) msa->alen, nold, nnew,
 	     (float) nold / (float) msa->nseq,
 	     (float) nnew / (float) msa->nseq);

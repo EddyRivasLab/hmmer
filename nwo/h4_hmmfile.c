@@ -390,8 +390,8 @@ read_ascii4a(H4_HMMFILE *hfp, ESL_ALPHABET **ret_abc, H4_PROFILE **opt_hmm)
   if ( hfp->pi->tok[idx].nchild != hmm->M)         ESL_FAIL(eslEFORMAT, hfp->errmsg, "expected M (%d) rows in state transition array (line %d)", hmm->M, hfp->pi->tok[idx].linenum); // {bad.24:6,33}
   for (k = 0, ki = hfp->pi->tok[idx].firstchild; ki != -1; ki = hfp->pi->tok[ki].nextsib, k++)
     {
-      if ( hfp->pi->tok[ki].type   != eslJSON_ARRAY)   ESL_FAIL(eslEFORMAT, hfp->errmsg, "expected state transition row k=%d to be an array (line %d)",    k,                  hfp->pi->tok[ki].linenum); // {bad.25,1,35}
-      if ( hfp->pi->tok[ki].nchild != h4_NTRANSITIONS) ESL_FAIL(eslEFORMAT, hfp->errmsg, "expected state transition row k=%d to have %d values (line %d)", k, h4_NTRANSITIONS, hfp->pi->tok[ki].linenum); // {bad.26,2,9,36}
+      if ( hfp->pi->tok[ki].type   != eslJSON_ARRAY) ESL_FAIL(eslEFORMAT, hfp->errmsg, "expected state transition row k=%d to be an array (line %d)",    k,        hfp->pi->tok[ki].linenum); // {bad.25,1,35}
+      if ( hfp->pi->tok[ki].nchild != h4_NT)         ESL_FAIL(eslEFORMAT, hfp->errmsg, "expected state transition row k=%d to have %d values (line %d)", k, h4_NT, hfp->pi->tok[ki].linenum); // {bad.26,2,9,36}
       for (z = 0, zi = hfp->pi->tok[ki].firstchild; zi != -1; zi = hfp->pi->tok[zi].nextsib, z++)
 	if  (hfp->pi->tok[zi].type == eslJSON_NUMBER) {
 	  if ((status = esl_json_ReadFloat(hfp->pi, zi, hfp->bf, &v)) != eslOK) goto ERROR; // a validated JSON number is a subset of valid floats; esl_json_ReadFloat() can't fail.

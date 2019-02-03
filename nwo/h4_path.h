@@ -7,25 +7,23 @@
 #include "h4_profile.h"
 
 /* Codes for states, esp. states used in H4_PATH pi->st[] */
-enum h4_statetypes_e {
-  h4_NONE = 0,
-  h4_S    = 1,   // unused in paths
-  h4_N    = 2,   
-  h4_B    = 3,   // unused
-  h4_G    = 4, 
-  h4_MG   = 5,
-  h4_IG   = 6,
-  h4_DG   = 7,
-  h4_L    = 8,
-  h4_ML   = 9,
-  h4_IL   = 10,
-  h4_DL   = 11,
-  h4_E    = 12,  // unused
-  h4_J    = 13,
-  h4_C    = 14,  
-  h4_T    = 15   // unused
-};
-#define h4_NSTATETYPES 16
+#define h4P_NONE  0
+#define h4P_S     1   // unused in paths
+#define h4P_N     2   
+#define h4P_B     3   // unused
+#define h4P_G     4
+#define h4P_MG    5
+#define h4P_IG    6
+#define h4P_DG    7
+#define h4P_L     8
+#define h4P_ML    9
+#define h4P_IL    10
+#define h4P_DL    11
+#define h4P_E     12  // unused
+#define h4P_J     13
+#define h4P_C     14  
+#define h4P_T     15  // unused
+#define h4P_NST   16  
 
 typedef struct {
   int     Z;      // length of <st>, <r> (actual; i.e. inclusive of run length compression)
@@ -39,6 +37,7 @@ typedef struct {
 extern H4_PATH *h4_path_Create (void);
 extern int      h4_path_Grow   (H4_PATH *pi);
 extern int      h4_path_Append (H4_PATH *pi, int8_t st);
+extern int      h4_path_Reverse(H4_PATH *pi);
 extern int      h4_path_Reuse  (H4_PATH *pi);
 extern void     h4_path_Destroy(H4_PATH *pi);
 
