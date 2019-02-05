@@ -244,6 +244,7 @@ reference_trace_engine(ESL_RANDOMNESS *rng, float *wrk, const H4_PROFILE *hmm, c
       }
 
       if ( (status = h4_path_Append(pi, scur)) != eslOK) return status;
+      if (scur == h4P_L) pi->rle[pi->Z-1] = k+1;   // if we just backed into an L state, record the k of L->Mk in its rle[].
 
       if ( (scur == h4P_N || scur == h4P_J || scur == h4P_C) && scur == sprv) i--;
       sprv = scur;

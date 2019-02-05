@@ -305,7 +305,7 @@ set_local_entry(H4_PROFILE *hmm)
   if (hmm->flags & h4_SINGLE)
     {
       for (k = 1; k <= hmm->M; k++)
-	hmm->tsc[k-1][h4_LM] = logf( 2. / ((float) hmm->M * (float) (hmm->M+1)));
+	hmm->tsc[k-1][h4_LM] = esl_log2f( 2. / ((float) hmm->M * (float) (hmm->M+1)));
     }
   else
     {
@@ -313,7 +313,7 @@ set_local_entry(H4_PROFILE *hmm)
       for (k = 1; k <= hmm->M; k++)
 	Z += occ[k] * (float) (hmm->M + 1 - k );
       for (k = 1; k <= hmm->M; k++)
-	hmm->tsc[k-1][h4_LM] = esl_logf(occ[k] / Z);  // watch out for occ[k] = 0. esl_logf(0) = -inf
+	hmm->tsc[k-1][h4_LM] = esl_log2f(occ[k] / Z);  // watch out for occ[k] = 0. esl_log2f(0) = -inf
     }
 
   hmm->tsc[hmm->M][h4_LM] = -eslINFINITY;
@@ -349,12 +349,12 @@ set_glocal_entry(H4_PROFILE *hmm)
   float ppath;   
   int   k;
 
-  hmm->tsc[0][h4_GM] = esl_logf(hmm->t[0][h4_TMM]); // G->M1
-  ppath              = esl_logf(hmm->t[0][h4_TMD]); // G->D1
+  hmm->tsc[0][h4_GM] = esl_log2f(hmm->t[0][h4_TMM]); // G->M1
+  ppath              = esl_log2f(hmm->t[0][h4_TMD]); // G->D1
   for (k = 1; k < hmm->M; k++) 
     {
-      hmm->tsc[k][h4_GM] = ppath + esl_logf(hmm->t[k][h4_TDM]);
-      ppath             += esl_logf(hmm->t[k][h4_TDD]);
+      hmm->tsc[k][h4_GM] = ppath + esl_log2f(hmm->t[k][h4_TDM]);
+      ppath             += esl_log2f(hmm->t[k][h4_TDD]);
     }
   hmm->tsc[hmm->M][h4_GM] = -eslINFINITY;
   return eslOK;
@@ -385,7 +385,7 @@ set_glocal_exit(H4_PROFILE *hmm)
   for (k = hmm->M-1; k >= 1; k--)
     {
       hmm->tsc[k][h4_DGE] = ppath;
-      ppath += esl_logf(hmm->t[k][h4_TDD]);
+      ppath += esl_log2f(hmm->t[k][h4_TDD]);
     }
   hmm->t[0][h4_DGE] = -eslINFINITY;
   return eslOK;
@@ -405,18 +405,18 @@ h4_profile_Config(H4_PROFILE *hmm)
 
   /* Correct boundary conditions on hmm->t[0], t[M] will result in
    * correct boundary conditions on tsc[0], tsc[M]... especially since
-   * esl_logf(0) = -eslINFINITY.
+   * esl_log2f(0) = -eslINFINITY.
    */
   for (k = 0; k <= hmm->M; k++) {
-    hmm->tsc[k][h4_MM] = esl_logf(hmm->t[k][h4_TMM]);
-    hmm->tsc[k][h4_IM] = esl_logf(hmm->t[k][h4_TIM]);
-    hmm->tsc[k][h4_DM] = esl_logf(hmm->t[k][h4_TDM]);
-    hmm->tsc[k][h4_MD] = esl_logf(hmm->t[k][h4_TMD]);
-    hmm->tsc[k][h4_ID] = esl_logf(hmm->t[k][h4_TID]);
-    hmm->tsc[k][h4_DD] = esl_logf(hmm->t[k][h4_TDD]);
-    hmm->tsc[k][h4_MI] = esl_logf(hmm->t[k][h4_TMI]);
-    hmm->tsc[k][h4_II] = esl_logf(hmm->t[k][h4_TII]);
-    hmm->tsc[k][h4_DI] = esl_logf(hmm->t[k][h4_TDI]);
+    hmm->tsc[k][h4_MM] = esl_log2f(hmm->t[k][h4_TMM]);
+    hmm->tsc[k][h4_IM] = esl_log2f(hmm->t[k][h4_TIM]);
+    hmm->tsc[k][h4_DM] = esl_log2f(hmm->t[k][h4_TDM]);
+    hmm->tsc[k][h4_MD] = esl_log2f(hmm->t[k][h4_TMD]);
+    hmm->tsc[k][h4_ID] = esl_log2f(hmm->t[k][h4_TID]);
+    hmm->tsc[k][h4_DD] = esl_log2f(hmm->t[k][h4_TDD]);
+    hmm->tsc[k][h4_MI] = esl_log2f(hmm->t[k][h4_TMI]);
+    hmm->tsc[k][h4_II] = esl_log2f(hmm->t[k][h4_TII]);
+    hmm->tsc[k][h4_DI] = esl_log2f(hmm->t[k][h4_TDI]);
   }
 
   sc[hmm->abc->K]    = -eslINFINITY; // gap
@@ -425,7 +425,7 @@ h4_profile_Config(H4_PROFILE *hmm)
   for (k = 0; k <= hmm->M; k++)                       // k=0 will use boundary conditions from e[0]
     {
       for (x = 0; x < hmm->abc->K; x++)
-	sc[x] = esl_logf(hmm->e[k][x] / hmm->f[x]);   // log-odds scores for canonical alphabet
+	sc[x] = esl_log2f(hmm->e[k][x] / hmm->f[x]);   // log-odds scores for canonical alphabet
       esl_abc_FExpectScVec(hmm->abc, sc, hmm->f);     //     ...  scores for degeneracies
 
       for (x = 0; x < hmm->abc->Kp; x++)              // stored transposed

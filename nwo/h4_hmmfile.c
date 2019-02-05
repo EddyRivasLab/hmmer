@@ -451,7 +451,7 @@ printprob(FILE *fp, int fieldwidth, float p)
 {
   if      (p == 0.0) return esl_fprintf(fp, "%*s",   fieldwidth, "null");
   else if (p == 1.0) return esl_fprintf(fp, "%*s",   fieldwidth, "0");
-  else               return esl_fprintf(fp, "%*.5f", fieldwidth, -logf(p));
+  else               return esl_fprintf(fp, "%*.5f", fieldwidth, -esl_log2f(p));
 }
 
 static int

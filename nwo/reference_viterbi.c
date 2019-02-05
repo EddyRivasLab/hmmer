@@ -41,7 +41,7 @@
  * Purpose:   Given a target sequence <dsq> of length <L> residues, a
  *            query profile <hmm> in mode <mo>, and a DP matrix <rmx>; do the
  *            Viterbi optimal alignment algorithm.  Return the Viterbi
- *            score in nats in <*opt_sc>, if caller provides it.
+ *            score in bits in <*opt_sc>, if caller provides it.
  *            Return the Viterbi optimal trace in <*opt_pi>, if caller
  *            provides an allocated trace structure.
  *            
@@ -54,7 +54,7 @@
  *            mo      - profile's mode (algorithm-dependent parameters)
  *            rmx     - DP matrix
  *            opt_pi  - optRETURN: path structure for Viterbi alignment, or NULL
- *            opt_sc  - optRETURN: Viterbi raw score in nats, or NULL
+ *            opt_sc  - optRETURN: Viterbi raw score in bits, or NULL
  *
  * Returns:   <eslOK> on success. <rmx> contains the Viterbi matrix.
  * 
@@ -242,7 +242,8 @@ main(int argc, char **argv)
   ESL_SQ         *sq      = NULL;
   H4_REFMX       *rmx     = h4_refmx_Create(100, 100);
   H4_PATH        *pi      = h4_path_Create();
-  float           vsc;
+  float           vsc, pisc;
+  char            errbuf[eslERRBUFSIZE];
   int             status;
 
   if ( h4_hmmfile_Open(hmmfile, NULL, &hfp) != eslOK) esl_fatal("couldn't open profile file %s", hmmfile);
@@ -260,11 +261,15 @@ main(int argc, char **argv)
       h4_mode_SetLength(mo, sq->n);
 
       h4_ReferenceViterbi(sq->dsq, sq->n, hmm, mo, rmx, pi, &vsc);
+      h4_path_Score(pi, sq->dsq, hmm, mo, &pisc);
 
-      printf("%s %.3f\n", sq->name, vsc);
+      printf("%s %.6f  %.6f\n", sq->name, vsc, pisc);
+      ESL_DASSERT1(( vsc == pisc ));
 
       //h4_refmx_Dump(stdout, rmx);
       h4_path_Dump(stdout, pi);
+
+      if ( h4_path_Validate(pi, abc, hmm->M, sq->n, errbuf) != eslOK) esl_fatal("path validation failed:\n%s", errbuf);
 
       h4_refmx_Reuse(rmx);
       h4_path_Reuse(pi);

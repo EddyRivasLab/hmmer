@@ -86,8 +86,8 @@ h4_mode_SetCustom(H4_MODE *mo, int L, float nj, float pglocal)
   ESL_DASSERT1(( nj >= 0. ));
   ESL_DASSERT1(( pglocal >= 0. && pglocal <= 1. ));
 
-  mo->xsc[h4_E][h4_LOOP] = esl_logf(nj / (nj + 1.));
-  mo->xsc[h4_E][h4_MOVE] = esl_logf(1. / (nj + 1.));
+  mo->xsc[h4_E][h4_LOOP] = esl_log2f(nj / (nj + 1.));
+  mo->xsc[h4_E][h4_MOVE] = esl_log2f(1. / (nj + 1.));
 
   mo->xsc[h4_B][h4_LOOP] = 1. - pglocal;
   mo->xsc[h4_B][h4_MOVE] = pglocal;
@@ -152,8 +152,8 @@ h4_mode_SetLength(H4_MODE *mo, int L)
 {
   ESL_DASSERT1(( L >= 0 && L <= 100000 ));
 
-  mo->xsc[h4_N][h4_LOOP] = mo->xsc[h4_J][h4_LOOP] = mo->xsc[h4_C][h4_LOOP] = esl_logf( (float) L    / ( (float) L + 2. + mo->nj));
-  mo->xsc[h4_N][h4_MOVE] = mo->xsc[h4_J][h4_MOVE] = mo->xsc[h4_C][h4_MOVE] = esl_logf((2. + mo->nj) / ( (float) L + 2. + mo->nj));
+  mo->xsc[h4_N][h4_LOOP] = mo->xsc[h4_J][h4_LOOP] = mo->xsc[h4_C][h4_LOOP] = esl_log2f( (float) L    / ( (float) L + 2. + mo->nj));
+  mo->xsc[h4_N][h4_MOVE] = mo->xsc[h4_J][h4_MOVE] = mo->xsc[h4_C][h4_MOVE] = esl_log2f((2. + mo->nj) / ( (float) L + 2. + mo->nj));
   mo->L = L;
   return eslOK;
 }

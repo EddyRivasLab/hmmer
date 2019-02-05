@@ -4,6 +4,7 @@
 #include "easel.h"
 #include "esl_alphabet.h"
 
+#include "h4_mode.h"
 #include "h4_profile.h"
 
 /* Codes for states, esp. states used in H4_PATH pi->st[] */
@@ -26,11 +27,11 @@
 #define h4P_NST   16  
 
 typedef struct {
-  int     Z;      // length of <st>, <r> (actual; i.e. inclusive of run length compression)
-  int8_t *st;     // state codes
-  int    *rle;    // run lengths of st[z]
+  int     Z;        // length of <st>, <r> (actual; i.e. inclusive of run length compression)
+  int8_t *st;       // state codes
+  int    *rle;      // run lengths of st[z];  or, for st[z] == L, k for L->Mk entry
 
-  int     Zalloc;   // current allocation for st, r
+  int     Zalloc;   // current allocation for st, rle
   int     Zredline; // Reuse() will downalloc to this, if exceeded.
 } H4_PATH;
 
@@ -45,6 +46,8 @@ extern int h4_path_InferLocal (const ESL_ALPHABET *abc, const ESL_DSQ *ax, int a
 extern int h4_path_InferGlocal(const ESL_ALPHABET *abc, const ESL_DSQ *ax, int alen, const int8_t *matassign, H4_PATH *pi);
 
 extern int h4_path_Count(const H4_PATH *pi, const ESL_DSQ *dsq, float wgt, H4_PROFILE *hmm);
+
+extern int h4_path_Score(const H4_PATH *pi, const ESL_DSQ *dsq, const H4_PROFILE *hmm, const H4_MODE *mo, float *ret_sc);
 
 
 extern char *h4_path_DecodeStatetype(int8_t st);

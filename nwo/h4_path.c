@@ -4,10 +4,11 @@
  *    1. The H4_PATH structure
  *    2. Inferring paths from existing alignments
  *    3. Counting paths into new HMMs
- *    4. Debugging and development tools
- *    5. Unit tests
- *    6. Test driver
- *    7. Example
+ *    4. Calculating lod scores for paths
+ *    5. Debugging and development tools
+ *    6. Unit tests
+ *    7. Test driver
+ *    8. Example
  */
 
 #include "h4_config.h"
@@ -17,6 +18,7 @@
 #include "easel.h"
 #include "esl_alphabet.h"
 
+#include "h4_mode.h"
 #include "h4_profile.h"
 #include "h4_path.h"
 
@@ -529,13 +531,120 @@ h4_path_Count(const H4_PATH *pi, const ESL_DSQ *dsq, float wgt, H4_PROFILE *hmm)
     }
   return eslOK;
 }
-
-
 /*----------- end, counting paths into new HMMs -----------------*/
 
 
 /*****************************************************************
- * 4. Debugging and development tools
+ * 4. Calculating lod scores for paths
+ *****************************************************************/
+
+/* Function:  h4_path_Score()
+ * Synopsis:  Calculate score of a path.
+ * Incept:    SRE, Sun 03 Feb 2019
+ *
+ * Purpose:   Calculate the score of path <pi> for a comparison of
+ *            digital sequence <dsq> to profile <hmm> in alignment
+ *            mode <mo>. Return the raw lod score in bits in
+ *            <*ret_sc>.
+ *            
+ *            Note on numerical roundoff error: we deliberately sum
+ *            terms in exactly the same order that the reference
+ *            Viterbi implementation does. Calling <h4_path_Score> on
+ *            the Viterbi path gives the Viterbi score, exactly.
+ *
+ * Returns:   <eslOK> on success.
+ */
+int
+h4_path_Score(const H4_PATH *pi, const ESL_DSQ *dsq, const H4_PROFILE *hmm, const H4_MODE *mo, float *ret_sc)
+{
+  float sc = (pi->Z ? 0. : -eslINFINITY);  // Z=0 case is going to return -inf
+  int   i;                                 // seq position: always on _next_ x_i to be emitted.
+  int   k;                                 // profile position: always on _current_ state, for states that have k index.
+  int   z,y;                               // counters over path elements and their runlengths
+
+  for (z = 0; z < pi->Z; z++)             // z=0 is always an N.
+    {
+      switch (pi->st[z]) {
+      case h4P_N: 
+	for (y = 1; y < pi->rle[z]; y++) sc += mo->xsc[h4_N][h4_LOOP]; // mo->xsc[h4_N][h4_LOOP] * (pi->rle[z] - 1), but multiplied out individually, matching numerical roundoff error of Viterbi algorithm
+	i   = pi->rle[z];                                  // initialize i: i is on next x_i to be emitted.
+	break;
+
+      case h4P_G:
+	sc += (pi->st[z-1] == h4P_N ? mo->xsc[h4_N][h4_MOVE] : mo->xsc[h4_J][h4_MOVE]); // {NJ}->B
+	sc += mo->xsc[h4_B][h4_MOVE];                                                   // B->G
+	k   = 0;                                          // reinit k for each domain: 0 because k will advance +1 when we enter {MD}G1
+	break;
+
+      case h4P_L:
+	sc += (pi->st[z-1] == h4P_N ? mo->xsc[h4_N][h4_MOVE] : mo->xsc[h4_J][h4_MOVE]); // {NJ}->B
+	sc += mo->xsc[h4_B][h4_LOOP];                                                   // B->L
+	k   = pi->rle[z] - 1;                            // reinit k for each domain: rle[z]-1 because k will be advanced +1 when we enter the MLk
+	break;
+
+      case h4P_MG:
+      case h4P_ML:
+	switch (pi->st[z-1]) {
+	case h4P_IG: case h4P_IL: sc += hmm->tsc[k++][h4_IM]; break; 
+	case h4P_DG: case h4P_DL: sc += hmm->tsc[k++][h4_DM]; break;
+	case h4P_G:               sc += hmm->tsc[k++][h4_MM]; break;  // (k=0 advances to 1)
+	case h4P_L:               sc += hmm->tsc[k++][h4_LM]; break;  // (L->Mk is stored off-by-one in profile. k advances to correct MLk coord here.)
+	}                                                             // k is now for the first MGk in this run at z.
+	sc += hmm->rsc[dsq[i++]][k];                                  // i advances to the next x_i that'll be emitted.
+
+	for (y = 2; y <= pi->rle[z]; y++)
+	  {                                // for remaining MG's in a run:
+	    sc += hmm->tsc[k++][h4_MM];    //   ... score transition, advance k to next MG_k
+	    sc += hmm->rsc[dsq[i++]][k];   //   ... score emission,   advance i to next x_i
+	  }                                // k is now the current MGk; i is now the next x_i
+	break;
+
+      case h4P_IG:
+      case h4P_IL:
+	switch (pi->st[z-1]) {
+	case h4P_MG: case h4P_ML: sc += hmm->tsc[k][h4_MI]; break;
+	case h4P_DG: case h4P_DL: sc += hmm->tsc[k][h4_DI]; break;
+	}
+	for (y = 1; y < pi->rle[z]; y++) sc += hmm->tsc[k][h4_II];  	// sc += hmm->tsc[k][h4_II] * (pi->rle[z]-1), but done indidivually to match roundoff error of Viterbi
+	i  += pi->rle[z];
+	break;
+
+      case h4P_DG:
+      case h4P_DL:
+	switch (pi->st[z-1]) {
+	case h4P_MG: case h4P_ML: sc += hmm->tsc[k++][h4_MD]; break;
+	case h4P_IG: case h4P_IL: sc += hmm->tsc[k++][h4_ID]; break;
+	case h4P_G:               sc += hmm->tsc[k++][h4_MD]; break;
+	}
+	for (y = 2; y <= pi->rle[z]; y++)
+	  sc += hmm->tsc[k++][h4_DD];
+	break;
+
+      case h4P_J: // all {MD}{GL}->E are t=1.0, log(t)=0 transitions. Only need E->J.
+	sc += mo->xsc[h4_E][h4_LOOP];
+	for (y = 1; y < pi->rle[z]; y++) sc += mo->xsc[h4_J][h4_LOOP];	// sc += mo->xsc[h4_J][h4_LOOP] * (pi->rle[z]-1), but matching Viterbi roundoff error
+	i  += pi->rle[z]-1;
+	break;
+
+      case h4P_C:
+	sc += mo->xsc[h4_E][h4_LOOP];
+	for (y = 1; y < pi->rle[z]; y++) sc += mo->xsc[h4_C][h4_LOOP]; // sc += mo->xsc[h4_C][h4_LOOP] * (pi->rle[z]-1), but matching Viterbi roundoff error
+	i  += pi->rle[z]-1;
+	break;
+      }
+    }
+  sc += mo->xsc[h4_C][h4_MOVE];  // in Z=0 case, this is -inf + tau_CT = -inf, so it's fine.
+
+  *ret_sc = sc;
+  return eslOK;
+}
+/*------- end, lod score calculations for paths -----------------*/
+
+
+
+
+/*****************************************************************
+ * 5. Debugging and development tools
  *****************************************************************/
 
 /* Function:  h4_path_DecodeStatetype()
@@ -686,7 +795,7 @@ h4_path_Dump(FILE *fp, const H4_PATH *pi)
 
 
 /*****************************************************************
- * 5. Unit tests
+ * 6. Unit tests
  *****************************************************************/
 #ifdef h4PATH_TESTDRIVE
 
@@ -897,7 +1006,7 @@ utest_counting(void)
 
 
 /*****************************************************************
- * 6. Test driver
+ * 7. Test driver
  *****************************************************************/
 #ifdef h4PATH_TESTDRIVE
 
@@ -948,7 +1057,7 @@ main(int argc, char **argv)
 
 
 /*****************************************************************
- * 7. Example
+ * 8. Example
  *****************************************************************/
 #ifdef h4PATH_EXAMPLE
 
