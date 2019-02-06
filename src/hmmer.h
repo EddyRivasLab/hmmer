@@ -1465,6 +1465,7 @@ extern int p7_tracealign_getMSAandStats(P7_HMM *hmm, ESL_SQ  **sq, int N, ESL_MS
 
 /* p7_alidisplay.c */
 extern P7_ALIDISPLAY *p7_alidisplay_Create(const P7_TRACE *tr, int which, const P7_OPROFILE *om, const ESL_SQ *sq, const ESL_SQ *ntsq);
+extern P7_ALIDISPLAY *p7_alidisplay_Create_empty();
 extern P7_ALIDISPLAY *p7_alidisplay_Clone(const P7_ALIDISPLAY *ad);
 extern size_t         p7_alidisplay_Sizeof(const P7_ALIDISPLAY *ad);
 extern int            p7_alidisplay_Serialize_old(P7_ALIDISPLAY *ad);
