@@ -20,8 +20,8 @@
 #include "h4_path.h"
 #include "h4_prior.h"
 #include "h4_profile.h"
-#include "h4_build.h"
 
+#include "build.h"
 #include "parameterize.h"
 
 
@@ -369,8 +369,9 @@ h4_build_config_Destroy(H4_BUILD_CONFIG *cfg)
 #include "esl_msa.h"
 #include "esl_msafile.h"
 
-#include "h4_build.h"
 #include "h4_profile.h"
+
+#include "build.h"
 
 static ESL_OPTIONS options[] = {
   /* name           type      default  env  range toggles reqs incomp  help                                       docgroup*/

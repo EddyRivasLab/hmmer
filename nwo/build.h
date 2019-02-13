@@ -1,5 +1,5 @@
-#ifndef h4_BUILD_INCLUDED
-#define h4_BUILD_INCLUDED
+#ifndef h4BUILD_INCLUDED
+#define h4BUILD_INCLUDED
 
 #include "esl_alphabet.h"
 #include "esl_msa.h"
@@ -40,4 +40,4 @@ extern int h4_Build(H4_BUILD_CONFIG *cfg, ESL_MSA *msa, H4_PROFILE **ret_hmm, ch
 extern H4_BUILD_CONFIG *h4_build_config_Create(const ESL_ALPHABET *abc);
 extern void             h4_build_config_Destroy(H4_BUILD_CONFIG *cfg);
 
-#endif /*h4_BUILD_INCLUDED*/
+#endif /*h4BUILD_INCLUDED*/

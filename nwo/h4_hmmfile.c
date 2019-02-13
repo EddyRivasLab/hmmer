@@ -374,7 +374,7 @@ read_ascii4a(H4_HMMFILE *hfp, ESL_ALPHABET **ret_abc, H4_PROFILE **opt_hmm)
       for (a = 0, ai = hfp->pi->tok[ki].firstchild; ai != -1; ai = hfp->pi->tok[ai].nextsib, a++)
 	if  (hfp->pi->tok[ai].type == eslJSON_NUMBER) {
 	  if (( status = esl_json_ReadFloat(hfp->pi, ai, hfp->bf, &v)) != eslOK) goto ERROR; // esl_json_ReadFloat() currently can't fail, on a validated JSON number
-	  hmm->e[k][a] = expf(-v);
+	  hmm->e[k][a] = exp2f(-v);
 	}
 	else if (hfp->pi->tok[ai].type == eslJSON_NULL)  hmm->e[k][a] = 0.0;
 	else ESL_XFAIL(eslEFORMAT, hfp->errmsg, "match emission val neither number nor null, (k,a) = (%d,%d), line %d char %d", k, a, hfp->pi->tok[ai].linenum, hfp->pi->tok[ai].linepos); // {bad.21:4,2,30,26}
@@ -395,7 +395,7 @@ read_ascii4a(H4_HMMFILE *hfp, ESL_ALPHABET **ret_abc, H4_PROFILE **opt_hmm)
       for (z = 0, zi = hfp->pi->tok[ki].firstchild; zi != -1; zi = hfp->pi->tok[zi].nextsib, z++)
 	if  (hfp->pi->tok[zi].type == eslJSON_NUMBER) {
 	  if ((status = esl_json_ReadFloat(hfp->pi, zi, hfp->bf, &v)) != eslOK) goto ERROR; // a validated JSON number is a subset of valid floats; esl_json_ReadFloat() can't fail.
-	  hmm->t[k][z] = expf(-v);
+	  hmm->t[k][z] = exp2f(-v);
 	}
       	else if (hfp->pi->tok[zi].type == eslJSON_NULL)  hmm->t[k][z] = 0.0;
 	else ESL_XFAIL(eslEFORMAT, hfp->errmsg, "state transition val neither number nor null at (k,z) = (%d,%d), line %d char %d", k, z, hfp->pi->tok[zi].linenum, hfp->pi->tok[zi].linepos); // {bad.27:4,3,38,38}
@@ -547,6 +547,7 @@ utest_readwrite(const char *tmpfile, const H4_PROFILE *hmm)
 #include "h4_config.h"
 
 #include <stdio.h>
+#include <string.h>
 
 #include "easel.h"
 #include "esl_alphabet.h"

@@ -13,23 +13,47 @@ I'd intended to only use during development, but which got locked in.
 
 ## Properties
 
-* `pi->st[0]` is always an N state (`h4P_N`). `pi->rle[0]-1` is the
-  number of nonhomologous flanking residues on the left.
+* The first state `pi->st[0]` is always an N state
+  (`h4P_N`). `pi->rle[0]-1` is the number of nonhomologous flanking
+  residues on the left.
   
+* The last state `pi->st[Z-1]` is always a C state (`h4P_C`), and
+  `pi->rle[Z-1]-1` is the number of nonhomologous flanking
+  residues on the right.
+
 * `pi->st[1]` is always G or L. This can be used to tell whether the
-  first domain is in glocal vs. local mode.
+  first domain is in glocal vs. local mode. However, there can be
+  additional domains in the path.
 
-* `pi->rle[]` is special for L states (when `pi->rle[z] == h4P_L`).
-  For L states, the value stored in `rle` is not a run length, but
-  instead stores the `k` value for a L $\rightarrow$ Mk local entry.
-  L and G states are the only states that always occur "singularly",
-  i.e. with run lengths that are always known to be 1; and for G
-  states, `pi->rle[]` is indeed always 1.
+* `pi->rle[]` has a special meaning for L states (when `pi->rle[z] ==
+  h4P_L`).  For L states, the value stored in `rle` is not a run
+  length, but instead stores the `k` value for a L $\rightarrow$ Mk
+  local entry.  L and G states are the only states that always occur
+  "singularly", i.e. with run lengths that are always known to be 1...
+  
+* ... thus for G states, `pi->rle[]` is indeed always 1.
 
-* An empty sequence ($L=0$) is represented by a glocal path, NGD..DC.
+* A "zero length homology" path (a path with no residues in MI states
+  at all) can arise as an edge case in model construction. In glocal
+  mode, this can be represented by a valid glocal path as
+  NGD..DC. Model construction might also force a zero length homology
+  in local mode, and an H4 model has no such valid path. As a special
+  case, NL(E)C is accepted as a path. This is the only legal path of
+  length $Z=3$ elements. N and C can still have run lengths $>1$ with
+  residues assigned to them, so it's a zero length _homology_ path in
+  my jargon, not a zero length _sequence_ path. As a convention, a
+  zero length homology local path sets k=0 for the L->MLk entry in
+  `rle[]`. A zero-length homology path is assigned a log-odds score of
+  $-\infty$.
 
-* An impossible path (no path can exist for this profile/sequence
-  comparison) is represented by `pi->Z = 0`.
+* Besides the zero length local homology special case, an impossible
+  path (no path was found or can exist for this profile/sequence
+  comparison) can also be represented by `pi->Z = 0` (an empty path).
+
+* S/B/E/T are not explicitly represented in a path.  
+  All paths implicitly begin/end with S/T.  
+  {NJ}->{GL} implies {NJ}->B->{GL}.  
+  {MD}->{CJ} imples {MD}->E->{CJ}.  
 
 ## Differences relative to HMMER3's P7_TRACE
 
@@ -46,10 +70,7 @@ I'd intended to only use during development, but which got locked in.
      rle-1.  
      For L, rle=k for L->Mk entry.  
 
-* S/B/E/T are not explicitly represented in a path.  
-  All paths implicitly begin/end with S/T.  
-  {NJ}->{GL} implies {NJ}->B->{GL}.  
-  {MD}->{CJ} imples {MD}->E->{CJ}.  
+
  
 * Posterior probabilities don't compress with run length encoding,
   and we only report per-residue PP's, so we'll move these 

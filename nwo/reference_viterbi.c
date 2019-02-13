@@ -269,7 +269,7 @@ main(int argc, char **argv)
       //h4_refmx_Dump(stdout, rmx);
       h4_path_Dump(stdout, pi);
 
-      if ( h4_path_Validate(pi, abc, hmm->M, sq->n, errbuf) != eslOK) esl_fatal("path validation failed:\n%s", errbuf);
+      if ( h4_path_Validate(pi, hmm->M, sq->n, errbuf) != eslOK) esl_fatal("path validation failed:\n%s", errbuf);
 
       h4_refmx_Reuse(rmx);
       h4_path_Reuse(pi);

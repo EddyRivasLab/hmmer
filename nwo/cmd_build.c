@@ -13,7 +13,7 @@
 #include "h4_profile.h"
 #include "h4_hmmfile.h"
 
-#include "h4_build.h"
+#include "build.h"
 
 
 static ESL_OPTIONS build_options[] = {

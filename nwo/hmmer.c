@@ -8,7 +8,7 @@
 #include "esl_getopts.h"
 #include "esl_subcmd.h"
 
-#include "h4_cmd_build.h"
+#include "cmd_build.h"
 
 ESL_SUBCMD subcommands[] = {
   { h4_cmd_build, "build", 2, "[-options] <msafile> <hmmfile>", "build profile(s) from multiple alignment(s)" },

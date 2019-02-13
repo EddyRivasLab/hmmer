@@ -9,17 +9,6 @@
 
 #include "esl_alphabet.h"
 
-/* Constants defining fixed sizes of parameter arrays in a profile.  
- *
- * It's not that you can change these easily; rather, these are so you
- * don't see bare numbers like '9' in the code and wonder where it
- * came from and what it's supposed to mean.
- */
-#define h4_NT      9     // number of transition probabilities in hmm->t
-#define h4_NTSC    12    // number of transition scores in hmm->tsc
-
-
-
 /* H4_PROFILE
  * A HMMER4 profile HMM, dual-mode local/glocal 
  * 
@@ -45,9 +34,14 @@ typedef struct {
 } H4_PROFILE;
 
 
-
-
-
+/* Constants defining fixed sizes of parameter arrays in a profile.  
+ *
+ * It's not that you can change these easily; rather, these are so you
+ * don't see bare numbers like '9' in the code and wonder where it
+ * came from and what it's supposed to mean.
+ */
+#define h4_NT      9     // number of transition probabilities in hmm->t
+#define h4_NTSC    12    // number of transition scores in hmm->tsc
 
 
 /* 9 (h4_NT) transition probabilities, ordered for convenience in

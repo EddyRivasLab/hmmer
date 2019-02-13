@@ -17,6 +17,7 @@
 
 #include "easel.h"
 #include "esl_alphabet.h"
+#include "esl_random.h"
 
 #include "h4_mode.h"
 #include "h4_profile.h"
@@ -83,11 +84,29 @@ h4_path_Grow(H4_PATH *pi)
 
 
 /* Function:  h4_path_Append()
- * Synopsis:  Add a state to a (left-to-right) growing path 
+ * Synopsis:  Add one state to a growing path 
  * Incept:    SRE, Wed 20 Jun 2018 [Universal Orlando]
  *
  * Purpose:   Adds state <st> onto growing path <pi>, left to right.
  *            The path is reallocated if needed.
+ *            
+ *            Designed to allow you to add states one by one; this
+ *            routine will increment run lengths in the <H4_PATH>
+ *            appropriately, and manage its allocation. It will also
+ *            deal appropriately with you trying to add S/B/E/T states
+ *            (by no-op'ing). These states occur naturally when you
+ *            emit or trace back a path, but which are not stored
+ *            explicitly in the <H4_PATH>. Path-building code is
+ *            cleaner if it can call <h4_path_Append()> at every state
+ *            without having to worry about the internal storage
+ *            details of <H4_PATH>.
+ *            
+ *            You can also build paths backwards (from T to S), then
+ *            reverse them with <h4_path_Reverse()>. Dynamic
+ *            programming tracebacks do this.
+ *            
+ *            If you want to append a complete element (a state and
+ *            its runlength), see <h4_path_AppendElement()>.
  *
  * Returns:   <eslOK> on success.
  *
@@ -98,7 +117,7 @@ h4_path_Append(H4_PATH *pi, int8_t st)
 {
   int status;
 
-  if (st == h4P_S || st == h4P_B || st == h4P_E) return eslOK;  // S,B,E are implicit; attempting to add them is a no-op
+  if (st == h4P_S || st == h4P_B || st == h4P_E || st == h4P_T) return eslOK;  // S,B,E,T are implicit; attempting to add them is a no-op
 
   if (pi->Z > 0 && st == pi->st[pi->Z-1]) 
     { // run length encoding:
@@ -116,6 +135,42 @@ h4_path_Append(H4_PATH *pi, int8_t st)
     }
   return eslOK;
 }
+
+
+/* Function:  h4_path_AppendElement()
+ * Synopsis:  Append an element (state + runleng) to a growing path
+ * Incept:    SRE, Fri 08 Feb 2019
+ *
+ * Purpose:   Adds state <st> and runlength <r> to growing path <pi>.
+ *
+ *            If <st> is <h4P_L>, then <r> is treated specially, as
+ *            the <k> coordinate of the L->Mk entry transition.
+ *            
+ *            <h4_path_AppendElement()> is convenient when we're
+ *            building paths element by element; <h4_path_Append()> is
+ *            more convenient when building them state by state; and
+ *            <h4_path_AppendElement(pi, h4P_L, k)> is convenient for
+ *            L->Mk transitions in both cases.
+ *            
+ * Returns:   <eslOK> on success.
+ * 
+ * Throws:    <eslEMEM> on allocation failure.           
+ */
+int
+h4_path_AppendElement(H4_PATH *pi, int8_t st, int r)
+{
+  int status;
+
+  if (pi->Z == pi->Zalloc) {
+    if ((status = h4_path_Grow(pi)) != eslOK) return status;
+  }
+
+  pi->st[pi->Z]  = st;
+  pi->rle[pi->Z] = r;
+  pi->Z++;
+  return eslOK;
+}
+
 
 
 /* Function:  h4_path_Reverse()
@@ -220,10 +275,10 @@ h4_path_Destroy(H4_PATH *pi)
  *            
  *            It is possible for the sequence to have zero length (no
  *            residues), or to have a zero-length homologous region.
- *            Such a local path looks like N[n+1] L[m+1] C[1], where the
+ *            Such a local path looks like N[n+1] L[0] C[1], where the
  *            N state run length n+1 absorbs all n residues of the
- *            sequence, and the L[m+1] means L->E skipping all m match
- *            states. A glocal path looks like N[a] G D[m] C[b].
+ *            sequence, and the L[0] means L->E.  A glocal path looks
+ *            like N[a] G D[m] C[b].
  *
  *            This is a one-way transformation, mainly because HMMER
  *            does not consider insertions to be aligned, and
@@ -289,7 +344,7 @@ h4_path_InferLocal(const ESL_ALPHABET *abc, const ESL_DSQ *ax, int alen, const i
   /* Set lcol to the column with the L->MLk entry.  If none is found,
    * then lcol=alen+1; either there are no consensus columns (and we'll
    * throw eslEINVAL), or the consensus columns are empty (and we'll 
-   * generate an empty N[n+1] L[m+1] C path).
+   * generate an empty N[n+1] L[0] C path).
    */
   for (lcol = 1; lcol <= alen; lcol++)
     if (matassign[lcol] && ! esl_abc_XIsGap(abc, ax[lcol])) break; 
@@ -312,8 +367,7 @@ h4_path_InferLocal(const ESL_ALPHABET *abc, const ESL_DSQ *ax, int alen, const i
 	  ncons++;
 
 	  if (c == lcol) {
-	    if ((status = h4_path_Append(pi, h4P_L)) != eslOK) return status;
-	    pi->rle[pi->Z-1] = ncons;  // we store the k of L->MLk in rle
+	    if ((status = h4_path_AppendElement(pi, h4P_L, ncons)) != eslOK) return status; // we store the k of L->MLk in rle
 	  }
 
 	  if (! esl_abc_XIsGap(abc, ax[c])) { if ((status = h4_path_Append(pi, h4P_ML)) != eslOK) return status; }
@@ -335,11 +389,10 @@ h4_path_InferLocal(const ESL_ALPHABET *abc, const ESL_DSQ *ax, int alen, const i
     }
   if (ncons == 0) ESL_EXCEPTION(eslEINVAL, "matassign defined no consensus columns");
 
-  /* If zerolen, we have N[n+1] so far. Add L[m+1] C. */
+  /* If zerolen, we have N[n+1] so far. Add L[0] C. */
   if (lcol == alen+1) {
-    if ((status = h4_path_Append(pi, h4P_L)) != eslOK) return status;
-    pi->rle[pi->Z-1] = ncons+1;  
-    if ((status = h4_path_Append(pi, h4P_C)) != eslOK) return status; 
+    if ((status = h4_path_AppendElement(pi, h4P_L, 0)) != eslOK) return status;
+    if ((status = h4_path_Append       (pi, h4P_C))    != eslOK) return status; 
   }
 
   return eslOK;
@@ -577,6 +630,7 @@ h4_path_Score(const H4_PATH *pi, const ESL_DSQ *dsq, const H4_PROFILE *hmm, cons
 	break;
 
       case h4P_L:
+	if (pi->st[z+1] == h4P_C) { *ret_sc = -eslINFINITY; return eslOK; }             // zero length homology edge case convention.
 	sc += (pi->st[z-1] == h4P_N ? mo->xsc[h4_N][h4_MOVE] : mo->xsc[h4_J][h4_MOVE]); // {NJ}->B
 	sc += mo->xsc[h4_B][h4_LOOP];                                                   // B->L
 	k   = pi->rle[z] - 1;                            // reinit k for each domain: rle[z]-1 because k will be advanced +1 when we enter the MLk
@@ -647,6 +701,119 @@ h4_path_Score(const H4_PATH *pi, const ESL_DSQ *dsq, const H4_PROFILE *hmm, cons
  * 5. Debugging and development tools
  *****************************************************************/
 
+
+/* Function:  h4_path_Example()
+ * Synopsis:  Create a small, fixed <H4_PATH>, for debug/test.
+ * Incept:    SRE, Fri 08 Feb 2019
+ *
+ * Returns:   <eslOK> on success, and <*ret_pi> points to
+ *            the new <H4_PATH>.
+ *
+ * Throws:    <eslEMEM> on allocation failure, and <*ret_pi>
+ *            is <NULL>.
+ */
+int
+h4_path_Example(H4_PATH **ret_pi)
+{
+  H4_PATH *pi = h4_path_Create();
+  int      status;
+
+  if (pi == NULL) { status = eslEMEM; goto ERROR; }
+
+  /* This is the Caudal_act | CDX2_HUMAN alignment shown in 6 Jun 2016 zigar PDF */
+  if (( status = h4_path_AppendElement(pi, h4P_N,  13))  != eslOK) goto ERROR;
+  if (( status = h4_path_AppendElement(pi, h4P_G,  1))   != eslOK) goto ERROR;
+  if (( status = h4_path_AppendElement(pi, h4P_MG, 10))  != eslOK) goto ERROR;
+  if (( status = h4_path_AppendElement(pi, h4P_IG, 1))   != eslOK) goto ERROR;
+  if (( status = h4_path_AppendElement(pi, h4P_MG, 21))  != eslOK) goto ERROR;
+  if (( status = h4_path_AppendElement(pi, h4P_DG, 1))   != eslOK) goto ERROR;
+  if (( status = h4_path_AppendElement(pi, h4P_MG, 2))   != eslOK) goto ERROR;
+  if (( status = h4_path_AppendElement(pi, h4P_IG, 7))   != eslOK) goto ERROR;
+  if (( status = h4_path_AppendElement(pi, h4P_MG, 50))  != eslOK) goto ERROR;
+  if (( status = h4_path_AppendElement(pi, h4P_IG, 1))   != eslOK) goto ERROR;
+  if (( status = h4_path_AppendElement(pi, h4P_MG, 14))  != eslOK) goto ERROR;
+  if (( status = h4_path_AppendElement(pi, h4P_IG, 9))   != eslOK) goto ERROR;
+  if (( status = h4_path_AppendElement(pi, h4P_MG, 10))  != eslOK) goto ERROR;
+  if (( status = h4_path_AppendElement(pi, h4P_IG, 8))   != eslOK) goto ERROR;
+  if (( status = h4_path_AppendElement(pi, h4P_MG, 35))  != eslOK) goto ERROR;
+  if (( status = h4_path_AppendElement(pi, h4P_C,  134)) != eslOK) goto ERROR;
+
+  *ret_pi = pi;
+  return eslOK;
+
+ ERROR:
+  *ret_pi = NULL;
+  return status;
+}
+
+
+/* Function:  h4_path_TestSample()
+ * Synopsis:  Generate valid <H4_PATH>, including edge cases, for debug/tests
+ * Incept:    SRE, Fri 08 Feb 2019
+ *
+ * Returns:   <eslOK> on success, and <*ret_pi> points to the new path.
+ *
+ * Throws:    <eslEMEM> on allocation failure, and <*ret_pi> is <NULL>.
+ */
+int
+h4_path_TestSample(ESL_RANDOMNESS *rng, H4_PATH **ret_pi)
+{
+  H4_PATH *pi = NULL;
+  int8_t   st = h4P_S;
+  int      M  = 4;     // small M tests edgier cases more frequently
+  int      k  = 0;
+  int      status;
+
+  if (( pi = h4_path_Create() ) == NULL) { status = eslEMEM; goto ERROR; }
+
+  /* Zero length homology NLC edge case as a special case, 2% of the time. */
+  if (esl_rnd_Roll(rng, 50) == 0)
+    {
+      if (( status = h4_path_AppendElement(pi, h4P_N, esl_rnd_Roll(rng, 3)))  != eslOK) goto ERROR;
+      if (( status = h4_path_AppendElement(pi, h4P_L, 0))                     != eslOK) goto ERROR;
+      if (( status = h4_path_AppendElement(pi, h4P_C, esl_rnd_Roll(rng, 3)))  != eslOK) goto ERROR;
+      *ret_pi = pi;
+      return eslOK;
+    }
+
+  /* Main cases, by sampling transitions uniformly through profile */
+  while (st != h4P_T)
+    {
+      switch (st) {
+      case h4P_S:  st = h4P_N;                                          break;
+      case h4P_N:  st = (esl_rnd_Roll(rng, 2) == 0 ? h4P_N  : h4P_B);   break;
+      case h4P_B:  st = (esl_rnd_Roll(rng, 2) == 0 ? h4P_G  : h4P_L);   break;
+      case h4P_G:  st = (esl_rnd_Roll(rng, 2) == 0 ? h4P_MG : h4P_DG);  break;
+      case h4P_MG: st = (k==M ? h4P_E : h4P_MG + esl_rnd_Roll(rng, 3)); break;
+      case h4P_IG: st = h4P_MG + esl_rnd_Roll(rng, 3);                  break;
+      case h4P_DG: st = (k==M ? h4P_E : h4P_MG + esl_rnd_Roll(rng, 3)); break;
+      case h4P_L:  st = h4P_ML;                                         break;
+      case h4P_ML: st = (k==M ? h4P_E : h4P_ML + esl_rnd_Roll(rng, 3)); break;
+      case h4P_IL: st = h4P_ML + esl_rnd_Roll(rng, 3);                  break;
+      case h4P_DL: st = (k==M ? h4P_E : h4P_ML + esl_rnd_Roll(rng, 3)); break;
+      case h4P_E:  st = (esl_rnd_Roll(rng, 2) == 0 ? h4P_C : h4P_J);    break;
+      case h4P_J:  st = (esl_rnd_Roll(rng, 2) == 0 ? h4P_J : h4P_B);    break;
+      case h4P_C:  st = (esl_rnd_Roll(rng, 2) == 0 ? h4P_C : h4P_T);    break;
+      default: esl_fatal("bad state code in path");
+      }
+ 
+      if      (h4_path_IsM(st) || h4_path_IsD(st)) k++;                       // k++ after move to an M, thus L,G init of k must be off-by-one...
+      else if (st == h4P_G)                        k = 0;                     //  ... thus k=0 not 1 
+      else if (st == h4P_L)                        k = esl_rnd_Roll(rng, M);  //  ... and 0..M-1 not 1..M
+
+      if (st == h4P_L) status = h4_path_AppendElement(pi, st, k+1);           // +1 here for same reason as above.
+      else             status = h4_path_Append       (pi, st);
+      if (status != eslOK) goto ERROR;
+    }
+  *ret_pi = pi;
+  return eslOK;
+
+ ERROR:
+  *ret_pi = NULL;
+  return status;
+}
+
+
 /* Function:  h4_path_DecodeStatetype()
  * Synopsis:  Convert internal state type code to a string
  * Incept:    SRE, Thu 21 Jun 2018 [Universal Orlando]
@@ -691,10 +858,15 @@ h4_path_DecodeStatetype(int8_t st)
  *            representing an alignment of a profile of length <M> to
  *            a digital sequence of (unaligned) length <L>.
  *            
+ *            In some cases, <M> and/or <L> may not be at hand -- for
+ *            example, when test paths are randomly generated in unit
+ *            tests directly, without a profile/sequence comparison.
+ *            Passing -1 disables checks against either or both of
+ *            these expected lengths.
+ *            
  * Args:      pi     : path to validate
- *            abc    : alphabet for <dsq>
- *            M      : length of profile
- *            L      : length of sequence
+ *            M      : length of profile; -1 if unknown
+ *            L      : length of sequence; -1 if unknown
  *            errbuf : <NULL>, or an error message buffer allocated 
  *                     for at least <eslERRBUFSIZE> chars.
  * 
@@ -703,7 +875,7 @@ h4_path_DecodeStatetype(int8_t st)
  *            says why.
  */
 int
-h4_path_Validate(const H4_PATH *pi, const ESL_ALPHABET *abc, int M, int L, char *errbuf)
+h4_path_Validate(const H4_PATH *pi, int M, int L, char *errbuf)
 {
                                        /* -  S  N  B  G MG IG DG  L ML IL DL  E  J  C  T */
   static int is_valid_inside[h4P_NST] = { 0, 0, 0, 0, 1, 1, 1, 1, 1, 1, 1, 1, 0, 1, 0, 0 }; // valid in positions 1..Z-2 of path
@@ -737,6 +909,18 @@ h4_path_Validate(const H4_PATH *pi, const ESL_ALPHABET *abc, int M, int L, char 
   if (pi->st[0]       != h4P_N) ESL_FAIL(eslFAIL, errbuf, "first state should be N");
   if (pi->st[pi->Z-1] != h4P_C) ESL_FAIL(eslFAIL, errbuf, "last state should be C");
 
+  /* Edge case: the only Z=3 path is the NLC zero-length homology
+   * special case, which can arise in model construction but not in H4
+   * alignment.  Isolate and test it specially.
+   */
+  if (pi->Z == 3)
+    {
+      pathL = pi->rle[0] + pi->rle[2] - 2;
+      if (pi->st[1]  != h4P_L)   ESL_FAIL(eslFAIL, errbuf, "zero len homology local path: should have st[1] = L");
+      if (pi->rle[1] != 0)       ESL_FAIL(eslFAIL, errbuf, "zero len homology local path: should have rle[1] = 0");
+      if (L != -1 && pathL != L) ESL_FAIL(eslFAIL, errbuf, "zero len homology local path: pathL != L");
+      return eslOK;
+    }
 
   for (z = 0; z < pi->Z; z++)
     {
@@ -757,21 +941,47 @@ h4_path_Validate(const H4_PATH *pi, const ESL_ALPHABET *abc, int M, int L, char 
       }
 	  
       if (pi->st[z] == h4P_J || pi->st[z] == h4P_C)
-	{ // glocal M must exactly match, but MLk->E local end transition means M is only an upper bound on pathM.
-	  if (is_local) { if (! (pathM <= M)) ESL_FAIL(eslFAIL, errbuf, "local alignment length exceeds profile length"); }
-	  else          { if (   pathM != M)  ESL_FAIL(eslFAIL, errbuf, "glocal alignment length != M");                  }
+	{                 // glocal M must exactly match, but MLk->E local end transition means M is only an upper bound on pathM.
+	  if (M != -1) {  // Only run this check if caller provided M; -1 means caller doesn't have M handy
+	    if (is_local) { if (! (pathM <= M)) ESL_FAIL(eslFAIL, errbuf, "local alignment length exceeds profile length"); }
+	    else          { if (   pathM != M)  ESL_FAIL(eslFAIL, errbuf, "glocal alignment length != M");                  }
+	  }
 	  pathM = 0;
 	}
 
       if (pi->st[z] == h4P_G && pi->rle[z] != 1) ESL_FAIL(eslFAIL, errbuf, "RLE!=1 for G at %d", z);
       if (pi->rle[z] < 1)                        ESL_FAIL(eslFAIL, errbuf, "RLE<1 at %d", z);
     }
-  if (pathL != L) ESL_FAIL(eslFAIL, errbuf, "pathL %d != L %d", pathL, L);
+  if (L != -1 && pathL != L) ESL_FAIL(eslFAIL, errbuf, "pathL %d != L %d", pathL, L);  // this check only runs if caller provided valid L 
+  return eslOK;
+}
+
+/* Function:  h4_path_Compare()
+ * Synopsis:  Compare two paths for equality
+ * Incept:    SRE, Wed 13 Feb 2019 [Depeche Mode, Personal Jesus]
+ *
+ * Returns:   <eslOK> if the two paths are identical.
+ *            <eslFAIL> if they're not.
+ */
+int
+h4_path_Compare(const H4_PATH *pi1, const H4_PATH *pi2)
+{
+  int z;
+
+  if (pi1->Z != pi2->Z) ESL_FAIL(eslFAIL, NULL, "different Z");
+
+  for (z = 0; z < pi1->Z; z++)
+    {
+      if (pi1->st[z]  != pi2->st[z])  ESL_FAIL(eslFAIL, NULL, "different st at z = %d",  z);
+      if (pi1->rle[z] != pi2->rle[z]) ESL_FAIL(eslFAIL, NULL, "different rle at z = %d", z);
+    }
   return eslOK;
 }
 
 
-
+/* Function:  h4_path_Dump()
+ * Synopsis:  Dump internals of H4_PATH to a stream.
+ */
 int
 h4_path_Dump(FILE *fp, const H4_PATH *pi)
 {
@@ -781,9 +991,7 @@ h4_path_Dump(FILE *fp, const H4_PATH *pi)
   fprintf(fp, "---- -- ----\n");
 
   for (z = 0; z < pi->Z; z++)
-    {
-      fprintf(fp, "%4d %2s %4d\n", z, h4_path_DecodeStatetype(pi->st[z]), pi->rle[z]);
-    }
+    fprintf(fp, "%4d %2s %4d\n", z, h4_path_DecodeStatetype(pi->st[z]), pi->rle[z]);
 
   fprintf(fp, "\n# Z        = %d\n", pi->Z);
   fprintf(fp,   "# Zalloc   = %d\n", pi->Zalloc);
@@ -845,7 +1053,7 @@ utest_zerolength(ESL_ALPHABET *abc)
 
       // N L C: Z=3
       if ( h4_path_InferLocal(abc, ax, alen, matassign, pi)  != eslOK) esl_fatal(msg);
-      if ( h4_path_Validate(pi, abc, M, L, errbuf)           != eslOK) esl_fatal("%s: %s", msg, errbuf);
+      if ( h4_path_Validate(pi, M, L, errbuf)                != eslOK) esl_fatal("%s: %s", msg, errbuf);
       if ( pi->Z             != 3)     esl_fatal(msg);
       if ( pi->st[0]         != h4P_N) esl_fatal(msg);
       if ( pi->st[1]         != h4P_L) esl_fatal(msg);
@@ -855,7 +1063,7 @@ utest_zerolength(ESL_ALPHABET *abc)
       // N G DG(6) C          : Z=4
       // N G DG(3) IG DG(3) C : Z=6
       if ( h4_path_InferGlocal(abc, ax, alen, matassign, pi) != eslOK) esl_fatal(msg);
-      if ( h4_path_Validate(pi, abc, M, L, errbuf)           != eslOK) esl_fatal("%s: %s", msg, errbuf);
+      if ( h4_path_Validate(pi, M, L, errbuf)                != eslOK) esl_fatal("%s: %s", msg, errbuf);
       if ( pi->Z != 4 && pi->Z != 6 )   esl_fatal(msg); 
       if ( pi->st[0]         != h4P_N)  esl_fatal(msg);
       if ( pi->st[1]         != h4P_G)  esl_fatal(msg);
@@ -917,11 +1125,11 @@ utest_dirtyseqs(ESL_RANDOMNESS *rng, ESL_ALPHABET *abc)
       for (L = 0, c = 1; c <= alen; c++) if (! esl_abc_XIsGap(abc, ax[c])) L++;     // don't use esl_abc_dsqrlen(). Here, we count *,~ as "residues".
 
       if ( h4_path_InferLocal(abc, ax, alen, matassign, pi)  != eslOK) esl_fatal(msg);
-      if ( h4_path_Validate(pi, abc, M, L, errbuf)           != eslOK) esl_fatal("%s : %s", msg, errbuf);
+      if ( h4_path_Validate(pi, M, L, errbuf)                != eslOK) esl_fatal("%s : %s", msg, errbuf);
       if ( h4_path_Reuse(pi)                                 != eslOK) esl_fatal(msg);
 
       if ( h4_path_InferGlocal(abc, ax, alen, matassign, pi) != eslOK) esl_fatal(msg);
-      if ( h4_path_Validate(pi, abc, M, L, errbuf)           != eslOK) esl_fatal("%s : %s", msg, errbuf);
+      if ( h4_path_Validate(pi, M, L, errbuf)                != eslOK) esl_fatal("%s : %s", msg, errbuf);
       if ( h4_path_Reuse(pi)                                 != eslOK) esl_fatal(msg);
     }
 
@@ -968,10 +1176,10 @@ utest_counting(void)
 
   for (idx = 0; idx < nseq; idx++)
     {
-      if ( esl_abc_Digitize(abc, aseq[idx], ax)                           != eslOK) esl_fatal(msg);
-      if ( h4_path_InferGlocal(abc, ax, alen, matassign, pi)              != eslOK) esl_fatal(msg);
-      if ( h4_path_Validate(pi, abc, M, esl_abc_dsqrlen(abc, ax), errbuf) != eslOK) esl_fatal("%s:\n  %s", msg, errbuf);
-      if ( h4_path_Count(pi, ax, 1.0, hmm)                                != eslOK) esl_fatal(msg);
+      if ( esl_abc_Digitize(abc, aseq[idx], ax)                      != eslOK) esl_fatal(msg);
+      if ( h4_path_InferGlocal(abc, ax, alen, matassign, pi)         != eslOK) esl_fatal(msg);
+      if ( h4_path_Validate(pi, M, esl_abc_dsqrlen(abc, ax), errbuf) != eslOK) esl_fatal("%s:\n  %s", msg, errbuf);
+      if ( h4_path_Count(pi, ax, 1.0, hmm)                           != eslOK) esl_fatal(msg);
       h4_path_Reuse(pi);
     }
 
