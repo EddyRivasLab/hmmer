@@ -137,6 +137,7 @@ OBJS =  build.o\
 	p7_alidisplay.o\
 	p7_bg.o\
 	p7_builder.o\
+	p7_domain.o\
 	p7_domaindef.o\
 	p7_gbands.o\
 	p7_gmx.o\
@@ -190,6 +191,7 @@ UTESTS =\
 	seqmodel_utest\
 	p7_alidisplay_utest\
 	p7_bg_utest\
+	p7_domain_utest\
 	p7_gmx_utest\
 	p7_gmxchk_utest\
 	p7_hmmd_search_stats_utest\

@@ -34,6 +34,7 @@
 1 exercise seqmodel           @src/seqmodel_utest@
 1 exercise p7_alidisplay      @src/p7_alidisplay_utest@
 1 exercise p7_bg              @src/p7_bg_utest@
+1 exercise p7_domain          @src/p7_domain_utest@
 1 exercise p7_gmx             @src/p7_gmx_utest@
 1 exercise p7_hmm             @src/p7_hmm_utest@
 1 exercise p7_hmmfile         @src/p7_hmmfile_utest@
