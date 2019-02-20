@@ -29,6 +29,7 @@
 1 exercise generic_msv        @src/generic_msv_utest@
 1 exercise generic_stotrace   @src/generic_stotrace_utest@
 1 exercise generic_viterbi    @src/generic_viterbi_utest@
+1 exercise hmmd_search_status    @src/hmmd_search_status_utest@
 1 exercise logsum             @src/logsum_utest@
 1 exercise modelconfig        @src/modelconfig_utest@
 1 exercise seqmodel           @src/seqmodel_utest@

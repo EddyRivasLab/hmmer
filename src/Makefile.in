@@ -124,6 +124,7 @@ OBJS =  build.o\
 	hmmlogo.o\
 	hmmdmstr.o\
 	hmmdmstr_shard.o\
+	hmmd_search_status.o\
 	hmmdwrkr.o\
 	hmmdwrkr_shard.o\
 	hmmdutils.o\
@@ -203,7 +204,8 @@ UTESTS =\
 	p7_tophits_utest\
 	p7_trace_utest\
 	p7_scoredata_utest\
-  hmmpgmd2msa_utest
+  hmmpgmd2msa_utest\
+  hmmd_search_status_utest
 
 ITESTS = \
 	itest_brute

@@ -136,5 +136,10 @@ extern int p7_hmmd_search_stats_Deserialize(const uint8_t *buf, uint32_t *pos, H
     p7_syslog(LOG_CRIT,"[%s:%d] - %s error %d - %s\n", __FILE__, __LINE__, str, err, strerror(err)); \
     exit(0); \
   }
-
+  
+/* hmmd_search_status.c */
+extern int hmmd_search_status_Serialize(const HMMD_SEARCH_STATUS *obj, uint8_t **buf, uint32_t *n, uint32_t *nalloc);
+extern int hmmd_search_status_Deserialize(const uint8_t *buf, uint32_t *n, HMMD_SEARCH_STATUS *ret_obj);
+extern int hmmd_search_status_TestSample(ESL_RAND64 *rng, HMMD_SEARCH_STATUS **ret_obj);
+extern int hmmd_search_status_Compare(HMMD_SEARCH_STATUS *first, HMMD_SEARCH_STATUS *second);
 #endif /*P7_HMMPGMD_INCLUDED*/
