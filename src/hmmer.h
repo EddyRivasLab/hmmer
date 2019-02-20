@@ -48,6 +48,7 @@
 #include "esl_mixdchlet.h"	/* ESL_MIXDCHLET         */
 #include "esl_msa.h"		/* ESL_MSA               */
 #include "esl_random.h"		/* ESL_RANDOMNESS        */
+#include "esl_rand64.h" /* ESL_RAND64 */
 #include "esl_sq.h"		/* ESL_SQ                */
 #include "esl_scorematrix.h"    /* ESL_SCOREMATRIX       */
 #include "esl_stopwatch.h"      /* ESL_STOPWATCH         */
@@ -1516,6 +1517,8 @@ extern P7_DOMAIN *p7_domain_Create_empty();
 extern void p7_domain_Destroy(P7_DOMAIN *obj);
 extern int p7_domain_Serialize(const P7_DOMAIN *obj, uint8_t **buf, uint32_t *n, uint32_t *nalloc);
 extern int p7_domain_Deserialize(const uint8_t *buf, uint32_t *n, P7_DOMAIN *ret_obj);
+extern int p7_domain_TestSample(ESL_RAND64 *rng, P7_DOMAIN **ret_obj);
+extern int p7_domain_Compare(P7_DOMAIN *first, P7_DOMAIN *second, double atol, double rtol);
 
 /* p7_domaindef.c */
 extern P7_DOMAINDEF *p7_domaindef_Create (ESL_RANDOMNESS *r);
@@ -1541,6 +1544,13 @@ extern int     p7_gmx_Compare(P7_GMX *gx1, P7_GMX *gx2, float tolerance);
 extern int     p7_gmx_Dump(FILE *fp, P7_GMX *gx, int flags);
 extern int     p7_gmx_DumpWindow(FILE *fp, P7_GMX *gx, int istart, int iend, int kstart, int kend, int show_specials);
 
+/* p7_hit.c */
+extern P7_HIT *p7_hit_Create_empty();
+extern void p7_hit_Destroy(P7_HIT *the_hit);
+extern int p7_hit_Serialize(const P7_HIT *obj, uint8_t **buf, uint32_t *n, uint32_t *nalloc);
+extern int p7_hit_Deserialize(const uint8_t *buf, uint32_t *n, P7_HIT *ret_obj);
+extern int p7_hit_TestSample(ESL_RAND64 *rng, P7_HIT **ret_obj);
+extern int p7_hit_Compare(P7_HIT *first, P7_HIT *second, double atol, double rtol);
 
 /* p7_hmm.c */
 /*      1. The P7_HMM object: allocation, initialization, destruction. */

@@ -400,36 +400,110 @@ extern int p7_domain_Deserialize(const uint8_t *buf, uint32_t *n, P7_DOMAIN *ret
     }
   }
 
-  // finally, the enclosed P7_ALIDISPLAY object
-  if(ret_obj->ad == NULL){
-    ret_obj->ad =p7_alidisplay_Create_empty(); // need a structure to serialize into
-  }
+
   if(ptr - (buf + *n) != obj_size){
     printf("Deserialized object size didn't match expected length in p7_domain_Deserialize\n");
     return eslEINVAL;
   }
 
   *n = ptr - buf;  //update index into the buffer
+
+    // finally, the enclosed P7_ALIDISPLAY object
+  if(ret_obj->ad == NULL){
+    ret_obj->ad =p7_alidisplay_Create_empty(); // need a structure to serialize into
+  }
   return p7_alidisplay_Deserialize(buf, n, ret_obj->ad); // if this function terminates correctly, return eslOK, 
   // otherwise return its error code
 
 ERROR:
   return eslEMEM;
 }
-
 /*****************************************************************
- * 2. Unit tests
- *****************************************************************/      
-#ifdef p7DOMAIN_TESTDRIVE
+ * 2. Debugging Functions
+ *****************************************************************/    
+
+ /* Function:  p7_domain_TestSample
+ * Synopsis:  Creates a P7_DOMAIN object that contains random data.
+ *
+ * Purpose:   Creates a P7_DOMAIN object that contains random data.  This data will be syntactically correct, 
+ *            but is not intended to be in any way a "reasonable" domain. 
+ *
+ * Inputs:    rng: the random-number generator to use in creating this object.
+ *            ret_obj: pointer that is used to return the created object
+ *
+ * Returns:   eslOK, and the created object in ret_obj
+ *
+ * Throws:    Returns eslEMEM if unable to allocate or re-allocate memory. Returns eslEINVAL if ret_obj == NULL
+ */ 
+extern int p7_domain_TestSample(ESL_RAND64 *rng, P7_DOMAIN **ret_obj){
+  int status;
+
+  if(ret_obj == NULL){
+    return eslEINVAL;
+  }
+  if(*ret_obj == NULL){
+    ESL_ALLOC(*ret_obj, sizeof(P7_DOMAIN));
+  }
+  
+  P7_DOMAIN *the_domain = *ret_obj; // convenience pointer 
+ 
+
+  the_domain->ienv = esl_rand64(rng);
+  the_domain->jenv = esl_rand64(rng);
+  the_domain->iali = esl_rand64(rng);
+  the_domain->jali = esl_rand64(rng);
+  the_domain->iorf = esl_rand64(rng);
+  the_domain->jorf = esl_rand64(rng);
+  the_domain->envsc = (float) esl_rand64_double(rng);
+  the_domain->domcorrection = (float) esl_rand64_double(rng);
+  the_domain->dombias = (float) esl_rand64_double(rng);
+  the_domain->oasc = (float) esl_rand64_double(rng);
+  the_domain->bitscore = (float) esl_rand64_double(rng);
+  the_domain->lnP = esl_rand64_double(rng);
+  the_domain->is_reported = esl_rand64_Roll(rng, 1);
+  the_domain->is_included = esl_rand64_Roll(rng, 1);
+
+  // sample an alignment with length ranging uniformly from 50-350
+  ESL_RANDOMNESS *rng2 = esl_randomness_Create((uint32_t) esl_rand64(rng));  // This is inefficient, but probably the best we can do
+  // until alidisplay_Sample gets converted to the new rng
+  if(p7_alidisplay_Sample(rng2, esl_rand64_Roll(rng, 300) + 50, &(the_domain->ad)) != eslOK){
+    return eslFAIL;
+  }
+  esl_randomness_Destroy(rng2);
+
+  if(esl_rand64_Roll(rng, 1)){ // 50% chance of having a scores_per_pos array
+    ESL_ALLOC(the_domain->scores_per_pos, the_domain->ad->N * sizeof(float));
+    for(int i = 0; i < the_domain->ad->N; i++){
+      the_domain->scores_per_pos[i] = esl_rand64_double(rng);
+    }
+  }
+  else{ // array is empty
+    the_domain->scores_per_pos = NULL;
+  }
+
+  return eslOK; // If we make it here, everything went well
+
+ERROR:
+  return eslEMEM;
+}
 
 
-/* Compares two P7_DOMAIN objects to see if their contents are the same.
- * Because this function compares floating-point numbers using equality (==),
- * it should only be used when the goal is to determine if two P7_DOMAINs contain
- * the exact same bits, as when testing the serialization/deserialization code 
- */
-
-static int domain_Compare(P7_DOMAIN *first, P7_DOMAIN *second){
+/* Function:  p7_domain_Compare
+ * Synopsis:  Compares two P7_DOMAIN objects for equality within the specified tolerances
+ *
+ * Purpose:   Compares two P7_DOMAIN objects.  Integer fields are compared for equality. Floating-point fields are 
+ *            compared for equality within the specified relative and absolute tolerances
+ *
+ * Inputs:    first: The first object to be compared
+ *            second: The second object to be compared
+ *            atol: The absolute tolerance to be used when comparing floating-point fields
+ *            rtol: The relative tolerance to be used when comparing floating-point fields
+ *
+ * Returns:   eslOK if the P7_DOMAIN inputs match, eslFAIL otherwise
+ *
+ * Throws:    Nothing
+ */ 
+extern int p7_domain_Compare(P7_DOMAIN *first, P7_DOMAIN *second, double atol, double rtol){
   // compare all the fixed-length fields
   if(first->ienv != second->ienv){
     return eslFAIL;
@@ -449,19 +523,22 @@ static int domain_Compare(P7_DOMAIN *first, P7_DOMAIN *second){
   if(first->jorf != second->jorf){
     return eslFAIL;
   }
-  if(first->envsc != second->envsc){
+  if(esl_FCompareNew(first->envsc, second->envsc, (float) atol, (float) rtol) != eslOK){
     return eslFAIL;
   }
-  if(first->domcorrection != second->domcorrection){
+ if(esl_FCompareNew(first->domcorrection, second->domcorrection, (float) atol, (float) rtol) != eslOK){
     return eslFAIL;
   }
-  if(first->dombias != second->dombias){
+ if(esl_FCompareNew(first->dombias, second->dombias, (float) atol, (float) rtol) != eslOK){
     return eslFAIL;
   }
-  if(first->oasc != second->oasc){
+  if(esl_FCompareNew(first->oasc, second->oasc, (float) atol, (float) rtol) != eslOK){
     return eslFAIL;
   }
-  if(first->bitscore != second->bitscore){
+  if(esl_FCompareNew(first->bitscore, second->bitscore, (float) atol, (float) rtol) != eslOK){
+    return eslFAIL;
+  }
+ if(esl_DCompareNew(first->lnP, second->lnP, atol, rtol) != eslOK){
     return eslFAIL;
   }
   if(first->lnP != second->lnP){
@@ -487,7 +564,7 @@ static int domain_Compare(P7_DOMAIN *first, P7_DOMAIN *second){
     }
 
     for(int i = 0; i < first->ad->N; i++){
-      if(first->scores_per_pos[i] != second->scores_per_pos[i]){
+    if(esl_FCompareNew(first->scores_per_pos[i], second->scores_per_pos[i], (float) atol, (float) rtol) != eslOK){
         return eslFAIL; // fail if any of the scores_per_pos array values mismatch
       }
     }
@@ -496,80 +573,34 @@ static int domain_Compare(P7_DOMAIN *first, P7_DOMAIN *second){
   return p7_alidisplay_Compare(first->ad, second->ad);
 }
 
-static uint64_t random64(ESL_RANDOMNESS *rng){
-  uint64_t low = (uint64_t) esl_random_uint32(rng);
-  uint64_t high = ((uint64_t) esl_random_uint32(rng)) << 32;
-
-  return (high | low);
-}
-
-// Creates a valid P7_DOMAIN object with random values in each field. Calls p7_alidisplay_Sample() 
-// to create the domain's enclosed alidisplay object.  Returns NULL if something goes wrong
-
-static P7_DOMAIN *domain_Create_random(){
-  int status;
-  P7_DOMAIN *the_domain;
-  ESL_RANDOMNESS *rng;
-  ESL_ALLOC(the_domain, sizeof(P7_DOMAIN));
-  rng = esl_randomness_Create(0); 
-  if (rng == NULL ){
-    return NULL;
-  }
-
- 
-
-  the_domain->ienv = random64(rng);
-  the_domain->jenv = random64(rng);
-  the_domain->iali = random64(rng);
-  the_domain->jali = random64(rng);
-  the_domain->iorf = random64(rng);
-  the_domain->jorf = random64(rng);
-  the_domain->envsc = (float) esl_random(rng);
-  the_domain->domcorrection = (float) esl_random(rng);
-  the_domain->dombias = (float) esl_random(rng);
-  the_domain->oasc = (float) esl_random(rng);
-  the_domain->bitscore = (float) esl_random(rng);
-  the_domain->lnP = esl_random(rng);
-  the_domain->is_reported = esl_random_uint32(rng) % 1;
-  the_domain->is_included = esl_random_uint32(rng) % 1;
-
-  // sample an alignment with length ranging uniformly from 50-350
-  if(p7_alidisplay_Sample(rng, (esl_random_uint32(rng) %300) + 50, &(the_domain->ad)) != eslOK){
-    return NULL;
-  }
+/*****************************************************************
+ * 3. Unit tests
+ *****************************************************************/      
 
 
-  if(esl_random_uint32(rng) %1 == 0){ // 50% chance of having a scores_per_pos array
-    ESL_ALLOC(the_domain->scores_per_pos, the_domain->ad->N * sizeof(float));
-    for(int i = 0; i < the_domain->ad->N; i++){
-      the_domain->scores_per_pos[i] = esl_random(rng);
-    }
-  }
-  else{ // array is empty
-    the_domain->scores_per_pos = NULL;
-  }
 
-  esl_randomness_Destroy(rng);
 
-  return the_domain; // If we make it here, everything went well
-
-ERROR:
-  return NULL;
-}
+#ifdef p7DOMAIN_TESTDRIVE
 
 // Test that the _Serialize() function generates the correct errors when passed invalid arguments
 static void utest_Serialize_error_conditions(){
   int status;  // Easel error code variable
-  P7_DOMAIN *foo;
-  uint8_t **buf;
+  P7_DOMAIN *foo = NULL;
+  uint8_t **buf = NULL;
   uint32_t n;
   uint32_t nalloc;
+  ESL_RAND64 *rng= NULL;
+  rng = esl_rand64_Create(0);
 
   char msg[] = "utest_Serialize_error_conditions failed";
 
   n = 0; 
   nalloc = 0;
-  foo = domain_Create_random();
+  
+  if(p7_domain_TestSample(rng, &foo) != eslOK){
+    esl_fatal(msg);
+  }
+
   // Test 1: _Serialize returns error if passed NULL buffer
   buf = NULL;
 
@@ -625,11 +656,16 @@ static void utest_Serialize_error_conditions(){
     free(buf); 
   }
 
+  esl_rand64_Destroy(rng);
   p7_domain_Destroy(foo);
 
   return;
 
   ERROR:
+    if (rng != NULL){
+      esl_rand64_Destroy(rng);
+    }
+
     if(foo != NULL){
       p7_domain_Destroy(foo);
     }
@@ -650,17 +686,16 @@ static void utest_Deserialize_error_conditions(){
   uint8_t *buf = NULL;
   uint32_t n = 0, nalloc = 0;
 
-  ESL_RANDOMNESS *rng        = esl_randomness_Create(0);
-
   deserial = p7_domain_Create_empty();
   if(deserial == NULL){
     esl_fatal(msg);
   }
 
-  sampled = domain_Create_random();
-  if(sampled == NULL){
+  ESL_RAND64 *rng = esl_rand64_Create(0);
+  if(p7_domain_TestSample(rng, &sampled) != eslOK){
     esl_fatal(msg);
   }
+  esl_rand64_Destroy(rng);
 
   if(p7_domain_Serialize(sampled, &buf, &n, &nalloc) != eslOK){ // serialize an object to deserialize
     esl_fatal(msg);
@@ -686,7 +721,6 @@ static void utest_Deserialize_error_conditions(){
 
   p7_domain_Destroy(deserial);
   p7_domain_Destroy(sampled);
-  esl_randomness_Destroy(rng);
   return;
 }
 
@@ -705,10 +739,14 @@ static void utest_Serialize(int ntrials){
   nalloc = 0;
 
   ESL_ALLOC(serial, ntrials * sizeof(P7_DOMAIN *));
+    for(i = 0; i< ntrials; i++){
+        serial[i] = NULL;
+    }
   
+  ESL_RAND64 *rng = esl_rand64_Create(0);
+
   for(i = 0; i < ntrials; i++){
-    serial[i] = domain_Create_random();
-    if(serial[i] == NULL){
+    if(p7_domain_TestSample(rng, &(serial[i])) != eslOK){
       esl_fatal(msg);
     }
     if(p7_domain_Serialize(serial[i], buf, &n, &nalloc) != eslOK){
@@ -727,7 +765,7 @@ static void utest_Serialize(int ntrials){
     if(p7_domain_Deserialize(*buf, &n, deserial) != eslOK){
       esl_fatal(msg);
     }
-    if(domain_Compare(serial[i], deserial) != eslOK){ // deserialized structure didn't match serialized
+    if(p7_domain_Compare(serial[i], deserial, 1e-4, 1e-4) != eslOK){ // deserialized structure didn't match serialized
       esl_fatal(msg);
     }
 
@@ -772,7 +810,7 @@ static void utest_Serialize(int ntrials){
 
 
 /*****************************************************************
- * 3. Test driver
+ * 4. Test driver
  *****************************************************************/      
 #ifdef p7DOMAIN_TESTDRIVE
 
@@ -784,7 +822,7 @@ static ESL_OPTIONS options[] = {
   {  0, 0, 0, 0, 0, 0, 0, 0, 0, 0 },
 };
 static char usage[]  = "[-options]";
-static char banner[] = "test driver for p7_profile.c";
+static char banner[] = "test driver for p7_domain.c";
 
 int
 main(int argc, char **argv)
