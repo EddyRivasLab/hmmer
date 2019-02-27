@@ -61,7 +61,7 @@ extern int hmmd_search_status_Serialize(const HMMD_SEARCH_STATUS *obj, uint8_t *
     return(eslEINVAL);
   }
 
-  int ser_size = sizeof(HMMD_SEARCH_STATUS);  // No variable-length fields to worry about
+  int ser_size = HMMD_SEARCH_STATUS_SERIAL_SIZE;  // No variable-length fields to worry about
   if(*buf == NULL){ // have no buffer, so allocate one
     ESL_ALLOC(*buf, ser_size);
     *nalloc = ser_size;

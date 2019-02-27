@@ -90,6 +90,7 @@ typedef struct {
   };
 } HMMD_COMMAND;
 
+#define HMMD_SEARCH_STATUS_SERIAL_SIZE sizeof(uint32_t) + sizeof(uint64_t)
 #define MSG_SIZE(x) (sizeof(HMMD_HEADER) + ((HMMD_HEADER *)(x))->length)
 
 size_t writen(int fd, const void *vptr, size_t n);

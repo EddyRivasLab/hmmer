@@ -163,7 +163,7 @@ worker_process(ESL_GETOPTS *go)
     {
       if ((status = read_Command(&cmd, &env)) != eslOK) break;
 
-
+printf("received command\n");
       switch (cmd->hdr.command) {
       case HMMD_CMD_INIT:      process_InitCmd  (cmd, &env);                break;
       case HMMD_CMD_SCAN: 
@@ -767,7 +767,82 @@ scan_thread(void *arg)
 
 
 static void
-send_results(int fd, ESL_STOPWATCH *w, P7_TOPHITS *th, P7_PIPELINE *pli)
+send_results(int fd, ESL_STOPWATCH *w, P7_TOPHITS *th, P7_PIPELINE *pli){
+  HMMD_SEARCH_STATS   stats;
+  HMMD_SEARCH_STATUS  status;
+  uint8_t **buf = NULL; // Buffer for the main results message
+  uint8_t **buf2 = NULL; // Buffer for the initial HMMD_SEARCH_STATUS message
+  uint8_t *buf_ptr = NULL; 
+  uint8_t *buf2_ptr = NULL;
+  uint32_t n = 0; // index within buffer of serialized data
+  uint32_t nalloc = 0; // Size of serialized buffer
+printf("starting send_results\n");
+  // set up handles to buffers
+  buf = &buf_ptr;
+  buf2 = &buf2_ptr;
+
+
+  /* Start filling out the fixed-length structures to be sent */
+  memset(&status, 0, sizeof(HMMD_SEARCH_STATUS)); /* silence valgrind errors - zero out entire structure including its padding */
+  status.status     = eslOK;
+  status.msg_size   = sizeof(stats);
+
+  /* copy the search stats */
+  stats.elapsed     = w->elapsed;
+  stats.user        = w->user;
+  stats.sys         = w->sys;
+
+  stats.nmodels     = pli->nmodels;
+  stats.nseqs       = pli->nseqs;
+  stats.n_past_msv  = pli->n_past_msv;
+  stats.n_past_bias = pli->n_past_bias;
+  stats.n_past_vit  = pli->n_past_vit;
+  stats.n_past_fwd  = pli->n_past_fwd;
+
+  stats.Z           = pli->Z;
+  stats.domZ        = pli->domZ;
+  stats.Z_setby     = pli->Z_setby;
+  stats.domZ_setby  = pli->domZ_setby;
+
+  stats.nhits       = th->N;
+  stats.nreported   = th->nreported;
+  stats.nincluded   = th->nincluded;
+
+  // Build the main buffer of result data, starting with the stats object
+  if(p7_hmmd_search_stats_Serialize(&stats, buf, &n, &nalloc) != eslOK){
+    LOG_FATAL_MSG("Serializing HMMD_SEARCH_STATS failed", errno);
+  }
+
+  // and then the hits
+  for(int i =0; i< stats.nhits; i++){
+    if(p7_hit_Serialize(&(th->unsrt[i]), buf, &n, &nalloc) != eslOK){
+      LOG_FATAL_MSG("Serializing P7_HIT failed", errno);
+    }
+  }
+
+  status.msg_size = n; // n will have the number of bytes used to serialize the main data block
+  n = 0;
+  nalloc = 0; // reset these to serialize status object
+
+  // Serialize the search_status object
+ if(hmmd_search_status_Serialize(&status, buf2, &n, &nalloc) != eslOK){
+    LOG_FATAL_MSG("Serializing HMMD_SEARCH_STATUS failed", errno);
+  }
+  printf("Sending status object, %llu bytes\n", n);
+  // Send the status object
+  if (writen(fd, buf2_ptr, n) != n) LOG_FATAL_MSG("write", errno);
+  printf("sending results to master, %llu bytes\n", status.msg_size);
+  // And the serialized data
+  if (writen(fd, buf_ptr, status.msg_size) != status.msg_size) LOG_FATAL_MSG("write", errno);
+  free(buf_ptr);
+  free(buf2_ptr);
+  printf("Bytes: %" PRId64 "  hits: %" PRId64 "  sent on socket %d\n", status.msg_size, stats.nhits, fd);
+  fflush(stdout);
+}
+
+// defunct code.  Kept around to aid with porting to new serialization
+static void
+send_results_old(int fd, ESL_STOPWATCH *w, P7_TOPHITS *th, P7_PIPELINE *pli)
 {
   HMMD_SEARCH_STATS   stats;
   HMMD_SEARCH_STATUS  status;

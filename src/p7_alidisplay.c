@@ -245,7 +245,8 @@ p7_alidisplay_Create(const P7_TRACE *tr, int which, const P7_OPROFILE *om, const
   ad->mline [z2-z1+1] = '\0';
   ad->aseq  [z2-z1+1] = '\0';
   ad->N = z2-z1+1;
-
+  ad->ntseq = NULL;  // Mark this NULL so it doesn't cause problems with serialization.  
+  // nhmmer can reset it if it wants later
   esl_sq_Destroy(ntorfseqtxt);  
 
 	

@@ -56,6 +56,7 @@ typedef struct {
   HMMD_SEARCH_STATS   stats;
   HMMD_SEARCH_STATUS  status;
   HIT_LIST           *hits;
+  P7_HIT              **new_hits; // change this name after old system ripped out
   int                 nhits;
   int                 db_inx;
   int                 db_cnt;
@@ -111,6 +112,8 @@ typedef struct worker_s {
   HMMD_SEARCH_STATUS    status;
   char                 *err_buf;
   P7_HIT               *hit;
+  P7_HIT               **hits;
+  uint32_t             allocated_hits;
   void                 *hit_data;
   int                   total;
 
@@ -845,6 +848,21 @@ hit_sorter(const void *p1, const void *p2)
   return cmp;
 }
 
+// Qsort comparison function to sort a list of pointers to P7_HITs
+static int
+hit_sorter2(const void *p1, const void *p2)
+{
+  int cmp;
+
+  const P7_HIT *h1 = *((P7_HIT **) p1);
+  const P7_HIT *h2 = *((P7_HIT **) p2);
+
+  cmp  = (h1->sortkey < h2->sortkey);
+  cmp -= (h1->sortkey > h2->sortkey);
+
+  return cmp;
+}
+
 static void
 init_results(SEARCH_RESULTS *results)
 {
@@ -863,6 +881,7 @@ init_results(SEARCH_RESULTS *results)
   results->stats.n_past_fwd  = 0;
   results->stats.Z           = 0;
 
+  results->new_hits          = NULL;
   results->hits              = NULL;
   results->nhits             = 0;
   results->db_inx            = 0;
@@ -890,6 +909,8 @@ gather_results(QUEUE_DATA *query, WORKERSIDE_ARGS *comm, SEARCH_RESULTS *results
   worker = comm->head;
   while (worker != NULL) {
     if (worker->completed) {
+      uint32_t previous_hits = results->stats.nhits;
+
       results->stats.nhits        += worker->stats.nhits;
       results->stats.nreported    += worker->stats.nreported;
       results->stats.nincluded    += worker->stats.nincluded;
@@ -906,13 +927,21 @@ gather_results(QUEUE_DATA *query, WORKERSIDE_ARGS *comm, SEARCH_RESULTS *results
 
       results->status.msg_size    += worker->status.msg_size - sizeof(HMMD_SEARCH_STATS);
 
-      results->hits[cnt].count     = worker->stats.nhits;
-      results->hits[cnt].data_size = worker->status.msg_size - sizeof(HMMD_SEARCH_STATS) - sizeof(P7_HIT) * worker->stats.nhits;
-      results->hits[cnt].hit       = worker->hit;
-      results->hits[cnt].data      = worker->hit_data;
+      // Add enough space to the list of hits for all the hits from this worker
+      results->new_hits = realloc(results->new_hits, results->stats.nhits * sizeof (P7_HIT *));
+      if(results->new_hits == NULL){
+        LOG_FATAL_MSG("malloc", n);
+      }
 
-      worker->hit         = NULL;
-      worker->hit_data    = NULL;
+      // copy this worker's hits into the global list
+      for(int i0 = 0, i1 = previous_hits; i1 < results->stats.nhits; i0++, i1++){
+        results->new_hits[i1] = worker->hits[i0];
+      }
+
+      free(worker->hits); //  Free the worker's array of pointers to hits.  The hits themselves
+      // will be freed by forward_results()
+
+      worker->hits = NULL;  
 
       worker->completed   = 0;
       ++cnt;
@@ -940,6 +969,7 @@ gather_results(QUEUE_DATA *query, WORKERSIDE_ARGS *comm, SEARCH_RESULTS *results
   }
 
   results->nhits = cnt;
+  printf("Master found %llu hits, %llu to be reported after gather\n", results->stats.nhits, results->stats.nreported);
 }
 
 static void
@@ -955,7 +985,15 @@ forward_results(QUEUE_DATA *query, SEARCH_RESULTS *results)
   int fd;
   int i, j;
   int n;
+  uint8_t **buf, **buf2, *buf_ptr, *buf2_ptr;
+  uint32_t nalloc, buf_offset;
   enum p7_pipemodes_e mode;
+
+  // Initialize these pointers-to-pointers that we'll use for sending data
+  buf_ptr = NULL;
+  buf = &(buf_ptr);
+  buf2_ptr = NULL;
+  buf2 = &(buf2_ptr);
 
   fd    = query->sock;
   list  = results->hits;
@@ -967,29 +1005,8 @@ forward_results(QUEUE_DATA *query, SEARCH_RESULTS *results)
   if (results->nhits > 0) {
     P7_HIT *h1;
 
-    /* at this point h1->offset's are the offset of the domain structure
-     * in the block of memory pointed to by "list[n]->data".  now we will change
-     * that offset to be the true pointers back to the dcl data.
-     */
-    for (i = 0; i < results->nhits; ++i) {
-      h1 = list[i].hit;
-      for (j = 0; j < list[i].count; ++j) {
-        esl_pos_t off = h1->offset - sizeof(HMMD_SEARCH_STATS) - (sizeof(P7_HIT) * list[i].count);
-        h1->dcl = (P7_DOMAIN *)(list[i].data + off);
-        ++h1;
-      }
-    }
-
-    /* combine all the hits into a single list */
-    offset = 0;
-    if ((hits = malloc(sizeof(P7_HIT) * results->stats.nhits)) == NULL) LOG_FATAL_MSG("malloc", errno);
-    memset(hits, 0, sizeof(P7_HIT) * results->stats.nhits); /* avoiding valgrind bitching; remove if structs serialized properly */
-    for (i = 0; i < results->nhits; ++i) {
-      memcpy(hits + offset, list[i].hit, sizeof(P7_HIT) * list[i].count);
-      offset += list[i].count;
-    }
-
-    qsort(hits, results->stats.nhits, sizeof(P7_HIT), hit_sorter);
+    // sort the hits 
+    qsort(results->new_hits, results->stats.nhits, sizeof(P7_HIT *), hit_sorter2);
 
     th.unsrt     = NULL;
     th.N         = results->stats.nhits;
@@ -1011,10 +1028,9 @@ forward_results(QUEUE_DATA *query, SEARCH_RESULTS *results)
     pli->Z_setby     = results->stats.Z_setby;
     pli->domZ_setby  = results->stats.domZ_setby;
 
-    if ((dcl = malloc(sizeof(void *) * results->stats.nhits)) == NULL) LOG_FATAL_MSG("malloc", errno);
-    th.hit = (P7_HIT **)dcl;
 
-    for (i = 0; i < th.N; ++i) th.hit[i] = hits + i;
+    th.hit = results->new_hits;
+
     p7_tophits_Threshold(&th, pli);
 
     /* after the top hits thresholds are checked, the number of sequences
@@ -1023,65 +1039,46 @@ forward_results(QUEUE_DATA *query, SEARCH_RESULTS *results)
     results->stats.nincluded = th.nincluded;
     results->stats.domZ      = pli->domZ;
     results->stats.Z         = pli->Z;
-
-    /* at this point the domain pointers need to be converted back to offsets
-     * within the binary data stream.
-     */
-    adj = sizeof(HMMD_SEARCH_STATS) + sizeof(P7_HIT) * results->stats.nhits;
-    h1 = hits;
-    for (i = 0; i < results->stats.nhits; ++i) {
-      char *ptr;
-
-      dcl[i] = h1->dcl;
-      h1->dcl = (P7_DOMAIN *)(((char *)NULL) + adj);
-
-      /* figure out the size of the domain and alignment info */
-      adj += sizeof(P7_DOMAIN) * h1->ndom;
-      ptr = (char *)(dcl[i] + h1->ndom);
-      for (j = 0; j < h1->ndom; ++j) {
-        n = sizeof(P7_ALIDISPLAY) + ((P7_ALIDISPLAY *)ptr)->memsize;
-        adj += n;
-        ptr += n;
-      }
-      ++h1;
-    }
   }
 
   /* add the size of the status structure to the message size */
   results->status.msg_size += sizeof(HMMD_SEARCH_STATS);
 
+  // Build the buffer of result data that we'll send back to the client
+  nalloc = 0;
+  buf_offset = 0;
+
+  if(p7_hmmd_search_stats_Serialize(&(results->stats), buf, &buf_offset, &nalloc) != eslOK){
+    LOG_FATAL_MSG("Serializing HMMD_SEARCH_STATS failed", errno);
+  }
+
+  // and then the hits
+  for(int i =0; i< results->stats.nhits; i++){
+    if(p7_hit_Serialize(results->new_hits[i], buf, &buf_offset, &nalloc) != eslOK){
+      LOG_FATAL_MSG("Serializing P7_HIT failed", errno);
+    }
+  }
+
+  results->status.msg_size = buf_offset; // set size of second message
+
+  buf_offset = 0;
+  nalloc = 0;
+  // Serialize the search_status object
+  if(hmmd_search_status_Serialize(&(results->status), buf2, &buf_offset, &nalloc) != eslOK){
+    LOG_FATAL_MSG("Serializing HMMD_SEARCH_STATUS failed", errno);
+  }
+
   /* send back a successful status message */
   n = sizeof(HMMD_SEARCH_STATUS);
-  if (writen(fd, &results->status, n) != n) {
+  if (writen(fd, buf2_ptr, n) != n) {
     p7_syslog(LOG_ERR,"[%s:%d] - writing %s error %d - %s\n", __FILE__, __LINE__, query->ip_addr, errno, strerror(errno));
     goto CLEAR;
   }
 
-  n = sizeof(HMMD_SEARCH_STATS);
-  if (writen(fd, &results->stats, n) != n) {
+  n = results->status.msg_size;
+  if (writen(fd, buf_ptr, n) != n) {
     p7_syslog(LOG_ERR,"[%s:%d] - writing %s error %d - %s\n", __FILE__, __LINE__, query->ip_addr, errno, strerror(errno));
     goto CLEAR;
-  }
-
-  if (results->stats.nhits > 0) {
-    /* send all the hit data */
-    n = sizeof(P7_HIT) * results->stats.nhits;
-    if (writen(fd, hits, n) != n) {
-      p7_syslog(LOG_ERR,"[%s:%d] - writing %s error %d - %s\n", __FILE__, __LINE__, query->ip_addr, errno, strerror(errno));
-      goto CLEAR;
-    }
-
-    for (i = 0; i < results->stats.nhits; ++i) {
-      if (i + 1 < results->stats.nhits) {
-        n = (char *)hits[i+1].dcl - (char *)hits[i].dcl;
-      } else {
-        n = ((char *)NULL) + results->status.msg_size - (char *)hits[i].dcl;
-      }
-      if (writen(fd, dcl[i], n) != n) {
-        p7_syslog(LOG_ERR,"[%s:%d] - writing %s error %d - %s\n", __FILE__, __LINE__, query->ip_addr, errno, strerror(errno));
-        goto CLEAR;
-      }
-    }
   }
 
   printf("Results for %s (%d) sent %" PRId64 " bytes\n", query->ip_addr, fd, results->status.msg_size);
@@ -1090,12 +1087,11 @@ forward_results(QUEUE_DATA *query, SEARCH_RESULTS *results)
 
  CLEAR:
   /* free all the data */
-  for (i = 0; i < results->nhits; ++i) {
-    if (list[i].hit  != NULL) free(list[i].hit);
-    if (list[i].data != NULL) free(list[i].data);
-    list[i].hit  = NULL;
-    list[i].data = NULL;
+  for(int i = 0; i < results->stats.nhits; i++){
+    p7_hit_Destroy(results->new_hits[i]);
   }
+  free(results->new_hits);
+  results->new_hits = NULL;
 
   if (pli)  p7_pipeline_Destroy(pli);
   if (list) free(list);
@@ -1112,7 +1108,12 @@ destroy_worker(WORKER_DATA *worker)
     if (worker->hit      != NULL) free(worker->hit);
     if (worker->hit_data != NULL) free(worker->hit_data);
     if (worker->err_buf  != NULL) free(worker->err_buf);
-
+    if (worker->hits != NULL){
+      for(int i = 0; i < worker->allocated_hits; i++){
+        p7_hit_Destroy(worker->hits[i]);
+      }
+      free(worker->hits);
+    }
     memset(worker, 0, sizeof(WORKER_DATA));
     free(worker);
   }
@@ -1729,7 +1730,8 @@ workerside_loop(WORKERSIDE_ARGS *data, WORKER_DATA *worker)
   int    size;
   int    total;
   char  *ptr;
-
+  uint8_t *buf; // Buffer to receive bytes into over sockets
+  uint32_t buf_position; //Index into buffer for deserialize
   memset(&cmd, 0, sizeof(HMMD_COMMAND)); /* silence valgrind. if we ever serialize structs properly, remove */
   w = esl_stopwatch_Create();
 
@@ -1810,11 +1812,21 @@ workerside_loop(WORKERSIDE_ARGS *data, WORKER_DATA *worker)
     total = 0;
     worker->total = 0;
 
-    n = sizeof(worker->status);
+    n = HMMD_SEARCH_STATUS_SERIAL_SIZE;
+    buf = malloc(n);
+    if (buf == NULL){
+      LOG_FATAL_MSG("malloc", errno);
+    }
+
     total += n;
-    if ((size = readn(worker->sock_fd, &worker->status, n)) == -1) {
+    if ((size = readn(worker->sock_fd, buf, n)) == -1) {
       p7_syslog(LOG_ERR,"[%s:%d] - reading %s error %d - %s\n", __FILE__, __LINE__, worker->ip_addr, errno, strerror(errno));
       break;
+    }
+
+    buf_position = 0;
+    if(hmmd_search_status_Deserialize(buf, &buf_position, &(worker->status)) != eslOK){
+       LOG_FATAL_MSG("Couldn't deserialize HMMD_SEARCH_STATUS", errno);
     }
 
     if (worker->status.status != eslOK) {
@@ -1828,31 +1840,47 @@ workerside_loop(WORKERSIDE_ARGS *data, WORKER_DATA *worker)
       }
     } else {
 
-      n = sizeof(worker->stats);
-      total += n;
-      if ((size = readn(worker->sock_fd, &worker->stats, n)) == -1) {
+      // receive the results from the worker
+      buf = realloc(buf, worker->status.msg_size);
+      if(buf == NULL){
+        LOG_FATAL_MSG("malloc", errno);
+      }
+
+      total += worker->status.msg_size;
+      if ((size = readn(worker->sock_fd, buf, worker->status.msg_size)) == -1) {
         p7_syslog(LOG_ERR,"[%s:%d] - reading %s error %d - %s\n", __FILE__, __LINE__, worker->ip_addr, errno, strerror(errno));
         break;
       }
-
+      printf("Receiving main results from worker: %llu bytes\n", worker->status.msg_size);
+      buf_position = 0; // start at beginning of new buffer of data
+      // Now, serialize the data structures out of it
+      if(p7_hmmd_search_stats_Deserialize(buf, &buf_position, &(worker->stats)) != eslOK){
+        LOG_FATAL_MSG("Couldn't deserialize HMMD_SEARCH_STATS", errno);
+      }
       stats = &worker->stats;
 
-      /* read in the hits */
-      n = sizeof(P7_HIT) * stats->nhits;
-      if ((worker->hit = malloc(n)) == NULL) LOG_FATAL_MSG("malloc", errno);
-      if ((size = readn(worker->sock_fd, worker->hit, n)) == -1) {
-        p7_syslog(LOG_ERR,"[%s:%d] - reading %s error %d - %s\n", __FILE__, __LINE__, worker->ip_addr, errno, strerror(errno));
-        break;
+      worker->hits = malloc(stats->nhits * sizeof(P7_HIT *));
+      if(worker->hits == NULL){
+        LOG_FATAL_MSG("malloc", errno);
       }
-
-      /* read in the domain and alignment info */
-      n = worker->status.msg_size - sizeof(worker->stats) - n;
-      if ((worker->hit_data = malloc(n)) == NULL) LOG_FATAL_MSG("malloc", errno);
-      if ((size = readn(worker->sock_fd, worker->hit_data, n)) == -1) {
-        p7_syslog(LOG_ERR,"[%s:%d] - reading %s error %d - %s\n", __FILE__, __LINE__, worker->ip_addr, errno, strerror(errno));
-        break;
+      worker->allocated_hits = stats->nhits;  // Need this if we have to destroy the worker because of an error
+      /* read in the hits */
+      for(int i = 0; i < stats->nhits; i++){
+        worker->hits[i] = p7_hit_Create_empty();
+        if(worker->hits[i] == NULL){
+           LOG_FATAL_MSG("malloc", errno);
+        }
+        if(p7_hit_Deserialize(buf, &buf_position, worker->hits[i]) != eslOK){
+          LOG_FATAL_MSG("Couldn't deserialize P7_HIT", errno);
+        } 
       }
     }
+
+    /* We've just allocated an array of pointers to P7_HIT objects and a bunch of P7_HIT 
+      objects that we don't free in this function.  Here's what happens to them.  gather_results() assembles
+      all of the P7_HIT objects from the different workers into one big list, which it passes to forward_results().  
+      gather_results() frees each worker's array of pointers to P7_HIT objects, and forward_results is responsible for 
+      freeing all of the P7_HIT objects when it's done with them */
 
     esl_stopwatch_Stop(w);
 
@@ -2069,6 +2097,8 @@ worker_comm_thread(void *arg)
 
     worker->parent     = data;
     worker->sock_fd    = fd;
+    worker->allocated_hits = 0; // These may be redundant because of the memset earlier, but better safe than sorry
+    worker->hits = NULL;
 
     addrlen = sizeof(worker->ip_addr);
     strncpy(worker->ip_addr, inet_ntoa(addr.sin_addr), addrlen);
