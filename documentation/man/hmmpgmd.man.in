@@ -48,7 +48,7 @@ prints the line:
 
 
 .PP
-Only after master is ready, one or more instances of hmmpgmd may
+After the master is ready, one or more instances of hmmpgmd may
 be started as workers. These workers may be (and typically are) on
 different machines from the master, but must have access to the 
 same database file(s) provided to the master, with the same path. As 
@@ -57,7 +57,7 @@ indicates completion by printing: "Data loaded into memory. Worker is ready."
 
 
 .PP
-The master server and workers are expected to remain running.
+The master process and workers are expected to remain running.
 One or more clients then connect to the master and submit possibly
 many queries. The master distributes the work of a query among the
 workers, collects results, and merges them before responding to the
@@ -121,11 +121,6 @@ can be associated with one or more sub-databases. The
 flag indicates which of these sub-databases will be queried. 
 The HMM database format does not support sub-databases.
 
-.PP
-The result of each query is an undocumented data structure in 
-binary format. In the future the data will be returned in a proper
-serialized structure, but for now, it requires meticulous unpacking
-within the client. The example clients show how this is done.
 
  
 
@@ -136,10 +131,6 @@ within the client. The example clients show how this is done.
 Help; print a brief reminder of command line usage and all available
 options.
 
-
-
-.SH EXPERT OPTIONS
-
 .TP 
 .BI \-\-master
 Run as the master server.
@@ -149,10 +140,6 @@ Run as the master server.
 Run as a worker, connecting to the master server that is running on IP
 address
 .IR <s> .
-
-.TP 
-.BI \-\-daemon
-Run as a daemon using config file: /etc/hmmpgmd.conf
 
 .TP 
 .BI \-\-cport " <n>"

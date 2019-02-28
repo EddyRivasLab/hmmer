@@ -1,7 +1,7 @@
 .TH "hmmpgmd_shard" 1 "@HMMER_DATE@" "HMMER @HMMER_VERSION@" "HMMER Manual"
 
 .SH NAME
-hmmpgmd_shard \- daemon for database search web services that implements sharding of protein databases across the worker nodes
+hmmpgmd_shard \- sharded daemon for database search web services 
 
 
 .SH SYNOPSIS
@@ -59,10 +59,6 @@ workers are connected to the master.
 Help; print a brief reminder of command line usage and all available
 options.
 
-
-
-.SH EXPERT OPTIONS
-
 .TP 
 .BI \-\-master
 Run as the master server.
@@ -72,10 +68,6 @@ Run as the master server.
 Run as a worker, connecting to the master server that is running on IP
 address
 .IR <s> .
-
-.TP 
-.BI \-\-daemon
-Run as a daemon using config file: /etc/hmmpgmd.conf
 
 .TP 
 .BI \-\-cport " <n>"
