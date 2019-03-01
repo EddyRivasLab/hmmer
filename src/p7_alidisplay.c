@@ -433,7 +433,7 @@ p7_alidisplay_Sizeof(const P7_ALIDISPLAY *ad)
 }
 
 
-#define SER_BASE_SIZE (5 * sizeof(int)) + (3 * sizeof(int64_t) +1) // Total size of the fixed-length fields in a 
+#define SER_BASE_SIZE ((5 * sizeof(int)) + (3 * sizeof(int64_t)) +1) // Total size of the fixed-length fields in a 
 // serialized P7_ALIDISPLAY 
 
 /* Function:  p7_alidisplay_Serialize
@@ -702,6 +702,7 @@ extern int p7_alidisplay_Deserialize(const uint8_t *buf, uint32_t *n, P7_ALIDISP
   int status;  // Standard Easel error code variable
 
   uint8_t *ptr;
+  char *mem_ptr;
   uint64_t network_64bit; // holds 64-bit values in network order 
   uint64_t host_64bit; //variable to hold 64-bit values after conversion to host order
   uint32_t network_32bit; // holds 64-bit values in network order 
@@ -714,6 +715,7 @@ extern int p7_alidisplay_Deserialize(const uint8_t *buf, uint32_t *n, P7_ALIDISP
       return(eslEINVAL);
   }
 
+  mem_ptr = NULL; // set this for safety
   ptr = (uint8_t *) buf + *n; // Get pointer to start of the object
   //First field: Size of the serialized object.  Copy out of buffer into scalar variable to deal with memory alignment, convert to 
   // host machine order
@@ -770,12 +772,21 @@ extern int p7_alidisplay_Deserialize(const uint8_t *buf, uint32_t *n, P7_ALIDISP
   presence_flags = *ptr; // no need for memcpy with one-byte field
   ptr += sizeof(uint8_t);
 
+  // Bulk copy the strings into the alidisplay's mem field
+  memcpy(ret_obj->mem, ptr, (obj_size - SER_BASE_SIZE)); 
+  mem_ptr = ret_obj->mem;
+  ptr += (obj_size - SER_BASE_SIZE);
   // Tenth field: rfline, if present
-  // copy it out of the buffer 
+
+  if(ptr != buf + *n + obj_size){
+    printf("Error: in p7_alidisplay_Deserialize, found object (ptr) to be of size %ld, expected %u.\n", (long int) (ptr - (buf + *n)), obj_size);
+    //return eslEINVAL;
+  }
+
   if(presence_flags & RFLINE_PRESENT){
-    ret_obj->rfline = (char *) ptr;
-    string_length = (int) strlcpy(ret_obj->mem, (const char *) ptr, obj_size);
-    ptr+= string_length +1; // + 1 to account for end-of-string character
+    ret_obj->rfline = mem_ptr;
+    string_length = strlen(ret_obj->rfline);
+    mem_ptr+= string_length +1; // + 1 to account for end-of-string character
   }
   else{ // not present
     ret_obj->rfline = NULL; 
@@ -783,9 +794,9 @@ extern int p7_alidisplay_Deserialize(const uint8_t *buf, uint32_t *n, P7_ALIDISP
 
   // Eleventh field: mmline, if present
   if(presence_flags & MMLINE_PRESENT){
-    ret_obj->mmline = (char *) ptr;
-    string_length = (int) strlcpy(ret_obj->mem, (const char *) ptr, obj_size);
-    ptr+= string_length + 1;
+    ret_obj->mmline = mem_ptr;
+    string_length = strlen(ret_obj->mmline);
+    mem_ptr+= string_length + 1;
   }
   else{ // not present
     ret_obj->mmline = NULL; 
@@ -793,9 +804,9 @@ extern int p7_alidisplay_Deserialize(const uint8_t *buf, uint32_t *n, P7_ALIDISP
 
   // Twelfth field: csline, if present
   if(presence_flags & CSLINE_PRESENT){
-    ret_obj->csline = (char *) ptr;
-    string_length = (int) strlcpy(ret_obj->mem, (const char *) ptr, obj_size);
-    ptr+= string_length + 1;
+    ret_obj->csline = mem_ptr;
+    string_length = strlen(ret_obj->csline);
+    mem_ptr+= string_length + 1;
   }
   else{ // not present
     ret_obj->csline = NULL; 
@@ -803,20 +814,20 @@ extern int p7_alidisplay_Deserialize(const uint8_t *buf, uint32_t *n, P7_ALIDISP
 
 
   // Thirteenth field: model
-  ret_obj->model = (char *) ptr;
-  string_length = (int) strlcpy(ret_obj->mem, (const char *) ptr, obj_size);
-  ptr+= string_length + 1;
+  ret_obj->model = mem_ptr;
+  string_length = strlen(ret_obj->model);
+  mem_ptr+= string_length + 1;
 
  // Thirteenth field: mline
-  ret_obj->mline = (char *) ptr;
-  string_length = (int) strlcpy(ret_obj->mem, (const char *) ptr, obj_size);
-  ptr+= string_length + 1;
+  ret_obj->mline = mem_ptr;
+  string_length = strlen(ret_obj->mline);
+  mem_ptr+= string_length + 1;
 
   // Fourteenth field: aseq, if present
   if(presence_flags & ASEQ_PRESENT){
-    ret_obj->aseq = (char *) ptr;
-    string_length = (int) strlcpy(ret_obj->mem, (const char *) ptr, obj_size);
-    ptr+= string_length + 1;
+    ret_obj->aseq = mem_ptr;
+    string_length = strlen(ret_obj->aseq);
+    mem_ptr+= string_length + 1;
   }
   else{ // not present
     ret_obj->aseq = NULL; 
@@ -824,9 +835,9 @@ extern int p7_alidisplay_Deserialize(const uint8_t *buf, uint32_t *n, P7_ALIDISP
 
   // Fifteenth field: ntseq, if present
   if(presence_flags & NTSEQ_PRESENT){
-    ret_obj->ntseq = (char *) ptr;
-    string_length = (int) strlcpy(ret_obj->mem, (const char *) ptr, obj_size);
-    ptr+= string_length + 1;
+    ret_obj->ntseq = mem_ptr;
+    string_length = strlen(ret_obj->ntseq);
+    mem_ptr+= string_length + 1;
   }
   else{ // not present
     ret_obj->ntseq = NULL; 
@@ -834,50 +845,49 @@ extern int p7_alidisplay_Deserialize(const uint8_t *buf, uint32_t *n, P7_ALIDISP
 
   // Sixteenth field: ppline, if present
   if(presence_flags & PPLINE_PRESENT){
-    ret_obj->ppline = (char *) ptr;
-    string_length = (int) strlcpy(ret_obj->mem, (const char *) ptr, obj_size);
-    ptr+= string_length + 1;
+    ret_obj->ppline = mem_ptr;
+    string_length = strlen(ret_obj->ppline);
+    mem_ptr+= string_length + 1;
   }
   else{ // not present
     ret_obj->ppline = NULL; 
   }
 
   // Seventeenth field: hmmname
-  ret_obj->hmmname = (char *) ptr;
-  string_length = (int) strlcpy(ret_obj->mem, (const char *) ptr, obj_size);
-  ptr+= string_length + 1;
+  ret_obj->hmmname = mem_ptr;
+  string_length = strlen(ret_obj->hmmname);
+  mem_ptr+= string_length + 1;
 
   // Eighteenth field: hmmacc
-  ret_obj->hmmacc = (char *) ptr;
-  string_length = (int) strlcpy(ret_obj->mem, (const char *) ptr, obj_size);
-  ptr+= string_length + 1;
+  ret_obj->hmmacc = mem_ptr;
+  string_length = strlen(ret_obj->hmmacc);
+  mem_ptr+= string_length + 1;
 
   // Nineteenth field: hmmdesc 
-  ret_obj->hmmdesc = (char *) ptr;
-  string_length = (int) strlcpy(ret_obj->mem, (const char *) ptr, obj_size);
-  ptr+= string_length + 1;
+  ret_obj->hmmdesc = mem_ptr;
+  string_length = strlen(ret_obj->hmmdesc);
+  mem_ptr+= string_length + 1;
 
   // Twentyith field: sqname
-  ret_obj->sqname = (char *) ptr;
-  string_length = (int) strlcpy(ret_obj->mem, (const char *) ptr, obj_size);
-  ptr+= string_length + 1;
+  ret_obj->sqname = mem_ptr;
+  string_length = strlen(ret_obj->sqname);
+  mem_ptr+= string_length + 1;
 
   // Twentyfirst field: sqacc
-  ret_obj->sqacc = (char *) ptr;
-  string_length = (int) strlcpy(ret_obj->mem, (const char *) ptr, obj_size);
-  ptr+= string_length + 1;
+  ret_obj->sqacc = mem_ptr;
+  string_length = strlen(ret_obj->sqacc);
+  mem_ptr+= string_length + 1;
 
   // Twentysecond field: sqdesc
-  ret_obj->sqdesc = (char *) ptr;
-  string_length = (int) strlcpy(ret_obj->mem, (const char *) ptr, obj_size);
-  ptr+= string_length +1;
+  ret_obj->sqdesc = mem_ptr;
+  string_length = strlen(ret_obj->sqdesc);
+  mem_ptr+= string_length +1;
 
   // Sanity-check that we got the length right
-  if(ptr != buf + *n + obj_size){
-    printf("Error: at end of p7_alidisplay_Deserialize, found object to be of size %ld, expected %d.\n", (long int) (ptr - (buf + *n)), obj_size);
+  if(mem_ptr - ret_obj->mem != (obj_size - SER_BASE_SIZE)){
+    printf("Error: at end of p7_alidisplay_Deserialize, found strings to be of size %ld, expected %ld.\n", (mem_ptr - ret_obj->mem), (obj_size - SER_BASE_SIZE));
     return eslEINVAL;
   }
-
   *n += obj_size; 
   return eslOK;  // as usual, if we get to the end of the routine without failing, return success
 
@@ -1962,7 +1972,7 @@ static void utest_Serialize(int ntrials){
   uint8_t **buf;
   uint32_t n;
   uint32_t nalloc;
-  P7_ALIDISPLAY **serial, *deserial;
+  P7_ALIDISPLAY **serial, **deserial;
   int status, alignment_length;
   char msg[] = "utest_Serialize failed";
 
@@ -1976,7 +1986,8 @@ static void utest_Serialize(int ntrials){
   rng = esl_randomness_Create(0);
 
   ESL_ALLOC(serial, ntrials * sizeof(P7_ALIDISPLAY *));
-  
+  ESL_ALLOC(deserial, ntrials * sizeof(P7_ALIDISPLAY *));
+
   for(i = 0; i < ntrials; i++){
     // Create random alignment to serialize
     alignment_length = (esl_random_uint32(rng) %300) + 50;
@@ -1997,28 +2008,34 @@ static void utest_Serialize(int ntrials){
 
   n = 0; // reset to start of buffer
 
-  deserial = p7_alidisplay_Create_empty();
-  if(deserial == NULL){
-     esl_fatal(msg);
-  }
+  
 
   for(i = 0; i < ntrials; i++){
-    if(p7_alidisplay_Deserialize(*buf, &n, deserial) != eslOK){
+    deserial[i] = p7_alidisplay_Create_empty();
+      if(deserial[i] == NULL){
       esl_fatal(msg);
     }
-    if(p7_alidisplay_Compare(serial[i], deserial) != eslOK){ // deserialized structure didn't match serialized
+    if(p7_alidisplay_Deserialize(*buf, &n, deserial[i]) != eslOK){
+      esl_fatal(msg);
+    }
+  }
+  // free the buffer here to make sure we've actually copied all the data out of it into the new structures
+  free(*buf);
+  free(buf);
+  for(i = 0; i < ntrials; i++){
+    if(p7_alidisplay_Compare(serial[i], deserial[i]) != eslOK){ // deserialized structure didn't match serialized
       esl_fatal(msg);
     }
 
   }
   // haven't failed yet, so we've succeeded.  Clean up and exit
-  free(*buf);
-  free(buf);
+
   for(i = 0; i < ntrials; i++){
     p7_alidisplay_Destroy(serial[i]);
+    p7_alidisplay_Destroy(deserial[i]);
   }
   free(serial);
-  p7_alidisplay_Destroy(deserial);
+  free(deserial);
 
   return;
 
@@ -2040,7 +2057,12 @@ static void utest_Serialize(int ntrials){
     }
 
     if(deserial == NULL){
-      p7_alidisplay_Destroy(deserial);
+      for(i = 0; i < ntrials; i++){
+        if(deserial[i] != NULL){
+          p7_alidisplay_Destroy(deserial[i]);
+        }
+      }
+      free(deserial);
     }
 
     esl_fatal(msg);
