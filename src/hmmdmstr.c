@@ -784,14 +784,15 @@ master_process(ESL_GETOPTS *go)
     fflush(stdout);
 
     worker_comm.range_list = NULL;
-    if (esl_opt_IsUsed(query->opts, "--seqdb_ranges")) {
-      ESL_ALLOC(worker_comm.range_list, sizeof(RANGE_LIST));
-      hmmpgmd_GetRanges(worker_comm.range_list, esl_opt_GetString(query->opts, "--seqdb_ranges"));
-    }
-
 
     switch(query->cmd_type) {
-    case HMMD_CMD_SEARCH:      process_search(&worker_comm, query); break;
+    case HMMD_CMD_SEARCH:      
+      if (esl_opt_IsUsed(query->opts, "--seqdb_ranges")) {
+        ESL_ALLOC(worker_comm.range_list, sizeof(RANGE_LIST));
+        hmmpgmd_GetRanges(worker_comm.range_list, esl_opt_GetString(query->opts, "--seqdb_ranges"));
+      }
+      process_search(&worker_comm, query); 
+      break;
     case HMMD_CMD_SCAN:        process_search(&worker_comm, query); break;
     case HMMD_CMD_INIT:        process_load  (&worker_comm, query); break;
     case HMMD_CMD_RESET:       process_reset (&worker_comm, query); break;
@@ -969,7 +970,6 @@ gather_results(QUEUE_DATA *query, WORKERSIDE_ARGS *comm, SEARCH_RESULTS *results
   }
 
   results->nhits = cnt;
-  printf("Master found %llu hits, %llu to be reported after gather\n", results->stats.nhits, results->stats.nreported);
 }
 
 static void
@@ -1069,7 +1069,7 @@ forward_results(QUEUE_DATA *query, SEARCH_RESULTS *results)
   }
 
   /* send back a successful status message */
-  n = sizeof(HMMD_SEARCH_STATUS);
+  n = HMMD_SEARCH_STATUS_SERIAL_SIZE;
   if (writen(fd, buf2_ptr, n) != n) {
     p7_syslog(LOG_ERR,"[%s:%d] - writing %s error %d - %s\n", __FILE__, __LINE__, query->ip_addr, errno, strerror(errno));
     goto CLEAR;
@@ -1097,7 +1097,12 @@ forward_results(QUEUE_DATA *query, SEARCH_RESULTS *results)
   if (list) free(list);
   if (hits) free(hits);
   if (dcl)  free(dcl);
-
+  if(buf_ptr != NULL){
+    free(buf_ptr);
+  }
+  if(buf2_ptr != NULL){
+    free(buf2_ptr);
+  }
   init_results(results);
 }
 
@@ -1851,7 +1856,7 @@ workerside_loop(WORKERSIDE_ARGS *data, WORKER_DATA *worker)
         p7_syslog(LOG_ERR,"[%s:%d] - reading %s error %d - %s\n", __FILE__, __LINE__, worker->ip_addr, errno, strerror(errno));
         break;
       }
-      printf("Receiving main results from worker: %llu bytes\n", worker->status.msg_size);
+
       buf_position = 0; // start at beginning of new buffer of data
       // Now, serialize the data structures out of it
       if(p7_hmmd_search_stats_Deserialize(buf, &buf_position, &(worker->stats)) != eslOK){
@@ -1874,6 +1879,7 @@ workerside_loop(WORKERSIDE_ARGS *data, WORKER_DATA *worker)
           LOG_FATAL_MSG("Couldn't deserialize P7_HIT", errno);
         } 
       }
+      free(buf);
     }
 
     /* We've just allocated an array of pointers to P7_HIT objects and a bunch of P7_HIT 

@@ -176,6 +176,7 @@ printf("received command\n");
       case HMMD_CMD_SEARCH:
 		   query = process_QueryCmd(cmd, &env);
 	     process_SearchCmd(cmd, &env, query);
+       free_QueueData(query);
          break;
       case HMMD_CMD_SHUTDOWN:  process_Shutdown (cmd, &env);  shutdown = 1; break;
       default: p7_syslog(LOG_ERR,"[%s:%d] - unknown command %d (%d)\n", __FILE__, __LINE__, cmd->hdr.command, cmd->hdr.length);
@@ -776,7 +777,7 @@ send_results(int fd, ESL_STOPWATCH *w, P7_TOPHITS *th, P7_PIPELINE *pli){
   uint8_t *buf2_ptr = NULL;
   uint32_t n = 0; // index within buffer of serialized data
   uint32_t nalloc = 0; // Size of serialized buffer
-printf("starting send_results\n");
+
   // set up handles to buffers
   buf = &buf_ptr;
   buf2 = &buf2_ptr;
@@ -828,10 +829,10 @@ printf("starting send_results\n");
  if(hmmd_search_status_Serialize(&status, buf2, &n, &nalloc) != eslOK){
     LOG_FATAL_MSG("Serializing HMMD_SEARCH_STATUS failed", errno);
   }
-  printf("Sending status object, %llu bytes\n", n);
+
   // Send the status object
   if (writen(fd, buf2_ptr, n) != n) LOG_FATAL_MSG("write", errno);
-  printf("sending results to master, %llu bytes\n", status.msg_size);
+
   // And the serialized data
   if (writen(fd, buf_ptr, status.msg_size) != status.msg_size) LOG_FATAL_MSG("write", errno);
   free(buf_ptr);

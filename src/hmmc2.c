@@ -415,8 +415,9 @@ int main(int argc, char *argv[])
         }
 
         // Get the status structure back from the server
-        buf = malloc(sizeof(sstatus));
-        n = sizeof(sstatus);
+        buf = malloc(HMMD_SEARCH_STATUS_SERIAL_SIZE);
+        buf_offset = 0;
+        n = HMMD_SEARCH_STATUS_SERIAL_SIZE;
         if(buf == NULL){
           printf("Unable to allocate memory for search status structure\n");
           exit(1);

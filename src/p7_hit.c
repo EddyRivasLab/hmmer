@@ -100,6 +100,20 @@ extern void p7_hit_Destroy(P7_HIT *the_hit){
     free(the_hit->desc);
   }
 
+
+
+  // need to do this manually rather than calling p7_domain_Destroy because we have an array of hits as one record
+  if(the_hit->dcl !=NULL){
+    for(int i = 0; i < the_hit->ndom; i++){
+      if(the_hit->dcl[i].scores_per_pos != NULL){
+        free(the_hit->dcl[i].scores_per_pos);
+      }
+      if(the_hit->dcl[i].ad != NULL){
+        p7_alidisplay_Destroy(the_hit->dcl[i].ad);
+      }
+    }
+  }
+  
   if(the_hit->dcl != NULL){
     free(the_hit->dcl);
   }
