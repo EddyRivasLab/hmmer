@@ -46,17 +46,9 @@
 #define CONF_FILE "/etc/hmmpgmd.conf"
 
 typedef struct {
-  uint32_t        count;
-  uint32_t        data_size;
-  P7_HIT         *hit;
-  char           *data;
-} HIT_LIST;
-
-typedef struct {
   HMMD_SEARCH_STATS   stats;
   HMMD_SEARCH_STATUS  status;
-  HIT_LIST           *hits;
-  P7_HIT              **new_hits; // change this name after old system ripped out
+  P7_HIT              **hits; 
   int                 nhits;
   int                 db_inx;
   int                 db_cnt;
@@ -111,10 +103,8 @@ typedef struct worker_s {
   HMMD_SEARCH_STATS     stats;
   HMMD_SEARCH_STATUS    status;
   char                 *err_buf;
-  P7_HIT               *hit;
   P7_HIT               **hits;
   uint32_t             allocated_hits;
-  void                 *hit_data;
   int                   total;
 
   WORKERSIDE_ARGS      *parent;
@@ -835,19 +825,6 @@ ERROR:
 
 }
 
-static int
-hit_sorter(const void *p1, const void *p2)
-{
-  int cmp;
-
-  const P7_HIT *h1 = p1;
-  const P7_HIT *h2 = p2;
-
-  cmp  = (h1->sortkey < h2->sortkey);
-  cmp -= (h1->sortkey > h2->sortkey);
-
-  return cmp;
-}
 
 // Qsort comparison function to sort a list of pointers to P7_HITs
 static int
@@ -882,7 +859,6 @@ init_results(SEARCH_RESULTS *results)
   results->stats.n_past_fwd  = 0;
   results->stats.Z           = 0;
 
-  results->new_hits          = NULL;
   results->hits              = NULL;
   results->nhits             = 0;
   results->db_inx            = 0;
@@ -900,7 +876,7 @@ gather_results(QUEUE_DATA *query, WORKERSIDE_ARGS *comm, SEARCH_RESULTS *results
 
   /* allocate spaces to hold all the hits */
   cnt = results->nhits + MAX_WORKERS;
-  if ((results->hits = realloc(results->hits, sizeof(HIT_LIST) * cnt)) == NULL) LOG_FATAL_MSG("malloc", errno);
+  if ((results->hits = realloc(results->hits, sizeof(P7_HIT *) * cnt)) == NULL) LOG_FATAL_MSG("malloc", errno);
 
   /* lock the workers until we have merged the results */
   if ((n = pthread_mutex_lock (&comm->work_mutex)) != 0) LOG_FATAL_MSG("mutex lock", n);
@@ -929,14 +905,14 @@ gather_results(QUEUE_DATA *query, WORKERSIDE_ARGS *comm, SEARCH_RESULTS *results
       results->status.msg_size    += worker->status.msg_size - sizeof(HMMD_SEARCH_STATS);
 
       // Add enough space to the list of hits for all the hits from this worker
-      results->new_hits = realloc(results->new_hits, results->stats.nhits * sizeof (P7_HIT *));
-      if(results->new_hits == NULL){
+      results->hits = realloc(results->hits, results->stats.nhits * sizeof (P7_HIT *));
+      if(results->hits == NULL){
         LOG_FATAL_MSG("malloc", n);
       }
 
       // copy this worker's hits into the global list
       for(int i0 = 0, i1 = previous_hits; i1 < results->stats.nhits; i0++, i1++){
-        results->new_hits[i1] = worker->hits[i0];
+        results->hits[i1] = worker->hits[i0];
       }
 
       free(worker->hits); //  Free the worker's array of pointers to hits.  The hits themselves
@@ -981,7 +957,6 @@ forward_results(QUEUE_DATA *query, SEARCH_RESULTS *results)
   P7_PIPELINE        *pli   = NULL;
   P7_DOMAIN         **dcl   = NULL;
   P7_HIT             *hits  = NULL;
-  HIT_LIST           *list  = NULL;
   int fd;
   int i, j;
   int n;
@@ -996,7 +971,6 @@ forward_results(QUEUE_DATA *query, SEARCH_RESULTS *results)
   buf2 = &(buf2_ptr);
 
   fd    = query->sock;
-  list  = results->hits;
 
   if (query->cmd_type == HMMD_CMD_SEARCH) mode = p7_SEARCH_SEQS;
   else                                    mode = p7_SCAN_MODELS;
@@ -1006,7 +980,7 @@ forward_results(QUEUE_DATA *query, SEARCH_RESULTS *results)
     P7_HIT *h1;
 
     // sort the hits 
-    qsort(results->new_hits, results->stats.nhits, sizeof(P7_HIT *), hit_sorter2);
+    qsort(results->hits, results->stats.nhits, sizeof(P7_HIT *), hit_sorter2);
 
     th.unsrt     = NULL;
     th.N         = results->stats.nhits;
@@ -1029,7 +1003,7 @@ forward_results(QUEUE_DATA *query, SEARCH_RESULTS *results)
     pli->domZ_setby  = results->stats.domZ_setby;
 
 
-    th.hit = results->new_hits;
+    th.hit = results->hits;
 
     p7_tophits_Threshold(&th, pli);
 
@@ -1054,7 +1028,7 @@ forward_results(QUEUE_DATA *query, SEARCH_RESULTS *results)
 
   // and then the hits
   for(int i =0; i< results->stats.nhits; i++){
-    if(p7_hit_Serialize(results->new_hits[i], buf, &buf_offset, &nalloc) != eslOK){
+    if(p7_hit_Serialize(results->hits[i], buf, &buf_offset, &nalloc) != eslOK){
       LOG_FATAL_MSG("Serializing P7_HIT failed", errno);
     }
   }
@@ -1088,13 +1062,12 @@ forward_results(QUEUE_DATA *query, SEARCH_RESULTS *results)
  CLEAR:
   /* free all the data */
   for(int i = 0; i < results->stats.nhits; i++){
-    p7_hit_Destroy(results->new_hits[i]);
+    p7_hit_Destroy(results->hits[i]);
   }
-  free(results->new_hits);
-  results->new_hits = NULL;
+  free(results->hits);
+  results->hits = NULL;
 
   if (pli)  p7_pipeline_Destroy(pli);
-  if (list) free(list);
   if (hits) free(hits);
   if (dcl)  free(dcl);
   if(buf_ptr != NULL){
@@ -1110,8 +1083,6 @@ static void
 destroy_worker(WORKER_DATA *worker)
 {
   if (worker == NULL) {
-    if (worker->hit      != NULL) free(worker->hit);
-    if (worker->hit_data != NULL) free(worker->hit_data);
     if (worker->err_buf  != NULL) free(worker->err_buf);
     if (worker->hits != NULL){
       for(int i = 0; i < worker->allocated_hits; i++){
@@ -1139,12 +1110,14 @@ clear_results(WORKERSIDE_ARGS *args, SEARCH_RESULTS *results)
   /* free all the results */
   worker = args->head;
   while (worker != NULL) {
-    if (worker->hit      != NULL) free(worker->hit);
-    if (worker->hit_data != NULL) free(worker->hit_data);
     if (worker->err_buf  != NULL) free(worker->err_buf);
-
-    worker->hit      = NULL;
-    worker->hit_data = NULL;
+    if(worker->hits != NULL){
+      for(int i =0; i < worker->allocated_hits; i++){
+        p7_hit_Destroy(worker->hits[i]);
+      }
+      free(worker->hits);
+      worker->hits = NULL;
+    }
     worker->err_buf  = NULL;
       
     worker->completed = 0;
@@ -1154,10 +1127,8 @@ clear_results(WORKERSIDE_ARGS *args, SEARCH_RESULTS *results)
   if ((n = pthread_mutex_unlock (&args->work_mutex)) != 0)  LOG_FATAL_MSG("mutex unlock", n);
 
   for (i = 0; i < results->nhits; ++i) {
-    if (results->hits[i].hit  != NULL) free(results->hits[i].hit);
-    if (results->hits[i].data != NULL) free(results->hits[i].data);
-    results->hits[i].hit  = NULL;
-    results->hits[i].data = NULL;
+    if (results->hits[i]  != NULL) p7_hit_Destroy(results->hits[i]);
+    results->hits[i]  = NULL;
   }
 
   if (results->hits != NULL) free(results->hits);
