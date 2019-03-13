@@ -437,7 +437,7 @@ process_search(WORKERSIDE_ARGS *args, QUEUE_DATA_SHARD *query)
   results.stats.elapsed = w->elapsed;
   results.stats.user    = w->user;
   results.stats.sys     = w->sys;
-
+  results.stats.hit_offsets = NULL; // set this to make sure we allocate memory later
   /* TODO: check for errors */
   if (args->ready != args->num_shards) {
     client_msg(query->sock, eslFAIL, "Not enough compute nodes available for the number of shards specified.  %d nodes available, %d required\n", args->ready, args->num_shards);
@@ -941,23 +941,23 @@ gather_results(QUEUE_DATA_SHARD *query, WORKERSIDE_ARGS *comm, SEARCH_RESULTS *r
       results->stats.Z             = worker->stats.Z;
 
       results->status.msg_size    += worker->status.msg_size - sizeof(HMMD_SEARCH_STATS);
+      if((results->stats.nhits- previous_hits) >0){ // There are new hits to deal with
+        // Add enough space to the list of hits for all the hits from this worker
+       results->hits = realloc(results->hits, results->stats.nhits * sizeof (P7_HIT *));
+        if(results->hits == NULL){
+         LOG_FATAL_MSG("malloc", n);
+       }
 
-      // Add enough space to the list of hits for all the hits from this worker
-      results->hits = realloc(results->hits, results->stats.nhits * sizeof (P7_HIT *));
-      if(results->hits == NULL){
-        LOG_FATAL_MSG("malloc", n);
+       // copy this worker's hits into the global list
+        for(int i0 = 0, i1 = previous_hits; i1 < results->stats.nhits; i0++, i1++){
+          results->hits[i1] = worker->hits[i0];
+       }
+
+        free(worker->hits); //  Free the worker's array of pointers to hits.  The hits themselves
+       // will be freed by forward_results()
+
+       worker->hits = NULL;  
       }
-
-      // copy this worker's hits into the global list
-      for(int i0 = 0, i1 = previous_hits; i1 < results->stats.nhits; i0++, i1++){
-        results->hits[i1] = worker->hits[i0];
-      }
-
-      free(worker->hits); //  Free the worker's array of pointers to hits.  The hits themselves
-      // will be freed by forward_results()
-
-      worker->hits = NULL;  
-
       worker->completed   = 0;
       ++cnt;
     } else {
@@ -990,7 +990,7 @@ gather_results(QUEUE_DATA_SHARD *query, WORKERSIDE_ARGS *comm, SEARCH_RESULTS *r
 static void
 forward_results(QUEUE_DATA_SHARD *query, SEARCH_RESULTS *results)
 {
- uint32_t           adj;
+   uint32_t           adj;
   esl_pos_t          offset;
   P7_TOPHITS         th;
   P7_PIPELINE        *pli   = NULL;
@@ -999,8 +999,8 @@ forward_results(QUEUE_DATA_SHARD *query, SEARCH_RESULTS *results)
   int fd;
   int i, j;
   int n;
-  uint8_t **buf, **buf2, *buf_ptr, *buf2_ptr;
-  uint32_t nalloc, buf_offset;
+  uint8_t **buf, **buf2, **buf3, *buf_ptr, *buf2_ptr, *buf3_ptr;
+  uint32_t nalloc, nalloc2, nalloc3, buf_offset, buf_offset2, buf_offset3;
   enum p7_pipemodes_e mode;
 
   // Initialize these pointers-to-pointers that we'll use for sending data
@@ -1008,6 +1008,8 @@ forward_results(QUEUE_DATA_SHARD *query, SEARCH_RESULTS *results)
   buf = &(buf_ptr);
   buf2_ptr = NULL;
   buf2 = &(buf2_ptr);
+  buf3_ptr = NULL;
+  buf3 = &(buf3_ptr);
 
   fd    = query->sock;
 
@@ -1016,6 +1018,12 @@ forward_results(QUEUE_DATA_SHARD *query, SEARCH_RESULTS *results)
     
   /* sort the hits and apply score and E-value thresholds */
   if (results->nhits > 0) {
+    if(results->stats.hit_offsets != NULL){
+      if ((results->stats.hit_offsets = realloc(results->stats.hit_offsets, results->stats.nhits * sizeof(uint64_t))) == NULL) LOG_FATAL_MSG("malloc", errno);
+    }
+    else{
+      if ((results->stats.hit_offsets = malloc(results->stats.nhits * sizeof(uint64_t))) == NULL) LOG_FATAL_MSG("malloc", errno);
+    }
     P7_HIT *h1;
 
     // sort the hits 
@@ -1054,46 +1062,69 @@ forward_results(QUEUE_DATA_SHARD *query, SEARCH_RESULTS *results)
     results->stats.Z         = pli->Z;
   }
 
-  /* add the size of the status structure to the message size */
-  results->status.msg_size += sizeof(HMMD_SEARCH_STATS);
+  /* Build the buffers of serialized results we'll send back to the client.  
+     Use three buffers, one for each object, because we need to build them in reverse order.
+     We need to serialize the hits to build the hits_offset array in HMMD_SEARCH_STATS.
+     We need the length of the serialized hits and HMMD_SEARCH_STATS objects to fill out the msg_size
+     field in status, but we want to send status, then stats, then hits */
 
-  // Build the buffer of result data that we'll send back to the client
   nalloc = 0;
   buf_offset = 0;
 
-  if(p7_hmmd_search_stats_Serialize(&(results->stats), buf, &buf_offset, &nalloc) != eslOK){
-    LOG_FATAL_MSG("Serializing HMMD_SEARCH_STATS failed", errno);
-  }
-
-  // and then the hits
+  // First, the buffer of hits
   for(int i =0; i< results->stats.nhits; i++){
+   
+    results->stats.hit_offsets[i] = buf_offset;
     if(p7_hit_Serialize(results->hits[i], buf, &buf_offset, &nalloc) != eslOK){
       LOG_FATAL_MSG("Serializing P7_HIT failed", errno);
     }
+
+  }
+  if(results->stats.nhits == 0){
+    results->stats.hit_offsets = NULL;
   }
 
-  results->status.msg_size = buf_offset; // set size of second message
+  // Second, the buffer with the HMMD_SEARCH_STATS object
 
-  buf_offset = 0;
-  nalloc = 0;
-  // Serialize the search_status object
-  if(hmmd_search_status_Serialize(&(results->status), buf2, &buf_offset, &nalloc) != eslOK){
+  buf_offset2 = 0;
+  nalloc2 = 0; 
+  if(p7_hmmd_search_stats_Serialize(&(results->stats), buf2, &buf_offset2, &nalloc2) != eslOK){
+    LOG_FATAL_MSG("Serializing HMMD_SEARCH_STATS failed", errno);
+  }
+
+  results->status.msg_size = buf_offset + buf_offset2; // set size of second message
+  
+  // Third, the buffer with the HMMD_SEARCH_STATUS object
+  buf_offset3 = 0;
+  nalloc3 = 0;
+  if(hmmd_search_status_Serialize(&(results->status), buf3, &buf_offset3, &nalloc3) != eslOK){
     LOG_FATAL_MSG("Serializing HMMD_SEARCH_STATUS failed", errno);
   }
 
+  // Now, send the buffers in the reverse of the order they were built
   /* send back a successful status message */
-  n = HMMD_SEARCH_STATUS_SERIAL_SIZE;
+  n = buf_offset3;
+
+  if (writen(fd, buf3_ptr, n) != n) {
+    p7_syslog(LOG_ERR,"[%s:%d] - writing %s error %d - %s\n", __FILE__, __LINE__, query->ip_addr, errno, strerror(errno));
+    goto CLEAR;
+  }
+
+  // and the stats object
+  n=buf_offset2;
+
   if (writen(fd, buf2_ptr, n) != n) {
     p7_syslog(LOG_ERR,"[%s:%d] - writing %s error %d - %s\n", __FILE__, __LINE__, query->ip_addr, errno, strerror(errno));
     goto CLEAR;
   }
+  printf("%p\n", results->hits[1]);
+  // and finally the hits 
+  n=buf_offset;
 
-  n = results->status.msg_size;
   if (writen(fd, buf_ptr, n) != n) {
     p7_syslog(LOG_ERR,"[%s:%d] - writing %s error %d - %s\n", __FILE__, __LINE__, query->ip_addr, errno, strerror(errno));
     goto CLEAR;
   }
-
   printf("Results for %s (%d) sent %" PRId64 " bytes\n", query->ip_addr, fd, results->status.msg_size);
   printf("Hits:%"PRId64 "  reported:%" PRId64 "  included:%"PRId64 "\n", results->stats.nhits, results->stats.nreported, results->stats.nincluded);
   fflush(stdout);
@@ -1103,6 +1134,7 @@ forward_results(QUEUE_DATA_SHARD *query, SEARCH_RESULTS *results)
   for(int i = 0; i < results->stats.nhits; i++){
     p7_hit_Destroy(results->hits[i]);
   }
+
   free(results->hits);
   results->hits = NULL;
 
@@ -1115,7 +1147,14 @@ forward_results(QUEUE_DATA_SHARD *query, SEARCH_RESULTS *results)
   if(buf2_ptr != NULL){
     free(buf2_ptr);
   }
+  if(buf3_ptr != NULL){
+    free(buf3_ptr);
+  }
+  if(results->stats.hit_offsets != NULL){
+    free(results->stats.hit_offsets);
+  }
   init_results(results);
+  return;
 }
 
 static void
@@ -1873,21 +1912,22 @@ workerside_loop(WORKERSIDE_ARGS *data, WORKER_DATA *worker)
         LOG_FATAL_MSG("Couldn't deserialize HMMD_SEARCH_STATS", errno);
       }
       stats = &worker->stats;
-
-      worker->hits = malloc(stats->nhits * sizeof(P7_HIT *));
-      if(worker->hits == NULL){
-        LOG_FATAL_MSG("malloc", errno);
-      }
-      worker->allocated_hits = stats->nhits;  // Need this if we have to destroy the worker because of an error
-      /* read in the hits */
-      for(int i = 0; i < stats->nhits; i++){
-        worker->hits[i] = p7_hit_Create_empty();
-        if(worker->hits[i] == NULL){
-           LOG_FATAL_MSG("malloc", errno);
+      if(stats->nhits > 0){
+        worker->hits = malloc(stats->nhits * sizeof(P7_HIT *));
+        if(worker->hits == NULL){
+          LOG_FATAL_MSG("malloc", errno);
         }
-        if(p7_hit_Deserialize(buf, &buf_position, worker->hits[i]) != eslOK){
-          LOG_FATAL_MSG("Couldn't deserialize P7_HIT", errno);
-        } 
+        worker->allocated_hits = stats->nhits;  // Need this if we have to destroy the worker because of an error
+        /* read in the hits */
+        for(int i = 0; i < stats->nhits; i++){
+          worker->hits[i] = p7_hit_Create_empty();
+          if(worker->hits[i] == NULL){
+            LOG_FATAL_MSG("malloc", errno);
+          }
+          if(p7_hit_Deserialize(buf, &buf_position, worker->hits[i]) != eslOK){
+            LOG_FATAL_MSG("Couldn't deserialize P7_HIT", errno);
+          } 
+        }
       }
       free(buf);
     }

@@ -30,6 +30,10 @@ typedef struct {
   uint64_t   nhits;           	/* number of hits in list now               */
   uint64_t   nreported;       	/* number of hits that are reportable       */
   uint64_t   nincluded;       	/* number of hits that are includable       */
+  uint64_t   *hit_offsets;      /* either NULL or an array of nhits values that define the offset from the start of this 
+                                   search's array of serialized hits to each hit in the array.  I.e. hit_offsets[0] will always be 0
+                                   if the array exists, hit_offsets[1] will be the number of bytes between the start of the 
+                                   array of serialized hits to the start of the second hit, and so on */
 } HMMD_SEARCH_STATS;
 
 #define HMMD_SEQUENCE   101
@@ -91,6 +95,8 @@ typedef struct {
 } HMMD_COMMAND;
 
 #define HMMD_SEARCH_STATUS_SERIAL_SIZE sizeof(uint32_t) + sizeof(uint64_t)
+#define HMMD_SEARCH_STATS_SERIAL_BASE (5 * sizeof(double)) + (9 * sizeof(uint64_t)) + 2
+// The 2 is two enums at one byte/enum as we serialize them
 #define MSG_SIZE(x) (sizeof(HMMD_HEADER) + ((HMMD_HEADER *)(x))->length)
 
 size_t writen(int fd, const void *vptr, size_t n);

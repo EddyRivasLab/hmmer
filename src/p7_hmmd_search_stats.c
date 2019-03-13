@@ -55,7 +55,14 @@ extern int p7_hmmd_search_stats_Serialize(const HMMD_SEARCH_STATS *obj, uint8_t 
     return(eslEINVAL);
   }
 
-  ser_size = (5 * sizeof(double)) + (9 * sizeof(uint64_t)) + 2;  // The 2 is two enums at one byte/enum as we serialize them
+  ser_size = HMMD_SEARCH_STATS_SERIAL_BASE;
+
+  if(obj->hit_offsets != NULL){
+    ser_size += obj->nhits * sizeof(uint64_t);
+  }
+  else{
+    ser_size += sizeof(uint64_t);
+  }
 
   if(buf == NULL){ // Can't proceed, don't have any place to put the pointer to the buffer
     return eslEINVAL; 
@@ -190,6 +197,18 @@ extern int p7_hmmd_search_stats_Serialize(const HMMD_SEARCH_STATS *obj, uint8_t 
   memcpy((void *) ptr, (void *) &network_64bit, sizeof(obj->nincluded));  
   ptr += sizeof(obj->nincluded);
 
+  if(obj->hit_offsets == NULL){ // no hit_offsets array
+    network_64bit = esl_hton64(-1);
+    memcpy((void *) ptr, (void *) &network_64bit, sizeof(uint64_t));  
+    ptr += sizeof(uint64_t);
+  }
+  else{
+    for(int i = 0; i < obj->nhits; i++){
+      network_64bit = esl_hton64(obj->hit_offsets[i]);
+      memcpy((void *) ptr, (void *) &network_64bit, sizeof(uint64_t));  
+      ptr += sizeof(uint64_t);
+    }
+  }
 
   // Ok, we've serialized the data structure.  Just need to update n
   *n = ptr - *buf; // works because ptr and *buf point to uint8_t arrays
@@ -217,12 +236,13 @@ ERROR: // We only get here if memory (re)allocation failed, so no cleanup requir
  *
  * Throws:    Returns eslEINVAL if ret_obj == NULL or an unknown enum
  *.           value is found in one of the fields of the serialized object.
+ *            Returns eslEMEM if unable to allocate memory
  */
 extern int p7_hmmd_search_stats_Deserialize(const uint8_t *buf, uint32_t *n, HMMD_SEARCH_STATS *ret_obj){
   uint8_t *ptr;
   uint64_t network_64bit; // holds 64-bit values in network order 
   uint64_t host_64bit; //variable to hold 64-bit values after conversion to host order
-
+  int status;
   
 
   if ((buf == NULL) || (ret_obj == NULL)|| (n == NULL)){ // check to make sure we've been passed valid objects
@@ -340,8 +360,35 @@ extern int p7_hmmd_search_stats_Deserialize(const uint8_t *buf, uint32_t *n, HMM
   ret_obj->nincluded = esl_ntoh64(network_64bit);
   ptr += sizeof(uint64_t);
 
+  // seventh field: hit_offsets array, if any
+  memcpy(&network_64bit, ptr, sizeof(uint64_t));
+  ptr += sizeof(uint64_t);
+  if(esl_ntoh64(network_64bit) == (uint64_t) -1){ // no hit_offsets array
+    if(ret_obj->hit_offsets != NULL){
+      free(ret_obj->hit_offsets);
+      ret_obj->hit_offsets = NULL;
+    }
+  }
+  else{ // there's a hit_offsets array
+    if(ret_obj->hit_offsets != NULL){
+      ESL_REALLOC(ret_obj->hit_offsets, ret_obj->nhits * sizeof(uint64_t));
+    }
+    else{
+      ESL_ALLOC(ret_obj->hit_offsets, ret_obj->nhits * sizeof(uint64_t));
+    }
+
+    ret_obj->hit_offsets[0] = esl_ntoh64(network_64bit); //already have the first offset read out of the buffer
+    for(int i = 1; i < ret_obj->nhits; i++){
+      memcpy(&network_64bit, ptr, sizeof(uint64_t));
+      ptr += sizeof(uint64_t);
+      ret_obj->hit_offsets[i] = esl_ntoh64(network_64bit);
+    }
+  }
+
   *n = ptr - buf; // update position counter to just past the object we just deserialized 
   return eslOK;  // If we make it here, we've finished successfully
+ERROR:
+  return eslEMEM;
 }
 
 /*****************************************************************
@@ -427,6 +474,19 @@ static int hmmd_search_stats_Same(const HMMD_SEARCH_STATS *first, const HMMD_SEA
     return eslFAIL;
   }
 
+  if(((first->hit_offsets != NULL) && (second->hit_offsets == NULL)) ||
+      ((first->hit_offsets == NULL) && (second->hit_offsets != NULL))){ // one object has a hit_offsets array and the other doesn't
+    return eslFAIL;
+  }
+
+  if(first->hit_offsets != NULL){ // both must have a hit_offsets array, since we'd already have failed if only one did
+    for(int i = 0; i < first->nhits; i++){ // we've already checked that both objects have the same value for nhits
+      if(first->hit_offsets[i] != second->hit_offsets[i]){
+        return eslFAIL;
+      }
+    }
+  }
+
   return eslOK;  // If we make it this far, everything matched
 }
 
@@ -459,12 +519,13 @@ int serialize_utest(){
   
   ESL_ALLOC(serial, 100 * sizeof(HMMD_SEARCH_STATS));
   ESL_ALLOC(deserial, sizeof(HMMD_SEARCH_STATS));
+  deserial->hit_offsets = NULL;
   ESL_ALLOC(buffer, sizeof(uint8_t *));
   *buffer = NULL; //force Serialize to allocate the first buffer
   pos = 0;
   buffer_size = 0;
 
-  int i;
+  int i,j;
   double low = -1000.0;
   double high = 1000.0;
 
@@ -483,10 +544,19 @@ int serialize_utest(){
     serial[i].n_past_bias = rand();
     serial[i].n_past_vit = rand();
     serial[i].n_past_fwd = rand();
-    serial[i].nhits = rand();
+    serial[i].nhits = rand() % 10000; // keep the size of the hit_offsets array reasonable
     serial[i].nreported = rand();
     serial[i].nincluded = rand();
 
+    if((rand() % 2) == 0){ // 50% chance of hit_offsets array
+      ESL_ALLOC(serial[i].hit_offsets, serial[i].nhits * sizeof(uint64_t));
+      for(j = 0; j < serial[i].nhits; j++){
+        serial[i].hit_offsets[j] = (((uint64_t) rand()) << 32) + ((uint64_t) rand());
+      }
+    }
+    else{
+      serial[i].hit_offsets = NULL;
+    }
     if(p7_hmmd_search_stats_Serialize(&(serial[i]), buffer, &pos, &buffer_size) != eslOK){
       if(serial != NULL){
         free(serial);
@@ -545,6 +615,11 @@ int serialize_utest(){
 
   // If we make it this far without failing out, we've succeeded
   if(serial != NULL){
+    for(i = 0; i < 100; i++){
+      if(serial[i].hit_offsets != NULL){
+        free(serial[i].hit_offsets);
+      }
+    }
     free(serial);
   }
   if(deserial != NULL){
@@ -696,7 +771,7 @@ int deserialize_error_conditions_utest(){
   foo.nhits = 7;
   foo.nreported = 8;
   foo.nincluded = 9;
-
+  foo.hit_offsets = NULL;
   // Test 1: should return eslEINVAL if buf == NULL
   ESL_ALLOC(buf, sizeof(uint8_t *));
   *buf = NULL;

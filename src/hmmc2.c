@@ -202,7 +202,7 @@ int main(int argc, char *argv[])
   HMMD_SEARCH_STATS   *stats;
   HMMD_SEARCH_STATUS   sstatus;
   uint8_t *buf;
-  uint32_t buf_offset;
+  uint32_t buf_offset, hits_start;
 
   int                  sock;
   char                 serv_ip[64];
@@ -465,7 +465,7 @@ int main(int argc, char *argv[])
           fprintf(stderr, "[%s:%d] malloc error %d - %s\n", __FILE__, __LINE__, errno, strerror(errno));
           exit(1);
         }
-
+        stats->hit_offsets = NULL; // force allocation of memory for this in _Deserialize
         if(p7_hmmd_search_stats_Deserialize(buf, &buf_offset, stats) != eslOK){
           printf("Unable to deserialize search stats object \n");
           exit(1);
@@ -510,7 +510,7 @@ int main(int argc, char *argv[])
           fprintf(stderr, "[%s:%d] malloc error %d - %s\n", __FILE__, __LINE__, errno, strerror(errno));
           exit(1);
         }
-        
+        hits_start = buf_offset;
         // deserialize the hits
         for (i = 0; i < stats->nhits; ++i) {
           // set all internal pointers of the hit to NULL before deserializing into it
@@ -518,7 +518,9 @@ int main(int argc, char *argv[])
           th->unsrt[i].acc = NULL;
           th->unsrt[i].desc = NULL;
           th->unsrt[i].dcl = NULL;
-
+          if((buf_offset -hits_start) != stats->hit_offsets[i]){
+            printf("Hit offset %d did not match expected.  Found %d, expected d%d\n", i, (buf_offset-hits_start), stats->hit_offsets[i]);
+          }
           if(p7_hit_Deserialize(buf, &buf_offset, &(th->unsrt[i])) != eslOK){
             printf("Unable to deserialize hit %d\n", i);
             exit(0);

@@ -807,8 +807,7 @@ send_results(int fd, ESL_STOPWATCH *w, P7_TOPHITS *th, P7_PIPELINE *pli){
   stats.nhits       = th->N;
   stats.nreported   = th->nreported;
   stats.nincluded   = th->nincluded;
-
-  // Build the main buffer of result data, starting with the stats object
+  stats.hit_offsets = NULL; // This field is only used when sending results back to the client
   if(p7_hmmd_search_stats_Serialize(&stats, buf, &n, &nalloc) != eslOK){
     LOG_FATAL_MSG("Serializing HMMD_SEARCH_STATS failed", errno);
   }
