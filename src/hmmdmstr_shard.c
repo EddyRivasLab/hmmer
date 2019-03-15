@@ -628,14 +628,6 @@ master_process_shard(ESL_GETOPTS *go)
     worker_comm.range_list = NULL;
 
     switch(query->cmd_type) {
-<<<<<<< HEAD
-    case HMMD_CMD_SEARCH: 
-      if (esl_opt_IsUsed(query->opts, "--seqdb_ranges")) {
-        ESL_ALLOC(worker_comm.range_list, sizeof(RANGE_LIST));
-        hmmpgmd_GetRanges(worker_comm.range_list, esl_opt_GetString(query->opts, "--seqdb_ranges"));
-      } 
-      process_search(&worker_comm, query); break;
-=======
     case HMMD_CMD_SEARCH:
       if (esl_opt_IsUsed(query->opts, "--seqdb_ranges")) {
         ESL_ALLOC(worker_comm.range_list, sizeof(RANGE_LIST));
@@ -643,7 +635,6 @@ master_process_shard(ESL_GETOPTS *go)
       }
       process_search(&worker_comm, query); 
       break;
->>>>>>> remotes/origin/serialize
     case HMMD_CMD_SCAN:        process_search(&worker_comm, query); break;
     case HMMD_CMD_SHUTDOWN:    
       process_shutdown(&worker_comm, query);
