@@ -47,17 +47,11 @@
 #define CONF_FILE "/etc/hmmpgmd.conf"
 #define INVALID_IP 0xfefefefe // 254.254.254.254 is supposed to be in the "reserved for future use" range of IPs, so we
   // should never see one
-typedef struct {
-  uint32_t        count;
-  uint32_t        data_size;
-  P7_HIT         *hit;
-  char           *data;
-} HIT_LIST;
 
 typedef struct {
   HMMD_SEARCH_STATS   stats;
   HMMD_SEARCH_STATUS  status;
-  HIT_LIST           *hits;
+  P7_HIT           **hits;
   int                 nhits;
   int                 db_inx;
   int                 db_cnt;
@@ -115,8 +109,8 @@ typedef struct worker_s {
   HMMD_SEARCH_STATS     stats;
   HMMD_SEARCH_STATUS    status;
   char                 *err_buf;
-  P7_HIT               *hit;
-  void                 *hit_data;
+  P7_HIT               **hits;
+  uint32_t              allocated_hits;       
   int                   total;
 
   WORKERSIDE_ARGS      *parent;
@@ -458,7 +452,7 @@ process_search(WORKERSIDE_ARGS *args, QUEUE_DATA_SHARD *query)
   results.stats.elapsed = w->elapsed;
   results.stats.user    = w->user;
   results.stats.sys     = w->sys;
-
+  results.stats.hit_offsets = NULL; // set this to make sure we allocate memory later
   /* TODO: check for errors */
   if (args->ready != args->num_shards) {
     client_msg(query->sock, eslFAIL, "Not enough compute nodes available for the number of shards specified.  %d nodes available, %d required\n", args->ready, args->num_shards);
@@ -634,12 +628,22 @@ master_process_shard(ESL_GETOPTS *go)
     worker_comm.range_list = NULL;
 
     switch(query->cmd_type) {
+<<<<<<< HEAD
     case HMMD_CMD_SEARCH: 
       if (esl_opt_IsUsed(query->opts, "--seqdb_ranges")) {
         ESL_ALLOC(worker_comm.range_list, sizeof(RANGE_LIST));
         hmmpgmd_GetRanges(worker_comm.range_list, esl_opt_GetString(query->opts, "--seqdb_ranges"));
       } 
       process_search(&worker_comm, query); break;
+=======
+    case HMMD_CMD_SEARCH:
+      if (esl_opt_IsUsed(query->opts, "--seqdb_ranges")) {
+        ESL_ALLOC(worker_comm.range_list, sizeof(RANGE_LIST));
+        hmmpgmd_GetRanges(worker_comm.range_list, esl_opt_GetString(query->opts, "--seqdb_ranges"));
+      }
+      process_search(&worker_comm, query); 
+      break;
+>>>>>>> remotes/origin/serialize
     case HMMD_CMD_SCAN:        process_search(&worker_comm, query); break;
     case HMMD_CMD_SHUTDOWN:    
       process_shutdown(&worker_comm, query);
@@ -671,7 +675,7 @@ master_process_shard(ESL_GETOPTS *go)
     if (worker_comm.range_list->ends)    free(worker_comm.range_list->ends);
     free (worker_comm.range_list);
   }
-
+  free(worker_comm.worker_ips);
   return;
 
 
@@ -680,19 +684,21 @@ ERROR:
 
 }
 
+// Qsort comparison function to sort a list of pointers to P7_HITs
 static int
-hit_sorter(const void *p1, const void *p2)
+hit_sorter2(const void *p1, const void *p2)
 {
   int cmp;
 
-  const P7_HIT *h1 = p1;
-  const P7_HIT *h2 = p2;
+  const P7_HIT *h1 = *((P7_HIT **) p1);
+  const P7_HIT *h2 = *((P7_HIT **) p2);
 
   cmp  = (h1->sortkey < h2->sortkey);
   cmp -= (h1->sortkey > h2->sortkey);
 
   return cmp;
 }
+
 
 static void
 init_results(SEARCH_RESULTS *results)
@@ -719,6 +725,7 @@ init_results(SEARCH_RESULTS *results)
   results->errors            = 0;
 }
 
+
 static void
 gather_results(QUEUE_DATA_SHARD *query, WORKERSIDE_ARGS *comm, SEARCH_RESULTS *results)
 {
@@ -729,7 +736,7 @@ gather_results(QUEUE_DATA_SHARD *query, WORKERSIDE_ARGS *comm, SEARCH_RESULTS *r
 
   /* allocate spaces to hold all the hits */
   cnt = results->nhits + MAX_WORKERS;
-  if ((results->hits = realloc(results->hits, sizeof(HIT_LIST) * cnt)) == NULL) LOG_FATAL_MSG("malloc", errno);
+  if ((results->hits = realloc(results->hits, sizeof(P7_HIT *) * cnt)) == NULL) LOG_FATAL_MSG("malloc", errno);
 
   /* lock the workers until we have merged the results */
   if ((n = pthread_mutex_lock (&comm->work_mutex)) != 0) LOG_FATAL_MSG("mutex lock", n);
@@ -739,7 +746,8 @@ gather_results(QUEUE_DATA_SHARD *query, WORKERSIDE_ARGS *comm, SEARCH_RESULTS *r
   worker = comm->head;
   while (worker != NULL) {
     if (worker->completed) {
- //     printf("worker returned %d hits, %d met reporting threshold\n", worker->stats.nhits, worker->stats.nreported);
+      uint32_t previous_hits = results->stats.nhits;
+
       results->stats.nhits        += worker->stats.nhits;
       results->stats.nreported    += worker->stats.nreported;
       results->stats.nincluded    += worker->stats.nincluded;
@@ -755,15 +763,23 @@ gather_results(QUEUE_DATA_SHARD *query, WORKERSIDE_ARGS *comm, SEARCH_RESULTS *r
       results->stats.Z             = worker->stats.Z;
 
       results->status.msg_size    += worker->status.msg_size - sizeof(HMMD_SEARCH_STATS);
+      if((results->stats.nhits- previous_hits) >0){ // There are new hits to deal with
+        // Add enough space to the list of hits for all the hits from this worker
+       results->hits = realloc(results->hits, results->stats.nhits * sizeof (P7_HIT *));
+        if(results->hits == NULL){
+         LOG_FATAL_MSG("malloc", n);
+       }
 
-      results->hits[cnt].count     = worker->stats.nhits;
-      results->hits[cnt].data_size = worker->status.msg_size - sizeof(HMMD_SEARCH_STATS) - sizeof(P7_HIT) * worker->stats.nhits;
-      results->hits[cnt].hit       = worker->hit;
-      results->hits[cnt].data      = worker->hit_data;
+       // copy this worker's hits into the global list
+        for(int i0 = 0, i1 = previous_hits; i1 < results->stats.nhits; i0++, i1++){
+          results->hits[i1] = worker->hits[i0];
+       }
 
-      worker->hit         = NULL;
-      worker->hit_data    = NULL;
+        free(worker->hits); //  Free the worker's array of pointers to hits.  The hits themselves
+       // will be freed by forward_results()
 
+       worker->hits = NULL;  
+      }
       worker->completed   = 0;
       ++cnt;
     } else {
@@ -790,57 +806,50 @@ gather_results(QUEUE_DATA_SHARD *query, WORKERSIDE_ARGS *comm, SEARCH_RESULTS *r
   }
 
   results->nhits = cnt;
+
 }
 
 static void
 forward_results(QUEUE_DATA_SHARD *query, SEARCH_RESULTS *results)
 {
-  uint32_t           adj;
+   uint32_t           adj;
   esl_pos_t          offset;
   P7_TOPHITS         th;
   P7_PIPELINE        *pli   = NULL;
   P7_DOMAIN         **dcl   = NULL;
   P7_HIT             *hits  = NULL;
-  HIT_LIST           *list  = NULL;
   int fd;
   int i, j;
   int n;
+  uint8_t **buf, **buf2, **buf3, *buf_ptr, *buf2_ptr, *buf3_ptr;
+  uint32_t nalloc, nalloc2, nalloc3, buf_offset, buf_offset2, buf_offset3;
   enum p7_pipemodes_e mode;
 
+  // Initialize these pointers-to-pointers that we'll use for sending data
+  buf_ptr = NULL;
+  buf = &(buf_ptr);
+  buf2_ptr = NULL;
+  buf2 = &(buf2_ptr);
+  buf3_ptr = NULL;
+  buf3 = &(buf3_ptr);
+
   fd    = query->sock;
-  list  = results->hits;
 
   if (query->cmd_type == HMMD_CMD_SEARCH) mode = p7_SEARCH_SEQS;
   else                                    mode = p7_SCAN_MODELS;
     
   /* sort the hits and apply score and E-value thresholds */
   if (results->nhits > 0) {
-  //  printf("Merged into %d hits\n", results->nhits);
+    if(results->stats.hit_offsets != NULL){
+      if ((results->stats.hit_offsets = realloc(results->stats.hit_offsets, results->stats.nhits * sizeof(uint64_t))) == NULL) LOG_FATAL_MSG("malloc", errno);
+    }
+    else{
+      if ((results->stats.hit_offsets = malloc(results->stats.nhits * sizeof(uint64_t))) == NULL) LOG_FATAL_MSG("malloc", errno);
+    }
     P7_HIT *h1;
 
-    /* at this point h1->offset's are the offset of the domain structure
-     * in the block of memory pointed to by "list[n]->data".  now we will change
-     * that offset to be the true pointers back to the dcl data.
-     */
-    for (i = 0; i < results->nhits; ++i) {
-      h1 = list[i].hit;
-      for (j = 0; j < list[i].count; ++j) {
-        esl_pos_t off = h1->offset - sizeof(HMMD_SEARCH_STATS) - (sizeof(P7_HIT) * list[i].count);
-        h1->dcl = (P7_DOMAIN *)(list[i].data + off);
-        ++h1;
-      }
-    }
-
-    /* combine all the hits into a single list */
-    offset = 0;
-    if ((hits = malloc(sizeof(P7_HIT) * results->stats.nhits)) == NULL) LOG_FATAL_MSG("malloc", errno);
-    memset(hits, 0, sizeof(P7_HIT) * results->stats.nhits); /* avoiding valgrind bitching; remove if structs serialized properly */
-    for (i = 0; i < results->nhits; ++i) {
-      memcpy(hits + offset, list[i].hit, sizeof(P7_HIT) * list[i].count);
-      offset += list[i].count;
-    }
-
-    qsort(hits, results->stats.nhits, sizeof(P7_HIT), hit_sorter);
+    // sort the hits 
+    qsort(results->hits, results->stats.nhits, sizeof(P7_HIT *), hit_sorter2);
 
     th.unsrt     = NULL;
     th.N         = results->stats.nhits;
@@ -862,10 +871,9 @@ forward_results(QUEUE_DATA_SHARD *query, SEARCH_RESULTS *results)
     pli->Z_setby     = results->stats.Z_setby;
     pli->domZ_setby  = results->stats.domZ_setby;
 
-    if ((dcl = malloc(sizeof(void *) * results->stats.nhits)) == NULL) LOG_FATAL_MSG("malloc", errno);
-    th.hit = (P7_HIT **)dcl;
 
-    for (i = 0; i < th.N; ++i) th.hit[i] = hits + i;
+    th.hit = results->hits;
+
     p7_tophits_Threshold(&th, pli);
 
     /* after the top hits thresholds are checked, the number of sequences
@@ -874,96 +882,114 @@ forward_results(QUEUE_DATA_SHARD *query, SEARCH_RESULTS *results)
     results->stats.nincluded = th.nincluded;
     results->stats.domZ      = pli->domZ;
     results->stats.Z         = pli->Z;
-//    printf("%d hits reported after re-thresholding\n", results->stats.nreported);
-    /* at this point the domain pointers need to be converted back to offsets
-     * within the binary data stream.
-     */
-    adj = sizeof(HMMD_SEARCH_STATS) + sizeof(P7_HIT) * results->stats.nhits;
-    h1 = hits;
-    for (i = 0; i < results->stats.nhits; ++i) {
-      char *ptr;
-
-      dcl[i] = h1->dcl;
-      h1->dcl = (P7_DOMAIN *)(((char *)NULL) + adj);
-
-      /* figure out the size of the domain and alignment info */
-      adj += sizeof(P7_DOMAIN) * h1->ndom;
-      ptr = (char *)(dcl[i] + h1->ndom);
-      for (j = 0; j < h1->ndom; ++j) {
-        n = sizeof(P7_ALIDISPLAY) + ((P7_ALIDISPLAY *)ptr)->memsize;
-        adj += n;
-        ptr += n;
-      }
-      ++h1;
-    }
   }
 
-  /* add the size of the status structure to the message size */
-  results->status.msg_size += sizeof(HMMD_SEARCH_STATS);
+  /* Build the buffers of serialized results we'll send back to the client.  
+     Use three buffers, one for each object, because we need to build them in reverse order.
+     We need to serialize the hits to build the hits_offset array in HMMD_SEARCH_STATS.
+     We need the length of the serialized hits and HMMD_SEARCH_STATS objects to fill out the msg_size
+     field in status, but we want to send status, then stats, then hits */
 
+  nalloc = 0;
+  buf_offset = 0;
+
+  // First, the buffer of hits
+  for(int i =0; i< results->stats.nhits; i++){
+   
+    results->stats.hit_offsets[i] = buf_offset;
+    if(p7_hit_Serialize(results->hits[i], buf, &buf_offset, &nalloc) != eslOK){
+      LOG_FATAL_MSG("Serializing P7_HIT failed", errno);
+    }
+
+  }
+  if(results->stats.nhits == 0){
+    results->stats.hit_offsets = NULL;
+  }
+
+  // Second, the buffer with the HMMD_SEARCH_STATS object
+
+  buf_offset2 = 0;
+  nalloc2 = 0; 
+  if(p7_hmmd_search_stats_Serialize(&(results->stats), buf2, &buf_offset2, &nalloc2) != eslOK){
+    LOG_FATAL_MSG("Serializing HMMD_SEARCH_STATS failed", errno);
+  }
+
+  results->status.msg_size = buf_offset + buf_offset2; // set size of second message
+  
+  // Third, the buffer with the HMMD_SEARCH_STATUS object
+  buf_offset3 = 0;
+  nalloc3 = 0;
+  if(hmmd_search_status_Serialize(&(results->status), buf3, &buf_offset3, &nalloc3) != eslOK){
+    LOG_FATAL_MSG("Serializing HMMD_SEARCH_STATUS failed", errno);
+  }
+
+  // Now, send the buffers in the reverse of the order they were built
   /* send back a successful status message */
-  n = sizeof(HMMD_SEARCH_STATUS);
-  if (writen(fd, &results->status, n) != n) {
+  n = buf_offset3;
+
+  if (writen(fd, buf3_ptr, n) != n) {
     p7_syslog(LOG_ERR,"[%s:%d] - writing %s error %d - %s\n", __FILE__, __LINE__, query->ip_addr, errno, strerror(errno));
     goto CLEAR;
   }
 
-  n = sizeof(HMMD_SEARCH_STATS);
-  if (writen(fd, &results->stats, n) != n) {
+  // and the stats object
+  n=buf_offset2;
+
+  if (writen(fd, buf2_ptr, n) != n) {
     p7_syslog(LOG_ERR,"[%s:%d] - writing %s error %d - %s\n", __FILE__, __LINE__, query->ip_addr, errno, strerror(errno));
     goto CLEAR;
   }
+  printf("%p\n", results->hits[1]);
+  // and finally the hits 
+  n=buf_offset;
 
-  if (results->stats.nhits > 0) {
-    /* send all the hit data */
-    n = sizeof(P7_HIT) * results->stats.nhits;
-    if (writen(fd, hits, n) != n) {
-      p7_syslog(LOG_ERR,"[%s:%d] - writing %s error %d - %s\n", __FILE__, __LINE__, query->ip_addr, errno, strerror(errno));
-      goto CLEAR;
-    }
-
-    for (i = 0; i < results->stats.nhits; ++i) {
-      if (i + 1 < results->stats.nhits) {
-        n = (char *)hits[i+1].dcl - (char *)hits[i].dcl;
-      } else {
-        n = ((char *)NULL) + results->status.msg_size - (char *)hits[i].dcl;
-      }
-      if (writen(fd, dcl[i], n) != n) {
-        p7_syslog(LOG_ERR,"[%s:%d] - writing %s error %d - %s\n", __FILE__, __LINE__, query->ip_addr, errno, strerror(errno));
-        goto CLEAR;
-      }
-    }
+  if (writen(fd, buf_ptr, n) != n) {
+    p7_syslog(LOG_ERR,"[%s:%d] - writing %s error %d - %s\n", __FILE__, __LINE__, query->ip_addr, errno, strerror(errno));
+    goto CLEAR;
   }
-
   printf("Results for %s (%d) sent %" PRId64 " bytes\n", query->ip_addr, fd, results->status.msg_size);
   printf("Hits:%"PRId64 "  reported:%" PRId64 "  included:%"PRId64 "\n", results->stats.nhits, results->stats.nreported, results->stats.nincluded);
   fflush(stdout);
 
  CLEAR:
   /* free all the data */
-  for (i = 0; i < results->nhits; ++i) {
-    if (list[i].hit  != NULL) free(list[i].hit);
-    if (list[i].data != NULL) free(list[i].data);
-    list[i].hit  = NULL;
-    list[i].data = NULL;
+  for(int i = 0; i < results->stats.nhits; i++){
+    p7_hit_Destroy(results->hits[i]);
   }
 
+  free(results->hits);
+  results->hits = NULL;
+
   if (pli)  p7_pipeline_Destroy(pli);
-  if (list) free(list);
   if (hits) free(hits);
   if (dcl)  free(dcl);
-
+  if(buf_ptr != NULL){
+    free(buf_ptr);
+  }
+  if(buf2_ptr != NULL){
+    free(buf2_ptr);
+  }
+  if(buf3_ptr != NULL){
+    free(buf3_ptr);
+  }
+  if(results->stats.hit_offsets != NULL){
+    free(results->stats.hit_offsets);
+  }
   init_results(results);
+  return;
 }
 
 static void
 destroy_worker(WORKER_DATA *worker)
 {
   if (worker == NULL) {
-    if (worker->hit      != NULL) free(worker->hit);
-    if (worker->hit_data != NULL) free(worker->hit_data);
     if (worker->err_buf  != NULL) free(worker->err_buf);
-
+    if (worker->hits != NULL){
+      for(int i = 0; i < worker->allocated_hits; i++){
+        p7_hit_Destroy(worker->hits[i]);
+      }
+      free(worker->hits);
+    }
     memset(worker, 0, sizeof(WORKER_DATA));
     free(worker);
   }
@@ -984,12 +1010,14 @@ clear_results(WORKERSIDE_ARGS *args, SEARCH_RESULTS *results)
   /* free all the results */
   worker = args->head;
   while (worker != NULL) {
-    if (worker->hit      != NULL) free(worker->hit);
-    if (worker->hit_data != NULL) free(worker->hit_data);
     if (worker->err_buf  != NULL) free(worker->err_buf);
-
-    worker->hit      = NULL;
-    worker->hit_data = NULL;
+    if(worker->hits != NULL){
+      for(int i =0; i < worker->allocated_hits; i++){
+        p7_hit_Destroy(worker->hits[i]);
+      }
+      free(worker->hits);
+      worker->hits = NULL;
+    }
     worker->err_buf  = NULL;
       
     worker->completed = 0;
@@ -999,10 +1027,8 @@ clear_results(WORKERSIDE_ARGS *args, SEARCH_RESULTS *results)
   if ((n = pthread_mutex_unlock (&args->work_mutex)) != 0)  LOG_FATAL_MSG("mutex unlock", n);
 
   for (i = 0; i < results->nhits; ++i) {
-    if (results->hits[i].hit  != NULL) free(results->hits[i].hit);
-    if (results->hits[i].data != NULL) free(results->hits[i].data);
-    results->hits[i].hit  = NULL;
-    results->hits[i].data = NULL;
+    if (results->hits[i]  != NULL) p7_hit_Destroy(results->hits[i]);
+    results->hits[i]  = NULL;
   }
 
   if (results->hits != NULL) free(results->hits);
@@ -1497,7 +1523,8 @@ workerside_loop(WORKERSIDE_ARGS *data, WORKER_DATA *worker)
   int    size;
   int    total;
   char  *ptr;
-
+  uint8_t *buf; // Buffer to receive bytes into over sockets
+  uint32_t buf_position; //Index into buffer for deserialize
   memset(&cmd, 0, sizeof(HMMD_COMMAND_SHARD)); /* silence valgrind. if we ever serialize structs properly, remove */
   w = esl_stopwatch_Create();
 
@@ -1576,11 +1603,21 @@ workerside_loop(WORKERSIDE_ARGS *data, WORKER_DATA *worker)
     total = 0;
     worker->total = 0;
 
-    n = sizeof(worker->status);
+    n = HMMD_SEARCH_STATUS_SERIAL_SIZE;
+    buf = malloc(n);
+    if (buf == NULL){
+      LOG_FATAL_MSG("malloc", errno);
+    }
+
     total += n;
-    if ((size = readn(worker->sock_fd, &worker->status, n)) == -1) {
+    if ((size = readn(worker->sock_fd, buf, n)) == -1) {
       p7_syslog(LOG_ERR,"[%s:%d] - reading %s error %d - %s\n", __FILE__, __LINE__, worker->ip_addr, errno, strerror(errno));
       break;
+    }
+
+    buf_position = 0;
+    if(hmmd_search_status_Deserialize(buf, &buf_position, &(worker->status)) != eslOK){
+       LOG_FATAL_MSG("Couldn't deserialize HMMD_SEARCH_STATUS", errno);
     }
 
     if (worker->status.status != eslOK) {
@@ -1594,31 +1631,49 @@ workerside_loop(WORKERSIDE_ARGS *data, WORKER_DATA *worker)
       }
     } else {
 
-      n = sizeof(worker->stats);
-      total += n;
-      if ((size = readn(worker->sock_fd, &worker->stats, n)) == -1) {
+      // receive the results from the worker
+      buf = realloc(buf, worker->status.msg_size);
+      if(buf == NULL){
+        LOG_FATAL_MSG("malloc", errno);
+      }
+
+      total += worker->status.msg_size;
+      if ((size = readn(worker->sock_fd, buf, worker->status.msg_size)) == -1) {
         p7_syslog(LOG_ERR,"[%s:%d] - reading %s error %d - %s\n", __FILE__, __LINE__, worker->ip_addr, errno, strerror(errno));
         break;
       }
 
+      buf_position = 0; // start at beginning of new buffer of data
+      // Now, serialize the data structures out of it
+      if(p7_hmmd_search_stats_Deserialize(buf, &buf_position, &(worker->stats)) != eslOK){
+        LOG_FATAL_MSG("Couldn't deserialize HMMD_SEARCH_STATS", errno);
+      }
       stats = &worker->stats;
-
-      /* read in the hits */
-      n = sizeof(P7_HIT) * stats->nhits;
-      if ((worker->hit = malloc(n)) == NULL) LOG_FATAL_MSG("malloc", errno);
-      if ((size = readn(worker->sock_fd, worker->hit, n)) == -1) {
-        p7_syslog(LOG_ERR,"[%s:%d] - reading %s error %d - %s\n", __FILE__, __LINE__, worker->ip_addr, errno, strerror(errno));
-        break;
+      if(stats->nhits > 0){
+        worker->hits = malloc(stats->nhits * sizeof(P7_HIT *));
+        if(worker->hits == NULL){
+          LOG_FATAL_MSG("malloc", errno);
+        }
+        worker->allocated_hits = stats->nhits;  // Need this if we have to destroy the worker because of an error
+        /* read in the hits */
+        for(int i = 0; i < stats->nhits; i++){
+          worker->hits[i] = p7_hit_Create_empty();
+          if(worker->hits[i] == NULL){
+            LOG_FATAL_MSG("malloc", errno);
+          }
+          if(p7_hit_Deserialize(buf, &buf_position, worker->hits[i]) != eslOK){
+            LOG_FATAL_MSG("Couldn't deserialize P7_HIT", errno);
+          } 
+        }
       }
-
-      /* read in the domain and alignment info */
-      n = worker->status.msg_size - sizeof(worker->stats) - n;
-      if ((worker->hit_data = malloc(n)) == NULL) LOG_FATAL_MSG("malloc", errno);
-      if ((size = readn(worker->sock_fd, worker->hit_data, n)) == -1) {
-        p7_syslog(LOG_ERR,"[%s:%d] - reading %s error %d - %s\n", __FILE__, __LINE__, worker->ip_addr, errno, strerror(errno));
-        break;
-      }
+      free(buf);
     }
+
+    /* We've just allocated an array of pointers to P7_HIT objects and a bunch of P7_HIT 
+      objects that we don't free in this function.  Here's what happens to them.  gather_results() assembles
+      all of the P7_HIT objects from the different workers into one big list, which it passes to forward_results().  
+      gather_results() frees each worker's array of pointers to P7_HIT objects, and forward_results is responsible for 
+      freeing all of the P7_HIT objects when it's done with them */
 
     esl_stopwatch_Stop(w);
 

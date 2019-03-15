@@ -1,0 +1,12 @@
+# target name        accession  query name           accession  hmmfrom hmm to alifrom  ali to envfrom  env to  modlen strand   E-value  score  bias  description of target
+#------------------- ---------- -------------------- ---------- ------- ------- ------- ------- ------- ------- ------- ------ --------- ------ ----- ---------------------
+#
+# Program:         hmmscan
+# Version:         3.3dev (November 2018)
+# Pipeline mode:   SCAN
+# Query file:      esltmpaa30566.RNDDB
+# Target file:     ./../tutorial/MADE1.hmm
+# Option settings: ../src/nhmmscan --tblout esltmpaa30566.nhmmscan.tbl ./../tutorial/MADE1.hmm esltmpaa30566.RNDDB 
+# Current dir:     /n/eddyfs01/home/npcarter/hmmer/serialize/testsuite
+# Date:            Tue Mar 12 19:25:47 2019
+# [ok]

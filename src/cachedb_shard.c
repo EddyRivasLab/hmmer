@@ -520,7 +520,7 @@ p7_seqcache_Open_shard(char *seqfile, P7_SEQCACHE **ret_cache, char *errbuf, int
   }
 //printf("Starting final reallocs\n");
   ESL_REALLOC(cache->header_mem, hdr_mem_used); // trim any unused memory in this array
-  ESL_REALLOC(cache->residue_mem, res_mem_used);  // ditto
+  ESL_REALLOC(cache->residue_mem, res_mem_used+1);  // ditto
 
 //printf("Worker done reading DB\n");
 

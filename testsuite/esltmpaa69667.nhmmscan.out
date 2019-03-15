@@ -1,0 +1,61 @@
+# nhmmscan :: search DNA sequence(s) against a DNA profile database
+# HMMER 3.3dev (November 2018); http://hmmer.org/
+# Copyright (C) 2018 Howard Hughes Medical Institute.
+# Freely distributed under the BSD open source license.
+# - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+# query sequence file:             esltmpaa69667.RNDDB
+# target HMM database:             ./../tutorial/MADE1.hmm
+# output directed to file:         esltmpaa69667.nhmmscan.out
+# - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+
+Query:       random0  [L=10000]
+Scores for complete hit:
+    E-value  score  bias  Model     start    end  Description
+    ------- ------ -----  --------  -----  -----  -----------
+
+   [No hits detected that satisfy reporting thresholds]
+
+
+Annotation for each hit  (and alignments):
+
+   [No targets detected that satisfy reporting thresholds]
+
+
+Internal pipeline statistics summary:
+-------------------------------------
+Query sequence(s):                         1  (20000 residues searched)
+Target model(s):                           1  (80 nodes)
+Residues passing SSV filter:             404  (0.0202); expected (0.02)
+Residues passing bias filter:            404  (0.0202); expected (0.02)
+Residues passing Vit filter:               0  (0); expected (0.003)
+Residues passing Fwd filter:               0  (0); expected (3e-05)
+Total number of hits:                      0  (0)
+# CPU time: 0.00u 0.00s 00:00:00.00 Elapsed: 00:00:00.00
+# Mc/sec: 1974.56
+//
+Query:       random1  [L=10000]
+Scores for complete hit:
+    E-value  score  bias  Model     start    end  Description
+    ------- ------ -----  --------  -----  -----  -----------
+
+   [No hits detected that satisfy reporting thresholds]
+
+
+Annotation for each hit  (and alignments):
+
+   [No targets detected that satisfy reporting thresholds]
+
+
+Internal pipeline statistics summary:
+-------------------------------------
+Query sequence(s):                         1  (20000 residues searched)
+Target model(s):                           1  (80 nodes)
+Residues passing SSV filter:             929  (0.0464); expected (0.02)
+Residues passing bias filter:            929  (0.0464); expected (0.02)
+Residues passing Vit filter:               0  (0); expected (0.003)
+Residues passing Fwd filter:               0  (0); expected (3e-05)
+Total number of hits:                      0  (0)
+# CPU time: 0.00u 0.00s 00:00:00.00 Elapsed: 00:00:00.00
+# Mc/sec: 2207.86
+//
+[ok]

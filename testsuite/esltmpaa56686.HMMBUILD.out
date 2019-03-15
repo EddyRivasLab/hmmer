@@ -1,0 +1,18 @@
+# hmmbuild :: profile HMM construction from multiple sequence alignments
+# HMMER 3.3dev (November 2018); http://hmmer.org/
+# Copyright (C) 2018 Howard Hughes Medical Institute.
+# Freely distributed under the BSD open source license.
+# - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+# input alignment file:             ./../testsuite/20aa.sto
+# output HMM file:                  esltmpaa56686.HMMBUILD.hmm
+# output directed to file:          esltmpaa56686.HMMBUILD.out
+# seq length for MSV Gumbel mu fit: 10
+# seq length for Vit Gumbel mu fit: 10
+# seq length for Fwd exp tau fit:   10
+# - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+
+# idx name                  nseq  alen  mlen eff_nseq re/pos description
+#---- -------------------- ----- ----- ----- -------- ------ -----------
+1     test                    10    20    20     1.96  2.634 
+
+# CPU time: 0.02u 0.00s 00:00:00.02 Elapsed: 00:00:00.02

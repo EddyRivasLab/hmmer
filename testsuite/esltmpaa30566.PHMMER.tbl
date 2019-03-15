@@ -1,0 +1,13 @@
+#                                                               --- full sequence ---- --- best 1 domain ---- --- domain number estimation ----
+# target name        accession  query name           accession    E-value  score  bias   E-value  score  bias   exp reg clu  ov env dom rep inc description of target
+#------------------- ---------- -------------------- ---------- --------- ------ ----- --------- ------ -----   --- --- --- --- --- --- --- --- ---------------------
+#
+# Program:         phmmer
+# Version:         3.3dev (November 2018)
+# Pipeline mode:   SEARCH
+# Query file:      ./../tutorial/HBB_HUMAN
+# Target file:     esltmpaa30566.RNDDB
+# Option settings: ../src/phmmer --tblout esltmpaa30566.PHMMER.tbl --EmL 10 --EvL 10 --EfL 10 ./../tutorial/HBB_HUMAN esltmpaa30566.RNDDB 
+# Current dir:     /n/eddyfs01/home/npcarter/hmmer/serialize/testsuite
+# Date:            Tue Mar 12 19:25:47 2019
+# [ok]

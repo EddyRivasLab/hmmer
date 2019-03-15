@@ -124,6 +124,7 @@ OBJS =  build.o\
 	hmmlogo.o\
 	hmmdmstr.o\
 	hmmdmstr_shard.o\
+	hmmd_search_status.o\
 	hmmdwrkr.o\
 	hmmdwrkr_shard.o\
 	hmmdutils.o\
@@ -137,13 +138,16 @@ OBJS =  build.o\
 	p7_alidisplay.o\
 	p7_bg.o\
 	p7_builder.o\
+	p7_domain.o\
 	p7_domaindef.o\
 	p7_gbands.o\
 	p7_gmx.o\
 	p7_gmxb.o\
 	p7_gmxchk.o\
+	p7_hit.o\
 	p7_hmm.o\
 	p7_hmmcache.o\
+	p7_hmmd_search_stats.o\
 	p7_hmmfile.o\
 	p7_hmmwindow.o\
 	p7_pipeline.o\
@@ -189,15 +193,19 @@ UTESTS =\
 	seqmodel_utest\
 	p7_alidisplay_utest\
 	p7_bg_utest\
+	p7_domain_utest\
 	p7_gmx_utest\
 	p7_gmxchk_utest\
+	p7_hit_utest\
+	p7_hmmd_search_stats_utest\
 	p7_hmm_utest\
 	p7_hmmfile_utest\
 	p7_profile_utest\
 	p7_tophits_utest\
 	p7_trace_utest\
 	p7_scoredata_utest\
-  hmmpgmd2msa_utest
+  hmmpgmd2msa_utest\
+  hmmd_search_status_utest
 
 ITESTS = \
 	itest_brute

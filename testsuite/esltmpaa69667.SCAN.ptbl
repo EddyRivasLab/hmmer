@@ -1,0 +1,21 @@
+# Sequence scores
+# ---------------
+#
+# name                  bits   E-value   n   exp  bias    description
+# ------------------- ------ --------- --- ----- -----    ---------------------
+
+# Domain scores
+# -------------
+#
+#  name                 bits   E-value   hit  bias env-st env-en ali-st ali-en hmm-st hmm-en     description
+# ------------------- ------ --------- ----- ----- ------ ------ ------ ------ ------ ------      ---------------------
+#
+# Program:         hmmscan
+# Version:         3.3dev (November 2018)
+# Pipeline mode:   SEARCH
+# Query file:      ./../tutorial/HBB_HUMAN
+# Target file:     esltmpaa69667.MINIFAM.HMM
+# Option settings: ../src/hmmscan --pfamtblout esltmpaa69667.SCAN.ptbl esltmpaa69667.MINIFAM.HMM ./../tutorial/HBB_HUMAN 
+# Current dir:     /net/eddyfs01/srv/export/eddyfs01/share_root/home/npcarter/hmmer/serialize/testsuite
+# Date:            Fri Mar  1 12:13:45 2019
+# [ok]

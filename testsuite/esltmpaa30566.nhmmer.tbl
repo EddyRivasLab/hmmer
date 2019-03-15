@@ -1,0 +1,12 @@
+# target name        accession  query name           accession   hmmfrom hmm to alifrom  ali to envfrom  env to  sq len strand   E-value  score  bias  description of target
+#------------------- ---------- --------------------  ---------- ------- ------- ------- ------- ------- ------- ------- ------ --------- ------ ----- ---------------------
+#
+# Program:         nhmmer
+# Version:         3.3dev (November 2018)
+# Pipeline mode:   SEARCH
+# Query file:      ./../tutorial/MADE1.hmm
+# Target file:     esltmpaa30566.RNDDB
+# Option settings: ../src/nhmmer --tblout esltmpaa30566.nhmmer.tbl ./../tutorial/MADE1.hmm esltmpaa30566.RNDDB 
+# Current dir:     /n/eddyfs01/home/npcarter/hmmer/serialize/testsuite
+# Date:            Tue Mar 12 19:25:47 2019
+# [ok]

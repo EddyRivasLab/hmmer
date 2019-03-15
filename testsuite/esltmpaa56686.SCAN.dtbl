@@ -1,0 +1,13 @@
+#                                                                            --- full sequence --- -------------- this domain -------------   hmm coord   ali coord   env coord
+# target name        accession   tlen query name           accession   qlen   E-value  score  bias   #  of  c-Evalue  i-Evalue  score  bias  from    to  from    to  from    to  acc description of target
+#------------------- ---------- ----- -------------------- ---------- ----- --------- ------ ----- --- --- --------- --------- ------ ----- ----- ----- ----- ----- ----- ----- ---- ---------------------
+#
+# Program:         hmmscan
+# Version:         3.3dev (November 2018)
+# Pipeline mode:   SCAN
+# Query file:      ./../tutorial/HBB_HUMAN
+# Target file:     esltmpaa56686.MINIFAM.HMM
+# Option settings: ../src/hmmscan --domtblout esltmpaa56686.SCAN.dtbl esltmpaa56686.MINIFAM.HMM ./../tutorial/HBB_HUMAN 
+# Current dir:     /n/eddyfs01/home/npcarter/hmmer/serialize/testsuite
+# Date:            Mon Mar  4 12:08:05 2019
+# [ok]

@@ -1,0 +1,21 @@
+# Sequence scores
+# ---------------
+#
+# name                  bits   E-value   n   exp  bias    description
+# ------------------- ------ --------- --- ----- -----    ---------------------
+
+# Domain scores
+# -------------
+#
+#  name                 bits   E-value   hit  bias env-st env-en ali-st ali-en hmm-st hmm-en     description
+# ------------------- ------ --------- ----- ----- ------ ------ ------ ------ ------ ------      ---------------------
+#
+# Program:         hmmsearch
+# Version:         3.3dev (November 2018)
+# Pipeline mode:   SEARCH
+# Query file:      ./../tutorial/globins4.hmm
+# Target file:     esltmpaa30566.RNDDB
+# Option settings: ../src/hmmsearch --pfamtblout esltmpaa30566.HMMSEARCH.dtbl ./../tutorial/globins4.hmm esltmpaa30566.RNDDB 
+# Current dir:     /n/eddyfs01/home/npcarter/hmmer/serialize/testsuite
+# Date:            Tue Mar 12 19:25:46 2019
+# [ok]
