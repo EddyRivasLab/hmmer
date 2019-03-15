@@ -45,7 +45,6 @@
 1 exercise p7_tophits         @src/p7_tophits_utest@
 1 exercise p7_trace           @src/p7_trace_utest@
 1 exercise p7_scoredata       @src/p7_scoredata_utest@
-1 exercise hmmpgmd2msa       @src/hmmpgmd2msa_utest@
 
 
 1 exercise decoding           @src/impl/decoding_utest@
@@ -56,7 +55,7 @@
 1 exercise optacc             @src/impl/optacc_utest@
 1 exercise stotrace           @src/impl/stotrace_utest@
 1 exercise vitfilter          @src/impl/vitfilter_utest@
-
+1 exercise  hmmpgmd2msa               @src/hmmpgmd2msa_utest@     !testsuite/Caudal_act.hmm!
 # Still to come, unit tests for
 #   emit.c
 #   errors.c

@@ -97,7 +97,8 @@ hmmpgmd2msa(void *data, P7_HMM *hmm, ESL_SQ *qsq, int *incl, int incl_size, int 
   th.N = 0;
   th.unsrt = NULL;
   th.hit   = NULL;
-
+  ESL_ALLOC(stats, sizeof(HMMD_SEARCH_STATS));
+  stats->hit_offsets = NULL; // we don't use hit_offsets for this test
   /* optionally build a faux trace for the query sequence: relative to core model (B->M_1..M_L->E) */
   if (qsq != NULL) {
     if (qsq->n != hmm->M) {
@@ -220,7 +221,7 @@ hmmpgmd2msa(void *data, P7_HMM *hmm, ESL_SQ *qsq, int *incl, int incl_size, int 
   }
   if (th.unsrt != NULL) free (th.unsrt);
   if (th.hit != NULL) free (th.hit);
-
+  free(stats);
   *ret_msa = msa;
   return eslOK;
 
@@ -236,7 +237,7 @@ ERROR:
   }
   if (th.unsrt != NULL) free (th.unsrt);
   if (th.hit != NULL) free (th.hit);
-
+  if(stats != NULL) free(stats);
   return status;
 }
 
@@ -633,7 +634,7 @@ void hmmpgmd2msa_utest(int ntrials, char *hmmfile){
     }
 
     // compare the MSAs
-    if(esl_msa_Compare (msa, msa) != eslOK){
+    if(esl_msa_Compare (msa, deser_msa) != eslOK){
       p7_Fail(msg);
     }
 
@@ -668,7 +669,7 @@ main(int argc, char **argv) {
     printf("Usage: hmmpgmd2msa_utest <hmmfile>\n");
     return eslFAIL;
   }
-  hmmpgmd2msa_utest(1, argv[1]);
+  hmmpgmd2msa_utest(10, argv[1]);
   return eslOK;  // hmmpgmd2msa_utest fails if anything goes wrong, so getting here = pass
 }
 #endif
