@@ -597,8 +597,6 @@ master_process(ESL_GETOPTS *go)
       process_search(&worker_comm, query); 
       break;
     case HMMD_CMD_SCAN:        process_search(&worker_comm, query); break;
-    case HMMD_CMD_INIT:        process_load  (&worker_comm, query); break;
-    case HMMD_CMD_RESET:       process_reset (&worker_comm, query); break;
     case HMMD_CMD_SHUTDOWN:    
       process_shutdown(&worker_comm, query);
       p7_syslog(LOG_ERR,"[%s:%d] - shutting down...\n", __FILE__, __LINE__);
