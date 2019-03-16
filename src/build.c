@@ -61,7 +61,7 @@ static int annotate_model(P7_HMM *hmm, int *matassign, ESL_MSA *msa);
  *           no consensus columns, a <eslENORESULT> error is returned.
  *           
  * Args:     msa     - multiple sequence alignment
- *           bld       - holds information on regions requiring masking, optionally NULL -> no masking
+ *           bld     - holds information on regions requiring masking, optionally NULL -> no masking
  *           ret_hmm - RETURN: counts-form HMM
  *           opt_tr  - optRETURN: array of tracebacks for aseq's
  *           
