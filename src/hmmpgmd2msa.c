@@ -76,7 +76,6 @@ hmmpgmd2msa(void *data, P7_HMM *hmm, ESL_SQ *qsq, int *incl, int incl_size, int 
   int i, j;
   int c;
   int status;
-  int set_included;
   uint32_t n = 0;
   /* trace of the query sequence with N residues onto model with N match states */
   P7_TRACE          *qtr         = NULL;
@@ -177,7 +176,6 @@ hmmpgmd2msa(void *data, P7_HMM *hmm, ESL_SQ *qsq, int *incl, int incl_size, int 
 
   for (i = 0; i < th.N; i++) {
     /* Go through the hits and set to be excluded or included as necessary */
-    set_included = 0;
     if(th.hit[i]->flags & p7_IS_INCLUDED){
       if(excl_size > 0){
         for( c = 0; c < excl_size; c++){
@@ -193,7 +191,6 @@ hmmpgmd2msa(void *data, P7_HMM *hmm, ESL_SQ *qsq, int *incl, int incl_size, int 
     	for( c = 0; c < incl_size; c++){
           if(incl[c] == (long)th.hit[i]->name ){
             th.hit[i]->flags = p7_IS_INCLUDED;
-            set_included = 1;
           }
         }
       }
