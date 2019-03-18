@@ -512,8 +512,8 @@ double random_double(double min, double max){
 
 int serialize_utest(){
   int status; // ESL_ALLOC error value
-  HMMD_SEARCH_STATS *serial, *deserial;
-  uint8_t **buffer;
+  HMMD_SEARCH_STATS *serial=NULL, *deserial=NULL;
+  uint8_t **buffer=NULL;
   uint32_t pos, buffer_size;
   srand(time(0)); // reseed randomness
   
@@ -653,7 +653,7 @@ int serialize_utest(){
 int serialize_error_conditions_utest(){
   int status;  // Easel error code variable
   HMMD_SEARCH_STATS foo;
-  uint8_t **buf;
+  uint8_t **buf, *buf_ptr=NULL;
   uint32_t n;
   uint32_t nalloc;
 
@@ -703,12 +703,13 @@ int serialize_error_conditions_utest(){
     return eslFAIL;
   }
   else{
-    printf("invalid n check passed\n");
+    printf("invalid object check passed\n");
   }
 
   // Test 4: invalid enum in Z_setby field
   foo.Z_setby = 255; // set Z_setby to invalid value
-  if(p7_hmmd_search_stats_Serialize(&foo, buf, &n, &nalloc) != eslEINVAL){
+  buf = &buf_ptr;
+    if(p7_hmmd_search_stats_Serialize(&foo, buf, &n, &nalloc) != eslEINVAL){
     return eslFAIL;
   }
   else{
@@ -728,17 +729,11 @@ int serialize_error_conditions_utest(){
   if(buf !=NULL && *buf != NULL){
     free(*buf);
   }
-  if(buf != NULL){
-    free(buf); 
-  }
   return eslOK;  // As usual, reaching the end of the test without failing out means we passed
 
   ERROR:
     if(buf !=NULL && *buf != NULL){
       free(*buf);
-    }
-    if(buf != NULL){
-      free(buf); 
     }
     return eslEMEM;
 }
@@ -888,18 +883,9 @@ ERROR:
 
 #include "esl_getopts.h"
 
-static ESL_OPTIONS options[] = {
-  /* name           type      default  env  range toggles reqs incomp  help                                       docgroup*/
-  { "-h",        eslARG_NONE,   FALSE, NULL, NULL, NULL, NULL, NULL, "show brief help on version and usage",              0 },
-  {  0, 0, 0, 0, 0, 0, 0, 0, 0, 0 },
-};
-static char usage[]  = "[-options]";
-static char banner[] = "test driver for p7_profile.c";
-
 int
 main(int argc, char **argv)
 {
-  ESL_GETOPTS *go = p7_CreateDefaultApp(options, 0, argc, argv, banner, usage);
 
   char           *msg       = "p7_hmmd_search_stats_utest failed";
 

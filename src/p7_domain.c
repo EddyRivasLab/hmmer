@@ -726,11 +726,11 @@ static void utest_Deserialize_error_conditions(){
 
 static void utest_Serialize(int ntrials){
   int i;
-  uint8_t **buf;
+  uint8_t **buf=NULL;
   uint32_t n;
   uint32_t nalloc;
-  P7_DOMAIN **serial, *deserial;
-  int status, alignment_length;
+  P7_DOMAIN **serial=NULL, *deserial=NULL;
+  int status;
   char msg[] = "utest_Serialize failed";
 
   ESL_ALLOC(buf, sizeof(uint8_t *));
@@ -798,7 +798,7 @@ static void utest_Serialize(int ntrials){
       free(serial);
     }
 
-    if(deserial == NULL){
+    if(deserial != NULL){
       p7_domain_Destroy(deserial);
     }
 
@@ -816,20 +816,9 @@ static void utest_Serialize(int ntrials){
 
 #include "esl_getopts.h"
 
-static ESL_OPTIONS options[] = {
-  /* name           type      default  env  range toggles reqs incomp  help                                       docgroup*/
-  { "-h",        eslARG_NONE,   FALSE, NULL, NULL, NULL, NULL, NULL, "show brief help on version and usage",              0 },
-  {  0, 0, 0, 0, 0, 0, 0, 0, 0, 0 },
-};
-static char usage[]  = "[-options]";
-static char banner[] = "test driver for p7_domain.c";
-
 int
 main(int argc, char **argv)
 {
-  ESL_GETOPTS *go = p7_CreateDefaultApp(options, 0, argc, argv, banner, usage);
-
-  char           *msg       = "p7_domain_utest failed";
 
   utest_Serialize_error_conditions();
   utest_Deserialize_error_conditions();

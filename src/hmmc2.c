@@ -175,7 +175,7 @@ usage(char *pgm)
 
 int main(int argc, char *argv[])
 {
-  int              i, j;
+  int              i;
   uint64_t         n;
   int              eod;
   int              size;
@@ -190,20 +190,17 @@ int main(int argc, char *argv[])
   char             buffer[MAX_READ_LEN];
 
   int              status  = eslOK;
-  char            *data    = NULL;
-  char            *ptr     = NULL;
 
   ESL_GETOPTS     *go      = NULL;
   ESL_STOPWATCH   *w       = NULL;
   P7_PIPELINE     *pli     = NULL;
   P7_TOPHITS      *th      = NULL;
-  P7_DOMAIN       *dcl     = NULL;
 
   HMMD_SEARCH_STATS   *stats;
   HMMD_SEARCH_STATUS   sstatus;
   uint8_t *buf;
   uint32_t buf_offset, hits_start;
-
+  char *ptr;
   int                  sock;
   char                 serv_ip[64];
   unsigned short       serv_port;

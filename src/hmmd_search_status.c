@@ -110,9 +110,7 @@ ERROR:
 extern int hmmd_search_status_Deserialize(const uint8_t *buf, uint32_t *n, HMMD_SEARCH_STATUS *ret_obj){
   uint8_t *ptr;
   uint64_t network_64bit; // holds 64-bit values in network order 
-  uint64_t host_64bit; //variable to hold 64-bit values after conversion to host order
   uint32_t network_32bit; // holds 64-bit values in network order 
-  uint32_t host_32bit; //variable to hold 64-bit values after conversion to host order
 
   if(ret_obj == NULL || buf == NULL || n == NULL){
     return eslEINVAL;
@@ -335,11 +333,11 @@ static void utest_Deserialize_error_conditions(){
 
 static void utest_Serialize(int ntrials){
   int i;
-  uint8_t **buf;
+  uint8_t **buf=NULL;
   uint32_t n;
   uint32_t nalloc;
-  HMMD_SEARCH_STATUS **serial, *deserial;
-  int status, alignment_length;
+  HMMD_SEARCH_STATUS **serial=NULL, *deserial=NULL;
+  int status;
   char msg[] = "utest_Serialize failed";
 
   ESL_ALLOC(buf, sizeof(uint8_t *));
@@ -417,20 +415,9 @@ static void utest_Serialize(int ntrials){
  *****************************************************************/      
 #ifdef p7HMMD_SEARCH_STATUS_TESTDRIVE
 
-static ESL_OPTIONS options[] = {
-  /* name           type      default  env  range toggles reqs incomp  help                                       docgroup*/
-  { "-h",        eslARG_NONE,   FALSE, NULL, NULL, NULL, NULL, NULL, "show brief help on version and usage",              0 },
-  {  0, 0, 0, 0, 0, 0, 0, 0, 0, 0 },
-};
-static char usage[]  = "[-options]";
-static char banner[] = "test driver for p7_hit.c";
-
 int
 main(int argc, char **argv)
 {
-  ESL_GETOPTS *go = p7_CreateDefaultApp(options, 0, argc, argv, banner, usage);
-
-  char           *msg       = "p7_hit_utest failed";
   utest_Serialize_error_conditions();
   utest_Deserialize_error_conditions();
   utest_Serialize(100);

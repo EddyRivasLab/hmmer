@@ -764,15 +764,11 @@ gather_results(QUEUE_DATA *query, WORKERSIDE_ARGS *comm, SEARCH_RESULTS *results
 static void
 forward_results(QUEUE_DATA *query, SEARCH_RESULTS *results)
 {
-  uint32_t           adj;
-  esl_pos_t          offset;
   P7_TOPHITS         th;
   P7_PIPELINE        *pli   = NULL;
   P7_DOMAIN         **dcl   = NULL;
   P7_HIT             *hits  = NULL;
-  int fd;
-  int i, j;
-  int n;
+  int fd, n;
   uint8_t **buf, **buf2, **buf3, *buf_ptr, *buf2_ptr, *buf3_ptr;
   uint32_t nalloc, nalloc2, nalloc3, buf_offset, buf_offset2, buf_offset3;
   enum p7_pipemodes_e mode;
@@ -798,7 +794,6 @@ forward_results(QUEUE_DATA *query, SEARCH_RESULTS *results)
     else{
       if ((results->stats.hit_offsets = malloc(results->stats.nhits * sizeof(uint64_t))) == NULL) LOG_FATAL_MSG("malloc", errno);
     }
-    P7_HIT *h1;
 
     // sort the hits 
     qsort(results->hits, results->stats.nhits, sizeof(P7_HIT *), hit_sorter2);
@@ -994,7 +989,6 @@ process_ServerCmd(char *ptr, CLIENTSIDE_ARGS *data)
   HMMD_COMMAND  *cmd      = NULL;     /* parsed cmd to process  */
   int            fd       = data->sock_fd;
   ESL_STACK     *cmdstack = data->cmdstack;
-  int            n;
   char          *s;
   time_t         date;
   char           timestamp[32];

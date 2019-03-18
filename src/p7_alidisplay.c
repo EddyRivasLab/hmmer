@@ -704,9 +704,7 @@ extern int p7_alidisplay_Deserialize(const uint8_t *buf, uint32_t *n, P7_ALIDISP
   uint8_t *ptr;
   char *mem_ptr;
   uint64_t network_64bit; // holds 64-bit values in network order 
-  uint64_t host_64bit; //variable to hold 64-bit values after conversion to host order
   uint32_t network_32bit; // holds 64-bit values in network order 
-  uint32_t host_32bit; //variable to hold 64-bit values after conversion to host order
   uint32_t obj_size; // How much space does the variable-length portion of the serialized object take up?
   uint8_t presence_flags; // bit-vector that tells us which strings are present in the object
   int string_length; // used to hold the length of strings copied out of serialized object
@@ -1754,32 +1752,6 @@ main(int argc, char **argv)
  * 5. Unit tests.
  ****************************************************************/
 #ifdef p7ALIDISPLAY_TESTDRIVE
-static void
-utest_Serialize_old(ESL_RANDOMNESS *rng, int ntrials, int N)
-{
-  char          msg[] = "utest_Serialize failed";
-  P7_ALIDISPLAY *ad   = NULL;
-  P7_ALIDISPLAY *ad2  = NULL;
-  int trial;
-
-  for (trial = 0; trial < ntrials; trial++)
-    {
-      if ( p7_alidisplay_Sample(rng, N, &ad) != eslOK) esl_fatal(msg);
-      if ( (ad2 = p7_alidisplay_Clone(ad))   == NULL)  esl_fatal(msg);
-      if ( p7_alidisplay_Compare(ad, ad2)    != eslOK) esl_fatal(msg);
-
-      if ( p7_alidisplay_Serialize_old(ad)       != eslOK) esl_fatal(msg);
-      if ( p7_alidisplay_Compare(ad, ad2)    != eslOK) esl_fatal(msg);
-
-      if ( p7_alidisplay_Deserialize_old(ad)     != eslOK) esl_fatal(msg);
-      if ( p7_alidisplay_Compare(ad, ad2)    != eslOK) esl_fatal(msg);
-
-      p7_alidisplay_Destroy(ad);
-      p7_alidisplay_Destroy(ad2);
-    }
-  return;
-}
-
 
 /*Testing function that generates a P7_ALIDISPLAY containing a nucleotide sequence string rather than an amino
   *sequence string.  This function should only be used for testing the serialization/deserializaton code.  No attempt
@@ -1969,10 +1941,10 @@ alidisplay_SampleFake_ntseq(ESL_RANDOMNESS *rng, int N, P7_ALIDISPLAY **ret_ad)
 
 static void utest_Serialize(int ntrials){
   int i;
-  uint8_t **buf;
+  uint8_t **buf=NULL;
   uint32_t n;
   uint32_t nalloc;
-  P7_ALIDISPLAY **serial, **deserial;
+  P7_ALIDISPLAY **serial=NULL, **deserial=NULL;
   int status, alignment_length;
   char msg[] = "utest_Serialize failed";
 
@@ -2073,7 +2045,7 @@ static void utest_Serialize(int ntrials){
 static void utest_Serialize_error_conditions(){
   int status;  // Easel error code variable
   P7_ALIDISPLAY *foo;
-  uint8_t **buf;
+  uint8_t **buf=NULL;
   uint32_t n;
   uint32_t nalloc;
 

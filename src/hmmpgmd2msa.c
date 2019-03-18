@@ -84,13 +84,10 @@ hmmpgmd2msa(void *data, P7_HMM *hmm, ESL_SQ *qsq, int *incl, int incl_size, int 
 
   /* vars used to read from the binary data */
   HMMD_SEARCH_STATS *stats   = NULL;              /* pointer to a single stats object, at the beginning of data */
-  P7_HIT            *hits    = NULL;              /* an array of hits, at the appropriate offset in data */
 
   /* vars used in msa construction */
   P7_TOPHITS         th;
-  P7_ALIDISPLAY     *ad, *ad2;
   ESL_MSA           *msa   = NULL;
-  P7_DOMAIN         *dom   = NULL;
 
   char              *p     = (char*)data;        /*pointer used to walk along data, must be char* to allow pointer arithmetic */
 
