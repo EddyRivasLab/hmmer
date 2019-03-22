@@ -3,13 +3,6 @@
  */
 #include "p7_config.h"
 
-#ifdef HAVE_FLUSH_ZERO_MODE
-#include <xmmintrin.h>    // x86 SSE 
-#endif
-#ifdef HAVE_DENORMALS_ZERO_MODE
-#include <pmmintrin.h>    // x86 SSE3 
-#endif
-
 #include "easel.h"
 #include "esl_cpu.h"
 
@@ -19,15 +12,8 @@
 void
 p7_simdvec_Init(void)
 {
-  /* Turn off denormalized floating-point, if possible.  Vectorized
-   * prob-space Fwd/Bck filter underflows by design, and underflows
-   * are negligible. See notes in simdvec.md.
-   */
-#ifdef HAVE_FLUSH_ZERO_MODE
-  _MM_SET_FLUSH_ZERO_MODE(_MM_FLUSH_ZERO_ON);
-#endif  
-#ifdef HAVE_DENORMAL_ZERO_MODE
-  _MM_SET_DENORMALS_ZERO_MODE(_MM_DENORMALS_ZERO_ON);
+#if defined eslENABLE_SSE4 || eslENABLE_AVX || eslENABLE_AVX512
+  p7_simdvec_x86_Init();
 #endif
 }
 
@@ -59,8 +45,8 @@ p7_simdvec_Width(void)
 #ifdef eslENABLE_AVX
       if (esl_cpu_has_avx())    { V = 32;  goto DONE; }
 #endif
-#ifdef eslENABLE_SSE
-      if (esl_cpu_has_sse())    { V = 16;  goto DONE; }
+#ifdef eslENABLE_SSE4
+      if (esl_cpu_has_sse4())   { V = 16;  goto DONE; }
 #endif
 #ifdef eslENABLE_NEON
       V = 16; goto DONE;

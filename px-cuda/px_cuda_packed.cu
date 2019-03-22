@@ -1,9 +1,9 @@
 #include <string.h>
 #include "easel.h"
-#include "esl_dsqdata.h"
 #include <x86intrin.h>
 #include <math.h>
 #include "esl_sse.h"
+#include "esl_dsqdata.h"
 #include "hmmer.h"
 #include "px_cuda.h"
 #include "cuda_profiler_api.h"

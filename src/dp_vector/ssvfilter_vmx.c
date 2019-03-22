@@ -843,7 +843,7 @@ p7_SSVFilter_base_vmx(const ESL_DSQ *dsq, int L, const P7_OPROFILE *om, P7_FILTE
 }
 
 
-#else // ! eslENABLE_SSE
+#else // ! eslENABLE_VMX
 /* Standard compiler-pleasing mantra for an #ifdef'd-out, empty code file. */
 void p7_ssvfilter_vmx_silence_hack(void) { return; }
 #if defined p7SSVFILTER_VMX_TESTDRIVE || p7SSVFILTER_VMX_EXAMPLE

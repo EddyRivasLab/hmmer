@@ -689,6 +689,15 @@ ascmatrix_compare(P7_REFMX *std, P7_REFMX *ascu, P7_REFMX *ascd, P7_ANCHOR *anch
 
       for (s = 0; s < p7R_NXCELLS; s++)
 	{
+	  /* special exception: ignore L in this test, for Backwards.
+	   * reference backward can have valid prob for {MI}(k<k0) on
+	   * the anchor row, and via M->I, reference can reach an Mk
+	   * on any row i that ASC can't reach, in addition to Mk that
+	   * ASC can reach; thus L can legitimately differ between ASC
+	   * and reference Backward. [H5/26]
+	   */
+	  if (std->type == p7R_BACKWARD && s == p7R_L) continue;
+
 	  val = P7R_XMX(ascd,i,s);
 	  if (val != -eslINFINITY && esl_FCompareAbs(val, P7R_XMX(std,i,s), tolerance) != eslOK)
 	    ESL_FAIL(eslFAIL, NULL, msg);
@@ -806,15 +815,20 @@ utest_singlepath(FILE *diagfp, ESL_RANDOMNESS *rng, int M, const ESL_ALPHABET *a
   if ((status = p7_ReferenceASCForward (sq->dsq, sq->n, gm, anch, D, afu, afd, &asc_f)) != eslOK) esl_fatal(failmsg);
   if ((status = p7_ReferenceASCBackward(sq->dsq, sq->n, gm, anch, D, abu, abd, &asc_b)) != eslOK) esl_fatal(failmsg);
 
-  //printf("### Reference Vit:\n"); p7_refmx_Dump(stdout, rxv);
-  //printf("### Reference Fwd:\n"); p7_refmx_Dump(stdout, rxf);
-  //printf("### Reference Bck:\n"); p7_refmx_Dump(stdout, rxb);
-  //printf("### ASC Fwd UP:\n");    p7_refmx_Dump(stdout, afu);
-  //printf("### ASC Fwd DOWN:\n");  p7_refmx_Dump(stdout, afd);
-  //printf("### ASC Bck UP:\n");    p7_refmx_Dump(stdout, abu);
-  //printf("### ASC Bck DOWN:\n");  p7_refmx_Dump(stdout, abd);
-  //p7_trace_DumpAnnotated(stdout, tr,  gm, sq->dsq);
-  //p7_trace_DumpAnnotated(stdout, vtr, gm, sq->dsq);
+
+#if 0
+  p7_profile_Dump(stdout, gm);
+  printf("### Reference Vit:\n"); p7_refmx_Dump(stdout, rxv);
+  printf("### Reference Fwd:\n"); p7_refmx_Dump(stdout, rxf);
+  printf("### Reference Bck:\n"); p7_refmx_Dump(stdout, rxb);
+  printf("### ASC Fwd UP:\n");    p7_refmx_Dump(stdout, afu);
+  printf("### ASC Fwd DOWN:\n");  p7_refmx_Dump(stdout, afd);
+  printf("### ASC Bck UP:\n");    p7_refmx_Dump(stdout, abu);
+  printf("### ASC Bck DOWN:\n");  p7_refmx_Dump(stdout, abd);
+  p7_trace_DumpAnnotated(stdout, tr,  gm, sq->dsq);
+  p7_trace_DumpAnnotated(stdout, vtr, gm, sq->dsq);
+  printf("anchor i0,k0 = %d,%d\n", anch[1].i0, anch[1].k0);
+#endif
 
   if (p7_trace_Compare(tr, vtr, 0)        != eslOK) esl_fatal(failmsg);  // generated trace = Viterbi trace
 

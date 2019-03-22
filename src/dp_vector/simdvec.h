@@ -123,8 +123,14 @@ extern void p7_restripe_float(float *source, float *dest, int length, int source
 
 extern void p7_simdvec_Init(void);
 extern int  p7_simdvec_Width(void);
+
+#if defined eslENABLE_SSE4 || eslENABLE_AVX || eslENABLE_AVX512
+extern void p7_simdvec_x86_Init(void);
+#endif  
+
 #ifdef __cplusplus // magic to make C++ compilers happy
 }
 #endif
+
 #endif  /*p7SIMDVEC_INCLUDED*/
 

@@ -89,7 +89,6 @@ main(int argc, char **argv)
 
   /* Configure vector, dual-mode, and local-only profiles from HMM */
   bg = p7_bg_Create(abc);
-
   gm = p7_profile_Create(hmm->M, abc);
   p7_profile_Config(gm, hmm, bg);
 

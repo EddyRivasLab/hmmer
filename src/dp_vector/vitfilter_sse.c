@@ -10,7 +10,7 @@
  * underflow, in local alignment mode.
  */
 #include "p7_config.h"
-#ifdef eslENABLE_SSE
+#ifdef eslENABLE_SSE4
 
 #include <stdio.h>
 #include <math.h>
@@ -70,7 +70,7 @@ p7_ViterbiFilter_sse(const ESL_DSQ *dsq, int L, const P7_OPROFILE *om, P7_FILTER
   ox->M    = om->M;
   ox->Vw   = p7_VWIDTH_SSE / sizeof(int16_t);
   ox->type = p7F_VITFILTER;
-  ESL_DASSERT1(( ox->Vw = om->V / sizeof(int16_t)));
+  ESL_DASSERT1(( ox->Vw == om->V / sizeof(int16_t)));
 
   /* Initialization. In int16_t, our -infinity is -32768  */
   for (q = 0; q < Q; q++)
@@ -203,14 +203,14 @@ p7_ViterbiFilter_sse(const ESL_DSQ *dsq, int L, const P7_OPROFILE *om, P7_FILTER
   return eslOK;
 }
 
-#else // ! eslENABLE_SSE
+#else // ! eslENABLE_SSE4
 
 /* Standard compiler-pleasing mantra for an #ifdef'd-out, empty code file. */
 void p7_vitfilter_sse_silence_hack(void) { return; }
 #if defined p7VITFILTER_SSE_TESTDRIVE || p7VITFILTER_SSE_EXAMPLE
 int main(void) { return 0; }
 #endif 
-#endif // eslENABLE_SSE or not
+#endif // eslENABLE_SSE4 or not
 
 
 

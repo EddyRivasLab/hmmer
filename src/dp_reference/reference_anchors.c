@@ -323,7 +323,7 @@ p7_reference_Anchors(ESL_RANDOMNESS *rng, const ESL_DSQ *dsq, int L, const P7_PR
  *    keyidx != best_keyidx test and the recalculation. (The
  *    other way to do it is to keep the best matrices somewhere,
  *    but we would rather burn a small amount of time than a lot
- *    of memory.
+ *    of memory.)
  *
  * 2. best_ascprob >= 0.5 
  *    If this AS happens to dominate, we know we're done (probably
@@ -426,12 +426,14 @@ p7_reference_anchors_SetFromTrace(const P7_REFMX *pp, const P7_TRACE *tr, P7_ANC
 
 static ESL_OPTIONS options[] = {
   /* name           type           default  env  range  toggles reqs incomp  help                                       docgroup*/
-  { (char *)"-h",          eslARG_NONE,   FALSE,  NULL, NULL,   NULL,  NULL, NULL, (char *)"show brief help on version and usage",                   0 },
-  { (char *)"-k",          eslARG_NONE,   FALSE,  NULL, NULL,   NULL,  NULL, NULL, (char *)"keep sampling until n_max: test termination conditions", 0 },
-  { (char *)"-n",          eslARG_INT,  (char *) "1000",  NULL, NULL,   NULL,  NULL, NULL, (char *)"maximum number of samples (n_max)",                      0 },
-  { (char *)"-s",          eslARG_INT,  (char *)    "0",  NULL, NULL,   NULL,  NULL, NULL, (char *)"set random number seed to <n>",                          0 },
-  { (char *)"-t",         eslARG_REAL,  (char *)"0.001",  NULL, NULL,   NULL,  NULL, NULL, (char *)"loss threshold",                                         0 },
-  { (char *)"-Z",          eslARG_INT,   (char *)   "1",  NULL, NULL,   NULL,  NULL, NULL, (char *)"set sequence # to <n>, for E-value calculations",        0 },
+
+  { "-h",          eslARG_NONE,   FALSE,  NULL, NULL,   NULL,  NULL, NULL, "show brief help on version and usage",                   0 },
+  { "-k",          eslARG_NONE,   FALSE,  NULL, NULL,   NULL,  NULL, NULL, "keep sampling until n_max: test termination conditions", 0 },
+  { "-n",          eslARG_INT,   "1000",  NULL, NULL,   NULL,  NULL, NULL, "maximum number of samples (n_max)",                      0 },
+  { "-s",          eslARG_INT,      "0",  NULL, NULL,   NULL,  NULL, NULL, "set random number seed to <n>",                          0 },
+  { "-t",         eslARG_REAL,  "0.001",  NULL, NULL,   NULL,  NULL, NULL, "loss threshold",                                         0 },
+  { "-E",         eslARG_REAL,     NULL,  NULL, NULL,   NULL,  NULL, NULL, "only process seqs with E(fwd_sc) < this threshold",      0 },
+  { "-Z",          eslARG_INT,      "1",  NULL, NULL,   NULL,  NULL, NULL, "set sequence # to <n>, for E-value calculations",        0 },
   {  0, 0, 0, 0, 0, 0, 0, 0, 0, 0 },
 };
 static char usage[]  = "[-options] <hmmfile> <seqfile>";
@@ -453,9 +455,7 @@ main(int argc, char **argv)
   P7_HMM         *hmm     = NULL;
   P7_PROFILE     *gm      = NULL;           /* profile in H4's standard dual-mode local/glocal */
   P7_OPROFILE    *om      = NULL;
-  P7_FILTERMX    *fx      = p7_filtermx_Create(100);
-  P7_CHECKPTMX   *cx      = p7_checkptmx_Create(100, 100, ESL_MBYTES(p7_SPARSIFY_RAMLIMIT));
-  P7_SPARSEMASK  *sm      = p7_sparsemask_Create(100, 100);
+  P7_ENGINE      *eng     = NULL;           /* we'll use the Overthruster but not main engine: <fx>, <cx>, <sm> */
   P7_ANCHORS     *anch    = p7_anchors_Create();
   P7_REFMX       *rxf     = p7_refmx_Create(100,100);
   P7_REFMX       *rxd     = p7_refmx_Create(100,100);
@@ -498,6 +498,9 @@ main(int argc, char **argv)
   else if (status == eslEINVAL)    p7_Fail((char *)"Can't autodetect stdin or .gz.");
   else if (status != eslOK)        p7_Fail((char *)"Open failed, code %d.", status);
 
+  /* Make an engine to use */
+  eng  = p7_engine_Create(abc, /*params=*/NULL, /*stats=*/NULL, gm->M, /*L_hint=*/400);
+
   esl_dataheader(stdout, 
 		 -15, "hmm", -30, "seq",
 		 8, "fsc",    10, "E(fsc)", 8, "vsc",   10, "E(vsc)", 
@@ -515,16 +518,20 @@ main(int argc, char **argv)
       p7_profile_SetLength      (gm,  sq->n);
       p7_oprofile_ReconfigLength(om,  sq->n);
 
-      if (( status = p7_pipeline_AccelerationFilter(sq->dsq, sq->n, om, bg, fx, cx, sm)) == eslOK)
+      if (( status = p7_engine_Overthruster(eng, sq->dsq, sq->n, om, bg)) == eslOK)
 	{
+	  p7_bg_NullOne(bg, sq->dsq, sq->n, &nullsc);
+	  p7_ReferenceForward (sq->dsq, sq->n, gm, rxf, &fsc);
+
+          if (esl_opt_IsOn   (go, "-E") &&
+              esl_opt_GetReal(go, "-E") < (double) Z * esl_exp_surv ( (fsc - nullsc) / eslCONST_LOG2, gm->evparam[p7_FTAU], gm->evparam[p7_FLAMBDA]))
+            { esl_sq_Reuse(sq); p7_engine_Reuse(eng); p7_refmx_Reuse(rxf); continue; }
+
 	  esl_randomness_Init(rng, esl_randomness_GetSeed(rng));  // Makes results for <dsq> reproducible, for a given seed
 	  printf("%-15s %-30s ", gm->name, sq->name);
 
-	  p7_bg_NullOne(bg, sq->dsq, sq->n, &nullsc);
-
-	  p7_ReferenceViterbi (sq->dsq, sq->n, gm, rxf, vtr, &vsc);
-	  p7_reference_trace_Viterbi(gm, rxf, tr);               // a second copy; we have no p7_trace_Copy() function yet
-	  p7_ReferenceForward (sq->dsq, sq->n, gm, rxf, &fsc);
+	  p7_ReferenceViterbi (sq->dsq, sq->n, gm, rxd, vtr, &vsc);  // we use the rxd mx for Viterbi, then immediately overwrite it with decoding.
+	  p7_reference_trace_Viterbi(gm, rxd, tr);                   // a second copy; we have no p7_trace_Copy() function yet
 	  p7_ReferenceBackward(sq->dsq, sq->n, gm, rxd, NULL);   
 	  p7_ReferenceDecoding(sq->dsq, sq->n, gm, rxf, rxd, rxd);   
 
@@ -580,7 +587,7 @@ main(int argc, char **argv)
 	  p7_anchors_Reuse(anch);
 	}
 
-      p7_sparsemask_Reuse(sm);
+      p7_engine_Reuse(eng);
       esl_sq_Reuse(sq);
     }
   if      (status == eslEFORMAT) p7_Fail((char *)"Parse failed (sequence file %s)\n%s\n", sqfp->filename, sqfp->get_error(sqfp));
@@ -597,9 +604,7 @@ main(int argc, char **argv)
   p7_refmx_Destroy(afu);
   p7_refmx_Destroy(rxf);
   p7_refmx_Destroy(rxd);
-  p7_sparsemask_Destroy(sm);
-  p7_checkptmx_Destroy(cx);
-  p7_filtermx_Destroy(fx);
+  p7_engine_Destroy(eng);
   p7_oprofile_Destroy(om);
   p7_profile_Destroy(gm);
   p7_hmm_Destroy(hmm);

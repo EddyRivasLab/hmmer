@@ -274,8 +274,8 @@ p7_anchorhash_Store(P7_ANCHORHASH *ah, const P7_ANCHORS *anch, int D0, int32_t *
    */
   if (ah->nkeys == 1) 
     p7_anchor_GetSentinels(anch->a, anch->D, &(ah->L), &(ah->M));
-  ESL_DASSERT1(( anch->a[anch->D+1].i0 = ah->L+1 ));
-  ESL_DASSERT1(( anch->a[0].k0         = ah->M+1 ));
+  ESL_DASSERT1(( anch->a[anch->D+1].i0 == ah->L+1 ));
+  ESL_DASSERT1(( anch->a[0].k0         == ah->M+1 ));
 
   /* Insert new element at head of the approp chain in hashtable */
   ah->nxt[idx]       = ah->hashtable[val];

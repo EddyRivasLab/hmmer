@@ -88,9 +88,6 @@
 1 exercise modelconfig		@src/search/modelconfig_utest@
 
 
-1 exercise shard_utest		@src/server/shard_utest@
-
-
 
 ################################################################
 # Scripted "integration" tests in testsuite/i*-*.{sh,pl}

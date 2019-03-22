@@ -11,7 +11,7 @@ extern "C" {
 #endif
 extern int (*p7_SSVFilter)(const ESL_DSQ *dsq, int L, const P7_OPROFILE *om, float *ret_sc);
 
-#ifdef eslENABLE_SSE
+#ifdef eslENABLE_SSE4
 extern int p7_SSVFilter_sse     (const ESL_DSQ *dsq, int L, const P7_OPROFILE *om, float *ret_sc);
 extern int p7_SSVFilter_base_sse(const ESL_DSQ *dsq, int L, const P7_OPROFILE *om, P7_FILTERMX *fx, float *ret_sc);
 #endif

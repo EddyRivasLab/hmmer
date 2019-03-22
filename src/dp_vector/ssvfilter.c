@@ -90,8 +90,8 @@ ssvfilter_dispatcher(const ESL_DSQ *dsq, int L, const P7_OPROFILE *om, float *re
     }
 #endif
 
-#ifdef eslENABLE_SSE
-  if (esl_cpu_has_sse())
+#ifdef eslENABLE_SSE4
+  if (esl_cpu_has_sse4())
     {
       p7_SSVFilter = p7_SSVFilter_sse;
       return p7_SSVFilter_sse(dsq, L, om, ret_sc);
@@ -147,9 +147,10 @@ ssvfilter_dispatcher(const ESL_DSQ *dsq, int L, const P7_OPROFILE *om, float *re
 
 static ESL_OPTIONS options[] = {
   /* name           type      default  env  range toggles reqs incomp  help                                       docgroup*/
-  { (char *) "-h",        eslARG_NONE,   FALSE, NULL, NULL,  NULL,  NULL, NULL, (char *) "show brief help on version and usage",             0 },
-#ifdef eslENABLE_SSE
-  { (char *) "-b",        eslARG_NONE,   FALSE, NULL, NULL,  NULL,  NULL, NULL, (char *) "baseline version, not production version",         0 },
+  { "-h",        eslARG_NONE,   FALSE, NULL, NULL,  NULL,  NULL, NULL, "show brief help on version and usage",             0 },
+#ifdef eslENABLE_SSE4
+  { "-b",        eslARG_NONE,   FALSE, NULL, NULL,  NULL,  NULL, NULL, "baseline version, not production version",         0 },
+
 #endif
   { (char *) "-s",        eslARG_INT,     (char *)  "0", NULL, NULL,  NULL,  NULL, NULL, (char *) "set random number seed to <n>",                    0 },
   { (char *) "-x",        eslARG_NONE,   FALSE, NULL, NULL,  NULL,  NULL, NULL, (char *) "equate scores to trusted implementation (debug)",  0 },
@@ -208,8 +209,9 @@ main(int argc, char **argv)
   esl_stopwatch_Start(w);
   for (i = 0; i < N; i++)
     {
-#ifdef eslENABLE_SSE      
-      if (esl_opt_GetBoolean(go, (char *) "-b"))      p7_SSVFilter_base_sse(dsq[i], L, om, fx, &sc1);   
+
+#ifdef eslENABLE_SSE4      
+      if (esl_opt_GetBoolean(go, "-b"))      p7_SSVFilter_base_sse(dsq[i], L, om, fx, &sc1);   
       else          
 #endif
       p7_SSVFilter(dsq[i], L, om, &sc1);   

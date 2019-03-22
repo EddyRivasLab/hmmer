@@ -785,8 +785,8 @@ hit_sorter(const void *p1, const void *p2)
   const P7_HIT *h1 = p1;
   const P7_HIT *h2 = p2;
 
-  cmp  = (h1->sortkey < h2->sortkey);
-  cmp -= (h1->sortkey > h2->sortkey);
+  cmp  = (h1->sortkey < h2->sortkey);   // SRE: this is Farrar trickery, and it's ok.
+  cmp -= (h1->sortkey > h2->sortkey);   // We must return 0 if h1's sortkey == h2's, and Farrar's trick does the right thing.
 
   return cmp;
 }
@@ -938,7 +938,7 @@ forward_results(QUEUE_DATA *query, SEARCH_RESULTS *results)
     gettimeofday(&merge_time, NULL);
 
     qsort(hits, results->stats.nhits, sizeof(P7_HIT), hit_sorter);
- gettimeofday(&sort_time, NULL);
+    gettimeofday(&sort_time, NULL);
 
     th.unsrt     = NULL;
     th.N         = results->stats.nhits;

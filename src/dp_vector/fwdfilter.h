@@ -14,7 +14,7 @@ extern "C" {
 extern int (*p7_ForwardFilter) (const ESL_DSQ *dsq, int L, const P7_OPROFILE *om, P7_CHECKPTMX *ox, float *opt_sc);
 extern int (*p7_BackwardFilter)(const ESL_DSQ *dsq, int L, const P7_OPROFILE *om, P7_CHECKPTMX *ox, P7_SPARSEMASK *sm, float sm_thresh);
 
-#ifdef eslENABLE_SSE
+#ifdef eslENABLE_SSE4
 extern int p7_ForwardFilter_sse (const ESL_DSQ *dsq, int L, const P7_OPROFILE *om, P7_CHECKPTMX *ox, float *opt_sc);
 extern int p7_BackwardFilter_sse(const ESL_DSQ *dsq, int L, const P7_OPROFILE *om, P7_CHECKPTMX *ox, P7_SPARSEMASK *sm, float sm_thresh);
 #endif
