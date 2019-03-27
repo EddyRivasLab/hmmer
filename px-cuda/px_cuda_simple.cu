@@ -10,7 +10,7 @@
 
 #define DSQ_BUFFER_LENGTH 16  //must be multiple of 16 to allow 128-bit loads
 #define KP 27  // number of characters in alphabet.  Make parameter.
-#define MAX_BAND_WIDTH 4
+#define MAX_BAND_WIDTH 1
 #define NEGINFMASK 0x80808080
 #define NUM_REPS 1000
 #define MAX(a, b, c)\

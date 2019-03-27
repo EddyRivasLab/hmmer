@@ -1424,6 +1424,7 @@ static int worker_thread_front_end_sequence_search_loop(P7_DAEMON_WORKERNODE_STA
             // populate the fields
             the_entry->sequence = (ESL_DSQ *) the_sequence;
             the_entry->L = L;
+            the_entry->do_overthruster = 1; // The CPU front end does the full overthruster. curretly set to 1 to test code
             the_entry->seq_id = seq_id;
             the_entry->next = NULL;
             workernode->thread_state[my_id].comparisons_queued += 1;
@@ -1526,52 +1527,64 @@ static void worker_thread_back_end_sequence_search_loop(P7_DAEMON_WORKERNODE_STA
   P7_BACKEND_QUEUE_ENTRY *the_entry = workernode_get_backend_queue_entry_from_queue(workernode);
 
   ESL_RED_BLACK_DOUBLEKEY *the_hit_entry;
+  int overthruster_result = eslFAIL;
   while(the_entry != NULL){
-    // There's a sequence in the queue, so do the backend comparison 
+  // There's a sequence in the queue, so do the backend comparison 
+    if(the_entry->do_overthruster !=0){
+      //need to do the overthruster part of this comparison, generally because CUDA doesn't do the full overthruster
+        p7_bg_SetLength(workernode->thread_state[my_id].bg, the_entry->L);           
+        p7_oprofile_ReconfigLength(workernode->thread_state[my_id].om, the_entry->L);
 
-    // Configure the model and engine for this comparison
-    p7_bg_SetLength(workernode->thread_state[my_id].bg, the_entry->L);           
-    p7_oprofile_ReconfigLength(workernode->thread_state[my_id].om, the_entry->L);
-    P7_SPARSEMASK *temp_mask = the_entry->sm;
-    the_entry->sm = workernode->thread_state[my_id].engine->sm;
-    workernode->thread_state[my_id].engine->sm = temp_mask;
+        // The overthruster filters are the front end of the engine
+        overthruster_result = p7_engine_Overthruster(workernode->thread_state[my_id].engine, the_entry->sequence, the_entry->L, workernode->thread_state[my_id].om, workernode->thread_state[my_id].bg);  
+    }
+    
+    if((the_entry->do_overthruster == 0) || (overthruster_result != eslFAIL)){ // this comparison passed the overthruster, so do the main stage
+      // Configure the model and engine for this comparison
+      p7_bg_SetLength(workernode->thread_state[my_id].bg, the_entry->L);           
+      p7_oprofile_ReconfigLength(workernode->thread_state[my_id].om, the_entry->L);
+      P7_SPARSEMASK *temp_mask = the_entry->sm;
+      the_entry->sm = workernode->thread_state[my_id].engine->sm;
+      workernode->thread_state[my_id].engine->sm = temp_mask;
 
-    p7_profile_SetLength(workernode->thread_state[my_id].gm, the_entry->L);
-    p7_engine_Main(workernode->thread_state[my_id].engine, the_entry->sequence, the_entry->L, workernode->thread_state[my_id].gm); 
+      p7_profile_SetLength(workernode->thread_state[my_id].gm, the_entry->L);
+      p7_engine_Main(workernode->thread_state[my_id].engine, the_entry->sequence, the_entry->L, workernode->thread_state[my_id].gm); 
 
 
 #ifdef TEST_SEQUENCES 
-      // Record that we processed this sequence
-      workernode->sequences_processed[the_entry->seq_id] = 1;
+        // Record that we processed this sequence
+        workernode->sequences_processed[the_entry->seq_id] = 1;
 #endif
 
     // Stub code that treats any comparison that reaches the back end as a hit
 
-    the_hit_entry = workernode_get_hit_list_entry_from_pool(workernode, my_id);
-    the_hit_entry->key = (double) the_entry->seq_id; // For now, we only sort on sequence ID.  Need to change this to possibly sort
-    // on score
+      the_hit_entry = workernode_get_hit_list_entry_from_pool(workernode, my_id);
+      the_hit_entry->key = (double) the_entry->seq_id; // For now, we only sort on sequence ID.  Need to change this to possibly sort
+      // on score
 
-    // Fake up a hit for comparison purposes.  Do not use for actual analysis
-    P7_HIT *the_hit = (P7_HIT *) the_hit_entry->contents;
-    the_hit->seqidx = the_entry->seq_id;
-    the_hit->sortkey = the_hit_entry->key; // need to fix this to sort on score when we make hits work
-    char *descriptors;
+      // Fake up a hit for comparison purposes.  Do not use for actual analysis
+      P7_HIT *the_hit = (P7_HIT *) the_hit_entry->contents;
+      the_hit->seqidx = the_entry->seq_id;
+      the_hit->sortkey = the_hit_entry->key; // need to fix this to sort on score when we make hits work
+      char *descriptors;
 
-    // Get the descriptors for this sequence
-    p7_shard_Find_Descriptor_Nexthigh(workernode->database_shards[workernode->compare_database], the_entry->seq_id, &descriptors);
-    the_hit->name = descriptors;
-    the_hit->acc = descriptors + (strlen(the_hit->name) +1); //+1 for termination character
-    the_hit->desc = the_hit->acc + (strlen(the_hit->acc) +1); //+1 for termination character
+      // Get the descriptors for this sequence
+      p7_shard_Find_Descriptor_Nexthigh(workernode->database_shards[workernode->compare_database], the_entry->seq_id, &descriptors);
+      the_hit->name = descriptors;
+      the_hit->acc = descriptors + (strlen(the_hit->name) +1); //+1 for termination character
+      the_hit->desc = the_hit->acc + (strlen(the_hit->acc) +1); //+1 for termination character
 
-    // Add the hit to the threads's list of hits
-    while(pthread_mutex_trylock(&(workernode->thread_state[my_id].hits_lock))){
-      // spin-wait until the lock on the hitlist is cleared.  Should never be locked for long
-    }                
-    the_hit_entry->large = workernode->thread_state[my_id].my_hits;
-    workernode->thread_state[my_id].my_hits = the_hit_entry;
-    pthread_mutex_unlock(&(workernode->thread_state[my_id].hits_lock));
-  
+      // Add the hit to the threads's list of hits
+      while(pthread_mutex_trylock(&(workernode->thread_state[my_id].hits_lock))){
+        // spin-wait until the lock on the hitlist is cleared.  Should never be locked for long
+      }                
+      the_hit_entry->large = workernode->thread_state[my_id].my_hits;
+      workernode->thread_state[my_id].my_hits = the_hit_entry;
+      pthread_mutex_unlock(&(workernode->thread_state[my_id].hits_lock));
+    }
 
+    // Done with the comparison, reset for next time
+    overthruster_result = eslFAIL;
     workernode_put_backend_queue_entry_in_pool(workernode, the_entry); // Put the entry back in the free pool
     p7_engine_Reuse(workernode->thread_state[my_id].engine);  // Reset engine structure for next comparison
     the_entry = workernode_get_backend_queue_entry_from_queue(workernode); //see if there's another backend operation to do
@@ -1654,6 +1667,7 @@ static P7_BACKEND_QUEUE_ENTRY *workernode_backend_pool_Create(int num_entries){
     ESL_ALLOC(the_entry, sizeof(P7_BACKEND_QUEUE_ENTRY));
     the_entry->sequence = NULL;
     the_entry->L = 0;
+    the_entry->do_overthruster = 0;
     the_entry->next = prev;
 
     // allocate a sparse mask to go in the entry

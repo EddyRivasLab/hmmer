@@ -11,7 +11,7 @@
 #define KP 27  // number of characters in alphabet.  Make parameter.
 #define MAX_BAND_WIDTH 1
 #define NEGINFMASK 0x80808080
-#define NUM_REPS 1000
+#define NUM_REPS 1
 #define MAX(a, b, c)\
   a = __vmaxs4(b, c);
 
@@ -24,7 +24,7 @@ int *restripe_char_to_int(char *source, int source_chars_per_vector, int dest_in
 
 #define STEP_1()\
   sv0   = __vaddss4(sv0, *rsc);\
-  rsc =  ((int *)__shfl_sync(0xffffffff, (uint64_t) rsc_precompute, (last_row_fetched-row))) + offset;\
+  rsc =  (int *)rbv[dsq[row]];\
   xE0  = __vmaxs4(xE0, sv0);
 
 #define STEP_2()\
@@ -482,13 +482,13 @@ void SSV_cuda(const __restrict__ uint8_t *dsq, int L, P7_OPROFILE *om, int8_t *r
     int rsc_length = (Q + MAX_BAND_WIDTH -1) * 128;  // 32 threaads * 4 bytes 
     int cachable_rscs = ((48 *1024) - (((KP+1)/2)*2 * sizeof(uint *)))/rsc_length; // number of rbv entries that will fit in shared memory
 
-    if(threadIdx.x < min(KP, cachable_rscs)){
+   /* if(threadIdx.x < min(KP, cachable_rscs)){
       rbv[threadIdx.x] = (int *)(rbv + ((KP+1)/2)*2) + (rsc_length/sizeof(int))*threadIdx.x;
       memcpy((void *) rbv[threadIdx.x], (void *) om->rbv[threadIdx.x], rsc_length);
-    }
-    else{
+    } 
+    else{ */
       rbv[threadIdx.x]=(int *)(om->rbv[threadIdx.x]);
-    }
+    //}
 
   }
   __syncthreads();
@@ -776,7 +776,7 @@ p7_SSVFilter_shell_sse(const ESL_DSQ *dsq, int L, const __restrict__
 
   cudaEventRecord(start);
   num_blocks.x = 1;
-  num_blocks.y = 40;
+  num_blocks.y = 1;
   num_blocks.z = 1;
   warps_per_block = 32;
   threads_per_block.x = 32;
@@ -961,15 +961,15 @@ main(int argc, char **argv)
       esl_dsqdata_Recycle(dd, chu);
     }
     printf("Saw %ld sequences\n", num_hits);
-    cudaProfilerStop();
-  /*esl_dsqdata_Close(dd);
+  cudaProfilerStop();
+  esl_dsqdata_Close(dd);
   p7_oprofile_Destroy(om);
   p7_profile_Destroy(gm);
   p7_hmm_Destroy(hmm);
   p7_bg_Destroy(bg);
   p7_hmmfile_Close(hfp);
-  esl_alphabet_Destroy(abc);
-  esl_getopts_Destroy(go); */
+  //esl_alphabet_Destroy(abc);
+  esl_getopts_Destroy(go);
   //destroy_oprofile_on_card(om, card_OPROFILE);
   exit(0);
 }

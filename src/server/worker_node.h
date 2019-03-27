@@ -75,6 +75,11 @@ typedef struct p7_backend_queue_entry{
     //! Sequence length if we're doing a one-HMM, many-sequence comparison
 	int L;
 
+	//! Does the back-end thread need to run the overthruster before proceeding to the main stage?
+	// This was added to support CUDA integration, since the CUDA code doesn't do the whole overthruster
+	// Some change needs to happen to avoid redundant work once the CUDA code stabilizess
+	int do_overthruster;
+
 	//! The sequence or HMM's index in the appropriate database
 	uint64_t seq_id;
 
