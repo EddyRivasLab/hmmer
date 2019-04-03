@@ -1,0 +1,47 @@
+MODULE = cuda
+
+OBJS = 
+
+HDRS =  
+
+PROGS =
+
+UTESTS = 
+
+STATS  = 
+
+BENCHMARKS = 
+
+EXAMPLES = 
+
+CUDA_OBJS = p7_cuda.o \
+			p7_server_cuda.o
+
+CUDA_LIB = libhmmercuda.a
+
+#Use this variable so that we only perform CUDA-specific compilation steps when we're using NVCC
+NVCC_FOUND = @NVCC_FOUND@
+
+top_srcdir   = @top_srcdir@
+top_builddir = @top_builddir@
+srcdir       = @srcdir@
+VPATH        = @srcdir@ 
+SHELL        = /bin/sh
+NVCC 		= @NVCC@
+
+
+include ../Makefile-subdirs.mk
+
+${CUDA_OBJS}:  %.o : %.cu ${HDRS} 
+ifeq ($(NVCC_FOUND),yes) 
+	${NVCC} ${MYINCDIRS} -I/usr/include/mpi -c $< ;\
+	${NVCC} -dlink $@ -o $(addsuffix .dlink.o, $(basename $(notdir $@))) ;\
+	${AR} -r ${top_builddir}/src/libhmmer.a $@ $(addsuffix .dlink.o, $(basename $(notdir $@))) ;\
+	${RANLIB} ${top_builddir}/src/libhmmer.a ;\
+else 
+
+endif
+
+
+#	${NVCC} -lib ${CUDA_OBJS} $(addsuffix .dlink.o, $(basename $(notdir ${CUDA_OBJS}))) -o ${CUDA_LIB}
+

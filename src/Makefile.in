@@ -1,5 +1,6 @@
 SUBDIRS = base         \
 	  build        \
+	  cuda \
           daemon       \
           dp_reference \
 	  dp_sparse    \
@@ -26,7 +27,6 @@ UTESTS =
 ITESTS = 
 
 EXAMPLES = 
-
 
 
 # VPATH and shell configuration
@@ -57,7 +57,7 @@ SIMDFLAGS = @SIMD_CFLAGS@
 CPPFLAGS  = @CPPFLAGS@
 LDFLAGS   = @LDFLAGS@
 DEFS      = @DEFS@
-LIBS      = -lhmmer -leasel -ldivsufsort @LIBGSL@ @MPILIBS@ @PTHREAD_LIBS@ @LIBS@ -lm
+LIBS      = -lhmmer -leasel -ldivsufsort @LIBGSL@ @MPILIBS@ @PTHREAD_LIBS@ @LIBS@ -lm 
 
 AR        = @AR@ 
 RANLIB    = @RANLIB@
@@ -66,7 +66,7 @@ INSTALL   = @INSTALL@
 ESLDIR    = @HMMER_ESLDIR@
 SADIR     = @HMMER_SADIR@
 
-MYLIBDIRS = -L${top_builddir}/${ESLDIR} -L${top_builddir}/${SADIR} -L.
+MYLIBDIRS = -L${top_builddir}/${ESLDIR} -L${top_builddir}/${SADIR} -L. -L ${srcdir}/cuda
 MYINCDIRS = -I${top_builddir}/${ESLDIR} \
             -I${top_builddir}/${SADIR} \
 	    -I. \

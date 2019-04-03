@@ -103,6 +103,16 @@
 #include "daemon/hmmdmstr.h"		      /* master process on the daemon's head node                 */
 #include "daemon/hmmpgmd2msa.h"		      /* utility for efficient MSA creation (Rob Finn)            */
 
+/* 'server' subdir: the new H4 server */
+#include "server/hmmserver.h"
+#include "server/shard.h"
+#include "server/worker_node.h"
+#include "server/master_node.h"
 
+/* 'cuda' subdir: Functions to accelerate HMMER on NVIDIA GPUs.  
+   All functions in these files are conditionally compiled to contain only C code
+   if HMMER is built on a system that does not have CUDA installed */
 
+#include "cuda/p7_cuda.h"
+#include "cuda/p7_server_cuda.h"
 

@@ -308,7 +308,6 @@ void p7_server_master_node_main(int argc, char ** argv, MPI_Datatype *server_mpi
   p7_server_masternode_Setup(num_shards, 2, database_names, masternode);
 
 
-
   // Tell all of the workers how many shards we're using
   MPI_Bcast(&num_shards, 1, MPI_INT, 0, MPI_COMM_WORLD);
 

@@ -11,6 +11,7 @@
 #include "search/modelconfig.h"
 #include "server/shard.h"
 #include "server/hmmserver.h"
+#include "cuda/p7_cuda.h"
 #ifdef __cplusplus // magic to make C++ compilers happy
 extern "C" {
 #endif
@@ -23,7 +24,7 @@ typedef char MPI_Datatype;
 #endif
 
 //! Enum that encodes whether a worker thread is in front-end or back-end mode
-typedef enum p7_thread_mode{FRONTEND, BACKEND} P7_THREAD_MODE;
+typedef enum p7_thread_mode{CPU_FRONTEND, GPU_FRONTEND, BACKEND} P7_THREAD_MODE;
 
 //! What type of search is the worker node processing?
 /*! /details IDLE: Not currently processing a search
@@ -289,6 +290,10 @@ typedef struct p7_server_workernode_state{
 
 	//! array[num_sequences] of integers, used when debugging to check that each sequence/HMM in the database is processed during a search
 	uint64_t *sequences_processed;
+
+	// Configuration of the hardware's CUDA cards, if any
+	P7_CUDA_CONFIG *cuda_config;
+
 } P7_DAEMON_WORKERNODE_STATE;
 
 /*! argument data structure for worker threads */
@@ -307,7 +312,7 @@ typedef struct p7_server_worker_argument{
  ************************************************************************/ 
 
 // Creates and initializes a P7_DAEMON_WORKERNODE_STATE object.  Do not call this directly. Call p7_server_workernode_Setup, which calls p7_server_workernode_Create
-P7_DAEMON_WORKERNODE_STATE *p7_server_workernode_Create(uint32_t num_databases, uint32_t num_shards, uint32_t my_shard, uint32_t num_threads);
+P7_DAEMON_WORKERNODE_STATE *p7_server_workernode_Create(uint32_t num_databases, uint32_t num_shards, uint32_t my_shard, uint32_t num_threads, P7_CUDA_CONFIG *cuda_config);
 
 
 // Performs all of the setup required by a worker node, including creating data structures, 

@@ -31,7 +31,7 @@ static P7_BACKEND_QUEUE_ENTRY *workernode_get_backend_queue_entry_from_queue(P7_
 static void workernode_put_backend_queue_entry_in_pool(P7_DAEMON_WORKERNODE_STATE *workernode, P7_BACKEND_QUEUE_ENTRY *the_entry);
 static void workernode_put_backend_queue_entry_in_queue(P7_DAEMON_WORKERNODE_STATE *workernode, P7_BACKEND_QUEUE_ENTRY *the_entry);
 static ESL_RED_BLACK_DOUBLEKEY *workernode_get_hit_list_entry_from_pool(P7_DAEMON_WORKERNODE_STATE *workernode, uint32_t my_id);
-static uint64_t worker_thread_get_chunk(P7_DAEMON_WORKERNODE_STATE *workernode, uint32_t my_id, volatile uint64_t *start, volatile uint64_t *end);
+uint64_t worker_thread_get_chunk(P7_DAEMON_WORKERNODE_STATE *workernode, uint32_t my_id, volatile uint64_t *start, volatile uint64_t *end);
 static int32_t worker_thread_steal(P7_DAEMON_WORKERNODE_STATE *workernode, uint32_t my_id);
 static void workernode_request_Work(uint32_t my_shard);
 static void workernode_wait_for_Work(P7_DAEMON_CHUNK_REPLY *the_reply, MPI_Datatype *server_mpitypes);
@@ -80,7 +80,7 @@ static void workernode_wait_for_Work(P7_DAEMON_CHUNK_REPLY *the_reply, MPI_Datat
  * \returns The created and initialized P7_WORKERNODE_STATE object
  */
 
-P7_DAEMON_WORKERNODE_STATE *p7_server_workernode_Create(uint32_t num_databases, uint32_t num_shards, uint32_t my_shard, uint32_t num_threads){
+P7_DAEMON_WORKERNODE_STATE *p7_server_workernode_Create(uint32_t num_databases, uint32_t num_shards, uint32_t my_shard, uint32_t num_threads, P7_CUDA_CONFIG *cuda_config){
 
   int status; // return value from ESL functions
   int i;
@@ -93,7 +93,7 @@ P7_DAEMON_WORKERNODE_STATE *p7_server_workernode_Create(uint32_t num_databases, 
   workernode->num_databases = num_databases;
   workernode->num_shards = num_shards;
   workernode->my_shard = my_shard;
-
+  workernode->cuda_config = cuda_config;
   // allocate array[num_databases] of pointers to shards
   ESL_ALLOC(workernode->database_shards, (num_databases * sizeof(P7_SHARD *)));
   for(i = 0; i < num_databases; i++){
@@ -300,6 +300,7 @@ void p7_server_workernode_Destroy(P7_DAEMON_WORKERNODE_STATE *workernode){
     free(workernode->compare_sequence);
   }
 
+  p7_cuda_config_Destroy(workernode->cuda_config);
   //finally, free the workernode structure itself
   free(workernode);
 }
@@ -333,8 +334,18 @@ void p7_server_workernode_Destroy(P7_DAEMON_WORKERNODE_STATE *workernode){
 int p7_server_workernode_Setup(uint32_t num_databases, char **database_names, uint32_t num_shards, uint32_t my_shard, uint32_t num_threads,  P7_DAEMON_WORKERNODE_STATE **workernode){
   FILE *datafile;
   char id_string[13];
-
+  P7_CUDA_CONFIG *cuda_config;
   int i;
+
+
+  cuda_config = (P7_CUDA_CONFIG *) malloc(sizeof (P7_CUDA_CONFIG));
+  if(cuda_config == NULL){
+    p7_Fail((char *)"Unable to allocate memory in p7_server_workernode_Setup\n");
+  }
+
+  if(p7_query_cuda(cuda_config) != eslOK){
+    p7_Fail((char *) "Error while attempting to detect CUDA hardware");
+  }
 
   uint32_t worker_threads;
   // First, figure out how many threads to create
@@ -347,7 +358,7 @@ int p7_server_workernode_Setup(uint32_t num_databases, char **database_names, ui
   }
 
   // Then, create the workernode object
-  *workernode = p7_server_workernode_Create(num_databases, num_shards, my_shard, worker_threads);
+  *workernode = p7_server_workernode_Create(num_databases, num_shards, my_shard, worker_threads, cuda_config);
   if(workernode == NULL){
     p7_Fail((char *)"Unable to allocate memory in p7_server_workernode_Setup\n");
   }
@@ -488,7 +499,7 @@ int p7_server_workernode_start_hmm_vs_amino_db(P7_DAEMON_WORKERNODE_STATE *worke
 
   // Set up thread state
   for(i = 0; i < workernode->num_threads; i++){
-    workernode->thread_state[i].mode = FRONTEND; // all threads start out processing front-end comparisons
+    workernode->thread_state[i].mode = CPU_FRONTEND; // all threads start out processing front-end comparisons
     workernode->thread_state[i].comparisons_queued = 0; // reset this
   }
   workernode->num_backend_threads = 0;
@@ -735,8 +746,19 @@ int p7_server_workernode_create_threads(P7_DAEMON_WORKERNODE_STATE *workernode){
     the_argument->my_id = i;
     the_argument->workernode = workernode;
 
-    if(pthread_create(&(workernode->thread_objs[i]), &attr, p7_server_worker_thread, (void *) the_argument)){
-      p7_Fail((char *) "Unable to create thread %d in p7_server_workernode_create_threads", i);
+    // The ordering of which threads are GPU and CPU is a bit important here.  By creating the GPU threads first, 
+    // the GPU threads can use their IDs to determine which CUDA device to talk to.
+    if((i < workernode->cuda_config->num_cards) && (i < workernode->num_threads -1) && (i <1)){
+      // Take out the last i<1 when we're ready to think about multiple GPUs
+      // Create as many GPU worker threads as there are cards, but make sure we create at least one CPU worker thread
+        if(pthread_create(&(workernode->thread_objs[i]), &attr, p7_server_cuda_worker_thread, (void *) the_argument)){
+          p7_Fail((char *) "Unable to create thread %d in p7_server_workernode_create_threads", i);
+        }
+      }
+      else{ // Create a CPU worker thread
+        if(pthread_create(&(workernode->thread_objs[i]), &attr, p7_server_worker_thread, (void *) the_argument)){
+          p7_Fail((char *) "Unable to create thread %d in p7_server_workernode_create_threads", i);
+      }
     }
     pthread_attr_destroy(&attr);
   }
@@ -921,10 +943,12 @@ void *p7_server_worker_thread(void *worker_argument){
         stop = 0;
         while(stop == 0){  // There's still some work left to do on the current search
           switch(workernode->thread_state[my_id].mode){
-            case FRONTEND:
+            case CPU_FRONTEND:
               // process front-end searches until we either run out of work or are told to switch to back-end
               stop = worker_thread_front_end_sequence_search_loop(workernode, my_id);
               break;
+            case GPU_FRONTEND:
+              p7_Fail((char *) "CPU worker thread was set to GPU mode, which is not allowed.");
             case BACKEND:
               // Call the back end search loop to process comparisons that require long searches until there aren't any
               // left in the queue
@@ -997,10 +1021,12 @@ void p7_server_workernode_main(int argc, char **argv, int my_rank, MPI_Datatype 
   int send_buf_length = 100 * 1024; // size of the send buffer. Default to 100kB, send code will resize as necessary
   char *hmmfile;
   char *seqfile;
-    ESL_GETOPTS    *go      = p7_CreateDefaultApp(options, 2, argc, argv, banner, usage);
+  ESL_GETOPTS    *go      = p7_CreateDefaultApp(options, 2, argc, argv, banner, usage);
   if(go == NULL){
     p7_Fail((char *) "Unable to allocate memory in workernode_main\n");
   }
+
+  
 
   ESL_ALLOC(send_buf, send_buf_length * sizeof(char));
 
@@ -1347,7 +1373,7 @@ static int worker_thread_front_end_sequence_search_loop(P7_DAEMON_WORKERNODE_STA
           while(pthread_mutex_trylock(&(workernode->backend_threads_lock))){
           // Wait for the lock
           }
-          if(workernode->thread_state[my_id].mode == FRONTEND){
+          if(workernode->thread_state[my_id].mode == CPU_FRONTEND){
             // someone hasn't already set me to BACKEND
             workernode->num_backend_threads += 1;
             workernode->thread_state[my_id].mode = BACKEND;
@@ -1598,7 +1624,7 @@ static void worker_thread_back_end_sequence_search_loop(P7_DAEMON_WORKERNODE_STA
     // enqueuing an entry in an empty backend queue and the last backend thread deciding there's no front-end work to do.
     // If we don't switch to front-end mode, we'll just call this function again immediately
 
-    workernode->thread_state[my_id].mode = FRONTEND; // change my mode to frontend
+    workernode->thread_state[my_id].mode = CPU_FRONTEND; // change my mode to frontend
     workernode->num_backend_threads -= 1;
     }
 
@@ -1628,7 +1654,7 @@ static void workernode_increase_backend_threads(P7_DAEMON_WORKERNODE_STATE *work
   uint32_t fewest_hits_thread = -1;
 
   for(which_thread = 0; which_thread < workernode->num_threads; which_thread++){
-    if((workernode->thread_state[which_thread].mode == FRONTEND) &&(workernode->thread_state[which_thread].comparisons_queued < fewest_hits)){
+    if((workernode->thread_state[which_thread].mode == CPU_FRONTEND) &&(workernode->thread_state[which_thread].comparisons_queued < fewest_hits)){
       // this thread is processing front-end queries and has queued fewer hits than any other front-end thread
       fewest_hits_thread = which_thread;
       fewest_hits = workernode->thread_state[which_thread].comparisons_queued;
@@ -1870,7 +1896,7 @@ static ESL_RED_BLACK_DOUBLEKEY *workernode_get_hit_list_entry_from_pool(P7_DAEMO
  *  \param [out] end The index of the end of the work chunk grabbed from the global queue if there was work available.
  *  \returns 1 if there was a chunk of work to get, 0 otherwise.  Calls p7_Fail() to exit the program if unable to complete.
  */
-static uint64_t worker_thread_get_chunk(P7_DAEMON_WORKERNODE_STATE *workernode, uint32_t my_id, volatile uint64_t *start, volatile uint64_t *end){
+uint64_t worker_thread_get_chunk(P7_DAEMON_WORKERNODE_STATE *workernode, uint32_t my_id, volatile uint64_t *start, volatile uint64_t *end){
  while(pthread_mutex_trylock(&(workernode->global_queue_lock))){
     // spin-wait until the lock on global queue is cleared.  Should never be locked for long
   }
@@ -2000,7 +2026,7 @@ int32_t worker_thread_steal(P7_DAEMON_WORKERNODE_STATE *workernode, uint32_t my_
   int64_t stealable_work = 0;
 
   for(i = 0; i < workernode->num_threads; i++){
-     if((workernode->work[i].start != -1) && (workernode->work[i].start < workernode->work[i].end) && (workernode->thread_state[i].mode == FRONTEND)){ 
+     if((workernode->work[i].start != -1) && (workernode->work[i].start < workernode->work[i].end) && (workernode->thread_state[i].mode == CPU_FRONTEND)){ 
     // There's some stealable work in the potential victim's queue (never steal the current task)
       stealable_work = workernode->work[i].end - workernode->work[i].start;
       if(stealable_work > most_work){

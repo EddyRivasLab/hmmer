@@ -19,7 +19,7 @@ VMX_CFLAGS    = @VMX_CFLAGS@
 CPPFLAGS      = @CPPFLAGS@
 LDFLAGS       = @LDFLAGS@
 DEFS          = @DEFS@
-LIBS          = ${LIBTMP} -lhmmer -leasel -ldivsufsort @MPILIBS@ @LIBS@ -lm
+LIBS          = ${LIBTMP} -lhmmer -leasel -ldivsufsort @MPILIBS@ @LIBS@ -lm -lcudart -lstdc++
 
 AR            = @AR@ 
 RANLIB        = @RANLIB@
@@ -35,7 +35,9 @@ SADIR        = @HMMER_SADIR@
 MYLIBDIRS    = -L${top_builddir}/${ESLDIR}\
                -L${top_builddir}/${SADIR}\
                ${LIBTMPDIR} \
-               -L${top_builddir}/src
+               -L${top_builddir}/src \
+               -L${top_builddir}/src/cuda \
+               -L/usr/local/cuda-9.2/lib64
 MYINCDIRS    = -I${top_builddir}/${ESLDIR} \
                -I${top_builddir}/${SADIR} \
 	       -I${top_builddir}/src \
@@ -44,7 +46,7 @@ MYINCDIRS    = -I${top_builddir}/${ESLDIR} \
 	       -I${top_srcdir}/src
 MYLIBDEPS    = ${LIBTMPDEP} ${top_builddir}/src/libhmmer.a ${top_builddir}/${ESLDIR}/libeasel.a ${top_builddir}/${SADIR}/libdivsufsort.a
 
-
+V=1
 # beautification magic stolen from git 
 QUIET_SUBDIR0 = +${MAKE} -C #space separator after -c
 QUIET_SUBDIR1 = 
@@ -58,7 +60,7 @@ ifndef V
 	QUIET         = @
 endif
 
-ALL_OBJS       = ${OBJS}       ${SSE_OBJS}       ${AVX_OBJS}       ${AVX512_OBJS}       ${NEON_OBJS}       ${VMX_OBJS}
+ALL_OBJS       = ${OBJS}       ${SSE_OBJS}       ${AVX_OBJS}       ${AVX512_OBJS}       ${NEON_OBJS}       ${VMX_OBJS} 
 ALL_UTESTS     = ${UTESTS}     ${SSE_UTESTS}     ${AVX_UTESTS}     ${AVX512_UTESTS}     ${NEON_UTESTS}     ${VMX_UTESTS}
 ALL_STATS      = ${STATS}      ${SSE_STATS}      ${AVX_STATS}      ${AVX512_STATS}      ${NEON_STATS}      ${VMX_STATS}
 ALL_BENCHMARKS = ${BENCHMARKS} ${SSE_BENCHMARKS} ${AVX_BENCHMARKS} ${AVX512_BENCHMARKS} ${NEON_BENCHMARKS} ${VMX_BENCHMARKS}
@@ -99,7 +101,7 @@ ${VMX_EXAMPLES}:      SIMD_CFLAGS:= $(VMX_CFLAGS)
 .PHONY: all dev check tests install uninstall distclean clean tags-append
 .FORCE:
 
-all:   libhmmer-${MODULE}.stamp ${LIBTMPDEP} ${PROGS} ${MPIPROGS}
+all:   libhmmer-${MODULE}.stamp ${LIBTMPDEP} ${PROGS} ${MPIPROGS} ${CUDA_OBJS}
 dev:   libhmmer-${MODULE}.stamp ${LIBTMPDEP} ${PROGS} ${MPIPROGS} ${UTESTS} ${STATS} ${BENCHMARKS} ${EXAMPLES}
 check: libhmmer-${MODULE}.stamp ${LIBTMPDEP} ${PROGS} ${MPIPROGS} ${UTESTS}
 tests: libhmmer-${MODULE}.stamp ${LIBTMPDEP} ${PROGS} ${MPIPROGS} ${UTESTS}

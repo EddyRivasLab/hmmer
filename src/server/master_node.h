@@ -2,6 +2,9 @@
 #include "esl_red_black.h"
 #include "shard.h"
 #include "p7_config.h"
+
+#ifndef __P7_MASTERNODE_INCLUDE
+#define __P7_MASTERNODE_INCLUDE
 #ifdef __cplusplus // magic to make C++ compilers happy
 extern "C" {
 #endif
@@ -146,4 +149,5 @@ void p7_masternode_message_handler(P7_DAEMON_MASTERNODE_STATE *masternode, P7_DA
 
 #ifdef __cplusplus // magic to make C++ compilers happy
 }
+#endif
 #endif

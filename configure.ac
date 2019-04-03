@@ -68,6 +68,7 @@ m4_include([lib/easel/m4/esl_avx.m4])
 m4_include([lib/easel/m4/esl_avx512.m4])
 m4_include([lib/easel/m4/esl_neon.m4])
 m4_include([lib/easel/m4/esl_vmx.m4])
+m4_include([lib/easel/m4/esl_cuda.m4])
 
 m4_include([lib/easel/m4/ax_mpi.m4])
 m4_include([lib/easel/m4/ax_pthread.m4])
@@ -216,11 +217,13 @@ AC_ARG_ENABLE(avx512,  [AS_HELP_STRING([--enable-avx512],  [enable our AVX-512 v
 AC_ARG_ENABLE(neon,    [AS_HELP_STRING([--enable-neon],    [enable our NEON vector code])],              enable_neon=$enableval,    enable_neon=check)
 AC_ARG_ENABLE(vmx,     [AS_HELP_STRING([--enable-vmx],     [enable our Altivec/VMX vector code])],       enable_vmx=$enableval,     enable_vmx=check)
 
+AC_ARG_ENABLE(cuda,     [AS_HELP_STRING([--enable-cuda],     [enable CUDA acceleration])],       enable_cuda=$enableval,     enable_cuda=check)
+
 AC_ARG_ENABLE(threads, [AS_HELP_STRING([--enable-threads], [enable POSIX threads parallelization])],     enable_threads=$enableval, enable_threads=check)
 AC_ARG_ENABLE(mpi,     [AS_HELP_STRING([--enable-mpi],     [enable MPI parallelization])],               enable_mpi=$enableval,     enable_mpi=no)
 
+AC_ARG_WITH(cuda,      [AS_HELP_STRING([--with-cuda=PATH],       [specify the path to the CUDA installation (default /usr/local/cuda)])],       cuda_path=$withval,         cuda_path="/usr/local/cuda")
 AC_ARG_WITH(gsl,       [AS_HELP_STRING([--with-gsl],       [use the GSL, GNU Scientific Library])],       with_gsl=$withval,         with_gsl=no)
-
 
 
 # Is the following shell code portable? Specifically, incrementing with $((n++)).
@@ -424,6 +427,26 @@ AC_COMPILE_IFELSE(
 
 CFLAGS="$esl_save_cflags"
 
+# check if we can compile CUDA code
+if test "$enable_cuda" = "yes" || test "$enable_cuda" = "check"; then
+  ESL_CUDA([
+    AC_DEFINE(eslENABLE_CUDA)
+    enable_cuda=yes
+    NVCC=$esl_nvcc
+    AC_SUBST(NVCC)
+    NVCC_FOUND=yes
+    AC_SUBST(NVCC_FOUND)
+    ],[
+    if test "$enable_cuda" = "yes"; then
+       AC_MSG_FAILURE([Could not find a CUDA installation])
+    fi
+    enable_cuda=no
+    NVCC=$CC
+    AC_SUBST(NVCC)
+    NVCC_FOUND=no
+    AC_SUBST(NVCC_FOUND)
+    ])
+fi
 
 
 # Define HAVE_GZIP if gzip is in $PATH (or if HAVE_GZIP is already set)
@@ -596,6 +619,7 @@ AC_CONFIG_FILES([
   src/Makefile-subdirs.mk
   src/base/Makefile
   src/build/Makefile
+  src/cuda/Makefile
   src/daemon/Makefile
   src/dp_reference/Makefile
   src/dp_sparse/Makefile
@@ -657,6 +681,8 @@ HMMER configuration:
            avx512 : $enable_avx512
              neon : $enable_neon
               vmx : $enable_vmx
+
+  CUDA acceleration enabled: $enable_cuda
 "
 
 if test ${PYTHON3}; then echo "
