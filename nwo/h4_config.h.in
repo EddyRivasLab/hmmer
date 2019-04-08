@@ -1,10 +1,6 @@
 #ifndef H4_CONFIGH_INCLUDED
 #define H4_CONFIGH_INCLUDED
 
-#define h4_DEFAULT_SYMFRAC         0.5
-#define h4_DEFAULT_FRAGTHRESH      0.85
-#define h4_DEFAULT_WID             0.62
-
 #undef HMMER_VERSION
 #undef HMMER_DATE
 #undef HMMER_COPYRIGHT

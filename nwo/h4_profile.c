@@ -2,6 +2,8 @@
  * 
  * Contents:
  *    1. H4_PROFILE structure
+ *    2. Counts to probabilities
+ *    3. Profile configuration: probabilities to scores
  *    
  */
 #include "h4_config.h"
@@ -15,12 +17,22 @@
 #include "general.h"        // h4_AminoFrequencies()
 
 
+/*****************************************************************
+ * 1. H4_PROFILE structure
+ *****************************************************************/
+
+
 /* Function:  h4_profile_Create()
  * Synopsis:  Allocate a new profile.
  * Incept:    SRE, Sun 08 Jul 2018 [JB1486 PIT-BOS]
  *
  * Purpose:   Allocates a new empty profile of length 
  *            <M> consensus positions, for alphabet <abc>.
+ *            
+ *            The <M> and <abc> fields in the returned profile are
+ *            set. The <abc> field is only a copy of the <abc>
+ *            ptr. Because of this use of a ptr copy, caller needs to
+ *            keep <abc> (unchanged) while this profile is in play.
  *
  * Args:      abc : digital alphabet
  *            M   : model length in nodes (consensus positions)
@@ -133,11 +145,74 @@ h4_profile_CreateBody(H4_PROFILE *hmm, const ESL_ALPHABET *abc, int M)
   return eslEMEM;
 }
 
+
+/* Function:  h4_profile_Clone()
+ * Synopsis:  Duplicate a profile into newly allocated space.
+ * Incept:    SRE, Fri 05 Apr 2019
+ *
+ * Purpose:   Make a duplicate of <hmm> in freshly allocated
+ *            space. Return a pointer to the new profile.
+ *
+ * Throws:    <NULL> on allocation failure.
+ */
+H4_PROFILE *
+h4_profile_Clone(const H4_PROFILE *hmm)
+{
+  H4_PROFILE *new = NULL;
+
+  if (( new = h4_profile_Create(hmm->abc, hmm->M)) == NULL) return NULL;
+  h4_profile_Copy(hmm, new);
+  return new;
+}
+
+
+/* Function:  h4_profile_Copy()
+ * Synopsis:  Copy a profile into existing space.
+ * Incept:    SRE, Fri 05 Apr 2019
+ *
+ * Purpose:   Copy profile <src> to <dst>, where space for
+ *            <dst> is already allocated.
+ *            
+ *            Currently assumes that <dst->M> is exactly the same as
+ *            <src->M>: the profiles are exactly the same allocated
+ *            size. We might relax this in the future, allowing there
+ *            to be a difference between allocated size and used size,
+ *            and then we'd just need <src->M> <= <dst->allocM>.
+ *            
+ *            Also assumes that <dst->abc> is the same type as
+ *            <src->abc>, so that they're identical and their sizes
+ *            match. Usually, the ptrs themselves will be identical -
+ *            pointing to the same one alphabet structure in the
+ *            caller - but this isn't necessary, they could be two
+ *            separately allocated but identical alphabets.
+ *
+ * Returns:   <eslOK> on success.
+ *
+ * Throws:    (no abnormal error conditions)
+ */
+int
+h4_profile_Copy(const H4_PROFILE *src, H4_PROFILE *dst)
+{
+  ESL_DASSERT1(( src->M == dst->M ));
+  ESL_DASSERT1(( src->abc->type == dst->abc->type ));
+
+  esl_mat_FCopy(src->t,   src->M+1,     h4_NT,       dst->t);
+  esl_mat_FCopy(src->e,   src->M+1,     src->abc->K, dst->e);
+  esl_vec_FCopy(src->f,                 src->abc->K, dst->f);
+  esl_mat_FCopy(src->tsc, src->M+1,     h4_NTSC,     dst->tsc);
+  esl_mat_FCopy(src->rsc, src->abc->Kp, src->M+1,    dst->rsc);
+
+  dst->flags = src->flags;
+  return eslOK;
+}
+
+
+
 /* Function:  h4_profile_Sizeof()
  * Synopsis:  Returns allocated size of a profile, in bytes.
  */
 size_t
-h4_profile_Sizeof(H4_PROFILE *hmm)
+h4_profile_Sizeof(const H4_PROFILE *hmm)
 {
   size_t n = 0;
   n += sizeof(H4_PROFILE);
@@ -169,6 +244,9 @@ h4_profile_Destroy(H4_PROFILE *hmm)
 }
 
 
+/*****************************************************************
+ * 2. Counts to probabilities.
+ *****************************************************************/
 
 /* Function:  h4_profile_SetConventions()
  * Synopsis:  Set the fixed edge conditions in a H4 profile HMM.
@@ -198,16 +276,29 @@ h4_profile_SetConventions(H4_PROFILE *hmm)
 }
 
 
+/* Function:  h4_profile_Renormalize()
+ * Synopsis:  Renormalize profile probability params.
+ * Incept:    SRE, Fri 05 Apr 2019
+ *
+ * Purpose:   Renormalize the probability parameters in profile <hmm>,
+ *            i.e. transitions <hmm->t> and emissions <hmm->e>.
+ *
+ *            Assures that the fixed boundary conditions are set properly.
+ *
+ * Returns:   <eslOK> on success.
+ *
+ * Throws:    (no abnormal error conditions)
+ */
 int
 h4_profile_Renormalize(H4_PROFILE *hmm)
 {
   float sum;
   int   k;
 
-  for (k = 1; k <= hmm->M; k++) esl_vec_FNorm(hmm->e[k], hmm->abc->K);
-  for (k = 1; k <  hmm->M; k++) esl_vec_FNorm(hmm->t[k],   3);
-  for (k = 1; k <  hmm->M; k++) esl_vec_FNorm(hmm->t[k]+3, 3);
-  for (k = 1; k <  hmm->M; k++) esl_vec_FNorm(hmm->t[k]+6, 3);
+  for (k = 1; k <= hmm->M; k++) esl_vec_FNorm(hmm->e[k], hmm->abc->K); // M0 doesn't exist. Keep at conventions.
+  for (k = 1; k <  hmm->M; k++) esl_vec_FNorm(hmm->t[k],   3); // M states. M0 doesn't exist, Mm forced to Mm->E. Keep them untouched, at conventions.
+  for (k = 1; k <  hmm->M; k++) esl_vec_FNorm(hmm->t[k]+3, 3); // I states. I0, IM don't exist. Keep untouched, at conventions.
+  for (k = 1; k <  hmm->M; k++) esl_vec_FNorm(hmm->t[k]+6, 3); // D states. D0 doesn't exist, Dm is forced to Dm->E. Keep untouched, at conventions.
 
   /* You have to be unusually careful with the t[0] match transitions,
    * which are the G->{MD}1 glocal entry transitions. t[0][TMI] must
@@ -222,7 +313,6 @@ h4_profile_Renormalize(H4_PROFILE *hmm)
 
   return eslOK;
 }
-
 
 
 /* Function:  h4_profile_CalculateOccupancy()

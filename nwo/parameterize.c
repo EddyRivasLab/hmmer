@@ -15,13 +15,15 @@
  *            parameters <pri>, convert <hmm> from counts to
  *            probabilities (mean posterior parameter estimates).
  *
- * Args:      
- *
- * Returns:   
- *
- * Throws:    (no abnormal error conditions)
- *
- * Xref:      
+ *            Sets model parameter fixed boundary conditions
+ *            correctly.  This allows entropy weighting to blindly
+ *            rescale all values in a model (almost of which are
+ *            counts, but some are 1.0 probabilities in fixed boundary
+ *            conditions that aren't observed counts) before 
+ *            calling <h4_Parameterize()> on the reweighted counts.
+ *            
+ * Returns:   <eslOK> on success, and <hmm> is converted from 
+ *            counts to mean posterior probability parameters.           
  */
 int
 h4_Parameterize(H4_PROFILE *hmm, const H4_PRIOR *pri)

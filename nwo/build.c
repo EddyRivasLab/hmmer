@@ -12,6 +12,7 @@
 
 #include "easel.h"
 #include "esl_alphabet.h"
+#include "esl_matrixops.h"
 #include "esl_msa.h"
 #include "esl_msaweight.h"
 #include "esl_vectorops.h"
@@ -22,6 +23,7 @@
 #include "h4_profile.h"
 
 #include "build.h"
+#include "eweight.h"
 #include "parameterize.h"
 
 
@@ -58,86 +60,115 @@ static int collect_counts      (const ESL_MSA *msa, const int8_t *fragassign, co
 int
 h4_Build(H4_BUILD_CONFIG *cfg, ESL_MSA *msa, H4_PROFILE **ret_hmm, char *errbuf)
 {
-  H4_PROFILE *hmm        = NULL;
-  H4_PRIOR   *pri        = NULL;
-  int8_t     *fragassign = NULL;
-  int8_t     *matassign  = NULL;
-  int         M          = 0;
+  int         arch_strategy  = (cfg ? cfg->arch_strategy : h4BUILD_ARCH_RULES);
+  float       symfrac        = (cfg ? cfg->symfrac       : h4BUILD_SYMFRAC);
+  float       fragthresh     = (cfg ? cfg->fragthresh    : h4BUILD_FRAGTHRESH);
+  int         wgt_strategy   = (cfg ? cfg->wgt_strategy  : h4BUILD_WGT_PB);
+  float       wid            = (cfg ? cfg->wid           : h4BUILD_WID);
+  int         effn_strategy  = (cfg ? cfg->effn_strategy : h4BUILD_EFFN_EWGT);
+  float       re_target;
+  float       re_sigma       = (cfg ? cfg->re_sigma      : h4BUILD_ESIGMA);
+  float       n_eff          = (cfg ? cfg->effn_set      : (float) msa->nseq);    // default eweighting will reset this.
+  H4_PRIOR   *pri            = ((cfg && cfg->pri) ? cfg->pri : h4_prior_Create(msa->abc));
+  int         stop_early     = (cfg ? cfg->stop_early    : FALSE);
+  ESL_MSAWEIGHT_CFG *wgt_cfg = NULL;
+  H4_PROFILE *hmm            = NULL;
+  int8_t     *fragassign     = NULL;
+  int8_t     *matassign      = NULL;
+  int         M              = 0;
+
   int         apos;
-  int         status;
+  int         status = eslOK;
 
   ESL_DASSERT1(( msa->flags && eslMSA_DIGITAL ));
+  ESL_DASSERT1(( !cfg || !cfg->abc || cfg->abc->type == msa->abc->type ));
+
+  if      (cfg)                        re_target = cfg->re_target;
+  else if (msa->abc->type == eslAMINO) re_target = h4BUILD_ETARG_PRT;
+  else if (msa->abc->type == eslDNA)   re_target = h4BUILD_ETARG_NUC;
+  else if (msa->abc->type == eslRNA)   re_target = h4BUILD_ETARG_NUC;
+  else                                 re_target = h4BUILD_ETARG_OTH;
 
   ESL_ALLOC(fragassign, sizeof(int8_t) * msa->nseq);
   ESL_ALLOC(matassign,  sizeof(int8_t) * (msa->alen + 1));
-  matassign[0] = 0; // unused; convention.
+  if (( wgt_cfg = esl_msaweight_cfg_Create() ) == NULL) { status = eslEMEM; goto ERROR; }
+  matassign[0] = 0; // unused; convention.c
   if (errbuf) errbuf[0] = '\0';
 
-  if (cfg) pri = cfg->pri;
-  else     pri = h4_prior_Create(msa->abc);
 
   // validate_msa()
   // esl_msa_Checksum()
 
-  /* x. Set relative weights, in msa->wgt.
+  /* 1. Define which sequences are considered to be fragments (local alignments).
    */
-  status = eslOK;
-  if      (! cfg || cfg->wgt_strategy == h4_WGT_PB)     status = esl_msaweight_PB(msa);
-  else if (         cfg->wgt_strategy == h4_WGT_GIVEN)  status = eslOK;
-  else if (         cfg->wgt_strategy == h4_WGT_GSC)    status = esl_msaweight_GSC(msa);
-  else if (         cfg->wgt_strategy == h4_WGT_BLOSUM) status = esl_msaweight_BLOSUM(msa, cfg->wid);
-  else if (         cfg->wgt_strategy == h4_WGT_NONE)   esl_vec_DSet(msa->wgt, msa->nseq, 1.);
-  else    ESL_EXCEPTION(eslEINCONCEIVABLE, "no such weighting strategy");
-  if (status != eslOK) goto ERROR;
+  if (( status = mark_fragments(msa, fragthresh, fragassign)) != eslOK) goto ERROR;
 
-  /* x. Define which sequences are considered to be fragments (local alignments).
+  /* 2. Set relative weights, in msa->wgt.
+   *    PB weighting determines consensus columns, so share the fragthresh/symfrac params.
    */
-  status = mark_fragments(msa,
-			  cfg ? cfg->fragthresh : h4_DEFAULT_FRAGTHRESH,
-			  fragassign);
-  if (status != eslOK) goto ERROR;
+  wgt_cfg->fragthresh = fragthresh;
+  wgt_cfg->symfrac    = symfrac;
 
-  /* x. Define which columns are considered to be consensus.
+  switch (wgt_strategy) {
+  case h4BUILD_WGT_NONE:   esl_vec_DSet(msa->wgt, msa->nseq, 1.);                                         break;
+  case h4BUILD_WGT_GIVEN:                                                                                 break;
+  case h4BUILD_WGT_PB:     if ((status = esl_msaweight_PB_adv(wgt_cfg, msa, NULL))  != eslOK) goto ERROR; break;
+  case h4BUILD_WGT_GSC:    if ((status = esl_msaweight_GSC(msa))                    != eslOK) goto ERROR; break;
+  case h4BUILD_WGT_BLOSUM: if ((status = esl_msaweight_BLOSUM(msa, wid))            != eslOK) goto ERROR; break;
+  default: esl_fatal("no such weighting strategy");
+  }
+  
+  /* 3. Define which columns are considered to be consensus.
    */
-  if      (! cfg || cfg->arch_strategy == h4_ARCH_SYMFRAC)  status = consensus_by_symfrac(msa, cfg ? cfg->symfrac : h4_DEFAULT_SYMFRAC, fragassign, matassign);
-  else if (         cfg->arch_strategy == h4_ARCH_GIVEN)    status = consensus_by_hand(msa, matassign, errbuf);
-  else    ESL_EXCEPTION(eslEINCONCEIVABLE, "no such profile architecture strategy");
-  if (status != eslOK) goto ERROR;
+  switch (arch_strategy) {
+  case h4BUILD_ARCH_RULES: if ((status = consensus_by_symfrac(msa, symfrac, fragassign, matassign)) != eslOK) goto ERROR; break;
+  case h4BUILD_ARCH_GIVEN: if ((status = consensus_by_hand(msa, matassign, errbuf))                 != eslOK) goto ERROR; break;
+  }
 
   /* Allocate the new profile.
    */
   for (apos = 1; apos <= msa->alen; apos++) if (matassign[apos]) M++;
   hmm = h4_profile_Create(msa->abc, M);
 
-  /* x. Collect observed (relative-weighted) counts from alignment in hmm->t[] and ->e[]
+  /* Collect observed (relative-weighted) counts from alignment in hmm->t[] and ->e[]
    */
   if ((status = collect_counts(msa, fragassign, matassign, hmm)) != eslOK) goto ERROR;
 
-  if (cfg && cfg->stop_after_counting) goto DONE;
+  if (stop_early) goto DONE;
 
   // mask_columns();
 
-  // effective_seqnumber();
+  /* Determine and apply effective sequence number
+   */
+  if (effn_strategy == h4BUILD_EFFN_EWGT)
+    {
+      re_target = ESL_MAX(re_target, (re_sigma - log2f( 2.0 / ((float) M * (float) (M+1)))) / (float) M); // assure a minimum total expected score, for short models. [J5/36]
 
-  /* x. Convert counts to mean posterior probability parameters
+      if (( status = h4_EntropyWeight(hmm, pri, msa->nseq, re_target, &n_eff)) != eslOK) goto ERROR;
+  
+      esl_mat_FScale(hmm->e, hmm->M+1, hmm->abc->K,  (n_eff / (float) msa->nseq));
+      esl_mat_FScale(hmm->t, hmm->M+1, h4_NT,        (n_eff / (float) msa->nseq));
+    }
+  else if (effn_strategy == h4BUILD_EFFN_GIVEN)
+    {
+      esl_mat_FScale(hmm->e, hmm->M+1, hmm->abc->K,  (n_eff / (float) msa->nseq));
+      esl_mat_FScale(hmm->t, hmm->M+1, h4_NT,        (n_eff / (float) msa->nseq));
+    }
+
+  /* Convert counts to mean posterior probability parameters
    */
   h4_Parameterize(hmm, pri);
 
-  // parameterize();
   // annotate();
   // calibrate();
   // make_post_msa()
 
- DONE:
-  *ret_hmm = hmm;
-  if (! cfg) h4_prior_Destroy(pri);
-  free(fragassign);
-  free(matassign);
-  return eslOK;
 
+ DONE:
  ERROR:
-  *ret_hmm = NULL;
-  if (! cfg) h4_prior_Destroy(pri);
+  if (status == eslOK) *ret_hmm = hmm; else { *ret_hmm = NULL; h4_profile_Destroy(hmm); }
+  esl_msaweight_cfg_Destroy(wgt_cfg);
+  if (! cfg || ! cfg->pri) h4_prior_Destroy(pri); // if <cfg> provided the prior, <cfg> is managing that memory, not us.
   free(fragassign);
   free(matassign);
   return status;
@@ -250,7 +281,7 @@ mark_fragments(const ESL_MSA *msa, float fragthresh, int8_t *fragassign)
   for (idx = 0; idx < msa->nseq; idx++)
     {
       for (lpos = 1;         lpos <= msa->alen; lpos++) if (esl_abc_XIsResidue(msa->abc, msa->ax[idx][lpos])) break;
-      for (rpos = msa->alen; rpos >= 1;         rpos++) if (esl_abc_XIsResidue(msa->abc, msa->ax[idx][rpos])) break;
+      for (rpos = msa->alen; rpos >= 1;         rpos--) if (esl_abc_XIsResidue(msa->abc, msa->ax[idx][rpos])) break;
       /* L=0 sequence? lpos == msa->alen+1, rpos == 0; lpos > rpos. 
        * alen=0 alignment? lpos == 1, rpos == 0; lpos > rpos.
        */
@@ -324,13 +355,24 @@ h4_build_config_Create(const ESL_ALPHABET *abc)
 
   ESL_ALLOC(cfg, sizeof(H4_BUILD_CONFIG));
 
-  cfg->arch_strategy       = h4_ARCH_SYMFRAC;
-  cfg->wgt_strategy        = h4_WGT_PB;
-  cfg->symfrac             = h4_DEFAULT_SYMFRAC;
-  cfg->fragthresh          = h4_DEFAULT_FRAGTHRESH;
-  cfg->wid                 = h4_DEFAULT_WID;
-  cfg->pri                 = h4_prior_Create(abc);
-  cfg->stop_after_counting = FALSE;
+  cfg->arch_strategy       = h4BUILD_ARCH_RULES;
+  cfg->symfrac             = h4BUILD_SYMFRAC;
+  cfg->fragthresh          = h4BUILD_FRAGTHRESH;
+
+  cfg->wgt_strategy        = h4BUILD_WGT_PB;
+  cfg->wid                 = h4BUILD_WID;
+
+  cfg->effn_strategy       = h4BUILD_EFFN_EWGT;
+  switch (abc->type) {
+  case eslAMINO: cfg->re_target = h4BUILD_ETARG_PRT;  break;
+  case eslDNA:   cfg->re_target = h4BUILD_ETARG_NUC;  break;
+  case eslRNA:   cfg->re_target = h4BUILD_ETARG_NUC;  break;
+  default:       cfg->re_target = h4BUILD_ETARG_OTH;  break;
+  }
+  cfg->re_sigma            = h4BUILD_ESIGMA;
+  cfg->effn_set            = -1.;
+  cfg->pri                 = NULL;
+  cfg->stop_early          = FALSE;
   cfg->abc                 = abc;
   return cfg;
 
@@ -429,7 +471,7 @@ main(int argc, char **argv)
   if (status != eslOK) esl_msafile_OpenFailure(afp, status);
 
   cfg = h4_build_config_Create(abc);
-  cfg->stop_after_counting = TRUE;
+  cfg->stop_early = TRUE;
 
   while ((status = esl_msafile_Read(afp, &msa)) == eslOK)
     {
@@ -533,7 +575,7 @@ main(int argc, char **argv)
       ESL_ALLOC(old_fragassign, sizeof(int8_t) * msa->nseq);
       ESL_ALLOC(new_fragassign, sizeof(int8_t) * msa->nseq);
       
-      if ((status = mark_fragments(msa, h4_DEFAULT_FRAGTHRESH, new_fragassign)) != eslOK) goto ERROR;
+      if ((status = mark_fragments(msa, h4BUILD_FRAGTHRESH, new_fragassign)) != eslOK) goto ERROR;
 
       /* Reproduce the H3 calculation, while setting flag instead of marking ~ in the msa */
       for (idx = 0; idx < msa->nseq; idx++)

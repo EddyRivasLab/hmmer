@@ -17,6 +17,8 @@
  *  t[M] = [ 1,0,0; 1,0,0; 1,0,0 ]. None free; these are t(M->E), Im doesn't exist, t(D->E).
  *  e[0] = [ 1,0..0].
  * So, if you're setting free params: 2 values at t[0], t[1..M-1], e[1..M] 
+ *
+ * t,e,tsc,rsc are standard Easel 2D arrays, and can be manipulated with esl_mat_F*() functions.
  */
 typedef struct {
   int     M;                // model length in nodes (consensus positions)
@@ -119,7 +121,9 @@ typedef struct {
 extern H4_PROFILE *h4_profile_Create(const ESL_ALPHABET *abc, int M);
 extern H4_PROFILE *h4_profile_CreateShell(void);
 extern int         h4_profile_CreateBody(H4_PROFILE *hmm, const ESL_ALPHABET *abc, int M);
-extern size_t      h4_profile_Sizeof (H4_PROFILE *hmm);
+extern H4_PROFILE *h4_profile_Clone  (const H4_PROFILE *hmm);
+extern int         h4_profile_Copy   (const H4_PROFILE *src, H4_PROFILE *dst);
+extern size_t      h4_profile_Sizeof (const H4_PROFILE *hmm);
 extern void        h4_profile_Destroy(H4_PROFILE *hmm);
 
 extern int         h4_profile_SetConventions(H4_PROFILE *hmm);

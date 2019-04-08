@@ -1,0 +1,7 @@
+
+#ifndef h4MODELSTATS_INCLUDED
+#define h4MODELSTATS_INCLUDED
+
+extern float h4_MeanMatchKL(H4_PROFILE *hmm);
+
+#endif // h4MODELSTATS_INCLUDED

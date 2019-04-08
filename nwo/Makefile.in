@@ -9,8 +9,10 @@ OBJS   = \
 	h4_profile.o        \
 	h4_refmx.o          \
 	build.o             \
+	eweight.o           \
 	general.o           \
 	modelsample.o       \
+	modelstats.o        \
 	parameterize.o      \
 	reference_trace.o   \
 	reference_viterbi.o \
@@ -32,8 +34,10 @@ HDRS = \
 	h4_profile.h        \
 	h4_refmx.h          \
 	build.h             \
+	eweight.h           \
 	general.h           \
 	modelsample.h       \
+	modelstats.h        \
 	parameterize.h      \
 	reference_trace.h   \
 	reference_viterbi.h \
@@ -169,8 +173,15 @@ ${VMX_EXAMPLES}:      SIMD_CFLAGS:= $(VMX_CFLAGS)
 .FORCE:
 
 all:    ${PROGS} 
-check:  ${PROGS} ${UTESTS}
 dev:    ${PROGS} ${UTESTS} ${EXPERIMENTS} ${STATS} ${BENCHMARKS} ${EXAMPLES}
+
+check:  ${PROGS} ${UTESTS}
+	@command -v python3 >/dev/null 2>&1 || { echo >&2 "python3 is required for 'make check', but is not in your PATH. Aborting."; exit 1; }
+	@echo 
+	@echo Running HMMER NWO test suite...
+	@echo
+	@${top_srcdir}/lib/easel/devkit/sqc 1 nwo_tests.sqc .. ${srcdir}/..
+
 
 # Programs build from their .c's directly. They are not included in libhmmer.a.
 ${PROGS}: % : %.c  libhmmer.a ${HDRS}

@@ -524,7 +524,10 @@ h4_path_Count(const H4_PATH *pi, const ESL_DSQ *dsq, float wgt, H4_PROFILE *hmm)
     }
 
   /* Count transitions prv->cur.
-   * Only transitions into M/I/D states need to be counted.
+   * Only transitions into M/I/D states are counted.
+   * Do not count {MD}k->E exit transitions, even in glocal alignments.
+   * Do not count L->Mk entry transitions.
+   * Do count G->{MD}1 glocal entry transitions, in t[0].
    */
   yprv = h4P_N;
   // don't need to init k. it gets init'ed on G/L
