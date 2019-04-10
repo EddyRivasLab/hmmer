@@ -348,7 +348,7 @@ main(int argc, char **argv)
 
     symfrac = esl_opt_GetReal(go, "--symfrac");
 
-    if ((status =  esl_msa_MarkFragments(msa, esl_opt_GetReal(go, "--fragthresh")))           != eslOK) goto ERROR;
+    if ((status =  esl_msa_MarkFragments_old(msa, esl_opt_GetReal(go, "--fragthresh")))           != eslOK) goto ERROR;
 
     // Determine weighted sym freq in each column, build a map of model mask coordinates to alignment coords
     ESL_ALLOC(map, sizeof(int)     * (msa->alen+1));
