@@ -42,7 +42,7 @@ if (! -r "$srcdir/testsuite/$alignment")  { die "FAIL: can't read msa $alignment
 $cmd = "$builddir/src/hmmbuild $tmppfx.hmm $srcdir/testsuite/$alignment";
 $output = do_cmd($cmd);
 if ($? != 0) { die "FAIL: hmmbuild failed unexpectedly\n"; } 
-if ($output !~ /1     3box                    22    22    20    75    22.00  1.415/) {
+if ($output !~ /1     3box                    22    22    20    75    22.00  1.413/) {
 	die "FAIL: hmmbuild failed to build correctly\n";
 }
 $output = do_cmd( "grep MAXL $tmppfx.hmm" );
@@ -71,20 +71,20 @@ if ($? != 0) { die "FAIL: nhmmer failed unexpectedly\n"; }
 $expect = 
 q[
 Target sequences:                          1  \(9000000 residues searched\)
-Residues passing SSV filter:          174175  \(0.0194\); expected \(0.02\)
-Residues passing bias filter:         145307  \(0.0161\); expected \(0.02\)
-Residues passing Vit filter:           18396  \(0.00204\); expected \(0.003\)
+Residues passing SSV filter:          181118  \(0.0201\); expected \(0.02\)
+Residues passing bias filter:         150796  \(0.0168\); expected \(0.02\)
+Residues passing Vit filter:           17527  \(0.00195\); expected \(0.003\)
 Residues passing Fwd filter:             415  \(4.61e-05\); expected \(3e-05\)
-Total number of hits:                      4  \(8e-06\)];
+Total number of hits:                      4  \(8.33e-06\)];
 if ($output !~ /$expect/s) {
     die "FAIL: nhmmer failed search test 1\n";
 }
 
 $expect =   q[
-       0.45   13.6   5.2  random   4499980 4499998\s+
-        1.7   11.8   4.4  random   1979941 1979960\s+
-        1.8   11.7   4.2  random   3299961 3299978\s+
-        8.2    9.7   2.3  random   2354832 2354818]; 
+        0.3   14.1   4.3  random   4499980 4500000\s+
+       0.59   13.2   3.7  random   3299961 3299979\s+
+        1.4   12.1   4.4  random   1979941 1979960\s+
+        8.4    9.6   2.3  random   2354832 2354818];
 if ($output !~ /$expect/s) {
     die "FAIL: nhmmer failed search test 2\n";
 }
@@ -92,30 +92,28 @@ if ($output !~ /$expect/s) {
 $cmd = "$builddir/src/nhmmer --tformat fasta --watson $tmppfx.hmm $database";
 $output = do_cmd($cmd);
 if ($? != 0) { die "FAIL: nhmmer failed unexpectedly\n"; }
-$expect = 
-q[
+$expect = q[
 Target sequences:                          1  \(4500000 residues searched\)
-Residues passing SSV filter:           84366  \(0.0187\); expected \(0.02\)
-Residues passing bias filter:          70869  \(0.0157\); expected \(0.02\)
-Residues passing Vit filter:            9070  \(0.00202\); expected \(0.003\)
+Residues passing SSV filter:           88023  \(0.0196\); expected \(0.02\)
+Residues passing bias filter:          72871  \(0.0162\); expected \(0.02\)
+Residues passing Vit filter:            8995  \(0.002\); expected \(0.003\)
 Residues passing Fwd filter:             228  \(5.07e-05\); expected \(3e-05\)
-Total number of hits:                      3  \(1.27e-05\)];
-
+Total number of hits:                      3  \(1.33e-05\)];
 
 if ($output !~ /$expect/s) {
     die "FAIL: nhmmer failed search test 3\n";
 }
 $expect = 
      q[
-       0.22   13.6   5.2  random   4499980 4499998\s+
-       0.86   11.8   4.4  random   1979941 1979960\s+
-       0.89   11.7   4.2  random   3299961 3299978]; 
+       0.15   14.1   4.3  random   4499980 4500000\s+
+        0.3   13.2   3.7  random   3299961 3299979\s+
+       0.69   12.1   4.4  random   1979941 1979960]; 
 
 if ($output !~ /$expect/s) {
     die "FAIL: nhmmer failed search test 4\n";
 }
 
-print "ok.\n";
+print "ok\n";
 unlink "$tmppfx.hmm";
 unlink "$tmppfx.A";
 unlink "$tmppfx.B";
