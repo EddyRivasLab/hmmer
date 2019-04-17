@@ -483,9 +483,10 @@ p7_seqcache_Open_shard(char *seqfile, P7_SEQCACHE **ret_cache, char *errbuf, int
       /* copy the digitized sequence */
       if(res_size < res_mem_used + sq->n +1){
   //      fprintf(stderr, "Reallocing residue_mem to size %llu\n", res_mem_used+ sq->n + 1);
-         ESL_REALLOC(cache->residue_mem, res_mem_used + sq->n + 1);
+         ESL_REALLOC(cache->residue_mem, res_mem_used + (1024 * 1024)); // add a megabyte of space at a time to reduce
+         // the number of reallocations we do
          res_ptr = cache->residue_mem + res_mem_used;
-         res_size = res_mem_used + sq->n + 1;
+         res_size = res_mem_used + (1024 * 1024);
       }
    //   printf("Copying %llu bytes into residue array of size %llu with %llu bytes already used\n", (sq->n +1), res_size, res_mem_used);
       memcpy(res_ptr, sq->dsq, sq->n + 1);
@@ -495,9 +496,9 @@ p7_seqcache_Open_shard(char *seqfile, P7_SEQCACHE **ret_cache, char *errbuf, int
       /* copy the index to the header */
       if(hdr_size < hdr_mem_used + 10){
 //        fprintf(stderr, "Reallocing hdr_mem to size %llu\n", hdr_mem_used +10);
-        ESL_REALLOC(cache->header_mem, hdr_mem_used + 10);
+        ESL_REALLOC(cache->header_mem, hdr_mem_used + (100 * 1024)); // add 100k at a time to reduces the number of reallocs
         hdr_ptr = cache->header_mem + hdr_mem_used;
-        hdr_size = hdr_mem_used + 10;
+        hdr_size = hdr_mem_used + (100 * 1024);
       }
       strcpy(hdr_ptr, buffer);
       hdr_ptr += 10;
