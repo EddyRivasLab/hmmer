@@ -345,13 +345,22 @@ static int
 collect_counts(const ESL_MSA *msa, const ESL_BITFIELD *fragassign, const int8_t *matassign, H4_PROFILE *hmm)
 {
   H4_PATH *pi = h4_path_Create();
+  int      lcol, rcol;
   int      idx;
   int      status = eslOK;
   
+  /* Find leftmost and rightmost consensus columns first, before calling
+   * a bunch of <h4_path_InferLocal()> and <_Glocal()>, as an optimization.
+   */
+  for (lcol = 1;    lcol <= msa->alen; lcol++) if (matassign[lcol]) break;
+  for (rcol = msa->alen; rcol >= 1;    rcol--) if (matassign[rcol]) break;
+  /* if none: then now lcol=alen+1, rcol=0. don't let this happen */
+  if (rcol == 0) ESL_EXCEPTION(eslEINVAL, "matassign defined no consensus columns");
+
   for (idx = 0; idx < msa->nseq; idx++)
     {
-      if ( esl_bitfield_IsSet(fragassign, idx) )  status = h4_path_InferLocal (msa->abc, msa->ax[idx], msa->alen, matassign, pi);
-      else                                        status = h4_path_InferGlocal(msa->abc, msa->ax[idx], msa->alen, matassign, pi);
+      if ( esl_bitfield_IsSet(fragassign, idx) )  status = h4_path_InferLocal (msa->abc, msa->ax[idx], msa->alen, matassign, lcol, rcol, pi);
+      else                                        status = h4_path_InferGlocal(msa->abc, msa->ax[idx], msa->alen, matassign, lcol, rcol, pi);
       if (status != eslOK) goto ERROR;
 
       // SRE DEBUGGING
