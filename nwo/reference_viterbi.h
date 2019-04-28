@@ -2,6 +2,7 @@
  */
 #ifndef h4REFERENCE_VITERBI_INCLUDED
 #define h4REFERENCE_VITERBI_INCLUDED
+#include "h4_config.h"
 
 #include "easel.h"
 

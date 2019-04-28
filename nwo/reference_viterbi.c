@@ -39,14 +39,16 @@
  * Synopsis:  Reference implementation of the Viterbi algorithm.
  *
  * Purpose:   Given a target sequence <dsq> of length <L> residues, a
- *            query profile <hmm> in mode <mo>, and a DP matrix <rmx>; do the
- *            Viterbi optimal alignment algorithm.  Return the Viterbi
- *            score in bits in <*opt_sc>, if caller provides it.
- *            Return the Viterbi optimal trace in <*opt_pi>, if caller
- *            provides an allocated trace structure.
+ *            query profile <hmm> in mode <mo>, and a DP
+ *            matrix <rmx>; do the Viterbi optimal alignment
+ *            algorithm.  Return the Viterbi score in bits in
+ *            <*opt_sc>, if caller provides it.  Return the Viterbi
+ *            optimal trace in <*opt_pi>, if caller provides an
+ *            allocated trace structure.
  *            
- *            <rmx> will be reallocated if needed, so it can be reused
- *            from a previous calculation, even a smaller one.
+ *            <rmx> is allocated by the caller but can be any size; it
+ *            will be reallocated if needed, so it can be reused from
+ *            a previous calculation, even a smaller one.
  *            
  * Args:      dsq     - digital target sequence 1..L
  *            L       - length of <dsq> in residues
