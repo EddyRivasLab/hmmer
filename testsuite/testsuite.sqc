@@ -394,8 +394,8 @@
 1 exercise  hmmbuild_variation    !testsuite/i1-build-variation.sh!     @src/hmmbuild@   !testsuite/Caudal_act.sto!          %OUTFILES%
 1 exercise  hmmscan_variation     !testsuite/i2-search-variation.sh!    @src/hmmscan@    %MINIFAM.HMM%   %TESTSEQ% %OUTFILES%
 1 exercise  hmmsearch_variation   !testsuite/i2-search-variation.sh!    @src/hmmsearch@  %CAUDAL.HMM%    %TESTDB%  %OUTFILES%
-1 exercise  phmmer_variation      !testsuite/i3-seqsearch-variation.sh! @src/phmmer@     %TESTSEQ%       %TESTDB%  %OUTFILES%
-3 exercise  jackhmmer_variation   !testsuite/i3-seqsearch-variation.sh! @src/jackhmmer@  %TESTSEQ%       %TESTDB%  %OUTFILES%
+1 exercise  phmmer_variation      !testsuite/i3-seqsearch-variation.sh! @src/phmmer@                               %OUTFILES%
+3 exercise  jackhmmer_variation   !testsuite/i3-seqsearch-variation.sh! @src/jackhmmer@                            %OUTFILES%
 1 exercise  mapali                !testsuite/i6-hmmalign-mapali.pl!     @src/hmmalign@   @easel/miniapps/esl-reformat@  !testsuite!  %OUTFILES%
 1 exercise  fragments             !testsuite/i7-hmmbuild-fragments.pl!  @src/hmmbuild@               %OUTFILES%
 1 exercise  nonresidues           !testsuite/i8-nonresidues.pl!         @@ !! %OUTFILES%
@@ -412,7 +412,8 @@
 #comment out fmindex test until it's been returned to life
 #1 exercise  fmindex-core          !testsuite/i20-fmindex-core.pl!       @@ !! %OUTFILES%
 1 exercise  rewind                !testsuite/i21-rewind.pl!             @@ !! %OUTFILES%
-1 exercise  hmmpgmd_shard_ga            !testsuite/i22-hmmpgmd-shard-ga.pl!         @@ !! %OUTFILES% 
+1 exercise  hmmpgmd_shard_ga      !testsuite/i22-hmmpgmd-shard-ga.pl!   @@ !! %OUTFILES% 
+1 exercise  bad-fasta             !testsuite/i23-bad-fasta.sh!          @@ !! %OUTFILES% 
 1 exercise  brute-itest           @src/itest_brute@  
 1 exercise  hmmpress-itest        !src/hmmpress.itest.pl! @src/hmmpress@ %MINIFAM.HMM% %TMPPFX%
 
