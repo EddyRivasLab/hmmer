@@ -127,7 +127,9 @@ static void forward_results(QUEUE_DATA *query, SEARCH_RESULTS *results);
 static void
 print_client_msg(int fd, int status, char *format, va_list ap)
 {
-  int   n;
+  int nalloc =0;
+  int buf_offset = 0;
+  uint8_t *buf = NULL;
   char  ebuf[512];
 
   HMMD_SEARCH_STATUS s;
@@ -136,11 +138,15 @@ print_client_msg(int fd, int status, char *format, va_list ap)
 
   s.status   = status;
   s.msg_size = vsnprintf(ebuf, sizeof(ebuf), format, ap) +1; /* +1 because we send the \0 */
+
   p7_syslog(LOG_ERR, ebuf);
 
+  if(hmmd_search_status_Serialize(&s, &buf, &buf_offset, &nalloc) != eslOK){
+    LOG_FATAL_MSG("Serializing HMMD_SEARCH_STATUS failed", errno);
+  }
   /* send back an unsuccessful status message */
-  n = sizeof(s);
-  if (writen(fd, &s, n) != n) {
+
+  if (writen(fd, buf, buf_offset) != buf_offset) {
     p7_syslog(LOG_ERR,"[%s:%d] - writing (%d) error %d - %s\n", __FILE__, __LINE__, fd, errno, strerror(errno));
     return;
   }
@@ -148,6 +154,8 @@ print_client_msg(int fd, int status, char *format, va_list ap)
     p7_syslog(LOG_ERR,"[%s:%d] - writing (%d) error %d - %s\n", __FILE__, __LINE__, fd, errno, strerror(errno));
     return;
   }
+
+  free(buf);
 }
 
 static void
