@@ -147,8 +147,8 @@ static void forward_results(QUEUE_DATA_SHARD *query, SEARCH_RESULTS *results);
 
 static void print_client_msg(int fd, int status, char *format, va_list ap)
 {
-  int nalloc =0;
-  int buf_offset = 0;
+  uint32_t nalloc =0;
+  uint32_t buf_offset = 0;
   uint8_t *buf = NULL;
   char  ebuf[512];
 
