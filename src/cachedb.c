@@ -39,7 +39,7 @@ p7_seqcache_Open(char *seqfile, P7_SEQCACHE **ret_cache, char *errbuf)
   int                val;
   int                status;
 
-  int32_t            seq_cnt;
+  uint64_t            seq_cnt;
   int32_t            db_cnt;
   int32_t            db_inx[32];
   uint32_t           db_key;

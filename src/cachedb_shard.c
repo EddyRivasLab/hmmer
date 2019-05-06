@@ -46,9 +46,9 @@ p7_seqcache_Open_master(char *seqfile, P7_SEQCACHE **ret_cache, char *errbuf)
   int                val;
   int                status;
 
-  int32_t            seq_cnt;
-  int32_t            db_cnt;
-  int32_t            db_inx[32];
+  uint64_t            seq_cnt;
+  uint32_t            db_cnt;
+  uint32_t            db_inx[32];
   uint32_t           db_key;
 
   //uint64_t           res_cnt;
@@ -222,7 +222,7 @@ p7_seqcache_Open_master(char *seqfile, P7_SEQCACHE **ret_cache, char *errbuf)
   }
   if (status != eslEOF) { printf("Unexpected error %d at %d\n", status, inx); return status; }
 
-  if (inx != seq_cnt) { printf("inx:: %d %d\n", inx, seq_cnt); return eslEFORMAT; }
+  if (inx != seq_cnt) { printf("inx:: %d %lu\n", inx, seq_cnt); return eslEFORMAT; }
   if (hdr_size != 0)  { printf("inx:: %d hdr %d\n", inx, (int)hdr_size); return eslEFORMAT; }
   //if (res_size != 1)  { printf("inx:: %d size %d %d\n", inx, (int)sq->n + 1, (int)res_size); return eslEFORMAT; }
 
@@ -307,16 +307,19 @@ p7_seqcache_Close_master(P7_SEQCACHE *cache)
 }
 
 int
-p7_seqcache_Open_shard(char *seqfile, P7_SEQCACHE **ret_cache, char *errbuf, int my_shard, int num_shards)
+p7_seqcache_Open_shard(char *seqfile, P7_SEQCACHE **ret_cache, char *errbuf, int my_shard, uint64_t num_shards)
 {
+
+  //note: num_shards is declared here to be 64-bit because it's used in computations with other 64-bit values,
+  // not because we anticipate needing anywhere near that many shards
   int                i;
   int                inx;
   int                val;
   int                status;
-  int                sequence_number; // Count the total number of sequences seen so that we get the correct sequence IDs
-  int32_t            seq_cnt;
-  int32_t            db_cnt;
-  int32_t            db_inx[32];
+  uint32_t                sequence_number; // Count the total number of sequences seen so that we get the correct sequence IDs
+  uint64_t            seq_cnt;
+  uint32_t            db_cnt;
+  uint32_t            db_inx[32];
   uint32_t           db_key;
 
   uint64_t           res_cnt;
