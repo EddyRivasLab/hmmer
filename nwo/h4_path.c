@@ -14,6 +14,7 @@
 #include "h4_config.h"
 
 #include <stdlib.h>
+#include <string.h>
 
 #include "easel.h"
 #include "esl_alphabet.h"
@@ -58,6 +59,40 @@ h4_path_Create(void)
 }
 
 
+/* Function:  h4_path_Clone()
+ * Synopsis:  Clone a path.
+ * Incept:    SRE, Sun 05 May 2019 [Yaz, Situation]
+ */
+H4_PATH *
+h4_path_Clone(const H4_PATH *pi)
+{
+  H4_PATH *np = NULL;
+  int      status;
+
+  if ((np = h4_path_Create())    == NULL)  goto ERROR;
+
+  /* This could become _GrowTo() if we ever want to break it out */
+  if (pi->Z > np->Zalloc)
+    {
+      while (np->Zalloc < pi->Z) np->Zalloc *= 2;
+      ESL_REALLOC(np->st,  sizeof(int8_t) * np->Zalloc);
+      ESL_REALLOC(np->rle, sizeof(int)    * np->Zalloc);
+    }
+
+  /* and this could become _Copy() */
+  memcpy( (void *) np->st,  (void *) pi->st,  sizeof(int8_t) * pi->Z);
+  memcpy( (void *) np->rle, (void *) pi->rle, sizeof(int)    * pi->Z);
+  np->Z = pi->Z;
+
+  return np;
+
+ ERROR:
+  h4_path_Destroy(np);
+  return NULL;
+}
+
+
+
 /* Function:  h4_path_Grow()
  * Synopsis:  Increase the allocation for path, by doubling.
  * Incept:    SRE, Wed 20 Jun 2018 [Universal Orlando]
@@ -83,6 +118,7 @@ h4_path_Grow(H4_PATH *pi)
 }
 
 
+
 /* Function:  h4_path_Append()
  * Synopsis:  Add one state to a growing path 
  * Incept:    SRE, Wed 20 Jun 2018 [Universal Orlando]
@@ -94,12 +130,13 @@ h4_path_Grow(H4_PATH *pi)
  *            routine will increment run lengths in the <H4_PATH>
  *            appropriately, and manage its allocation. It will also
  *            deal appropriately with you trying to add S/B/E/T states
- *            (by no-op'ing). These states occur naturally when you
- *            emit or trace back a path, but which are not stored
- *            explicitly in the <H4_PATH>. Path-building code is
- *            cleaner if it can call <h4_path_Append()> at every state
- *            without having to worry about the internal storage
- *            details of <H4_PATH>.
+ *            (by no-op'ing), which sometimes makes code a little
+ *            cleaner. These states occur naturally when you emit or
+ *            trace back a path, but which are not stored explicitly
+ *            in the <H4_PATH>. Path-building code is cleaner if it
+ *            can call <h4_path_Append()> at every state without
+ *            having to worry about the internal storage details of
+ *            <H4_PATH>.
  *            
  *            You can also build paths backwards (from T to S), then
  *            reverse them with <h4_path_Reverse()>. Dynamic
@@ -626,8 +663,15 @@ h4_path_Count(const H4_PATH *pi, const ESL_DSQ *dsq, float wgt, H4_PROFILE *hmm)
  *            
  *            Note on numerical roundoff error: we deliberately sum
  *            terms in exactly the same order that the reference
- *            Viterbi implementation does. Calling <h4_path_Score> on
- *            the Viterbi path gives the Viterbi score, exactly.
+ *            Viterbi implementation does. This makes it likely that
+ *            calling <h4_path_Score> on the Viterbi path will give
+ *            the Viterbi score, exactly. However, this isn't
+ *            guaranteed. I think the reason is that the ML/MG states
+ *            have a three-way a+b+c addition (sc = rsc + sc + tsc).
+ *            Empirically, the brute test gives exact match 99+% of
+ *            the time; when it's off, it's off by an absolute diff
+ *            of ~0.000001.
+ *            
  *
  * Returns:   <eslOK> on success.
  */
@@ -671,10 +715,10 @@ h4_path_Score(const H4_PATH *pi, const ESL_DSQ *dsq, const H4_PROFILE *hmm, cons
 	sc += hmm->rsc[dsq[i++]][k];                                  // i advances to the next x_i that'll be emitted.
 
 	for (y = 2; y <= pi->rle[z]; y++)
-	  {                                // for remaining MG's in a run:
-	    sc += hmm->tsc[k++][h4_MM];    //   ... score transition, advance k to next MG_k
-	    sc += hmm->rsc[dsq[i++]][k];   //   ... score emission,   advance i to next x_i
-	  }                                // k is now the current MGk; i is now the next x_i
+	  {                                        // for remaining MG's in a run:
+	    sc += hmm->tsc[k++][h4_MM];            //   ... score transition, advance k to next MG_k
+	    sc += hmm->rsc[dsq[i++]][k];           //   ... score emission,   advance i to next x_i
+	  }                                        // k is now the current MGk; i is now the next x_i
 	break;
 
       case h4P_IG:
@@ -1022,6 +1066,21 @@ h4_path_Dump(FILE *fp, const H4_PATH *pi)
   fprintf(fp,   "# Zredline = %d\n", pi->Zredline);
   return eslOK;
 }
+
+
+/* Function:  h4_path_DumpCigar()
+ * Synopsis:  More compact single line dump of an H4_PATH.
+ */
+int
+h4_path_DumpCigar(FILE *fp, const H4_PATH *pi)
+{
+  int z;
+
+  for (z = 0; z < pi->Z; z++)
+    fprintf(fp, "%s %d ", h4_path_DecodeStatetype(pi->st[z]), pi->rle[z]);
+  fprintf(fp, "\n");
+  return eslOK;
+}
 /*------------ end, debugging and development tools -------------*/
 
 
@@ -1269,14 +1328,14 @@ main(int argc, char **argv)
   ESL_ALPHABET   *abc = esl_alphabet_Create(eslAMINO);
   ESL_RANDOMNESS *rng = esl_randomness_Create(esl_opt_GetInteger(go, "--seed"));
 
-  esl_fprintf(stderr, "## %s\n", argv[0]);
-  esl_fprintf(stderr, "#  rng seed = %" PRIu32 "\n", esl_randomness_GetSeed(rng));
+  fprintf(stderr, "## %s\n", argv[0]);
+  fprintf(stderr, "#  rng seed = %" PRIu32 "\n", esl_randomness_GetSeed(rng));
 
   utest_zerolength(     abc);
   utest_dirtyseqs (rng, abc);
   utest_counting  ();
 
-  esl_fprintf(stderr, "#  status   = ok\n");
+  fprintf(stderr, "#  status   = ok\n");
 
   esl_randomness_Destroy(rng);
   esl_alphabet_Destroy(abc);

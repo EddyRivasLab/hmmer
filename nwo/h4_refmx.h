@@ -36,6 +36,9 @@ typedef struct h4_refmx_s {
   int      type;     /* h4R_UNSET | h4R_FORWARD | h4R_BACKWARD | h4R_DECODING  */
 } H4_REFMX;
 
+/* Indices for main states in each <dp[i]> supercell.
+ * Some code has hardcoded an assumption of this order of the indices.
+ */
 #define h4R_NSCELLS 6
 #define h4R_ML 0
 #define h4R_MG 1
@@ -44,7 +47,9 @@ typedef struct h4_refmx_s {
 #define h4R_DL 4
 #define h4R_DG 5
 
-/* Codes/indices for special states ENJBLGC, and emission-on-transition JJ/CC */
+/* Codes/indices for special states ENJBLGC, and emission-on-transition JJ/CC 
+ * Some code (reference_fwdback for example) has hardcoded this order of indices.
+ */
 #define h4R_NXCELLS 9
 #define h4R_E  0
 #define h4R_N  1

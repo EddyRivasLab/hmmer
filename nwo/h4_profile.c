@@ -2,8 +2,9 @@
  * 
  * Contents:
  *    1. H4_PROFILE structure
- *    2. Counts to probabilities
+ *    2. Model estimation: counts to probabilities
  *    3. Profile configuration: probabilities to scores
+ *    4. Debugging and development tools
  *    
  */
 #include "h4_config.h"
@@ -136,8 +137,9 @@ h4_profile_CreateBody(H4_PROFILE *hmm, const ESL_ALPHABET *abc, int M)
   if (abc->type == eslAMINO) h4_AminoFrequencies(hmm->f);
   else                       esl_vec_FSet(hmm->f, abc->K, 1. / (float) abc->K);
 
-  hmm->M   = M;
-  hmm->abc = abc;
+  hmm->M     = M;
+  hmm->abc   = abc;
+  hmm->flags = 0;
   return eslOK;
 
  ERROR:
@@ -245,7 +247,7 @@ h4_profile_Destroy(H4_PROFILE *hmm)
 
 
 /*****************************************************************
- * 2. Counts to probabilities.
+ * 2. Model estimation: counts to probabilities.
  *****************************************************************/
 
 /* Function:  h4_profile_SetConventions()
@@ -328,6 +330,10 @@ h4_profile_Renormalize(H4_PROFILE *hmm)
  *            expected number of times that a sampled path would contain
  *            each insert state.
  *            
+ *            <mocc[0]> is set to 0 (there's no M0 state).  If <iocc>
+ *            is provided, <iocc[0]> and <iocc[M]> are set to 0 (there's
+ *            no I0 or Im state).
+ *            
  * Returns:   <eslOK> on success.
  * 
  * TODO:      unit testing. I'm worried about roundoff error accumulation
@@ -357,6 +363,7 @@ h4_profile_CalculateOccupancy(const H4_PROFILE *hmm, float *mocc, float *iocc)
       iocc[k] += (1.-mocc[k]) * hmm->t[k][h4_TDI];
       iocc[k] /= (1.-hmm->t[k][h4_TII]);
     }
+    iocc[hmm->M] = 0.;
   }
 
   return eslOK;
@@ -364,7 +371,7 @@ h4_profile_CalculateOccupancy(const H4_PROFILE *hmm, float *mocc, float *iocc)
 
 
 /*****************************************************************
- * x. Profile configuration: probabilities to scores
+ * 3. Profile configuration: probabilities to scores
  *****************************************************************/
 
 /* set_local_entry()
@@ -413,40 +420,53 @@ set_local_entry(H4_PROFILE *hmm)
 
 /* set_glocal_entry()
  * 
- * glocal entry is "wing retracted" into a G->Mk entry distribution.
+ * glocal entry is "wing retracted" into G->(D1..Dk-1)->Mk and
+ * G->D1..Dk->Ik entry distributions, which we use to enter on {M|I}k
+ * states.
  *
- * G->Mk entry is used in sparse DP to avoid having to calculate
- * through supercells that aren't in the sparse mask.
+ * Wing-retracted entry is used in sparse DP to avoid having to
+ * calculate through supercells that aren't in the sparse mask.
  *
- * Wing retraction also removes the B->G->D1..Dm->E->J->B mute cycle,
- * by removing the D1 state. Our DP algorithms neglect (disallow) this
- * mute cycle. As a result, a (usually negligible) amount of
- * probability is unaccounted for. If you need to know what that
- * neglected mass is, see <p7_profile_GetMutePathLogProb()>.
+ * Wing retraction is also used to remove the B->G->D1..Dm->E->J->B
+ * mute cycle, by removing the D1 state. Our DP algorithms neglect
+ * (disallow) this mute cycle. As a result, a (usually negligible)
+ * amount of probability is unaccounted for. If you need to know what
+ * that neglected mass is, see <p7_profile_GetMutePathLogProb()>.
  *
  * Unretracted "base" transition parameters G->{M1,D1} are still in
- * <tsc[0][h4_MM | h4_MD]> if you need them.
+ * <tsc[0][h4_MM | h4_MD]> if you need them, but DP algorithms must use
+ * wing retraction or not: G->{MI}k or G->D1: not both.
  *
- * We compute the wing-retracted entries G->{D1..Dk-1}->Mk as follows:
+ * Wing-retracted entries G->{D1..Dk-1}->Mk are computed as follows:
  *      tGM1 = log t(G->M1) 
- *      tGMk = log t(G->D1) + \sum_j={1..k-2} log t(Dj->Dj+1) + log t(Dk-1->Mk)
- * and for technical/efficiency reasons, these params are stored
- * off-by-one in the profile: tGMk is stored at <tsc[k-1][h4_GM]>.
+ *      tGMk = log t(G->D1) + \sum_j={2..k-1} log t(Dj-1 -> Dj) + log t(Dk-1->Mk)
+ * and this is stored off-by-one (at k-1) in tsc, to match DP access pattern
+ * of tsc[].
+ *
+ * Wing-retracted G->(D1..Dk)->Ik are computed as:
+ *      tGI0 = -inf   (no I0 state)
+ *      tGIk = log t(G->D1) + \sum_{j=2..k} log t(Dj-1 -> Dj) + log t(Dk->Ik)
+ *      tGIm = -inf   (no Im state)
+ * and stored normally at tsc[k]. 
  */
 static int
 set_glocal_entry(H4_PROFILE *hmm)
 {
-  float ppath;   
+  float tmp;
   int   k;
 
-  hmm->tsc[0][h4_GM] = esl_log2f(hmm->t[0][h4_TMM]); // G->M1
-  ppath              = esl_log2f(hmm->t[0][h4_TMD]); // G->D1
+  hmm->tsc[0][h4_GM] = esl_log2f(hmm->t[0][h4_TMM]); // i.e. G->M1 transition
+  hmm->tsc[0][h4_GI] = -eslINFINITY;                 // (no I0 state)
+  tmp                = esl_log2f(hmm->t[0][h4_TMD]); // i.e. G->D1
   for (k = 1; k < hmm->M; k++) 
     {
-      hmm->tsc[k][h4_GM] = ppath + esl_log2f(hmm->t[k][h4_TDM]);
-      ppath             += esl_log2f(hmm->t[k][h4_TDD]);
+      hmm->tsc[k][h4_GM] = tmp + esl_log2f(hmm->t[k][h4_TDM]);  // because of the off-by-one storage, this is G->D1..Dk->Mk+1, stored at k
+      hmm->tsc[k][h4_GI] = tmp + esl_log2f(hmm->t[k][h4_TDI]);  // ... whereas this is G->D1..Dk->Ik, stored at k
+      tmp += esl_log2f(hmm->t[k][h4_TDD]);
     }
-  hmm->tsc[hmm->M][h4_GM] = -eslINFINITY;
+  hmm->tsc[hmm->M][h4_GM] = -eslINFINITY;  // no Mm+1 state (remember, off by one storage)
+  hmm->tsc[hmm->M][h4_GI] = -eslINFINITY;  // no Im state      
+
   return eslOK;
 }
 
@@ -477,21 +497,23 @@ set_glocal_exit(H4_PROFILE *hmm)
       hmm->tsc[k][h4_DGE] = ppath;
       ppath += esl_log2f(hmm->t[k][h4_TDD]);
     }
-  hmm->t[0][h4_DGE] = -eslINFINITY;
+  hmm->tsc[0][h4_DGE] = -eslINFINITY;
   return eslOK;
 }
 
-
-
+/* Function:  h4_profile_Config
+ * Synopsis:  Set the scores in a profile HMM, from the probabilities.
+ * Incept:    SRE, Wed 08 May 2019
+ */
 int
 h4_profile_Config(H4_PROFILE *hmm)
 {
   float  sc[h4_MAXCODE];   // tmp space for calculating residue scores, including degeneracies
   int    k,x;
 
-  set_local_entry(hmm);  //  [LM] 'uniform' local alignment entry
-  set_glocal_entry(hmm); //  [GM] left wing retraction
-  set_glocal_exit(hmm);  // [DGE] right wing retraction
+  set_local_entry(hmm);  //  [LM]    'uniform' local entry  -  sets tsc[(0)1..M][h4_LM]
+  set_glocal_entry(hmm); //  [GM|GI] left wing retraction   -  sets tsc[0..M-1(M)][h4_GM] and tsc[(0)1..M-1(M)][h4_GI]
+  set_glocal_exit(hmm);  // [DGE]    right wing retraction  
 
   /* Correct boundary conditions on hmm->t[0], t[M] will result in
    * correct boundary conditions on tsc[0], tsc[M]... especially since
@@ -527,10 +549,8 @@ h4_profile_Config(H4_PROFILE *hmm)
 
 
 
-
-
 /*****************************************************************
- * x. Debugging and development tools
+ * 4. Debugging and development tools
  *****************************************************************/
 
 
@@ -543,7 +563,7 @@ h4_profile_Dump(FILE *fp, H4_PROFILE *hmm)
 {
   int k,a,z;
 
-  fprintf(fp, "Emissions:\n");
+  fprintf(fp, "Emission probabilities:\n");
   fprintf(fp, "     ");
   for (a = 0; a < hmm->abc->K; a++)
     fprintf(fp, "         %c%c", hmm->abc->sym[a], a == hmm->abc->K-1 ? '\n':' ');
@@ -551,10 +571,10 @@ h4_profile_Dump(FILE *fp, H4_PROFILE *hmm)
     {
       fprintf(fp, "%4d ", k);
       for (a = 0; a < hmm->abc->K; a++)
-	fprintf(fp, "%10.2f%c", hmm->e[k][a], a == hmm->abc->K-1 ? '\n':' ');
+	fprintf(fp, "%10.4f%c", hmm->e[k][a], a == hmm->abc->K-1 ? '\n':' ');
     }
 
-  fprintf(fp, "Transitions:\n");
+  fprintf(fp, "Transition probabilities:\n");
   fprintf(fp, "     ");
   fprintf(fp, "%10s %10s %10s %10s %10s %10s %10s %10s %10s\n",
 	  "TMM", "TMI", "TMD", "TIM", "TII", "TID", "TDM", "TDI", "TDD");
@@ -562,8 +582,31 @@ h4_profile_Dump(FILE *fp, H4_PROFILE *hmm)
     {                           // exclude t[M] which has no data dependent transitions.
       fprintf(fp, "%4d ", k);
       for (z = 0; z < h4_NT; z++)
-	fprintf(fp, "%10.2f%c", hmm->t[k][z], z == h4_NT-1 ? '\n':' ');
+	fprintf(fp, "%10.4f%c", hmm->t[k][z], z == h4_NT-1 ? '\n':' ');
     }
+
+  fprintf(fp, "Emission scores:\n");
+  fprintf(fp, "     ");
+  for (a = 0; a < hmm->abc->K; a++)
+    fprintf(fp, "         %c%c", hmm->abc->sym[a], a == hmm->abc->K-1 ? '\n':' ');
+  for (k = 1; k <= hmm->M; k++)
+    {
+      fprintf(fp, "%4d ", k);
+      for (a = 0; a < hmm->abc->K; a++)
+	fprintf(fp, "%10.4f%c", hmm->rsc[a][k], a == hmm->abc->K-1 ? '\n':' ');
+    }
+
+  fprintf(fp, "Transition scores:\n");
+  fprintf(fp, "     ");
+  fprintf(fp, "%10s %10s %10s %10s %10s %10s %10s %10s %10s %10s %10s %10s %10s\n",
+	  "MM", "IM", "DM", "LM", "GM", "MI", "II", "DI", "GI", "MD", "ID", "DD", "DGE");
+  for (k = 0; k <= hmm->M; k++)  // include t[0] because GM, GD (in MM, MD) are data-dependent
+    {             
+      fprintf(fp, "%4d ", k);
+      for (z = 0; z < h4_NTSC; z++)
+	fprintf(fp, "%10.4f%c", hmm->tsc[k][z], z == h4_NTSC-1 ? '\n':' ');
+    }
+
   return eslOK;
 }
 

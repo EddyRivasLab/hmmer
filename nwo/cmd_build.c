@@ -72,12 +72,15 @@ h4_cmd_build(const char *topcmd, const ESL_SUBCMD *sub, int argc, char **argv)
   else if (esl_opt_GetBoolean(go, "--dna"))   abc = esl_alphabet_Create(eslDNA);
   else if (esl_opt_GetBoolean(go, "--amino")) abc = esl_alphabet_Create(eslAMINO); 
   
+  /* Open MSA file before opening output <hmmfile>.
+   * If user messed up order of arguments, we want to detect that before overwriting their data.
+   */
+  if (( status = esl_msafile_Open(&abc, msafile, NULL, infmt, NULL, &afp)) != eslOK)
+    esl_msafile_OpenFailure(afp, status);
+
   if (strcmp(hmmfile, "-") == 0) ofp = stdout;
   else if (( ofp = fopen(hmmfile, "w")) == NULL)
     esl_fatal("couldn't open output HMM file %s for writing", hmmfile);
-
-  if (( status = esl_msafile_Open(&abc, msafile, NULL, infmt, NULL, &afp)) != eslOK)
-    esl_msafile_OpenFailure(afp, status);
 
   cfg = h4_build_config_Create(abc);
 

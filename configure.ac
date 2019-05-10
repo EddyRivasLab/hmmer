@@ -177,11 +177,11 @@ AC_CANONICAL_HOST
 # At all levels, including 0, replaces CFLAGS w/ "-g -Wall" (so it assumes gcc).
 # Sets eslDEBUGLEVEL preprocessor symbol, which compiles in debugging support, to 0..3.
 #
+# Shenanigans with the two help strings (# and lack of indentation) are
+# to fix indentation in ./configure -h
 AC_ARG_ENABLE(debugging,
-  [
-    AS_HELP_STRING([--enable-debugging],[include debugging code])
-    AS_HELP_STRING([--enable-debugging=x],[also set diagnostics verbosity level to <x> (1-3)])
-  ],
+  [AS_HELP_STRING([--enable-debugging],[include debugging code])#
+AS_HELP_STRING([--enable-debugging=x],[also set diagnostics verbosity level to <x> (1-3)])],
   enable_debugging=$enableval, 
   enable_debugging=no)
 
@@ -197,13 +197,14 @@ esac
 # --enable-exact-logsum  - turn on p7_LOGSUM_SLOWEXACT flag (should only be used in debugging)
 # 
 AC_ARG_ENABLE(exact-logsum,
-  [ AS_HELP_STRING( [--enable-exact-logsum],[use slow/exact lse2 log-sum-exp calculations]) ],
+  [AS_HELP_STRING([--enable-exact-logsum],[use slow/exact lse2 log-sum-exp calculations])],
   ok=$enableval,
   ok=no)
 
 if test "$ok" = "yes"; then
   AC_MSG_NOTICE([Compiling with slow/exact lse2 log-sum-exp calculations.])
   AC_DEFINE(p7_LOGSUM_SLOWEXACT)
+  AC_DEFINE(h4LOGSUM_SLOWEXACT)
 fi
 
 

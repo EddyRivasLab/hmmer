@@ -614,6 +614,15 @@ main(int argc, char **argv)
  *****************************************************************/
 #ifdef h4HMMFILE_EXAMPLE
 
+#include <stdio.h>
+
+#include "easel.h"
+#include "esl_alphabet.h"
+#include "esl_json.h"
+
+#include "h4_hmmfile.h"
+#include "h4_profile.h"
+
 int
 main(int argc, char **argv)
 {

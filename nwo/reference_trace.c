@@ -71,13 +71,14 @@ static inline int8_t
 v_select_ig(ESL_RANDOMNESS *r, const H4_PROFILE *hmm, const H4_REFMX *rmx, int i, int k)
 {
   ESL_UNUSED(r);
-  int8_t state[3] = { h4P_MG, h4P_IG, h4P_DG };
-  float  path[3];
+  int8_t state[4] = { h4P_MG, h4P_IG, h4P_DG, h4P_G };
+  float  path[4];
 
   path[0] = H4R_MX(rmx, i-1, k, h4R_MG) + hmm->tsc[k][h4_MI];
   path[1] = H4R_MX(rmx, i-1, k, h4R_IG) + hmm->tsc[k][h4_II];
   path[2] = H4R_MX(rmx, i-1, k, h4R_DG) + hmm->tsc[k][h4_DI];
-  return state[esl_vec_FArgMax(path, 3)];
+  path[3] = H4R_XMX(rmx, i-1, h4R_G)    + hmm->tsc[k][h4_GI];
+  return state[esl_vec_FArgMax(path, 4)];
 }
 
 static inline int8_t
@@ -117,7 +118,10 @@ v_select_e(ESL_RANDOMNESS *r, float *wrk, const H4_PROFILE *hmm, const H4_REFMX 
   int    k;
 
   for (k = 1; k <= hmm->M; k++)
-    if (H4R_MX(rmx, i, k, h4R_ML) > max) { max = H4R_MX(rmx, i, k, h4R_ML); smax = h4P_ML; kmax = k; }
+    {
+      if (H4R_MX(rmx, i, k, h4R_ML) > max) { max = H4R_MX(rmx, i, k, h4R_ML); smax = h4P_ML; kmax = k; }
+      if (H4R_MX(rmx, i, k, h4R_DL) > max) { max = H4R_MX(rmx, i, k, h4R_DL); smax = h4P_DL; kmax = k; }
+    }
 
   if (H4R_MX(rmx, i, hmm->M, h4R_MG) > max) { max = H4R_MX(rmx, i, hmm->M, h4R_MG); smax = h4P_MG; kmax = hmm->M; }
   if (H4R_MX(rmx, i, hmm->M, h4R_DG) > max) {                                       smax = h4P_DG; kmax = hmm->M; }
@@ -235,8 +239,11 @@ reference_trace_engine(ESL_RANDOMNESS *rng, float *wrk, const H4_PROFILE *hmm, c
       default: ESL_EXCEPTION(eslEINCONCEIVABLE, "lost in traceback");
       }
 
-      /* A glocal B->G->Mk wing-retraction entry: unfold it */
+      /* A glocal B->G->{M|I}k wing-retraction entry: unfold it 
+       * Because Dk->Ik whereas Dk-1->Mk, the I version adds an extra DG.
+       */
       if (scur == h4P_G) {
+	if (sprv == h4P_IG && (status = h4_path_Append(pi, h4P_DG)) != eslOK) return status;
 	while (k) {
 	  if ( (status = h4_path_Append(pi, h4P_DG)) != eslOK) return status;
 	  k--;

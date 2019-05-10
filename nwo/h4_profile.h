@@ -43,7 +43,7 @@ typedef struct {
  * came from and what it's supposed to mean.
  */
 #define h4_NT      9     // number of transition probabilities in hmm->t
-#define h4_NTSC    12    // number of transition scores in hmm->tsc
+#define h4_NTSC    13    // number of transition scores in hmm->tsc
 
 
 /* 9 (h4_NT) transition probabilities, ordered for convenience in
@@ -63,23 +63,27 @@ typedef struct {
 #define h4_TDI  7
 #define h4_TDD  8
 
-/* 12 (h4_TSC) transition scores, ordered for efficiency in dynamic
- * programming algorithms. Besides a score for each transition
- * probability, three scores are precomputed for L->Mk and
- * "wing-retracted" G->...->Mk entries, and for Mk->...->E exits.
+/* 13 (h4_NTSC) transition scores, ordered for efficiency in (forward)
+ * dynamic programming algorithms. Besides a score for each transition
+ * probability, four additional scores are precomputed:
+ *   -  L->Mk local entry
+ *   -  left wing retracted G->D1..Dk-1->Mk glocal entry
+ *   -               ...and G->D1..Dk->Ik glocal entry
+ *   -  right wing retracted Dk->...E glocal exit
  */
 #define h4_MM   0
 #define h4_IM   1
 #define h4_DM   2
 #define h4_LM   3
 #define h4_GM   4
-#define h4_MD   5
-#define h4_ID   6
-#define h4_DD   7
-#define h4_MI   8
-#define h4_II   9
-#define h4_DI   10
-#define h4_DGE  11
+#define h4_MI   5
+#define h4_II   6
+#define h4_DI   7
+#define h4_GI   8
+#define h4_MD   9
+#define h4_ID   10
+#define h4_DD   11
+#define h4_DGE  12
 
 
 /* Flags that can be raised in <hmm->flags>.

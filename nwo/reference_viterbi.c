@@ -135,10 +135,14 @@ h4_ReferenceViterbi(const ESL_DSQ *dsq, int L, const H4_PROFILE *hmm, const H4_M
 				          dpp[h4R_DL] + tsc[h4_DI]);
 	  dpc[h4R_IG] = ESL_MAX( ESL_MAX( dpp[h4R_MG] + tsc[h4_MI],
 					  dpp[h4R_IG] + tsc[h4_II]),
-				          dpp[h4R_DG] + tsc[h4_DI]);
+				 ESL_MAX( dpp[h4R_DG] + tsc[h4_DI],
+					  xG          + tsc[h4_GI]));
 
-	  /* E state update; local paths only, transition prob 1.0 in implicit probability model, Dk->E can never be optimal */
-	  xE  = ESL_MAX( dpc[h4R_ML], xE);
+	  /* E state update; local paths only, transition prob 1.0 in implicit probability model
+           * You might think that Dk->E can never be optimal, and in Plan7 models this was so, 
+           * but in Plan9 models there are edge cases where Ik->Dk+1->E is an optimal path.
+	   */
+	  xE  = ESL_MAX(xE, ESL_MAX(dpc[h4R_ML], dlv));
 
 	  /* Delete state, deferred storage trick */
 	  dpc[h4R_DL] = dlv;
@@ -167,9 +171,13 @@ h4_ReferenceViterbi(const ESL_DSQ *dsq, int L, const H4_PROFILE *hmm, const H4_M
       dpc[h4R_IL] = -eslINFINITY;
       dpc[h4R_IG] = -eslINFINITY;
 
-      /* E state update now includes glocal exits: transition prob 1.0 from MG_m; DLk->E still can't be optimal, but DGk->E can */
-      xE  = ESL_MAX( ESL_MAX( dpc[h4R_MG], dgv),
-		     ESL_MAX( dpc[h4R_ML], xE));
+      /* E state update now includes glocal exits: transition prob 1.0 from MG_m
+       * DLk->E and DGk->E both need to be included here; DGk->E is common, DLk->E is more weirdo-edge-casey */
+      xE  = ESL_MAX( ESL_MAX( ESL_MAX( dpc[h4R_MG],
+				       dgv),
+		              ESL_MAX( dpc[h4R_ML],
+				       dlv)),
+   		                       xE);
       
       /* D_M state: deferred storage only */
       dpc[h4R_DL] = dlv;
@@ -215,7 +223,9 @@ h4_ReferenceViterbi(const ESL_DSQ *dsq, int L, const H4_PROFILE *hmm, const H4_M
 
 #include "h4_hmmfile.h"
 #include "h4_mode.h"
+#include "h4_path.h"
 #include "h4_profile.h"
+#include "h4_refmx.h"
 
 #include "general.h"
 #include "reference_viterbi.h"

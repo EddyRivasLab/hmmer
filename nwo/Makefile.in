@@ -9,12 +9,14 @@ OBJS   = \
 	h4_profile.o        \
 	h4_refmx.o          \
 	build.o             \
+	emit.o              \
 	eweight.o           \
 	general.o           \
 	logsum.o            \
 	modelsample.o       \
 	modelstats.o        \
 	parameterize.o      \
+	reference_fwdback.o \
 	reference_trace.o   \
 	reference_viterbi.o \
 	zigar.o
@@ -35,12 +37,14 @@ HDRS = \
 	h4_profile.h        \
 	h4_refmx.h          \
 	build.h             \
+	emit.h              \
 	eweight.h           \
 	general.h           \
 	logsum.h            \
 	modelsample.h       \
 	modelstats.h        \
 	parameterize.h      \
+	reference_fwdback.h \
 	reference_trace.h   \
 	reference_viterbi.h \
 	zigar.h
@@ -51,6 +55,7 @@ UTESTS = \
 	h4_mode_utest    \
 	h4_path_utest    \
 	logsum_utest     \
+	reference_fwdback_utest \
 	zigar_utest
 
 STATS  =
@@ -65,7 +70,9 @@ BENCHMARKS = \
 EXAMPLES = \
 	h4_hmmfile_example        \
 	h4_path_example           \
+	emit_example              \
 	logsum_example            \
+	reference_fwdback_example \
 	reference_viterbi_example \
 	zigar_example
 

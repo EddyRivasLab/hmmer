@@ -17,10 +17,9 @@
 /* h4LOGSUM_SCALE defines the precision of the calculation; the
  * default of 500.0 means discretizing in bins of 0.002 bits.
  * h4LOGSUM_TBL defines the size of the lookup table; the
- * default of 11500 means entries are calculated for differences of 0
- * to 23.000 bits (when h4LOGSUM_SCALE is 500.0).  2^{-h4LOGSUM_TBL /
- * h4LOGSUM_SCALE} should be on the order of the machine FLT_EPSILON,
- * 1.2e-7 for IEEE754 floating point.
+ * default of 11500 means entries are calculated for differences of [0,23)
+ * bits (when h4LOGSUM_SCALE is 500.0), chosen
+ * because 2^-23 is machine epsilon for IEEE754 floats.
  */
 #define h4LOGSUM_SCALE 500.0f
 #define h4LOGSUM_TBL   11500
@@ -52,11 +51,8 @@ h4_logsum_Init(void)
 
   if (h4_logsum_initialized) return eslOK;
 
-  // I used to add +0.5 to i to pre-round the table and reduce
-  // discretization error by 2x; but then A+A gives maximum error,
-  // violating principle of least surprise.
   for (i = 0; i < h4LOGSUM_TBL; i++) 
-    h4_flogsum_lookup[i] = (float) log2(1. + exp2(- ((double) i) / h4LOGSUM_SCALE)); 
+    h4_flogsum_lookup[i] = (float) log2(1. + exp2(- ((double) i + 0.5) / h4LOGSUM_SCALE));  // +0.5 for "pre-rounding", so max discretization error is a half bin width.
   h4_logsum_initialized = TRUE;
   h4_logsum_max         = FALSE;
   return eslOK;
@@ -321,14 +317,12 @@ main(int argc, char **argv)
  * halve the error this way; catch them.
  */
 static void
-utest_error(void)
+utest_error(ESL_RANDOMNESS *rng, int be_verbose)
 {
-  char            msg[] = "logsum numerical error unit test failed";
-  ESL_RANDOMNESS *rng   = esl_randomness_Create(0); 
+  char    msg[]  = "logsum numerical error unit test failed";
   int     N      = 1000000;
-  float   maxval = 20.0;   // test operands uniformly distributed on -20..20
-  float   maxerr = 0.;
-  float   errlim = 1.01 * 1.0 / (2. * (float) h4LOGSUM_SCALE);   // see notes in logsum.md for approx analysis. The 1.01 allows a little slop for the approx + floating point roundoff.
+  float   maxval = 15.0;   // test operands uniformly distributed on -15..15. delta can be >23 sometimes.
+  float   errlim = 1.01 * 1.0 / (4. * (float) h4LOGSUM_SCALE);   // see notes in logsum.md for approx analysis. The 1.01 allows a little slop for the approx + floating point roundoff.
   int     i;
   float   a,b,result,exact,abserr;
 
@@ -340,16 +334,11 @@ utest_error(void)
       // Verify that logsum(A,B) is within expected absolute error.
       exact  = logsum_exact(a,b);
       result = h4_logsum(a,b);
-      abserr = fabs(exact-result);
+      abserr = fabs(result-exact);
 
       if (abserr > errlim) esl_fatal(msg);
-      if (abserr > maxerr) maxerr = abserr;
 
-      // Verify that logsum(A,A) = A+1 exactly.
-      result = h4_logsum(a,a);
-      exact  = a + 1.;
-      abserr = fabs(exact-result);
-      if (abserr != 0.0) esl_fatal(msg);  // exact comparison is ok; I designed this to be true.
+      if (be_verbose) printf("abserr %f\n", result-exact);
     }
   esl_randomness_Destroy(rng);
 }
@@ -391,21 +380,26 @@ utest_bounds(void)
 
 static ESL_OPTIONS options[] = {
   /* name          type         default  env   range togs  reqs  incomp  help                docgrp */
-  {"-h",         eslARG_NONE,    FALSE, NULL, NULL, NULL, NULL, NULL, "show help and usage",               0},
-  { "--version", eslARG_NONE,    NULL, NULL, NULL,  NULL, NULL, NULL, "show HMMER version number",         0 },  
+  {"-h",         eslARG_NONE,    FALSE, NULL, NULL, NULL, NULL, NULL, "show help and usage",               0 },
+  { "--abserr",  eslARG_NONE,    FALSE, NULL, NULL, NULL, NULL, NULL, "print absolute errors",             0 },
+  { "--seed",    eslARG_INT,      "0",  NULL, NULL, NULL, NULL, NULL, "set random number generator seed",  0 },
+  { "--version", eslARG_NONE,    NULL,  NULL, NULL, NULL, NULL, NULL, "show HMMER version number",         0 },  
   { 0,0,0,0,0,0,0,0,0,0},
 };
 
 int 
 main(int argc, char **argv)
 {
-  ESL_GETOPTS    *go         = h4_CreateDefaultApp(options, 0, argc, argv, "logsum.c test driver", "[-options]");
+  ESL_GETOPTS    *go   = h4_CreateDefaultApp(options, 0, argc, argv, "logsum.c test driver", "[-options]");
+  ESL_RANDOMNESS *rng  = esl_randomness_Create(esl_opt_GetInteger(go, "--seed")); 
+  int        do_abserr = esl_opt_GetBoolean(go, "--abserr");
   
-  fprintf(stderr, "## %s\n", argv[0]);
-
   h4_logsum_Init();
 
-  utest_error();
+  fprintf(stderr, "## %s\n", argv[0]);
+  fprintf(stderr, "#  rng seed = %" PRIu32 "\n", esl_randomness_GetSeed(rng));
+
+  utest_error(rng, do_abserr);
   utest_bounds();
 
   esl_getopts_Destroy(go);

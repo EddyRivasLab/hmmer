@@ -1,40 +1,59 @@
 # logsum: fast, table-driven log-sum-exp
 
-The Forward and Backward algorithms need to calculate sums of
-probabilities. In reference and sparse implementations, we store
-log2-odds probabilities to avoid underflow.  Given two log2
-probabilities A and B, where $A = \log_2 a$, and $B = \log_2 b$, we
-need to calculate $C = \log_2 a + b$. (We actually work with log2-odds
-scores $A$ and $B$ in our DP recursions, but they always have the same
-denominator when we add them, so the same calculation applies.)
+Forward/Backward algorithms calculate sums of products of
+probabilities, which are vulnerable to numerical underflow. To avoid
+underflow in H4's reference and sparse implementations, we store
+log2-odds probabilities.  Given two log2 probabilities A and B where
+$A = \log_2 a$, and $B = \log_2 b$ (or log2-odds probabilities that
+have the same denominator), we need $C = \log_2 a + b$ as a function
+of $A,B$.
 
-The naive solution is $C = \log_2(2^{A} + 2^{B})$, but this underflows
-and requires three expensive calls to `log2()` and `exp2()`.
+The naive solution is $C = \log_2(2^{A} + 2^{B})$, and hence the
+function is called _log-sum-exp_. The naive solution is still
+vulnerable to underflow, and it also requires three expensive
+log2/exp2 calls.
 
-A numerically stable solution is $C = A + \log_2(1 + 2^{B-A})$, for $A
-\geq B$.  For sufficiently small $B \ll A$, $2^{B-A}$ becomes less
-than machine epsilon and $C \simeq A$. This is at about (A-B) >23 for
-`FLT_EPSILON` = 1.2e-7, >52 for `DBL_EPSILON` = 2.2e-16, for IEEE754
-floats and doubles.
+A numerically stable solution is $C = A + \log_2(1 + 2^{-\delta})$,
+for $A \geq B$ and $\delta = A-B$.  
 
-With some loss of accuracy (see below for analysis), we can
-precalculate $\log_2(1 + 2^{-(A-B)})$ for a discretized range of
-differences (A-B), and compute $C = A +
-\mathrm{table\_lookup}(A-B)$. This is what `h4_logsum()` does.
+For sufficiently large $\delta$, $2^{-\delta}$ is less than machine
+epsilon and $C = A$ in floating point math. This occurs at $\delta$ =
+23 for IEEE754 floats (`FLT_EPSILON` = $2^{-23}$ = 1.2e-7).
 
-This only applies to serial implementations. See the section on SIMD
-vectorization below for notes on why we remain unable to devise
-efficient log-space SIMD vector implementations.
+Thus with a small loss of accuracy (see analysis below), we can
+precalculate $\log_2(1 + 2^{-\delta})$ for a discretized table of
+differences $\delta$, and compute $C = A + \mathrm{LUT}(\delta)$ when
+$\delta$ is in our lookup table (LUT), else $C = A$. We call this a
+table-driven log-sum-exp calculation.
+
+The difference $0 \leq \delta < 23$ is mapped to integer table index
+$d$ by scaling by a constant $\beta$ (called `h4LOGSUM_SCALE` in the
+code; default 500, so d=0..11499). Table entry $d$ is $\mathrm{LUT}(d)
+= \log_2(1 + 2^{-(d+0.5)/\beta})$.  The $d+0.5$ (setting to the
+midpoint of the bin) is an alternative to rounding $\beta\delta$ to
+the nearest integer; `roundf()` is expensive.
+
+A drawback of the "prerounded" initialization is that a simple `C =
+log2sum(A,A)` isn't A+1, it's something slightly less than that.  This
+is undesirable from a "principle of least surprise" perspective, but I
+decided that trying to fix this (for example, by special casing the
+$d=0$ bin value to 1) was weird.
+
+The table is initialized with `h4_logsum_Init()`, and the log-sum-exp
+is `h4_logsum()`.
+
+
 
 ## benchmark times
 
 The table-driven `h4_logsum()` is about 7x faster than the numerically
 stable exact calculation. The gap has been narrowing over the years,
-which I attribute to system implementations of `log*()` and `exp*()`
-are getting faster. In 2011, the difference was about 20x [SRE:J8/71].
+which I think is because system implementations of `log*()` and
+`exp*()` are getting faster. In 2011, the difference was about 20x
+[SRE:J8/71].
 
 `logsum_benchmark` driver on wyvern, clang -O3, 3.1GHz Core i7 Kaby
-Lake, with default $N=10^8$ iterations in [SRE:H6/139]:
+Lake, with default $N=10^8$ iterations [SRE:H6/139]:
 
 | version              | time    | nsec/call  | clocks/call |
 |----------------------|---------|------------|-------------|
@@ -51,39 +70,36 @@ calculation to be used instead of the table-driven approximation.
 Initializing the lookup table to all zeros with `h4_logsum_InitMax()`
 instead of `h4_logsum_Init()` causes `h4_logsum()` calculations to
 return max(a,b) instead of logsum(a,b), thus converting
-Forward/Backward calculations into Viterbi calculations. This gets
-used by some of our unit test code.
+Forward/Backward calculations into Viterbi calculations. This is a way
+to test that a Forward or Backward recursion implementation matches
+its counterpart Viterbi implementation; it's used by some of our unit
+test code.
 
 ## numerical error analysis
 
 Let $w$ be the width of each bin in the lookup table: $w =
-\frac{1}{\textrm{h4LOGSUM\_SCALE}}$.  Maximum discretization error in
-the difference $\delta = A-B$ is $\pm w$ when we truncate $\delta$ to
-the nearest lookup table entry.
-
-Rounding to nearest bin (instead of truncating) would cut the
-discretization error in $\delta$ in half, but costs time. Prerounding
-the lookup table entries causes `h4_logsum(A,A)` to have maximum
-error, instead of giving exactly A+1, violating principle of least
-surprise.
+\frac{1}{\beta}$.  Maximum discretization error for difference
+$\delta$ is $\pm \frac{w}{2}$ (we can be off by up to half a bin
+width).
 
 Our implementation is in bits ($\log_2$) but the analysis here is in
-natural log so we can use $\log(1+x) \rightarrow x$ and $e^x
-\rightarrow 1+x$ for $\mathrm{x} \rightarrow 0$. Let $\alpha = \log 2$
-for use in converting $2^x = e^{\alpha x}$ and $\log_2 x =
-\frac{1}{\alpha} \log x$.
+natural log, so that we can use the convenient limits $\log(1+x)
+\rightarrow x$ and $e^x \rightarrow 1+x$ for $\mathrm{x} \rightarrow
+0$. Let $\alpha = \log 2$ for use in converting $2^x = e^{\alpha x}$
+and $\log_2 x = \frac{1}{\alpha} \log x$.
 
-The maximum absolute error $\epsilon = \hat{C}-C$ is:
+The maximum absolute error $\epsilon = \hat{C}-C$ between the
+calculated value $\hat{C}$ and true value $C$ is:
 
 $$
-  \epsilon = \frac{1}{\alpha} \left( \log (1 + e^{-\alpha (\delta \pm w)}) - \log(1 + e^{-\alpha \delta}) \right) =
-             \frac{1}{\alpha} \log \left( \frac{ e^{\alpha \delta} + e^{\pm \alpha w} } {  e^{\alpha \delta} + 1 } \right)
+  \epsilon = \frac{1}{\alpha} \left( \log (1 + e^{-\alpha (\delta \pm \frac{w}{2})}) - \log(1 + e^{-\alpha \delta}) \right) =
+             \frac{1}{\alpha} \log \left( \frac{ e^{\alpha \delta} + e^{\pm \frac{\alpha w}{2}} } {  e^{\alpha \delta} + 1 } \right)
 $$
 
 which, because $w \ll 1$, approximates to:
 
 $$
-  \epsilon \simeq \frac{1}{\alpha} \log \left( \frac{ e^{\alpha \delta} + 1 \pm \alpha w } {  e^{\alpha \delta} + 1 } \right)
+  \epsilon \simeq \frac{1}{\alpha} \log \left( \frac{ e^{\alpha \delta} + 1 \pm \frac{\alpha w}{2} } {  e^{\alpha \delta} + 1 } \right)
 $$
 
 Because $\delta \geq 0$, we can see that the maximum absolute error
@@ -91,30 +107,31 @@ will occur when $\delta = 0$ (when we're adding two equal log
 probabilities), where:
 
 $$
-  \epsilon \simeq \frac{1}{\alpha} \log \left( 1 \pm \frac{\alpha w}{2} \right)
+  \epsilon \simeq \frac{1}{\alpha} \log \left( 1 \pm \frac{\alpha w}{4} \right)
 $$
 
-And again because $w \ll 1$, this approximates to:
+And again because $w \ll 1$, maximum absolute error approximates to:
 
 $$
-  \epsilon \simeq \pm \frac{w}{2}
+  \epsilon \simeq \pm \frac{w}{4}
 $$
 
 This maximum _absolute_ error $\epsilon$ in the log probability $\hat{C}$
 results in a maximum _relative_ error $\rho$ of about $\frac{\alpha
-w}{2}$ in the probability $\hat{c}$, because:
+w}{4}$ in the probability $\hat{c}$, because:
 
 $$
   \pm \epsilon = \log_2 \hat{c} - \log_2 c = \log_2 \frac{\hat{c}}{c} \\
   \frac{\hat{c}}{c} = 2^{\pm \epsilon} = e^{\pm \alpha \epsilon} \simeq 1 \pm \alpha \epsilon \\
   \rho = \frac{\hat{c} - c}{c} \simeq \pm \alpha \epsilon  \\
-  \rho \simeq \pm \frac{\alpha w}{2}
+  \rho \simeq \pm \frac{\alpha w}{4}
 $$
 
 
 For the default `h4LOGSUM_SCALE` of 500, $w = 0.002$, the maximum
-absolute error in $\hat{C}$ is about $0.001$ bits, and the maximum
-relative error in $\hat{c}$ is about $0.0007$ bits.
+absolute error in $\hat{C}$ is about $0.0005$ bits, and the maximum
+relative error in $\hat{c}$ is about $0.00035$ (unitless).
+
 
 ## SIMD vectorization difficulty
 

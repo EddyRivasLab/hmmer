@@ -1,9 +1,10 @@
 /* H4_MODE: "algorithm-dependent" parameters of HMMER4 profiles
  * 
  * Contents:
- *   1. The H4_MODE object.
- *   2. Unit tests
- *   3. Test driver
+ *   1. The H4_MODE object
+ *   2. Debugging and development tools
+ *   3. Unit tests
+ *   4. Test driver
  *
  * See also:
  *   h4_profile : the profile itself; "model-dependent" parameters and metadata.
@@ -89,13 +90,13 @@ h4_mode_SetCustom(H4_MODE *mo, int L, float nj, float pglocal)
   mo->xsc[h4_E][h4_LOOP] = esl_log2f(nj / (nj + 1.));
   mo->xsc[h4_E][h4_MOVE] = esl_log2f(1. / (nj + 1.));
 
-  mo->xsc[h4_B][h4_LOOP] = 1. - pglocal;
-  mo->xsc[h4_B][h4_MOVE] = pglocal;
-
-  h4_mode_SetLength(mo, L);
+  mo->xsc[h4_B][h4_LOOP] = esl_log2f(1. - pglocal);
+  mo->xsc[h4_B][h4_MOVE] = esl_log2f(pglocal);
 
   mo->nj      = nj;
   mo->pglocal = pglocal;
+  h4_mode_SetLength(mo, L); // mo->nj must be set before calling SetLength().
+
   return eslOK;
 }
 
@@ -169,7 +170,26 @@ h4_mode_Destroy(H4_MODE *mo)
 
 
 /*****************************************************************
- * 2. Unit tests
+ * 2. Debugging and development tools
+ *****************************************************************/
+
+/* Function:  h4_mode_Dump()
+ * Synopsis:  Dump contents of an H4_PATH for inspection.
+ */
+int
+h4_mode_Dump(FILE *fp, const H4_MODE *mo)
+{
+  printf("E->J: %9.5f    E->C: %9.5f\n", mo->xsc[0][0], mo->xsc[0][1]);
+  printf("N->N: %9.5f    N->B: %9.5f\n", mo->xsc[1][0], mo->xsc[1][1]);
+  printf("J->J: %9.5f    J->B: %9.5f\n", mo->xsc[2][0], mo->xsc[2][1]); 
+  printf("C->C: %9.5f    C->T: %9.5f\n", mo->xsc[3][0], mo->xsc[3][1]); 
+  printf("B->L: %9.5f    B->G: %9.5f\n", mo->xsc[4][0], mo->xsc[4][1]); 
+  return eslOK;
+}
+
+
+/*****************************************************************
+ * 3. Unit tests
  *****************************************************************/
 #ifdef h4MODE_TESTDRIVE
 
@@ -193,7 +213,7 @@ utest_minimal(void)
 #endif /* h4MODE_TESTDRIVE */
 
 /*****************************************************************
- * 3. Test driver
+ * 4. Test driver
  *****************************************************************/
 #ifdef h4MODE_TESTDRIVE
 
