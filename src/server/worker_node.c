@@ -24,12 +24,12 @@
 // Forward declarations for static functions
 static int worker_thread_front_end_sequence_search_loop(P7_DAEMON_WORKERNODE_STATE *workernode, uint32_t my_id);
 static void worker_thread_back_end_sequence_search_loop(P7_DAEMON_WORKERNODE_STATE *workernode, uint32_t my_id);
-static void workernode_increase_backend_threads(P7_DAEMON_WORKERNODE_STATE *workernode);
+void workernode_increase_backend_threads(P7_DAEMON_WORKERNODE_STATE *workernode);
 static P7_BACKEND_QUEUE_ENTRY *workernode_backend_pool_Create(int num_entries);
-static P7_BACKEND_QUEUE_ENTRY *workernode_get_backend_queue_entry_from_pool(P7_DAEMON_WORKERNODE_STATE *workernode);
+P7_BACKEND_QUEUE_ENTRY *workernode_get_backend_queue_entry_from_pool(P7_DAEMON_WORKERNODE_STATE *workernode);
 static P7_BACKEND_QUEUE_ENTRY *workernode_get_backend_queue_entry_from_queue(P7_DAEMON_WORKERNODE_STATE *workernode);
 static void workernode_put_backend_queue_entry_in_pool(P7_DAEMON_WORKERNODE_STATE *workernode, P7_BACKEND_QUEUE_ENTRY *the_entry);
-static void workernode_put_backend_queue_entry_in_queue(P7_DAEMON_WORKERNODE_STATE *workernode, P7_BACKEND_QUEUE_ENTRY *the_entry);
+void workernode_put_backend_queue_entry_in_queue(P7_DAEMON_WORKERNODE_STATE *workernode, P7_BACKEND_QUEUE_ENTRY *the_entry);
 static ESL_RED_BLACK_DOUBLEKEY *workernode_get_hit_list_entry_from_pool(P7_DAEMON_WORKERNODE_STATE *workernode, uint32_t my_id);
 uint64_t worker_thread_get_chunk(P7_DAEMON_WORKERNODE_STATE *workernode, uint32_t my_id, volatile uint64_t *start, volatile uint64_t *end);
 static int32_t worker_thread_steal(P7_DAEMON_WORKERNODE_STATE *workernode, uint32_t my_id);
@@ -748,7 +748,7 @@ int p7_server_workernode_create_threads(P7_DAEMON_WORKERNODE_STATE *workernode){
 
     // The ordering of which threads are GPU and CPU is a bit important here.  By creating the GPU threads first, 
     // the GPU threads can use their IDs to determine which CUDA device to talk to.
-    if((i < workernode->cuda_config->num_cards) && (i < workernode->num_threads -1) && (i <1)){
+    if((i < workernode->cuda_config->num_cards) &&(i < workernode->num_threads -1) && (i <1)){
       // Take out the last i<1 when we're ready to think about multiple GPUs
       // Create as many GPU worker threads as there are cards, but make sure we create at least one CPU worker thread
         if(pthread_create(&(workernode->thread_objs[i]), &attr, p7_server_cuda_worker_thread, (void *) the_argument)){
@@ -1450,7 +1450,7 @@ static int worker_thread_front_end_sequence_search_loop(P7_DAEMON_WORKERNODE_STA
             // populate the fields
             the_entry->sequence = (ESL_DSQ *) the_sequence;
             the_entry->L = L;
-            the_entry->do_overthruster = 1; // The CPU front end does the full overthruster. curretly set to 1 to test code
+            the_entry->do_overthruster = 0; // The CPU front end does the full overthruster. 
             the_entry->seq_id = seq_id;
             the_entry->next = NULL;
             workernode->thread_state[my_id].comparisons_queued += 1;
@@ -1556,23 +1556,26 @@ static void worker_thread_back_end_sequence_search_loop(P7_DAEMON_WORKERNODE_STA
   int overthruster_result = eslFAIL;
   while(the_entry != NULL){
   // There's a sequence in the queue, so do the backend comparison 
+
+    // configure the model and engine for this comparison
+    p7_bg_SetLength(workernode->thread_state[my_id].bg, the_entry->L);           
+        p7_oprofile_ReconfigLength(workernode->thread_state[my_id].om, the_entry->L);
+ 
+
     if(the_entry->do_overthruster !=0){
       //need to do the overthruster part of this comparison, generally because CUDA doesn't do the full overthruster
-        p7_bg_SetLength(workernode->thread_state[my_id].bg, the_entry->L);           
-        p7_oprofile_ReconfigLength(workernode->thread_state[my_id].om, the_entry->L);
-
-        // The overthruster filters are the front end of the engine
+      
         overthruster_result = p7_engine_Overthruster(workernode->thread_state[my_id].engine, the_entry->sequence, the_entry->L, workernode->thread_state[my_id].om, workernode->thread_state[my_id].bg);  
     }
-    
-    if((the_entry->do_overthruster == 0) || (overthruster_result != eslFAIL)){ // this comparison passed the overthruster, so do the main stage
-      // Configure the model and engine for this comparison
-      p7_bg_SetLength(workernode->thread_state[my_id].bg, the_entry->L);           
-      p7_oprofile_ReconfigLength(workernode->thread_state[my_id].om, the_entry->L);
-      P7_SPARSEMASK *temp_mask = the_entry->sm;
+    else{
+      // don't do the overthruster, but do set up the sparse mask for the main stage
+      // don't need to do this if we run the overthruster, as it will handle it
+     P7_SPARSEMASK *temp_mask = the_entry->sm;
       the_entry->sm = workernode->thread_state[my_id].engine->sm;
       workernode->thread_state[my_id].engine->sm = temp_mask;
+    }
 
+    if((the_entry->do_overthruster == 0) || (overthruster_result != eslFAIL)){ // this comparison passed the overthruster, so do the main stage
       p7_profile_SetLength(workernode->thread_state[my_id].gm, the_entry->L);
       p7_engine_Main(workernode->thread_state[my_id].engine, the_entry->sequence, the_entry->L, workernode->thread_state[my_id].gm); 
 
@@ -1626,6 +1629,7 @@ static void worker_thread_back_end_sequence_search_loop(P7_DAEMON_WORKERNODE_STA
 
     workernode->thread_state[my_id].mode = CPU_FRONTEND; // change my mode to frontend
     workernode->num_backend_threads -= 1;
+    //printf("Threads, %d, %d\n", workernode->num_threads - workernode->num_backend_threads, workernode->num_backend_threads);
     }
 
   pthread_mutex_unlock(&(workernode->backend_threads_lock));
@@ -1641,7 +1645,7 @@ static void worker_thread_back_end_sequence_search_loop(P7_DAEMON_WORKERNODE_STA
  *  /param [in,out] workernode The worker node's P7_DAEMON_WORKERNODE_STATE object, which is modified during execution.
  *  /returns Nothing
  */
-static void workernode_increase_backend_threads(P7_DAEMON_WORKERNODE_STATE *workernode){
+void workernode_increase_backend_threads(P7_DAEMON_WORKERNODE_STATE *workernode){
   if(pthread_mutex_trylock(&(workernode->backend_threads_lock))){
     // Someone else is changing the number of backend threads, so return from this routine.  The number of back-end 
     // threads will get re-evaluated the next time a comparison needs to be enqueued for processing by the back end.
@@ -1664,6 +1668,7 @@ static void workernode_increase_backend_threads(P7_DAEMON_WORKERNODE_STATE *work
     // We found a thread to switch to
     workernode->thread_state[fewest_hits_thread].mode = BACKEND;
     workernode->num_backend_threads +=1;
+    //printf("Threads, %d, %d\n", workernode->num_threads - workernode->num_backend_threads, workernode->num_backend_threads);
   }
   // If we didn't find a thread to switch to, all worker threads must be in back-end mode or about to change to back-end mode
   // so don't do anything
@@ -1716,7 +1721,7 @@ ERROR:
  *  \param [in,out] workernode The worker node's P7_DAEMON_WORKERNODE_STATE object, which is modified during execution.
  *  \returns A pointer to an empty backend queue entry.  Calls p7_Fail to end the program with an error message if it is unable to allocate memory. 
  */
-static P7_BACKEND_QUEUE_ENTRY *workernode_get_backend_queue_entry_from_pool(P7_DAEMON_WORKERNODE_STATE *workernode){
+P7_BACKEND_QUEUE_ENTRY *workernode_get_backend_queue_entry_from_pool(P7_DAEMON_WORKERNODE_STATE *workernode){
   
   P7_BACKEND_QUEUE_ENTRY *the_entry;
 
@@ -1804,7 +1809,7 @@ static void workernode_put_backend_queue_entry_in_pool(P7_DAEMON_WORKERNODE_STAT
  *  \param [in] the_entry The entry to be added to the queue.
  *  \returns Nothing.
  */
-static void workernode_put_backend_queue_entry_in_queue(P7_DAEMON_WORKERNODE_STATE *workernode, P7_BACKEND_QUEUE_ENTRY *the_entry){
+void workernode_put_backend_queue_entry_in_queue(P7_DAEMON_WORKERNODE_STATE *workernode, P7_BACKEND_QUEUE_ENTRY *the_entry){
   while(pthread_mutex_trylock(&(workernode->backend_queue_lock))){
         // spin-wait until the lock on our queue is cleared.  Should never be locked for long
   }

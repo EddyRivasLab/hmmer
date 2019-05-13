@@ -8,10 +8,15 @@
 #include "px_cuda.h"
 #include "cuda_profiler_api.h"
 
+
+/*  HEY NICK!  The result checking code will only work correctly if HMMER is configured with --disable-avx
+    and --disable-avx512 so that it uses SSE.  Otherwise, the RBV data in the oprofile will be striped for 
+    256- or 512-bit vectors and badness will ensue */
+
 #define KP 27  // number of characters in alphabet.  Make parameter.
-#define MAX_BAND_WIDTH 1
+#define MAX_BAND_WIDTH 4
 #define NEGINFMASK 0x80808080
-#define NUM_REPS 1
+#define NUM_REPS 1000
 #define MAX(a, b, c)\
   a = __vmaxs4(b, c);
 
@@ -24,7 +29,7 @@ int *restripe_char_to_int(char *source, int source_chars_per_vector, int dest_in
 
 #define STEP_1()\
   sv0   = __vaddss4(sv0, *rsc);\
-  rsc =  (int *)rbv[dsq[row]];\
+  rsc =  ((int *)__shfl_sync(0xffffffff, (uint64_t) rsc_precompute, (last_row_fetched-row))) + offset;\
   xE0  = __vmaxs4(xE0, sv0);
 
 #define STEP_2()\
@@ -93,7 +98,7 @@ __device__  uint calc_band_1(const __restrict__ uint8_t *dsq, int L, int Q, int 
   int row=0, last_row_fetched = -1;
   int offset;
   int* rsc_precompute;
-
+//printf("Starting calc_band_1, row = %d\n", row);
   offset = (q <<5)+threadIdx.x;
   ENSURE_DSQ(1)
   rsc =  ((int *)__shfl_sync(0xffffffff, (uint64_t) rsc_precompute, 31)) + offset;
@@ -173,7 +178,6 @@ __device__  uint calc_band_2(const __restrict__ uint8_t *dsq, int L, int Q, int 
   int row=0, last_row_fetched = -1;
   int offset;
   int* rsc_precompute;
-
   offset = (q <<5)+threadIdx.x;
   ENSURE_DSQ(1)
   rsc =  ((int *)__shfl_sync(0xffffffff, (uint64_t) rsc_precompute, 31)) + offset;
@@ -261,7 +265,6 @@ __device__  uint calc_band_3(const __restrict__ uint8_t *dsq, int L, int Q, int 
   int row=0, last_row_fetched = -1;
   int offset;
   int* rsc_precompute;
-
   offset = (q <<5)+threadIdx.x;
   ENSURE_DSQ(1)
   rsc =  ((int *)__shfl_sync(0xffffffff, (uint64_t) rsc_precompute, 31)) + offset;
@@ -361,7 +364,6 @@ __device__  uint calc_band_4(const __restrict__ uint8_t *dsq, int L, int Q, int 
   int row=0, last_row_fetched = -1;
   int offset;
   int* rsc_precompute;
-
   offset = (q <<5)+threadIdx.x;
   ENSURE_DSQ(1)
   rsc =  ((int *)__shfl_sync(0xffffffff, (uint64_t) rsc_precompute, 31)) + offset;
@@ -482,13 +484,13 @@ void SSV_cuda(const __restrict__ uint8_t *dsq, int L, P7_OPROFILE *om, int8_t *r
     int rsc_length = (Q + MAX_BAND_WIDTH -1) * 128;  // 32 threaads * 4 bytes 
     int cachable_rscs = ((48 *1024) - (((KP+1)/2)*2 * sizeof(uint *)))/rsc_length; // number of rbv entries that will fit in shared memory
 
-   /* if(threadIdx.x < min(KP, cachable_rscs)){
+   if(threadIdx.x < min(KP, cachable_rscs)){
       rbv[threadIdx.x] = (int *)(rbv + ((KP+1)/2)*2) + (rsc_length/sizeof(int))*threadIdx.x;
       memcpy((void *) rbv[threadIdx.x], (void *) om->rbv[threadIdx.x], rsc_length);
     } 
-    else{ */
+    else{ 
       rbv[threadIdx.x]=(int *)(om->rbv[threadIdx.x]);
-    //}
+    }
 
   }
   __syncthreads();
@@ -532,7 +534,7 @@ for(int num_reps = 0; num_reps < NUM_REPS; num_reps++){
   xE = __vmaxs4(xE, __shfl_down_sync(0x000001, xE, 1));
 
 
-  if((blockIdx.y == 0) &&(threadIdx.y ==0) && (threadIdx.x == 0)){ // only one thread writes result
+  if((blockIdx.x == 0) &&(threadIdx.y ==0) && (threadIdx.x == 0)){ // only one thread writes result
   xE = __vmaxs4(xE, (xE>>16));
   xE = __vmaxs4(xE, (xE>>8)); 
     *retval = xE & 255; // low 8 bits of the word is the final result
@@ -752,7 +754,7 @@ p7_SSVFilter_shell_sse(const ESL_DSQ *dsq, int L, const __restrict__
   int      i,q;
   int      status;
 
-
+  //printf("Dim %d %d\n", ((((om->M)-1) / (128)) + 1) * 32, L);
   cudaEvent_t start, stop;
   cudaEventCreate(&start);
   cudaEventCreate(&stop);
@@ -775,7 +777,7 @@ p7_SSVFilter_shell_sse(const ESL_DSQ *dsq, int L, const __restrict__
   cudaMemcpy(card_dsq, (dsq+ 1), L, cudaMemcpyHostToDevice);
 
   cudaEventRecord(start);
-  num_blocks.x = 1;
+  num_blocks.x = 20;
   num_blocks.y = 1;
   num_blocks.z = 1;
   warps_per_block = 32;
@@ -797,10 +799,11 @@ p7_SSVFilter_shell_sse(const ESL_DSQ *dsq, int L, const __restrict__
   milliseconds = 0;
   cudaEventElapsedTime(&milliseconds, start, stop);
   seconds = milliseconds/1000;
+  cudaDeviceSynchronize();
   cudaMemcpy(&h_compare, card_h, 1, cudaMemcpyDeviceToHost);
   gcups = ((((float) (om->M * L) *(float) NUM_REPS)/seconds)/1e9) * (float)(num_blocks.x * num_blocks.y *num_blocks.z) * (float)warps_per_block;
   //printf("M = %d, L = %d, seconds = %f, GCUPS = %f\n", om->M, L, seconds, gcups); 
-  printf("%f\n", gcups);
+  printf("length = %d, M = %d, gcups =%f\n", L, om->M, gcups);
 
   err = cudaGetLastError();
   if(err != cudaSuccess){
@@ -835,6 +838,13 @@ p7_SSVFilter_shell_sse(const ESL_DSQ *dsq, int L, const __restrict__
           printf("Row value miss-match at row %d, position %d. CPU had %d, GPU had %d.  CPU index was %d, GPU index was %d\n", (i-1), elem, cpu_val, card_val, cpu_index, (card_index - ((i -1) * card_Q * 128)));
         }
       } */
+     int cuda_length =0;
+      char *cuda_row = restripe_char((char *) dp, 16, 128, Q * 16, &cuda_length);
+  /*    printf("CPU %04d ", i-1);
+      for(int v = 0; v < cuda_length/4; v++){
+        printf("%08x ", ((uint32_t *) cuda_row)[v]);
+      }
+      printf("\n"); */ 
     } 
   h = esl_sse_hmax_epi8(hv);
   cudaFree(card_h);
@@ -846,11 +856,19 @@ p7_SSVFilter_shell_sse(const ESL_DSQ *dsq, int L, const __restrict__
   if(h != h_compare){
     printf("Final result miss-match: %x (CUDA) vs %x (CPU) on sequence %d with length %d\n\n", h_compare, h, num, L);
   } 
+  if(om->V != 16){
+    printf("Ignore any result miss-matches, as HMMER was not compiled to use only SSE instructions\n");
+  }
  float known_good;  
  
  p7_SSVFilter_base_sse(dsq, L, om, fx, &known_good);
   if (h == 127)  
-    { *ret_sc = eslINFINITY; return eslERANGE; }
+    { *ret_sc = eslINFINITY;
+      if(*ret_sc != known_good){
+        printf("miss-match with known good result %f vs %f\n", *ret_sc, known_good);
+      }                  
+      return eslOK;
+     }
   else if (h > -128)
     { 
       *ret_sc = ((float) h + 128.) / om->scale_b + om->tauBM - 2.0;   // 2.0 is the tauNN/tauCC "2 nat approximation"
@@ -918,8 +936,10 @@ main(int argc, char **argv)
   p7_oprofile_Convert (gm, om);
   P7_OPROFILE *card_OPROFILE;
   card_OPROFILE = create_oprofile_on_card((P7_OPROFILE *) om);
+  cudaDeviceSynchronize();
   P7_FILTERMX *card_FILTERMX;
   card_FILTERMX = create_filtermx_on_card();
+  cudaDeviceSynchronize();
   p7_bg_SetFilter(bg, om->M, om->compo);
 
   //uint64_t sequence_id = 0;
@@ -927,6 +947,7 @@ main(int argc, char **argv)
   int count;
   cudaGetDeviceCount(&count);
   //printf("Found %d CUDA devices\n", count);
+  cudaDeviceSetLimit(cudaLimitPrintfFifoSize, 1024*1024*16);
   /* Open sequence database */
   status = esl_dsqdata_Open(&abc, seqfile, ncore, &dd);
   if      (status == eslENOTFOUND) p7_Fail( (char *) "Failed to open dsqdata files:\n  %s",    dd->errbuf);
@@ -937,9 +958,9 @@ main(int argc, char **argv)
 
   while (( status = esl_dsqdata_Read(dd, &chu)) == eslOK)  
     {
-      for (i = 0; i < chu->N; i++)
+      for (i = 1; i < chu->N; i++)
 	{
-    if(num_hits > 100){
+    if(num_hits > 10 ){
       goto punt;
     }
 	  p7_bg_SetLength(bg, (int) chu->L[i]);            // TODO: remove need for cast

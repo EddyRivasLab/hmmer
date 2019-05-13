@@ -303,7 +303,17 @@ P7_SHARD *p7_shard_Create_dsqdata(char *basename, uint32_t num_shards, uint32_t 
     p7_Fail((char *)"Mis-match between expected sequence count of %d and actual sequence count of %d in p7_shard_Create_dsqdata", the_shard->num_objects, my_sequences);
   }
   
+  // Add a sentinel sequence ID and length to the end of the data to prevent running off the end
+  if(contents_buffer_size < (contents_offset + (2* sizeof(int64_t)))){
+    ESL_REALLOC(the_shard->contents, contents_offset+(2*sizeof(int64_t)));
+    contents_pointer = (char *) the_shard->contents + contents_offset;
+    contents_buffer_size = contents_offset+(2*sizeof(int64_t));
+  }
 
+ *((int64_t *) contents_pointer) = 0xFFFFFFFFFFFFFFFF; // Greater than any possible sequence ID
+  contents_pointer += sizeof(int64_t);
+  *((int64_t *) contents_pointer) = 0;
+  contents_pointer += sizeof(int64_t);
 
   if (contents_offset < contents_buffer_size){
     // We've allocated too much space, shrink the buffer to the minimum
