@@ -272,8 +272,10 @@ elif test "$enable_gprof" = "yes"; then
 elif test "$enable_debugging" != "no"; then
    if test "$GCC" = "yes"; then
       CFLAGS="-g -Wall"
+   else
+      CFLAGS="-g"
    fi
-else
+elif test "$esl_cflags_env_set" != "yes"; then
    CFLAGS="-O3"
 fi
 

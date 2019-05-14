@@ -564,6 +564,7 @@ main(int argc, char **argv)
   h4_refmx_Destroy(rx);
   h4_path_Destroy(pi);
   h4_profile_Destroy(hmm);
+  h4_mode_Destroy(mo);
   esl_alphabet_Destroy(abc);
   esl_stopwatch_Destroy(w);
   esl_randomness_Destroy(rng);
