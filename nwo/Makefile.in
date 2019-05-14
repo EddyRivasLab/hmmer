@@ -65,7 +65,8 @@ EXPERIMENTS = \
 	h4_build_experiment2
 
 BENCHMARKS = \
-	logsum_benchmark
+	logsum_benchmark \
+	reference_fwdback_benchmark 
 
 EXAMPLES = \
 	h4_hmmfile_example        \

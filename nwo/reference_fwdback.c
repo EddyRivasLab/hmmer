@@ -50,8 +50,9 @@
  * Args:      dsq    : digital target sequence of length <L>
  *            L      : length of the target sequence
  *            hmm    : query profile
+ *            mo     : algorithm-dependent parameters, the alignment "mode"
  *            rmx    : RESULT: DP matrix
- *            opt_sc : optRETURN: raw Forward score in nats
+ *            opt_sc : optRETURN: raw Forward score in bits
  *
  * Returns:   <eslOK> on success. <rmx> contains the Forward matrix;
  *            its internals may have been reallocated.
@@ -210,7 +211,370 @@ h4_ReferenceForward(const ESL_DSQ *dsq, int L, const H4_PROFILE *hmm, const H4_M
  * 2. Backward
  *****************************************************************/
 
-// TK
+/* Function:  h4_ReferenceBackward()
+ * Synopsis:  Reference implementation of the Backward algorithm
+ *
+ * Purpose:   The Backward algorithm, comparing profile <hmm> in mode
+ *            <mo> to target sequence <dsq> of length <L>. Caller
+ *            provides an allocated <P7_REFMX> DP matrix <rmx>; this
+ *            matrix will be reallocated if needed, so it can be
+ *            reused from a previous calculation, including a smaller
+ *            one.
+ *            
+ *            Caller must have initialized with a <h4_logsum_Init()>
+ *            call, because this function will use <h4_logsum()>.
+ *            
+ *            Upon successful return, the raw Backward score (in bits)
+ *            is optionally returned in <*opt_sc>, and the DP matrix
+ *            <rmx> is filled in.
+ *
+ * Args:      dsq    : digital target sequence of length <L>
+ *            L      : length of the target sequence
+ *            hmm    : query profile 
+ *            mo     : algorithm-dependent parameters, the alignment "mode"
+ *            rmx    : allocated DP matrix
+ *            opt_sc : optRETURN: raw Backward score in bits
+ *
+ * Returns:   <eslOK> on success. <rmx> contains the Backward matrix;
+ *            its internals may have been reallocated.
+ *            
+ * Throws:    <eslEMEM> if reallocation is attempted and fails.           
+ *
+ * Notes:     Order of evaluation in the code is carefully
+ *            arranged to guarantee that dpc,dpn could be pointing
+ *            into the same row of memory in a memory-efficient
+ *            one-row DP implementation... even though this particular
+ *            function, working with a <rmx>, knows it has all rows
+ *            <0,1..L>. This is so this code could be cribbed for a
+ *            one-row implementation.
+ */
+int
+h4_ReferenceBackward(const ESL_DSQ *dsq, int L, const H4_PROFILE *hmm, const H4_MODE *mo, H4_REFMX *rmx, float *opt_sc)
+{
+  float *dpc;                   // ptr into current DP row, rmx->dp[i]                     
+  float *dpn;                   // ptr into next DP row, rmx->dp[i+1]                       
+  const float *rsn;             // ptr to next row's residue score x_{i+1} vector in <hmm> 
+  const float *tsc;             // ptr to model transition score vector hmm->tsc[]         
+  float dgc, dlc;               // DG,DL tmp values on current row, [i,?,DG], [i,?,DL]     
+  float mgc, mlc;               // MG,ML tmp values on current row i
+  float mgn, mln;               // MG,ML (+ emission) tmp values from next row i+1
+  float ign, iln;               // IG/IL tmp values from next row i+1
+  float xE, xG, xL;             // tmp vars for special state values
+  int   i;                      // counter over sequence positions 1..L 
+  int   k;                      // counter over model positions 1..M    
+  const int M  = hmm->M;
+  int   status;
+
+ /* contract checks / arg validation */
+  ESL_DASSERT1( ( mo->L == L || mo->L == 0) ); /* length model in profile is either L (usually) or 0 (some unit tests) */
+
+  /* reallocation, if needed */
+  if ( (status = h4_refmx_GrowTo(rmx, M, L)) != eslOK) return status;
+  rmx->M    = M;
+  rmx->L    = L;
+  rmx->type = h4R_BACKWARD;
+
+  /* Initialize row L, starting with specials: */
+  dpc = rmx->dp[L] + (M+1)*h4R_NSCELLS;        // position <dpc> on row L+1 specials
+  dpc[h4R_CC]      = -eslINFINITY;                 
+  dpc[h4R_JJ]      = -eslINFINITY;                 
+  dpc[h4R_C]       = mo->xsc[h4_C][h4_MOVE];   // C <- T
+  dpc[h4R_G]       = -eslINFINITY;                 
+  dpc[h4R_L]       = -eslINFINITY;                 
+  dpc[h4R_B]       = -eslINFINITY;                 
+  dpc[h4R_J]       = -eslINFINITY;                 
+  dpc[h4R_N]       = -eslINFINITY;                 
+  dpc[h4R_E]  = xE = dpc[h4R_C] + mo->xsc[h4_E][h4_MOVE]; 
+  dpc -= h4R_NSCELLS;                   // dpc now on M
+
+  /* init supercell M on row L: */
+  dpc[h4R_ML]       = xE;               // ML: M_M->E (transition prob 1.0)  
+  dpc[h4R_MG]       = xE;               //   (same for MG)
+  dpc[h4R_IL]       = -eslINFINITY;     // no ILm
+  dpc[h4R_IG]       = -eslINFINITY;     // no IGm
+  dpc[h4R_DL] = dlc = xE;               // DL: D_M->E (transition prob 1.0)  
+  dpc[h4R_DG] = dgc = xE;               //   (same for DG)  
+  dpc -= h4R_NSCELLS;                   // dpc now on M-1
+
+  /* initialize main cells [k=1..M-1] on row L, which has no pulls
+   * from I or M because there's no next row. 
+   */
+  tsc  = hmm->tsc[M-1];                // position <tsc> on node M-1    
+  for (k = M-1; k >= 1; k--)
+    {
+      dpc[h4R_ML]       = h4_logsum(xE, dlc + tsc[h4_MD]); // ML -> DL or E              
+      dpc[h4R_MG]       =               dgc + tsc[h4_MD];  // MG -> DG
+      dpc[h4R_IL]       =               dlc + tsc[h4_ID];  // IL -> DL
+      dpc[h4R_IG]       =               dgc + tsc[h4_ID];  // IG -> DG 
+      dpc[h4R_DL] = dlc = h4_logsum(xE, dlc + tsc[h4_DD]); // DL: Dk->Dk+1 or Dk->E 
+      dpc[h4R_DG] = dgc =               dgc + tsc[h4_DD];  // DG: only D->D path is possible 
+      tsc -= h4_NTSC; 
+      dpc -= h4R_NSCELLS;
+    }
+  /* k=0 cells are already -inf */
+
+  /* The main recursion over rows i=L-1 down to 0.
+   * On row i=0, we're going to break out early from the code below, after we
+   * do the specials but before the main states.
+   */
+  for (i = L-1; i >= 0; i--)
+    {
+      /* Initialization of xL/xG by pulling from next row i+1.
+       * Done by sweeping forward through k=1..M; with care taken to
+       * leave ptrs sitting where they need to be for backwards sweeps.
+       */
+      xL  = xG = -eslINFINITY;
+      tsc = hmm->tsc[0];
+      dpn = rmx->dp[i+1] + h4R_NSCELLS;
+      rsn = hmm->rsc[dsq[i+1]];
+      for (k = 1; k <= M; k++)
+        {
+          rsn++;
+          xL   = h4_logsum(xL, dpn[h4R_ML] + *rsn + tsc[h4_LM]);
+          xG   = h4_logsum(xG, dpn[h4R_MG] + *rsn + tsc[h4_GM]);
+          tsc += h4_NTSC;                                        // LMk and GMk entries are stored off-by-one, hence the delayed bump of tsc
+          xG   = h4_logsum(xG, dpn[h4R_IG] + tsc[h4_GI]);
+          dpn += h4R_NSCELLS; 
+        }
+      // <tsc>, <rsn> at M; and <dpn> at start of next row's specials (i.e. "M+1")
+
+      /* Calculation of the special states on row i. */
+      dpc = rmx->dp[i] + (M+1)*h4R_NSCELLS;                               // put dpc on start of current row's specials        
+      dpc[h4R_CC]      = -eslINFINITY;                                    // CC unused (only used in decoding) 
+      dpc[h4R_JJ]      = -eslINFINITY;                                    // JJ unused too 
+      dpc[h4R_C]       = dpn[h4R_C] + mo->xsc[h4_C][h4_LOOP];             // C = C<-C 
+      dpc[h4R_G]       = xG;                                              // G was just calculated above
+      dpc[h4R_L]       = xL;                                              //  ... and L too
+      dpc[h4R_B]       = h4_logsum(dpc[h4R_G] + mo->xsc[h4_B][h4_MOVE],   // B<-G 
+                                   dpc[h4R_L] + mo->xsc[h4_B][h4_LOOP]);  // B<-L 
+      dpc[h4R_J]       = h4_logsum(dpn[h4R_J] + mo->xsc[h4_J][h4_LOOP],   // J<-J 
+                                   dpc[h4R_B] + mo->xsc[h4_J][h4_MOVE]);  // J<-B 
+      dpc[h4R_N]       = h4_logsum(dpn[h4R_N] + mo->xsc[h4_N][h4_LOOP],   // N<-N 
+                                   dpc[h4R_B] + mo->xsc[h4_N][h4_MOVE]);  // N<-B 
+      dpc[h4R_E]  = xE = h4_logsum(dpc[h4R_C] + mo->xsc[h4_E][h4_MOVE],
+                                   dpc[h4R_J] + mo->xsc[h4_E][h4_LOOP]);
+      /* Forgive the weirdness, but this is the actual end of the
+       * iteration over i.  When we reach row i=0, we need to
+       * calculate the specials, exactly like we did for other rows;
+       * but we don't calculate the rest of row i=0. Break out here.
+       * Decided this is better than duplicating code.
+       * Need dpc to remain on specials (M+1) so break before decrement.
+       */
+      if (i == 0) break;
+      dpc -= h4R_NSCELLS;       /* dpc now on [i,M] supercell   */
+      dpn -= h4R_NSCELLS;       /* dpn now on [i+1,M] supercell */
+
+
+      /* Initialization of k=M supercell */
+      dpc[h4R_ML]       = xE;           // MLm->E only
+      dpc[h4R_MG]       = xE;           // MGm->E only
+      dpc[h4R_IL]       = -eslINFINITY; // no ILm state
+      dpc[h4R_IG]       = -eslINFINITY; // no IGm state
+      dpc[h4R_DL] = dlc = xE;           // DLm->E, and store dlc i,k for next k loop iteration
+      dpc[h4R_DG] = dgc = xE;           // DGm->E, and "" 
+
+      mgn = *rsn + dpn[h4R_MG];         // pick up MG(i+1,k=M) + s(i+1,k=M) for next k loop iteration
+      mln = *rsn + dpn[h4R_ML];
+      rsn--;                            // now rsn on i+1,k=M-1
+      tsc -= h4_NTSC;                   // now tsc on M-1
+      dpc -= h4R_NSCELLS;               // now dpc on i,M-1   
+      dpn -= h4R_NSCELLS;               // now dpn on i+1,M-1
+
+      /* The main recursion over model positions k=M-1 down to 1. */
+      for (k = M-1; k >= 1; k--)
+        {
+          ign = dpn[h4R_IG];                              // dpn is on k. pick up IG|IL from [i+1] so we can write into dpc[IG] 
+          iln = dpn[h4R_IL];                              //   ... insert emission is zero
+                                                          // tsc is on k.
+          mlc =  h4_logsum( h4_logsum(mln + tsc[h4_MM],   // mln is i+1,k+1 plus i+1,k+1 emission
+                                      iln + tsc[h4_MI]),  // iln is i+1,k just picked up
+                            h4_logsum(dlc + tsc[h4_MD],   // dlc is i,k+1
+                                      xE));               // ML->E trans = 1.0  
+          mgc =  h4_logsum( h4_logsum(mgn + tsc[h4_MM],   // mgn is i+1,k+1 plus i+1,k+1 emission
+                                      ign + tsc[h4_MI]),  // ign is i+1,k just picked up
+                                      dgc + tsc[h4_MD]);  // dgc is i,k+1
+
+          dpc[h4R_IL] = h4_logsum( h4_logsum(mln + tsc[h4_IM],           // safe to store in dpc[IG|IL] because we picked up ign|iln already
+                                             iln + tsc[h4_II]),
+                                             dlc + tsc[h4_ID]);
+          dpc[h4R_IG] = h4_logsum( h4_logsum(mgn + tsc[h4_IM],     
+                                             ign + tsc[h4_II]),
+                                             dgc + tsc[h4_ID]);
+
+          dpc[h4R_DL] = dlc = h4_logsum( h4_logsum(mln + tsc[h4_DM],     // dlc|dgc i,k picked up here, used in next loop iteration
+                                                   iln + tsc[h4_DI]),
+                                         h4_logsum(dlc + tsc[h4_DD],
+                                                   xE));
+          dpc[h4R_DG] = dgc = h4_logsum( h4_logsum(mgn + tsc[h4_DM],   
+                                                   ign + tsc[h4_DI]),
+                                                   dgc + tsc[h4_DD]);
+          tsc -= h4_NTSC;               // now tsc is on k-1 supercell
+
+                                        // rsn on i+1,k
+          mgn = *rsn + dpn[h4R_MG];     // mgn i+1,k + emission i+1,k picked up here, used in next loop iteration
+          mln = *rsn + dpn[h4R_ML];     
+          rsn--;                        // rsn now on i+1,k-1
+          dpc[h4R_MG] = mgc;            // delayed store of [i,k,MG] value enables dpc,dpn to point into same single row 
+          dpc[h4R_ML] = mlc;
+
+          dpn -= h4R_NSCELLS;           // dpn now on i+1,k-1 supercell
+          dpc -= h4R_NSCELLS;           // dpc now on   i,k-1 supercell
+          /* as we loop around now and decrement k:
+           *   dpn [i+1,k-1] => [i+1,k] 
+           *   dpc [i,k-1]   => [i,k] 
+           *   tsc [k-1]     => [k]
+           *   rsn [i+1,k-1] => [i+1,k]
+           *   rsc [i,k-1]   => [i,k]
+           *   dgc,dlc [i,k] => [i,k+1] 
+           *   mgn,mln [i+1,k] => [i+1,k+1] including emission of i+1,k+1
+           */
+        } // end of loop over model positions k 
+      // k=0 cells are -inf 
+      // xG,xL values are now ready for deferred storage on next row above 
+    } /* end of loop over rows i. */
+
+  /* We just broke out of the iteration above on row i=0, having just
+   * calculated the i=0 special states. Only N,B,G,L states are
+   * ultimately reachable on i=0, but we calculate C,J,E anyway, to
+   * match sparse implementation exactly. Decoding will see -inf for
+   * these cells in Fwd matrix, and decode them to impossible. 
+   */
+  /* for complete cleanliness: set all the main states on row 0 to -inf */
+  esl_vec_FSet(rmx->dp[0], (M+1)*h4R_NSCELLS, -eslINFINITY);
+
+  if (opt_sc) *opt_sc = dpc[h4R_N]; // assumes dpc is sitting on i=0 specials (M+1)
+  return eslOK;
+}
+/*-------------- end, backwards implementation ------------------*/
+
+
+/*****************************************************************
+ * x. Benchmark driver
+ *****************************************************************/
+#ifdef h4REFERENCE_FWDBACK_BENCHMARK
+
+#include "easel.h"
+#include "esl_alphabet.h"
+#include "esl_getopts.h"
+#include "esl_random.h"
+#include "esl_randomseq.h"
+#include "esl_stopwatch.h"
+
+#include "h4_hmmfile.h"
+#include "h4_mode.h"
+#include "h4_path.h"
+#include "h4_profile.h"
+#include "h4_refmx.h"
+
+#include "general.h"
+#include "logsum.h"
+#include "reference_fwdback.h"
+#include "reference_viterbi.h"
+
+static ESL_OPTIONS options[] = {
+  /* name           type      default  env  range toggles reqs incomp  help                                       docgroup*/
+  { "-h",        eslARG_NONE,   FALSE, NULL, NULL,  NULL,  NULL, NULL, "show brief help on version and usage",           0 },
+  { "-s",        eslARG_INT,      "0", NULL, NULL,  NULL,  NULL, NULL, "set random number seed to <n>",                  0 },
+  { "-L",        eslARG_INT,    "400", NULL, "n>0", NULL,  NULL, NULL, "length of random target seqs",                   0 },
+  { "-N",        eslARG_INT,   "2000", NULL, "n>0", NULL,  NULL, NULL, "number of random target seqs",                   0 },
+  { "--version", eslARG_NONE,    NULL, NULL, NULL,  NULL,  NULL, NULL, "show HMMER version/release information",         0 },
+  {  0, 0, 0, 0, 0, 0, 0, 0, 0, 0 },
+};
+
+int 
+main(int argc, char **argv)
+{
+  ESL_GETOPTS    *go      = h4_CreateDefaultApp(options, 1, argc, argv,
+						"benchmark driver for generic dual-mode Forward/Backward DP",
+						"[-options] <hmmfile>");
+  char           *hmmfile = esl_opt_GetArg(go, 1);
+  ESL_STOPWATCH  *w       = esl_stopwatch_Create();
+  ESL_RANDOMNESS *rng     = esl_randomness_CreateFast(esl_opt_GetInteger(go, "-s"));
+  ESL_ALPHABET   *abc     = NULL;
+  H4_HMMFILE     *hfp     = NULL;
+  H4_PROFILE     *hmm     = NULL;
+  H4_MODE        *mo      = h4_mode_Create();
+  H4_REFMX       *rx      = h4_refmx_Create(100, 100);  // will be resized as needed.
+  H4_PATH        *pi      = h4_path_Create();
+  int             L       = esl_opt_GetInteger(go, "-L");
+  int             N       = esl_opt_GetInteger(go, "-N");
+  ESL_DSQ        *dsq     = malloc(sizeof(ESL_DSQ) * (L+2));
+  int             i;
+  float           sc;
+  double          base_time, F_time, B_time, V_time;
+  double          F_speed, B_speed, V_speed;
+
+  h4_logsum_Init();
+
+  if ( h4_hmmfile_Open(hmmfile, NULL, &hfp) != eslOK) esl_fatal("couldn't open profile file %s", hmmfile);
+  if ( h4_hmmfile_Read(hfp, &abc, &hmm)     != eslOK) esl_fatal("failed to read profile");
+  h4_hmmfile_Close(hfp);
+  h4_profile_Config(hmm);
+  h4_mode_SetLength(mo, L);
+
+  /* Baseline time for seq generation alone */
+  esl_stopwatch_Start(w);
+  for (i = 0; i < N; i++) esl_rsq_xfIID(rng, hmm->f, abc->K, L, dsq);
+  esl_stopwatch_Stop(w);
+  base_time = w->user;
+
+  /* Forward benchmark time. */
+  esl_stopwatch_Start(w);
+  for (i = 0; i < N; i++)
+    {
+      esl_rsq_xfIID(rng, hmm->f, abc->K, L, dsq);
+      h4_ReferenceForward (dsq, L, hmm, mo, rx, &sc);
+      h4_refmx_Reuse(rx);
+    }
+  esl_stopwatch_Stop(w);
+  F_time  = w->user - base_time;
+  F_speed = (double) N * (double) L * (double) hmm->M * 1e-6 / F_time;
+
+  /* Backward */
+  esl_stopwatch_Start(w);
+  for (i = 0; i < N; i++)
+    {
+      esl_rsq_xfIID(rng, hmm->f, abc->K, L, dsq);
+      h4_ReferenceBackward (dsq, L, hmm, mo, rx, &sc);
+      h4_refmx_Reuse(rx);
+    }
+  esl_stopwatch_Stop(w);
+  B_time  = w->user - base_time;
+  B_speed = (double) N * (double) L * (double) hmm->M * 1e-6 / B_time;
+
+  /* Viterbi */
+  esl_stopwatch_Start(w);
+  for (i = 0; i < N; i++)
+    {
+      esl_rsq_xfIID(rng, hmm->f, abc->K, L, dsq);
+      h4_ReferenceViterbi (dsq, L, hmm, mo, rx, pi, &sc);
+      h4_refmx_Reuse(rx);
+      h4_path_Reuse(pi);
+    }
+  esl_stopwatch_Stop(w);
+  V_time  = w->user - base_time;
+  V_speed = (double) N * (double) L * (double) hmm->M * 1e-6 / V_time;
+
+  printf("# %s (M= %d)\n", "(name here)", hmm->M);
+  printf("# Reference Forward:  %8.1f Mc/s\n", F_speed);
+  printf("# Reference Backward: %8.1f Mc/s\n", B_speed);
+  printf("# Reference Viterbi:  %8.1f Mc/s\n", V_speed);
+
+  free(dsq);
+  h4_refmx_Destroy(rx);
+  h4_path_Destroy(pi);
+  h4_profile_Destroy(hmm);
+  esl_alphabet_Destroy(abc);
+  esl_stopwatch_Destroy(w);
+  esl_randomness_Destroy(rng);
+  esl_getopts_Destroy(go);
+  return 0;
+}
+#endif /*h4REFERENCE_FWDBACK_BENCHMARK*/
+/*----------------- end, benchmark ------------------------------*/
+
+
+
 
 
 /*****************************************************************
@@ -543,13 +907,17 @@ utest_brute(ESL_RANDOMNESS *rng, int M, int L, int ntrials, int be_verbose)
   float           vtol_abs = 1e-5;
   float           ftol_abs = (h4_logsum_IsSlowExact() ? 1e-5 : 0.003);
   int   npath;
-  float vsc, fsc, brute_vsc, brute_fsc;
+  float vsc, fsc, bsc, brute_vsc, brute_fsc;
   int   i;
   int   status;
 
   /* path enumeration is independent of model, params, seq */
   if ( enumerate_paths(M, L, &arrpi, &npath) != eslOK) esl_fatal(msg);
   ESL_ALLOC(pathsc, sizeof(float) * npath);
+
+  /* all paths should validate */
+  for (i = 0; i < npath; i++)
+    if ( h4_path_Validate(arrpi[i], M, L, NULL) != eslOK) esl_fatal(msg);
 
   while (ntrials--)
     {
@@ -567,17 +935,20 @@ utest_brute(ESL_RANDOMNESS *rng, int M, int L, int ntrials, int be_verbose)
       if (be_verbose) h4_profile_Dump(stdout, hmm);
       if (be_verbose) h4_mode_Dump(stdout, mo);
 
-      /* run Forward and Viterbi: get vsc, fsc */
-      if (h4_ReferenceForward(sq->dsq, sq->n, hmm, mo, rmx,       &fsc) != eslOK) esl_fatal(msg);
+      /* run Forward, Backward, Viterbi */
+      if (h4_ReferenceForward (sq->dsq, sq->n, hmm, mo, rmx,       &fsc) != eslOK) esl_fatal(msg);
       if (be_verbose) h4_refmx_Dump(stdout, rmx);
       h4_refmx_Reuse(rmx);
-      if (h4_ReferenceViterbi(sq->dsq, sq->n, hmm, mo, rmx,  vpi, &vsc) != eslOK) esl_fatal(msg);
+      if (h4_ReferenceBackward(sq->dsq, sq->n, hmm, mo, rmx,       &bsc) != eslOK) esl_fatal(msg);
+      h4_refmx_Reuse(rmx);
+      if (h4_ReferenceViterbi (sq->dsq, sq->n, hmm, mo, rmx,  vpi, &vsc) != eslOK) esl_fatal(msg);
 
+      /* Backward and Forward scores should match */
+      if (fabs(fsc - bsc) > ftol_abs) esl_fatal(msg);
+
+      /* Score all brute paths with this seq/profile  */
       for (i = 0; i < npath; i++)
-	{
-	  if ( h4_path_Validate(arrpi[i], M, L, NULL)                  != eslOK) esl_fatal(msg);
-	  if ( h4_path_Score(arrpi[i], sq->dsq, hmm, mo, &(pathsc[i])) != eslOK) esl_fatal(msg);
-	}
+	if ( h4_path_Score(arrpi[i], sq->dsq, hmm, mo, &(pathsc[i])) != eslOK) esl_fatal(msg);
 
       /* dump all paths and their scores before we sort scores for accurate summation */
       if (be_verbose)
@@ -728,7 +1099,7 @@ main(int argc, char **argv)
   ESL_SQFILE     *sqfp    = NULL;
   ESL_SQ         *sq      = NULL;
   H4_REFMX       *rmx     = h4_refmx_Create(100, 100);
-  float           fsc;
+  float           fsc, bsc;
   int             status;
 
   h4_logsum_Init();
@@ -748,10 +1119,13 @@ main(int argc, char **argv)
       h4_mode_SetLength(mo, sq->n);
 
       h4_ReferenceForward(sq->dsq, sq->n, hmm, mo, rmx, &fsc);
-
-      printf("%s %.6f\n", sq->name, fsc);
-
       //h4_refmx_Dump(stdout, rmx);
+      h4_refmx_Reuse(rmx);
+      printf("%s fwd %.6f\n", sq->name, fsc);
+
+      h4_ReferenceBackward(sq->dsq, sq->n, hmm, mo, rmx, &bsc);
+      //h4_refmx_Dump(stdout, rmx);
+      printf("%s bck %.6f\n", sq->name, bsc);
 
       h4_refmx_Reuse(rmx);
       esl_sq_Reuse(sq);

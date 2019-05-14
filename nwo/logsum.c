@@ -211,9 +211,6 @@ logsum_exact(float a, float b)
  * 3. Benchmark driver.
  *****************************************************************/
 #ifdef h4LOGSUM_BENCHMARK
-
-#include "h4_config.h"
-
 #include <math.h>
 
 #include "easel.h"
