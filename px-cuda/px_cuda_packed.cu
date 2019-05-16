@@ -1396,6 +1396,7 @@ __device__  uint calc_band_10(const __restrict__ uint8_t *dsq, int L, int Q, int
       STEP_10()
       CONVERT_6()
       row++;
+      num_iters = Q-10;
       offset+=32;
       STEP_10()
       CONVERT_5()
@@ -1416,7 +1417,7 @@ __device__  uint calc_band_10(const __restrict__ uint8_t *dsq, int L, int Q, int
       STEP_10()
       CONVERT_1()
       row++;
-      num_iters = Q-10;
+
   }
   num_iters = min(num_iters, L-row);
   while(row <= L){
@@ -1865,7 +1866,8 @@ p7_SSVFilter_shell_sse(const ESL_DSQ *dsq, int L, const __restrict__
   cudaMemcpy(&h_compare, card_h, 1, cudaMemcpyDeviceToHost);
   gcups = ((((float) (om->M * L) *(float) NUM_REPS)/seconds)/1e9) * (float)(num_blocks.x * num_blocks.y *num_blocks.z) * (float)warps_per_block;
   //printf("M = %d, L = %d, seconds = %f, GCUPS = %f\n", om->M, L, seconds, gcups); 
-  printf("length = %d, M = %d, gcups =%f\n", L, om->M, gcups);
+ // printf("length = %d, M = %d, gcups =%f\n", L, om->M, gcups);
+ //printf("%f\n", gcups);
 
   err = cudaGetLastError();
   if(err != cudaSuccess){
@@ -1915,6 +1917,7 @@ p7_SSVFilter_shell_sse(const ESL_DSQ *dsq, int L, const __restrict__
   for(i = 0; i < om->abc->Kp; i++){
 
   }
+  printf("score %x \n", h_compare);
   if(h != h_compare){
     printf("Final result miss-match: %x (CUDA) vs %x (CPU) on sequence %d with length %d\n\n", h_compare, h, num, L);
   } 
@@ -2022,7 +2025,7 @@ main(int argc, char **argv)
     {
       for (i = 1; i < chu->N; i++)
 	{
-    if(num_hits > 10 ){
+    if(num_hits > 100 ){
       goto punt;
     }
 	  p7_bg_SetLength(bg, (int) chu->L[i]);            // TODO: remove need for cast
@@ -2030,7 +2033,7 @@ main(int argc, char **argv)
 	  
 	  //	  printf("seq %d %s\n", chu->i0+i, chu->name[i]);
     float ssv_score;
-//printf("Sequence %s, ", chu->name[i]);
+printf("Sequence %s, ", chu->name[i]);
     p7_SSVFilter_shell_sse(chu->dsq[i], chu->L[i], om, eng->fx ,&ssv_score, card_OPROFILE, card_FILTERMX, num_hits);
 
 
