@@ -25,6 +25,8 @@
 typedef struct {
   float xsc[h4_NX][h4_NXT];     // special transitions [ENJCB][LOOP,MOVE]
 
+  float nullsc;                 // null1 score correction for length L
+
   int   L;                      // current configured target seq length                      unset=-1
   float nj;                     // expected # of J's: 0.0 = unihit; 1.0 = standard multihit. unset=-1.
   float pglocal;                // B->G probability
@@ -48,6 +50,7 @@ extern int      h4_mode_SetCustom   (H4_MODE *mo, int L, float nj, float pglocal
 extern int      h4_mode_SetDefault  (H4_MODE *mo);
 extern int      h4_mode_SetLocal    (H4_MODE *mo);
 extern int      h4_mode_SetGlocal   (H4_MODE *mo);
+extern int      h4_mode_SetUnihit   (H4_MODE *mo);
 extern int      h4_mode_SetUnilocal (H4_MODE *mo);
 extern int      h4_mode_SetUniglocal(H4_MODE *mo);
 extern int      h4_mode_SetGlobal   (H4_MODE *mo);        

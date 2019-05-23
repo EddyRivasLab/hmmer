@@ -20,11 +20,12 @@
  * Bundle of info to pass to objective function for Easel rootfinder
  */
 struct ew_param_s {
-  const H4_PROFILE *hmm;	// ptr to the original count-based HMM, which remains unchanged 
-  const H4_PRIOR   *pri;	// Dirichlet mixture priors used to parameterize from counts 
-  H4_PROFILE       *h2;		// our working space: a copy of <hmm> that we can parameterize
-  int              nseq;        // number of sequences that were counted into <hmm>
-  float            etarget;	// target for average score per match emission vector (bits)
+  const H4_PROFILE_CT *orig_ctm;   // ptr to the original count-based HMM, which remains unchanged 
+  const H4_PRIOR      *pri;	   // Dirichlet mixture priors used to parameterize from counts 
+  H4_PROFILE_CT       *ctm;        // working space: copy of <orig_ctm> that we can scale and parameterize
+  H4_PROFILE          *hmm;	   // parameterized model for current effective seq #
+  int                  nseq;       // number of sequences that were counted into <ctm>
+  float                etarget;	   // target for average score per match emission vector (bits)
 };
 
 
@@ -43,22 +44,17 @@ eweight_target_f(double Neff, void *data, double *ret_fx)
   struct ew_param_s *p = (struct ew_param_s *) data;
   int    status = eslOK;
 
-  /* Copy counts to <h2> model we're going to parameterize. */
-  esl_mat_FCopy(p->hmm->e, p->hmm->M+1, p->hmm->abc->K, p->h2->e);
-  esl_mat_FCopy(p->hmm->t, p->hmm->M+1, h4_NT,          p->h2->t);
+  /* Copy counts to <ctm> tmp space */
+  esl_mat_DCopy(p->orig_ctm->e, p->orig_ctm->M+1, p->orig_ctm->abc->K, p->ctm->e);
+  esl_mat_DCopy(p->orig_ctm->t, p->orig_ctm->M+1, h4_NT,               p->ctm->t);
 
-  /* Scale those counts by current <Neff>.
-   * This has a side effect of (temporarily) altering the fixed boundary conditions 
-   * of the model params.
-   */
-  esl_mat_FScale(p->h2->e, p->h2->M+1, p->h2->abc->K, (float) Neff / (float) p->nseq);
-  esl_mat_FScale(p->h2->t, p->hmm->M+1, h4_NT,        (float) Neff / (float) p->nseq);
+  /* Scale those counts by current <Neff> */
+  esl_mat_DScale(p->ctm->e, p->ctm->M+1, p->ctm->abc->K, (float) Neff / (float) p->nseq);
+  esl_mat_DScale(p->ctm->t, p->ctm->M+1, h4_NT,          (float) Neff / (float) p->nseq);
 
-  /* Parameterize the model, combining weighted counts w/ prior.
-   * We count on h4_Parameterize() setting fixed boundary conditions.
-    */
-  if (( status = h4_Parameterize(p->h2, p->pri)) != eslOK) goto ERROR;
-  *ret_fx = (double) (h4_MeanMatchKL(p->h2) - p->etarget);
+  /* Parameterize the model, combining weighted counts w/ prior. */
+  if (( status = h4_Parameterize(p->ctm, p->pri, p->hmm)) != eslOK) goto ERROR;
+  *ret_fx = (double) (h4_MeanMatchKL(p->hmm) - p->etarget);
   return eslOK;
 
  ERROR:
@@ -73,14 +69,14 @@ eweight_target_f(double Neff, void *data, double *ret_fx)
  * Purpose:   Use "entropy weighting" to calculate an effective sequence
  *            number, and return it in <*ret_Neff>. 
  *            
- *            We're given an <hmm> that contains observed counts for a
- *            new profile we're building, the prior <pri> that we're
- *            going to use to convert counts to probability
- *            parameters, and the number of sequences <nseq> that we
- *            got the counts from.  We look at the average bitscore
- *            per match emission distribution, and aim to reduce it to
- *            <etarget> bits by making <Neff> something less than
- *            <nseq>. 
+ *            We're given a count-collection <ctm> that contains
+ *            observed counts for a new profile we're building, the
+ *            prior <pri> that we're going to use to convert counts to
+ *            probability parameters, and the number of sequences
+ *            <nseq> that we got the counts from.  We look at the
+ *            average bitscore per match emission distribution, and
+ *            aim to reduce it to <etarget> bits by making <Neff>
+ *            something less than <nseq>.
  *            
  *            If the alignment was so diverse that the average
  *            bitscore per match state was already <= <etarget>, <Neff
@@ -93,7 +89,7 @@ eweight_target_f(double Neff, void *data, double *ret_fx)
  *            
  *            Uses the Easel bisection rootfinder. 
  *
- * Args:      hmm      - counts that were collected
+ * Args:      ctm      - counts that were collected
  *            pri      - mixture Dirichlet prior that'll be used
  *            nseq     - # of seqs that were counted into <hmm>
  *            etarget  - target mean bitscore per match state
@@ -117,7 +113,7 @@ eweight_target_f(double Neff, void *data, double *ret_fx)
  *            nonfatal handler, <*ret_Neff> is set to <nseq>.
  */
 int
-h4_EntropyWeight(const H4_PROFILE *hmm, const H4_PRIOR *pri, int nseq, float etarget, float *ret_Neff)
+h4_EntropyWeight(const H4_PROFILE_CT *ctm, const H4_PRIOR *pri, int nseq, float etarget, float *ret_Neff)
 {
   ESL_ROOTFINDER *R = NULL;
   struct ew_param_s p;
@@ -126,11 +122,12 @@ h4_EntropyWeight(const H4_PROFILE *hmm, const H4_PRIOR *pri, int nseq, float eta
   int    status;
 
   /* Set up the data bundle we pass to the rootfinder */
-  p.hmm     = hmm;
-  p.pri     = pri;
-  p.nseq    = nseq;
-  p.etarget = etarget;
-  if (( p.h2 = h4_profile_Clone(hmm) ) == NULL) return eslEMEM;
+  p.orig_ctm = ctm;
+  p.pri      = pri;
+  p.ctm      = h4_profile_ct_Create(ctm->abc, ctm->M);
+  p.hmm      = h4_profile_Create   (ctm->abc, ctm->M);
+  p.nseq     = nseq;
+  p.etarget  = etarget;
 
   /* If the diversity of the input data already gives us a profile w/ fx < 0,
    * no need to use entropy weighting to further reduce its mean score.
@@ -150,7 +147,8 @@ h4_EntropyWeight(const H4_PROFILE *hmm, const H4_PRIOR *pri, int nseq, float eta
     }
   
  ERROR: // also normal:
-  h4_profile_Destroy(p.h2);
+  h4_profile_Destroy(p.hmm);
+  h4_profile_ct_Destroy(p.ctm);
   esl_rootfinder_Destroy(R);  // this is fine even if R is NULL.
   *ret_Neff = (status == eslOK ? (float) Neff : (float) nseq);
   return status;

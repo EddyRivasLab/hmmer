@@ -1,6 +1,10 @@
 
 # ........ ....................
-1 exercise h4_hmmfile            @nwo/h4_hmmfile_utest@
+1 exercise h4_hmmfile            @nwo/h4_hmmfile_utest@ -s0
 1 exercise h4_mode               @nwo/h4_mode_utest@
-1 exercise h4_path               @nwo/h4_path_utest@
-1 exercise zigar                 @nwo/zigar_utest@
+1 exercise h4_path               @nwo/h4_path_utest@ -s0
+1 exercise h4_profile            @nwo/h4_profile_utest@ -s0
+1 exercise logsum                @nwo/logsum_utest@ -s0
+1 exercise modelsample           @nwo/modelsample_utest@ -s0
+1 exercise reference_dp          @nwo/reference_dp_utest@ -s0
+1 exercise zigar                 @nwo/zigar_utest@ -s0

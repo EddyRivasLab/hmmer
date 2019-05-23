@@ -41,7 +41,6 @@ static int sample_endpoints(ESL_RANDOMNESS *rng, const H4_PROFILE *hmm, int *ret
  *            
  *            The minimum sampled sequence length is 1, because mute
  *            cycles are rejected.
- *            
  *
  * Args:      rng - random number generator
  *            hmm - profile to sample from
@@ -177,7 +176,7 @@ sample_endpoints(ESL_RANDOMNESS *rng, const H4_PROFILE *hmm, int *ret_kstart, in
    * [SRE H6/142]
    */
   ESL_ALLOC(pstart, sizeof(float) * (hmm->M+1));
-  h4_profile_CalculateOccupancy(hmm, pstart, NULL);                                       // this sets pstart[0] = 0; there's no M0 state.
+  h4_profile_Occupancy(hmm, pstart, NULL, NULL, NULL);                                    // this sets pstart[0] = 0; there's no M0 state.
   for (k = 1; k <= hmm->M; k++)  Z        +=  pstart[k]      * (float) (hmm->M + 1 - k);  // reproduce calculation in h4_profile::set_local_entry()
   for (k = 1; k <= hmm->M; k++)  pstart[k] = (pstart[k] / Z) * (float) (hmm->M + 1 - k);  //   (M+1-k) is weighting for how many ij fragments start at i                
   kstart = esl_rnd_FChoose(rng, pstart, hmm->M+1);                                        // sample the starting position from that distribution 

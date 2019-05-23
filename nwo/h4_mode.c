@@ -113,6 +113,7 @@ h4_mode_SetCustom(H4_MODE *mo, int L, float nj, float pglocal)
  *            | <h4_mode_SetDefault()>   | default multihit glocal/local | 1.0 | 0.5     | 400 |
  *            | <h4_mode_SetLocal()>     | multihit local-only           | 1.0 |   0     | 400 |
  *            | <h4_mode_SetGlocal()>    | multihit glocal-only          | 1.0 | 1.0     | 400 |
+ *            | <h4_mode_SetUnihit()>    | unihit glocal/local           |   0 | 0.5     | 400 |
  *            | <h4_mode_SetUnilocal()>  | unihit local-only             |   0 |   0     | 400 |
  *            | <h4_mode_SetUniglocal()> | unihit glocal-only            |   0 | 1.0     | 400 |
  *            | <h4_mode_SetGlobal()>    | single global alignment       |   0 | 1.0     |   0 |
@@ -128,6 +129,7 @@ h4_mode_SetCustom(H4_MODE *mo, int L, float nj, float pglocal)
 int h4_mode_SetDefault   (H4_MODE *mo){ return h4_mode_SetCustom(mo, 400,  1.0, 0.5); }
 int h4_mode_SetLocal     (H4_MODE *mo){ return h4_mode_SetCustom(mo, 400,  1.0, 0.0); }
 int h4_mode_SetGlocal    (H4_MODE *mo){ return h4_mode_SetCustom(mo, 400,  1.0, 1.0); }
+int h4_mode_SetUnihit    (H4_MODE *mo){ return h4_mode_SetCustom(mo, 400,  0.0, 0.5); }
 int h4_mode_SetUnilocal  (H4_MODE *mo){ return h4_mode_SetCustom(mo, 400,  0.0, 0.0); }
 int h4_mode_SetUniglocal (H4_MODE *mo){ return h4_mode_SetCustom(mo, 400,  0.0, 1.0); }
 int h4_mode_SetGlobal    (H4_MODE *mo){ return h4_mode_SetCustom(mo,  0.,  0.0, 1.0); }
@@ -152,12 +154,16 @@ int
 h4_mode_SetLength(H4_MODE *mo, int L)
 {
   ESL_DASSERT1(( L >= 0 && L <= 100000 ));
+  float p    = (float) L / (float) (L+1);
+  float q    = 1.0f / (float) (L+1);
+  mo->nullsc = (float) L * log2f(p) + log2f(q);
 
   mo->xsc[h4_N][h4_LOOP] = mo->xsc[h4_J][h4_LOOP] = mo->xsc[h4_C][h4_LOOP] = esl_log2f( (float) L    / ( (float) L + 2. + mo->nj));
   mo->xsc[h4_N][h4_MOVE] = mo->xsc[h4_J][h4_MOVE] = mo->xsc[h4_C][h4_MOVE] = esl_log2f((2. + mo->nj) / ( (float) L + 2. + mo->nj));
   mo->L = L;
   return eslOK;
 }
+
 
 /* Function:  h4_mode_Destroy()
  * Synopsis:  Frees an <H4_MODE>
@@ -194,7 +200,7 @@ h4_mode_Dump(FILE *fp, const H4_MODE *mo)
 #ifdef h4MODE_TESTDRIVE
 
 static void
-utest_minimal(void)
+utest_sanity(void)
 {
   char     msg[] = "h4_mode minimal unit test failed";
   H4_MODE *mo    = NULL;
@@ -234,7 +240,7 @@ main(int argc, char **argv)
  
   fprintf(stderr, "## %s\n", argv[0]);
 
-  utest_minimal();
+  utest_sanity();
 
   fprintf(stderr, "#  status = ok\n");
   esl_getopts_Destroy(go);

@@ -236,6 +236,24 @@ h4_path_Reverse(H4_PATH *pi)
 }
       
   
+/* Function:  h4_path_GetSeqlen()
+ * Synopsis:  Returns length of sequence emitted by path
+ * Incept:    SRE, Wed 22 May 2019
+ */
+int
+h4_path_GetSeqlen(const H4_PATH *pi)
+{
+  int L = 0;
+  int z;
+
+  for (z = 0; z < pi->Z; z++)
+    switch (pi->st[z]) {
+    case h4P_N:   case h4P_J:  case h4P_C: L += pi->rle[z] - 1; break;
+    case h4P_MG:  case h4P_IG:             L += pi->rle[z];     break;
+    case h4P_ML:  case h4P_IL:             L += pi->rle[z];     break;
+    }
+  return L;
+}
 
 /* Function:  h4_path_Reuse()
  * Synopsis:  Reinitialize and reuse an existing path
@@ -509,7 +527,7 @@ h4_path_InferGlocal(const ESL_ALPHABET *abc, const ESL_DSQ *ax, int alen, const 
  *
  * Purpose:   Count path <pi>, for sequence <dsq>, into the t[] and e[]
  *            transition and emission fields of counts-based profile
- *            <hmm>, with count weight <wgt>. (That is, the sequence can
+ *            <ctm>, with count weight <wgt>. (That is, the sequence can
  *            have a weight different than 1.0.) 
  *            
  *            <dsq> can be either the unaligned raw sequence, or from
@@ -527,16 +545,16 @@ h4_path_InferGlocal(const ESL_ALPHABET *abc, const ESL_DSQ *ax, int alen, const 
  * Args:      pi  : path to count
  *            dsq : digital sequence corresponding to <pi>, aligned or unaligned
  *            wgt : weight on this sequence 
- *            hmm : profile to count the path into
+ *            ctm : count-collection profile to count the path into
  *
  * Returns:   <eslOK> on success.
- *            Weighted counts are accumulated in the hmm's e[] and t[].
+ *            Weighted counts are accumulated in the ctm's e[] and t[].
  *
  * Throws:    <eslEINVAL> if we detect something's corrupt in the path.
  *            Now the effect on <hmm> is undefined, and caller shouldn't use it.
  */
 int
-h4_path_Count(const H4_PATH *pi, const ESL_DSQ *dsq, float wgt, H4_PROFILE *hmm)
+h4_path_Count(const H4_PATH *pi, const ESL_DSQ *dsq, float wgt, H4_PROFILE_CT *ctm)
 {
   int    z;             // position in trace, 0..Z-1
   int    r;             // position in a runlength, 0..rle-1
@@ -555,8 +573,8 @@ h4_path_Count(const H4_PATH *pi, const ESL_DSQ *dsq, float wgt, H4_PROFILE *hmm)
 	{
 	  for (r = 0; r < pi->rle[z]; r++)
 	    {
-	      while (esl_abc_XIsGap(hmm->abc, dsq[i])) i++;      // dsq might be aligned, with gap columns
-	      esl_abc_FCount(hmm->abc, hmm->e[k], dsq[i], wgt);  // handles counting degenerate residues. *,~: no-op.
+	      while (esl_abc_XIsGap(ctm->abc, dsq[i])) i++;      // dsq might be aligned, with gap columns
+	      esl_abc_DCount(ctm->abc, ctm->e[k], dsq[i], wgt);  // handles counting degenerate residues. *,~: no-op.
 	      k++;
 	      i++;
 	    }
@@ -565,7 +583,7 @@ h4_path_Count(const H4_PATH *pi, const ESL_DSQ *dsq, float wgt, H4_PROFILE *hmm)
 	{
 	  for (r = 0; r < pi->rle[z]; r++)
 	    {
-	      while (esl_abc_XIsGap(hmm->abc, dsq[i])) i++;
+	      while (esl_abc_XIsGap(ctm->abc, dsq[i])) i++;
 	      i++;
 	    }
 	}
@@ -573,7 +591,7 @@ h4_path_Count(const H4_PATH *pi, const ESL_DSQ *dsq, float wgt, H4_PROFILE *hmm)
 	{
 	  for (r = 0; r < pi->rle[z]-1; r++)    // note -1, because N/J/C emit on transition
 	    {
-	      while (esl_abc_XIsGap(hmm->abc, dsq[i])) i++;
+	      while (esl_abc_XIsGap(ctm->abc, dsq[i])) i++;
 	      i++;
 	    }
 	}
@@ -599,10 +617,10 @@ h4_path_Count(const H4_PATH *pi, const ESL_DSQ *dsq, float wgt, H4_PROFILE *hmm)
 	    case h4P_MG:
 	    case h4P_ML:
 	      switch (yprv) {
-	      case h4P_MG: case h4P_ML: hmm->t[k][h4_TMM] += wgt; break;
-	      case h4P_IG: case h4P_IL: hmm->t[k][h4_TIM] += wgt; break;
-	      case h4P_DG: case h4P_DL: hmm->t[k][h4_TDM] += wgt; break;
-	      case h4P_G:               hmm->t[0][h4_TMM] += wgt; break;  // t[0] includes data-dependent G->{MD}
+	      case h4P_MG: case h4P_ML: ctm->t[k][h4_TMM] += wgt; break;
+	      case h4P_IG: case h4P_IL: ctm->t[k][h4_TIM] += wgt; break;
+	      case h4P_DG: case h4P_DL: ctm->t[k][h4_TDM] += wgt; break;
+	      case h4P_G:               ctm->t[0][h4_TMM] += wgt; break;  // t[0] includes data-dependent G->{MD}
 	      case h4P_L:                                         break;
 	      default: ESL_EXCEPTION(eslEINVAL, "invalid transition to M in path");
 	      }
@@ -612,9 +630,9 @@ h4_path_Count(const H4_PATH *pi, const ESL_DSQ *dsq, float wgt, H4_PROFILE *hmm)
 	    case h4P_IG:
 	    case h4P_IL:
 	      switch (yprv) {
-	      case h4P_MG: case h4P_ML: hmm->t[k][h4_TMI] += wgt; break;
-	      case h4P_IG: case h4P_IL: hmm->t[k][h4_TII] += wgt; break;
-	      case h4P_DG: case h4P_DL: hmm->t[k][h4_TDI] += wgt; break;
+	      case h4P_MG: case h4P_ML: ctm->t[k][h4_TMI] += wgt; break;
+	      case h4P_IG: case h4P_IL: ctm->t[k][h4_TII] += wgt; break;
+	      case h4P_DG: case h4P_DL: ctm->t[k][h4_TDI] += wgt; break;
 	      default: ESL_EXCEPTION(eslEINVAL, "invalid transition to I in path");
 	      }
 	      break;
@@ -622,10 +640,10 @@ h4_path_Count(const H4_PATH *pi, const ESL_DSQ *dsq, float wgt, H4_PROFILE *hmm)
 	    case h4P_DG:
 	    case h4P_DL:
 	      switch (yprv) {
-	      case h4P_MG: case h4P_ML: hmm->t[k][h4_TMD] += wgt; break;
-	      case h4P_IG: case h4P_IL: hmm->t[k][h4_TID] += wgt; break;
-	      case h4P_DG: case h4P_DL: hmm->t[k][h4_TDD] += wgt; break;
-	      case h4P_G:               hmm->t[0][h4_TMD] += wgt; break;
+	      case h4P_MG: case h4P_ML: ctm->t[k][h4_TMD] += wgt; break;
+	      case h4P_IG: case h4P_IL: ctm->t[k][h4_TID] += wgt; break;
+	      case h4P_DG: case h4P_DL: ctm->t[k][h4_TDD] += wgt; break;
+	      case h4P_G:               ctm->t[0][h4_TMD] += wgt; break;
 	      default: ESL_EXCEPTION(eslEINVAL, "invalid transition to D in path");
 	      }
 	      k++;
@@ -663,15 +681,10 @@ h4_path_Count(const H4_PATH *pi, const ESL_DSQ *dsq, float wgt, H4_PROFILE *hmm)
  *            
  *            Note on numerical roundoff error: we deliberately sum
  *            terms in exactly the same order that the reference
- *            Viterbi implementation does. This makes it likely that
- *            calling <h4_path_Score> on the Viterbi path will give
- *            the Viterbi score, exactly. However, this isn't
- *            guaranteed. I think the reason is that the ML/MG states
- *            have a three-way a+b+c addition (sc = rsc + sc + tsc).
- *            Empirically, the brute test gives exact match 99+% of
- *            the time; when it's off, it's off by an absolute diff
- *            of ~0.000001.
- *            
+ *            Viterbi implementation does. This makes it nigh-certain
+ *            that calling <h4_path_Score> on the Viterbi path will give
+ *            the Viterbi score, exactly. Unclear that this can 
+ *            be guaranteed though.
  *
  * Returns:   <eslOK> on success.
  */
@@ -749,7 +762,7 @@ h4_path_Score(const H4_PATH *pi, const ESL_DSQ *dsq, const H4_PROFILE *hmm, cons
 	break;
 
       case h4P_C:
-	sc += mo->xsc[h4_E][h4_LOOP];
+	sc += mo->xsc[h4_E][h4_MOVE];
 	for (y = 1; y < pi->rle[z]; y++) sc += mo->xsc[h4_C][h4_LOOP]; // sc += mo->xsc[h4_C][h4_LOOP] * (pi->rle[z]-1), but matching Viterbi roundoff error
 	i  += pi->rle[z]-1;
 	break;
@@ -1064,6 +1077,7 @@ h4_path_Dump(FILE *fp, const H4_PATH *pi)
   fprintf(fp, "\n# Z        = %d\n", pi->Z);
   fprintf(fp,   "# Zalloc   = %d\n", pi->Zalloc);
   fprintf(fp,   "# Zredline = %d\n", pi->Zredline);
+  fprintf(fp,   "# L        = %d\n", h4_path_GetSeqlen(pi));
   return eslOK;
 }
 
@@ -1232,21 +1246,21 @@ utest_dirtyseqs(ESL_RANDOMNESS *rng, ESL_ALPHABET *abc)
 static void
 utest_counting(void)
 {
-  char          msg[]     = "h4_path counting test failed";
-  ESL_ALPHABET *abc       = esl_alphabet_Create(eslDNA);
-  char         *aseq[]    = { "..GAA..TTC..",
-	 	              "aaGAA..TTCaa",
-		              "..GAAccTTC.." };
-  char          cons[]    =   "..xxx..xxx..";
-  int           nseq      = sizeof(aseq) / sizeof(char *);
-  int           alen      = strlen(cons);
-  ESL_DSQ      *ax        = malloc(sizeof(ESL_DSQ) * (alen+2));
-  int8_t       *matassign = malloc(sizeof(int8_t) * (alen+1));
-  H4_PATH      *pi        = h4_path_Create();
-  H4_PROFILE   *hmm       = NULL;
-  int           M         = 0;
-  int           idx, apos, k;
-  char          errbuf[eslERRBUFSIZE];
+  char           msg[]     = "h4_path counting test failed";
+  ESL_ALPHABET  *abc       = esl_alphabet_Create(eslDNA);
+  char          *aseq[]    = { "..GAA..TTC..",
+	 	               "aaGAA..TTCaa",
+		               "..GAAccTTC.." };
+  char           cons[]    =   "..xxx..xxx..";
+  int            nseq      = sizeof(aseq) / sizeof(char *);
+  int            alen      = strlen(cons);
+  ESL_DSQ       *ax        = malloc(sizeof(ESL_DSQ) * (alen+2));
+  int8_t        *matassign = malloc(sizeof(int8_t) * (alen+1));
+  H4_PATH       *pi        = h4_path_Create();
+  H4_PROFILE_CT *ctm       = NULL;
+  int            M         = 0;
+  int            idx, apos, k;
+  char           errbuf[eslERRBUFSIZE];
 
   matassign[0] = 0;
   for (apos = 1; apos <= alen; apos++)
@@ -1255,39 +1269,38 @@ utest_counting(void)
       if (matassign[apos]) M++;
     }
 
-  if ((hmm = h4_profile_Create(abc, M)) == NULL) esl_fatal(msg);
+  if ((ctm = h4_profile_ct_Create(abc, M)) == NULL) esl_fatal(msg);
 
   for (idx = 0; idx < nseq; idx++)
     {
       if ( esl_abc_Digitize(abc, aseq[idx], ax)                      != eslOK) esl_fatal(msg);
       if ( h4_path_InferGlocal(abc, ax, alen, matassign, -1, -1, pi) != eslOK) esl_fatal(msg);
       if ( h4_path_Validate(pi, M, esl_abc_dsqrlen(abc, ax), errbuf) != eslOK) esl_fatal("%s:\n  %s", msg, errbuf);
-      if ( h4_path_Count(pi, ax, 1.0, hmm)                           != eslOK) esl_fatal(msg);
+      if ( h4_path_Count(pi, ax, 1.0, ctm)                           != eslOK) esl_fatal(msg);
       h4_path_Reuse(pi);
     }
 
-  //h4_profile_Dump(stdout, hmm);
+  //h4_profile_ct_Dump(stdout, hmm);
 
   /* For the emissions, every sequence has a "GAATTC" consensus */
-  if (hmm->e[1][2] != (float) nseq) esl_fatal(msg);
-  if (hmm->e[2][0] != (float) nseq) esl_fatal(msg);
-  if (hmm->e[3][0] != (float) nseq) esl_fatal(msg);
-  if (hmm->e[4][3] != (float) nseq) esl_fatal(msg);
-  if (hmm->e[5][3] != (float) nseq) esl_fatal(msg);
-  if (hmm->e[6][1] != (float) nseq) esl_fatal(msg);
+  if (ctm->e[1][2] != (double) nseq) esl_fatal(msg);
+  if (ctm->e[2][0] != (double) nseq) esl_fatal(msg);
+  if (ctm->e[3][0] != (double) nseq) esl_fatal(msg);
+  if (ctm->e[4][3] != (double) nseq) esl_fatal(msg);
+  if (ctm->e[5][3] != (double) nseq) esl_fatal(msg);
+  if (ctm->e[6][1] != (double) nseq) esl_fatal(msg);
 
   /* For the transitions, one basic test condition (for this test)
    * is that occupancy at each k == nseq 
    */
-  for (k = 1; k < M; k++)
-    {
-      if (hmm->t[k][h4_TMM] + hmm->t[k][h4_TMI] + hmm->t[k][h4_TMD] + 
-	  hmm->t[k][h4_TDM] + hmm->t[k][h4_TDI] + hmm->t[k][h4_TDD] != nseq) esl_fatal(msg);
-    }
+  for (k = 1; k < M; k++) {
+    if (ctm->t[k][h4_TMM] + ctm->t[k][h4_TMI] + ctm->t[k][h4_TMD] + 
+	ctm->t[k][h4_TDM] + ctm->t[k][h4_TDI] + ctm->t[k][h4_TDD] != (double) nseq) esl_fatal(msg);
+  }
 
   free(ax);
   free(matassign);
-  h4_profile_Destroy(hmm);
+  h4_profile_ct_Destroy(ctm);
   h4_path_Destroy(pi);
   esl_alphabet_Destroy(abc);
 }  
@@ -1313,7 +1326,7 @@ utest_counting(void)
 static ESL_OPTIONS options[] = {
   /* name           type      default  env  range toggles reqs incomp  help                          docgroup*/
   { "-h",         eslARG_NONE,   NULL, NULL, NULL,  NULL,  NULL, NULL, "show brief help summary",             0 },
-  { "--seed",     eslARG_INT,     "0", NULL, NULL,  NULL,  NULL, NULL, "set random number generator seed",    0 },
+  { "-s",         eslARG_INT,     "0", NULL, NULL,  NULL,  NULL, NULL, "set random number generator seed",    0 },
   { "--version",  eslARG_NONE,   NULL, NULL, NULL,  NULL,  NULL, NULL, "show HMMER version number",           0 },
   {  0, 0, 0, 0, 0, 0, 0, 0, 0, 0 },
 
@@ -1326,7 +1339,7 @@ main(int argc, char **argv)
 					    "test driver for H4_PATH",
 					    "[-options]");
   ESL_ALPHABET   *abc = esl_alphabet_Create(eslAMINO);
-  ESL_RANDOMNESS *rng = esl_randomness_Create(esl_opt_GetInteger(go, "--seed"));
+  ESL_RANDOMNESS *rng = esl_randomness_Create(esl_opt_GetInteger(go, "-s"));
 
   fprintf(stderr, "## %s\n", argv[0]);
   fprintf(stderr, "#  rng seed = %" PRIu32 "\n", esl_randomness_GetSeed(rng));

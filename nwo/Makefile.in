@@ -16,9 +16,7 @@ OBJS   = \
 	modelsample.o       \
 	modelstats.o        \
 	parameterize.o      \
-	reference_fwdback.o \
-	reference_trace.o   \
-	reference_viterbi.o \
+	reference_dp.o      \
 	zigar.o
 
 SSE4_OBJS   =
@@ -44,18 +42,18 @@ HDRS = \
 	modelsample.h       \
 	modelstats.h        \
 	parameterize.h      \
-	reference_fwdback.h \
-	reference_trace.h   \
-	reference_viterbi.h \
+	reference_dp.h      \
 	zigar.h
 
 
 UTESTS = \
-	h4_hmmfile_utest \
-	h4_mode_utest    \
-	h4_path_utest    \
-	logsum_utest     \
-	reference_fwdback_utest \
+	h4_hmmfile_utest   \
+	h4_mode_utest      \
+	h4_path_utest      \
+	h4_profile_utest   \
+	logsum_utest       \
+	modelsample_utest  \
+	reference_dp_utest \
 	zigar_utest
 
 STATS  =
@@ -66,15 +64,14 @@ EXPERIMENTS = \
 
 BENCHMARKS = \
 	logsum_benchmark \
-	reference_fwdback_benchmark 
+	reference_dp_benchmark 
 
 EXAMPLES = \
 	h4_hmmfile_example        \
 	h4_path_example           \
 	emit_example              \
 	logsum_example            \
-	reference_fwdback_example \
-	reference_viterbi_example \
+	reference_dp_example      \
 	zigar_example
 
 

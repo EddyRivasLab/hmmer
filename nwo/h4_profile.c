@@ -2,14 +2,17 @@
  * 
  * Contents:
  *    1. H4_PROFILE structure
+ *    2. H4_PROFILE_CT structure
  *    2. Model estimation: counts to probabilities
  *    3. Profile configuration: probabilities to scores
  *    4. Debugging and development tools
- *    
+ *    5. Unit tests
+ *    6. Test driver
  */
 #include "h4_config.h"
 
 #include "easel.h"
+#include "esl_alphabet.h"
 #include "esl_matrixops.h"
 #include "esl_vectorops.h"
 
@@ -21,7 +24,6 @@
 /*****************************************************************
  * 1. H4_PROFILE structure
  *****************************************************************/
-
 
 /* Function:  h4_profile_Create()
  * Synopsis:  Allocate a new profile.
@@ -247,6 +249,61 @@ h4_profile_Destroy(H4_PROFILE *hmm)
 
 
 /*****************************************************************
+ * 2. H4_PROFILE_CT structure
+ *****************************************************************/ 
+
+
+/* Function:  h4_profile_ct_Create()
+ * Synopsis:  Allocate a new count-collection profile.
+ * Incept:    SRE, Mon 20 May 2019
+ *
+ * Purpose:   Allocates a new count-collection profile of 
+ *            length <M> consensus positions, for alphabet <abc>. 
+ *            
+ *            All transition counts <t> and emission counts <e> are
+ *            initialized to zero; <M> and <abc> fields are set.
+ */
+H4_PROFILE_CT *
+h4_profile_ct_Create(const ESL_ALPHABET *abc, int M)
+{
+  H4_PROFILE_CT *ctm = NULL;
+  int            status;
+
+  ESL_ALLOC(ctm, sizeof(H4_PROFILE_CT));
+  ctm->t = ctm->e = NULL;
+
+  if (( ctm->t = esl_mat_DCreate( M+1, h4_NT))  == NULL) goto ERROR;
+  if (( ctm->e = esl_mat_DCreate( M+1, abc->K)) == NULL) goto ERROR;
+
+  esl_mat_DSet(ctm->t, M+1, h4_NT,  0.);
+  esl_mat_DSet(ctm->e, M+1, abc->K, 0.);
+
+  ctm->M   = M;
+  ctm->abc = abc;
+  return ctm;
+
+ ERROR:
+  h4_profile_ct_Destroy(ctm);
+  return NULL;
+}
+
+/* Function:  h4_profile_ct_Destroy()
+ * Synopsis:  Free a H4_PROFILE_CT.
+ * Incept:    SRE, Mon 20 May 2019
+ */
+void
+h4_profile_ct_Destroy(H4_PROFILE_CT *ctm)
+{
+  if (ctm)
+    {
+      esl_mat_DDestroy(ctm->t);
+      esl_mat_DDestroy(ctm->e);
+      free(ctm);
+    }
+}
+  
+
+/*****************************************************************
  * 2. Model estimation: counts to probabilities.
  *****************************************************************/
 
@@ -317,55 +374,74 @@ h4_profile_Renormalize(H4_PROFILE *hmm)
 }
 
 
-/* Function:  h4_profile_CalculateOccupancy()
+/* Function:  h4_profile_Occupancy()
  * Synopsis:  Calculate match occupancy and insert expected use count vectors.
  *
- * Purpose:   Calculate a vector <mocc[1..M]> containing probability
- *            that each match state is used in a sampled path through
- *            the model. Caller provides allocated space (<M+1> floats)
- *            for <mocc>.
+ * Purpose: Calculate the expected number of times that each match and
+ *            insert state is used in a single domain subpath
+ *            (B->...->E) in profile <hmm>. (Since each match state
+ *            can only be used once, this is also the probability of
+ *            using the state. Inserts can be used more than once.)
  *            
- *            Caller may optionally provide an array <iocc[0..M]> as
- *            well, which (if provided) will be set to contain the
- *            expected number of times that a sampled path would contain
- *            each insert state.
+ *            Caller can elect to get back either the total expected
+ *            number of match or insert states used (in <*opt_mtot>
+ *            and <*opt_itot>), and/or provide allocated space of
+ *            at least (M+1) floats for <mocc> and <iocc> arrays
+ *            to get expected counts per state.
+ *
+ *            <mocc[0]>, <iocc[0]>, and <iocc[M]> are 0 (there's no
+ *            M0, I0, or Im state).
  *            
- *            <mocc[0]> is set to 0 (there's no M0 state).  If <iocc>
- *            is provided, <iocc[0]> and <iocc[M]> are set to 0 (there's
- *            no I0 or Im state).
+ *            Only depends on transition probabilities, not emissions.
+ *            It's ok to abuse this function, calling it on a
+ *            partially parameterized <hmm> that only has transition
+ *            probs.  Some <h4_modelsample_*()> functions do this as a
+ *            speed thing. Therefore, it deliberately doesn't check
+ *            the model's <h4_HASPROBS> flag.
+ * 
+ *            <mtot>+<itot> is the expected length of one domain.
  *            
  * Returns:   <eslOK> on success.
- * 
- * TODO:      unit testing. I'm worried about roundoff error accumulation
- *            especially on long models.
  */
 int
-h4_profile_CalculateOccupancy(const H4_PROFILE *hmm, float *mocc, float *iocc)
+h4_profile_Occupancy(const H4_PROFILE *hmm, float *mocc, float *iocc, float *opt_mtot, float *opt_itot)
 {
+  float mprv, mcur, icur;
+  float mtot = 0.0;
+  float itot = 0.0;
   int   k;
   float mshare;
 
-  mocc[0] = 0.;			        // no M_0 state 
-  mocc[1] = hmm->t[0][h4_TMM];          // initialize w/ G->M1 
-  for (k = 2; k <= hmm->M; k++) {
-    mshare   = hmm->t[k-1][h4_TIM] / (hmm->t[k-1][h4_TIM] + hmm->t[k-1][h4_TID]);
-    mocc[k]  =     mocc[k-1]  * hmm->t[k-1][h4_TMM];           // M->M
-    mocc[k] += (1.-mocc[k-1]) * hmm->t[k-1][h4_TDM];           // D->M
-    mocc[k] +=     mocc[k-1]  * hmm->t[k-1][h4_TMI]  * mshare; // M->I->M
-    mocc[k] += (1.-mocc[k-1]) * hmm->t[k-1][h4_TDI]  * mshare; // D->I->M
-    mocc[k] = ESL_MIN(1.0, mocc[k]);                           // avoid floating pt roundoff error making mocc[k] 1+epsilon; mocc[k] is a probability
-  }
+  if (mocc) mocc[0] = 0.;
+  if (iocc) iocc[0] = 0.;
 
-  if (iocc) {
-    iocc[0] = 0.;                     // no I0 state
-    for (k = 1; k < hmm->M; k++) {    // ... also no Im state
-      iocc[k]  =     mocc[k]  * hmm->t[k][h4_TMI];
-      iocc[k] += (1.-mocc[k]) * hmm->t[k][h4_TDI];
-      iocc[k] /= (1.-hmm->t[k][h4_TII]);
+  for (k = 1; k <= hmm->M; k++)
+    {
+      if (k == 1)
+	mcur = hmm->t[0][h4_TMM];
+      else {
+	mshare = hmm->t[k-1][h4_TIM] / (hmm->t[k-1][h4_TIM] + hmm->t[k-1][h4_TID]);  // factors out II
+	mcur   =     mprv  * hmm->t[k-1][h4_TMM];           // M->M
+	mcur  += (1.-mprv) * hmm->t[k-1][h4_TDM];           // D->M
+	mcur  +=     mprv  * hmm->t[k-1][h4_TMI]  * mshare; // M->I->M
+	mcur  += (1.-mprv) * hmm->t[k-1][h4_TDI]  * mshare; // D->I->M
+	mcur   = ESL_MIN(1.0, mcur);                        // avoid floating pt roundoff error making mocc[k] 1+epsilon
+      }
+      if (mocc) mocc[k] = mcur;
+      mtot += mcur;
+      mprv  = mcur;
+
+      if (k < hmm->M) {
+	icur  =     mcur  * hmm->t[k][h4_TMI];  // M->I
+	icur += (1.-mcur) * hmm->t[k][h4_TDI];  // D->I
+	icur /= (1.-hmm->t[k][h4_TII]);         // account for expected I length 
+      } else icur = 0.f;
+      if (iocc) iocc[k] = icur;
+      itot += icur;
     }
-    iocc[hmm->M] = 0.;
-  }
-
+  
+  if (opt_mtot) *opt_mtot = mtot;
+  if (opt_itot) *opt_itot = itot;
   return eslOK;
 }
 
@@ -406,7 +482,7 @@ set_local_entry(H4_PROFILE *hmm)
     }
   else
     {
-      h4_profile_CalculateOccupancy(hmm, occ, NULL);
+      h4_profile_Occupancy(hmm, occ, NULL, NULL, NULL);
       for (k = 1; k <= hmm->M; k++)
 	Z += occ[k] * (float) (hmm->M + 1 - k );
       for (k = 1; k <= hmm->M; k++)
@@ -431,7 +507,7 @@ set_local_entry(H4_PROFILE *hmm)
  * mute cycle, by removing the D1 state. Our DP algorithms neglect
  * (disallow) this mute cycle. As a result, a (usually negligible)
  * amount of probability is unaccounted for. If you need to know what
- * that neglected mass is, see <p7_profile_GetMutePathLogProb()>.
+ * that neglected mass is, see <h4_profile_GetMutePathLogProb()>.
  *
  * Unretracted "base" transition parameters G->{M1,D1} are still in
  * <tsc[0][h4_MM | h4_MD]> if you need them, but DP algorithms must use
@@ -511,6 +587,8 @@ h4_profile_Config(H4_PROFILE *hmm)
   float  sc[h4_MAXCODE];   // tmp space for calculating residue scores, including degeneracies
   int    k,x;
 
+  ESL_DASSERT1(( hmm->flags & h4_HASPROBS ));
+
   set_local_entry(hmm);  //  [LM]    'uniform' local entry  -  sets tsc[(0)1..M][h4_LM]
   set_glocal_entry(hmm); //  [GM|GI] left wing retraction   -  sets tsc[0..M-1(M)][h4_GM] and tsc[(0)1..M-1(M)][h4_GI]
   set_glocal_exit(hmm);  // [DGE]    right wing retraction  
@@ -544,6 +622,7 @@ h4_profile_Config(H4_PROFILE *hmm)
 	hmm->rsc[x][k] = sc[x];
     }
 
+  hmm->flags |= h4_HASBITS;
   return eslOK;
 }
 
@@ -610,6 +689,40 @@ h4_profile_Dump(FILE *fp, H4_PROFILE *hmm)
   return eslOK;
 }
 
+/* Function:  h4_profile_ct_Dump()
+ * Synopsis:  Dump contents of H4_PROFILE_CT for inspection
+ * Incept:    SRE, Mon 20 May 2019
+ */
+int
+h4_profile_ct_Dump(FILE *fp, H4_PROFILE_CT *ctm)
+{
+  int k,a,z;
+
+  fprintf(fp, "Emission counts:\n");
+  fprintf(fp, "     ");
+  for (a = 0; a < ctm->abc->K; a++)
+    fprintf(fp, "         %c%c", ctm->abc->sym[a], a == ctm->abc->K-1 ? '\n':' ');
+  for (k = 1; k <= ctm->M; k++)
+    {
+      fprintf(fp, "%4d ", k);
+      for (a = 0; a < ctm->abc->K; a++)
+	fprintf(fp, "%10.4f%c", ctm->e[k][a], a == ctm->abc->K-1 ? '\n':' ');
+    }
+
+  fprintf(fp, "Transition counts:\n");
+  fprintf(fp, "     ");
+  fprintf(fp, "%10s %10s %10s %10s %10s %10s %10s %10s %10s\n",
+	  "TMM", "TMI", "TMD", "TIM", "TII", "TID", "TDM", "TDI", "TDD");
+  for (k = 0; k < ctm->M; k++)  // include t[0] because GM, GD (in MM, MD) are data-dependent
+    {                           // exclude t[M] which has no data dependent transitions.
+      fprintf(fp, "%4d ", k);
+      for (z = 0; z < h4_NT; z++)
+	fprintf(fp, "%10.4f%c", ctm->t[k][z], z == h4_NT-1 ? '\n':' ');
+    }
+  return eslOK;
+}
+
+
 
 
 /* Function:  h4_profile_Validate()
@@ -643,6 +756,9 @@ h4_profile_Validate(const H4_PROFILE *hmm, char *errbuf)
       hmm->t[hmm->M][h4_TDM] != 1.)
     ESL_FAIL(eslFAIL, errbuf, "something awry in edge conventions");
 
+  // TK TK TK
+  // Check score components too, not just probabilities.
+
   return eslOK;
 }
 
@@ -669,3 +785,165 @@ h4_profile_Compare(const H4_PROFILE *h1, const H4_PROFILE *h2)
 
   return eslOK;
 }
+
+
+/* Function:  h4_profile_MutePathScore()
+ * Synopsis:  Calculate log2 prob of G->D1..Dm->E path
+ * Incept:    SRE, Sat 18 May 2019
+ *
+ * Purpose:   Calculate the log2 prob (i.e. in bits) of the mute glocal
+ *            path G->D1..Dm->E, the probability mass that
+ *            wing-retracted DP algorithms neglect. We sometimes need
+ *            to add this term back, especially in some unit tests
+ *            that check for perfect summation over paths or sequences.
+ * 
+ * Xref:      [SRE:J9/98,100]
+ */
+int
+h4_profile_MutePathScore(const H4_PROFILE *hmm, float *ret_sc)
+{
+  int   k;
+  float sc;
+    
+  sc = hmm->tsc[0][h4_MD];    // G->D1
+  for (k = 1; k < hmm->M; k++)
+    sc += hmm->tsc[k][h4_DD]; // D1..Dm
+  *ret_sc = sc;
+  return eslOK;
+}
+
+
+/*****************************************************************
+ * 5. Unit tests
+ *****************************************************************/
+#ifdef h4PROFILE_TESTDRIVE
+
+#include "esl_sq.h"
+
+#include "h4_mode.h"
+#include "h4_path.h"
+#include "emit.h"
+#include "modelsample.h"
+
+/* utest_occupancy()
+ * 
+ * The "occupancy" unit test checks that the analytical calculation
+ * of match and insert state occupancy in h4_profile_Occupancy()
+ * agrees with counts in a brute force simulation of <N> emitted
+ * sequences.
+ */
+static void
+utest_occupancy(FILE *diagfp, ESL_RANDOMNESS *rng, int alphatype, int M, int N)
+{
+  char           msg[]    = "h4_profile occupancy unit test failed";
+  ESL_ALPHABET  *abc      = esl_alphabet_Create(alphatype);
+  ESL_SQ        *sq       = esl_sq_CreateDigital(abc);
+  H4_PROFILE    *hmm      = NULL;
+  H4_PROFILE_CT *ctm      = h4_profile_ct_Create(abc, M);
+  H4_MODE       *mo       = h4_mode_Create();
+  H4_PATH       *pi       = h4_path_Create();
+  float         *mocc     = malloc(sizeof(float) * (M+1));
+  float         *iocc     = malloc(sizeof(float) * (M+1));
+  float         *sim_mocc = malloc(sizeof(float) * (M+1));
+  float         *sim_iocc = malloc(sizeof(float) * (M+1));
+  float          mtot, itot;
+  double         exp_len  = 0.;
+  double         sim_len  = 0.;
+  int            k,idx;
+
+  if (diagfp)
+    esl_dataheader(stdout, 6, "k", 12, "mocc",   12, "sim_mocc", 12, "mocc_diff", 
+		                   12, "iocc",   12, "sim_iocc", 12, "iocc_diff",
+		                    9, "exp_len", 9, "sim_len",   9, "len_diff", 0); 
+ 
+
+  if ( h4_modelsample(rng, abc, M, &hmm) != eslOK) esl_fatal(msg);
+  if ( h4_mode_SetUniglocal(mo)          != eslOK) esl_fatal(msg);
+  if ( h4_mode_SetLength(mo, 0)          != eslOK) esl_fatal(msg);
+  //  h4_profile_Dump(stdout, hmm);
+  
+  for (idx = 0; idx < N; idx++)
+    {
+      if ( h4_emit(rng, hmm, mo, sq, pi)        != eslOK) esl_fatal(msg);
+      if ( h4_path_Count(pi, sq->dsq, 1.0, ctm) != eslOK) esl_fatal(msg);
+      sim_len += sq->n;
+      h4_path_Reuse(pi);
+      esl_sq_Reuse(sq);
+    }
+  sim_len /= (double) N;
+
+  sim_mocc[0] = sim_iocc[0] = 0.;
+  for (k = 1; k <= M; k++)
+    {
+      sim_mocc[k] = esl_vec_DSum(ctm->e[k], ctm->abc->K) / (double) N;
+      if (k == M) sim_iocc[0] = 0.;
+      else        sim_iocc[k] = (ctm->t[k][h4_TMI] + ctm->t[k][h4_TII] + ctm->t[k][h4_TDI]) / (double) N;
+    }
+
+  if ( h4_profile_Occupancy(hmm, mocc, iocc, &mtot, &itot) != eslOK) esl_fatal(msg);
+  exp_len = mtot+itot;
+  
+  if (diagfp)
+    {
+      for (k = 1; k <= M; k++)
+	fprintf(stdout, "%6d %12.4f %12.4f %12.4f %12.4f %12.4f %12.4f %9.4f %9.4f %9.4f\n",
+		k, mocc[k], sim_mocc[k], (mocc[k]-sim_mocc[k]) / sim_mocc[k],
+		iocc[k], sim_iocc[k], (iocc[k]-sim_iocc[k]) / sim_iocc[k],
+		exp_len, sim_len, (exp_len-sim_len)/sim_len);
+    }
+
+  if (esl_DCompareNew(sim_len, exp_len, 0.01, 0.0) != eslOK) esl_fatal(msg);
+  for (k = 1; k <= M; k++) if (esl_DCompareNew(sim_mocc[k], mocc[k], 0.05, 0.0) != eslOK) esl_fatal(msg);
+  for (k = 1; k <  M; k++) if (esl_DCompareNew(sim_iocc[k], iocc[k], 0.10, 0.0) != eslOK) esl_fatal(msg);
+
+  h4_path_Destroy(pi);
+  h4_profile_ct_Destroy(ctm);
+  h4_profile_Destroy(hmm);
+  h4_mode_Destroy(mo);
+  esl_sq_Destroy(sq);
+  esl_alphabet_Destroy(abc);
+}
+
+
+#endif // h4PROFILE_TESTDRIVE
+
+/*****************************************************************
+ * 6. Test driver
+ *****************************************************************/
+#ifdef h4PROFILE_TESTDRIVE
+
+#include "easel.h"
+#include "esl_getopts.h"
+
+#include "general.h"
+
+static ESL_OPTIONS options[] = {
+  /* name           type      default  env  range toggles reqs incomp  help                          docgroup*/
+  { "-h",         eslARG_NONE,   NULL, NULL, NULL,  NULL,  NULL, NULL, "show brief help summary",                  0 },
+  { "-s",         eslARG_INT,    "42", NULL, NULL,  NULL,  NULL, NULL, "set random number generator seed",         0 },
+  { "-M",         eslARG_INT,    "20", NULL, NULL,  NULL,  NULL, NULL, "set test profile length",                  0 },
+  { "-N",         eslARG_INT,"100000", NULL, NULL,  NULL,  NULL, NULL, "set # of sampled paths in occupancy test", 0 },
+  { "--version",  eslARG_NONE,   NULL, NULL, NULL,  NULL,  NULL, NULL, "show HMMER version number",                0 },
+  {  0, 0, 0, 0, 0, 0, 0, 0, 0, 0 },
+};
+
+int
+main(int argc, char **argv)
+{
+  ESL_GETOPTS    *go  = h4_CreateDefaultApp(options, 0, argc, argv, "test driver for h4_profile", "[-options]");
+  ESL_RANDOMNESS *rng = esl_randomness_Create(esl_opt_GetInteger(go, "-s"));
+  int             M   = esl_opt_GetInteger(go, "-M");
+  int             N   = esl_opt_GetInteger(go, "-N");
+
+  fprintf(stderr, "## %s\n", argv[0]);
+  fprintf(stderr, "#  rng seed = %" PRIu32 "\n", esl_randomness_GetSeed(rng)); 
+
+  utest_occupancy(stdout, rng, eslRNA, M, N);
+  
+  fprintf(stderr, "#  status   = ok\n");
+
+  esl_randomness_Destroy(rng);
+  esl_getopts_Destroy(go);
+  return 0;
+}  
+#endif // h4PROFILE_TESTDRIVE

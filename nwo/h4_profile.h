@@ -10,15 +10,15 @@
 #include "esl_alphabet.h"
 
 /* H4_PROFILE
- * A HMMER4 profile HMM, dual-mode local/glocal 
+ * A HMMER4 profile HMM, dual-mode local/glocal, with both probabilities and log-odds scores.
  * 
  * Brief summary of fixed edge conditions; also see h4_profile.md, and h4_profile_SetConventions()
- *  t[0] = [ t(G->M1), 0, t(G->D1); 1,0,0; 1,0,0 ]. Only TMM,TMD values are free params.
- *  t[M] = [ 1,0,0; 1,0,0; 1,0,0 ]. None free; these are t(M->E), Im doesn't exist, t(D->E).
+ *  t[0] = [ tGM1, 0, tGD1;  1,0,0;  1,0,0 ].   Only TMM,TMD values are free params.
+ *  t[M] = [    1, 0,    0;  1,0,0;  1,0,0 ].   None are free. These are t(M->E), Im doesn't exist, t(D->E).
  *  e[0] = [ 1,0..0].
- * So, if you're setting free params: 2 values at t[0], t[1..M-1], e[1..M] 
+ * So, if you're setting free params: you set t[0][0,2], t[1..M-1][], and e[1..M][].
  *
- * t,e,tsc,rsc are standard Easel 2D arrays, and can be manipulated with esl_mat_F*() functions.
+ * t,e,tsc,rsc are std Easel 2D arrays that can be manipulated with esl_mat_F*() functions.
  */
 typedef struct {
   int     M;                // model length in nodes (consensus positions)
@@ -34,6 +34,24 @@ typedef struct {
 
   const ESL_ALPHABET *abc;  // reference ptr to alphabet. (only a copy; don't free)
 } H4_PROFILE;
+
+
+/* H4_PROFILE_CT
+ * Profile HMM, counts-collection form.
+ * 
+ * Profile structure used to collect counts, where we use double
+ * instead of float, and we only need the probability model part of
+ * the H4_PROFILE structure. Deep alignments (and simulations) can
+ * exceed dynamic range of float - especially on II transitions.
+ */
+typedef struct {
+  int    M;
+  double **t;
+  double **e;
+
+  const ESL_ALPHABET *abc;
+} H4_PROFILE_CT;
+
 
 
 /* Constants defining fixed sizes of parameter arrays in a profile.  
@@ -86,40 +104,10 @@ typedef struct {
 #define h4_DGE  12
 
 
-/* Flags that can be raised in <hmm->flags>.
- * Which optional annotations are available, for example.
- * 
- * Flags marked with ! may not be changed nor used for other meanings,
- * because they're codes used by HMMER2 (and earlier) that must be
- * preserved for reverse compatibility with old HMMER files.
- * 
- * Why use flags? (So I don't ask this question of myself again:)
- *   1. The way we allocate an HMM, we need to know if we're allocating
- *      M-width annotation fields (RF, CS, CA, MAP) before we read the
- *      annotation from a binary HMM file.
- *   2. Historically, H2 used flags, so we still need to read H2 flags
- *      from H2 files.
- */
-#define h4_HASBITS (1<<0)    /* obsolete (was: model has log-odds scores)       !*/
-#define h4_DESC    (1<<1)    /* description exists (legacy; xref SRE:J5/114)    !*/
-#define h4_RF      (1<<2)    /* #RF annotation available                        !*/
-#define h4_CS      (1<<3)    /* #CS annotation available                        !*/
-#define h4_XRAY    (1<<4)    /* obsolete (was: structural data available)       !*/
-#define h4_HASPROB (1<<5)    /* obsolete (was: model in probability form)       !*/
-#define h4_HASDNA  (1<<6)    /* obsolete (was: protein HMM->DNA seq params set) !*/
-#define h4_STATS   (1<<7)    /* model has E-value statistics calibrated         !*/
-#define h4_MAP     (1<<8)    /* alignment map is available                      !*/
-#define h4_ACC     (1<<9)    /* accession is available (legacy; xref SRE:J5/114)!*/
-#define h4_GA      (1<<10)   /* gathering thresholds available                  !*/
-#define h4_TC      (1<<11)   /* trusted cutoffs available                       !*/
-#define h4_NC      (1<<12)   /* noise cutoffs available                         !*/
-#define h4_CA      (1<<13)   /* surface accessibilities available               !*/
-#define h4_COMPO   (1<<14)   /* model-specific residue composition available     */
-#define h4_CHKSUM  (1<<15)   /* model has an alignment checksum                  */
-#define h4_CONS    (1<<16)   /* consensus residue line available                 */
-#define h4_MMASK   (1<<17)   /* #MM annotation available                        !*/
-#define h4_SINGLE  (1<<18)   /* model was from single query w/ Seqmodel()        */
-
+/* flags, in flux */
+#define h4_HASPROBS (1<<0)
+#define h4_HASBITS  (1<<1)
+#define h4_SINGLE   (1<<2)
 
 
 extern H4_PROFILE *h4_profile_Create(const ESL_ALPHABET *abc, int M);
@@ -130,14 +118,19 @@ extern int         h4_profile_Copy   (const H4_PROFILE *src, H4_PROFILE *dst);
 extern size_t      h4_profile_Sizeof (const H4_PROFILE *hmm);
 extern void        h4_profile_Destroy(H4_PROFILE *hmm);
 
+extern H4_PROFILE_CT *h4_profile_ct_Create(const ESL_ALPHABET *abc, int M);
+extern void           h4_profile_ct_Destroy(H4_PROFILE_CT *ctm);
+
 extern int         h4_profile_SetConventions(H4_PROFILE *hmm);
 extern int         h4_profile_Renormalize   (H4_PROFILE *hmm);
-extern int         h4_profile_CalculateOccupancy(const H4_PROFILE *hmm, float *mocc, float *iocc);
+extern int         h4_profile_Occupancy(const H4_PROFILE *hmm, float *mocc, float *iocc, float *opt_mtot, float *opt_itot);
 
 extern int         h4_profile_Config(H4_PROFILE *hmm);
 
-extern int         h4_profile_Dump(FILE *fp, H4_PROFILE *hmm);
+extern int         h4_profile_Dump   (FILE *fp, H4_PROFILE *hmm);
+extern int         h4_profile_ct_Dump(FILE *fp, H4_PROFILE_CT *ctm);
 extern int         h4_profile_Validate(const H4_PROFILE *hmm, char *errbuf);
 extern int         h4_profile_Compare(const H4_PROFILE *h1, const H4_PROFILE *h2);
+extern int         h4_profile_MutePathScore(const H4_PROFILE *hmm, float *ret_sc);
 
 #endif /* h4PROFILE_INCLUDED */

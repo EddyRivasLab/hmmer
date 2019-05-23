@@ -378,8 +378,8 @@ utest_bounds(void)
 static ESL_OPTIONS options[] = {
   /* name          type         default  env   range togs  reqs  incomp  help                docgrp */
   {"-h",         eslARG_NONE,    FALSE, NULL, NULL, NULL, NULL, NULL, "show help and usage",               0 },
+  { "-s",        eslARG_INT,      "0",  NULL, NULL, NULL, NULL, NULL, "set random number generator seed",  0 },
   { "--abserr",  eslARG_NONE,    FALSE, NULL, NULL, NULL, NULL, NULL, "print absolute errors",             0 },
-  { "--seed",    eslARG_INT,      "0",  NULL, NULL, NULL, NULL, NULL, "set random number generator seed",  0 },
   { "--version", eslARG_NONE,    NULL,  NULL, NULL, NULL, NULL, NULL, "show HMMER version number",         0 },  
   { 0,0,0,0,0,0,0,0,0,0},
 };
@@ -387,12 +387,10 @@ static ESL_OPTIONS options[] = {
 int 
 main(int argc, char **argv)
 {
-  ESL_GETOPTS    *go   = h4_CreateDefaultApp(options, 0, argc, argv, "logsum.c test driver", "[-options]");
-  ESL_RANDOMNESS *rng  = esl_randomness_Create(esl_opt_GetInteger(go, "--seed")); 
+  ESL_GETOPTS    *go   = h4_CreateDefaultApp(options, 0, argc, argv, "logsum.c test driver", "[-options]");  // includes h4_logsum_Init()
+  ESL_RANDOMNESS *rng  = esl_randomness_Create(esl_opt_GetInteger(go, "-s")); 
   int        do_abserr = esl_opt_GetBoolean(go, "--abserr");
   
-  h4_logsum_Init();
-
   fprintf(stderr, "## %s\n", argv[0]);
   fprintf(stderr, "#  rng seed = %" PRIu32 "\n", esl_randomness_GetSeed(rng));
 

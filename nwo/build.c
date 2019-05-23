@@ -31,7 +31,7 @@ static int consensus_by_symfrac(const ESL_MSA *msa, float symfrac, const ESL_BIT
 static int consensus_by_sample (const H4_BUILD_CONFIG *cfg, const ESL_MSA *msa, const ESL_BITFIELD *fragassign, int8_t *matassign);
 static int consensus_by_hand   (const ESL_MSA *msa, int8_t *matassign, char *errbuf);
 
-static int collect_counts      (const ESL_MSA *msa, const ESL_BITFIELD *fragassign, const int8_t *matassign, H4_PROFILE *hmm);
+static int collect_counts      (const ESL_MSA *msa, const ESL_BITFIELD *fragassign, const int8_t *matassign, H4_PROFILE_CT *ctm);
 
 /*****************************************************************
  * 1. h4_Build(): build new profile from alignment
@@ -61,27 +61,28 @@ static int collect_counts      (const ESL_MSA *msa, const ESL_BITFIELD *fragassi
 int
 h4_Build(const H4_BUILD_CONFIG *cfg, ESL_MSA *msa, H4_PROFILE **ret_hmm, char *errbuf)
 {
-  int         arch_strategy  = (cfg ? cfg->arch_strategy : h4BUILD_ARCH_RULES);
-  float       symfrac        = (cfg ? cfg->symfrac       : h4BUILD_SYMFRAC);
-  float       fragthresh     = (cfg ? cfg->fragthresh    : h4BUILD_FRAGTHRESH);
-  int         nsamp          = (cfg ? cfg->nsamp         : h4BUILD_NSAMP);
-  float       maxfragdens    = (cfg ? cfg->maxfragdens   : h4BUILD_MAXFRAGDENS);
-  uint64_t    seed           = (cfg ? cfg->seed          : h4BUILD_RNGSEED);
-  int         wgt_strategy   = (cfg ? cfg->wgt_strategy  : h4BUILD_WGT_PB);
-  float       wid            = (cfg ? cfg->wid           : h4BUILD_WID);
-  int         effn_strategy  = (cfg ? cfg->effn_strategy : h4BUILD_EFFN_EWGT);
+  int         arch_strategy   = (cfg ? cfg->arch_strategy : h4BUILD_ARCH_RULES);
+  float       symfrac         = (cfg ? cfg->symfrac       : h4BUILD_SYMFRAC);
+  float       fragthresh      = (cfg ? cfg->fragthresh    : h4BUILD_FRAGTHRESH);
+  int         nsamp           = (cfg ? cfg->nsamp         : h4BUILD_NSAMP);
+  float       maxfragdens     = (cfg ? cfg->maxfragdens   : h4BUILD_MAXFRAGDENS);
+  uint64_t    seed            = (cfg ? cfg->seed          : h4BUILD_RNGSEED);
+  int         wgt_strategy    = (cfg ? cfg->wgt_strategy  : h4BUILD_WGT_PB);
+  float       wid             = (cfg ? cfg->wid           : h4BUILD_WID);
+  int         effn_strategy   = (cfg ? cfg->effn_strategy : h4BUILD_EFFN_EWGT);
   float       re_target;
-  float       re_sigma       = (cfg ? cfg->re_sigma      : h4BUILD_ESIGMA);
-  float       n_eff          = (cfg ? cfg->effn_set      : (float) msa->nseq);    // default eweighting will reset this.
-  H4_PRIOR   *pri            = ((cfg && cfg->pri) ? cfg->pri : h4_prior_Create(msa->abc));
-  int         stop_early     = (cfg ? cfg->stop_early    : FALSE);
-  ESL_MSAWEIGHT_CFG *wgt_cfg = NULL;
-  H4_PROFILE   *hmm          = NULL;
-  ESL_BITFIELD *fragassign   = NULL;
-  int8_t       *matassign    = NULL;
-  int           M            = 0;
-  int           apos;
-  int           status       = eslOK;
+  float       re_sigma        = (cfg ? cfg->re_sigma      : h4BUILD_ESIGMA);
+  float       n_eff           = (cfg ? cfg->effn_set      : (float) msa->nseq);    // default eweighting will reset this.
+  H4_PRIOR   *pri             = ((cfg && cfg->pri) ? cfg->pri : h4_prior_Create(msa->abc));
+  int         stop_early      = (cfg ? cfg->stop_early    : FALSE);
+  ESL_MSAWEIGHT_CFG *wgt_cfg  = NULL;
+  H4_PROFILE_CT *ctm          = NULL;    // count-collection profile
+  H4_PROFILE    *hmm          = NULL;    // profile HMM we're building (probabilities & scores)
+  ESL_BITFIELD  *fragassign   = NULL;
+  int8_t        *matassign    = NULL;
+  int            M            = 0;
+  int            apos;
+  int            status       = eslOK;
 
   ESL_DASSERT1(( msa->flags && eslMSA_DIGITAL ));
   ESL_DASSERT1(( !cfg || !cfg->abc || cfg->abc->type == msa->abc->type ));
@@ -137,11 +138,12 @@ h4_Build(const H4_BUILD_CONFIG *cfg, ESL_MSA *msa, H4_PROFILE **ret_hmm, char *e
   /* Allocate the new profile.
    */
   for (apos = 1; apos <= msa->alen; apos++) if (matassign[apos]) M++;
-  hmm = h4_profile_Create(msa->abc, M);
+  hmm = h4_profile_Create   (msa->abc, M);
+  ctm = h4_profile_ct_Create(msa->abc, M);
 
   /* Collect observed (relative-weighted) counts from alignment in hmm->t[] and ->e[]
    */
-  if ((status = collect_counts(msa, fragassign, matassign, hmm)) != eslOK) goto ERROR;
+  if ((status = collect_counts(msa, fragassign, matassign, ctm)) != eslOK) goto ERROR;
 
   if (stop_early) goto DONE;
 
@@ -153,20 +155,21 @@ h4_Build(const H4_BUILD_CONFIG *cfg, ESL_MSA *msa, H4_PROFILE **ret_hmm, char *e
     {
       re_target = ESL_MAX(re_target, (re_sigma - log2f( 2.0 / ((float) M * (float) (M+1)))) / (float) M); // assure a minimum total expected score, for short models. [J5/36]
 
-      if (( status = h4_EntropyWeight(hmm, pri, msa->nseq, re_target, &n_eff)) != eslOK) goto ERROR;
+      if (( status = h4_EntropyWeight(ctm, pri, msa->nseq, re_target, &n_eff)) != eslOK) goto ERROR;
   
-      esl_mat_FScale(hmm->e, hmm->M+1, hmm->abc->K,  (n_eff / (float) msa->nseq));
-      esl_mat_FScale(hmm->t, hmm->M+1, h4_NT,        (n_eff / (float) msa->nseq));
+      esl_mat_DScale(ctm->e, ctm->M+1, ctm->abc->K,  (n_eff / (float) msa->nseq));
+      esl_mat_DScale(ctm->t, ctm->M+1, h4_NT,        (n_eff / (float) msa->nseq));
     }
   else if (effn_strategy == h4BUILD_EFFN_GIVEN)
     {
-      esl_mat_FScale(hmm->e, hmm->M+1, hmm->abc->K,  (n_eff / (float) msa->nseq));
-      esl_mat_FScale(hmm->t, hmm->M+1, h4_NT,        (n_eff / (float) msa->nseq));
+      esl_mat_DScale(ctm->e, ctm->M+1, ctm->abc->K,  (n_eff / (float) msa->nseq));
+      esl_mat_DScale(ctm->t, ctm->M+1, h4_NT,        (n_eff / (float) msa->nseq));
     }
 
   /* Convert counts to mean posterior probability parameters
    */
-  h4_Parameterize(hmm, pri);
+  if (( status = h4_Parameterize(ctm, pri, hmm)) != eslOK) goto ERROR;
+  if (( status = h4_profile_Config(hmm))         != eslOK) goto ERROR;
 
   // annotate();
   // calibrate();
@@ -176,6 +179,7 @@ h4_Build(const H4_BUILD_CONFIG *cfg, ESL_MSA *msa, H4_PROFILE **ret_hmm, char *e
  DONE:
  ERROR:
   if (status == eslOK) *ret_hmm = hmm; else { *ret_hmm = NULL; h4_profile_Destroy(hmm); }
+  h4_profile_ct_Destroy(ctm);
   esl_msaweight_cfg_Destroy(wgt_cfg);
   if (! cfg || ! cfg->pri) h4_prior_Destroy(pri); // if <cfg> provided the prior, <cfg> is managing that memory, not us.
   free(fragassign);
@@ -342,7 +346,7 @@ consensus_by_hand(const ESL_MSA *msa, int8_t *matassign, char *errbuf)
 
 
 static int
-collect_counts(const ESL_MSA *msa, const ESL_BITFIELD *fragassign, const int8_t *matassign, H4_PROFILE *hmm)
+collect_counts(const ESL_MSA *msa, const ESL_BITFIELD *fragassign, const int8_t *matassign, H4_PROFILE_CT *ctm)
 {
   H4_PATH *pi = h4_path_Create();
   int      lcol, rcol;
@@ -364,12 +368,12 @@ collect_counts(const ESL_MSA *msa, const ESL_BITFIELD *fragassign, const int8_t 
       if (status != eslOK) goto ERROR;
 
       // SRE DEBUGGING
-      //status = h4_path_Validate(pi, msa->abc, hmm->M, esl_abc_dsqrlen(msa->abc, msa->ax[idx]), errbuf);
+      //status = h4_path_Validate(pi, msa->abc, ctm->M, esl_abc_dsqrlen(msa->abc, msa->ax[idx]), errbuf);
       //if (status != eslOK) esl_fatal(errbuf);
 
       //h4_path_Dump(stdout, pi);
 
-      if ((status = h4_path_Count(pi, msa->ax[idx], msa->wgt[idx], hmm)) != eslOK) goto ERROR;
+      if ((status = h4_path_Count(pi, msa->ax[idx], msa->wgt[idx], ctm)) != eslOK) goto ERROR;
       h4_path_Reuse(pi);
     }
 

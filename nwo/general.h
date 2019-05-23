@@ -3,6 +3,7 @@
 
 #include "esl_getopts.h"
 
+extern int          h4_Init(void);
 extern ESL_GETOPTS *h4_CreateDefaultApp(ESL_OPTIONS *options, int nargs, int argc, char **argv, char *banner, char *usage);
 extern int          h4_AminoFrequencies(float *f);
 
