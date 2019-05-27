@@ -37,7 +37,7 @@ MYLIBDIRS    = -L${top_builddir}/${ESLDIR}\
                ${LIBTMPDIR} \
                -L${top_builddir}/src \
                -L${top_builddir}/src/cuda \
-               -L/usr/local/cuda-9.2/lib64
+               -L/usr/local/cuda-10.1/lib64
 MYINCDIRS    = -I${top_builddir}/${ESLDIR} \
                -I${top_builddir}/${SADIR} \
 	       -I${top_builddir}/src \
@@ -101,7 +101,7 @@ ${VMX_EXAMPLES}:      SIMD_CFLAGS:= $(VMX_CFLAGS)
 .PHONY: all dev check tests install uninstall distclean clean tags-append
 .FORCE:
 
-all:   libhmmer-${MODULE}.stamp ${LIBTMPDEP} ${PROGS} ${MPIPROGS} ${CUDA_OBJS}
+all:   libhmmer-${MODULE}.stamp ${LIBTMPDEP} ${PROGS} ${MPIPROGS} ${CUDA_OBJS} ${CUDA_LIB}
 dev:   libhmmer-${MODULE}.stamp ${LIBTMPDEP} ${PROGS} ${MPIPROGS} ${UTESTS} ${STATS} ${BENCHMARKS} ${EXAMPLES}
 check: libhmmer-${MODULE}.stamp ${LIBTMPDEP} ${PROGS} ${MPIPROGS} ${UTESTS}
 tests: libhmmer-${MODULE}.stamp ${LIBTMPDEP} ${PROGS} ${MPIPROGS} ${UTESTS}

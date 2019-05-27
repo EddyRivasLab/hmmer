@@ -121,6 +121,9 @@ P7_DAEMON_WORKERNODE_STATE *p7_server_workernode_Create(uint32_t num_databases, 
     workernode->thread_state[i].empty_hit_pool = NULL;
     workernode->thread_state[i].my_hits = NULL;
     workernode->thread_state[i].comparisons_queued = 0;
+    workernode->thread_state[i].bg = NULL;
+    workernode->thread_state[i].gm = NULL;
+    workernode->thread_state[i].om = NULL;
     if(pthread_mutex_init(&(workernode->thread_state[i].hits_lock), NULL)){
       p7_Fail((char *)"Unable to create mutex in p7_server_workernode_Create");
     }

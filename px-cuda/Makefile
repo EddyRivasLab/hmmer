@@ -1,5 +1,5 @@
 CC     = nvcc 
-CFLAGS = -O3 -lineinfo --ptxas-options=-v --maxrregcount=64 -arch=compute_60 -code=sm_61  -lineinfo --Wno-deprecated-declarations --compiler-options "-msse4.1" 
+CFLAGS = -O3 -g -lineinfo --ptxas-options=-v --maxrregcount=64 -arch=compute_60 -code=sm_61  -lineinfo --Wno-deprecated-declarations --compiler-options "-msse4.1" 
 HOME = ../
 all:   px_cuda_packed px_cuda px_cuda_texture px_cuda_fp
 
