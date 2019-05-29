@@ -66,21 +66,9 @@ h4_zigar_Encode(const H4_PATH *pi, int z1, char **ret_zali)
    * mallocs. I bet it's worth precalculating the allocation size,
    * making two passes.
    */
-  nb = ( h4_path_IsM(pi->st[z1+1]) ? 1 : 2);
-  z = z1 + 1;
-  while (1) 
-    {
-      switch (pi->st[z]) {
-      case h4P_MG: case h4P_ML:	esl_varint_expgol(pi->rle[z]-1, 4, NULL, &nc); nb += nc; break;  // M runlength encodes in exp-Golomb-4
-      case h4P_IG: case h4P_IL: esl_varint_expgol(pi->rle[z]-1, 0, NULL, &nc); nb += nc; break;  // I in exp-Golomb-0
-      case h4P_DG: case h4P_DL: esl_varint_expgol(pi->rle[z]-1, 0, NULL, &nc); nb += nc; break;  // D also in exp-Golomb-0
-      }
-
-      if (pi->st[z+1] == h4P_J || pi->st[z+1] == h4P_C) break;  // we're at the end of this domain.
-      nb++;  // 1 bit code for the next transition
-      z++;
-    }
+  if (( status = h4_zigar_codelen(pi, z1, &nb) ) != eslOK) goto ERROR;
   ESL_ALLOC(zali, sizeof(char) * ((nb + 5) / 6) + 1);   // +1 for \0 terminator
+
 
   /* Second pass, having allocated, now we encode. */
   nb = 0;
@@ -132,6 +120,57 @@ h4_zigar_Encode(const H4_PATH *pi, int z1, char **ret_zali)
  ERROR:
   if (zali) free(zali);
   *ret_zali = NULL;
+  return eslOK;
+}
+
+
+/* Function:  h4_zigar_codelen()
+ * Synopsis:  Calculate length of compressed encoding of a path, in bits
+ * Incept:    SRE, Thu 14 Feb 2019 [Depeche Mode, Little 15]
+ *
+ * Purpose:   Calculate the length (in bits) of the encoding of
+ *            the M|D|I alignment that starts after position <z1>
+ *            of path <pi>. <z1> is the position of an L or G state
+ *            at the start of one domain alignment. Return the
+ *            length in bits in <*ret_nbits>.
+ *
+ * Returns:   <eslOK> on success.
+ *
+ * Notes:     Used both to determine zigar allocation size 
+ *            in h4_zigar_Encode(), and in development to
+ *            characterize performance and different BASE* encoding
+ *            schemes.
+ *            
+ *            BASE64 encoding: nc =  (nb + 5)  / 6
+ *            BASE85 encoding: nc = ((nb + 31) / 32) * 5
+ *            BASE91 encoding: nc = ((nb + 12) / 13) * 2
+ */
+int
+h4_zigar_codelen(const H4_PATH *pi, int z1, int *ret_nbits)
+{
+  int nb = 0;
+  int nc, z;
+
+  ESL_DASSERT1(( pi->st[z1] == h4P_G || pi->st[z1] == h4P_L )); 
+  
+  if (pi->st[z1+1] != h4P_C)  // checking for special case of a zero-length homology local path */
+    {
+      nb = ( h4_path_IsM(pi->st[z1+1]) ? 1 : 2);  // initial state
+      z  = z1+1;
+      while (1) // breaks out when we hit C|J
+	{
+	  switch (pi->st[z]) {
+	  case h4P_MG: case h4P_ML: esl_varint_expgol(pi->rle[z]-1, 4, NULL, &nc); nb += nc; break;  // M runlength encodes in exp-Golomb-4
+	  case h4P_IG: case h4P_IL: esl_varint_expgol(pi->rle[z]-1, 0, NULL, &nc); nb += nc; break;  // I in exp-Golomb-0
+	  case h4P_DG: case h4P_DL: esl_varint_expgol(pi->rle[z]-1, 0, NULL, &nc); nb += nc; break;  // D also in exp-Golomb-0
+	  }
+	  if (pi->st[z+1] == h4P_J || pi->st[z+1] == h4P_C) break;  // we're at the end of this domain.
+	  nb++;  // 1 bit code for the next transition
+	  z++;
+	}
+    }
+  
+  *ret_nbits = nb;
   return eslOK;
 }
 

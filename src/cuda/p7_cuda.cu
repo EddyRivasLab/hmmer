@@ -14,7 +14,6 @@
 #include "p7_config.h"
 
 
-
 int p7_query_cuda(P7_CUDA_CONFIG *ret_config){
 #ifndef eslENABLE_CUDA // if we weren't compiled with CUDA support, never find any cards 
 	ret_config->num_cards =0;

@@ -1567,8 +1567,9 @@ static void worker_thread_back_end_sequence_search_loop(P7_DAEMON_WORKERNODE_STA
 
     if(the_entry->do_overthruster !=0){
       //need to do the overthruster part of this comparison, generally because CUDA doesn't do the full overthruster
-      
-        overthruster_result = p7_engine_Overthruster(workernode->thread_state[my_id].engine, the_entry->sequence, the_entry->L, workernode->thread_state[my_id].om, workernode->thread_state[my_id].bg);  
+        char *seqname;
+        p7_shard_Find_Descriptor_Nexthigh(workernode->database_shards[workernode->compare_database], the_entry->seq_id, &seqname);
+        overthruster_result = p7_engine_Overthruster_roundtwo(workernode->thread_state[my_id].engine, the_entry->sequence, the_entry->L, workernode->thread_state[my_id].om, workernode->thread_state[my_id].bg, the_entry->score, seqname);  
     }
     else{
       // don't do the overthruster, but do set up the sparse mask for the main stage

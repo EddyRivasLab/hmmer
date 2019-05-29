@@ -1,9 +1,10 @@
 /* H4_MODE: "algorithm-dependent" parameters of HMMER4 profiles
  * 
  * Contents:
- *   1. The H4_MODE object.
- *   2. Unit tests
- *   3. Test driver
+ *   1. The H4_MODE object
+ *   2. Debugging and development tools
+ *   3. Unit tests
+ *   4. Test driver
  *
  * See also:
  *   h4_profile : the profile itself; "model-dependent" parameters and metadata.
@@ -89,13 +90,13 @@ h4_mode_SetCustom(H4_MODE *mo, int L, float nj, float pglocal)
   mo->xsc[h4_E][h4_LOOP] = esl_log2f(nj / (nj + 1.));
   mo->xsc[h4_E][h4_MOVE] = esl_log2f(1. / (nj + 1.));
 
-  mo->xsc[h4_B][h4_LOOP] = 1. - pglocal;
-  mo->xsc[h4_B][h4_MOVE] = pglocal;
-
-  h4_mode_SetLength(mo, L);
+  mo->xsc[h4_B][h4_LOOP] = esl_log2f(1. - pglocal);
+  mo->xsc[h4_B][h4_MOVE] = esl_log2f(pglocal);
 
   mo->nj      = nj;
   mo->pglocal = pglocal;
+  h4_mode_SetLength(mo, L); // mo->nj must be set before calling SetLength().
+
   return eslOK;
 }
 
@@ -112,6 +113,7 @@ h4_mode_SetCustom(H4_MODE *mo, int L, float nj, float pglocal)
  *            | <h4_mode_SetDefault()>   | default multihit glocal/local | 1.0 | 0.5     | 400 |
  *            | <h4_mode_SetLocal()>     | multihit local-only           | 1.0 |   0     | 400 |
  *            | <h4_mode_SetGlocal()>    | multihit glocal-only          | 1.0 | 1.0     | 400 |
+ *            | <h4_mode_SetUnihit()>    | unihit glocal/local           |   0 | 0.5     | 400 |
  *            | <h4_mode_SetUnilocal()>  | unihit local-only             |   0 |   0     | 400 |
  *            | <h4_mode_SetUniglocal()> | unihit glocal-only            |   0 | 1.0     | 400 |
  *            | <h4_mode_SetGlobal()>    | single global alignment       |   0 | 1.0     |   0 |
@@ -127,6 +129,7 @@ h4_mode_SetCustom(H4_MODE *mo, int L, float nj, float pglocal)
 int h4_mode_SetDefault   (H4_MODE *mo){ return h4_mode_SetCustom(mo, 400,  1.0, 0.5); }
 int h4_mode_SetLocal     (H4_MODE *mo){ return h4_mode_SetCustom(mo, 400,  1.0, 0.0); }
 int h4_mode_SetGlocal    (H4_MODE *mo){ return h4_mode_SetCustom(mo, 400,  1.0, 1.0); }
+int h4_mode_SetUnihit    (H4_MODE *mo){ return h4_mode_SetCustom(mo, 400,  0.0, 0.5); }
 int h4_mode_SetUnilocal  (H4_MODE *mo){ return h4_mode_SetCustom(mo, 400,  0.0, 0.0); }
 int h4_mode_SetUniglocal (H4_MODE *mo){ return h4_mode_SetCustom(mo, 400,  0.0, 1.0); }
 int h4_mode_SetGlobal    (H4_MODE *mo){ return h4_mode_SetCustom(mo,  0.,  0.0, 1.0); }
@@ -151,12 +154,16 @@ int
 h4_mode_SetLength(H4_MODE *mo, int L)
 {
   ESL_DASSERT1(( L >= 0 && L <= 100000 ));
+  float p    = (float) L / (float) (L+1);
+  float q    = 1.0f / (float) (L+1);
+  mo->nullsc = (float) L * log2f(p) + log2f(q);
 
   mo->xsc[h4_N][h4_LOOP] = mo->xsc[h4_J][h4_LOOP] = mo->xsc[h4_C][h4_LOOP] = esl_log2f( (float) L    / ( (float) L + 2. + mo->nj));
   mo->xsc[h4_N][h4_MOVE] = mo->xsc[h4_J][h4_MOVE] = mo->xsc[h4_C][h4_MOVE] = esl_log2f((2. + mo->nj) / ( (float) L + 2. + mo->nj));
   mo->L = L;
   return eslOK;
 }
+
 
 /* Function:  h4_mode_Destroy()
  * Synopsis:  Frees an <H4_MODE>
@@ -169,12 +176,31 @@ h4_mode_Destroy(H4_MODE *mo)
 
 
 /*****************************************************************
- * 2. Unit tests
+ * 2. Debugging and development tools
+ *****************************************************************/
+
+/* Function:  h4_mode_Dump()
+ * Synopsis:  Dump contents of an H4_PATH for inspection.
+ */
+int
+h4_mode_Dump(FILE *fp, const H4_MODE *mo)
+{
+  printf("E->J: %9.5f    E->C: %9.5f\n", mo->xsc[0][0], mo->xsc[0][1]);
+  printf("N->N: %9.5f    N->B: %9.5f\n", mo->xsc[1][0], mo->xsc[1][1]);
+  printf("J->J: %9.5f    J->B: %9.5f\n", mo->xsc[2][0], mo->xsc[2][1]); 
+  printf("C->C: %9.5f    C->T: %9.5f\n", mo->xsc[3][0], mo->xsc[3][1]); 
+  printf("B->L: %9.5f    B->G: %9.5f\n", mo->xsc[4][0], mo->xsc[4][1]); 
+  return eslOK;
+}
+
+
+/*****************************************************************
+ * 3. Unit tests
  *****************************************************************/
 #ifdef h4MODE_TESTDRIVE
 
 static void
-utest_minimal(void)
+utest_sanity(void)
 {
   char     msg[] = "h4_mode minimal unit test failed";
   H4_MODE *mo    = NULL;
@@ -193,7 +219,7 @@ utest_minimal(void)
 #endif /* h4MODE_TESTDRIVE */
 
 /*****************************************************************
- * 3. Test driver
+ * 4. Test driver
  *****************************************************************/
 #ifdef h4MODE_TESTDRIVE
 
@@ -214,7 +240,7 @@ main(int argc, char **argv)
  
   fprintf(stderr, "## %s\n", argv[0]);
 
-  utest_minimal();
+  utest_sanity();
 
   fprintf(stderr, "#  status = ok\n");
   esl_getopts_Destroy(go);

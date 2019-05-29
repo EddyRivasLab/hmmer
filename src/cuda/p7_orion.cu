@@ -14,7 +14,7 @@
 
 
 __global__
- void p7_orion(int num_sequences, const __restrict__ uint8_t *data, const __restrict__ uint64_t *lengths, const __restrict__ uint64_t *offsets, __restrict__ uint64_t *hits, P7_OPROFILE *om, double mu, double lambda){
+ void p7_orion(int num_sequences, const __restrict__ uint8_t *data, const __restrict__ uint64_t *lengths, const __restrict__ uint64_t *offsets, float *hits, P7_OPROFILE *om, double mu, double lambda){
   __shared__ uint4 shared_buffer[1024 *3];  //allocate one big lump that takes up all our shared memory
   int  Q = ((((om->M)-1) / (128)) + 1);
   int **rbv = (int **)shared_buffer; 
@@ -58,10 +58,10 @@ __global__
     float score = SSV_cuda(dsq, L, om->M, rbv, om->scale_b, om->tauBM);
     score = (score - nullscore)/eslCONST_LOG2; // subtract expected random score and convert to bits 
     if(threadIdx.x == 0){
-		double y  = lambda*(score-mu);
+	/*	double y  = lambda*(score-mu);
     	double ey = -exp(-y);
     	double passprob;
-    	/* Use 1-e^x ~ -x approximation here when e^-y is small. */
+    	//Use 1-e^x ~ -x approximation here when e^-y is small. 
     	if (fabs(ey) < eslSMALLX1) passprob = -ey;
     	else                       passprob =  1 - exp(ey); 
 
@@ -71,7 +71,8 @@ __global__
       	}
       	else{
         	hits[my_warp] =1;
-      	}
+      	} */
+       hits[my_warp]= score;
     }
   }
   return; 

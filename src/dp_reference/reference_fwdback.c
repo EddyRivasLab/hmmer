@@ -220,7 +220,7 @@ p7_ReferenceForward(const ESL_DSQ *dsq, int L, const P7_PROFILE *gm, P7_REFMX *r
  *            rmx    : allocated DP matrix
  *            opt_sc : optRETURN: raw Backward score in nats
  *
- * Returns:   <eslOK> on success. <rmx> contains the Forward matrix;
+ * Returns:   <eslOK> on success. <rmx> contains the Backward matrix;
  *            its internals may have been reallocated.
  *            
  * Throws:    <eslEMEM> if reallocation is attempted and fails.           

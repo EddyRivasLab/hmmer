@@ -81,6 +81,8 @@ typedef struct p7_backend_queue_entry{
 	// Some change needs to happen to avoid redundant work once the CUDA code stabilizess
 	int do_overthruster;
 
+	float score;
+
 	//! The sequence or HMM's index in the appropriate database
 	uint64_t seq_id;
 

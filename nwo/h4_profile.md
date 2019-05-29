@@ -1,4 +1,3 @@
-
 # H4_PROFILE - H4's dual-mode local/glocal probability model
 
 ## Boundary cases
@@ -39,6 +38,17 @@ state are forced to transit to E. There is no Im state.
 | TDD | -        | 0       |
 
 e[0] is unused. It is set with e[0][0] = 1, e[0][a>0] = 0.
+
+## "Count" mode
+
+When we collect counts from an alignment, we collect them in the
+probability fields `e[]` and `t[]`. 
+
+The only boundary case that accumulates observed counts is
+`t[0][TMM|TMD]`. The other boundary cases do not accumulate counts;
+they are left at their fixed conditions defined above. For example,
+see `h4_path.c::h4_path_Count()`.
+
 
 
 ## H4_PROFILE_SPECIALS

@@ -396,13 +396,18 @@ main(int argc, char **argv)
 
 #include "hmmer.h"
 
+#define SIMDOPTS "--sse,--avx,--avx512"
+
 static ESL_OPTIONS options[] = {
-  /* name           type      default  env  range toggles reqs incomp  help                                       docgroup*/
-  { (char *) "-h",        eslARG_NONE,   FALSE, NULL, NULL,  NULL,  NULL, NULL, (char *) "show brief help on version and usage",           0 },
-  {(char *) "-s",        eslARG_INT,     (char *)  "0", NULL, NULL,  NULL,  NULL, NULL, (char *) "set random number seed to <n>",                  0 },
-  { (char *) "-F",        eslARG_NONE,   FALSE, NULL, NULL,  NULL,  NULL, NULL, (char *) "only benchmark Forward",                         0 },
-  { (char *) "-L",        eslARG_INT,   (char *)  "400", NULL, (char *) "n>0", NULL,  NULL, NULL, (char *) "length of random target seqs",                   0 },
-  {(char *)  "-N",        eslARG_INT,  (char *)  "2000", NULL, (char *) "n>0", NULL,  NULL, NULL, (char *) "number of random target seqs",                   0 },
+  /* name           type      default  env  range   toggles reqs incomp  help                                       docgroup*/
+  { "-h",        eslARG_NONE,   FALSE, NULL, NULL,     NULL,  NULL, NULL, "show brief help on version and usage",           0 },
+  { "-s",        eslARG_INT,      "0", NULL, NULL,     NULL,  NULL, NULL, "set random number seed to <n>",                  0 },
+  { "-F",        eslARG_NONE,   FALSE, NULL, NULL,     NULL,  NULL, NULL, "only benchmark Forward",                         0 },
+  { "-L",        eslARG_INT,    "400", NULL, "n>0",    NULL,  NULL, NULL, "length of random target seqs",                   0 },
+  { "-N",        eslARG_INT,  "20000", NULL, "n>0",    NULL,  NULL, NULL, "number of random target seqs",                   0 },
+  { "--sse",     eslARG_NONE,    NULL, NULL,  NULL,SIMDOPTS,  NULL, NULL, "force using the SSE4 implementation",            0 },
+  { "--avx",     eslARG_NONE,    NULL, NULL,  NULL,SIMDOPTS,  NULL, NULL, "force using the AVX2 implementation",            0 },
+  { "--avx512",  eslARG_NONE,    NULL, NULL,  NULL,SIMDOPTS,  NULL, NULL, "force using the AVX512 implementation",          0 },
   {  0, 0, 0, 0, 0, 0, 0, 0, 0, 0 },
 };
 static char usage[]  = "[-options] <hmmfile>";
@@ -430,8 +435,14 @@ main(int argc, char **argv)
   float           sc;
   double          Mcs;
 
-  if (p7_hmmfile_OpenE(hmmfile, NULL, &hfp, NULL) != eslOK) p7_Fail((char *) "Failed to open HMM file %s", hmmfile);
-  if (p7_hmmfile_Read(hfp, &abc, &hmm)            != eslOK) p7_Fail((char *) "Failed to read HMM");
+  /* Overriding the CPU dispatcher */
+  if      (esl_opt_GetBoolean(go, "--sse"))    { p7_ForwardFilter = p7_ForwardFilter_sse;    p7_BackwardFilter = p7_BackwardFilter_sse;    }
+  else if (esl_opt_GetBoolean(go, "--avx"))    { p7_ForwardFilter = p7_ForwardFilter_avx;    p7_BackwardFilter = p7_BackwardFilter_avx;    }
+  else if (esl_opt_GetBoolean(go, "--avx512")) { p7_ForwardFilter = p7_ForwardFilter_avx512; p7_BackwardFilter = p7_BackwardFilter_avx512; }
+
+  if (p7_hmmfile_OpenE(hmmfile, NULL, &hfp, NULL) != eslOK) p7_Fail("Failed to open HMM file %s", hmmfile);
+  if (p7_hmmfile_Read(hfp, &abc, &hmm)            != eslOK) p7_Fail("Failed to read HMM");
+
 
   bg = p7_bg_Create(abc);
   p7_bg_SetLength(bg, L);
@@ -468,8 +479,14 @@ main(int argc, char **argv)
 
 
   Mcs        = (double) N * (double) L * (double) gm->M * 1e-6 / (double) w->elapsed;
-  printf("# implementation: %s\n", esl_cpu_Get());
-  esl_stopwatch_Display(stdout, w, (char *) "# CPU time: ");
+
+  printf("# implementation: ");
+  if      (esl_opt_GetBoolean(go, "--sse"))    printf("SSE\n");
+  else if (esl_opt_GetBoolean(go, "--avx"))    printf("AVX\n");
+  else if (esl_opt_GetBoolean(go, "--avx512")) printf("AVX512\n");
+  else                                         printf("%s\n", esl_cpu_Get());
+  esl_stopwatch_Display(stdout, w, "# CPU time: ");
+
   printf("# M    = %d\n", gm->M);
   printf("# %.1f Mc/s\n", Mcs);
 

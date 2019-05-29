@@ -10,8 +10,8 @@ typedef struct p7_cuda_buffers{
   char **gpu_data; // buffers for sequence data on GPU
   uint32_t *cpu_num_hits; // Number of hits found in this chunk of sequences, CPU copy
   uint32_t *gpu_num_hits; // Number of hits found in this chunk of sequences, GPU copy
-  uint64_t **cpu_hits; // IDs of sequences that hit, CPU copy
-  uint64_t **gpu_hits; // IDs of sequences that hit, GPU copy
+  float **cpu_hits; // IDs of sequences that hit, CPU copy
+  float **gpu_hits; // IDs of sequences that hit, GPU copy
   uint64_t **cpu_lengths; // sequence lengths
   uint64_t **gpu_lengths;
   char ***cpu_sequences; // Original locations of sequences
@@ -209,8 +209,8 @@ void *p7_server_cuda_worker_thread(void *worker_argument){
   buffer_state.gpu_offsets = (uint64_t **) malloc(buffer_state.num_streams * sizeof(uint64_t *));
   buffer_state.cpu_data = (char **) malloc(buffer_state.num_streams * sizeof(char *));
   buffer_state.gpu_data = (char **) malloc(buffer_state.num_streams * sizeof(char *));
-  buffer_state.cpu_hits = (uint64_t **) malloc(buffer_state.num_streams * sizeof(uint64_t *));
-  buffer_state.gpu_hits = (uint64_t **) malloc(buffer_state.num_streams * sizeof(uint64_t *));
+  buffer_state.cpu_hits = (float **) malloc(buffer_state.num_streams * sizeof(uint64_t *));
+  buffer_state.gpu_hits = (float **) malloc(buffer_state.num_streams * sizeof(uint64_t *));
   buffer_state.cpu_lengths = (uint64_t **) malloc(buffer_state.num_streams * sizeof(uint64_t *));
   buffer_state.gpu_lengths = (uint64_t **) malloc(buffer_state.num_streams * sizeof(uint64_t *));
   buffer_state.cpu_sequences = (char ***) malloc(buffer_state.num_streams * sizeof(char **));
@@ -498,13 +498,14 @@ int p7_cuda_worker_thread_front_end_sequence_search_loop(P7_DAEMON_WORKERNODE_ST
 
         int num_hits = 0;
         for(int q = 0; q < num_sequences; q++){
-          if(buffer_state->cpu_hits[my_stream][q] ==1){ //This sequence hit
+            if(1){
+         // if(buffer_state->cpu_hits[my_stream][q] ==1){ //This sequence hit
             // get an entry to put this comparison in
             P7_BACKEND_QUEUE_ENTRY * the_entry = workernode_get_backend_queue_entry_from_pool(workernode);
 
             // Skip the sparsemask swapping, as the GPU doesn't do enough of the overthruster to
             // populate a sparse mask
-            
+            the_entry->score = buffer_state->cpu_hits[my_stream][q];
             // populate the fields
             char *s = buffer_state->cpu_sequences[my_stream][q];
             the_entry->seq_id = *((uint64_t *) s);

@@ -1,7 +1,7 @@
 CC     = nvcc 
 CFLAGS = -O3 -g -lineinfo --ptxas-options=-v --maxrregcount=64 -arch=compute_60 -code=sm_61  -lineinfo --Wno-deprecated-declarations --compiler-options "-msse4.1" 
 HOME = ../
-all:   px_cuda_packed px_cuda px_cuda_texture px_cuda_fp
+all:   px_cuda_packed
 
 px:     px.c Makefile
 	${CC} ${CFLAGS} -o px -L ${HOME}/src -L ${HOME}/lib/easel -I ${HOME}/src -I /usr/include/mpi -I ${HOME}/lib/easel px.c -lhmmer -leasel -lm -lmpi

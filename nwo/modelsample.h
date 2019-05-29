@@ -9,6 +9,10 @@
 
 #include "h4_profile.h"
 
-extern int h4_modelsample(ESL_RANDOMNESS *rng, const ESL_ALPHABET *abc, int M, H4_PROFILE **ret_hmm);
+extern int h4_modelsample             (ESL_RANDOMNESS *rng, const ESL_ALPHABET *abc, int M, H4_PROFILE **ret_hmm);
+extern int h4_modelsample_zeropeppered(ESL_RANDOMNESS *rng, const ESL_ALPHABET *abc, int M, H4_PROFILE **ret_hmm);
+extern int h4_modelsample_Enumerable  (ESL_RANDOMNESS *rng, const ESL_ALPHABET *abc, int M, H4_PROFILE **ret_hmm);
+extern int h4_modelsample_Enumerable2 (ESL_RANDOMNESS *rng, const ESL_ALPHABET *abc, int M, H4_PROFILE **ret_hmm);
+extern int h4_modelsample_SinglePath  (ESL_RANDOMNESS *rng, const ESL_ALPHABET *abc, int M, H4_PROFILE **ret_hmm);
 
 #endif /*h4MODELSAMPLE_INCLUDED*/

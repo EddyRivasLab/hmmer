@@ -5,6 +5,40 @@
 #include "easel.h"
 #include "esl_getopts.h"
 
+#include "logsum.h"
+
+/* Function:  h4_Init()
+ * Synopsis:  Initialize a new H4 process or thread.
+ * Incept:    SRE, Fri 17 May 2019
+ *
+ * Purpose:   Initialize a new H4 process or thread:
+ *
+ *              - initialize lookup table for fast table-driven
+ *                approximation of the log-sum-exp operation, used by
+ *                non-SIMD Forward/Backward code.
+ *
+ *              - TK: set processor flags to turn off denormalized
+ *                floating point math; performance penalty is too 
+ *                high.
+ *
+ * Returns:   <eslOK> on success.
+ *
+ * Throws:    (no abnormal error conditions)
+ */
+int
+h4_Init(void)
+{
+  /* We do a lot of log-sum-exp operations using a table-driven
+   * approximation; initialize the table.
+   */
+  h4_logsum_Init();
+
+  /* TK: simdvec_Init() */
+
+  return eslOK;
+}
+
+
 
 /* Function:  h4_CreateDefaultApp()
  * Synopsis:  Initialize a small HMMER program such as a test driver or example.
@@ -42,8 +76,9 @@ h4_CreateDefaultApp(ESL_OPTIONS *options, int nargs, int argc, char **argv, char
   ESL_GETOPTS *go       = NULL;
   char        *progname = NULL;
 
-  //if (  h4_Init()                               != eslOK) goto ERROR;  // we'll probably need this someday
-  if (  esl_FileTail(argv[0], FALSE, &progname) != eslOK) goto ERROR; // remove any leading directory path
+  if ( h4_Init() != eslOK) goto ERROR; 
+
+  if ( esl_FileTail(argv[0], FALSE, &progname) != eslOK) goto ERROR; // remove any leading directory path
   if (( go = esl_getopts_Create(options))       == NULL)  goto ERROR;
 
   if (esl_opt_ProcessCmdline(go, argc, argv) != eslOK ||

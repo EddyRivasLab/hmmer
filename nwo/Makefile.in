@@ -9,18 +9,21 @@ OBJS   = \
 	h4_profile.o        \
 	h4_refmx.o          \
 	build.o             \
+	emit.o              \
+	eweight.o           \
 	general.o           \
+	logsum.o            \
 	modelsample.o       \
+	modelstats.o        \
 	parameterize.o      \
-	reference_trace.o   \
-	reference_viterbi.o \
-	zigar.o             
+	reference_dp.o      \
+	zigar.o
 
 SSE4_OBJS   =
-AVX_OBJS    = 
+AVX_OBJS    =
 AVX512_OBJS =
 NEON_OBJS   =
-VMX_OBJS    = 
+VMX_OBJS    =
 
 HDRS = \
 	h4_config.h         \
@@ -32,18 +35,25 @@ HDRS = \
 	h4_profile.h        \
 	h4_refmx.h          \
 	build.h             \
+	emit.h              \
+	eweight.h           \
 	general.h           \
+	logsum.h            \
 	modelsample.h       \
+	modelstats.h        \
 	parameterize.h      \
-	reference_trace.h   \
-	reference_viterbi.h \
-	zigar.h             
+	reference_dp.h      \
+	zigar.h
 
 
 UTESTS = \
-	h4_hmmfile_utest \
-	h4_mode_utest    \
-	h4_path_utest    \
+	h4_hmmfile_utest   \
+	h4_mode_utest      \
+	h4_path_utest      \
+	h4_profile_utest   \
+	logsum_utest       \
+	modelsample_utest  \
+	reference_dp_utest \
 	zigar_utest
 
 STATS  =
@@ -52,13 +62,17 @@ EXPERIMENTS = \
 	h4_build_experiment  \
 	h4_build_experiment2
 
-BENCHMARKS =
+BENCHMARKS = \
+	logsum_benchmark \
+	reference_dp_benchmark 
 
 EXAMPLES = \
 	h4_hmmfile_example        \
 	h4_path_example           \
-	reference_viterbi_example \
-	zigar_example      
+	emit_example              \
+	logsum_example            \
+	reference_dp_example      \
+	zigar_example
 
 
 
@@ -66,7 +80,7 @@ EXAMPLES = \
 top_srcdir     = @top_srcdir@
 top_builddir   = @top_builddir@
 srcdir         = @srcdir@
-VPATH          = @srcdir@ 
+VPATH          = @srcdir@
 SHELL          = /bin/sh
 
 prefix         = @prefix@
@@ -77,7 +91,7 @@ libdir         = @libdir@
 includedir     = @includedir@
 
 CC             = @CC@
-CFLAGS         = @CFLAGS@ 
+CFLAGS         = @CFLAGS@
 PTHREAD_CFLAGS = @PTHREAD_CFLAGS@
 SSE4_CFLAGS    = @SSE4_CFLAGS@
 AVX_CFLAGS     = @AVX_CFLAGS@
@@ -89,7 +103,7 @@ LDFLAGS        = @LDFLAGS@
 DEFS           = @DEFS@
 LIBS           = -lhmmer -leasel -ldivsufsort @MPILIBS@ @LIBS@ -lm
 
-AR             = @AR@ 
+AR             = @AR@
 RANLIB         = @RANLIB@
 INSTALL        = @INSTALL@
 
@@ -97,7 +111,7 @@ INSTALL        = @INSTALL@
 # ./configure (p7_config.h, esl_config.h) are in build dirs, not
 # source dirs; and we want to find these first (in case an errant one is
 # in the source tree). All other headers are in the source tree.
-# 
+#
 ESLDIR       = @HMMER_ESLDIR@
 SADIR        = @HMMER_SADIR@
 MYLIBDIRS    = -L${top_builddir}/${ESLDIR}\
@@ -169,8 +183,15 @@ ${VMX_EXAMPLES}:      SIMD_CFLAGS:= $(VMX_CFLAGS)
 .FORCE:
 
 all:    ${PROGS} 
-check:  ${PROGS} ${UTESTS}
 dev:    ${PROGS} ${UTESTS} ${EXPERIMENTS} ${STATS} ${BENCHMARKS} ${EXAMPLES}
+
+check:  ${PROGS} ${UTESTS}
+	@command -v python3 >/dev/null 2>&1 || { echo >&2 "python3 is required for 'make check', but is not in your PATH. Aborting."; exit 1; }
+	@echo 
+	@echo Running HMMER NWO test suite...
+	@echo
+	@${top_srcdir}/lib/easel/devkit/sqc 1 nwo_tests.sqc .. ${srcdir}/..
+
 
 # Programs build from their .c's directly. They are not included in libhmmer.a.
 ${PROGS}: % : %.c  libhmmer.a ${HDRS}
@@ -186,6 +207,19 @@ ${ALL_OBJS}:  %.o : %.c ${HDRS}
 
 ${ALL_EXAMPLES}: libhmmer.a ${top_builddir}/lib/easel/libeasel.a ${HDRS} h4_config.h
 	@BASENAME=`echo $@ | sed -e 's/_example[0-9]*//' | sed -e 's/^h4_//'` ;\
+	DFLAG=h4`echo $@ | sed -e 's/^h4_//' | sed -e 'y/abcdefghijklmnopqrstuvwxyz/ABCDEFGHIJKLMNOPQRSTUVWXYZ/'`;\
+	if test -e ${srcdir}/h4_$${BASENAME}.c    ;\
+	   then DFILE=${srcdir}/h4_$${BASENAME}.c ;\
+	   else DFILE=${srcdir}/$${BASENAME}.c    ;\
+	fi;\
+	if test ${V} ;\
+	   then echo "${CC} ${CFLAGS} ${SIMD_CFLAGS} ${PTHREAD_CFLAGS} ${CPPFLAGS} ${DEFS} ${MYINCDIRS} ${LDFLAGS} ${MYLIBDIRS} -D$${DFLAG} -o $@ $${DFILE} ${LIBS}" ;\
+	   else echo '    ' GEN $@ ;\
+        fi ;\
+	${CC} ${CFLAGS} ${SIMD_CFLAGS} ${PTHREAD_CFLAGS} ${CPPFLAGS} ${DEFS} ${MYINCDIRS} ${LDFLAGS} ${MYLIBDIRS} -D$${DFLAG} -o $@ $${DFILE} ${LIBS}
+
+${ALL_BENCHMARKS}: libhmmer.a ${top_builddir}/lib/easel/libeasel.a ${HDRS} h4_config.h
+	@BASENAME=`echo $@ | sed -e 's/_benchmark[0-9]*//' | sed -e 's/^h4_//'` ;\
 	DFLAG=h4`echo $@ | sed -e 's/^h4_//' | sed -e 'y/abcdefghijklmnopqrstuvwxyz/ABCDEFGHIJKLMNOPQRSTUVWXYZ/'`;\
 	if test -e ${srcdir}/h4_$${BASENAME}.c    ;\
 	   then DFILE=${srcdir}/h4_$${BASENAME}.c ;\

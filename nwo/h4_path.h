@@ -20,8 +20,8 @@ typedef struct {
 
 /* Codes for states, esp. states used in H4_PATH pi->st[] */
 /* Do not change order. Some routines make assumptions about it: for
- * example, h4_path_TestSample() assumes that MG-IG-DG and ML-IL-DL
- * are contiguous.
+ * example, h4_path_TestSample() and h4_emit() assume that MG-IG-DG
+ * and ML-IL-DL are contiguous.
  */
 #define h4P_NONE  0
 #define h4P_S     1   // unused in paths
@@ -47,6 +47,7 @@ typedef struct {
 #define h4_path_IsD(s)     ( (s) == h4P_DG || (s) == h4P_DL )
 
 extern H4_PATH *h4_path_Create (void);
+extern H4_PATH *h4_path_Clone  (const H4_PATH *pi);
 extern int      h4_path_Grow   (H4_PATH *pi);
 extern int      h4_path_Append (H4_PATH *pi, int8_t st);
 extern int      h4_path_AppendElement(H4_PATH *pi, int8_t st, int r);
@@ -54,10 +55,10 @@ extern int      h4_path_Reverse(H4_PATH *pi);
 extern int      h4_path_Reuse  (H4_PATH *pi);
 extern void     h4_path_Destroy(H4_PATH *pi);
 
-extern int h4_path_InferLocal (const ESL_ALPHABET *abc, const ESL_DSQ *ax, int alen, const int8_t *matassign, H4_PATH *pi);
-extern int h4_path_InferGlocal(const ESL_ALPHABET *abc, const ESL_DSQ *ax, int alen, const int8_t *matassign, H4_PATH *pi);
+extern int h4_path_InferLocal (const ESL_ALPHABET *abc, const ESL_DSQ *ax, int alen, const int8_t *matassign, int lcol, int rcol, H4_PATH *pi);
+extern int h4_path_InferGlocal(const ESL_ALPHABET *abc, const ESL_DSQ *ax, int alen, const int8_t *matassign, int lcol, int rcol, H4_PATH *pi);
 
-extern int h4_path_Count(const H4_PATH *pi, const ESL_DSQ *dsq, float wgt, H4_PROFILE *hmm);
+extern int h4_path_Count(const H4_PATH *pi, const ESL_DSQ *dsq, float wgt, H4_PROFILE_CT *ctm);
 
 extern int h4_path_Score(const H4_PATH *pi, const ESL_DSQ *dsq, const H4_PROFILE *hmm, const H4_MODE *mo, float *ret_sc);
 
@@ -66,8 +67,8 @@ extern int   h4_path_TestSample(ESL_RANDOMNESS *rng, H4_PATH **ret_pi);
 extern char *h4_path_DecodeStatetype(int8_t st);
 extern int   h4_path_Validate(const H4_PATH *pi, int M, int L, char *errbuf);
 extern int   h4_path_Compare(const H4_PATH *pi1, const H4_PATH *pi2);
-extern int   h4_path_Dump(FILE *fp, const H4_PATH *pi);
-
+extern int   h4_path_Dump     (FILE *fp, const H4_PATH *pi);
+extern int   h4_path_DumpCigar(FILE *fp, const H4_PATH *pi);
 
 
 

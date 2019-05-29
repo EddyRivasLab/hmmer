@@ -1,8 +1,3 @@
-#include <string.h>
-#include "easel.h"
-#include <x86intrin.h>
-#include <math.h>
-#include "esl_sse.h"
 #include "esl_dsqdata.h"
 #include "hmmer.h"
 #include "px_cuda.h"
@@ -16,7 +11,7 @@
 #define KP 27  // number of characters in alphabet.  Make parameter.
 #define MAX_BAND_WIDTH 10
 #define NEGINFMASK 0x80808080
-#define NUM_REPS 1000
+#define NUM_REPS 1
 #define MAX(a, b, c)\
   a = __vmaxs4(b, c);
 
@@ -1806,16 +1801,7 @@ int
 p7_SSVFilter_shell_sse(const ESL_DSQ *dsq, int L, const __restrict__
   P7_OPROFILE *om, P7_FILTERMX *fx, float *ret_sc, P7_OPROFILE *card_OPROFILE, P7_FILTERMX *card_FILTERMX, int num)
 {
-  int      Q          = P7_Q(om->M, p7_VWIDTH_SSE);
-  __m128i  hv         = _mm_set1_epi8(-128);
-  __m128i  neginfmask = _mm_insert_epi8( _mm_setzero_si128(), -128, 0);
-  __m128i *dp;
-  __m128i *rbv;
-  __m128i  mpv;
-  __m128i  sv;
-  int8_t   h, *card_h;
-  int      i,q;
-  int      status;
+  int8_t   *card_h;
 
   //printf("Dim %d %d\n", ((((om->M)-1) / (128)) + 1) * 32, L);
   cudaEvent_t start, stop;
@@ -1827,11 +1813,10 @@ p7_SSVFilter_shell_sse(const ESL_DSQ *dsq, int L, const __restrict__
   int warps_per_block;
   dim3 threads_per_block, num_blocks;
   cudaError_t err;
-  if (( status = p7_filtermx_Reinit(fx, om->M) ) != eslOK) goto FAILURE;
+  p7_filtermx_Reinit(fx, om->M);
   fx->M    = om->M;
   fx->Vw   = p7_VWIDTH_SSE / sizeof(int16_t); // A hack. FILTERMX wants Vw in units of int16_t. 
   fx->type = p7F_SSVFILTER;
-  dp       = (__m128i *) fx->dp;
 
   cudaMalloc((void **) &card_h, 1);
   err = cudaGetLastError();
@@ -1876,88 +1861,33 @@ p7_SSVFilter_shell_sse(const ESL_DSQ *dsq, int L, const __restrict__
   // Compare CUDA result and SSE
   //cudaMemcpy(check_array, check_array_cuda, L * ((((om->M)-1) / (32)) + 1) * 32* sizeof(uint), cudaMemcpyDeviceToHost);
  // card_Q = ((((om->M)-1) / (128)) + 1);
-  mpv = hv;
-  for (q = 0; q < Q; q++)
-    dp[q] = hv;
-
-  for (i = 1; i <= L; i++)
-    {
-      rbv = (__m128i *) om->rbv[dsq[i]];
-      
-      for (q = 0; q < Q; q++)
-        {
-          sv    = _mm_adds_epi8(mpv, rbv[q]);
-          hv    = _mm_max_epi8(hv, sv);
-          mpv   = dp[q];
-          dp[q] = sv;
-        }  
-      mpv = esl_sse_rightshift_int8(sv, neginfmask);
-    // Check row against GPU
-   /*   for(int elem= 0; elem < Q * p7_VWIDTH_SSE; elem++){
-        int card_index = ((i -1) * card_Q * 128) + ((elem % card_Q) * 128) + (elem/card_Q);
-        int cpu_index =  ((elem % Q) * p7_VWIDTH_SSE) + (elem/Q);
-        uint8_t card_val = ((uint8_t *)check_array)[card_index];
-        uint8_t cpu_val = ((uint8_t *)dp)[cpu_index];
-        if(card_val != cpu_val){
-          printf("Row value miss-match at row %d, position %d. CPU had %d, GPU had %d.  CPU index was %d, GPU index was %d\n", (i-1), elem, cpu_val, card_val, cpu_index, (card_index - ((i -1) * card_Q * 128)));
-        }
-      } */
-     int cuda_length =0;
-      char *cuda_row = restripe_char((char *) dp, 16, 128, Q * 16, &cuda_length);
-  /*    printf("CPU %04d ", i-1);
-      for(int v = 0; v < cuda_length/4; v++){
-        printf("%08x ", ((uint32_t *) cuda_row)[v]);
-      }
-      printf("\n"); */ 
-    } 
-  h = esl_sse_hmax_epi8(hv);
+ 
   cudaFree(card_h);
   cudaFree(card_dsq);
-
-  for(i = 0; i < om->abc->Kp; i++){
-
-  }
-  printf("score %x \n", h_compare);
-  if(h != h_compare){
-    printf("Final result miss-match: %x (CUDA) vs %x (CPU) on sequence %d with length %d\n\n", h_compare, h, num, L);
-  } 
-  if(om->V != 16){
-    printf("Ignore any result miss-matches, as HMMER was not compiled to use only SSE instructions\n");
-  }
- float known_good;  
- 
- p7_SSVFilter_base_sse(dsq, L, om, fx, &known_good);
-  if (h == 127)  
-    { *ret_sc = eslINFINITY;
-      if(*ret_sc != known_good){
-        printf("miss-match with known good result %f vs %f\n", *ret_sc, known_good);
-      }                  
-      return eslOK;
-     }
-  else if (h > -128)
-    { 
-      *ret_sc = ((float) h + 128.) / om->scale_b + om->tauBM - 2.0;   // 2.0 is the tauNN/tauCC "2 nat approximation"
-      *ret_sc += 2.0 * logf(2.0 / (float) (L + 2)); 
-      if(*ret_sc != known_good){
-        printf("miss-match with known good result %f vs %f\n", *ret_sc, known_good);
-      }                  
-      return eslOK;
+  float score;
+ if (h_compare == 127)  // Overflow on high scoring sequences is expected.
+    {             // Pass filter, but score is unknown.
+      score = eslINFINITY;
+    }
+  else if (h_compare > -128)
+    {                         //v  Add +128 back onto the diagonal score. DP calculated it from -128 baseline.
+      score = ((float) h_compare + 128.) / om->scale_b + om->tauBM - 2.0;   // 2.0 is the tauNN/tauCC "2 nat approximation"
+      score += 2.0 * logf(2.0 / (float) (L + 2));                    // tauNB, tauCT
     }
   else 
     {
-      *ret_sc = -eslINFINITY;
-            if(*ret_sc != known_good){
-        printf("miss-match with known good result %f vs %f\n", *ret_sc, known_good);
-      }     
-      return eslOK;
+      score = -eslINFINITY;
     }
-    
- FAILURE:
-  *ret_sc = -eslINFINITY;
-        if(*ret_sc != known_good){
-        printf("miss-match with known good result %f vs %f\n", *ret_sc, known_good);
-      }     
-  return status;
+
+ float known_good;  
+ 
+ p7_SSVFilter_base_sse(dsq, L, om, fx, &known_good);
+ 
+  if (abs((score-known_good)/known_good) > .001){
+    printf("Miss-match.  CUDA returned %f, SSE returned %f ", score, known_good);
+    return eslFAIL;
+  }
+  return eslOK;
 }
 
 
@@ -2025,16 +1955,17 @@ main(int argc, char **argv)
     {
       for (i = 1; i < chu->N; i++)
 	{
-    if(num_hits > 100 ){
+    /*if(num_hits > 100 ){
       goto punt;
-    }
+    } */
 	  p7_bg_SetLength(bg, (int) chu->L[i]);            // TODO: remove need for cast
 	  p7_oprofile_ReconfigLength(om, (int) chu->L[i]); //         (ditto)
 	  
 	  //	  printf("seq %d %s\n", chu->i0+i, chu->name[i]);
     float ssv_score;
-printf("Sequence %s, ", chu->name[i]);
-    p7_SSVFilter_shell_sse(chu->dsq[i], chu->L[i], om, eng->fx ,&ssv_score, card_OPROFILE, card_FILTERMX, num_hits);
+    if(p7_SSVFilter_shell_sse(chu->dsq[i], chu->L[i], om, eng->fx ,&ssv_score, card_OPROFILE, card_FILTERMX, num_hits) != eslOK){
+      printf(" on sequence %s\n", chu->name[i]);
+    }
 
 
 	  p7_engine_Reuse(eng);

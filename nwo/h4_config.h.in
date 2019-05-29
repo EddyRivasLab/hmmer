@@ -1,16 +1,11 @@
 #ifndef H4_CONFIGH_INCLUDED
 #define H4_CONFIGH_INCLUDED
 
-#define h4_DEFAULT_SYMFRAC         0.5
-#define h4_DEFAULT_FRAGTHRESH      0.85
-#define h4_DEFAULT_WID             0.62
-
 #undef HMMER_VERSION
 #undef HMMER_DATE
 #undef HMMER_COPYRIGHT
 #undef HMMER_LICENSE
 #undef HMMER_URL
-
 
 /* The symbol alphabet is handled by ESL_ALPHABET objects, which
  * dynamically allocate; but sometimes HMMER uses statically-allocated
@@ -19,6 +14,9 @@
  */
 #define h4_MAXABET    20      /* maximum size of alphabet (4 or 20)              */
 #define h4_MAXCODE    29      /* maximum degenerate alphabet size (18 or 29)     */
+
+
+#undef h4LOGSUM_SLOWEXACT     // TRUE when --enable-exact-logsum is set from ./configure. Replace fast FLogsum() with slow exact one. Testing purposes only! 
 
 
 #endif /*H4_CONFIGH_INCLUDED*/

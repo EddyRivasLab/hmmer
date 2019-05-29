@@ -1510,7 +1510,7 @@ p7_trace_Index(P7_TRACE *tr)
  *            indicated to be local. Currently the convention for
  *            flagging a local alignment is that the leading/trailing
  *            gaps are converted to missing data symbols; see
- *            <esl_msa_MarkFragments()> for example. (But this is a
+ *            <esl_msa_MarkFragments_old()> for example. (But this is a
  *            problematic convention; it would be better to directly
  *            annotate the MSA somehow, instead of overloading the ~
  *            character this way.)

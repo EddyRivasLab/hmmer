@@ -14,6 +14,7 @@
 #include "h4_config.h"
 
 #include <stdlib.h>
+#include <string.h>
 
 #include "easel.h"
 #include "esl_alphabet.h"
@@ -58,6 +59,40 @@ h4_path_Create(void)
 }
 
 
+/* Function:  h4_path_Clone()
+ * Synopsis:  Clone a path.
+ * Incept:    SRE, Sun 05 May 2019 [Yaz, Situation]
+ */
+H4_PATH *
+h4_path_Clone(const H4_PATH *pi)
+{
+  H4_PATH *np = NULL;
+  int      status;
+
+  if ((np = h4_path_Create())    == NULL)  goto ERROR;
+
+  /* This could become _GrowTo() if we ever want to break it out */
+  if (pi->Z > np->Zalloc)
+    {
+      while (np->Zalloc < pi->Z) np->Zalloc *= 2;
+      ESL_REALLOC(np->st,  sizeof(int8_t) * np->Zalloc);
+      ESL_REALLOC(np->rle, sizeof(int)    * np->Zalloc);
+    }
+
+  /* and this could become _Copy() */
+  memcpy( (void *) np->st,  (void *) pi->st,  sizeof(int8_t) * pi->Z);
+  memcpy( (void *) np->rle, (void *) pi->rle, sizeof(int)    * pi->Z);
+  np->Z = pi->Z;
+
+  return np;
+
+ ERROR:
+  h4_path_Destroy(np);
+  return NULL;
+}
+
+
+
 /* Function:  h4_path_Grow()
  * Synopsis:  Increase the allocation for path, by doubling.
  * Incept:    SRE, Wed 20 Jun 2018 [Universal Orlando]
@@ -83,6 +118,7 @@ h4_path_Grow(H4_PATH *pi)
 }
 
 
+
 /* Function:  h4_path_Append()
  * Synopsis:  Add one state to a growing path 
  * Incept:    SRE, Wed 20 Jun 2018 [Universal Orlando]
@@ -94,12 +130,13 @@ h4_path_Grow(H4_PATH *pi)
  *            routine will increment run lengths in the <H4_PATH>
  *            appropriately, and manage its allocation. It will also
  *            deal appropriately with you trying to add S/B/E/T states
- *            (by no-op'ing). These states occur naturally when you
- *            emit or trace back a path, but which are not stored
- *            explicitly in the <H4_PATH>. Path-building code is
- *            cleaner if it can call <h4_path_Append()> at every state
- *            without having to worry about the internal storage
- *            details of <H4_PATH>.
+ *            (by no-op'ing), which sometimes makes code a little
+ *            cleaner. These states occur naturally when you emit or
+ *            trace back a path, but which are not stored explicitly
+ *            in the <H4_PATH>. Path-building code is cleaner if it
+ *            can call <h4_path_Append()> at every state without
+ *            having to worry about the internal storage details of
+ *            <H4_PATH>.
  *            
  *            You can also build paths backwards (from T to S), then
  *            reverse them with <h4_path_Reverse()>. Dynamic
@@ -199,6 +236,24 @@ h4_path_Reverse(H4_PATH *pi)
 }
       
   
+/* Function:  h4_path_GetSeqlen()
+ * Synopsis:  Returns length of sequence emitted by path
+ * Incept:    SRE, Wed 22 May 2019
+ */
+int
+h4_path_GetSeqlen(const H4_PATH *pi)
+{
+  int L = 0;
+  int z;
+
+  for (z = 0; z < pi->Z; z++)
+    switch (pi->st[z]) {
+    case h4P_N:   case h4P_J:  case h4P_C: L += pi->rle[z] - 1; break;
+    case h4P_MG:  case h4P_IG:             L += pi->rle[z];     break;
+    case h4P_ML:  case h4P_IL:             L += pi->rle[z];     break;
+    }
+  return L;
+}
 
 /* Function:  h4_path_Reuse()
  * Synopsis:  Reinitialize and reuse an existing path
@@ -270,6 +325,14 @@ h4_path_Destroy(H4_PATH *pi)
  *            column must be marked. Caller provides <pi> as an
  *            allocated empty structure, newly created or Reuse()'d.
  *           
+ *            <lcol> and <rcol> are the leftmost and rightmost
+ *            consensus column indexes (1..alen), if known; or -1 if
+ *            not. This allows an optimization: the caller can
+ *            determine these itself, once, from <matassign>, then
+ *            provide them to many (e.g. <nseq>) calls of
+ *            <_InferLocal()> and <_InferGlocal()>. If either is -1,
+ *            it's determined here.
+ * 
  *            Alignments are assumed to be a single domain. Only a
  *            single-domain path, with no J states, is created.
  *            
@@ -287,7 +350,7 @@ h4_path_Destroy(H4_PATH *pi)
  *            match are assigned to N and C, losing track of which
  *            consensus columns they were between. If caller wants to
  *            make paths that guarantee a _reversible_ transformation,
- *            it should define all columns as consensus
+ *            it can define all columns as consensus
  *            (<matassign[1..alen] = 1>).
  *            
  *            Nonresidue '*' and missing data '~' symbols in the
@@ -298,10 +361,11 @@ h4_path_Destroy(H4_PATH *pi)
  *            *, and ~.
  *
  * Args:      abc       - digital alphabet
- *            ax        - digital aligned sequence <ax[1..alen]>; sentinels at 0,alen+1.
+ *            ax        - digital aligned sequence [(0).1..alen.(+1)]
  *            alen      - length of <ax>
- *            matassign - flag for each alignment column, whether it's consensus
- *                        or not. matassign[1..alen] = 1|0; matassign[0] = 0.
+ *            matassign - binary 1/0 flags for which columns are consensus [(0).1..alen]
+ *            lpos      - leftmost consensus col defined in <matassign>; or -1 and we'll figure it out
+ *            rpos      - rightmost ""
  *            pi        - RETURN: caller provides empty (Create'd or Reuse'd) path structure.
  *
  * Returns:   <eslOK> on success, and <pi> contains inferred path.
@@ -333,28 +397,35 @@ h4_path_Destroy(H4_PATH *pi)
  *            J9/42: upgraded to dual-mode local/glocal profile paths.
  */
 int
-h4_path_InferLocal(const ESL_ALPHABET *abc, const ESL_DSQ *ax, int alen, const int8_t *matassign, H4_PATH *pi)
+h4_path_InferLocal(const ESL_ALPHABET *abc, const ESL_DSQ *ax, int alen, const int8_t *matassign, int lcol, int rcol, H4_PATH *pi)
 {
-  int lcol;              // position of first MLk state (1..alen); alen+1 if none
-  int rcol = alen+1;     // position of last MLk state (lcol..alen);  alen+1 if none
   int ncons = 0;         // number of consensus columns up to & including lpos, first MLk 
   int c;                 // index over 1..alen
   int status;
+
+  ESL_DASSERT1(( ax[0] == eslDSQ_SENTINEL && ax[alen+1] == eslDSQ_SENTINEL ));  // unless we ever want to use this on a subseq for some reason?
+  ESL_DASSERT1(( lcol == -1 || (lcol >= 1    && lcol <= alen) ));
+  ESL_DASSERT1(( rcol == -1 || (rcol >= lcol && rcol <= alen) ));
+  ESL_DASSERT1(( pi->Z == 0 ));          
 
   /* Set lcol to the column with the L->MLk entry.  If none is found,
    * then lcol=alen+1; either there are no consensus columns (and we'll
    * throw eslEINVAL), or the consensus columns are empty (and we'll 
    * generate an empty N[n+1] L[0] C path).
    */
-  for (lcol = 1; lcol <= alen; lcol++)
+  if  (lcol == -1) lcol = 1;    // if caller provided <lcol>, start there; else start at 1
+  for (; lcol <= alen; lcol++)
     if (matassign[lcol] && ! esl_abc_XIsGap(abc, ax[lcol])) break; 
 
-  /* Set rcol to column with the MLk->E exit, or leave it at alen+1 if
-   * zerolength 
+  /* Set rcol to column with the MLk->E exit, or make it alen+1 if zerolength 
    */
   if (lcol <= alen)
-    for (rcol = alen; rcol > lcol;  rcol--)
-      if (matassign[rcol] && ! esl_abc_XIsGap(abc, ax[rcol])) break;
+    {
+      if  (rcol == -1) rcol = alen;  // if caller provided <rcol>, start there; else start at 1
+      for (rcol = alen; rcol > lcol;  rcol--)
+	if (matassign[rcol] && ! esl_abc_XIsGap(abc, ax[rcol])) break;
+    }
+  else rcol = alen+1;
 
   /* Now build the path. 
    * All residues left of <lcol> are assigned to N; all right of <rcol> are C.
@@ -404,13 +475,18 @@ h4_path_InferLocal(const ESL_ALPHABET *abc, const ESL_DSQ *ax, int alen, const i
  * Incept:    SRE, Tue 19 Jun 2018 [Universal Orlando]
  */
 int
-h4_path_InferGlocal(const ESL_ALPHABET *abc, const ESL_DSQ *ax, int alen, const int8_t *matassign, H4_PATH *pi)
+h4_path_InferGlocal(const ESL_ALPHABET *abc, const ESL_DSQ *ax, int alen, const int8_t *matassign, int lcol, int rcol, H4_PATH *pi)
 {
-  int lcol, rcol, i, status;
+  int i, status;
 
-  /* Find leftmost and rightmost consensus columns */
-  for (lcol = 1;    lcol <= alen; lcol++) if (matassign[lcol]) break;
-  for (rcol = alen; rcol >= 1;    rcol--) if (matassign[rcol]) break;
+  ESL_DASSERT1(( ax[0] == eslDSQ_SENTINEL && ax[alen+1] == eslDSQ_SENTINEL ));  // unless we ever want to use this on a subseq for some reason?
+  ESL_DASSERT1(( lcol == -1 || (lcol >= 1    && lcol <= alen) ));
+  ESL_DASSERT1(( rcol == -1 || (rcol >= lcol && rcol <= alen) ));
+  ESL_DASSERT1(( pi->Z == 0 ));          
+
+  /* Find leftmost and rightmost consensus columns, if unknown */
+  if (lcol == -1) { for (lcol = 1;    lcol <= alen; lcol++) if (matassign[lcol]) break; }
+  if (rcol == -1) { for (rcol = alen; rcol >= 1;    rcol--) if (matassign[rcol]) break; }
   /* if none: then now lcol=alen+1, rcol=0. don't let this happen */
   if (rcol == 0) ESL_EXCEPTION(eslEINVAL, "matassign defined no consensus columns");
 
@@ -451,7 +527,7 @@ h4_path_InferGlocal(const ESL_ALPHABET *abc, const ESL_DSQ *ax, int alen, const 
  *
  * Purpose:   Count path <pi>, for sequence <dsq>, into the t[] and e[]
  *            transition and emission fields of counts-based profile
- *            <hmm>, with count weight <wgt>. (That is, the sequence can
+ *            <ctm>, with count weight <wgt>. (That is, the sequence can
  *            have a weight different than 1.0.) 
  *            
  *            <dsq> can be either the unaligned raw sequence, or from
@@ -469,16 +545,16 @@ h4_path_InferGlocal(const ESL_ALPHABET *abc, const ESL_DSQ *ax, int alen, const 
  * Args:      pi  : path to count
  *            dsq : digital sequence corresponding to <pi>, aligned or unaligned
  *            wgt : weight on this sequence 
- *            hmm : profile to count the path into
+ *            ctm : count-collection profile to count the path into
  *
  * Returns:   <eslOK> on success.
- *            Weighted counts are accumulated in the hmm's e[] and t[].
+ *            Weighted counts are accumulated in the ctm's e[] and t[].
  *
  * Throws:    <eslEINVAL> if we detect something's corrupt in the path.
  *            Now the effect on <hmm> is undefined, and caller shouldn't use it.
  */
 int
-h4_path_Count(const H4_PATH *pi, const ESL_DSQ *dsq, float wgt, H4_PROFILE *hmm)
+h4_path_Count(const H4_PATH *pi, const ESL_DSQ *dsq, float wgt, H4_PROFILE_CT *ctm)
 {
   int    z;             // position in trace, 0..Z-1
   int    r;             // position in a runlength, 0..rle-1
@@ -497,8 +573,8 @@ h4_path_Count(const H4_PATH *pi, const ESL_DSQ *dsq, float wgt, H4_PROFILE *hmm)
 	{
 	  for (r = 0; r < pi->rle[z]; r++)
 	    {
-	      while (esl_abc_XIsGap(hmm->abc, dsq[i])) i++;      // dsq might be aligned, with gap columns
-	      esl_abc_FCount(hmm->abc, hmm->e[k], dsq[i], wgt);  // handles counting degenerate residues. *,~: no-op.
+	      while (esl_abc_XIsGap(ctm->abc, dsq[i])) i++;      // dsq might be aligned, with gap columns
+	      esl_abc_DCount(ctm->abc, ctm->e[k], dsq[i], wgt);  // handles counting degenerate residues. *,~: no-op.
 	      k++;
 	      i++;
 	    }
@@ -507,7 +583,7 @@ h4_path_Count(const H4_PATH *pi, const ESL_DSQ *dsq, float wgt, H4_PROFILE *hmm)
 	{
 	  for (r = 0; r < pi->rle[z]; r++)
 	    {
-	      while (esl_abc_XIsGap(hmm->abc, dsq[i])) i++;
+	      while (esl_abc_XIsGap(ctm->abc, dsq[i])) i++;
 	      i++;
 	    }
 	}
@@ -515,7 +591,7 @@ h4_path_Count(const H4_PATH *pi, const ESL_DSQ *dsq, float wgt, H4_PROFILE *hmm)
 	{
 	  for (r = 0; r < pi->rle[z]-1; r++)    // note -1, because N/J/C emit on transition
 	    {
-	      while (esl_abc_XIsGap(hmm->abc, dsq[i])) i++;
+	      while (esl_abc_XIsGap(ctm->abc, dsq[i])) i++;
 	      i++;
 	    }
 	}
@@ -524,7 +600,10 @@ h4_path_Count(const H4_PATH *pi, const ESL_DSQ *dsq, float wgt, H4_PROFILE *hmm)
     }
 
   /* Count transitions prv->cur.
-   * Only transitions into M/I/D states need to be counted.
+   * Only transitions into M/I/D states are counted.
+   * Do not count {MD}k->E exit transitions, even in glocal alignments.
+   * Do not count L->Mk entry transitions.
+   * Do count G->{MD}1 glocal entry transitions, in t[0].
    */
   yprv = h4P_N;
   // don't need to init k. it gets init'ed on G/L
@@ -538,10 +617,10 @@ h4_path_Count(const H4_PATH *pi, const ESL_DSQ *dsq, float wgt, H4_PROFILE *hmm)
 	    case h4P_MG:
 	    case h4P_ML:
 	      switch (yprv) {
-	      case h4P_MG: case h4P_ML: hmm->t[k][h4_TMM] += wgt; break;
-	      case h4P_IG: case h4P_IL: hmm->t[k][h4_TIM] += wgt; break;
-	      case h4P_DG: case h4P_DL: hmm->t[k][h4_TDM] += wgt; break;
-	      case h4P_G:               hmm->t[0][h4_TMM] += wgt; break;  // t[0] includes data-dependent G->{MD}
+	      case h4P_MG: case h4P_ML: ctm->t[k][h4_TMM] += wgt; break;
+	      case h4P_IG: case h4P_IL: ctm->t[k][h4_TIM] += wgt; break;
+	      case h4P_DG: case h4P_DL: ctm->t[k][h4_TDM] += wgt; break;
+	      case h4P_G:               ctm->t[0][h4_TMM] += wgt; break;  // t[0] includes data-dependent G->{MD}
 	      case h4P_L:                                         break;
 	      default: ESL_EXCEPTION(eslEINVAL, "invalid transition to M in path");
 	      }
@@ -551,9 +630,9 @@ h4_path_Count(const H4_PATH *pi, const ESL_DSQ *dsq, float wgt, H4_PROFILE *hmm)
 	    case h4P_IG:
 	    case h4P_IL:
 	      switch (yprv) {
-	      case h4P_MG: case h4P_ML: hmm->t[k][h4_TMI] += wgt; break;
-	      case h4P_IG: case h4P_IL: hmm->t[k][h4_TII] += wgt; break;
-	      case h4P_DG: case h4P_DL: hmm->t[k][h4_TDI] += wgt; break;
+	      case h4P_MG: case h4P_ML: ctm->t[k][h4_TMI] += wgt; break;
+	      case h4P_IG: case h4P_IL: ctm->t[k][h4_TII] += wgt; break;
+	      case h4P_DG: case h4P_DL: ctm->t[k][h4_TDI] += wgt; break;
 	      default: ESL_EXCEPTION(eslEINVAL, "invalid transition to I in path");
 	      }
 	      break;
@@ -561,10 +640,10 @@ h4_path_Count(const H4_PATH *pi, const ESL_DSQ *dsq, float wgt, H4_PROFILE *hmm)
 	    case h4P_DG:
 	    case h4P_DL:
 	      switch (yprv) {
-	      case h4P_MG: case h4P_ML: hmm->t[k][h4_TMD] += wgt; break;
-	      case h4P_IG: case h4P_IL: hmm->t[k][h4_TID] += wgt; break;
-	      case h4P_DG: case h4P_DL: hmm->t[k][h4_TDD] += wgt; break;
-	      case h4P_G:               hmm->t[0][h4_TMD] += wgt; break;
+	      case h4P_MG: case h4P_ML: ctm->t[k][h4_TMD] += wgt; break;
+	      case h4P_IG: case h4P_IL: ctm->t[k][h4_TID] += wgt; break;
+	      case h4P_DG: case h4P_DL: ctm->t[k][h4_TDD] += wgt; break;
+	      case h4P_G:               ctm->t[0][h4_TMD] += wgt; break;
 	      default: ESL_EXCEPTION(eslEINVAL, "invalid transition to D in path");
 	      }
 	      k++;
@@ -602,8 +681,10 @@ h4_path_Count(const H4_PATH *pi, const ESL_DSQ *dsq, float wgt, H4_PROFILE *hmm)
  *            
  *            Note on numerical roundoff error: we deliberately sum
  *            terms in exactly the same order that the reference
- *            Viterbi implementation does. Calling <h4_path_Score> on
- *            the Viterbi path gives the Viterbi score, exactly.
+ *            Viterbi implementation does. This makes it nigh-certain
+ *            that calling <h4_path_Score> on the Viterbi path will give
+ *            the Viterbi score, exactly. Unclear that this can 
+ *            be guaranteed though.
  *
  * Returns:   <eslOK> on success.
  */
@@ -647,10 +728,10 @@ h4_path_Score(const H4_PATH *pi, const ESL_DSQ *dsq, const H4_PROFILE *hmm, cons
 	sc += hmm->rsc[dsq[i++]][k];                                  // i advances to the next x_i that'll be emitted.
 
 	for (y = 2; y <= pi->rle[z]; y++)
-	  {                                // for remaining MG's in a run:
-	    sc += hmm->tsc[k++][h4_MM];    //   ... score transition, advance k to next MG_k
-	    sc += hmm->rsc[dsq[i++]][k];   //   ... score emission,   advance i to next x_i
-	  }                                // k is now the current MGk; i is now the next x_i
+	  {                                        // for remaining MG's in a run:
+	    sc += hmm->tsc[k++][h4_MM];            //   ... score transition, advance k to next MG_k
+	    sc += hmm->rsc[dsq[i++]][k];           //   ... score emission,   advance i to next x_i
+	  }                                        // k is now the current MGk; i is now the next x_i
 	break;
 
       case h4P_IG:
@@ -681,7 +762,7 @@ h4_path_Score(const H4_PATH *pi, const ESL_DSQ *dsq, const H4_PROFILE *hmm, cons
 	break;
 
       case h4P_C:
-	sc += mo->xsc[h4_E][h4_LOOP];
+	sc += mo->xsc[h4_E][h4_MOVE];
 	for (y = 1; y < pi->rle[z]; y++) sc += mo->xsc[h4_C][h4_LOOP]; // sc += mo->xsc[h4_C][h4_LOOP] * (pi->rle[z]-1), but matching Viterbi roundoff error
 	i  += pi->rle[z]-1;
 	break;
@@ -996,6 +1077,22 @@ h4_path_Dump(FILE *fp, const H4_PATH *pi)
   fprintf(fp, "\n# Z        = %d\n", pi->Z);
   fprintf(fp,   "# Zalloc   = %d\n", pi->Zalloc);
   fprintf(fp,   "# Zredline = %d\n", pi->Zredline);
+  fprintf(fp,   "# L        = %d\n", h4_path_GetSeqlen(pi));
+  return eslOK;
+}
+
+
+/* Function:  h4_path_DumpCigar()
+ * Synopsis:  More compact single line dump of an H4_PATH.
+ */
+int
+h4_path_DumpCigar(FILE *fp, const H4_PATH *pi)
+{
+  int z;
+
+  for (z = 0; z < pi->Z; z++)
+    fprintf(fp, "%s %d ", h4_path_DecodeStatetype(pi->st[z]), pi->rle[z]);
+  fprintf(fp, "\n");
   return eslOK;
 }
 /*------------ end, debugging and development tools -------------*/
@@ -1052,8 +1149,8 @@ utest_zerolength(ESL_ALPHABET *abc)
       for (L = 0, c = 1; c <= alen; c++) if (! esl_abc_XIsGap(abc, ax[c])) L++;     // don't use esl_abc_dsqrlen(). Here, we count *,~ as "residues".
 
       // N L C: Z=3
-      if ( h4_path_InferLocal(abc, ax, alen, matassign, pi)  != eslOK) esl_fatal(msg);
-      if ( h4_path_Validate(pi, M, L, errbuf)                != eslOK) esl_fatal("%s: %s", msg, errbuf);
+      if ( h4_path_InferLocal(abc, ax, alen, matassign, -1, -1, pi)  != eslOK) esl_fatal(msg);
+      if ( h4_path_Validate(pi, M, L, errbuf)                        != eslOK) esl_fatal("%s: %s", msg, errbuf);
       if ( pi->Z             != 3)     esl_fatal(msg);
       if ( pi->st[0]         != h4P_N) esl_fatal(msg);
       if ( pi->st[1]         != h4P_L) esl_fatal(msg);
@@ -1062,8 +1159,8 @@ utest_zerolength(ESL_ALPHABET *abc)
 
       // N G DG(6) C          : Z=4
       // N G DG(3) IG DG(3) C : Z=6
-      if ( h4_path_InferGlocal(abc, ax, alen, matassign, pi) != eslOK) esl_fatal(msg);
-      if ( h4_path_Validate(pi, M, L, errbuf)                != eslOK) esl_fatal("%s: %s", msg, errbuf);
+      if ( h4_path_InferGlocal(abc, ax, alen, matassign, -1, -1, pi) != eslOK) esl_fatal(msg);
+      if ( h4_path_Validate(pi, M, L, errbuf)                        != eslOK) esl_fatal("%s: %s", msg, errbuf);
       if ( pi->Z != 4 && pi->Z != 6 )   esl_fatal(msg); 
       if ( pi->st[0]         != h4P_N)  esl_fatal(msg);
       if ( pi->st[1]         != h4P_G)  esl_fatal(msg);
@@ -1124,13 +1221,13 @@ utest_dirtyseqs(ESL_RANDOMNESS *rng, ESL_ALPHABET *abc)
       if ( esl_rsq_SampleDirty(rng, abc, &p, alen, ax)    != eslOK) esl_fatal(msg);
       for (L = 0, c = 1; c <= alen; c++) if (! esl_abc_XIsGap(abc, ax[c])) L++;     // don't use esl_abc_dsqrlen(). Here, we count *,~ as "residues".
 
-      if ( h4_path_InferLocal(abc, ax, alen, matassign, pi)  != eslOK) esl_fatal(msg);
-      if ( h4_path_Validate(pi, M, L, errbuf)                != eslOK) esl_fatal("%s : %s", msg, errbuf);
-      if ( h4_path_Reuse(pi)                                 != eslOK) esl_fatal(msg);
+      if ( h4_path_InferLocal(abc, ax, alen, matassign, -1, -1, pi)  != eslOK) esl_fatal(msg);
+      if ( h4_path_Validate(pi, M, L, errbuf)                        != eslOK) esl_fatal("%s : %s", msg, errbuf);
+      if ( h4_path_Reuse(pi)                                         != eslOK) esl_fatal(msg);
 
-      if ( h4_path_InferGlocal(abc, ax, alen, matassign, pi) != eslOK) esl_fatal(msg);
-      if ( h4_path_Validate(pi, M, L, errbuf)                != eslOK) esl_fatal("%s : %s", msg, errbuf);
-      if ( h4_path_Reuse(pi)                                 != eslOK) esl_fatal(msg);
+      if ( h4_path_InferGlocal(abc, ax, alen, matassign, -1, -1, pi) != eslOK) esl_fatal(msg);
+      if ( h4_path_Validate(pi, M, L, errbuf)                        != eslOK) esl_fatal("%s : %s", msg, errbuf);
+      if ( h4_path_Reuse(pi)                                         != eslOK) esl_fatal(msg);
     }
 
   h4_path_Destroy(pi);
@@ -1149,21 +1246,21 @@ utest_dirtyseqs(ESL_RANDOMNESS *rng, ESL_ALPHABET *abc)
 static void
 utest_counting(void)
 {
-  char          msg[]     = "h4_path counting test failed";
-  ESL_ALPHABET *abc       = esl_alphabet_Create(eslDNA);
-  char         *aseq[]    = { "..GAA..TTC..",
-	 	              "aaGAA..TTCaa",
-		              "..GAAccTTC.." };
-  char          cons[]    =   "..xxx..xxx..";
-  int           nseq      = sizeof(aseq) / sizeof(char *);
-  int           alen      = strlen(cons);
-  ESL_DSQ      *ax        = malloc(sizeof(ESL_DSQ) * (alen+2));
-  int8_t       *matassign = malloc(sizeof(int8_t) * (alen+1));
-  H4_PATH      *pi        = h4_path_Create();
-  H4_PROFILE   *hmm       = NULL;
-  int           M         = 0;
-  int           idx, apos, k;
-  char          errbuf[eslERRBUFSIZE];
+  char           msg[]     = "h4_path counting test failed";
+  ESL_ALPHABET  *abc       = esl_alphabet_Create(eslDNA);
+  char          *aseq[]    = { "..GAA..TTC..",
+	 	               "aaGAA..TTCaa",
+		               "..GAAccTTC.." };
+  char           cons[]    =   "..xxx..xxx..";
+  int            nseq      = sizeof(aseq) / sizeof(char *);
+  int            alen      = strlen(cons);
+  ESL_DSQ       *ax        = malloc(sizeof(ESL_DSQ) * (alen+2));
+  int8_t        *matassign = malloc(sizeof(int8_t) * (alen+1));
+  H4_PATH       *pi        = h4_path_Create();
+  H4_PROFILE_CT *ctm       = NULL;
+  int            M         = 0;
+  int            idx, apos, k;
+  char           errbuf[eslERRBUFSIZE];
 
   matassign[0] = 0;
   for (apos = 1; apos <= alen; apos++)
@@ -1172,39 +1269,38 @@ utest_counting(void)
       if (matassign[apos]) M++;
     }
 
-  if ((hmm = h4_profile_Create(abc, M)) == NULL) esl_fatal(msg);
+  if ((ctm = h4_profile_ct_Create(abc, M)) == NULL) esl_fatal(msg);
 
   for (idx = 0; idx < nseq; idx++)
     {
       if ( esl_abc_Digitize(abc, aseq[idx], ax)                      != eslOK) esl_fatal(msg);
-      if ( h4_path_InferGlocal(abc, ax, alen, matassign, pi)         != eslOK) esl_fatal(msg);
+      if ( h4_path_InferGlocal(abc, ax, alen, matassign, -1, -1, pi) != eslOK) esl_fatal(msg);
       if ( h4_path_Validate(pi, M, esl_abc_dsqrlen(abc, ax), errbuf) != eslOK) esl_fatal("%s:\n  %s", msg, errbuf);
-      if ( h4_path_Count(pi, ax, 1.0, hmm)                           != eslOK) esl_fatal(msg);
+      if ( h4_path_Count(pi, ax, 1.0, ctm)                           != eslOK) esl_fatal(msg);
       h4_path_Reuse(pi);
     }
 
-  //h4_profile_Dump(stdout, hmm);
+  //h4_profile_ct_Dump(stdout, hmm);
 
   /* For the emissions, every sequence has a "GAATTC" consensus */
-  if (hmm->e[1][2] != (float) nseq) esl_fatal(msg);
-  if (hmm->e[2][0] != (float) nseq) esl_fatal(msg);
-  if (hmm->e[3][0] != (float) nseq) esl_fatal(msg);
-  if (hmm->e[4][3] != (float) nseq) esl_fatal(msg);
-  if (hmm->e[5][3] != (float) nseq) esl_fatal(msg);
-  if (hmm->e[6][1] != (float) nseq) esl_fatal(msg);
+  if (ctm->e[1][2] != (double) nseq) esl_fatal(msg);
+  if (ctm->e[2][0] != (double) nseq) esl_fatal(msg);
+  if (ctm->e[3][0] != (double) nseq) esl_fatal(msg);
+  if (ctm->e[4][3] != (double) nseq) esl_fatal(msg);
+  if (ctm->e[5][3] != (double) nseq) esl_fatal(msg);
+  if (ctm->e[6][1] != (double) nseq) esl_fatal(msg);
 
   /* For the transitions, one basic test condition (for this test)
    * is that occupancy at each k == nseq 
    */
-  for (k = 1; k < M; k++)
-    {
-      if (hmm->t[k][h4_TMM] + hmm->t[k][h4_TMI] + hmm->t[k][h4_TMD] + 
-	  hmm->t[k][h4_TDM] + hmm->t[k][h4_TDI] + hmm->t[k][h4_TDD] != nseq) esl_fatal(msg);
-    }
+  for (k = 1; k < M; k++) {
+    if (ctm->t[k][h4_TMM] + ctm->t[k][h4_TMI] + ctm->t[k][h4_TMD] + 
+	ctm->t[k][h4_TDM] + ctm->t[k][h4_TDI] + ctm->t[k][h4_TDD] != (double) nseq) esl_fatal(msg);
+  }
 
   free(ax);
   free(matassign);
-  h4_profile_Destroy(hmm);
+  h4_profile_ct_Destroy(ctm);
   h4_path_Destroy(pi);
   esl_alphabet_Destroy(abc);
 }  
@@ -1230,7 +1326,7 @@ utest_counting(void)
 static ESL_OPTIONS options[] = {
   /* name           type      default  env  range toggles reqs incomp  help                          docgroup*/
   { "-h",         eslARG_NONE,   NULL, NULL, NULL,  NULL,  NULL, NULL, "show brief help summary",             0 },
-  { "--seed",     eslARG_INT,     "0", NULL, NULL,  NULL,  NULL, NULL, "set random number generator seed",    0 },
+  { "-s",         eslARG_INT,     "0", NULL, NULL,  NULL,  NULL, NULL, "set random number generator seed",    0 },
   { "--version",  eslARG_NONE,   NULL, NULL, NULL,  NULL,  NULL, NULL, "show HMMER version number",           0 },
   {  0, 0, 0, 0, 0, 0, 0, 0, 0, 0 },
 
@@ -1243,16 +1339,16 @@ main(int argc, char **argv)
 					    "test driver for H4_PATH",
 					    "[-options]");
   ESL_ALPHABET   *abc = esl_alphabet_Create(eslAMINO);
-  ESL_RANDOMNESS *rng = esl_randomness_Create(esl_opt_GetInteger(go, "--seed"));
+  ESL_RANDOMNESS *rng = esl_randomness_Create(esl_opt_GetInteger(go, "-s"));
 
-  esl_fprintf(stderr, "## %s\n", argv[0]);
-  esl_fprintf(stderr, "#  rng seed = %" PRIu32 "\n", esl_randomness_GetSeed(rng));
+  fprintf(stderr, "## %s\n", argv[0]);
+  fprintf(stderr, "#  rng seed = %" PRIu32 "\n", esl_randomness_GetSeed(rng));
 
   utest_zerolength(     abc);
   utest_dirtyseqs (rng, abc);
   utest_counting  ();
 
-  esl_fprintf(stderr, "#  status   = ok\n");
+  fprintf(stderr, "#  status   = ok\n");
 
   esl_randomness_Destroy(rng);
   esl_alphabet_Destroy(abc);
@@ -1293,7 +1389,7 @@ main(void)
   for (i = 1; i <= alen; i++)
     matassign[i] = esl_abc_CIsGap(abc, rf[i-1]) ? 0 : 1;
 
-  h4_path_InferLocal(abc, ax1, alen, matassign, pi);
+  h4_path_InferLocal(abc, ax1, alen, matassign, -1, -1, pi);
 
   h4_path_Dump(stdout, pi);
 

@@ -289,6 +289,7 @@ p7_logsum_exact(float a, float b)
 #include "esl_getopts.h"
 #include "esl_random.h"
 #include "esl_stopwatch.h"
+#include "esl_vectorops.h"
 
 #include "hmmer.h"
 
@@ -358,7 +359,10 @@ main(int argc, char **argv)
     }
 
   esl_stopwatch_Stop(w);
-  esl_stopwatch_Display(stdout, w, (char *) "# CPU time: ");
+
+  esl_stopwatch_Display(stdout, w, "# CPU time: ");
+  printf("max sum = %.4f\n", esl_vec_FMax(C, N));    // prevent compiler from optimizing the sums away!
+
 
   esl_stopwatch_Destroy(w);
   esl_randomness_Destroy(r);

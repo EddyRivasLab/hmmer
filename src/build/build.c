@@ -489,7 +489,7 @@ utest_fragments(void)
    *
    * The X->Dk and Dk->X cases should never happen, but we don't
    * prohibit them. They can only arise in an input file, because
-   * esl_msa_MarkFragments() converts everything before/after
+   * esl_msa_MarkFragments_old() converts everything before/after
    * first/last residue to ~, and won't leave a gap character in
    * between.
    *

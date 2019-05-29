@@ -36,6 +36,9 @@ typedef struct h4_refmx_s {
   int      type;     /* h4R_UNSET | h4R_FORWARD | h4R_BACKWARD | h4R_DECODING  */
 } H4_REFMX;
 
+/* Indices for main states in each <dp[i]> supercell.
+ * Some code has hardcoded an assumption of this order of the indices.
+ */
 #define h4R_NSCELLS 6
 #define h4R_ML 0
 #define h4R_MG 1
@@ -44,7 +47,9 @@ typedef struct h4_refmx_s {
 #define h4R_DL 4
 #define h4R_DG 5
 
-/* Codes/indices for special states ENJBLGC, and emission-on-transition JJ/CC */
+/* Codes/indices for special states ENJBLGC, and emission-on-transition JJ/CC 
+ * Some code (reference_fwdback for example) has hardcoded this order of indices.
+ */
 #define h4R_NXCELLS 9
 #define h4R_E  0
 #define h4R_N  1
@@ -83,21 +88,26 @@ typedef struct h4_refmx_s {
  * having access macros, though we can expect these to be relatively
  * expensive to evaluate:
  */
-#define H4R_XMX(rmx,i,s)  ( (rmx)->dp[(i)][ ( (rmx)->M +1) * h4R_NSCELLS + (s)] )
-#define H4R_MX(rmx,i,k,s) ( (rmx)->dp[(i)][ (k)            * h4R_NSCELLS + (s)] )
+#define H4R_XMX(rmx,i,y)  ( (rmx)->dp[(i)][ ( (rmx)->M +1) * h4R_NSCELLS + (y)] )
+#define H4R_MX(rmx,i,k,y) ( (rmx)->dp[(i)][ (k)            * h4R_NSCELLS + (y)] )
 
 /*****************************************************************
  * 2. Function declarations
  *****************************************************************/
 
-extern H4_REFMX *h4_refmx_Create (int M, int L);
-extern int       h4_refmx_GrowTo (H4_REFMX *rmx, int M, int L);
-extern int       h4_refmx_Reuse  (H4_REFMX *rmx);
-extern void      h4_refmx_Destroy(H4_REFMX *rmx);
+extern H4_REFMX *h4_refmx_Create   (int M, int L);
+extern int       h4_refmx_GrowTo   (H4_REFMX *rx, int M, int L);
+extern int       h4_refmx_SetValues(H4_REFMX *rx, float val);
+extern int       h4_refmx_SetType  (H4_REFMX *rx, int M, int L, int type);
+extern int       h4_refmx_Scale    (H4_REFMX *rx, float scale);
+extern int       h4_refmx_Reuse    (H4_REFMX *rx);
+extern void      h4_refmx_Destroy  (H4_REFMX *rx);
 
 extern char     *h4_refmx_DecodeSpecial(int type);
 extern char     *h4_refmx_DecodeState  (int type);
-extern int       h4_refmx_Dump      (FILE *ofp, H4_REFMX *rmx);
-extern int       h4_refmx_DumpWindow(FILE *ofp, H4_REFMX *rmx, int istart, int iend, int kstart, int kend);
-
+extern int       h4_refmx_Dump      (FILE *ofp, H4_REFMX *rx);
+extern int       h4_refmx_DumpWindow(FILE *ofp, H4_REFMX *rx, int istart, int iend, int kstart, int kend);
+extern int       h4_refmx_CountPath(const H4_PATH *pi, H4_REFMX *rxd);
+extern int       h4_refmx_CompareDecoding(const H4_REFMX *ppe, const H4_REFMX *ppa, float a_tol);
+extern int       h4_refmx_Validate(H4_REFMX *rmx, char *errbuf);
 #endif /*h4REFMX_INCLUDED*/

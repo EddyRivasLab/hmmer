@@ -371,6 +371,82 @@ p7_engine_Overthruster(P7_ENGINE *eng, ESL_DSQ *dsq, int L, P7_OPROFILE *om, P7_
   return eslOK;
 }
 
+//hacked copy of Overthruster to allow Nick to experiment with different Overthruster behavior
+//after passing CUDA filters
+int
+p7_engine_Overthruster_roundtwo(P7_ENGINE *eng, ESL_DSQ *dsq, int L, P7_OPROFILE *om, P7_BG *bg, float score, char *seqname)
+{
+  int   do_biasfilter    = (eng->params ? eng->params->do_biasfilter   : p7_ENGINE_DO_BIASFILTER);
+  float sparsify_thresh  = (eng->params ? eng->params->sparsify_thresh : p7_SPARSIFY_THRESH);
+  float seq_score;
+  float P;
+  int   status;
+
+  if (L == 0) return eslFAIL;
+
+  if ((status = p7_bg_NullOne(bg, dsq, L, &(eng->nullsc))) != eslOK) return status; 
+
+  /* First level: SSV filter */
+  status = p7_SSVFilter(dsq, L, om, &(eng->sfsc));
+  if (status != eslOK && status != eslERANGE) return status;
+
+  seq_score = (eng->sfsc - eng->nullsc) / eslCONST_LOG2;  
+  if(abs((seq_score - score)/seq_score) > .001){
+    printf("SSV miss-match on sequence %s: %f (CPU) vs %f (GPU)\n", seqname, seq_score, score);
+  }
+  P = esl_gumbel_surv(seq_score,  om->evparam[p7_SMU],  om->evparam[p7_SLAMBDA]);
+  if (P > eng->F1){
+  //  printf("Sequence failed SSV after passing CUDA SSV\n");
+    return eslFAIL;
+  }
+  if (eng->stats) eng->stats->n_past_ssv++;
+
+  /* Biased composition HMM, ad hoc, acts as a modified null */
+  if  (do_biasfilter)
+    {
+      if ((status = p7_bg_FilterScore(bg, dsq, L, &(eng->biassc))) != eslOK) return status;
+      seq_score = (eng->sfsc - eng->biassc) / eslCONST_LOG2;
+      P = esl_gumbel_surv(seq_score,  om->evparam[p7_SMU],  om->evparam[p7_SLAMBDA]);
+      if (P > eng->F1) return eslFAIL;
+    }
+  else eng->biassc = eng->nullsc;
+  if (eng->stats) eng->stats->n_past_bias++;
+
+  // TODO: in scan mode, you have to load the rest of the oprofile now,
+  // configure its length model, and get GA/TC/NC thresholds.
+
+  /* Second level: ViterbiFilter(), multihit with <om> */
+  if (P > eng->F2)
+    {
+      if (eng->stats) eng->stats->n_ran_vit++;
+
+      status = p7_ViterbiFilter(dsq, L, om, eng->fx, &(eng->vfsc));  
+      if (status != eslOK && status != eslERANGE) return status;
+
+      seq_score = (eng->vfsc - eng->biassc) / eslCONST_LOG2;
+      P  = esl_gumbel_surv(seq_score,  om->evparam[p7_VMU],  om->evparam[p7_VLAMBDA]);
+      if (P > eng->F2) return eslFAIL;
+    }
+  if (eng->stats) eng->stats->n_past_vit++;
+
+
+  /* Checkpointed vectorized Forward, local-only.
+   */
+  status = p7_ForwardFilter(dsq, L, om, eng->cx, &(eng->ffsc));
+  if (status != eslOK) return status;
+
+  seq_score = (eng->ffsc - eng->biassc) / eslCONST_LOG2;
+  P  = esl_exp_surv(seq_score,  om->evparam[p7_FTAU],  om->evparam[p7_FLAMBDA]);
+  if (P > eng->F3) return eslFAIL;
+  if (eng->stats) eng->stats->n_past_fwd++;
+
+  /* Sequence has passed all acceleration filters.
+   * Calculate the sparse mask, by checkpointed vectorized decoding.
+   */
+  p7_BackwardFilter(dsq, L, om, eng->cx, eng->sm, sparsify_thresh);
+
+  return eslOK;
+}
 
   // om is assumed to be complete, w/ GA/NC/TC thresholds set, and w/ length model set.
   // Use dsq, L -- not sq -- so subseqs can be processed (should help longtarget/nhmmer)
@@ -617,13 +693,6 @@ main(int argc, char **argv)
       p7_bg_Destroy(bg);          bg   = NULL;
       p7_hmm_Destroy(hmm);        hmm  = NULL;
     }
-<<<<<<< HEAD
-  if      (status == eslEFORMAT) esl_fatal((char *) "Parse failed (sequence file %s)\n%s\n",
-             sqfp->filename, sqfp->get_error(sqfp));     
-  else if (status != eslEOF)     esl_fatal((char *) "Unexpected error %d reading sequence file %s",
-             status, sqfp->filename);
-=======
->>>>>>> remotes/origin/h4-develop
 
   p7_hmmfile_Close(hfp);      
   esl_alphabet_Destroy(abc);

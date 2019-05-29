@@ -407,6 +407,9 @@ read_ascii4a(H4_HMMFILE *hfp, ESL_ALPHABET **ret_abc, H4_PROFILE **opt_hmm)
   if (( status = esl_keyhash_Lookup(hfp->kh, "format",  -1, &keyi)) != eslOK) ESL_FAIL(eslEFORMAT, hfp->errmsg, "model starting at line %d has no `format` key",  hfp->pi->tok[0].linenum); // {bad.4:1}
   if (( status = esl_keyhash_Lookup(hfp->kh, "version", -1, &keyi)) != eslOK) ESL_FAIL(eslEFORMAT, hfp->errmsg, "model starting at line %d has no `version` key", hfp->pi->tok[0].linenum); // {bad.28:21}
 
+  hmm->flags |= h4_HASPROBS;
+  h4_profile_Config(hmm);
+
   if (! *ret_abc) *ret_abc = abc;  // caller may have provided its own <abc>
   if (opt_hmm)    *opt_hmm = hmm; else h4_profile_Destroy(hmm);
   return eslOK;
@@ -562,7 +565,7 @@ utest_readwrite(const char *tmpfile, const H4_PROFILE *hmm)
 static ESL_OPTIONS options[] = {
   /* name           type      default  env  range toggles reqs incomp  help                          docgroup*/
   { "-h",         eslARG_NONE,   NULL, NULL, NULL,  NULL,  NULL, NULL, "show brief help summary",             0 },
-  { "--seed",     eslARG_INT,     "0", NULL, NULL,  NULL,  NULL, NULL, "set random number generator seed",    0 },
+  { "-s",         eslARG_INT,     "0", NULL, NULL,  NULL,  NULL, NULL, "set random number generator seed",    0 },
   { "--version",  eslARG_NONE,   NULL, NULL, NULL,  NULL,  NULL, NULL, "show HMMER version number",           0 },
   {  0, 0, 0, 0, 0, 0, 0, 0, 0, 0 },
 };
@@ -571,7 +574,7 @@ int
 main(int argc, char **argv)
 {
   ESL_GETOPTS    *go          = h4_CreateDefaultApp(options, 0, argc, argv, "h4_hmmfile test driver", "[-options]");
-  ESL_RANDOMNESS *rng         = esl_randomness_Create(esl_opt_GetInteger(go, "--seed"));
+  ESL_RANDOMNESS *rng         = esl_randomness_Create(esl_opt_GetInteger(go, "-s"));
   ESL_ALPHABET   *aa_abc      = esl_alphabet_Create(eslAMINO);
   ESL_ALPHABET   *nt_abc      = esl_alphabet_Create(eslDNA);
   H4_PROFILE     *hmm         = NULL;
@@ -613,6 +616,15 @@ main(int argc, char **argv)
  * 7. Example
  *****************************************************************/
 #ifdef h4HMMFILE_EXAMPLE
+
+#include <stdio.h>
+
+#include "easel.h"
+#include "esl_alphabet.h"
+#include "esl_json.h"
+
+#include "h4_hmmfile.h"
+#include "h4_profile.h"
 
 int
 main(int argc, char **argv)
