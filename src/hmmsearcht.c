@@ -787,10 +787,6 @@ serial_loop(WORKER_INFO *info, ESL_SQFILE *dbfp, int n_targetseqs)
           dbsq_aa->end   += dbsq_dna->start-1;
           p7_Pipeline(info->pli, info->om, info->bg, dbsq_aa, info->ntqsq, info->th, NULL);
 
-//          if (info->th->unsrt[info->th->N-1].score > 200) {
-//             printf("here\n");
-//          }
-
           /*
           for (int d = 0; d < info->th->hit[info->th->N-1]->ndom; d++) {
 
