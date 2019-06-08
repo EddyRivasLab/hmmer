@@ -71,7 +71,7 @@ p7_alidisplay_Create(const P7_TRACE *tr, int which, const P7_OPROFILE *om, const
   int            j;
 
   ESL_SQ         *ntorfseqtxt = NULL;
-  
+
   /* First figure out which piece of the trace (from first match to last match) 
    * we're going to represent, and how big it is.
    */
@@ -114,7 +114,7 @@ p7_alidisplay_Create(const P7_TRACE *tr, int which, const P7_OPROFILE *om, const
   sq_namelen  = strlen(sq->name);                           n += sq_namelen  + 1;	  
   sq_acclen   = strlen(sq->acc);                            n += sq_acclen   + 1; /* sq->acc is "\0" when unset */
   sq_desclen  = strlen(sq->desc);                           n += sq_desclen  + 1; /* same for desc              */
- 
+
   if (ntsq != NULL)    {  /* translated search only */
       orf_namelen = strlen(sq->orfid);                      n += orf_namelen  + 1; /* same for orfname          */
   }
@@ -189,15 +189,14 @@ p7_alidisplay_Create(const P7_TRACE *tr, int which, const P7_OPROFILE *om, const
   }
 
   /*
-     If this is a hmmscant scan; i.e. scan using a DNA
-	 query, put the ORF in a buffer so that if
-	 the hit is in a reverse compliment of the query, i.e.
-	 the other DNA strand, we can take the reverse complement
-	 of the nucleotide DNA to print on the alignment display
+     If this is a translated search; i.e. DNA v protein,
+     put the ORF in a buffer so that if the hit is in
+	 a reverse complement of the query, we can take the
+	 reverse complement of the DNA to print on the ali display
    */  
   if (ntsq != NULL)    { 
      ntorfseqtxt = esl_sq_Create();
-     if (sq->start < sq->end) {				
+     if (sq->start < sq->end) {
         for(j= sq->start; j <= sq->end; j++) {
            esl_sq_CAddResidue(ntorfseqtxt, ntsq->seq[j-1]);
         }
