@@ -895,9 +895,15 @@ mpi_worker(const ESL_GETOPTS *go, struct cfg_s *cfg)
 
       /* Calculate upper bound on size of sending status, HMM, and optional postmsa; make sure wbuf can hold it. */
       n = 0;
-      if (MPI_Pack_size(1,    MPI_INT, MPI_COMM_WORLD, &sz) != 0)     goto ERROR;   n += sz;
-      if (p7_hmm_mpi_PackSize(hmm,     MPI_COMM_WORLD, &sz) != eslOK) goto ERROR;   n += sz;
-      if (esl_msa_MPIPackSize(postmsa, MPI_COMM_WORLD, &sz) != eslOK) goto ERROR;   n += sz;
+      if (MPI_Pack_size(1,    MPI_INT, MPI_COMM_WORLD, &sz) != 0)     goto ERROR;
+      n += sz;
+      
+      if (p7_hmm_mpi_PackSize(hmm,     MPI_COMM_WORLD, &sz) != eslOK) goto ERROR;
+      n += sz;
+      
+      if (esl_msa_MPIPackSize(postmsa, MPI_COMM_WORLD, &sz) != eslOK) goto ERROR;   
+      n += sz;
+      
       if (n > wn) { ESL_RALLOC(wbuf, tmp, sizeof(char) * n); wn = n; }
       ESL_DPRINTF2(("worker %d: has calculated that HMM will pack into %d bytes\n", cfg->my_rank, n));
 
