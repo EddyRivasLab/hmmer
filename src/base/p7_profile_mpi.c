@@ -72,8 +72,10 @@ p7_profile_mpi_Send(const P7_PROFILE *gm, int dest, int tag, MPI_Comm comm, char
   int   status;
 
   /* Figure out size. */
-  if ( MPI_Pack_size(1, MPI_INT, comm, &sz)              != MPI_SUCCESS) ESL_EXCEPTION(eslESYS, "mpi pack size failed");  n += sz; /* # of profiles in the transmission; 0=EOD */
-  if (( status = p7_profile_mpi_PackSize(gm, comm, &sz)) != eslOK)       return status;                                   n += sz;
+  if ( MPI_Pack_size(1, MPI_INT, comm, &sz)              != MPI_SUCCESS) ESL_EXCEPTION(eslESYS, "mpi pack size failed");  
+  n += sz; /* # of profiles in the transmission; 0=EOD */
+  if (( status = p7_profile_mpi_PackSize(gm, comm, &sz)) != eslOK)       return status;                                   
+  n += sz;
 
   /* Allocate buffer */
   if (*buf == NULL || n > *nalloc) 
@@ -127,19 +129,32 @@ p7_profile_mpi_PackSize(const P7_PROFILE *gm, MPI_Comm comm, int *ret_n)
    */
   if (gm)
     {
-      if (MPI_Pack_size(                           1, MPI_INT,      comm, &sz) != MPI_SUCCESS) ESL_EXCEPTION(eslESYS, "pack size failed");  n += sz*4;               /* M,L,max_length,abc->type */
-      if (MPI_Pack_size(         (M+1) *  p7P_NTRANS, MPI_FLOAT,    comm, &sz) != MPI_SUCCESS) ESL_EXCEPTION(eslESYS, "pack size failed");  n += sz;                 /* tsc             */
-      if (MPI_Pack_size(         (M+1) * Kp * p7P_NR, MPI_FLOAT,    comm, &sz) != MPI_SUCCESS) ESL_EXCEPTION(eslESYS, "pack size failed");  n += sz;                 /* rsc[0]          */
-      if (MPI_Pack_size(                 p7P_NXTRANS, MPI_FLOAT,    comm, &sz) != MPI_SUCCESS) ESL_EXCEPTION(eslESYS, "pack size failed");  n += sz*p7P_NXSTATES;    /* xsc[0..3]       */
-      if (MPI_Pack_size(                           1, MPI_FLOAT,    comm, &sz) != MPI_SUCCESS) ESL_EXCEPTION(eslESYS, "pack size failed");  n += sz*2;               /* nj,pglocal      */
-      if ((status = esl_mpi_PackOptSize(gm->name, -1, MPI_CHAR,     comm, &sz))!= eslOK)       return status;                               n += sz;                 /* name (string)   */
-      if ((status = esl_mpi_PackOptSize(gm->acc,  -1, MPI_CHAR,     comm, &sz))!= eslOK)       return status;                               n += sz;                 /* acc (string)    */
-      if ((status = esl_mpi_PackOptSize(gm->desc, -1, MPI_CHAR,     comm, &sz))!= eslOK)       return status;                               n += sz;                 /* desc (string)   */
-      if (MPI_Pack_size(                       (M+2), MPI_CHAR,     comm, &sz) != MPI_SUCCESS) ESL_EXCEPTION(eslESYS, "pack size failed");  n += sz*4;               /* rf,cs,mm,consensus */
-      if (MPI_Pack_size(                 p7_NEVPARAM, MPI_FLOAT,    comm, &sz) != MPI_SUCCESS) ESL_EXCEPTION(eslESYS, "pack size failed");  n += sz;                 /* evparam[]       */
-      if (MPI_Pack_size(                 p7_NCUTOFFS, MPI_FLOAT,    comm, &sz) != MPI_SUCCESS) ESL_EXCEPTION(eslESYS, "pack size failed");  n += sz;                 /* cutoff[]        */
-      if (MPI_Pack_size(                  p7_MAXABET, MPI_FLOAT,    comm, &sz) != MPI_SUCCESS) ESL_EXCEPTION(eslESYS, "pack size failed");  n += sz;                 /* compo[]         */
-      if (MPI_Pack_size(               p7_NOFFSETS+2, MPI_INT64_T,  comm, &sz) != MPI_SUCCESS) ESL_EXCEPTION(eslESYS, "pack size failed");  n += sz;                 /* offs[],roff,eoff*/
+      if (MPI_Pack_size(                           1, MPI_INT,      comm, &sz) != MPI_SUCCESS) ESL_EXCEPTION(eslESYS, "pack size failed");  
+      n += sz*4;               /* M,L,max_length,abc->type */
+      if (MPI_Pack_size(         (M+1) *  p7P_NTRANS, MPI_FLOAT,    comm, &sz) != MPI_SUCCESS) ESL_EXCEPTION(eslESYS, "pack size failed");  
+      n += sz;                 /* tsc             */
+      if (MPI_Pack_size(         (M+1) * Kp * p7P_NR, MPI_FLOAT,    comm, &sz) != MPI_SUCCESS) ESL_EXCEPTION(eslESYS, "pack size failed");  
+      n += sz;                 /* rsc[0]          */
+      if (MPI_Pack_size(                 p7P_NXTRANS, MPI_FLOAT,    comm, &sz) != MPI_SUCCESS) ESL_EXCEPTION(eslESYS, "pack size failed");  
+      n += sz*p7P_NXSTATES;    /* xsc[0..3]       */
+      if (MPI_Pack_size(                           1, MPI_FLOAT,    comm, &sz) != MPI_SUCCESS) ESL_EXCEPTION(eslESYS, "pack size failed");  
+      n += sz*2;               /* nj,pglocal      */
+      if ((status = esl_mpi_PackOptSize(gm->name, -1, MPI_CHAR,     comm, &sz))!= eslOK)       return status;                               
+      n += sz;                 /* name (string)   */
+      if ((status = esl_mpi_PackOptSize(gm->acc,  -1, MPI_CHAR,     comm, &sz))!= eslOK)       return status;                              
+       n += sz;                 /* acc (string)    */
+      if ((status = esl_mpi_PackOptSize(gm->desc, -1, MPI_CHAR,     comm, &sz))!= eslOK)       return status;                               
+      n += sz;                 /* desc (string)   */
+      if (MPI_Pack_size(                       (M+2), MPI_CHAR,     comm, &sz) != MPI_SUCCESS) ESL_EXCEPTION(eslESYS, "pack size failed");  
+      n += sz*4;               /* rf,cs,mm,consensus */
+      if (MPI_Pack_size(                 p7_NEVPARAM, MPI_FLOAT,    comm, &sz) != MPI_SUCCESS) ESL_EXCEPTION(eslESYS, "pack size failed");  
+      n += sz;                 /* evparam[]       */
+      if (MPI_Pack_size(                 p7_NCUTOFFS, MPI_FLOAT,    comm, &sz) != MPI_SUCCESS) ESL_EXCEPTION(eslESYS, "pack size failed");  
+      n += sz;                 /* cutoff[]        */
+      if (MPI_Pack_size(                  p7_MAXABET, MPI_FLOAT,    comm, &sz) != MPI_SUCCESS) ESL_EXCEPTION(eslESYS, "pack size failed");  
+      n += sz;                 /* compo[]         */
+      if (MPI_Pack_size(               p7_NOFFSETS+2, MPI_INT64_T,  comm, &sz) != MPI_SUCCESS) ESL_EXCEPTION(eslESYS, "pack size failed");  
+      n += sz;                 /* offs[],roff,eoff*/
       /* <allocM> is not sent. */
       /* alphabet is only sent as <type>. */
     }

@@ -53,11 +53,15 @@ p7_domain_mpi_PackSize(const P7_DOMAIN *dcl, int ndom, MPI_Comm comm, int *ret_n
   
   for (d = 0; d < ndom; d++)
     {
-      if ( MPI_Pack_size( 1, MPI_INT,    comm, &sz) != MPI_SUCCESS) ESL_EXCEPTION(eslESYS, "pack size failed"); n += sz*10; /* iae,ibe;kae,kbe;ia,ib;ka,kb;is_reported,is_included*/
-      if ( MPI_Pack_size( 1, MPI_FLOAT,  comm, &sz) != MPI_SUCCESS) ESL_EXCEPTION(eslESYS, "pack size failed"); n += sz*5;  /* envsc,domcorrection,dombias,oasc,bitscore*/
-      if ( MPI_Pack_size( 1, MPI_DOUBLE, comm, &sz) != MPI_SUCCESS) ESL_EXCEPTION(eslESYS, "pack size failed"); n += sz;    /* lnP */
+      if ( MPI_Pack_size( 1, MPI_INT,    comm, &sz) != MPI_SUCCESS) ESL_EXCEPTION(eslESYS, "pack size failed"); 
+      n += sz*10; /* iae,ibe;kae,kbe;ia,ib;ka,kb;is_reported,is_included*/
+      if ( MPI_Pack_size( 1, MPI_FLOAT,  comm, &sz) != MPI_SUCCESS) ESL_EXCEPTION(eslESYS, "pack size failed"); 
+      n += sz*5;  /* envsc,domcorrection,dombias,oasc,bitscore*/
+      if ( MPI_Pack_size( 1, MPI_DOUBLE, comm, &sz) != MPI_SUCCESS) ESL_EXCEPTION(eslESYS, "pack size failed"); 
+      n += sz;    /* lnP */
 
-      if ( (status = p7_alidisplay_mpi_PackSize(dcl[d].ad, comm, &sz)) != eslOK) return status;                 n += sz;
+      if ( (status = p7_alidisplay_mpi_PackSize(dcl[d].ad, comm, &sz)) != eslOK) return status;                 
+      n += sz;
       // fixme: TJW is using scores_per_pos; SRE is not dealing with it
     }
   *ret_n = n;
