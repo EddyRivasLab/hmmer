@@ -209,7 +209,7 @@ p7_seqcache_Open(char *seqfile, P7_SEQCACHE **ret_cache, char *errbuf)
   }
   if (status != eslEOF) { printf("Unexpected error %d at %d\n", status, inx); return status; }
 
-  if (inx != seq_cnt) { printf("inx:: %d %d\n", inx, seq_cnt); return eslEFORMAT; }
+  if (inx != seq_cnt) { printf("inx:: %d %" PRIu64 "\n", inx, seq_cnt);  return eslEFORMAT; }
   if (hdr_size != 0)  { printf("inx:: %d hdr %d\n", inx, (int)hdr_size); return eslEFORMAT; }
   if (res_size != 1)  { printf("inx:: %d size %d %d\n", inx, (int)sq->n + 1, (int)res_size); return eslEFORMAT; }
 

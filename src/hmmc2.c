@@ -521,7 +521,7 @@ int main(int argc, char *argv[])
           th->unsrt[i].desc = NULL;
           th->unsrt[i].dcl = NULL;
           if((buf_offset -hits_start) != stats->hit_offsets[i]){
-            printf("Hit offset %d did not match expected.  Found %d, expected %lu\n", i, (buf_offset-hits_start), stats->hit_offsets[i]);
+            printf("Hit offset %d did not match expected.  Found %d, expected %" PRIu64 "\n", i, (buf_offset-hits_start), stats->hit_offsets[i]);
           }
           if(p7_hit_Deserialize(buf, &buf_offset, &(th->unsrt[i])) != eslOK){
             printf("Unable to deserialize hit %d\n", i);
