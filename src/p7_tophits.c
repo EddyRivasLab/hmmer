@@ -1782,21 +1782,21 @@ p7_tophits_TabularXfam(FILE *ofp, char *qname, char *qacc, P7_TOPHITS *th, P7_PI
       {
           //d    = th->hit[h]->best_domain;
           if (fprintf(ofp, "%-*s  %-*s %-*s %6.1f %9.2g %5.1f %7d %7d %s %*" PRId64 " %*" PRId64 " %*" PRId64 " %*" PRId64 " %*" PRId64 "   %s\n",
-          tnamew, th->hit[h]->name,
-          taccw, ( pli->mode == p7_SCAN_MODELS ? th->hit[h]->acc : qacc ),
-          qnamew, qname,
-          th->hit[h]->score,
-          exp(th->hit[h]->lnP),
-          th->hit[h]->dcl[0].dombias * eslCONST_LOG2R, /* convert nats to bits at last moment */
-          th->hit[h]->dcl[0].ad->hmmfrom,
-          th->hit[h]->dcl[0].ad->hmmto,
-          (th->hit[h]->dcl[0].iali < th->hit[h]->dcl[0].jali ? "   +  "  :  "   -  "),
-          posw, th->hit[h]->dcl[0].iali,
-          posw, th->hit[h]->dcl[0].jali,
-          posw, th->hit[h]->dcl[0].ienv,
-          posw, th->hit[h]->dcl[0].jenv,
-          posw, th->hit[h]->dcl[0].ad->L,
-          th->hit[h]->desc == NULL ?  "-" : th->hit[h]->desc) < 0)
+		      tnamew, th->hit[h]->name,
+		      taccw, ( pli->mode == p7_SCAN_MODELS ? (th->hit[h]->acc ? th->hit[h]->acc : "-") : ((qacc && qacc[0] != '\0') ? qacc : "-")),
+		      qnamew, qname,
+		      th->hit[h]->score,
+		      exp(th->hit[h]->lnP),
+		      th->hit[h]->dcl[0].dombias * eslCONST_LOG2R, /* convert nats to bits at last moment */
+		      th->hit[h]->dcl[0].ad->hmmfrom,
+		      th->hit[h]->dcl[0].ad->hmmto,
+		      (th->hit[h]->dcl[0].iali < th->hit[h]->dcl[0].jali ? "   +  "  :  "   -  "),
+		      posw, th->hit[h]->dcl[0].iali,
+		      posw, th->hit[h]->dcl[0].jali,
+		      posw, th->hit[h]->dcl[0].ienv,
+		      posw, th->hit[h]->dcl[0].jenv,
+		      posw, th->hit[h]->dcl[0].ad->L,
+		      th->hit[h]->desc == NULL ?  "-" : th->hit[h]->desc) < 0)
             ESL_XEXCEPTION_SYS(eslEWRITE, "xfam tabular output: write failed");
       }
   }
