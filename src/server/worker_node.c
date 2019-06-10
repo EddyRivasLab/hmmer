@@ -1564,12 +1564,11 @@ static void worker_thread_back_end_sequence_search_loop(P7_DAEMON_WORKERNODE_STA
     p7_bg_SetLength(workernode->thread_state[my_id].bg, the_entry->L);           
         p7_oprofile_ReconfigLength(workernode->thread_state[my_id].om, the_entry->L);
  
-
     if(the_entry->do_overthruster !=0){
       //need to do the overthruster part of this comparison, generally because CUDA doesn't do the full overthruster
         char *seqname;
         p7_shard_Find_Descriptor_Nexthigh(workernode->database_shards[workernode->compare_database], the_entry->seq_id, &seqname);
-        overthruster_result = p7_engine_Overthruster_roundtwo(workernode->thread_state[my_id].engine, the_entry->sequence, the_entry->L, workernode->thread_state[my_id].om, workernode->thread_state[my_id].bg, the_entry->score, seqname);  
+        overthruster_result = p7_engine_Overthruster_roundtwo(workernode->thread_state[my_id].engine, the_entry->sequence, the_entry->L, workernode->thread_state[my_id].om, workernode->thread_state[my_id].bg, the_entry->score, seqname, the_entry->seq_position, the_entry->seq_in_chunk);  
     }
     else{
       // don't do the overthruster, but do set up the sparse mask for the main stage
@@ -1627,7 +1626,9 @@ static void worker_thread_back_end_sequence_search_loop(P7_DAEMON_WORKERNODE_STA
   while(pthread_mutex_trylock(&(workernode->backend_threads_lock))){
     // Wait for the lock
     }
-  if(workernode->backend_queue == NULL){  // Check this while we have the lock to prevent a race condition between 
+
+
+  if(workernode->backend_queue == NULL ){  // Check this while we have the lock to prevent a race condition between 
     // enqueuing an entry in an empty backend queue and the last backend thread deciding there's no front-end work to do.
     // If we don't switch to front-end mode, we'll just call this function again immediately
 

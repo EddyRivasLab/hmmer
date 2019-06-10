@@ -82,7 +82,8 @@ typedef struct p7_backend_queue_entry{
 	int do_overthruster;
 
 	float score;
-
+	int seq_position;
+	int seq_in_chunk;
 	//! The sequence or HMM's index in the appropriate database
 	uint64_t seq_id;
 

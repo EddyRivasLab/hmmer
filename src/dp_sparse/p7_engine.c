@@ -374,7 +374,7 @@ p7_engine_Overthruster(P7_ENGINE *eng, ESL_DSQ *dsq, int L, P7_OPROFILE *om, P7_
 //hacked copy of Overthruster to allow Nick to experiment with different Overthruster behavior
 //after passing CUDA filters
 int
-p7_engine_Overthruster_roundtwo(P7_ENGINE *eng, ESL_DSQ *dsq, int L, P7_OPROFILE *om, P7_BG *bg, float score, char *seqname)
+p7_engine_Overthruster_roundtwo(P7_ENGINE *eng, ESL_DSQ *dsq, int L, P7_OPROFILE *om, P7_BG *bg, float score, char *seqname, int position, int num_sequences_in_chunk)
 {
   int   do_biasfilter    = (eng->params ? eng->params->do_biasfilter   : p7_ENGINE_DO_BIASFILTER);
   float sparsify_thresh  = (eng->params ? eng->params->sparsify_thresh : p7_SPARSIFY_THRESH);
@@ -392,7 +392,7 @@ p7_engine_Overthruster_roundtwo(P7_ENGINE *eng, ESL_DSQ *dsq, int L, P7_OPROFILE
 
   seq_score = (eng->sfsc - eng->nullsc) / eslCONST_LOG2;  
   if(abs((seq_score - score)/seq_score) > .001){
-    printf("SSV miss-match on sequence %s: %f (CPU) vs %f (GPU)\n", seqname, seq_score, score);
+   printf("SSV miss-match on sequence %s: %f (CPU) vs %f (GPU), which was sequence %d of %d in its chunk\n", seqname, seq_score, score, position, num_sequences_in_chunk);
   }
   P = esl_gumbel_surv(seq_score,  om->evparam[p7_SMU],  om->evparam[p7_SLAMBDA]);
   if (P > eng->F1){

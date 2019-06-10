@@ -18,7 +18,6 @@ __global__
   __shared__ uint4 shared_buffer[1024 *3];  //allocate one big lump that takes up all our shared memory
   int  Q = ((((om->M)-1) / (128)) + 1);
   int **rbv = (int **)shared_buffer; 
-
   // needs to scale w abc->Kp
   if(threadIdx.x < KP && threadIdx.y == 0 && threadIdx.z == 0){
 
@@ -42,10 +41,10 @@ __global__
   // warps within a block are the Y dimension of threadIdx
   // and blocks within the grid are the X dimension of blockIdx
   int num_warps = gridDim.x * blockDim.y;
-
+printf("num_warps = %dl, num_sequences = %d\n", num_warps, num_sequences);
   //iterate through the sequences in groups of num_warps sequences
   for(int my_warp = (blockIdx.x * blockDim.y) + threadIdx.y; my_warp < num_sequences; my_warp += num_warps){
-
+  if(threadIdx.x == 0) printf("my_warp = %d", my_warp);
   	uint8_t *dsq = (uint8_t *)data + offsets[my_warp];
     // for now, skip the sequence ID, put that back in later
 
@@ -72,9 +71,13 @@ __global__
       	else{
         	hits[my_warp] =1;
       	} */
+       if (hits[my_warp] != 0.0){
+        printf("Duplicate write of hit found at warp %d, previous value was %f\n", my_warp, hits[my_warp]);
+       }
        hits[my_warp]= score;
     }
   }
+  if(threadIdx.x ==0) printf("Warp %d completed\n", (blockIdx.x * blockDim.y) + threadIdx.y);
   return; 
 }  
 

@@ -419,7 +419,7 @@ int p7_cuda_worker_thread_front_end_sequence_search_loop(P7_DAEMON_WORKERNODE_ST
   num_blocks.x = 20;
   num_blocks.y = 1;
   num_blocks.z = 1;
-  warps_per_block = 32;
+  warps_per_block = 1;
   threads_per_block.x = 32;
   threads_per_block.y = warps_per_block;
   threads_per_block.z = 1;
@@ -477,24 +477,28 @@ int p7_cuda_worker_thread_front_end_sequence_search_loop(P7_DAEMON_WORKERNODE_ST
           num_sequences += 1;
           L_effective = (L + 7) & ALIGNEIGHT_MASK; 
         }
-
+        for(int z = 0; z < num_sequences; z++){
+          buffer_state->cpu_hits[my_stream][z] = 0;
+        }
+     //   printf("GPU started chunk with %d sequences\n", num_sequences);
         //printf("Seq_id at end of chunk was %llu\n", seq_id);
         // This copy is inefficient, but required to overlap CPU-card data transfers and computation
         // Otherwise, we could just copy from the shard itself
         //memcpy(buffer_state->cpu_data[my_stream], data_start, current_offset);
 
         // Copy the input data to the card
-        cudaMemcpyAsync(buffer_state->gpu_data[my_stream], buffer_state->cpu_data[my_stream], current_offset, cudaMemcpyHostToDevice, buffer_state->streams[my_stream]);
-        cudaMemcpyAsync(buffer_state->gpu_offsets[my_stream], buffer_state->cpu_offsets[my_stream], num_sequences *sizeof(uint64_t), cudaMemcpyHostToDevice , buffer_state->streams[my_stream]);
+        cudaMemcpy(buffer_state->gpu_hits[my_stream], buffer_state->cpu_hits[my_stream], num_sequences * sizeof(uint64_t), cudaMemcpyHostToDevice);
+        cudaMemcpy(buffer_state->gpu_data[my_stream], buffer_state->cpu_data[my_stream], current_offset, cudaMemcpyHostToDevice);
+        cudaMemcpy(buffer_state->gpu_offsets[my_stream], buffer_state->cpu_offsets[my_stream], num_sequences *sizeof(uint64_t), cudaMemcpyHostToDevice);
 
-        cudaMemcpyAsync(buffer_state->gpu_lengths[my_stream], buffer_state->cpu_lengths[my_stream], num_sequences *sizeof(uint64_t), cudaMemcpyHostToDevice , buffer_state->streams[my_stream]);
+        cudaMemcpy(buffer_state->gpu_lengths[my_stream], buffer_state->cpu_lengths[my_stream], num_sequences *sizeof(uint64_t), cudaMemcpyHostToDevice);
 
-       p7_orion<<<num_blocks, threads_per_block, my_stream>>>(num_sequences, (uint8_t *) buffer_state->gpu_data[my_stream], buffer_state->gpu_lengths[my_stream], buffer_state->gpu_offsets[my_stream], buffer_state->gpu_hits[my_stream], om, mu, lambda);
+       p7_orion<<<num_blocks, threads_per_block, 0>>>(num_sequences, (uint8_t *) buffer_state->gpu_data[my_stream], buffer_state->gpu_lengths[my_stream], buffer_state->gpu_offsets[my_stream], buffer_state->gpu_hits[my_stream], om, mu, lambda);
 
         // Get the results back
-        cudaMemcpyAsync(buffer_state->cpu_hits[my_stream], buffer_state->gpu_hits[my_stream], num_sequences *sizeof(uint64_t) ,cudaMemcpyDeviceToHost, buffer_state->streams[my_stream]);
+        cudaMemcpy(buffer_state->cpu_hits[my_stream], buffer_state->gpu_hits[my_stream], num_sequences *sizeof(uint64_t) ,cudaMemcpyDeviceToHost);
 
-        cudaStreamSynchronize(buffer_state->streams[my_stream]);
+//        cudaStreamSynchronize(buffer_state->streams[my_stream]);
 
         int num_hits = 0;
         for(int q = 0; q < num_sequences; q++){
@@ -502,7 +506,8 @@ int p7_cuda_worker_thread_front_end_sequence_search_loop(P7_DAEMON_WORKERNODE_ST
          // if(buffer_state->cpu_hits[my_stream][q] ==1){ //This sequence hit
             // get an entry to put this comparison in
             P7_BACKEND_QUEUE_ENTRY * the_entry = workernode_get_backend_queue_entry_from_pool(workernode);
-
+            the_entry->seq_position = q;
+            the_entry->seq_in_chunk = num_sequences;
             // Skip the sparsemask swapping, as the GPU doesn't do enough of the overthruster to
             // populate a sparse mask
             the_entry->score = buffer_state->cpu_hits[my_stream][q];
@@ -524,6 +529,7 @@ int p7_cuda_worker_thread_front_end_sequence_search_loop(P7_DAEMON_WORKERNODE_ST
             num_hits++;
           }
         }
+       printf("GPU finished chunk with %d sequences\n", num_sequences);
         //printf("GPU found %d hits\n", num_hits);
         num_sequences = 0;
         current_offset = 0;
