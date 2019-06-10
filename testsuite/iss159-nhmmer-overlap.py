@@ -1,7 +1,11 @@
 #! /usr/bin/env python3
 
-# 
-
+# iss #159 : nhmmer reports overlapping envelopes on reverse strand
+#
+# A bug in how nhmmer sorts hits on reverse strand led to it reporting
+# overlapping envelopes in some situations.
+#
+# [xref SRE:2019/0531-nhmmer-iss159]
 
 import sys
 import os
@@ -80,14 +84,14 @@ envlist.sort(key=lambda elem: elem[0])
 for i in range(1, len(envlist)):
     if envlist[i][0] <= envlist[i-1][1]: sys.exit("FAIL: overlapping envelopes detected")
 
+
+
+os.remove('{0}.tbl'.format(tmppfx))
+os.remove('{0}.hmm'.format(tmppfx))
+os.remove('{0}.sto'.format(tmppfx))
+os.remove('{0}.fa'.format(tmppfx))
+
 print("ok")
-
-os.remove('{1}.tbl'.format(tmppfx))
-os.remove('{1}.hmm'.format(tmppfx))
-os.remove('{1}.sto'.format(tmppfx))
-os.remove('{1}.fa'.format(tmppfx))
-
-
 
         
  

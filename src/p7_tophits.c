@@ -276,58 +276,53 @@ hit_sorter_by_sortkey(const void *vh1, const void *vh2)
   }
 }
 
+/* used before duplicate hit removal in an nhmmer longtarget pipeline: */
 static int
 hit_sorter_by_seqidx_aliposition(const void *vh1, const void *vh2)
 {
-  P7_HIT *h1 = *((P7_HIT **) vh1);  /* don't ask. don't change. Don't Panic. */
-  P7_HIT *h2 = *((P7_HIT **) vh2);
+  P7_HIT  *h1 = *((P7_HIT **) vh1);  
+  P7_HIT  *h2 = *((P7_HIT **) vh2);
+  int64_t  s1, e1, s2, e2;
+  int      dir1, dir2;
 
   if      (h1->seqidx > h2->seqidx) return  1; /* first key, seq_idx (unique id for sequences), low to high */
   else if (h1->seqidx < h2->seqidx) return -1;
+
   // if on different strand, the positive strand goes first, else use position
-  int dir1 = (h1->dcl[0].iali < h1->dcl[0].jali ? 1 : -1);
-  int dir2 = (h2->dcl[0].iali < h2->dcl[0].jali ? 1 : -1);
+  s1 = h1->dcl[0].iali;  e1 = h1->dcl[0].jali;  if (s1 < e1) { dir1 = 1; } else { dir1 = -1; ESL_SWAP(s1, e1, int64_t); }
+  s2 = h2->dcl[0].iali;  e2 = h2->dcl[0].jali;  if (s2 < e2) { dir2 = 1; } else { dir2 = -1; ESL_SWAP(s2, e2, int64_t); }
 
   if (dir1 != dir2) return dir2; // so if dir1 is pos (1), and dir2 is neg (-1), this will return -1, placing h1 before h2;  otherwise, vice versa
 
-  if ( h1->dcl[0].iali == h2->dcl[0].iali) { 
-    if     (h1->dcl[0].jali < h2->dcl[0].jali) return  1; 
-    else if(h1->dcl[0].jali > h2->dcl[0].jali) return -1; 
-    else                                       return  0;
-  }
-  else { 
-    if     (h1->dcl[0].iali > h2->dcl[0].iali) return  1; 
-    else if(h1->dcl[0].iali < h2->dcl[0].iali) return -1;
-    else                                       return  0;
-  }
+  if      (s1 > s2) return  1;   // sort primarily from smallest to largest start pos
+  else if (s1 < s2) return -1;
+  else if (e1 < e2) return  1;   // secondarily, larger to smallest end position (i.e. longer hit first)
+  else if (e1 > e2) return -1;
+  else              return  0;
 }
 
+/* similarly, for nhmmscan longtarget pipeline: */
 static int
 hit_sorter_by_modelname_aliposition(const void *vh1, const void *vh2)
 {
-  P7_HIT *h1 = *((P7_HIT **) vh1);  /* don't ask. don't change. Don't Panic. */
-  P7_HIT *h2 = *((P7_HIT **) vh2);
+  P7_HIT  *h1 = *((P7_HIT **) vh1);  
+  P7_HIT  *h2 = *((P7_HIT **) vh2);
+  int64_t  s1, e1, s2, e2;
+  int      dir1, dir2;
+  int      res;
 
-  int res = esl_strcmp( h1->name, h2->name);
+  if  ( ( res = esl_strcmp(h1->name, h2->name))  != 0 ) return res; /* first key, seq_idx (unique id for sequences), low to high */
 
-  if  ( res != 0 ) return  res; /* first key, seq_idx (unique id for sequences), low to high */
+  s1 = h1->dcl[0].iali;  e1 = h1->dcl[0].jali;  if (s1 < e1) { dir1 = 1; } else { dir1 = -1; ESL_SWAP(s1, e1, int64_t); }
+  s2 = h2->dcl[0].iali;  e2 = h2->dcl[0].jali;  if (s2 < e2) { dir2 = 1; } else { dir2 = -1; ESL_SWAP(s2, e2, int64_t); }
 
-  // if on different strand, the positive strand goes first, else use position
-  int dir1 = (h1->dcl[0].iali < h1->dcl[0].jali ? 1 : -1);
-  int dir2 = (h2->dcl[0].iali < h2->dcl[0].jali ? 1 : -1);
+  if (dir1 != dir2) return dir2; 
 
-  if (dir1 != dir2) return dir2; // so if dir1 is pos (1), and dir2 is neg (-1), this will return -1, placing h1 before h2;  otherwise, vice versa
-
-  if ( h1->dcl[0].iali == h2->dcl[0].iali) { 
-    if     (h1->dcl[0].jali < h2->dcl[0].jali) return  1; 
-    else if(h1->dcl[0].jali > h2->dcl[0].jali) return -1; 
-    else                                       return  0;
-  }
-  else { 
-    if     (h1->dcl[0].iali > h2->dcl[0].iali) return  1; 
-    else if(h1->dcl[0].iali < h2->dcl[0].iali) return -1;
-    else                                       return  0;
-  }
+  if      (s1 > s2) return  1;   
+  else if (s1 < s2) return -1;
+  else if (e1 < e2) return  1;   
+  else if (e1 > e2) return -1;
+  else              return  0;
 }
 
 
@@ -355,11 +350,20 @@ p7_tophits_SortBySortkey(P7_TOPHITS *h)
 
 
 /* Function:  p7_tophits_SortBySeqidxAndAlipos()
- * Synopsis:  Sorts a hit list by sequence index and position in that
+ * Synopsis:  Sorts a hit list by sequence index and position for nhmmer.
  *            sequence at which the hit's first domain begins (used in nhmmer)
  *
- * Purpose:   Sorts a top hit list. After this call,
- *            <h->hit[i]> points to the i'th ranked
+ * Purpose: Sorts a top hit list, suitable for subsequent hit
+ *            duplicate removal by `p7_tophits_RemoveDuplicates()` in
+ *            an nhmmer longtarget pipeline: by sequence index, then
+ *            by strand (+ before - hits), then by smallest-to-largest
+ *            start position (in watson coords), then by
+ *            largest-to-smallest end position (in watson
+ *            coords). Correctness of logic of
+ *            `p7_tophits_RemoveDuplicates()` is sensitive to this
+ *            ordering.
+ * 
+ *            After this call, <h->hit[i]> points to the i'th ranked
  *            <P7_HIT> for all <h->N> hits.
  *
  * Returns:   <eslOK> on success.
@@ -378,12 +382,10 @@ p7_tophits_SortBySeqidxAndAlipos(P7_TOPHITS *h)
 }
 
 /* Function:  p7_tophits_SortByModelnameAndAlipos()
- * Synopsis:  Sorts a hit list by model name and position in the query sequence
- *            sequence at which the hit's first domain begins (used in nhmmscan)
+ * Synopsis:  Sorts a hit list by model name and position for nhmmscan.
  *
- * Purpose:   Sorts a top hit list. After this call,
- *            <h->hit[i]> points to the i'th ranked
- *            <P7_HIT> for all <h->N> hits.
+ * Purpose:   Like `p7_tophits_SortBySeqidxAndAlipos()` but for
+ *            nhmmscan, which sorts on model name not target seq idx.
  *
  * Returns:   <eslOK> on success.
  */
@@ -769,8 +771,6 @@ p7_tophits_RemoveDuplicates(P7_TOPHITS *th, int using_bit_cutoffs)
   int     s_i, s_j, e_i, e_j, dir_i, dir_j, len_i, len_j;
   int     intersect_alistart, intersect_aliend, intersect_alilen;
   int     intersect_hmmstart, intersect_hmmend, intersect_hmmlen;
-  //int64_t sub_i, sub_j;
-  int     tmp;
   double  p_i, p_j;
   int remove;
 
@@ -779,32 +779,19 @@ p7_tophits_RemoveDuplicates(P7_TOPHITS *th, int using_bit_cutoffs)
   j=0;
   for (i = 1; i < th->N; i++)
   {
-
-      //sub_j = th->hit[j]->subseq_start;
-      p_j = th->hit[j]->lnP;
-      s_j = th->hit[j]->dcl[0].iali;
-      e_j = th->hit[j]->dcl[0].jali;
+      p_j   = th->hit[j]->lnP;
+      s_j   = th->hit[j]->dcl[0].iali;
+      e_j   = th->hit[j]->dcl[0].jali;
       dir_j = (s_j < e_j ? 1 : -1);
-      if (dir_j == -1) {
-        tmp = s_j;
-        s_j = e_j;
-        e_j = tmp;
-      }
+      if (dir_j == -1) ESL_SWAP(s_j, e_j, int);
       len_j = e_j - s_j + 1 ;
 
-
-      //sub_i = th->hit[i]->subseq_start;
-      p_i = th->hit[i]->lnP;
-      s_i = th->hit[i]->dcl[0].iali;
-      e_i = th->hit[i]->dcl[0].jali;
+      p_i   = th->hit[i]->lnP;
+      s_i   = th->hit[i]->dcl[0].iali;
+      e_i   = th->hit[i]->dcl[0].jali;
       dir_i = (s_i < e_i ? 1 : -1);
-      if (dir_i == -1) {
-        tmp = s_i;
-        s_i = e_i;
-        e_i = tmp;
-      }
+      if (dir_i == -1) ESL_SWAP(s_i, e_i, int);
       len_i = e_i - s_i + 1 ;
-
 
       // these will only matter if seqidx and strand are the same
       intersect_alistart  = s_i>s_j ? s_i : s_j;
@@ -813,19 +800,18 @@ p7_tophits_RemoveDuplicates(P7_TOPHITS *th, int using_bit_cutoffs)
 
       intersect_hmmstart = (th->hit[i]->dcl[0].ad->hmmfrom > th->hit[j]->dcl[0].ad->hmmfrom) ? th->hit[i]->dcl[0].ad->hmmfrom : th->hit[j]->dcl[0].ad->hmmfrom;
       intersect_hmmend   = (th->hit[i]->dcl[0].ad->hmmto   < th->hit[j]->dcl[0].ad->hmmto)   ? th->hit[i]->dcl[0].ad->hmmto : th->hit[j]->dcl[0].ad->hmmto;
-      intersect_hmmlen = intersect_hmmend - intersect_hmmstart + 1;
+      intersect_hmmlen   = intersect_hmmend - intersect_hmmstart + 1;
 
-      if ( esl_strcmp(th->hit[i]->name, th->hit[i-1]->name) == 0  && //same model
-          th->hit[i]->seqidx ==  th->hit[i-1]->seqidx  && //same source sequence
-           dir_i == dir_j && // only bother removing if the overlapping hits are on the same strand
-           intersect_hmmlen > 0 && //only if they're both hitting similar parts of the model
+      if ( esl_strcmp(th->hit[i]->name, th->hit[i-1]->name) == 0  && // same model
+           th->hit[i]->seqidx ==  th->hit[i-1]->seqidx  &&           // same source sequence
+           dir_i == dir_j &&                                         // only bother removing if the overlapping hits are on the same strand
+           intersect_hmmlen > 0 &&                                   // only if they're both hitting similar parts of the model
            (
-               ( s_i >= s_j-3 && s_i <= s_j+3) ||  // at least one side is essentially flush
+               ( s_i >= s_j-3 && s_i <= s_j+3) ||     // at least one side is essentially flush
                ( e_i >= e_j-3 && e_i <= e_j+3) ||
                ( intersect_alilen >= len_i * 0.95) || // or one of the hits covers >90% of the other
                ( intersect_alilen >= len_j * 0.95)
-           )
-      )
+	   ))
       {
         /* Force one to go unreported.  I prefer to keep the one with the
          * better e-value.  This addresses two issues
@@ -846,16 +832,14 @@ p7_tophits_RemoveDuplicates(P7_TOPHITS *th, int using_bit_cutoffs)
         remove = p_i < p_j ? j : i;
 
         th->hit[remove]->flags |= p7_IS_DUPLICATE;
-        if (using_bit_cutoffs) {
-          //report/include flags were already included, need to remove them here
+        if (using_bit_cutoffs) { // report/include flags were already included, need to remove them here
           th->hit[remove]->flags &= ~p7_IS_REPORTED;
           th->hit[remove]->flags &= ~p7_IS_INCLUDED;
         }
 
-        j = remove == j ? i : j;
-      } else {
-        j = i;
+        j = (remove == j ? i : j);
       }
+      else j = i; 
   }
   return eslOK;
 }
