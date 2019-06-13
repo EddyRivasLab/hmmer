@@ -326,8 +326,11 @@ main(int argc, char **argv)
   return status;
 }
 
+/* translate_sequence()
+ * For input DNA sequence, add all ORFs (6 frames) to wrk block
+ */
 static int
-do_sq_by_sequences(ESL_GENCODE *gcode, ESL_GENCODE_WORKSTATE *wrk, ESL_SQ *sq)
+translate_sequence(ESL_GENCODE *gcode, ESL_GENCODE_WORKSTATE *wrk, ESL_SQ *sq)
 {
       if (wrk->do_watson) {
         esl_gencode_ProcessStart(gcode, wrk, sq);
@@ -740,7 +743,7 @@ serial_loop(WORKER_INFO *info, ESL_SQFILE *dbfp, int n_targetseqs)
 
   while (sstatus == eslOK && (n_targetseqs==-1 || seq_id < n_targetseqs) ) {
       dbsq_dna->idx = seq_id;
-      if (dbsq_dna->n < 15) continue; /* do not process sequence of less than 5 codons */
+      if (dbsq_dna->n < 24) continue; /* do not process tiny DNA sequences that can't possibly have a sequence >= 8 codons */
 
       /* copy and convert the DNA sequence to text so we can print it in the domain alignment display */
       esl_sq_Copy(dbsq_dna, dbsq_dnatxt);
@@ -748,9 +751,11 @@ serial_loop(WORKER_INFO *info, ESL_SQFILE *dbfp, int n_targetseqs)
 
       /* translate DNA sequence to 6 frame ORFs */
       dbsq_dna->L = dbsq_dna->n; /* here, L is not the full length of the sequence in the db, just of the currently-active window;  required for esl_gencode machinations */
-      do_sq_by_sequences(info->gcode, info->wrk, dbsq_dna);
+      esl_sq_ReuseBlock(info->wrk->orf_block);
+      translate_sequence(info->gcode, info->wrk, dbsq_dna);
 
       block =  info->wrk->orf_block;
+
 
       /* Main loop: */
       for (k = 0; k < block->count; ++k)
@@ -940,7 +945,6 @@ pipeline_thread(void *arg)
   if (orfblock == NULL)          esl_fatal("Failed to allocate sequence block");
 
 
-
   /* thread loops until all blocks have been processed */
   dnablock = (ESL_SQ_BLOCK *) newBlock; //block from threads
 
@@ -952,7 +956,7 @@ pipeline_thread(void *arg)
 
           dbsq_dna = dnablock->list + i;
 
-          if (dbsq_dna->n < 15) continue; /* do not process sequence of less than 5 codons */
+          if (dbsq_dna->n < 24) continue; /* do not process tiny DNA sequences that can't possibly have a sequence >= 8 codons */
 
           /* copy and convert the DNA sequence to text so we can print it in the domain alignment display */
           esl_sq_Copy(dbsq_dna, dbsq_dnatxt);
@@ -961,7 +965,8 @@ pipeline_thread(void *arg)
           /* translate DNA sequence to 6 frame ORFs */
           dbsq_dna->L = dbsq_dna->n; /* here, L is not the full length of the sequence in the db, just of the currently-active window;  required for esl_gencode machinations */
 
-          do_sq_by_sequences(info->gcode, info->wrk, dbsq_dna);
+          esl_sq_ReuseBlock(info->wrk->orf_block);
+          translate_sequence(info->gcode, info->wrk, dbsq_dna);
 
           orfblock =  info->wrk->orf_block;
 
