@@ -743,7 +743,6 @@ serial_loop(WORKER_INFO *info, ESL_SQFILE *dbfp, int n_targetseqs)
 
   while (sstatus == eslOK && (n_targetseqs==-1 || seq_id < n_targetseqs) ) {
       dbsq_dna->idx = seq_id;
-      if (dbsq_dna->n < 24) continue; /* do not process tiny DNA sequences that can't possibly have a sequence >= 8 codons */
 
       /* copy and convert the DNA sequence to text so we can print it in the domain alignment display */
       esl_sq_Copy(dbsq_dna, dbsq_dnatxt);
@@ -955,8 +954,6 @@ pipeline_thread(void *arg)
       {
 
           dbsq_dna = dnablock->list + i;
-
-          if (dbsq_dna->n < 24) continue; /* do not process tiny DNA sequences that can't possibly have a sequence >= 8 codons */
 
           /* copy and convert the DNA sequence to text so we can print it in the domain alignment display */
           esl_sq_Copy(dbsq_dna, dbsq_dnatxt);
