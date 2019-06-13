@@ -17,6 +17,7 @@ src/impl*/*_utest
 src/impl*/*_benchmark
 documentation/userguide/copyright.tex
 documentation/userguide/titlepage.tex
+documentation/userguide/titlepage_daemon.tex
 documentation/man/*.man
 libdivsufsort/divsufsort.h
 libdivsufsort/libdivsufsort.a
@@ -46,3 +47,4 @@ src/makehmmerdb
 src/nhmmer
 src/nhmmscan
 src/phmmer
+autom4te.cache/
