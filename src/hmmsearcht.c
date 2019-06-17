@@ -994,7 +994,7 @@ pipeline_thread(void *arg)
               Set the orfid to a number that will be uniq and consistent across threading
               options
               */
-              sprintf(dbsq_aa->orfid, "xorf%" PRId64 "", dbsq_dna->prev_n+k);
+              sprintf(dbsq_aa->orfid, "orf%" PRId64 "", dbsq_dna->prev_n+k);
               //if ((status = esl_sq_SetORFid    (dbsq_aa, dbsq_aa->name))          != eslOK)  esl_fatal("Set query sequence ORF id failed");
               if ((status = esl_sq_SetName     (dbsq_aa, info->ntqsq->name))   != eslOK)  esl_fatal("Set query sequence name failed");
               if ((status = esl_sq_SetAccession(dbsq_aa, info->ntqsq->acc))    != eslOK)  esl_fatal("Set query sequence accession failed");
