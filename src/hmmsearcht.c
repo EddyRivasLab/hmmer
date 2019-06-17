@@ -858,6 +858,7 @@ thread_loop(WORKER_INFO *info, ESL_THREADS *obj, ESL_WORK_QUEUE *queue, ESL_SQFI
       seqid = block->first_seqidx;
       for (i=0; i<block->count; i++) {
         block->list[i].idx = seqid;
+        block->list[i].prev_n = prev_char_cnt;
         prev_char_cnt += block->list[i].n;
 
 //        add_id_length(id_length_list, seqid, block->list[i].L);
