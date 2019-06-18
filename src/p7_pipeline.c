@@ -1027,6 +1027,14 @@ p7_Pipeline(P7_PIPELINE *pli, P7_OPROFILE *om, P7_BG *bg, const ESL_SQ *sq, cons
                hit->dcl[d].ad->sqfrom = sq->start - (hit->dcl[d].ad->sqfrom -1)*3;
                hit->dcl[d].ad->sqto   = sq->start - (hit->dcl[d].ad->sqto -1)*3 - 2;
             }
+
+            hit->dcl[d].iorf       += ntsq->start-1;
+            hit->dcl[d].jorf       += ntsq->start-1;
+            hit->dcl[d].ienv       += ntsq->start-1;
+            hit->dcl[d].jenv       += ntsq->start-1;
+            hit->dcl[d].ad->sqfrom += ntsq->start-1;
+            hit->dcl[d].ad->sqto   += ntsq->start-1;
+
          }
       }
 

@@ -146,7 +146,7 @@ static int  serial_loop  (WORKER_INFO *info, ESL_SQFILE *dbfp, int n_targetseqs)
 #ifdef HMMER_THREADS
 #define BLOCK_SIZE 1000
 
-static int  thread_loop(ESL_THREADS *obj, ESL_WORK_QUEUE *queue, ESL_SQFILE *dbfp, ESL_SQ_BLOCK  *orf_block);
+static int  thread_loop(WORKER_INFO *info, ESL_THREADS *obj, ESL_WORK_QUEUE *queue, ESL_SQFILE *dbfp, int n_targetseqs);
 static void pipeline_thread(void *arg);
 #endif /*HMMER_THREADS*/
 
@@ -326,8 +326,11 @@ main(int argc, char **argv)
   return status;
 }
 
+/* translate_sequence()
+ * For input DNA sequence, add all ORFs (6 frames) to wrk block
+ */
 static int
-do_sq_by_sequences(ESL_GENCODE *gcode, ESL_GENCODE_WORKSTATE *wrk, ESL_SQ *sq)
+translate_sequence(ESL_GENCODE *gcode, ESL_GENCODE_WORKSTATE *wrk, ESL_SQ *sq)
 {
       if (wrk->do_watson) {
         esl_gencode_ProcessStart(gcode, wrk, sq);
@@ -398,7 +401,6 @@ serial_master(ESL_GETOPTS *go, struct cfg_s *cfg)
   ESL_SQ          *qsqDNA = NULL;		 /* DNA query sequence                                  */
   ESL_SQ          *qsqDNATxt = NULL;    /* DNA query sequence that will be in text mode for printing */
   ESL_GENCODE     *gcode       = NULL;
-  ESL_GENCODE_WORKSTATE *wrk    = NULL;
   /* end hmmsearcht */
 
   w = esl_stopwatch_Create();
@@ -487,7 +489,7 @@ serial_master(ESL_GETOPTS *go, struct cfg_s *cfg)
 #ifdef HMMER_THREADS
       for (i = 0; i < ncpus * 2; ++i)
 	{
-	  block = esl_sq_CreateDigitalBlock(BLOCK_SIZE, abc);
+	  block = esl_sq_CreateDigitalBlock(BLOCK_SIZE, abcDNA);
 	  if (block == NULL) 	      esl_fatal("Failed to allocate sequence block");
 
  	  status = esl_workqueue_Init(queue, block);
@@ -508,7 +510,7 @@ serial_master(ESL_GETOPTS *go, struct cfg_s *cfg)
    * info about our position in <sqfp> and the DNA <sq>, as well as
    * one-time config info from options
    */
-  wrk = esl_gencode_WorkstateCreate(go, gcode);
+  //wrk = esl_gencode_WorkstateCreate(go, gcode);
 
   /* Outer loop: over each query HMM in <hmmfile>. */
   while (hstatus == eslOK) 
@@ -562,7 +564,7 @@ serial_master(ESL_GETOPTS *go, struct cfg_s *cfg)
       {
         /* Create processing pipeline and hit list */
         info[i].gcode = gcode;
-        info[i].wrk = wrk;
+        info[i].wrk = esl_gencode_WorkstateCreate(go, gcode);
         info[i].th  = p7_tophits_Create();
         info[i].om  = p7_oprofile_Clone(om);
         info[i].pli = p7_pipeline_Create(go, om->M, 100, FALSE, p7_SEARCH_SEQS); /* L_hint = 100 is just a dummy for now */
@@ -587,9 +589,9 @@ serial_master(ESL_GETOPTS *go, struct cfg_s *cfg)
 #endif
       }
 
-
 #ifdef HMMER_THREADS
-         if (ncpus > 0)  sstatus = thread_loop(threadObj, queue, dbfp, wrk->orf_block);
+         if (ncpus > 0)
+             sstatus = thread_loop(info, threadObj, queue, dbfp, cfg->n_targetseq);
          else
 #endif
          sstatus = serial_loop(info, dbfp, cfg->n_targetseq);
@@ -617,12 +619,6 @@ serial_master(ESL_GETOPTS *go, struct cfg_s *cfg)
            p7_oprofile_Destroy(info[i].om);
          }
 
-         if(wrk->orf_block != NULL)
-         {
-            esl_sq_DestroyBlock(wrk->orf_block);
-            wrk->orf_block = NULL;
-         }
-		 
          esl_sq_Reuse(qsqDNATxt);
          esl_sq_Reuse(qsqDNA);
 		 
@@ -686,9 +682,6 @@ serial_master(ESL_GETOPTS *go, struct cfg_s *cfg)
 
   /* Cleanup - prepare for exit
    */
-  for (i = 0; i < infocnt; ++i)
-    p7_bg_Destroy(info[i].bg);
-
 #ifdef HMMER_THREADS
   if (ncpus > 0)
     {
@@ -699,10 +692,13 @@ serial_master(ESL_GETOPTS *go, struct cfg_s *cfg)
       esl_threads_Destroy(threadObj);
     }
 #endif
+  for (i = 0; i < infocnt; ++i) {
+    p7_bg_Destroy(info[i].bg);
+    esl_gencode_WorkstateDestroy(info[i].wrk);
+  }
 
   free(info);
   
-  esl_gencode_WorkstateDestroy(wrk);
   esl_gencode_Destroy(gcode);
 
   esl_sq_Destroy(qsqDNA);  
@@ -720,7 +716,6 @@ serial_master(ESL_GETOPTS *go, struct cfg_s *cfg)
   if (tblfp)         fclose(tblfp);
   if (domtblfp)      fclose(domtblfp);
   if (pfamtblfp)     fclose(pfamtblfp);
-//  if (aliscoresfp)   fclose(aliscoresfp);
 
   return eslOK;
 
@@ -732,8 +727,9 @@ serial_master(ESL_GETOPTS *go, struct cfg_s *cfg)
 static int
 serial_loop(WORKER_INFO *info, ESL_SQFILE *dbfp, int n_targetseqs)
 {
-  int  sstatus = eslOK;
-  int seq_id = 0;
+  int sstatus            = eslOK;
+  int seq_id             = 0;
+  uint64_t prev_char_cnt = 0;
   int          k;
   ESL_ALPHABET *abc = esl_alphabet_Create(eslDNA);
   ESL_SQ       *dbsq_dna    = esl_sq_CreateDigital(abc);   /* (digital) nucleotide sequence, to be translated into ORFs  */
@@ -741,27 +737,26 @@ serial_loop(WORKER_INFO *info, ESL_SQFILE *dbfp, int n_targetseqs)
   ESL_SQ_BLOCK *block       = NULL;   /* for translated ORFs */
   ESL_SQ       *dbsq_aa     = NULL;   /* used to hold a current ORF  */
 
+
+
   sstatus = esl_sqio_ReadWindow(dbfp, 0, info->pli->block_length, dbsq_dna);
 
   info->wrk->orf_block = esl_sq_CreateDigitalBlock(BLOCK_SIZE, info->om->abc);
   if (info->wrk->orf_block == NULL)          esl_fatal("Failed to allocate sequence block");
 
-
   while (sstatus == eslOK && (n_targetseqs==-1 || seq_id < n_targetseqs) ) {
       dbsq_dna->idx = seq_id;
-      if (dbsq_dna->n < 15) continue; /* do not process sequence of less than 5 codons */
 
       /* copy and convert the DNA sequence to text so we can print it in the domain alignment display */
       esl_sq_Copy(dbsq_dna, dbsq_dnatxt);
       info->ntqsq = dbsq_dnatxt; // for printing the DNA target sequence in the domain hits display
 
-
       /* translate DNA sequence to 6 frame ORFs */
       dbsq_dna->L = dbsq_dna->n; /* here, L is not the full length of the sequence in the db, just of the currently-active window;  required for esl_gencode machinations */
-      do_sq_by_sequences(info->gcode, info->wrk, dbsq_dna);
+      esl_sq_ReuseBlock(info->wrk->orf_block);
+      translate_sequence(info->gcode, info->wrk, dbsq_dna);
 
       block =  info->wrk->orf_block;
-
 
       /* Main loop: */
       for (k = 0; k < block->count; ++k)
@@ -771,22 +766,22 @@ serial_loop(WORKER_INFO *info, ESL_SQFILE *dbfp, int n_targetseqs)
           p7_pli_NewSeq(info->pli, dbsq_aa);
 
           /*
-          use the name, accession, and description from the DNA sequence and
-          not from the ORF which is generated by gencode and only for internal use
+          Use the name, accession, and description from the DNA sequence and
+          not from the ORF which is generated by gencode and only for internal use.
+          Set the orfid to a number that will be uniq and consistent across threading
+          options
           */
-          if ((sstatus = esl_sq_SetORFid    (dbsq_aa, dbsq_aa->name))          != eslOK)  ESL_EXCEPTION_SYS(eslEWRITE, "Set query sequence ORF id failed");
+          sprintf(dbsq_aa->orfid, "orf%" PRId64 "", prev_char_cnt+k);
+          //if ((sstatus = esl_sq_SetORFid    (dbsq_aa, dbsq_aa->name))          != eslOK)  ESL_EXCEPTION_SYS(eslEWRITE, "Set query sequence ORF id failed");
           if ((sstatus = esl_sq_SetName     (dbsq_aa, info->ntqsq->name))   != eslOK)  ESL_EXCEPTION_SYS(eslEWRITE, "Set query sequence name failed");
           if ((sstatus = esl_sq_SetAccession(dbsq_aa, info->ntqsq->acc))    != eslOK)  ESL_EXCEPTION_SYS(eslEWRITE, "Set query sequence accession failed");
           if ((sstatus = esl_sq_SetDesc     (dbsq_aa, info->ntqsq->desc))   != eslOK)  ESL_EXCEPTION_SYS(eslEWRITE, "Set query sequence description failed");
 
-          //p7_pli_NewSeq(info->pli, dbsq_aa);
           p7_bg_SetLength(info->bg, dbsq_aa->n);
           p7_oprofile_ReconfigLength(info->om, dbsq_aa->n);
 
-          dbsq_aa->start += dbsq_dna->start-1;
-          dbsq_aa->end   += dbsq_dna->start-1;
-          p7_Pipeline(info->pli, info->om, info->bg, dbsq_aa, info->ntqsq, info->th, NULL);
 
+          p7_Pipeline(info->pli, info->om, info->bg, dbsq_aa, info->ntqsq, info->th, NULL);
           /*
           for (int d = 0; d < info->th->hit[info->th->N-1]->ndom; d++) {
 
@@ -802,6 +797,8 @@ serial_loop(WORKER_INFO *info, ESL_SQFILE *dbfp, int n_targetseqs)
           p7_pipeline_Reuse(info->pli);
       }
 
+      prev_char_cnt += dbsq_dna->n;
+
       sstatus = esl_sqio_ReadWindow(dbfp, info->om->max_length, info->pli->block_length, dbsq_dna);
       if (sstatus == eslEOD) { // no more left of this sequence ... move along to the next sequence.
           //add_id_length(id_length_list, dbsq->idx, dbsq->L);
@@ -814,63 +811,107 @@ serial_loop(WORKER_INFO *info, ESL_SQFILE *dbfp, int n_targetseqs)
       }
 
   }
-
   esl_alphabet_Destroy(abc);
   esl_sq_Destroy(dbsq_dna);
   esl_sq_Destroy(dbsq_dnatxt);
+ // esl_sq_DestroyBlock(block);
 
   return sstatus;
 }
 
 #ifdef HMMER_THREADS
 static int
-thread_loop(ESL_THREADS *obj, ESL_WORK_QUEUE *queue, ESL_SQFILE *dbfp, ESL_SQ_BLOCK  *orf_block)
+thread_loop(WORKER_INFO *info, ESL_THREADS *obj, ESL_WORK_QUEUE *queue, ESL_SQFILE *dbfp, int n_targetseqs)
 {
+  int  i;
   int  status  = eslOK;
   int  sstatus = eslOK;
   int  eofCount = 0;
-  ESL_SQ_BLOCK *block;
+  ESL_SQ_BLOCK *block; // block of 1 or more nucleotide sequences
   void         *newBlock;
-  ESL_SQ       *orf_seq;
-  int          num_processed_seq = 0;
-  int          k;
+  int          seqid = -1;
+  uint64_t prev_char_cnt = 0;
   
+  ESL_ALPHABET *abcdna = esl_alphabet_Create(eslDNA);
+  ESL_SQ      *tmpsq_dna = esl_sq_CreateDigital(abcdna ) ;
+  int          abort = FALSE; // in the case n_targetseqs != -1, a block may get abbreviated
+
   esl_workqueue_Reset(queue);
   esl_threads_WaitForStart(obj);
 
   status = esl_workqueue_ReaderUpdate(queue, NULL, &newBlock);
   if (status != eslOK) esl_fatal("Work queue reader failed");
-      
+  ((ESL_SQ_BLOCK *)newBlock)->complete = TRUE;
+
   /* Main loop: */
   while (sstatus == eslOK )
     {
       block = (ESL_SQ_BLOCK *) newBlock;
-      block->count = 0;
-		  
-      /* fill up the new block with ORF sequences from the ORF sequence block */
-      for (k = num_processed_seq; (k < orf_block->count) && (block->count < block->listSize); k++, num_processed_seq++)
-      {
-         orf_seq = &(orf_block->list[k]);
-         esl_sq_Copy(orf_seq, &(block->list[block->count]));
-         block->count++;
+
+      if (abort) {
+        block->count = 0;
+        sstatus = eslEOF;
+      } else {
+        sstatus = esl_sqio_ReadBlock(dbfp, block, info->pli->block_length, n_targetseqs, TRUE);
+      }
+      block->first_seqidx = info->pli->nseqs;
+      seqid = block->first_seqidx;
+      for (i=0; i<block->count; i++) {
+        block->list[i].idx = seqid;
+        block->list[i].prev_n = prev_char_cnt;
+        prev_char_cnt += block->list[i].n;
+
+//        add_id_length(id_length_list, seqid, block->list[i].L);
+
+        seqid++;
+
+        if (   seqid == n_targetseqs // hit the sequence target
+            && ( i<block->count-1 ||  block->complete ) // and either it's not the last sequence (so it's complete), or its complete
+        ) {
+          abort = TRUE;
+          block->count = i+1;
+          break;
+        }
+      }
+      info->pli->nseqs += block->count  - ((abort || block->complete) ? 0 : 1);// if there's an incomplete sequence read into the block wait to count it until it's complete.
+
+
+      if (sstatus == eslEOF) {
+          if (eofCount < esl_threads_GetWorkerCount(obj)) sstatus = eslOK;
+          ++eofCount;
+      } else if (!block->complete ) {
+          // The final sequence on the block was an incomplete window of the active sequence,
+          // so our next read will need a copy of it to correctly deal with overlapping
+          // regions. We capture a copy of the sequence here before sending it off to the
+          // pipeline to avoid odd race conditions that can occur otherwise.
+          // Copying the entire sequence isn't really necessary, and is a bit heavy-
+          // handed. Could accelerate if this proves to have any notable impact on speed.
+          esl_sq_Copy(block->list + (block->count - 1) , tmpsq_dna);
       }
 
-      if(num_processed_seq == orf_block->count)	
-      {
-         sstatus = eslEOF;
-      }	
-		
 
-      if (sstatus == eslEOF)
-      {
-         if (eofCount < esl_threads_GetWorkerCount(obj)) sstatus = eslOK;
-         ++eofCount;
-      }
+      if (sstatus == eslOK) {
 
-      if (sstatus == eslOK)
-      {
-         status = esl_workqueue_ReaderUpdate(queue, block, &newBlock);
-         if (status != eslOK) esl_fatal("Work queue reader failed");
+          status = esl_workqueue_ReaderUpdate(queue, block, &newBlock);
+          if (status != eslOK) esl_fatal("Work queue reader failed");
+
+          //newBlock needs all this information so the next ReadBlock call will know what to do
+          ((ESL_SQ_BLOCK *)newBlock)->complete = block->complete;
+          if (!block->complete) {
+              // Push the captured copy of the previously-read sequence into the new block,
+              // in preparation for ReadWindow  (double copy ... slower than necessary)
+              esl_sq_Copy(tmpsq_dna, ((ESL_SQ_BLOCK *)newBlock)->list);
+              esl_sq_Reuse(tmpsq_dna);
+
+              if (  ((ESL_SQ_BLOCK *)newBlock)->list->n < info->om->max_length ) {
+                //no reason to search the final partial sequence on the block, as the next block will search this whole chunk
+                ((ESL_SQ_BLOCK *)newBlock)->list->C = ((ESL_SQ_BLOCK *)newBlock)->list->n;
+                (((ESL_SQ_BLOCK *)newBlock)->count)--;
+              } else {
+                ((ESL_SQ_BLOCK *)newBlock)->list->C = info->om->max_length;
+              }
+
+          }
       }
     }
 
@@ -880,8 +921,11 @@ thread_loop(ESL_THREADS *obj, ESL_WORK_QUEUE *queue, ESL_SQFILE *dbfp, ESL_SQ_BL
   if (sstatus == eslEOF)
     {
       /* wait for all the threads to complete */
+
+      esl_alphabet_Destroy(abcdna);
       esl_threads_WaitForFinish(obj);
       esl_workqueue_Complete(queue);  
+      esl_sq_Destroy(tmpsq_dna);
     }
 
   return sstatus;
@@ -890,64 +934,97 @@ thread_loop(ESL_THREADS *obj, ESL_WORK_QUEUE *queue, ESL_SQFILE *dbfp, ESL_SQ_BL
 static void 
 pipeline_thread(void *arg)
 {
-  int i;
+  int i, k;
   int status;
   int workeridx;
   WORKER_INFO   *info;
   ESL_THREADS   *obj;
 
-  ESL_SQ_BLOCK  *block = NULL;
+  ESL_SQ_BLOCK  *orfblock   = NULL;
   void          *newBlock;
-  
+  ESL_SQ_BLOCK  *dnablock   = NULL;
+  ESL_SQ       *dbsq_aa     = NULL;   /* used to hold a current ORF  */
+  ESL_SQ       *dbsq_dna    = NULL;
+  ESL_SQ       *dbsq_dnatxt = esl_sq_Create();
+
   impl_Init();
 
   obj = (ESL_THREADS *) arg;
   esl_threads_Started(obj, &workeridx);
-
   info = (WORKER_INFO *) esl_threads_GetData(obj, workeridx);
-
   status = esl_workqueue_WorkerUpdate(info->queue, NULL, &newBlock);
   if (status != eslOK) esl_fatal("Work queue worker failed");
 
-  /* loop until all blocks have been processed */
-  block = (ESL_SQ_BLOCK *) newBlock;
-  while (block->count > 0)
+  info->wrk->orf_block = esl_sq_CreateDigitalBlock(BLOCK_SIZE, info->om->abc);
+  orfblock = info->wrk->orf_block;
+  if (orfblock == NULL)          esl_fatal("Failed to allocate sequence block");
+
+
+  /* thread loops until all blocks have been processed */
+  dnablock = (ESL_SQ_BLOCK *) newBlock; //block from threads
+
+  while (dnablock->count > 0)
     {
       /* Main loop: */
-      for (i = 0; i < block->count; ++i)
+      for (i = 0; i < dnablock->count; ++i)
       {
-          ESL_SQ *dbsq = block->list + i;
 
-          /*
-          use the name, accession, and description from the DNA sequence and
-          not from the ORF which is generated by gencode and only for internal use
-          */
-          if ((status = esl_sq_SetORFid    (dbsq, dbsq->name))          != eslOK)  esl_fatal("Set query sequence ORF id failed");
-          if ((status = esl_sq_SetName     (dbsq, info->ntqsq->name))   != eslOK)  esl_fatal("Set query sequence name failed");
-          if ((status = esl_sq_SetAccession(dbsq, info->ntqsq->acc))    != eslOK)  esl_fatal("Set query sequence accession failed");
-          if ((status = esl_sq_SetDesc     (dbsq, info->ntqsq->desc))   != eslOK)  esl_fatal("Set query sequence description failed");
+          dbsq_dna = dnablock->list + i;
+
+          /* copy and convert the DNA sequence to text so we can print it in the domain alignment display */
+          esl_sq_Reuse(dbsq_dnatxt);
+          esl_sq_Copy(dbsq_dna, dbsq_dnatxt);
+          info->ntqsq = dbsq_dnatxt; // for printing the DNA target sequence in the domain hits display
+
+          /* translate DNA sequence to 6 frame ORFs */
+          dbsq_dna->L = dbsq_dna->n; /* here, L is not the full length of the sequence in the db, just of the currently-active window;  required for esl_gencode machinations */
+
+          esl_sq_ReuseBlock(info->wrk->orf_block);
+          translate_sequence(info->gcode, info->wrk, dbsq_dna);
+
+          orfblock =  info->wrk->orf_block;
+
+          /* Main loop: */
+          for (k = 0; k < orfblock->count; ++k)
+          {
+              dbsq_aa = &(orfblock->list[k]);
+
+              /*
+              Use the name, accession, and description from the DNA sequence and
+              not from the ORF which is generated by gencode and only for internal use.
+              Set the orfid to a number that will be uniq and consistent across threading
+              options
+              */
+              sprintf(dbsq_aa->orfid, "orf%" PRId64 "", dbsq_dna->prev_n+k);
+              //if ((status = esl_sq_SetORFid    (dbsq_aa, dbsq_aa->name))          != eslOK)  esl_fatal("Set query sequence ORF id failed");
+              if ((status = esl_sq_SetName     (dbsq_aa, info->ntqsq->name))   != eslOK)  esl_fatal("Set query sequence name failed");
+              if ((status = esl_sq_SetAccession(dbsq_aa, info->ntqsq->acc))    != eslOK)  esl_fatal("Set query sequence accession failed");
+              if ((status = esl_sq_SetDesc     (dbsq_aa, info->ntqsq->desc))   != eslOK)  esl_fatal("Set query sequence description failed");
 
 
-          p7_pli_NewSeq(info->pli, dbsq);
-          p7_bg_SetLength(info->bg, dbsq->n);
-          p7_oprofile_ReconfigLength(info->om, dbsq->n);
+              p7_pli_NewSeq(info->pli, dbsq_aa);
 
-          p7_Pipeline(info->pli, info->om, info->bg, dbsq, info->ntqsq, info->th, NULL);
+              p7_bg_SetLength(info->bg, dbsq_aa->n);
+              p7_oprofile_ReconfigLength(info->om, dbsq_aa->n);
 
-          esl_sq_Reuse(dbsq);
-          p7_pipeline_Reuse(info->pli);
+              p7_Pipeline(info->pli, info->om, info->bg, dbsq_aa, info->ntqsq, info->th, NULL);
+
+              esl_sq_Reuse(dbsq_aa);
+              p7_pipeline_Reuse(info->pli);
+          }
       }
 
 
-      status = esl_workqueue_WorkerUpdate(info->queue, block, &newBlock);
+      status = esl_workqueue_WorkerUpdate(info->queue, dnablock, &newBlock);
       if (status != eslOK) esl_fatal("Work queue worker failed");
 
-      block = (ESL_SQ_BLOCK *) newBlock;
+      dnablock = (ESL_SQ_BLOCK *) newBlock;
     }
 
-  status = esl_workqueue_WorkerUpdate(info->queue, block, NULL);
+  status = esl_workqueue_WorkerUpdate(info->queue, dnablock, NULL);
   if (status != eslOK) esl_fatal("Work queue worker failed");
 
+  esl_sq_Destroy(dbsq_dnatxt);
   esl_threads_Finished(obj, workeridx);
   return;
 }
