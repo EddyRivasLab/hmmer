@@ -34,17 +34,16 @@ __global__
 
   }
   __syncthreads();
-
   // figure out this warp's offset within the array of warps and blocks, as well as the 
   // total number of warps we're using.
   // Here, threads within a warp are the X dimension of the threadIdx
   // warps within a block are the Y dimension of threadIdx
   // and blocks within the grid are the X dimension of blockIdx
   int num_warps = gridDim.x * blockDim.y;
-printf("num_warps = %dl, num_sequences = %d\n", num_warps, num_sequences);
+//printf("num_warps = %dl, num_sequences = %d\n", num_warps, num_sequences);
   //iterate through the sequences in groups of num_warps sequences
   for(int my_warp = (blockIdx.x * blockDim.y) + threadIdx.y; my_warp < num_sequences; my_warp += num_warps){
-  if(threadIdx.x == 0) printf("my_warp = %d", my_warp);
+  //if(threadIdx.x == 0) printf("my_warp = %d", my_warp);
   	uint8_t *dsq = (uint8_t *)data + offsets[my_warp];
     // for now, skip the sequence ID, put that back in later
 
@@ -77,7 +76,7 @@ printf("num_warps = %dl, num_sequences = %d\n", num_warps, num_sequences);
        hits[my_warp]= score;
     }
   }
-  if(threadIdx.x ==0) printf("Warp %d completed\n", (blockIdx.x * blockDim.y) + threadIdx.y);
+ // if(threadIdx.x ==0) printf("Warp %d completed\n", (blockIdx.x * blockDim.y) + threadIdx.y);
   return; 
 }  
 

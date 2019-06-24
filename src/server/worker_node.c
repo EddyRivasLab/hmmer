@@ -27,14 +27,14 @@ static void worker_thread_back_end_sequence_search_loop(P7_DAEMON_WORKERNODE_STA
 void workernode_increase_backend_threads(P7_DAEMON_WORKERNODE_STATE *workernode);
 static P7_BACKEND_QUEUE_ENTRY *workernode_backend_pool_Create(int num_entries);
 P7_BACKEND_QUEUE_ENTRY *workernode_get_backend_queue_entry_from_pool(P7_DAEMON_WORKERNODE_STATE *workernode);
-static P7_BACKEND_QUEUE_ENTRY *workernode_get_backend_queue_entry_from_queue(P7_DAEMON_WORKERNODE_STATE *workernode);
-static void workernode_put_backend_queue_entry_in_pool(P7_DAEMON_WORKERNODE_STATE *workernode, P7_BACKEND_QUEUE_ENTRY *the_entry);
+P7_BACKEND_QUEUE_ENTRY *workernode_get_backend_queue_entry_from_queue(P7_DAEMON_WORKERNODE_STATE *workernode);
+void workernode_put_backend_queue_entry_in_pool(P7_DAEMON_WORKERNODE_STATE *workernode, P7_BACKEND_QUEUE_ENTRY *the_entry);
 void workernode_put_backend_queue_entry_in_queue(P7_DAEMON_WORKERNODE_STATE *workernode, P7_BACKEND_QUEUE_ENTRY *the_entry);
-static ESL_RED_BLACK_DOUBLEKEY *workernode_get_hit_list_entry_from_pool(P7_DAEMON_WORKERNODE_STATE *workernode, uint32_t my_id);
+ESL_RED_BLACK_DOUBLEKEY *workernode_get_hit_list_entry_from_pool(P7_DAEMON_WORKERNODE_STATE *workernode, uint32_t my_id);
 uint64_t worker_thread_get_chunk(P7_DAEMON_WORKERNODE_STATE *workernode, uint32_t my_id, volatile uint64_t *start, volatile uint64_t *end);
 static int32_t worker_thread_steal(P7_DAEMON_WORKERNODE_STATE *workernode, uint32_t my_id);
-static void workernode_request_Work(uint32_t my_shard);
-static void workernode_wait_for_Work(P7_DAEMON_CHUNK_REPLY *the_reply, MPI_Datatype *server_mpitypes);
+//static void workernode_request_Work(uint32_t my_shard);
+//static void workernode_wait_for_Work(P7_DAEMON_CHUNK_REPLY *the_reply, MPI_Datatype *server_mpitypes);
 
 /* Tuning parameters */
 
@@ -370,7 +370,7 @@ int p7_server_workernode_Setup(uint32_t num_databases, char **database_names, ui
     P7_SHARD *current_shard;
 
     datafile = fopen(database_names[i], "r");
-    int suppress_warning = fread(id_string, 13, 1, datafile); //grab the first 13 characters of the file to determine the type of database it holds
+    fread(id_string, 13, 1, datafile); //grab the first 13 characters of the file to determine the type of database it holds
     fclose(datafile);
         
     if(!strncmp(id_string, "HMMER3", 5)){
@@ -751,7 +751,7 @@ int p7_server_workernode_create_threads(P7_DAEMON_WORKERNODE_STATE *workernode){
 
     // The ordering of which threads are GPU and CPU is a bit important here.  By creating the GPU threads first, 
     // the GPU threads can use their IDs to determine which CUDA device to talk to.
-    if((i < workernode->cuda_config->num_cards) &&(i < workernode->num_threads -1) && (i <1)){
+    if((i < workernode->cuda_config->num_cards) &&(i < workernode->num_threads -1)){
       // Take out the last i<1 when we're ready to think about multiple GPUs
       // Create as many GPU worker threads as there are cards, but make sure we create at least one CPU worker thread
         if(pthread_create(&(workernode->thread_objs[i]), &attr, p7_server_cuda_worker_thread, (void *) the_argument)){
@@ -1735,13 +1735,14 @@ P7_BACKEND_QUEUE_ENTRY *workernode_get_backend_queue_entry_from_pool(P7_DAEMON_W
         // spin-wait until the lock on our queue is cleared.  Should never be locked for long
   }
 
+    
   if(workernode->backend_pool == NULL){  // There are no free entries, so allocate some more.
     workernode->backend_pool = workernode_backend_pool_Create(workernode->num_threads * 10);
-  
+   
     if(workernode->backend_pool == NULL){
       p7_Fail((char *) "Unable to allocate memory in p7_server_get_backend_queue_entry_from_pool\n");
     }   
-  }
+  } 
 
   the_entry = workernode->backend_pool;
   workernode->backend_pool = workernode->backend_pool->next;
@@ -1759,7 +1760,7 @@ P7_BACKEND_QUEUE_ENTRY *workernode_get_backend_queue_entry_from_pool(P7_DAEMON_W
  *  \returns A pointer to a backend queue entry that contains a comparison to be performed by the back end if the backend queue is non-empty, or 
  *  NULL if the backend queue is empty.
  */
-static P7_BACKEND_QUEUE_ENTRY *workernode_get_backend_queue_entry_from_queue(P7_DAEMON_WORKERNODE_STATE *workernode){
+P7_BACKEND_QUEUE_ENTRY *workernode_get_backend_queue_entry_from_queue(P7_DAEMON_WORKERNODE_STATE *workernode){
   P7_BACKEND_QUEUE_ENTRY *the_entry;
   while(pthread_mutex_trylock(&(workernode->backend_queue_lock))){
         // spin-wait until the lock on our queue is cleared.  Should never be locked for long
@@ -1781,7 +1782,7 @@ static P7_BACKEND_QUEUE_ENTRY *workernode_get_backend_queue_entry_from_queue(P7_
   if(pthread_mutex_unlock(&(workernode->backend_queue_lock))){
     p7_Fail((char *) "Couldn't unlock work mutex in p7_get_backend_queue_entry_from_queue");
   }
-
+  
   return(the_entry);
 }
 
@@ -1791,7 +1792,7 @@ static P7_BACKEND_QUEUE_ENTRY *workernode_get_backend_queue_entry_from_queue(P7_
  *  \param [in] the_entry The backend queue entry to be returned to the pool
  *  \returns Nothing.
  */ 
-static void workernode_put_backend_queue_entry_in_pool(P7_DAEMON_WORKERNODE_STATE *workernode, P7_BACKEND_QUEUE_ENTRY *the_entry){
+void workernode_put_backend_queue_entry_in_pool(P7_DAEMON_WORKERNODE_STATE *workernode, P7_BACKEND_QUEUE_ENTRY *the_entry){
   while ( pthread_mutex_trylock(&(workernode->backend_pool_lock)) != 0)
     {
         // spin-wait until the lock on our queue is cleared.  Should never be locked for long
@@ -1840,7 +1841,7 @@ void workernode_put_backend_queue_entry_in_queue(P7_DAEMON_WORKERNODE_STATE *wor
  *  \param [in] my_id The thread id (index into arrays of thread-specific state) of the thread that called this function.
  *  \returns A pointer to the selected hit list entry.  Calls p7_Fail to exit the program with an error message if it is unable to return a hit list entry.
  */ 
-static ESL_RED_BLACK_DOUBLEKEY *workernode_get_hit_list_entry_from_pool(P7_DAEMON_WORKERNODE_STATE *workernode, uint32_t my_id){
+ESL_RED_BLACK_DOUBLEKEY *workernode_get_hit_list_entry_from_pool(P7_DAEMON_WORKERNODE_STATE *workernode, uint32_t my_id){
   ESL_RED_BLACK_DOUBLEKEY *the_entry;
 
   if(workernode->thread_state[my_id].empty_hit_pool == NULL){ 
@@ -2118,6 +2119,7 @@ int32_t worker_thread_steal(P7_DAEMON_WORKERNODE_STATE *workernode, uint32_t my_
  *  promises that only one thread per node will call MPI commands, so calling this function from a worker
  *  thread could lead to undefined behavior.
  */
+/*
 static void workernode_request_Work(uint32_t my_shard){
 #ifndef HAVE_MPI
       p7_Fail((char *) "Attempt to call workernode_request_Work when HMMER was compiled without MPI support");
@@ -2131,7 +2133,7 @@ static void workernode_request_Work(uint32_t my_shard){
   }
 #endif
 }
-
+*/
 // workernode_wait_for_work
 // NOTE!! Only call this procedure from the main (control) thread.  It receives MPI messages, and we've told
 // MPI that only one thread per node will do that
@@ -2147,6 +2149,7 @@ static void workernode_request_Work(uint32_t my_shard){
  *  promises that only one thread per node will call MPI commands, so calling this function from a worker
  *  thread could lead to undefined behavior.
  */
+/*
 static void workernode_wait_for_Work(P7_DAEMON_CHUNK_REPLY *the_reply, MPI_Datatype *server_mpitypes){
 #ifndef HAVE_MPI
       p7_Fail((char *) "Attempt to call workernode_wait_for_Work when HMMER was compiled without MPI support");
@@ -2160,3 +2163,4 @@ static void workernode_wait_for_Work(P7_DAEMON_CHUNK_REPLY *the_reply, MPI_Datat
   return; // return data gets passed through the_reply
 #endif
 }
+*/

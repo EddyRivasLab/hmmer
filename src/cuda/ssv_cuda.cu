@@ -153,7 +153,7 @@
   if(row +count-1 >= last_row_fetched){\
     last_row_fetched = row + 31;\
     rsc_precompute = rbv[dsq[last_row_fetched - threadIdx.x]];\
-  }
+      }
 
 // Note that these CONVERT macros are different from the ones in the CPU SSV. They only implement the shifting necessary to prepare
 // sv for the next row.  They don't include the STEP functionality.
@@ -256,8 +256,11 @@ __device__  uint calc_band_1(const __restrict__ uint8_t *dsq, int L, int Q, int 
       num_iters--;
     }
       // at end of row, convert
-      ENSURE_DSQ(1)
+     if(row >= last_row_fetched){
+    last_row_fetched = row + 31;
+    rsc_precompute = rbv[dsq[last_row_fetched - threadIdx.x]];
       offset = threadIdx.x;
+    } // ensure_DSQ(1)
       STEP_1()
       CONVERT_1()
       row++;

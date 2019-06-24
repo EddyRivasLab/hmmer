@@ -56,3 +56,5 @@ void p7_cuda_config_Destroy(P7_CUDA_CONFIG *cuda_config){
 	}
 	free(cuda_config);
 }
+
+
