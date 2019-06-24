@@ -107,8 +107,8 @@ fi
 # to use HMMER as a library inside other packages, with no name clashes.
 ################################################################
 
-HMMER_DATE="November 2018"
-HMMER_COPYRIGHT="Copyright (C) 2018 Howard Hughes Medical Institute."
+HMMER_DATE="June 2019"
+HMMER_COPYRIGHT="Copyright (C) 2019 Howard Hughes Medical Institute."
 HMMER_LICENSE="Freely distributed under the BSD open source license."
 HMMER_VERSION=$PACKAGE_VERSION
 HMMER_URL="http://hmmer.org/"
@@ -116,8 +116,8 @@ HMMER_URL="http://hmmer.org/"
 HMMER_ESLDIR="easel"
 HMMER_SADIR="libdivsufsort"
 
-EASEL_DATE="November 2018"
-EASEL_COPYRIGHT="Copyright (C) 2018 Howard Hughes Medical Institute."
+EASEL_DATE="June 2019"
+EASEL_COPYRIGHT="Copyright (C) 2019 Howard Hughes Medical Institute."
 EASEL_LICENSE="Freely distributed under the BSD open source license."
 EASEL_VERSION="0.46dev"
 EASEL_URL="http://bioeasel.org/"
