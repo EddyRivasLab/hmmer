@@ -46,11 +46,18 @@ CGTTTGTGTGTGAAACTGTTTTGATTTTTTTCGTGGGTGAATACTCATCCGTTTGACCTAAAATTTAACGCGTTTTGTCC
 ATTCACACAAGCACTTTCGTATATTTTTTGCACTCAAGCAAGGAGGCACGTCCATAAACGAATCACAAAAAGAAGATACGGGGAAGAAAAACCATAACGTTTTGTTTTCGGAAAACCGGTTTTGTTCACTCTCGGTCTGGGACTTACTACGACTTACTCCTTGGGTATTTTGGTCTGAAATTTTTACCAGACATTCGACAATGTGTCTATTGAGTTTCGGCTGAGGCTTGAGCCCCAGGT
 TCGGCCCACAAGAGTGGCAATAAATCTTTTATTCGTCAATGCCACGGCTGAAAGGAAGGT""", file=f) 
 
-r = subprocess.run('{0}/src/hmmbuild {1}.hmm {1}.sto'.format(builddir, tmppfx), shell=True, stdout=subprocess.DEVNULL)
-if r.returncode != 0: sys.exit("FAIL: hmmbuild failed")
+try:
+    retcode = subprocess.call(['{}/src/hmmbuild'.format(builddir), '{}.hmm'.format(tmppfx), '{}.sto'.format(tmppfx)], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+except:
+    sys.exit("FAIL: hmmbuild failed")
+if retcode != 0: sys.exit("FAIL: hmmbuild failed")
 
-r = subprocess.run('{0}/src/nhmmer --crick --tblout {1}.tbl {1}.hmm {1}.fa'.format(builddir, tmppfx), shell=True, stdout=subprocess.DEVNULL)
-if r.returncode != 0: sys.exit("FAIL: nhmmer failed")
+try:
+    retcode = subprocess.call(['{}/src/nhmmer'.format(builddir), '--crick', '--tblout', '{}.tbl'.format(tmppfx), '{}.hmm'.format(tmppfx), '{}.fa'.format(tmppfx)], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+except:
+    sys.exit("FAIL: hmmbuild failed")
+if retcode != 0: sys.exit("FAIL: hmmbuild failed")
+
 
 # From the .tbl output, extract a list of envelopes;
 # each envelope defined by (start,end) tuple, with start <= end

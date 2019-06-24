@@ -38,7 +38,7 @@ check:
 	@echo 
 	@echo Running HMMER test suite...
 	@echo
-	@${srcdir}/../${ESLDIR}/devkit/sqc ${SQCLEVEL} ${srcdir}/testsuite.sqc .. ${srcdir}/..
+	@${srcdir}/../${ESLDIR}/devkit/sqc -e ${SQCLEVEL} ${srcdir}/testsuite.sqc .. ${srcdir}/..
 
 hmms:
 	for ali in ${ALIS}; do\

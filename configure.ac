@@ -410,12 +410,11 @@ else
   AC_DEFINE(HAVE_GZIP, 1, [Support external gzip decompression])
 fi
 
-# We need python, specifically python3, for 'make check' and
-# some dev tools. Makefiles check for themselves, but we 
-# also check in ./configure, so we don't recommend
-# 'make check' to the user if they can't use it.
+# We need python 3 for 'make check' and some dev tools. sqc checks
+# too, as does the Makefile, but we also check in ./configure, so we
+# don't recommend 'make check' to the user if they can't use it.
 # 
-AC_PATH_PROG([PYTHON3], [python3])
+AC_CHECK_PROG(HAVE_PYTHON3, python3, yes)
 
 
 ################################################################
@@ -690,18 +689,17 @@ HMMER configuration:
    host:                 $host
    linker:               ${LDFLAGS}
    libraries:            ${LIBS} ${LIBGSL} ${PTHREAD_LIBS}
-   DP implementation:    ${impl_choice}
-   python3:		 ${ac_cv_path_PYTHON3}"
+   DP implementation:    ${impl_choice}"
 
 
-if test ${PYTHON3}; then echo "
+if test x"$HAVE_PYTHON3" = x"yes"; then echo "
 Now do 'make'  to build HMMER, and optionally:
        'make check'  to run self tests,
        'make install'  to install programs and man pages,
        '(cd easel; make install)'  to install Easel tools.
 ";
 else echo "
-   (No python3 found, so 'make check' self tests are disabled.)
+   (No python3 found, so 'make check' is disabled.)
 
 Now do 'make'  to build HMMER, and optionally:
        'make install'  to install programs and man pages,
