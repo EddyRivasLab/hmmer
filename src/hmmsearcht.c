@@ -32,12 +32,12 @@ typedef struct {
   ESL_WORK_QUEUE   *queue;
 #endif /*HMMER_THREADS*/
   P7_BG            *bg;	         /* null model                              */
-  ESL_SQ           *ntqsq;      /* query or target sequence; this is a DNA sequence in the case of hmmscant */
+  ESL_SQ           *ntqsq;       /* query or target sequence; this is a DNA sequence in the case of hmmscant */
   P7_PIPELINE      *pli;         /* work pipeline                           */
   P7_TOPHITS       *th;          /* top hit results                         */
   P7_OPROFILE      *om;          /* optimized query profile                 */
-  ESL_GENCODE      *gcode;        /* used for translating ORFs               */
-  ESL_GENCODE_WORKSTATE *wrk;     /* */
+  ESL_GENCODE      *gcode;       /* used for translating ORFs               */
+  ESL_GENCODE_WORKSTATE *wrk;    /* maintain state of nucleotide sequence in the midst of processing ORFs*/
 } WORKER_INFO;
 
 /* set the max residue count to 1/4 meg when reading a block */
@@ -460,8 +460,7 @@ serial_master(ESL_GETOPTS *go, struct cfg_s *cfg)
   ESL_ALLOC(info, sizeof(*info) * infocnt);
 
   
-   /*the query sequence will be DNA but will be translated to amino acids */
-  /* TODO can we detect the type???? */
+  /*the query sequence will be DNA but will be translated to amino acids */
   abcDNA = esl_alphabet_Create(eslDNA); 
   abcAMINO = esl_alphabet_Create(eslAMINO); 
   qsqDNA = esl_sq_CreateDigital(abcDNA);
@@ -475,7 +474,6 @@ serial_master(ESL_GETOPTS *go, struct cfg_s *cfg)
   {
       /* One-time initializations after alphabet <abc> becomes known */
       output_header(ofp, go, cfg->hmmfile, cfg->dbfile);
-//      esl_sqfile_SetDigital(dbfp, abc); //ReadBlock requires knowledge of the alphabet to decide how best to read blocks
       esl_sqfile_SetDigital(dbfp, abcDNA); //ReadBlock requires knowledge of the alphabet to decide how best to read blocks
 
     for (i = 0; i < infocnt; ++i)
@@ -505,12 +503,6 @@ serial_master(ESL_GETOPTS *go, struct cfg_s *cfg)
   if      (esl_opt_GetBoolean(go, "-m"))   esl_gencode_SetInitiatorOnlyAUG(gcode);
   else if (! esl_opt_GetBoolean(go, "-M")) esl_gencode_SetInitiatorAny(gcode);      // note this is the default, if neither -m or -M are set
 
-
-  /* Set up the workstate structure, which contains both stateful 
-   * info about our position in <sqfp> and the DNA <sq>, as well as
-   * one-time config info from options
-   */
-  //wrk = esl_gencode_WorkstateCreate(go, gcode);
 
   /* Outer loop: over each query HMM in <hmmfile>. */
   while (hstatus == eslOK) 
@@ -733,11 +725,10 @@ serial_loop(WORKER_INFO *info, ESL_SQFILE *dbfp, int n_targetseqs)
   int          k;
   ESL_ALPHABET *abc = esl_alphabet_Create(eslDNA);
   ESL_SQ       *dbsq_dna    = esl_sq_CreateDigital(abc);   /* (digital) nucleotide sequence, to be translated into ORFs  */
-  ESL_SQ       *dbsq_dnatxt = esl_sq_Create();
   ESL_SQ_BLOCK *block       = NULL;   /* for translated ORFs */
   ESL_SQ       *dbsq_aa     = NULL;   /* used to hold a current ORF  */
-
-
+  ESL_SQ       *dbsq_dnatxt = esl_sq_Create();
+  dbsq_dnatxt->abc = abc;
 
   sstatus = esl_sqio_ReadWindow(dbfp, 0, info->pli->block_length, dbsq_dna);
 
@@ -772,7 +763,6 @@ serial_loop(WORKER_INFO *info, ESL_SQFILE *dbfp, int n_targetseqs)
           options
           */
           sprintf(dbsq_aa->orfid, "orf%" PRId64 "", prev_char_cnt+k);
-          //if ((sstatus = esl_sq_SetORFid    (dbsq_aa, dbsq_aa->name))          != eslOK)  ESL_EXCEPTION_SYS(eslEWRITE, "Set query sequence ORF id failed");
           if ((sstatus = esl_sq_SetName     (dbsq_aa, info->ntqsq->name))   != eslOK)  ESL_EXCEPTION_SYS(eslEWRITE, "Set query sequence name failed");
           if ((sstatus = esl_sq_SetAccession(dbsq_aa, info->ntqsq->acc))    != eslOK)  ESL_EXCEPTION_SYS(eslEWRITE, "Set query sequence accession failed");
           if ((sstatus = esl_sq_SetDesc     (dbsq_aa, info->ntqsq->desc))   != eslOK)  ESL_EXCEPTION_SYS(eslEWRITE, "Set query sequence description failed");
@@ -780,19 +770,8 @@ serial_loop(WORKER_INFO *info, ESL_SQFILE *dbfp, int n_targetseqs)
           p7_bg_SetLength(info->bg, dbsq_aa->n);
           p7_oprofile_ReconfigLength(info->om, dbsq_aa->n);
 
-
           p7_Pipeline(info->pli, info->om, info->bg, dbsq_aa, info->ntqsq, info->th, NULL);
-          /*
-          for (int d = 0; d < info->th->hit[info->th->N-1]->ndom; d++) {
 
-              info->th->unsrt[info->th->N-1].dcl[d].iali += dbsq_dna->start;
-              info->th->unsrt[info->th->N-1].dcl[d].jali += dbsq_dna->start;
-              info->th->unsrt[info->th->N-1].dcl[d].iorf += dbsq_dna->start;
-              info->th->unsrt[info->th->N-1].dcl[d].jorf += dbsq_dna->start;
-              info->th->unsrt[info->th->N-1].dcl[d].ienv += dbsq_dna->start;
-              info->th->unsrt[info->th->N-1].dcl[d].jenv += dbsq_dna->start;
-          }
-*/
           esl_sq_Reuse(dbsq_aa);
           p7_pipeline_Reuse(info->pli);
       }
@@ -814,7 +793,6 @@ serial_loop(WORKER_INFO *info, ESL_SQFILE *dbfp, int n_targetseqs)
   esl_alphabet_Destroy(abc);
   esl_sq_Destroy(dbsq_dna);
   esl_sq_Destroy(dbsq_dnatxt);
- // esl_sq_DestroyBlock(block);
 
   return sstatus;
 }
@@ -947,6 +925,7 @@ pipeline_thread(void *arg)
   ESL_SQ       *dbsq_dna    = NULL;
   ESL_SQ       *dbsq_dnatxt = esl_sq_Create();
 
+
   impl_Init();
 
   obj = (ESL_THREADS *) arg;
@@ -974,6 +953,7 @@ pipeline_thread(void *arg)
           /* copy and convert the DNA sequence to text so we can print it in the domain alignment display */
           esl_sq_Reuse(dbsq_dnatxt);
           esl_sq_Copy(dbsq_dna, dbsq_dnatxt);
+          dbsq_dnatxt->abc = dbsq_dna->abc;
           info->ntqsq = dbsq_dnatxt; // for printing the DNA target sequence in the domain hits display
 
           /* translate DNA sequence to 6 frame ORFs */
@@ -996,7 +976,6 @@ pipeline_thread(void *arg)
               options
               */
               sprintf(dbsq_aa->orfid, "orf%" PRId64 "", dbsq_dna->prev_n+k);
-              //if ((status = esl_sq_SetORFid    (dbsq_aa, dbsq_aa->name))          != eslOK)  esl_fatal("Set query sequence ORF id failed");
               if ((status = esl_sq_SetName     (dbsq_aa, info->ntqsq->name))   != eslOK)  esl_fatal("Set query sequence name failed");
               if ((status = esl_sq_SetAccession(dbsq_aa, info->ntqsq->acc))    != eslOK)  esl_fatal("Set query sequence accession failed");
               if ((status = esl_sq_SetDesc     (dbsq_aa, info->ntqsq->desc))   != eslOK)  esl_fatal("Set query sequence description failed");

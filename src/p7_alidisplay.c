@@ -188,27 +188,6 @@ p7_alidisplay_Create(const P7_TRACE *tr, int which, const P7_OPROFILE *om, const
     ad->ppline[z-z1] = '\0';
   }
 
-  /*
-     If this is a translated search; i.e. DNA v protein,
-     put the ORF in a buffer so that if the hit is in
-	 a reverse complement of the query, we can take the
-	 reverse complement of the DNA to print on the ali display
-   */  
-  if (ntsq != NULL)    { 
-     ntorfseqtxt = esl_sq_Create();
-     if (sq->start < sq->end) {
-        for(j= sq->start; j <= sq->end; j++) {
-           esl_sq_CAddResidue(ntorfseqtxt, ntsq->seq[j-1]);
-        }
-     }
-     else {
-        for(j= sq->end; j <= sq->start; j++) {
-           esl_sq_CAddResidue(ntorfseqtxt, ntsq->seq[j-1]);
-        }		 
-        esl_sq_ReverseComplement(ntorfseqtxt);  
-     }
-     esl_sq_CAddResidue(ntorfseqtxt, 0);
-  }
 
   /* mandatory three alignment display lines: model, mline, aseq */
   for (z = z1; z <= z2; z++) 
@@ -245,9 +224,23 @@ p7_alidisplay_Create(const P7_TRACE *tr, int which, const P7_OPROFILE *om, const
          n1 = n2 = n3 = 78; /* use a capital 'N' for a don't know character instead of a sentinel byte used in ad->aseq */
          if(i > 0)
 		 {
-            n1 = ntorfseqtxt->seq[ 3*(i-1)];
-            n2 = ntorfseqtxt->seq[ 3*(i-1)+1];
-            n3 = ntorfseqtxt->seq[ 3*(i-1)+2];
+
+            if (sq->start < sq->end) {
+                n1 = ntsq->seq[  sq->start-1 + 3*(i-1)];
+                n2 = ntsq->seq[  sq->start-1 + 3*(i-1) + 1];
+                n3 = ntsq->seq[  sq->start-1 + 3*(i-1) + 2];
+            }
+            else
+            {
+                n1 = ntsq->seq[  sq->start-1 - 3*(i-1)] ;
+                n2 = ntsq->seq[  sq->start-1 - ( 3*(i-1) + 1) ] ;
+                n3 = ntsq->seq[  sq->start-1 - ( 3*(i-1) + 2) ] ;
+
+                n1 = ntsq->abc->sym [ ntsq->abc->complement[ ntsq->abc->inmap[n1] ] ];
+                n2 = ntsq->abc->sym [ ntsq->abc->complement[ ntsq->abc->inmap[n2] ] ];
+                n3 = ntsq->abc->sym [ ntsq->abc->complement[ ntsq->abc->inmap[n3] ] ];
+
+            }
          }
         }
 
