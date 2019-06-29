@@ -846,7 +846,6 @@ p7_tophits_RemoveDuplicates(P7_TOPHITS *th, int using_bit_cutoffs)
   int     s_i, s_j, e_i, e_j, dir_i, dir_j, len_i, len_j;
   int     intersect_alistart, intersect_aliend, intersect_alilen;
   int     intersect_hmmstart, intersect_hmmend, intersect_hmmlen;
-  //int64_t sub_i, sub_j;
   int     tmp;
   double  p_i, p_j;
   int remove;
@@ -857,7 +856,6 @@ p7_tophits_RemoveDuplicates(P7_TOPHITS *th, int using_bit_cutoffs)
   for (i = 1; i < th->N; i++)
   {
 
-      //sub_j = th->hit[j]->subseq_start;
       p_j = th->hit[j]->lnP;
       s_j = th->hit[j]->dcl[0].iali;
       e_j = th->hit[j]->dcl[0].jali;
@@ -870,7 +868,6 @@ p7_tophits_RemoveDuplicates(P7_TOPHITS *th, int using_bit_cutoffs)
       len_j = e_j - s_j + 1 ;
 
 
-      //sub_i = th->hit[i]->subseq_start;
       p_i = th->hit[i]->lnP;
       s_i = th->hit[i]->dcl[0].iali;
       e_i = th->hit[i]->dcl[0].jali;
@@ -881,7 +878,6 @@ p7_tophits_RemoveDuplicates(P7_TOPHITS *th, int using_bit_cutoffs)
         e_i = tmp;
       }
       len_i = e_i - s_i + 1 ;
-
 
       // these will only matter if seqidx and strand are the same
       intersect_alistart  = s_i>s_j ? s_i : s_j;
@@ -904,6 +900,7 @@ p7_tophits_RemoveDuplicates(P7_TOPHITS *th, int using_bit_cutoffs)
            )
       )
       {
+
         /* Force one to go unreported.  I prefer to keep the one with the
          * better e-value.  This addresses two issues
          * (1) longer hits sometimes encounter higher bias corrections,
@@ -919,7 +916,6 @@ p7_tophits_RemoveDuplicates(P7_TOPHITS *th, int using_bit_cutoffs)
          *     removed due to insufficient score.
          * see late notes in ~wheelert/notebook/2012/0518-dfam-scripts/00NOTES
         */
-        //remove = 0; // 1 := keep i,  0 := keep i-1
         remove = p_i < p_j ? j : i;
 
         th->hit[remove]->flags |= p7_IS_DUPLICATE;

@@ -399,7 +399,6 @@ serial_master(ESL_GETOPTS *go, struct cfg_s *cfg)
   ESL_ALPHABET    *abcDNA = NULL;       /* DNA sequence alphabet                               */
   ESL_ALPHABET    *abcAMINO = NULL;       /* DNA sequence alphabet                               */
   ESL_SQ          *qsqDNA = NULL;		 /* DNA query sequence                                  */
-  ESL_SQ          *qsqDNATxt = NULL;    /* DNA query sequence that will be in text mode for printing */
   ESL_GENCODE     *gcode       = NULL;
   /* end hmmsearcht */
 
@@ -464,7 +463,6 @@ serial_master(ESL_GETOPTS *go, struct cfg_s *cfg)
   abcDNA = esl_alphabet_Create(eslDNA); 
   abcAMINO = esl_alphabet_Create(eslAMINO); 
   qsqDNA = esl_sq_CreateDigital(abcDNA);
-  qsqDNATxt = esl_sq_Create();
 
   /* <abc> is not known 'til first HMM is read. */
   hstatus = p7_hmmfile_Read(hfp, &abc, &hmm);
@@ -611,7 +609,6 @@ serial_master(ESL_GETOPTS *go, struct cfg_s *cfg)
            p7_oprofile_Destroy(info[i].om);
          }
 
-         esl_sq_Reuse(qsqDNATxt);
          esl_sq_Reuse(qsqDNA);
 		 
       //} /* while ((cfg->n_targetseq < 0 || (cfg->n_targetseq > 0 &&... loop */
@@ -694,7 +691,6 @@ serial_master(ESL_GETOPTS *go, struct cfg_s *cfg)
   esl_gencode_Destroy(gcode);
 
   esl_sq_Destroy(qsqDNA);  
-  esl_sq_Destroy(qsqDNATxt);
   esl_alphabet_Destroy(abcDNA);
   esl_alphabet_Destroy(abcAMINO);
     
@@ -838,9 +834,7 @@ thread_loop(WORKER_INFO *info, ESL_THREADS *obj, ESL_WORK_QUEUE *queue, ESL_SQFI
         block->list[i].idx = seqid;
         block->list[i].prev_n = prev_char_cnt;
         prev_char_cnt += block->list[i].n;
-
 //        add_id_length(id_length_list, seqid, block->list[i].L);
-
         seqid++;
 
         if (   seqid == n_targetseqs // hit the sequence target
