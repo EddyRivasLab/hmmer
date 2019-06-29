@@ -359,7 +359,6 @@ serial_master(ESL_GETOPTS *go, struct cfg_s *cfg)
 
   ESL_SQ          *qsqDNA = NULL;		 /* DNA query sequence                                  */
 
-  int             k;
   ESL_GENCODE     *gcode       = NULL;
   ESL_GENCODE_WORKSTATE *wrk    = NULL;
   /* end hmmscant */
@@ -626,10 +625,11 @@ serial_master(ESL_GETOPTS *go, struct cfg_s *cfg)
   esl_gencode_WorkstateDestroy(wrk);
   esl_gencode_Destroy(gcode);
 
-  esl_sq_Destroy(qsqDNA);  /* hmmscant */
+  esl_sq_Destroy(qsqDNA); 
   esl_stopwatch_Destroy(w);
   esl_alphabet_Destroy(abc);
-  esl_alphabet_Destroy(abcDNA); /* hmmscant */
+  esl_alphabet_Destroy(abcDNA); 
+  esl_alphabet_Destroy(abcAMINO); 
   esl_sqfile_Close(sqfp);
 
   if (ofp != stdout) fclose(ofp);
@@ -708,10 +708,6 @@ thread_loop(ESL_THREADS *obj, ESL_WORK_QUEUE *queue, P7_HMMFILE *hfp)
   P7_OM_BLOCK   *block;
   ESL_ALPHABET  *abc = NULL;
   void          *newBlock;
-  uint64_t prev_char_cnt = 0;
-
-  ESL_ALPHABET *abcdna = esl_alphabet_Create(eslDNA);
-  ESL_SQ      *tmpsq_dna = esl_sq_CreateDigital(abcdna ) ;
 
   esl_workqueue_Reset(queue);
   esl_threads_WaitForStart(obj);
