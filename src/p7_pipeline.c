@@ -907,7 +907,10 @@ p7_Pipeline(P7_PIPELINE *pli, P7_OPROFILE *om, P7_BG *bg, const ESL_SQ *sq, cons
         if ((status  = esl_strdup(om->name, -1, &(hit->name)))  != eslOK) esl_fatal("allocation failure");
         if ((status  = esl_strdup(om->acc,  -1, &(hit->acc)))   != eslOK) esl_fatal("allocation failure");
         if ((status  = esl_strdup(om->desc, -1, &(hit->desc)))  != eslOK) esl_fatal("allocation failure");
+        if ((status  = esl_strdup(sq->orfid, -1, &(hit->orfid)))!= eslOK) esl_fatal("allocation failure");
+
       } 
+      hit->seqidx     = sq->idx;
       hit->ndom       = pli->ddef->ndom;
       hit->nexpected  = pli->ddef->nexpected;
       hit->nregions   = pli->ddef->nregions;

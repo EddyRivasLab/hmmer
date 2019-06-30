@@ -758,7 +758,8 @@ serial_loop(WORKER_INFO *info, ESL_SQFILE *dbfp, int n_targetseqs)
           Set the orfid to a number that will be uniq and consistent across threading
           options
           */
-          sprintf(dbsq_aa->orfid, "orf%" PRId64 "", prev_char_cnt+k);
+          dbsq_aa->idx = prev_char_cnt+k;
+          sprintf(dbsq_aa->orfid, "orf%" PRId64 "", dbsq_aa->idx);
           if ((sstatus = esl_sq_SetName     (dbsq_aa, info->ntqsq->name))   != eslOK)  ESL_EXCEPTION_SYS(eslEWRITE, "Set query sequence name failed");
           if ((sstatus = esl_sq_SetAccession(dbsq_aa, info->ntqsq->acc))    != eslOK)  ESL_EXCEPTION_SYS(eslEWRITE, "Set query sequence accession failed");
           if ((sstatus = esl_sq_SetDesc     (dbsq_aa, info->ntqsq->desc))   != eslOK)  ESL_EXCEPTION_SYS(eslEWRITE, "Set query sequence description failed");
@@ -969,7 +970,8 @@ pipeline_thread(void *arg)
               Set the orfid to a number that will be uniq and consistent across threading
               options
               */
-              sprintf(dbsq_aa->orfid, "orf%" PRId64 "", dbsq_dna->prev_n+k);
+              dbsq_aa->idx = dbsq_dna->prev_n+k;
+              sprintf(dbsq_aa->orfid, "orf%" PRId64 "", dbsq_aa->idx);
               if ((status = esl_sq_SetName     (dbsq_aa, info->ntqsq->name))   != eslOK)  esl_fatal("Set query sequence name failed");
               if ((status = esl_sq_SetAccession(dbsq_aa, info->ntqsq->acc))    != eslOK)  esl_fatal("Set query sequence accession failed");
               if ((status = esl_sq_SetDesc     (dbsq_aa, info->ntqsq->desc))   != eslOK)  esl_fatal("Set query sequence description failed");
