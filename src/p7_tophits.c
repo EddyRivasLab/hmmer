@@ -1188,6 +1188,7 @@ p7_tophits_Targets(FILE *ofp, P7_TOPHITS *th, P7_PIPELINE *pli, int textw)
       if ( th->N > 0 && th->hit[0]->ndom > 0 ) {
           if (pli->mode == p7_SEARCH_SEQS && th->hit[0]->dcl[0].ad->ntseq != NULL) /* hmmsearcht hit*/
           {
+
              posw = ESL_MAX(5, p7_tophits_GetMaxORFposLength(th));
              orfw = ESL_MAX(6, p7_tophits_GetMaxORFnameLength(th));
              orfsecdashw = (orfw+namew+posw+posw+15-28);
@@ -1237,7 +1238,7 @@ p7_tophits_Targets(FILE *ofp, P7_TOPHITS *th, P7_PIPELINE *pli, int textw)
              /* The minimum width of the target table is 111 char: 47 from fields, 8 from min name, 32 from min desc, 13 spaces */
              if (fprintf(ofp, "Scores for complete sequence%s (score includes all domains):\n", pli->mode == p7_SEARCH_SEQS ? "s" : "") < 0)
                ESL_EXCEPTION_SYS(eslEWRITE, "per-sequence hit list: write failed");
-             if (fprintf(ofp, "  %22s  %22s  %8s %15s\n",                              " --- full sequence ---",        " --- best 1 domain ---",   "-#dom-") < 0)
+             if (fprintf(ofp, "  %22s  %22s  %8s\n",                              " --- full sequence ---",        " --- best 1 domain ---",   "-#dom-") < 0)
                ESL_EXCEPTION_SYS(eslEWRITE, "per-sequence hit list: write failed");
              if (fprintf(ofp, "  %9s %6s %5s  %9s %6s %5s  %5s %2s  %-*s %s \n",
              "E-value", " score", " bias", "E-value", " score", " bias", "  exp",  "N", namew,  (pli->mode == p7_SEARCH_SEQS ? "Sequence":"Model"), "Description") < 0)
