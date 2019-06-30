@@ -679,6 +679,7 @@ serial_loop(WORKER_INFO *info, P7_HMMFILE *hfp)
           */
           qsq_aa->idx = info->ntqsq->prev_n + k;
           sprintf(qsq_aa->orfid, "orf%" PRId64 "", qsq_aa->idx);
+          //if ((status = esl_sq_SetORFid    (qsq_aa, qsq_aa->name))        != eslOK)  ESL_EXCEPTION_SYS(eslEWRITE, "Set query sequence name failed");
           if ((status = esl_sq_SetName     (qsq_aa, info->ntqsq->name))   != eslOK)  ESL_EXCEPTION_SYS(eslEWRITE, "Set query sequence name failed");
           if ((status = esl_sq_SetAccession(qsq_aa, info->ntqsq->acc))    != eslOK)  ESL_EXCEPTION_SYS(eslEWRITE, "Set query sequence accession failed");
           if ((status = esl_sq_SetDesc     (qsq_aa, info->ntqsq->desc))   != eslOK)  ESL_EXCEPTION_SYS(eslEWRITE, "Set query sequence description failed");
@@ -801,6 +802,7 @@ pipeline_thread(void *arg)
           */
           qsq_aa->idx = info->ntqsq->prev_n + k;
           sprintf(qsq_aa->orfid, "orf%" PRId64 "", qsq_aa->idx);
+          //if ((status = esl_sq_SetORFid    (qsq_aa, qsq_aa->name))       != eslOK)  esl_fatal("Set query sequence name failed");
           if ((status = esl_sq_SetName     (qsq_aa, info->ntqsq->name))   != eslOK)  esl_fatal("Set query sequence name failed");
           if ((status = esl_sq_SetAccession(qsq_aa, info->ntqsq->acc))    != eslOK)  esl_fatal("Set query sequence accession failed");
           if ((status = esl_sq_SetDesc     (qsq_aa, info->ntqsq->desc))   != eslOK)  esl_fatal("Set query sequence description failed");
