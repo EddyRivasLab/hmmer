@@ -47,9 +47,6 @@ typedef struct {
 #define CPUOPTS     NULL
 #define MPIOPTS     NULL
 
-#define DAEMONOPTS  "-o,--tblout,--domtblout,--pfamtblout"
-
-
 
 static ESL_OPTIONS options[] = {
   /* name           type          default  env  range toggles  reqs   incomp                         help                                           docgroup*/
@@ -91,7 +88,6 @@ static ESL_OPTIONS options[] = {
   { "--domZ",       eslARG_REAL,   FALSE, NULL, "x>0",   NULL,  NULL,  NULL,            "set # of significant seqs, for domain E-value calculation",    12 },
   { "--seed",       eslARG_INT,    "42",  NULL, "n>=0",  NULL,  NULL,  NULL,            "set RNG seed to <n> (if 0: one-time arbitrary seed)",          12 },
   { "--qformat",    eslARG_STRING,  NULL, NULL, NULL,    NULL,  NULL,  NULL,            "assert input <seqfile> is in format <s>: no autodetection",    12 },
-  { "--daemon",     eslARG_NONE,    NULL, NULL, NULL,    NULL,  NULL,  DAEMONOPTS,      "run program as a daemon",                                      12 },
 #ifdef HMMER_THREADS
   { "--cpu",        eslARG_INT, NULL,"HMMER_NCPU","n>=0",NULL,  NULL,  CPUOPTS,         "number of parallel CPU workers to use for multithreads",       12 },
 #endif
@@ -245,7 +241,6 @@ output_header(FILE *ofp, ESL_GETOPTS *go, char *hmmfile, char *seqfile)
     else if (                                  fprintf(ofp, "# random number seed set to:       %d\n",        esl_opt_GetInteger(go, "--seed"))     < 0) ESL_EXCEPTION_SYS(eslEWRITE, "write failed");
   }
   if (esl_opt_IsUsed(go, "--qformat")   && fprintf(ofp, "# input seqfile format asserted:   %s\n",            esl_opt_GetString(go, "--qformat"))   < 0) ESL_EXCEPTION_SYS(eslEWRITE, "write failed");
-  if (esl_opt_IsUsed(go, "--daemon")    && fprintf(ofp, "run as a daemon process\n")                                                                < 0) ESL_EXCEPTION_SYS(eslEWRITE, "write failed");
 #ifdef HMMER_THREADS
   if (esl_opt_IsUsed(go, "--cpu")       && fprintf(ofp, "# number of worker threads:        %d\n",            esl_opt_GetInteger(go, "--cpu"))      < 0) ESL_EXCEPTION_SYS(eslEWRITE, "write failed");  
 #endif
@@ -372,17 +367,6 @@ serial_master(ESL_GETOPTS *go, struct cfg_s *cfg)
   if (esl_opt_IsOn(go, "--qformat")) {
     seqfmt = esl_sqio_EncodeFormat(esl_opt_GetString(go, "--qformat"));
     if (seqfmt == eslSQFILE_UNKNOWN) p7_Fail("%s is not a recognized input sequence file format\n", esl_opt_GetString(go, "--qformat"));
-  }
-
-  /* validate options if running as a daemon */
-  if (esl_opt_IsOn(go, "--daemon")) {
-
-    /* running as a daemon, the input format must be type daemon */
-    if (seqfmt != eslSQFILE_UNKNOWN && seqfmt != eslSQFILE_DAEMON) 
-      esl_fatal("Input format %s not supported.  Must be daemon\n", esl_opt_GetString(go, "--qformat"));
-    seqfmt = eslSQFILE_DAEMON;
-
-    if (strcmp(cfg->seqfile, "-") != 0) esl_fatal("Query sequence file must be '-'\n");
   }
 
   /*the query sequence will be DNA but will be translated to amino acids */
@@ -687,6 +671,8 @@ serial_loop(WORKER_INFO *info, P7_HMMFILE *hfp)
           p7_bg_SetLength(info->bg, qsq_aa->n);
 
           p7_oprofile_ReconfigLength(om, qsq_aa->n);
+
+//          printf("%s %d %d\n", om->name, qsq_aa->start, qsq_aa->n );
           p7_Pipeline(info->pli, om, info->bg, qsq_aa, qsqDNATxt, info->th, NULL);
           p7_pipeline_Reuse(info->pli);
 
@@ -772,6 +758,15 @@ pipeline_thread(void *arg)
   status = esl_workqueue_WorkerUpdate(info->queue, NULL, &newBlock);
   if (status != eslOK) esl_fatal("Work queue worker failed");
 
+
+  /* copy and convert the DNA sequence to text so we can print it in the domain alignment display */
+  esl_sq_Copy(info->ntqsq, qsqDNATxt);
+  qsqDNATxt->abc = info->ntqsq->abc;
+
+  /* translate DNA sequence to 6 frame ORFs */
+  translate_sequence(info->gcode, info->wrk, info->ntqsq);
+
+
   /* loop until all blocks have been processed */
   block = (P7_OM_BLOCK *) newBlock;
   while (block->count > 0)
@@ -781,15 +776,6 @@ pipeline_thread(void *arg)
 	{
 	  P7_OPROFILE *om = block->list[i];
 	  p7_pli_NewModel(info->pli, om, info->bg);
-
-
-	  /* copy and convert the DNA sequence to text so we can print it in the domain alignment display */
-	  esl_sq_Copy(info->ntqsq, qsqDNATxt);
-	  qsqDNATxt->abc = info->ntqsq->abc;
-
-	  /* translate DNA sequence to 6 frame ORFs */
-	  translate_sequence(info->gcode, info->wrk, info->ntqsq);
-
 
 	  /*process each 6 frame translated sequence */
       for (k = 0; k < info->wrk->orf_block->count; ++k)
@@ -811,6 +797,8 @@ pipeline_thread(void *arg)
           p7_bg_SetLength(info->bg, qsq_aa->n);
 
           p7_oprofile_ReconfigLength(om, qsq_aa->n);
+
+//          printf("%s %d %d\n", om->name, qsq_aa->start, qsq_aa->n );
           p7_Pipeline(info->pli, om, info->bg, qsq_aa, qsqDNATxt, info->th, NULL);
           p7_pipeline_Reuse(info->pli);
 
@@ -818,7 +806,7 @@ pipeline_thread(void *arg)
 
       p7_oprofile_Destroy(om);
 
-	  p7_pipeline_Reuse(info->pli);
+//	  p7_pipeline_Reuse(info->pli);
 
 	  block->list[i] = NULL;
 	}
