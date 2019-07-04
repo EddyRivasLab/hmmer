@@ -293,7 +293,6 @@ translate_sequence(ESL_GENCODE *gcode, ESL_GENCODE_WORKSTATE *wrk, ESL_SQ *sq)
         esl_gencode_ProcessPiece(gcode, wrk, sq);
         esl_gencode_ProcessEnd(wrk, sq);
       }
-
       if (wrk->do_crick) {
         esl_sq_ReverseComplement(sq);
         esl_gencode_ProcessStart(gcode, wrk, sq);
@@ -646,7 +645,6 @@ serial_loop(WORKER_INFO *info, P7_HMMFILE *hfp)
   /* translate DNA sequence to 6 frame ORFs */
   translate_sequence(info->gcode, info->wrk, info->ntqsq);
 
-
   /* Main loop: */
   while ((status = p7_oprofile_ReadMSV(hfp, &abc, &om)) == eslOK)
   {
@@ -710,16 +708,16 @@ thread_loop(ESL_THREADS *obj, ESL_WORK_QUEUE *queue, P7_HMMFILE *hfp)
       block = (P7_OM_BLOCK *) newBlock;
       sstatus = p7_oprofile_ReadBlockMSV(hfp, &abc, block);
       if (sstatus == eslEOF)
-	{
-	  if (eofCount < esl_threads_GetWorkerCount(obj)) sstatus = eslOK;
-	  ++eofCount;
-	}
+      {
+          if (eofCount < esl_threads_GetWorkerCount(obj)) sstatus = eslOK;
+          ++eofCount;
+      }
 	  
       if (sstatus == eslOK)
-	{
-	  status = esl_workqueue_ReaderUpdate(queue, block, &newBlock);
-	  if (status != eslOK) esl_fatal("Work queue reader failed");
-	}
+      {
+          status = esl_workqueue_ReaderUpdate(queue, block, &newBlock);
+          if (status != eslOK) esl_fatal("Work queue reader failed");
+      }
   }
 
   status = esl_workqueue_ReaderUpdate(queue, block, NULL);
@@ -764,14 +762,19 @@ pipeline_thread(void *arg)
   esl_sq_Copy(info->ntqsq, qsqDNATxt);
   qsqDNATxt->abc = info->ntqsq->abc;
 
-  /* translate DNA sequence to 6 frame ORFs */
+  /* translate DNA sequence to 6 frame ORFs;
+   * lock is required since all threads share ntqsq, and translate_sequence() revcomp's it
+   */
+  if (pthread_mutex_lock (&obj->startMutex) != 0) esl_fatal("translate mutex lock failed");
   translate_sequence(info->gcode, info->wrk, info->ntqsq);
+  if (pthread_mutex_unlock  (&obj->startMutex) != 0) esl_fatal("translate mutex unlock failed");
 
 
-  /* loop until all blocks have been processed */
+  /* loop until all profile blocks have been processed */
   block = (P7_OM_BLOCK *) newBlock;
   while (block->count > 0)
   {
+
       /* Main loop over hmms */
     for (i = 0; i < block->count; ++i)
 	{
@@ -793,7 +796,6 @@ pipeline_thread(void *arg)
           if ((status = esl_sq_SetName     (qsq_aa, info->ntqsq->name))   != eslOK)  esl_fatal("Set query sequence name failed");
           if ((status = esl_sq_SetAccession(qsq_aa, info->ntqsq->acc))    != eslOK)  esl_fatal("Set query sequence accession failed");
           if ((status = esl_sq_SetDesc     (qsq_aa, info->ntqsq->desc))   != eslOK)  esl_fatal("Set query sequence description failed");
-
 
           p7_bg_SetLength(info->bg, qsq_aa->n);
 
