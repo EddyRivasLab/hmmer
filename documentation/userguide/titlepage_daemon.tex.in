@@ -1,0 +1,11 @@
+\title{User's Guide for the HMMER Daemon}
+
+\subtitle{High-performance biological sequence analysis using profile hidden Markov models}
+
+\author{Sean R. Eddy, Nicholas P. Carter}
+\subauthor{and the HMMER development team}
+
+\pkgurl{http://hmmer.org}
+\pkgversion{@HMMER_VERSION@}   % ./configure replaces HMMER_VERSION
+\pkgdate{@HMMER_DATE@}         %    ... and HMMER_DATE
+

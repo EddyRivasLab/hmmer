@@ -48,6 +48,7 @@
 #include "esl_mixdchlet.h"	/* ESL_MIXDCHLET         */
 #include "esl_msa.h"		/* ESL_MSA               */
 #include "esl_random.h"		/* ESL_RANDOMNESS        */
+#include "esl_rand64.h" /* ESL_RAND64 */
 #include "esl_sq.h"		/* ESL_SQ                */
 #include "esl_scorematrix.h"    /* ESL_SCOREMATRIX       */
 #include "esl_stopwatch.h"      /* ESL_STOPWATCH         */
@@ -1436,7 +1437,7 @@ extern double p7_MeanMatchEntropy        (const P7_HMM *hmm);
 extern double p7_MeanMatchRelativeEntropy(const P7_HMM *hmm, const P7_BG *bg);
 extern double p7_MeanForwardScore        (const P7_HMM *hmm, const P7_BG *bg);
 extern int    p7_MeanPositionRelativeEntropy(const P7_HMM *hmm, const P7_BG *bg, double *ret_entropy);
-extern int    p7_hmm_CompositionKLDist(P7_HMM *hmm, P7_BG *bg, float *ret_KL, float **opt_avp);
+extern int    p7_hmm_CompositionKLD(const P7_HMM *hmm, const P7_BG *bg, float *ret_KL, float **opt_avp);
 
 
 /* mpisupport.c */
@@ -1472,10 +1473,13 @@ extern int p7_tracealign_getMSAandStats(P7_HMM *hmm, ESL_SQ  **sq, int N, ESL_MS
 
 /* p7_alidisplay.c */
 extern P7_ALIDISPLAY *p7_alidisplay_Create(const P7_TRACE *tr, int which, const P7_OPROFILE *om, const ESL_SQ *sq, const ESL_SQ *ntsq);
+extern P7_ALIDISPLAY *p7_alidisplay_Create_empty();
 extern P7_ALIDISPLAY *p7_alidisplay_Clone(const P7_ALIDISPLAY *ad);
 extern size_t         p7_alidisplay_Sizeof(const P7_ALIDISPLAY *ad);
-extern int            p7_alidisplay_Serialize(P7_ALIDISPLAY *ad);
-extern int            p7_alidisplay_Deserialize(P7_ALIDISPLAY *ad);
+extern int            p7_alidisplay_Serialize(const P7_ALIDISPLAY *obj, uint8_t **buf, uint32_t *n, uint32_t *nalloc);
+extern int            p7_alidisplay_Deserialize(const uint8_t *buf, uint32_t *n, P7_ALIDISPLAY *ret_obj);
+extern int            p7_alidisplay_Serialize_old(P7_ALIDISPLAY *ad);
+extern int            p7_alidisplay_Deserialize_old(P7_ALIDISPLAY *ad);
 extern void           p7_alidisplay_Destroy(P7_ALIDISPLAY *ad);
 extern char           p7_alidisplay_EncodePostProb(float p);
 extern float          p7_alidisplay_DecodePostProb(char pc);
@@ -1515,6 +1519,14 @@ extern int p7_Builder      (P7_BUILDER *bld, ESL_MSA *msa, P7_BG *bg, P7_HMM **o
 extern int p7_SingleBuilder(P7_BUILDER *bld, ESL_SQ *sq,   P7_BG *bg, P7_HMM **opt_hmm, P7_TRACE  **opt_tr,    P7_PROFILE **opt_gm, P7_OPROFILE **opt_om); 
 extern int p7_Builder_MaxLength      (P7_HMM *hmm, double emit_thresh);
 
+/* p7_domain.c */
+extern P7_DOMAIN *p7_domain_Create_empty();
+extern void p7_domain_Destroy(P7_DOMAIN *obj);
+extern int p7_domain_Serialize(const P7_DOMAIN *obj, uint8_t **buf, uint32_t *n, uint32_t *nalloc);
+extern int p7_domain_Deserialize(const uint8_t *buf, uint32_t *n, P7_DOMAIN *ret_obj);
+extern int p7_domain_TestSample(ESL_RAND64 *rng, P7_DOMAIN **ret_obj);
+extern int p7_domain_Compare(P7_DOMAIN *first, P7_DOMAIN *second, double atol, double rtol);
+
 /* p7_domaindef.c */
 extern P7_DOMAINDEF *p7_domaindef_Create (ESL_RANDOMNESS *r);
 extern int           p7_domaindef_Fetch  (P7_DOMAINDEF *ddef, int which, int *opt_i, int *opt_j, float *opt_sc, P7_ALIDISPLAY **opt_ad);
@@ -1539,6 +1551,13 @@ extern int     p7_gmx_Compare(P7_GMX *gx1, P7_GMX *gx2, float tolerance);
 extern int     p7_gmx_Dump(FILE *fp, P7_GMX *gx, int flags);
 extern int     p7_gmx_DumpWindow(FILE *fp, P7_GMX *gx, int istart, int iend, int kstart, int kend, int show_specials);
 
+/* p7_hit.c */
+extern P7_HIT *p7_hit_Create_empty();
+extern void p7_hit_Destroy(P7_HIT *the_hit);
+extern int p7_hit_Serialize(const P7_HIT *obj, uint8_t **buf, uint32_t *n, uint32_t *nalloc);
+extern int p7_hit_Deserialize(const uint8_t *buf, uint32_t *n, P7_HIT *ret_obj);
+extern int p7_hit_TestSample(ESL_RAND64 *rng, P7_HIT **ret_obj);
+extern int p7_hit_Compare(P7_HIT *first, P7_HIT *second, double atol, double rtol);
 
 /* p7_hmm.c */
 /*      1. The P7_HMM object: allocation, initialization, destruction. */

@@ -386,7 +386,7 @@ main(int argc, char **argv)
     else if (esl_opt_IsOn(go, "--wgsc")   )                  status = esl_msaweight_GSC(msa);
     else if (esl_opt_IsOn(go, "--wblosum"))                  status = esl_msaweight_BLOSUM(msa, esl_opt_GetReal(go, "--wid"));
 
-    if ((status =  esl_msa_MarkFragments(msa, esl_opt_GetReal(go, "--fragthresh")))           != eslOK) goto ERROR;
+    if ((status =  esl_msa_MarkFragments_old(msa, esl_opt_GetReal(go, "--fragthresh")))           != eslOK) goto ERROR;
 
     //build a map of model mask coordinates to alignment coords
     ESL_ALLOC(map, sizeof(int)     * (msa->alen+1));

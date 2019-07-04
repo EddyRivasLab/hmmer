@@ -33,9 +33,24 @@ $wport   = 51374;		# nondefault worker and client ports...
 # purpose. The whole point is that another process might be using it
 # too, as their lock.
 #
+# The file must be world-writable. This is safe; we're not going to
+# read or execute its contents. To make sure that one user with an
+# antisocial umask doesn't inadvertently create a file with restricted
+# write permissions, which would cause another user's test to fail,
+# override user's umask, and for good measure, chmod the file. (The
+# umask is doing the work here. The only way the chmod actually helps
+# us is if the lockfile happens to already exist, is owned by us, and
+# isn't world-writable for some weird reason; in this case it would
+# block other users from using daemon tests, unless we chmod it for
+# them. It is still possible to create a nonwritable lockfile somehow,
+# externally, and block all our daemon tests.)
+# 
+#
 $ntry     = 10;
 $lockfile = "/tmp/esl-hmmpgmd-test.lock";
+umask 0011;
 open my $lock, '>>', $lockfile or die("FAIL: failed to open $lockfile for flocking: $1");
+chmod 0666, $lockfile;
 while (! flock $lock, LOCK_EX | LOCK_NB)
 {
     if ($ntry == 0) { die("FAIL: $0 is already running"); }
@@ -88,8 +103,8 @@ if ($?) { die "FAIL: hmmpgmd worker failed to start";  }
 sleep 2;
 
 # Run the test script
-@output = `cat $tmppfx.in | $builddir/src/hmmc2 -i $host -p $cport -S 2>&1`;
-# Currently, hmmc2 returns nonzero exit code even upon clean !shutdown command... don't check $?
+@output = qx(cat $tmppfx.in | $builddir/src/hmmc2 -i $host -p $cport -S 2>&1);
+if ($?) { die "FAIL: hmmc2 returned non-zero exit code of $?";  }
 $daemon_active = 0;
 
 
