@@ -745,7 +745,8 @@ pipeline_thread(void *arg)
   P7_OM_BLOCK   *block;
   void          *newBlock;
   ESL_SQ        *qsq_aa = NULL;      /* query sequence, amino acid                                 */
-  ESL_SQ        *qsqDNATxt = esl_sq_Create();    /* DNA query sequence that will be in text mode for printing */
+  ESL_SQ        *qsqDNATxt = NULL;    /* DNA query sequence that will be in text mode for printing */
+
 
   impl_Init();
 
@@ -758,18 +759,6 @@ pipeline_thread(void *arg)
   if (status != eslOK) esl_fatal("Work queue worker failed");
 
 
-  /* copy and convert the DNA sequence to text so we can print it in the domain alignment display */
-  esl_sq_Copy(info->ntqsq, qsqDNATxt);
-  qsqDNATxt->abc = info->ntqsq->abc;
-
-  /* translate DNA sequence to 6 frame ORFs;
-   * lock is required since all threads share ntqsq, and translate_sequence() revcomp's it
-   */
-  if (pthread_mutex_lock (&obj->startMutex) != 0) esl_fatal("translate mutex lock failed");
-  translate_sequence(info->gcode, info->wrk, info->ntqsq);
-  if (pthread_mutex_unlock  (&obj->startMutex) != 0) esl_fatal("translate mutex unlock failed");
-
-
   /* loop until all profile blocks have been processed */
   block = (P7_OM_BLOCK *) newBlock;
   while (block->count > 0)
@@ -778,6 +767,24 @@ pipeline_thread(void *arg)
       /* Main loop over hmms */
     for (i = 0; i < block->count; ++i)
 	{
+
+      if (qsqDNATxt == NULL) {
+        /* copy digital sequence to avoid race condition during esl_translate's revcomp;
+         * the copy will then be textized, for use in the domain alignemnt display
+         */
+        qsqDNATxt = esl_sq_CreateDigitalFrom(info->ntqsq->abc,info->ntqsq->name,info->ntqsq->dsq,
+                                  info->ntqsq->n,info->ntqsq->desc,info->ntqsq->acc,info->ntqsq->ss);
+
+
+        /* translate DNA sequence to 6 frame ORFs  */
+        translate_sequence(info->gcode, info->wrk, qsqDNATxt);
+
+        /* convert the DNA sequence to text so we can print it in the domain alignment display */
+        esl_sq_Textize(qsqDNATxt);
+        qsqDNATxt->abc = info->ntqsq->abc; /* add the alphabet back, since it's used in the pipeline */
+      }
+
+
 	  P7_OPROFILE *om = block->list[i];
 	  p7_pli_NewModel(info->pli, om, info->bg);
 
@@ -801,7 +808,6 @@ pipeline_thread(void *arg)
 
           p7_oprofile_ReconfigLength(om, qsq_aa->n);
 
-//          printf("%s %d %d\n", om->name, qsq_aa->start, qsq_aa->n );
           p7_Pipeline(info->pli, om, info->bg, qsq_aa, qsqDNATxt, info->th, NULL);
           p7_pipeline_Reuse(info->pli);
 
