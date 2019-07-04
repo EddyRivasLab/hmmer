@@ -681,6 +681,7 @@ serial_loop(WORKER_INFO *info, P7_HMMFILE *hfp)
 
   }
 
+  esl_sq_Destroy(qsqDNATxt);
   esl_alphabet_Destroy(abc);
 
   return status;
@@ -819,6 +820,8 @@ pipeline_thread(void *arg)
 
   status = esl_workqueue_WorkerUpdate(info->queue, block, NULL);
   if (status != eslOK) esl_fatal("Work queue worker failed");
+
+  esl_sq_Destroy(qsqDNATxt);
 
   esl_threads_Finished(obj, workeridx);
   return;

@@ -783,10 +783,10 @@ p7_Pipeline(P7_PIPELINE *pli, P7_OPROFILE *om, P7_BG *bg, const ESL_SQ *sq, cons
   else filtersc = nullsc;
   pli->n_past_bias++;
 
-  /* In scan mode, if it passes the MSV filter, read the rest of the profile */
+  /* In scan mode, if it passes the MSV filter, read the rest of the profile.*/
   if (pli->mode == p7_SCAN_MODELS)
     {
-      if (pli->hfp) p7_oprofile_ReadRest(pli->hfp, om);
+      if (pli->hfp && om->acc == NULL) p7_oprofile_ReadRest(pli->hfp, om); /* Skip if already done before (in the case of translated search */ 
       p7_oprofile_ReconfigRestLength(om, sq->n);
       if ((status = p7_pli_NewModelThresholds(pli, om)) != eslOK) return status; /* pli->errbuf has err msg set */
     }
