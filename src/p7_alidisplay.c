@@ -101,7 +101,6 @@ p7_alidisplay_Create(const P7_TRACE *tr, int which, const P7_OPROFILE *om, const
   int            orf_namelen; /* used for translated search only */
   int            status;
   char           n1,n2,n3;
-  int            j;
 
   ESL_SQ         *ntorfseqtxt = NULL;
 
@@ -269,9 +268,9 @@ p7_alidisplay_Create(const P7_TRACE *tr, int which, const P7_OPROFILE *om, const
                 n2 = ntsq->seq[  sq->start-1 - ( 3*(i-1) + 1) ] ;
                 n3 = ntsq->seq[  sq->start-1 - ( 3*(i-1) + 2) ] ;
 
-                n1 = ntsq->abc->sym [ ntsq->abc->complement[ ntsq->abc->inmap[n1] ] ];
-                n2 = ntsq->abc->sym [ ntsq->abc->complement[ ntsq->abc->inmap[n2] ] ];
-                n3 = ntsq->abc->sym [ ntsq->abc->complement[ ntsq->abc->inmap[n3] ] ];
+                n1 = ntsq->abc->sym [ ntsq->abc->complement[ ntsq->abc->inmap[(int)n1] ] ];
+                n2 = ntsq->abc->sym [ ntsq->abc->complement[ ntsq->abc->inmap[(int)n2] ] ];
+                n3 = ntsq->abc->sym [ ntsq->abc->complement[ ntsq->abc->inmap[(int)n3] ] ];
 
             }
          }
