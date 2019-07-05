@@ -846,7 +846,6 @@ p7_tophits_RemoveDuplicates(P7_TOPHITS *th, int using_bit_cutoffs)
   int     s_i, s_j, e_i, e_j, dir_i, dir_j, len_i, len_j;
   int     intersect_alistart, intersect_aliend, intersect_alilen;
   int     intersect_hmmstart, intersect_hmmend, intersect_hmmlen;
-  //int64_t sub_i, sub_j;
   int     tmp;
   double  p_i, p_j;
   int remove;
@@ -857,7 +856,6 @@ p7_tophits_RemoveDuplicates(P7_TOPHITS *th, int using_bit_cutoffs)
   for (i = 1; i < th->N; i++)
   {
 
-      //sub_j = th->hit[j]->subseq_start;
       p_j = th->hit[j]->lnP;
       s_j = th->hit[j]->dcl[0].iali;
       e_j = th->hit[j]->dcl[0].jali;
@@ -870,7 +868,6 @@ p7_tophits_RemoveDuplicates(P7_TOPHITS *th, int using_bit_cutoffs)
       len_j = e_j - s_j + 1 ;
 
 
-      //sub_i = th->hit[i]->subseq_start;
       p_i = th->hit[i]->lnP;
       s_i = th->hit[i]->dcl[0].iali;
       e_i = th->hit[i]->dcl[0].jali;
@@ -881,7 +878,6 @@ p7_tophits_RemoveDuplicates(P7_TOPHITS *th, int using_bit_cutoffs)
         e_i = tmp;
       }
       len_i = e_i - s_i + 1 ;
-
 
       // these will only matter if seqidx and strand are the same
       intersect_alistart  = s_i>s_j ? s_i : s_j;
@@ -904,6 +900,7 @@ p7_tophits_RemoveDuplicates(P7_TOPHITS *th, int using_bit_cutoffs)
            )
       )
       {
+
         /* Force one to go unreported.  I prefer to keep the one with the
          * better e-value.  This addresses two issues
          * (1) longer hits sometimes encounter higher bias corrections,
@@ -919,7 +916,6 @@ p7_tophits_RemoveDuplicates(P7_TOPHITS *th, int using_bit_cutoffs)
          *     removed due to insufficient score.
          * see late notes in ~wheelert/notebook/2012/0518-dfam-scripts/00NOTES
         */
-        //remove = 0; // 1 := keep i,  0 := keep i-1
         remove = p_i < p_j ? j : i;
 
         th->hit[remove]->flags |= p7_IS_DUPLICATE;
@@ -1192,6 +1188,7 @@ p7_tophits_Targets(FILE *ofp, P7_TOPHITS *th, P7_PIPELINE *pli, int textw)
       if ( th->N > 0 && th->hit[0]->ndom > 0 ) {
           if (pli->mode == p7_SEARCH_SEQS && th->hit[0]->dcl[0].ad->ntseq != NULL) /* hmmsearcht hit*/
           {
+
              posw = ESL_MAX(5, p7_tophits_GetMaxORFposLength(th));
              orfw = ESL_MAX(6, p7_tophits_GetMaxORFnameLength(th));
              orfsecdashw = (orfw+namew+posw+posw+15-28);
@@ -1211,8 +1208,29 @@ p7_tophits_Targets(FILE *ofp, P7_TOPHITS *th, P7_PIPELINE *pli, int textw)
                ESL_EXCEPTION_SYS(eslEWRITE, "per-sequence hit list: write failed");
 
           }
+          else if (pli->mode == p7_SCAN_MODELS && th->hit[0]->dcl[0].ad->ntseq != NULL) /* hmmscant hit*/
+          {
+
+              if (textw >  0)           descw = ESL_MAX(32, textw - namew - 61); /* 61 chars excluding desc is from the format: 2 + 22+2 +22+2 +8+2 +<name>+1 */
+              else                      descw = 0;                               /* unlimited desc length is handled separately */
+
+              posw = ESL_MAX(5, p7_tophits_GetMaxORFposLength(th));
+              orfw = ESL_MAX(6, p7_tophits_GetMaxORFnameLength(th));
+              orfsecdashw = (orfw+posw+posw-8);
+
+              /* The minimum width of the target table is 111 char: 47 from fields, 8 from min name, 32 from min desc, 13 spaces */
+              if (fprintf(ofp, "Scores for complete sequence%s (score includes all domains):\n", pli->mode == p7_SEARCH_SEQS ? "s" : "") < 0)
+                ESL_EXCEPTION_SYS(eslEWRITE, "per-sequence hit list: write failed");
+              if (fprintf(ofp, "  %22s  %22s  %8s %.*s %s %.*s\n",                              " --- full sequence ---",        " --- best 1 domain ---",   "-#dom-", orfsecdashw/2 + (orfsecdashw%2==1?1:0), "----------", "ORF info", orfsecdashw/2, "----------") < 0)
+                ESL_EXCEPTION_SYS(eslEWRITE, "per-sequence hit list: write failed");
+              if (fprintf(ofp, "  %9s %6s %5s  %9s %6s %5s  %5s %2s %.*s %.*s %.*s %-*s %s \n", "E-value", " score", " bias", "E-value", " score", " bias", "  exp",  "N", orfw, "orf                ", posw, "start        ", posw, "end        ", namew,  (pli->mode == p7_SEARCH_SEQS ? "Sequence":"Model"), "Description") < 0)
+                ESL_EXCEPTION_SYS(eslEWRITE, "per-sequence hit list: write failed");
+              if (fprintf(ofp, "  %9s %6s %5s  %9s %6s %5s  %5s %2s %.*s %.*s %.*s %-*s %s\n",
+              "-------", "------", "-----", "-------", "------", "-----", " ----", "--", orfw, "-------------", posw, "----------", posw, "----------", namew, "--------", "-----------") < 0)
+                ESL_EXCEPTION_SYS(eslEWRITE, "per-sequence hit list: write failed");
+          }
           else
-          { /* hmmsearch or hmmscan or hmmscant */
+          { /* hmmsearch or hmmscan */
 
              if (textw >  0)           descw = ESL_MAX(32, textw - namew - 61); /* 61 chars excluding desc is from the format: 2 + 22+2 +22+2 +8+2 +<name>+1 */
              else                      descw = 0;                               /* unlimited desc length is handled separately */
@@ -1222,8 +1240,8 @@ p7_tophits_Targets(FILE *ofp, P7_TOPHITS *th, P7_PIPELINE *pli, int textw)
                ESL_EXCEPTION_SYS(eslEWRITE, "per-sequence hit list: write failed");
              if (fprintf(ofp, "  %22s  %22s  %8s\n",                              " --- full sequence ---",        " --- best 1 domain ---",   "-#dom-") < 0)
                ESL_EXCEPTION_SYS(eslEWRITE, "per-sequence hit list: write failed");
-             if (fprintf(ofp, "  %9s %6s %5s  %9s %6s %5s  %5s %2s  %-*s %s\n",
-             "E-value", " score", " bias", "E-value", " score", " bias", "  exp",  "N", namew, (pli->mode == p7_SEARCH_SEQS ? "Sequence":"Model"), "Description") < 0)
+             if (fprintf(ofp, "  %9s %6s %5s  %9s %6s %5s  %5s %2s  %-*s %s \n",
+             "E-value", " score", " bias", "E-value", " score", " bias", "  exp",  "N", namew,  (pli->mode == p7_SEARCH_SEQS ? "Sequence":"Model"), "Description") < 0)
                ESL_EXCEPTION_SYS(eslEWRITE, "per-sequence hit list: write failed");
              if (fprintf(ofp, "  %9s %6s %5s  %9s %6s %5s  %5s %2s  %-*s %s\n",
              "-------", "------", "-----", "-------", "------", "-----", " ----", "--", namew, "--------", "-----------") < 0)
@@ -1273,7 +1291,6 @@ p7_tophits_Targets(FILE *ofp, P7_TOPHITS *th, P7_PIPELINE *pli, int textw)
         {
           if (pli->mode == p7_SEARCH_SEQS && th->hit[0]->dcl[0].ad->ntseq != NULL) /* hmmsearcht hit*/
           {
-
             if (fprintf(ofp, "%c %9.2g %6.1f %5.1f  %9.2g %6.1f %5.1f  %5.1f %2d  %-*s %-*s %*" PRId64 " %*" PRId64 " %s",
               newness,
               exp(th->hit[h]->lnP) * pli->Z,
@@ -1291,8 +1308,29 @@ p7_tophits_Targets(FILE *ofp, P7_TOPHITS *th, P7_PIPELINE *pli, int textw)
               th->hit[h]->desc == NULL ? "" : th->hit[h]->desc) < 0)
                 ESL_EXCEPTION_SYS(eslEWRITE, "per-sequence hit list: write failed");
           }
+          else if (pli->mode == p7_SCAN_MODELS && th->hit[0]->dcl[0].ad->ntseq != NULL) /* hmmscant hit*/
+          {
+
+              if (fprintf(ofp, "%c %9.2g %6.1f %5.1f  %9.2g %6.1f %5.1f  %5.1f %2d %-*s %-*d %-*d %-*s ",
+              newness,
+              exp(th->hit[h]->lnP) * pli->Z,
+              th->hit[h]->score,
+              th->hit[h]->pre_score - th->hit[h]->score, /* bias correction */
+              exp(th->hit[h]->dcl[d].lnP) * pli->Z,
+              th->hit[h]->dcl[d].bitscore,
+              eslCONST_LOG2R * th->hit[h]->dcl[d].dombias, /* convert NATS to BITS at last moment */
+              th->hit[h]->nexpected,
+              th->hit[h]->nreported,
+              orfw,  th->hit[h]->orfid == NULL ? "" : th->hit[h]->orfid,
+              posw, th->hit[h]->dcl[d].iorf,
+              posw, th->hit[h]->dcl[d].jorf,
+              namew, showname) < 0)
+                ESL_EXCEPTION_SYS(eslEWRITE, "per-sequence hit list: write failed");
+
+
+          }
           else
-          {/* hmmsearch or hmmscan or hmmscant */
+          {/* hmmsearch or hmmscan  */
             if (fprintf(ofp, "%c %9.2g %6.1f %5.1f  %9.2g %6.1f %5.1f  %5.1f %2d  %-*s ",
             newness,
             exp(th->hit[h]->lnP) * pli->Z,
