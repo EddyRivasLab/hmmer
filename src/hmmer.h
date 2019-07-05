@@ -1413,7 +1413,7 @@ extern int   p7_island_Viterbi(ESL_DSQ *dsq, int L, P7_PROFILE *gm, P7_GMX *mx, 
 extern int   p7_h2io_WriteASCII(FILE *fp, P7_HMM *hmm);
 
 /* hmmer.c */
-extern void         p7_banner(FILE *fp, char *progname, char *banner);
+extern void         p7_banner(FILE *fp, const char *progname, char *banner);
 extern ESL_GETOPTS *p7_CreateDefaultApp(ESL_OPTIONS *options, int nargs, int argc, char **argv, char *banner, char *usage);
 extern int          p7_AminoFrequencies(float *f);
 
@@ -1597,11 +1597,11 @@ extern int     p7_hmm_CalculateOccupancy(const P7_HMM *hmm, float *mocc, float *
 
 
 /* p7_hmmfile.c */
-extern int  p7_hmmfile_OpenE    (char *filename, char *env, P7_HMMFILE **ret_hfp, char *errbuf);
-extern int  p7_hmmfile_OpenENoDB(char *filename, char *env, P7_HMMFILE **ret_hfp, char *errbuf);
-extern int  p7_hmmfile_Open     (char *filename, char *env, P7_HMMFILE **ret_hfp); /* deprecated */
-extern int  p7_hmmfile_OpenNoDB (char *filename, char *env, P7_HMMFILE **ret_hfp); /* deprecated */
-extern int  p7_hmmfile_OpenBuffer(char *buffer, int size, P7_HMMFILE **ret_hfp);
+extern int  p7_hmmfile_OpenE    (const char *filename, char *env, P7_HMMFILE **ret_hfp, char *errbuf);
+extern int  p7_hmmfile_OpenENoDB(const char *filename, char *env, P7_HMMFILE **ret_hfp, char *errbuf);
+extern int  p7_hmmfile_Open     (const char *filename, char *env, P7_HMMFILE **ret_hfp); /* deprecated */
+extern int  p7_hmmfile_OpenNoDB (const char *filename, char *env, P7_HMMFILE **ret_hfp); /* deprecated */
+extern int  p7_hmmfile_OpenBuffer(const char *buffer, int size, P7_HMMFILE **ret_hfp);
 extern void p7_hmmfile_Close(P7_HMMFILE *hfp);
 #ifdef HMMER_THREADS
 extern int  p7_hmmfile_CreateLock(P7_HMMFILE *hfp);
