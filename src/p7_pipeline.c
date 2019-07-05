@@ -783,10 +783,10 @@ p7_Pipeline(P7_PIPELINE *pli, P7_OPROFILE *om, P7_BG *bg, const ESL_SQ *sq, cons
   else filtersc = nullsc;
   pli->n_past_bias++;
 
-  /* In scan mode, if it passes the MSV filter, read the rest of the profile */
+  /* In scan mode, if it passes the MSV filter, read the rest of the profile.*/
   if (pli->mode == p7_SCAN_MODELS)
     {
-      if (pli->hfp) p7_oprofile_ReadRest(pli->hfp, om);
+      if (pli->hfp && om->acc == NULL) p7_oprofile_ReadRest(pli->hfp, om); /* Skip if already done before (in the case of translated search */ 
       p7_oprofile_ReconfigRestLength(om, sq->n);
       if ((status = p7_pli_NewModelThresholds(pli, om)) != eslOK) return status; /* pli->errbuf has err msg set */
     }
@@ -811,7 +811,6 @@ p7_Pipeline(P7_PIPELINE *pli, P7_OPROFILE *om, P7_BG *bg, const ESL_SQ *sq, cons
   /* ok, it's for real. Now a Backwards parser pass, and hand it to domain definition workflow */
   p7_omx_GrowTo(pli->oxb, om->M, 0, sq->n);
   p7_BackwardParser(sq->dsq, sq->n, om, pli->oxf, pli->oxb, NULL);
-
   status = p7_domaindef_ByPosteriorHeuristics(sq, ntsq, om, pli->oxf, pli->oxb, pli->fwd, pli->bck, pli->ddef, bg, FALSE, NULL, NULL, NULL);
   if (status != eslOK) ESL_FAIL(status, pli->errbuf, "domain definition workflow failure"); /* eslERANGE can happen  */
   if (pli->ddef->nregions   == 0) return eslOK; /* score passed threshold but there's no discrete domains here       */
@@ -908,7 +907,10 @@ p7_Pipeline(P7_PIPELINE *pli, P7_OPROFILE *om, P7_BG *bg, const ESL_SQ *sq, cons
         if ((status  = esl_strdup(om->name, -1, &(hit->name)))  != eslOK) esl_fatal("allocation failure");
         if ((status  = esl_strdup(om->acc,  -1, &(hit->acc)))   != eslOK) esl_fatal("allocation failure");
         if ((status  = esl_strdup(om->desc, -1, &(hit->desc)))  != eslOK) esl_fatal("allocation failure");
+        if ((status  = esl_strdup(sq->orfid, -1, &(hit->orfid)))!= eslOK) esl_fatal("allocation failure");
+
       } 
+      hit->seqidx     = sq->idx;
       hit->ndom       = pli->ddef->ndom;
       hit->nexpected  = pli->ddef->nexpected;
       hit->nregions   = pli->ddef->nregions;
@@ -1005,37 +1007,41 @@ p7_Pipeline(P7_PIPELINE *pli, P7_OPROFILE *om, P7_BG *bg, const ESL_SQ *sq, cons
          hit->target_len = ntsq->n;
          for (d = 0; d < hit->ndom; d++)
          {
+            hit->dcl[d].iorf        =  sq->start + ntsq->start-1;
+            hit->dcl[d].jorf        =  sq->end   + ntsq->start-1;
+            hit->dcl[d].ad->orffrom =  hit->dcl[d].ad->sqfrom;
+            hit->dcl[d].ad->orfto   =  hit->dcl[d].ad->sqto;
+
             if (sq->start < sq->end)
             {
-               hit->dcl[d].iorf       = sq->start;
-               hit->dcl[d].jorf       = sq->end;
+               hit->dcl[d].iali       = (hit->dcl[d].iali*3-2) + sq->start-1;
+               hit->dcl[d].jali       = (hit->dcl[d].jali*3) + sq->start-1;
                hit->dcl[d].ienv       = (hit->dcl[d].ienv*3-2) + sq->start-1;
                hit->dcl[d].jenv       = (hit->dcl[d].jenv*3) + sq->start-1;
-               hit->dcl[d].ad->orffrom=  hit->dcl[d].ad->sqfrom;
-               hit->dcl[d].ad->orfto  =  hit->dcl[d].ad->sqto;
                hit->dcl[d].ad->sqfrom = (hit->dcl[d].ad->sqfrom*3-2) + sq->start-1;
                hit->dcl[d].ad->sqto   = (hit->dcl[d].ad->sqto*3) + sq->start-1;
             }
             else
             {
-               hit->dcl[d].iorf       = sq->start;
-               hit->dcl[d].jorf       = sq->end;
+               hit->dcl[d].iali       = sq->start - (hit->dcl[d].iali - 1)*3;
+               hit->dcl[d].jali       = sq->start - (hit->dcl[d].jali - 1)*3 - 2;
                hit->dcl[d].ienv       = sq->start - (hit->dcl[d].ienv - 1)*3;
                hit->dcl[d].jenv       = sq->start - (hit->dcl[d].jenv - 1)*3 - 2;
-               hit->dcl[d].ad->orffrom=  hit->dcl[d].ad->sqfrom;
-               hit->dcl[d].ad->orfto  =  hit->dcl[d].ad->sqto;
                hit->dcl[d].ad->sqfrom = sq->start - (hit->dcl[d].ad->sqfrom -1)*3;
                hit->dcl[d].ad->sqto   = sq->start - (hit->dcl[d].ad->sqto -1)*3 - 2;
             }
 
-            hit->dcl[d].iorf       += ntsq->start-1;
-            hit->dcl[d].jorf       += ntsq->start-1;
+            hit->dcl[d].iali       += ntsq->start-1;
+            hit->dcl[d].jali       += ntsq->start-1;
+
+
             hit->dcl[d].ienv       += ntsq->start-1;
             hit->dcl[d].jenv       += ntsq->start-1;
             hit->dcl[d].ad->sqfrom += ntsq->start-1;
             hit->dcl[d].ad->sqto   += ntsq->start-1;
 
          }
+
       }
 
     }
