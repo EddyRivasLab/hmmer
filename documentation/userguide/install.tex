@@ -53,7 +53,12 @@ To compile:
   \user{\% make}
   \vspace{1ex}
 
-Optionally, to compile and run a test suite:
+Optionally, to compile and run a test suite\sidenote{The test suite
+  uses scripts, and requires that you have \mono{python3} and
+  \mono{perl}. We haven't encountered any systems without perl.  If
+  you don't have \mono{python3}, \mono{make check} will fail and tell
+  you so. But HMMER is still fine, and you can install it -- running
+  the test suite is optional!}:
 
   \vspace{1ex}
   \user{\% make check}
@@ -220,7 +225,7 @@ your bets and install up-to-date versions of GNU command line tools
 such as GNU make and GNU grep.
 
 Running the test suite (and some of our development tools, if you
-delve deep into our codebase) requires Perl and Python to be
+delve deep into our codebase) requires Perl and Python3 to be
 installed.  If you don't have them (which should be rare), \mono{make
   check} won't work for you, but that's ok because \mono{make} and
 \mono{make install} will still work fine.

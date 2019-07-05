@@ -242,15 +242,11 @@ identify negative test sequences.
 ================================================================
 
 Number of query alignments:   wc -l <benchmark_prefix>.tbl
-                           or esl-alistat -a <benchmark_prefix>.msa
-
 Number of positives:          wc -l <benchmark_prefix>.pos
-
 Number of negatives:          wc -l <benchmark_prefix>.neg
-
 Test sequence length dist:    esl-seqstat <benchmark_prefix>.fa
-
-
+# of training seqs:           avg -f6 <benchmark_prefix>.tbl
+# of test seqs:               avg -f8 <benchmark_prefix>.tbl
 
 ================================================================
 = 5. pmark-master.pl: running a pmark benchmark, in parallel using SGE qsub

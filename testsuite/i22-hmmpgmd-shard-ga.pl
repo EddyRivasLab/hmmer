@@ -24,18 +24,15 @@ $host    = "127.0.0.1";
 $cport   = 51373;               # ...don't want a test to interfere w/ running hmmpgmd daemon on same machine
 $wport   = 51374;		# nondefault worker and client ports...
 
-# Only one instance of this script should be run at once.  I
-# frequently do several 'make check's in parallel for different
-# builds.  To avoid collisions, flock a specific lockfile, and try to
-# wait for it to be free. This file is in /tmp, in hope that this will
-# be a local filesystem, to avoid perl flock() problems with networked
-# filesystems. You don't remove this file; that would defeat the
-# purpose. The whole point is that another process might be using it
-# too, as their lock.
+# Uses a flock technique to make sure we're only running one test
+# daemon at a time on this machine (even across different users,
+# and different itests). See i19-hmmpgmd-ga.pl for details.
 #
 $ntry     = 10;
-$lockfile = "/tmp/esl-hmmpgmd-shard-test.lock";
+$lockfile = "/tmp/esl-hmmpgmd-test.lock";  # same lockfile as i19-hmmpgmd-ga.pl
+umask 0011;
 open my $lock, '>>', $lockfile or die("FAIL: failed to open $lockfile for flocking: $1");
+chmod 0666, $lockfile;
 while (! flock $lock, LOCK_EX | LOCK_NB)
 {
     if ($ntry == 0) { die("FAIL: $0 is already running"); }
@@ -89,7 +86,7 @@ sleep 2;
 
 # Run the test script
 @output = `cat $tmppfx.in | $builddir/src/hmmc2 -i $host -p $cport -S 2>&1`;
-# Currently, hmmc2 returns nonzero exit code even upon clean !shutdown command... don't check $?
+if ($?) { die "FAIL: hmmc2 returned non-zero exit code of $?";  }
 $daemon_active = 0;
 
 

@@ -71,7 +71,7 @@ static float h2ascii2prob(char *s, float null);
  * better error reporting through a <errbuf>.
  */
 
-static int open_engine(char *filename, char *env, P7_HMMFILE **ret_hfp, int do_ascii_only, char *errbuf);
+static int open_engine(const char *filename, char *env, P7_HMMFILE **ret_hfp, int do_ascii_only, char *errbuf);
 
 
 /* Function:  p7_hmmfile_OpenE()
@@ -123,7 +123,7 @@ static int open_engine(char *filename, char *env, P7_HMMFILE **ret_hfp, int do_a
  * Throws:    <eslEMEM> on allocation failure.
  */
 int
-p7_hmmfile_OpenE(char *filename, char *env, P7_HMMFILE **ret_hfp, char *errbuf)
+p7_hmmfile_OpenE(const char *filename, char *env, P7_HMMFILE **ret_hfp, char *errbuf)
 {
   return open_engine(filename, env, ret_hfp, FALSE, errbuf);
 }
@@ -139,7 +139,7 @@ p7_hmmfile_OpenE(char *filename, char *env, P7_HMMFILE **ret_hfp, char *errbuf)
  *            <OpenE()> will become <Open()>.
  */
 int
-p7_hmmfile_Open(char *filename, char *env, P7_HMMFILE **ret_hfp)
+p7_hmmfile_Open(const char *filename, char *env, P7_HMMFILE **ret_hfp)
 {
   return open_engine(filename, env, ret_hfp, FALSE, NULL);
 }
@@ -155,7 +155,7 @@ p7_hmmfile_Open(char *filename, char *env, P7_HMMFILE **ret_hfp)
  *            database that it may be about to overwrite.
  */
 int
-p7_hmmfile_OpenENoDB(char *filename, char *env, P7_HMMFILE **ret_hfp, char *errbuf)
+p7_hmmfile_OpenENoDB(const char *filename, char *env, P7_HMMFILE **ret_hfp, char *errbuf)
 {
   return open_engine(filename, env, ret_hfp, TRUE, errbuf);
 }
@@ -173,7 +173,7 @@ p7_hmmfile_OpenENoDB(char *filename, char *env, P7_HMMFILE **ret_hfp, char *errb
  *            database that it may be about to overwrite.
  */
 int
-p7_hmmfile_OpenNoDB(char *filename, char *env, P7_HMMFILE **ret_hfp)
+p7_hmmfile_OpenNoDB(const char *filename, char *env, P7_HMMFILE **ret_hfp)
 {
   return open_engine(filename, env, ret_hfp, TRUE, NULL);
 }
@@ -209,7 +209,7 @@ p7_hmmfile_OpenNoDB(char *filename, char *env, P7_HMMFILE **ret_hfp)
  * Throws:    <eslEMEM> on allocation failure.
  */
 int
-p7_hmmfile_OpenBuffer(char *buffer, int size, P7_HMMFILE **ret_hfp)
+p7_hmmfile_OpenBuffer(const char *buffer, int size, P7_HMMFILE **ret_hfp)
 {
   P7_HMMFILE *hfp     = NULL;
   int         status;
@@ -274,7 +274,7 @@ p7_hmmfile_OpenBuffer(char *buffer, int size, P7_HMMFILE **ret_hfp)
  *              
  */
 static int 
-open_engine(char *filename, char *env, P7_HMMFILE **ret_hfp, int do_ascii_only, char *errbuf)
+open_engine(const char *filename, char *env, P7_HMMFILE **ret_hfp, int do_ascii_only, char *errbuf)
 {
   P7_HMMFILE *hfp      = NULL;
   char       *envfile  = NULL;  /* full path to filename after using environment  */

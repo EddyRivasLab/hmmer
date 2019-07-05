@@ -78,6 +78,7 @@ database\\
 \monob{hmmlogo}     & produce a conservation logo graphic from a profile\\
 \monob{hmmconvert}  & convert between different profile file formats \\
 \monob{hmmpgmd}     & search daemon for the \mono{hmmer.org} website \\
+\monob{hmmpgmd\_shard}     & sharded search daemon for the \mono{hmmer.org} website \\
 \monob{makehmmerdb} & prepare an \mono{nhmmer} binary database \\
 \monob{hmmsim}      & collect score distributions on random sequences\\
 \monob{alimask}     & add column mask to a multiple sequence alignment \\
@@ -1097,8 +1098,187 @@ have this property (hmmbuild and the four search programs).
 
 
 
+\subsection{Summary statistics for a profile database: hmmstat}
+
+Our \mono{minifam} profile ``database'' example only contains three
+profiles, but real profile databases like Pfam can contain many
+thousands. The \mono{hmmstat} program is a utility that summarizes the
+content of a profile database. If you do:
+
+   \vspace{1ex}
+   \user{\% hmmstat minifam}
+   \vspace{1ex}
+
+you'll get:
+   
+   \xsreoutput{inclusions/hmmstat-minifam.out}
+   
+The output is one line per profile, numbered. Some of the fields are
+more meaningful to you than others; some are sort of cryptic relics
+of development that we haven't cleaned up yet:
+
+\begin{sreitems}{\monob{accession}}
+
+\item [\monob{idx}]       Number, in order in the database.
+\item [\monob{name}]      Name of the profile.
+\item [\monob{accession}] Accession (if present; else '-')
+\item [\monob{nseq}]      Number of sequences in the alignment this
+  profile was built from.
+
+\item [\monob{eff\_nseq}]  Effective sequence number. 
+   This was the ``effective'' number of independent sequences that
+   \mono{hmmbuild's} default ``entropy weighting'' step decided on,
+   given the phylogenetic similarity of the \mono{nseq} sequences in
+   the input alignment.
+   
+\item [\monob{M}] Length of the profile in consensus residues (match states).
+
+\item [\monob{relent}] Mean relative entropy of the match state
+  emission probabilities, relative to default null background
+  frequencies, in bits. This is the average bit score per aligned
+  consensus residue. This quantity is the target of \mono{hmmbuild}'s
+  entropy weighting procedure for determining \monob{eff\_nseq}.
+
+\item [\monob{info}] Mean information content per match state emission
+  probability vector, in bits. Probably not useful to you. Information
+  content is just a slightly different calculation from
+  \monob{relent}.
+
+\item [\monob{p relE}] Mean positional relative entropy, in bits.
+  Also probably not useful to you. This is an average relative entropy
+  per position that takes into account the transition
+  (insertion/deletion) probabilities.  It should be a more accurate
+  estimation of the average bit score contributed per aligned model
+  consensus position.
+
+\item [\monob{compKL}] Kullback-Leibler (KL) divergence from the
+  average composition of the profile's consensus match states to the
+  default background frequency distribution, in bits.  The higher this
+  number, the more biased the residue composition of the profile
+  is. Highly biased profiles may produce more false positives in
+  searches, and can also slow the HMMER3 acceleration pipeline, by
+  causing too many nonhomologous sequences to pass the filters.
+
+\end{sreitems}
+
+
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 \section{Searching nucleotide sequences vs. nucleotide sequences/profiles}
+
+The file \mono{globins45.fa} is a FASTA file containing 45
+unaligned globin sequences. To align all of these to the
+\mono{globins4} profile and make a multiple sequence alignment:
+
+   \vspace{1ex}
+   \user{\% hmmalign globins4.hmm globins45.fa}
+   \vspace{1ex}
+
+The output of this is a Stockholm format multiple alignment file. The
+first few lines of it look like:
+
+   \xsreoutput{inclusions/hmmalign-globins.out}
+
+and so on. (I've truncated long lines.)
+
+First thing to notice here is that \mono{hmmalign} uses both lower
+case and upper case residues, and it uses two different characters for
+gaps.  This is because there are two different kinds of columns:
+``match'' columns in which residues are assigned to match states and
+gaps are treated as deletions relative to consensus, and ``insert''
+columns where residues are assigned to insert states and gaps in other
+sequences are just padding for the alignment to accomodate those
+insertions. In a match column, residues are upper case, and a '-'
+character means a deletion relative to the consensus. In an insert
+column, residues are lower case, and a '.' is padding.  A '-' deletion
+has a cost: transition probabilities were assessed, penalizing the
+transition into and out of a deletion. A '.' pad has no cost per se;
+instead, the sequence(s) with insertions are paying transition
+probabilities into and out of their inserted residue.
+
+This notation is only for your convenience in output files. You can
+see the structure of the profile reflected in the pattern of
+residues and gap characters \marginnote{By default, \mono{hmmalign}
+  removes any columns that are all deletion characters, so the number
+  of apparent match columns in a displayed alignment is $\leq$ the
+  actual number of match states in the profile. To prevent this
+  trimming and see columns for all match states, use the
+  \mono{-{}-allcol} option. This can be helpful if you're writing a
+  postprocessor that's trying to keep track of what columns are
+  assigned to what match states in the profile.}.  In input files, in
+most alignment formats\sidenote[][1ex]{A2M format is an important exception!} HMMER is
+case-insensitive, and it does not distinguish between different gap
+characters: '-' (dash), '.' (period), or even '\_' (underscore) are
+accepted as gap characters.
+
+Important: insertions relative to a profile are
+\emph{unaligned}. Suppose one sequence has an insertion of length 10
+and another has an insertion of length 2 in the same place in the
+profile. The alignment will have ten insert columns, to accomodate the
+longest insertion.  The residues of the shorter insertion are thrown
+down in an arbitrary order.\marginnote[2ex]{By arbitrary HMMER convention,
+  the insertion is divided in half; half is left-justified, and the
+  other half is right-justified, leaving '.' characters in the
+  middle.}  Notice that in the previous paragraph I oh-so-carefully
+said residues are ``assigned'' to a state, not ``aligned'' to a
+state. For match states, assigned and aligned are the same thing: a
+one-to-one correspondence between a residue and a consensus match
+state in the profile. But there may be one \emph{or more} residues
+assigned to the same insert state.
+
+Don't be confused by the unaligned nature of profile 
+insertions. You're sure to see cases where lower-case inserted
+residues are ``obviously misaligned''.  This is just because HMMER
+isn't trying to ``align'' them in the first place. It's assigning
+them to unaligned insertions.
+
+Enough about the sequences in the alignment. Now, notice all those
+\mono{PP} annotation lines. That's posterior probability annotation,
+as in the single sequence alignments that \mono{hmmscan} and
+\mono{hmmsearch} showed. This represents the confidence that each
+residue is assigned where it should be.
+
+Again, that's ``assigned'', not ``aligned''. The posterior probability
+assigned to an inserted residue is the probability that it is assigned
+to the insert state corresponding to that column. Because the same
+insert state might correspond to more than one column, the probability
+on an insert residue is \emph{not} the probability that it belongs in
+that particular column; again, if there's a choice of column for
+putting an inserted residue, that choice is arbitrary.
+
+\mono{hmmalign} currently has a, um, feature that you may dislike.
+Recall that HMMER only does local alignments. Here, we know that we've
+provided full length globin sequences, and \mono{globins4} is a full
+length globin profile. We'd probably like \mono{hmmalign} to produce a
+global alignment. It can't currently do that. If it doesn't quite
+manage to extend its local alignment to the full length of a target
+globin sequence, you'll get a weird-looking effect, as the nonmatching
+termini are pulled out to the left or right. For example, look at the
+N-terminal \mono{g} in \mono{MYG\_HORSE} above. HMMER is about 80\%
+confident that this residue is nonhomologous, though any sensible
+person would align it into the first globin consensus column.
+
+Look at the end of that first block of Stockholm alignment, where you'll
+see:
+
+   \xsreoutput{inclusions/hmmalign-globins.out}
+
+The \mono{\#=GC PP\_cons} line is Stockholm-format \emph{consensus
+  posterior probability} annotation for the entire column. It's the
+arithmetic mean of the per-residue posterior probabilities in that
+column. This should prove useful in phylogenetic inference
+applications, for example, where it's common to mask away
+nonconfidently aligned columns of a multiple alignment. The
+\mono{PP\_cons} line provides an objective measure of the confidence
+assigned to each column.
+
+The \mono{\#=GC RF} line is Stockholm-format \emph{reference
+  coordinate annotation}, with an x marking each column that the
+profile considered to be consensus.
+
+
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+\section{Searching DNA sequences}
 
 HMMER was originally developed for protein sequence analysis. The
 \mono{hmmsearch} and \mono{hmmscan} programs assume that it's sensible

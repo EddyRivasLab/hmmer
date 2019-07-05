@@ -75,7 +75,7 @@ m4_include([easel/m4/ax_pthread.m4])
 # 2. AC_INIT
 ################################################################
 
-AC_INIT(HMMER, 3.2.1, sean@eddylab.org, hmmer)
+AC_INIT(HMMER, 3.3dev, sean@eddylab.org, hmmer)
 AC_MSG_NOTICE([Configuring HMMER3 for your system.])
 
 # remember if the user is overriding CFLAGS
@@ -107,8 +107,8 @@ fi
 # to use HMMER as a library inside other packages, with no name clashes.
 ################################################################
 
-HMMER_DATE="June 2018"
-HMMER_COPYRIGHT="Copyright (C) 2018 Howard Hughes Medical Institute."
+HMMER_DATE="June 2019"
+HMMER_COPYRIGHT="Copyright (C) 2019 Howard Hughes Medical Institute."
 HMMER_LICENSE="Freely distributed under the BSD open source license."
 HMMER_VERSION=$PACKAGE_VERSION
 HMMER_URL="http://hmmer.org/"
@@ -116,10 +116,10 @@ HMMER_URL="http://hmmer.org/"
 HMMER_ESLDIR="easel"
 HMMER_SADIR="libdivsufsort"
 
-EASEL_DATE="June 2018"
-EASEL_COPYRIGHT="Copyright (C) 2018 Howard Hughes Medical Institute."
+EASEL_DATE="June 2019"
+EASEL_COPYRIGHT="Copyright (C) 2019 Howard Hughes Medical Institute."
 EASEL_LICENSE="Freely distributed under the BSD open source license."
-EASEL_VERSION="0.45h"
+EASEL_VERSION="0.46dev"
 EASEL_URL="http://bioeasel.org/"
 
 AC_SUBST(HMMER_DATE)
@@ -410,6 +410,13 @@ else
   AC_DEFINE(HAVE_GZIP, 1, [Support external gzip decompression])
 fi
 
+# We need python 3 for 'make check' and some dev tools. sqc checks
+# too, as does the Makefile, but we also check in ./configure, so we
+# don't recommend 'make check' to the user if they can't use it.
+# 
+AC_CHECK_PROG(HAVE_PYTHON3, python3, yes)
+
+
 ################################################################
 # 6. Checks for libraries
 #################################################################
@@ -577,15 +584,16 @@ AC_SYS_LARGEFILE
 
 # HMMER Makefiles.
 AC_CONFIG_FILES([ \
-  Makefile                          \
-  src/Makefile                      \
-  testsuite/Makefile                \
-  profmark/Makefile                 \
-  src/impl_${impl_choice}/Makefile  \
-  documentation/Makefile            \
-  documentation/man/Makefile        \
-  documentation/userguide/Makefile  \
-  libdivsufsort/Makefile            \
+  Makefile                                     \
+  src/Makefile                                 \
+  testsuite/Makefile                           \
+  profmark/Makefile                            \
+  src/impl_${impl_choice}/Makefile             \
+  documentation/Makefile                       \
+  documentation/man/Makefile                   \
+  documentation/userguide/Makefile             \
+  documentation/userguide/inclusions/Makefile  \
+  libdivsufsort/Makefile                       \
   ])
 
 # Easel Makefiles.
@@ -600,6 +608,7 @@ AC_CONFIG_FILES([ \
 # HMMER_VERSION, HMMER_DATE, HMMER_COPYRIGHT
 AC_CONFIG_FILES([ \
   documentation/userguide/titlepage.tex  \
+  documentation/userguide/titlepage_daemon.tex  \
   documentation/userguide/copyright.tex  \
   ])
 
@@ -609,12 +618,14 @@ AC_CONFIG_FILES([ \
   documentation/man/alimask.man     \
   documentation/man/hmmalign.man    \
   documentation/man/hmmbuild.man    \
+  documentation/man/hmmc2.man       \
   documentation/man/hmmconvert.man  \
   documentation/man/hmmemit.man     \
   documentation/man/hmmer.man       \
   documentation/man/hmmfetch.man    \
   documentation/man/hmmlogo.man     \
   documentation/man/hmmpgmd.man     \
+  documentation/man/hmmpgmd_shard.man     \
   documentation/man/hmmpress.man    \
   documentation/man/hmmscan.man     \
   documentation/man/hmmsearch.man   \
@@ -676,17 +687,25 @@ AC_OUTPUT
 echo "
 
 HMMER configuration:
-     compiler:             ${CC} ${CFLAGS} ${SSE_CFLAGS} ${VMX_CFLAGS} ${PTHREAD_CFLAGS} 
-     host:                 $host
-     linker:               ${LDFLAGS}
-     libraries:            ${LIBS} ${LIBGSL} ${PTHREAD_LIBS}
-     DP implementation:    ${impl_choice}
-
-Do 'make'  to build HMMER, and optionally:
-   'make check'  to run self tests,
-   'make install'  to install programs and man pages,
-   '(cd easel; make install)'  to install Easel tools.
-"
+   compiler:             ${CC} ${CFLAGS} ${SSE_CFLAGS} ${VMX_CFLAGS} ${PTHREAD_CFLAGS} 
+   host:                 $host
+   linker:               ${LDFLAGS}
+   libraries:            ${LIBS} ${LIBGSL} ${PTHREAD_LIBS}
+   DP implementation:    ${impl_choice}"
 
 
+if test x"$HAVE_PYTHON3" = x"yes"; then echo "
+Now do 'make'  to build HMMER, and optionally:
+       'make check'  to run self tests,
+       'make install'  to install programs and man pages,
+       '(cd easel; make install)'  to install Easel tools.
+";
+else echo "
+   (No python3 found, so 'make check' is disabled.)
+
+Now do 'make'  to build HMMER, and optionally:
+       'make install'  to install programs and man pages,
+       '(cd easel; make install)'  to install Easel tools.
+";
+fi
 

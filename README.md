@@ -1,5 +1,8 @@
 ## HMMER - biological sequence analysis using profile HMMs
 
+[![](https://travis-ci.org/EddyRivasLab/hmmer.svg?branch=develop)](https://travis-ci.org/EddyRivasLab/hmmer)
+![](http://img.shields.io/badge/license-BSD-brightgreen.svg)
+
 [HMMER](http://hmmer.org) searches biological sequence databases for
 homologous sequences, using either single sequences or multiple
 sequence alignments as queries. HMMER implements a technology called
