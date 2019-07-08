@@ -220,12 +220,11 @@
     }
 
 
-__device__  uint calc_band_1(const __restrict__ uint8_t *dsq, int L, int Q, int q, int ** rbv){
+__device__  uint calc_band_1(const __restrict__ uint8_t *dsq, int L, int Q, int q, int ** rbv, int **om_rbv){
   int sv0 = NEGINFMASK, xE0=NEGINFMASK, *rsc;
   int row=0, last_row_fetched = -1;
   int offset;
   int* rsc_precompute;
-//printf("Starting calc_band_1, row = %d\n", row);
   offset = (q <<5)+threadIdx.x;
   ENSURE_DSQ(1)
   rsc =  ((int *)__shfl_sync(0xffffffff, (uint64_t) rsc_precompute, 31)) + offset;
@@ -235,13 +234,13 @@ __device__  uint calc_band_1(const __restrict__ uint8_t *dsq, int L, int Q, int 
     while (num_iters >= 4){
       ENSURE_DSQ(4)
       offset+= 32;
-      STEP_1() 
+      STEP_1()
       row++;
       offset+= 32;
-      STEP_1() 
+      STEP_1()
       row++;
       offset+= 32;
-      STEP_1() 
+      STEP_1()
       row++;
       offset+= 32;
       STEP_1()
@@ -251,16 +250,13 @@ __device__  uint calc_band_1(const __restrict__ uint8_t *dsq, int L, int Q, int 
     ENSURE_DSQ(num_iters)
     while(num_iters > 0){
       offset+= 32;
-      STEP_1() 
+      STEP_1()
       row++;
       num_iters--;
     }
       // at end of row, convert
-     if(row >= last_row_fetched){
-    last_row_fetched = row + 31;
-    rsc_precompute = rbv[dsq[last_row_fetched - threadIdx.x]];
       offset = threadIdx.x;
-    } // ensure_DSQ(1)
+      ENSURE_DSQ(1)
       STEP_1()
       CONVERT_1()
       row++;
@@ -270,23 +266,23 @@ __device__  uint calc_band_1(const __restrict__ uint8_t *dsq, int L, int Q, int 
     while (num_iters >= 4){
       ENSURE_DSQ(4)
       offset+= 32;
-      STEP_1() 
-      row++;
-      offset+= 32;
-      STEP_1() 
-      row++;
-      offset+= 32;
-      STEP_1() 
+      STEP_1()
       row++;
       offset+= 32;
       STEP_1()
+      row++;
+      offset+= 32;
+      STEP_1()
+      row++;
+      offset+= 32;
+       STEP_1()
       row++;
       num_iters -= 4;
     } 
     ENSURE_DSQ(num_iters)
     while(num_iters > 0){
       offset+= 32;
-      STEP_1() 
+      STEP_1()
       row++;
       num_iters--;
     }
@@ -1505,7 +1501,7 @@ __device__  uint calc_band_10(const __restrict__ uint8_t *dsq, int L, int Q, int
 
 
 __device__
-float SSV_cuda(const __restrict__ uint8_t *dsq, uint64_t L, int M, int **rbv, float scale_b, float tauBM){
+float SSV_cuda(const __restrict__ uint8_t *dsq, uint64_t L, int M, int **rbv, float scale_b, float tauBM, int **om_rbv){
   int  Q = (((M-1) / (128)) + 1);
 
   int xE = NEGINFMASK; 
@@ -1513,7 +1509,7 @@ float SSV_cuda(const __restrict__ uint8_t *dsq, uint64_t L, int M, int **rbv, fl
   {
     switch(min(MAX_BAND_WIDTH, Q-i)){
      case 1:
-     xE = __vmaxs4(xE, calc_band_1(dsq, L, Q, i, rbv));
+     xE = __vmaxs4(xE, calc_band_1(dsq, L, Q, i, rbv, om_rbv));
      break;
      case 2:
      xE = __vmaxs4(xE, calc_band_2(dsq, L, Q, i, rbv));

@@ -108,7 +108,7 @@ extern int        p7_engine_Reuse  (P7_ENGINE *eng);
 extern void       p7_engine_Destroy(P7_ENGINE *eng);
 
 extern int p7_engine_Overthruster(P7_ENGINE *eng, ESL_DSQ *dsq, int L, P7_OPROFILE *om, P7_BG *bg);
-extern int p7_engine_Overthruster_roundtwo(P7_ENGINE *eng, ESL_DSQ *dsq, int L, P7_OPROFILE *om, P7_BG *bg, float score, char *seqname, int position, int num_sequences_in_chunk);
+extern int p7_engine_Overthruster_roundtwo(P7_ENGINE *eng, ESL_DSQ *dsq, int L, P7_OPROFILE *om, P7_BG *bg, float score, char *seqname, int position, int num_sequences_in_chunk, uint64_t seq_id);
 
 extern int p7_engine_Main        (P7_ENGINE *eng, ESL_DSQ *dsq, int L, P7_PROFILE  *gm);
 #ifdef __cplusplus // magic to make C++ compilers happy

@@ -33,8 +33,8 @@ void workernode_put_backend_queue_entry_in_queue(P7_DAEMON_WORKERNODE_STATE *wor
 ESL_RED_BLACK_DOUBLEKEY *workernode_get_hit_list_entry_from_pool(P7_DAEMON_WORKERNODE_STATE *workernode, uint32_t my_id);
 uint64_t worker_thread_get_chunk(P7_DAEMON_WORKERNODE_STATE *workernode, uint32_t my_id, volatile uint64_t *start, volatile uint64_t *end);
 static int32_t worker_thread_steal(P7_DAEMON_WORKERNODE_STATE *workernode, uint32_t my_id);
-//static void workernode_request_Work(uint32_t my_shard);
-//static void workernode_wait_for_Work(P7_DAEMON_CHUNK_REPLY *the_reply, MPI_Datatype *server_mpitypes);
+static void workernode_request_Work(uint32_t my_shard);
+static void workernode_wait_for_Work(P7_DAEMON_CHUNK_REPLY *the_reply, MPI_Datatype *server_mpitypes);
 
 /* Tuning parameters */
 
@@ -751,7 +751,7 @@ int p7_server_workernode_create_threads(P7_DAEMON_WORKERNODE_STATE *workernode){
 
     // The ordering of which threads are GPU and CPU is a bit important here.  By creating the GPU threads first, 
     // the GPU threads can use their IDs to determine which CUDA device to talk to.
-    if((i < workernode->cuda_config->num_cards) &&(i < workernode->num_threads -1)){
+    if((i < workernode->cuda_config->num_cards) &&(i < workernode->num_threads)){
       // Take out the last i<1 when we're ready to think about multiple GPUs
       // Create as many GPU worker threads as there are cards, but make sure we create at least one CPU worker thread
         if(pthread_create(&(workernode->thread_objs[i]), &attr, p7_server_cuda_worker_thread, (void *) the_argument)){
@@ -942,7 +942,7 @@ void *p7_server_worker_thread(void *worker_argument){
 
           p7_bg_SetFilter(workernode->thread_state[my_id].bg, workernode->thread_state[my_id].om->M, workernode->thread_state[my_id].om->compo);
         }
-
+        workernode->thread_state[my_id].mode = BACKEND; // force CPU threads to backend mode for testing
         stop = 0;
         while(stop == 0){  // There's still some work left to do on the current search
           switch(workernode->thread_state[my_id].mode){
@@ -1568,7 +1568,7 @@ static void worker_thread_back_end_sequence_search_loop(P7_DAEMON_WORKERNODE_STA
       //need to do the overthruster part of this comparison, generally because CUDA doesn't do the full overthruster
         char *seqname;
         p7_shard_Find_Descriptor_Nexthigh(workernode->database_shards[workernode->compare_database], the_entry->seq_id, &seqname);
-        overthruster_result = p7_engine_Overthruster_roundtwo(workernode->thread_state[my_id].engine, the_entry->sequence, the_entry->L, workernode->thread_state[my_id].om, workernode->thread_state[my_id].bg, the_entry->score, seqname, the_entry->seq_position, the_entry->seq_in_chunk);  
+        overthruster_result = p7_engine_Overthruster_roundtwo(workernode->thread_state[my_id].engine, the_entry->sequence, the_entry->L, workernode->thread_state[my_id].om, workernode->thread_state[my_id].bg, the_entry->score, seqname, the_entry->seq_position, the_entry->seq_in_chunk, the_entry->seq_id);  
     }
     else{
       // don't do the overthruster, but do set up the sparse mask for the main stage
@@ -2119,7 +2119,7 @@ int32_t worker_thread_steal(P7_DAEMON_WORKERNODE_STATE *workernode, uint32_t my_
  *  promises that only one thread per node will call MPI commands, so calling this function from a worker
  *  thread could lead to undefined behavior.
  */
-/*
+
 static void workernode_request_Work(uint32_t my_shard){
 #ifndef HAVE_MPI
       p7_Fail((char *) "Attempt to call workernode_request_Work when HMMER was compiled without MPI support");
@@ -2133,7 +2133,7 @@ static void workernode_request_Work(uint32_t my_shard){
   }
 #endif
 }
-*/
+
 // workernode_wait_for_work
 // NOTE!! Only call this procedure from the main (control) thread.  It receives MPI messages, and we've told
 // MPI that only one thread per node will do that
@@ -2149,7 +2149,7 @@ static void workernode_request_Work(uint32_t my_shard){
  *  promises that only one thread per node will call MPI commands, so calling this function from a worker
  *  thread could lead to undefined behavior.
  */
-/*
+
 static void workernode_wait_for_Work(P7_DAEMON_CHUNK_REPLY *the_reply, MPI_Datatype *server_mpitypes){
 #ifndef HAVE_MPI
       p7_Fail((char *) "Attempt to call workernode_wait_for_Work when HMMER was compiled without MPI support");
@@ -2163,4 +2163,3 @@ static void workernode_wait_for_Work(P7_DAEMON_CHUNK_REPLY *the_reply, MPI_Datat
   return; // return data gets passed through the_reply
 #endif
 }
-*/

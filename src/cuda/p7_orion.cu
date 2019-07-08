@@ -23,7 +23,7 @@ __global__
 
     int rsc_length = (Q + MAX_BAND_WIDTH -1) * 128;  // 32 threaads * 4 bytes 
     int cachable_rscs = ((48 *1024) - (((KP+1)/2)*2 * sizeof(uint *)))/rsc_length; // number of rbv entries that will fit in shared memory
-
+    //if(threadIdx.x ==0 && blockIdx.x ==0) printf("M = %d, Q = %d, cachable_rscs = %d\n", om->M, Q, cachable_rscs);
    if(threadIdx.x < min(KP, cachable_rscs)){
       rbv[threadIdx.x] = (int *)(rbv + ((KP+1)/2)*2) + (rsc_length/sizeof(int))*threadIdx.x;
       memcpy((void *) rbv[threadIdx.x], (void *) om->rbv[threadIdx.x], rsc_length);
@@ -53,7 +53,7 @@ __global__
     // model
 	float nullscore = (float) L * log(p1) + log(1.-p1);
 
-    float score = SSV_cuda(dsq, L, om->M, rbv, om->scale_b, om->tauBM);
+    float score = SSV_cuda(dsq, L, om->M, rbv, om->scale_b, om->tauBM, (int **) om->rbv);
     score = (score - nullscore)/eslCONST_LOG2; // subtract expected random score and convert to bits 
     if(threadIdx.x == 0){
 	/*	double y  = lambda*(score-mu);
@@ -70,8 +70,8 @@ __global__
       	else{
         	hits[my_warp] =1;
       	} */
-       if (hits[my_warp] != 0.0){
-        printf("Duplicate write of hit found at warp %d, previous value was %f\n", my_warp, hits[my_warp]);
+       if(abs((hits[my_warp]- score)/hits[my_warp]) > .001){
+        printf("Miss-Match at warp %d, CUDA computed %f, CPU computed %f\n", my_warp, score, hits[my_warp]);
        }
        hits[my_warp]= score;
     }
