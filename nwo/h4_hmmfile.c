@@ -14,8 +14,10 @@
 #include <string.h>
 
 #include "h4_profile.h"
-
 #include "h4_hmmfile.h"
+
+#include "standardize.h"
+#include "vectorize.h"
 
 /*****************************************************************
  * 1. H4_HMMFILE : open stream for reading HMMs
@@ -408,7 +410,9 @@ read_ascii4a(H4_HMMFILE *hfp, ESL_ALPHABET **ret_abc, H4_PROFILE **opt_hmm)
   if (( status = esl_keyhash_Lookup(hfp->kh, "version", -1, &keyi)) != eslOK) ESL_FAIL(eslEFORMAT, hfp->errmsg, "model starting at line %d has no `version` key", hfp->pi->tok[0].linenum); // {bad.28:21}
 
   hmm->flags |= h4_HASPROBS;
-  h4_profile_Config(hmm);
+
+  if (( status = h4_standardize(hmm)) != eslOK) goto ERROR;
+  if (( status = h4_vectorize(hmm))   != eslOK) goto ERROR;
 
   if (! *ret_abc) *ret_abc = abc;  // caller may have provided its own <abc>
   if (opt_hmm)    *opt_hmm = hmm; else h4_profile_Destroy(hmm);

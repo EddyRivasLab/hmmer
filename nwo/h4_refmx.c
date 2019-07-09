@@ -16,6 +16,8 @@
 #include "esl_vectorops.h"
 
 #include "logsum.h"
+#include "simdvec.h"
+
 #include "h4_path.h"
 #include "h4_refmx.h"
 
@@ -381,6 +383,51 @@ h4_refmx_DumpWindow(FILE *ofp, H4_REFMX *rx, int istart, int iend, int kstart, i
       for (k = kstart; k <= kend;    k++)  fprintf(ofp, "%*.*f ", width, precision, rx->dp[i][k * h4R_NSCELLS + h4R_DG]);
       fprintf(ofp, "\n\n");
   }
+  return eslOK;
+}
+
+
+
+static int
+score_to_vf(float sc)
+{
+  if      (sc == -32768.)      return -32768;
+  else if (sc == -eslINFINITY) return -32768;
+  else                         return (int) (sc + h4_BASE_W);
+}
+
+int
+h4_refmx_DumpAsVF(FILE *ofp, H4_REFMX *rx)
+{
+  int i,k;
+  
+  /* header */
+  fprintf(ofp, "       ");
+  for (k = 0; k <= rx->M;  k++) fprintf(ofp, "%6d ", k);
+  fprintf(ofp, "%6s %6s %6s %6s %6s\n", "E", "N", "J", "B", "C");
+  fprintf(ofp, "       ");
+  for (k = 0; k <= rx->M+5;  k++) fprintf(ofp, "%6s ", "------");
+  fprintf(ofp, "\n");
+
+  for (i = 0; i <= rx->L; i++)
+    {
+      fprintf(ofp, "%3d ML ", i);
+      for (k = 0; k <= rx->M;    k++)  fprintf(ofp, "%6d ", score_to_vf(rx->dp[i][k * h4R_NSCELLS + h4R_ML]));
+      fprintf(ofp, "%6d ", score_to_vf(rx->dp[i][ (rx->M+1) * h4R_NSCELLS + h4R_E]));
+      fprintf(ofp, "%6d ", 0);   // in VF, N = 0 for all i 
+      fprintf(ofp, "%6d ", score_to_vf(rx->dp[i][ (rx->M+1) * h4R_NSCELLS + h4R_J]));
+      fprintf(ofp, "%6d ", score_to_vf(rx->dp[i][ (rx->M+1) * h4R_NSCELLS + h4R_B]));
+      fprintf(ofp, "%6d ", score_to_vf(rx->dp[i][ (rx->M+1) * h4R_NSCELLS + h4R_C]));
+      fprintf(ofp, "\n");
+
+      fprintf(ofp, "%3d IL ", i);
+      for (k = 0; k <= rx->M;    k++)  fprintf(ofp, "%6d ", score_to_vf(rx->dp[i][k * h4R_NSCELLS + h4R_IL]));
+      fprintf(ofp, "\n");
+
+      fprintf(ofp, "%3d DL ", i);
+      for (k = 0; k <= rx->M;    k++)  fprintf(ofp, "%6d ", score_to_vf(rx->dp[i][k * h4R_NSCELLS + h4R_DL]));
+      fprintf(ofp, "\n\n");
+    }
   return eslOK;
 }
 

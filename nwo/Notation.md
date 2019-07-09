@@ -98,3 +98,24 @@
 | symbol             | meaning |
 |--------------------|---------|
 | $\Delta$           |log-odds ratio of priors; offset in converting score to posterior|
+
+
+
+## Nomenclature conventions in the C code
+
+### naming of constants
+
+| prefix | module        | 
+|--------|---------------|
+| `h4_`  |  h4_profile, h4_mode, simdvec |
+| `h4C_` |  h4_checkptmx |
+| `h4D_` |  h4_domain    |
+| `h4F_` |  h4_filtermx  |
+| `h4H_` |  h4_hit       |
+| `h4P_` |  h4_path      |
+| `h4R_` |  h4_refmx     |
+| `h4S_` |  h4_sparsemx  |
+
+
+
+

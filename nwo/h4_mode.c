@@ -13,6 +13,7 @@
 
 #include "easel.h"
 
+#include "simdvec.h"
 #include "h4_mode.h"
 
 
@@ -58,6 +59,50 @@ h4_mode_Create(void)
 }
 
 
+/* Function:  h4_mode_Clone()
+ * Synopsis:  Clone an H4_MODE
+ * Incept:    SRE, Sun 07 Jul 2019
+ */
+H4_MODE *
+h4_mode_Clone(const H4_MODE *mo)
+{
+  H4_MODE *m2 = NULL;
+
+  if (( m2 = h4_mode_Create()) == NULL)  goto ERROR;
+  if ( h4_mode_Copy(mo, m2)    != eslOK) goto ERROR;
+  return m2;
+
+ ERROR:
+  h4_mode_Destroy(m2);
+  return NULL;
+}
+
+
+/* Function:  h4_mode_Copy()
+ * Synopsis:  Copy an H4_MODE.
+ * Incept:    SRE, Sun 07 Jul 2019
+ */
+int
+h4_mode_Copy(const H4_MODE *mo, H4_MODE *m2)
+{
+  int s,t;
+
+  for (s = 0; s < h4_NX; s++)
+    for (t = 0; t < h4_NXT; t++)
+      {
+	m2->xsc[s][t] = mo->xsc[s][t];
+	m2->xw[s][t]  = mo->xw[s][t];
+      }
+
+  m2->nullsc  = mo->nullsc;
+  m2->L       = mo->L;
+  m2->nj      = mo->nj;
+  m2->pglocal = mo->pglocal;
+  return eslOK;
+}
+
+
+
 /* Function:  h4_mode_SetCustom()
  * Synopsis:  Set algorithm-dependent parameters for a search profile.
  * Incept:    SRE, Thu 31 Jan 2019
@@ -77,6 +122,8 @@ h4_mode_Create(void)
 int
 h4_mode_SetCustom(H4_MODE *mo, int L, float nj, float pglocal)
 {
+  int s,t;
+
   /* defaults. */
   if (L       == -1)  L       = 400;
   if (nj      == -1.) nj      = 1.;
@@ -96,6 +143,17 @@ h4_mode_SetCustom(H4_MODE *mo, int L, float nj, float pglocal)
   mo->nj      = nj;
   mo->pglocal = pglocal;
   h4_mode_SetLength(mo, L); // mo->nj must be set before calling SetLength().
+
+  /* Vectorized 16bit scaled scores.
+   * See notes on the 3 nat approximation, for why N/J/C transitions are hardcoded zero 
+   * VF assumes local alignment. It doesn't even use the B transitions, but set them anyway. 
+   */
+  for (s = 0; s < h4_NX; s++)
+    for (t = 0; t < h4_NXT; t++)
+      mo->xw[s][t] = h4_simdvec_wordify(mo->xsc[s][t]);
+  mo->xw[h4_N][h4_LOOP] = mo->xw[h4_J][h4_LOOP] = mo->xw[h4_C][h4_LOOP] = 0;  
+  mo->xw[h4_B][h4_LOOP]  = 0.;         // B->L (VF and other filters are local-only)
+  mo->xw[h4_B][h4_MOVE]  = -32768;     // B->G 
 
   return eslOK;
 }
@@ -160,6 +218,10 @@ h4_mode_SetLength(H4_MODE *mo, int L)
 
   mo->xsc[h4_N][h4_LOOP] = mo->xsc[h4_J][h4_LOOP] = mo->xsc[h4_C][h4_LOOP] = esl_log2f( (float) L    / ( (float) L + 2. + mo->nj));
   mo->xsc[h4_N][h4_MOVE] = mo->xsc[h4_J][h4_MOVE] = mo->xsc[h4_C][h4_MOVE] = esl_log2f((2. + mo->nj) / ( (float) L + 2. + mo->nj));
+
+  mo->xw[h4_N][h4_LOOP]  = mo->xw[h4_J][h4_LOOP]  = mo->xw[h4_C][h4_LOOP]  = 0;
+  mo->xw[h4_N][h4_MOVE]  = mo->xw[h4_J][h4_MOVE]  = mo->xw[h4_C][h4_MOVE]  = h4_simdvec_wordify(mo->xsc[h4_N][h4_MOVE]);
+
   mo->L = L;
   return eslOK;
 }
@@ -192,6 +254,51 @@ h4_mode_Dump(FILE *fp, const H4_MODE *mo)
   printf("B->L: %9.5f    B->G: %9.5f\n", mo->xsc[4][0], mo->xsc[4][1]); 
   return eslOK;
 }
+
+
+/* Function:  h4_mode_SameAsVF()
+ * Synopsis:  Scale and round to match VF.
+ * Incept:    SRE, Sun 07 Jul 2019
+ *
+ * Purpose:   Make a copy of <mo> with standard <xsc> scores set to
+ *            match the scaling and rounding of the Viterbi filter:
+ *            scaled by <h4_SCALE_W> and rounded to nearest integer.
+ *            
+ *            With <h4_profile_SameAsVF()>, a unit test (for example)
+ *            can obtain a (local-only alignment) model that will give
+ *            identical results for reference Viterbi compared to the
+ *            Viterbi filter, so long as the comparison doesn't
+ *            overflow in VF. See <h4_profile_SameAsVF()> for further
+ *            notes on how to do this.
+ *            
+ *            The new, scaled/rounded <H4_MODE> is returned in
+ *            <*ret_xmo>. Caller frees, with <h4_mode_Destroy()>.  You
+ *            can't call any reparameterization on <xmo>, including
+ *            <h4_mode_SetLength()>, because such routines would set
+ *            standard (unscaled, unrounded) scores.
+ */
+int
+h4_mode_SameAsVF(const H4_MODE *mo, H4_MODE **ret_xmo)
+{
+  H4_MODE *xmo = NULL;
+  int      s,t;
+  int      status;
+
+  if ((xmo = h4_mode_Clone(mo)) == NULL) { status = eslEMEM; goto ERROR; }
+  
+  for (s = 0; s < h4_NX; s++)
+    for (t = 0; t < h4_NXT; t++)
+      xmo->xsc[s][t] = (float) xmo->xw[s][t];
+
+  *ret_xmo = xmo;
+  return eslOK;
+
+ ERROR:
+  h4_mode_Destroy(xmo);
+  *ret_xmo = NULL;
+  return status;
+}
+
 
 
 /*****************************************************************

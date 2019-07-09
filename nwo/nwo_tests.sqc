@@ -7,4 +7,5 @@
 1 exercise logsum                @nwo/logsum_utest@ -s0
 1 exercise modelsample           @nwo/modelsample_utest@ -s0
 1 exercise reference_dp          @nwo/reference_dp_utest@ -s0
+1 exercise vitfilter             @nwo/vitfilter_utest@ -s0
 1 exercise zigar                 @nwo/zigar_utest@ -s0

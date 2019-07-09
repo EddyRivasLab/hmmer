@@ -1,27 +1,29 @@
-## simdvec : config and initialization of SIMD vector environment
+# simdvec: SIMD vector environment configuration
 
-As much as possible, we want to write single implementations that
-create and access our vectorized data structures in standard C, rather
-than writing $N$ different implementations for $N$ different vector
-ISAs.
+As much as possible, we create and access our vectorized data
+structures in a single implementation in standard C, rather than
+writing $N$ different implementations for $N$ different vector ISAs.
 
-All our vectorized code and cpu dispatching is in `src/dp_vector`. We
-don't put vector-dependent code anywhere else.
+All our vectorized code is in files that end in `_sse`, `_avx`,
+`avx512`, etc.; for example, the vectorized SSE implementation of the
+Viterbi filter is in `vitfilter_sse.c`. We don't put vector-dependent
+code anywhere else. For a set of vector implementations (for example
+`vitfilter_{sse,avx,avx512...}.c`) there is a wrapper in C
+(`vitfilter.c`) that uses runtime dispatching to pass a comparison to
+the appropriate vector implementation.
 
-`src/dp_vector/simdvec.h` contains constants and macros used to manage
-notation, allocation size, and DP matrix indexing across our three
-vectorized filters, and across all the different vector ISAs we
-support. This header can be included in non-vector code, outside
-`src/dp_vector`, enabling access to vectorized data structures
-independent of vector ISA instructions.
+`simdvec.h` contains constants and macros used to manage notation,
+allocation size, and DP matrix indexing across all the vector ISAs we
+support, for all three of our vectorized filters (SSV, Viterbi, and
+Forward). The `simdvec.h` header can be included in non-vector code,
+enabling access to our vectorized data structures independent of
+vector ISA instructions.
 
-`src/dp_vector/simdvec.c` contains, among other things,
-`p7_simdvec_Width()`, which determines which vector ISA we're running
-and returns the width (in bytes) of its vectors, using a runtime CPU
-dispatch mechanism.
+`simdvec.c` contains, among other things, `h4_simdvec_width()`, which
+determines which vector ISA we're running and returns the width (in
+bytes) of its vectors, using a runtime CPU dispatch mechanism.
 
-
-### notation for indexing DP matrices
+## notation for indexing DP matrices
 
 Standard (non-vectorized) dynamic programming matrices are generally
 indexed $i,k$, for $i=1..L$ rows for a target sequence of length $L$
@@ -33,75 +35,113 @@ indexed $v=0..V-1$. There may be empty values in some vectors: $M \leq
 QV$. 
 
 
-### macros/constants for V,Q
 
-The macro `P7_Q(M,V)` returns the number of vectors needed on one DP
-row for a profile of length $M$ and vectors containing $V$ elements.
-This is roughly $Q = M/V$; to be more precise, $Q = \max \left( 2, \left\lceil
-\frac{M}{V} \right\rceil \right)$, because $Q$ must be an integer, and there must
-be at least two vectors per row for striped DP to work.
+## macros/constants for V,Q
 
-$Q$ depends on both the data element width (number of bits per DP
-value) and on the vector width (number of bits per SIMD vector).
+The macro `H4_Q(M,V)` returns the number of vectors $Q$ needed on one
+DP row for a profile of length $M$ and vectors containing $V$ values.
+This is roughly $Q = M/V$; but more precisely, $Q = \max \left( 2,
+\left\lceil \frac{M}{V} \right\rceil \right)$, because $Q$ must be an
+integer, and there must be at least two vectors per row for striped DP
+to work.
 
-There are three different vectorized filters, with different data
+$Q$ depends on both the data element width (number of bytes per 
+value) and on the vector width (number of bytes per SIMD vector).
+
+There are three different vectorized filters with different data
 element widths, so there is a different $Q$ for each filter.  The SSV
 filter uses 8-bit `int8_t`, the Viterbi filter uses 16-bit `int16_t`,
-and the checkpointed Forward/Backward filter uses 32-bit `float`.  The
-following argumentless macros call `p7_simdvec_Width()` and return the
-_actual_ number of elements per vector, for the vector ISA that's
-being used:
+and the checkpointed Forward/Backward filter uses 32-bit `float`.  
+
+### macros for vectorized code
+
+In a vectorized implementation, we know what vector ISA we're using
+(duh), so we can use specific constants for vector sizes.
+
+| constant           |  defined as  | description                    |
+|--------------------|--------------|-------------------------------:|
+| `h4_VWIDTH_SSE`    | 16           | width of SSE vectors in bytes  |
+| `h4_VWIDTH_AVX`    | 32           |  ... of AVX vectors            |
+| `h4_VWIDTH_AVX512` | 64           |  ... of AVX512 vectors         |
+| `h4_VWIDTH_NEON`   | 16           |  ... of ARM NEON vectors       |
+| `h4_VWIDTH_VMX`    | 16           |  ... of Altivec/VMX vectors    |
+
+$V$ is the vector width divided by the number of bytes per value, so
+to get $Q$ at runtime in SSE vector code (for example), you'd call
+`H4_Q(M, h4_VWIDTH_SSE)` for SSV, 
+`H4_Q(M, h4_VWIDTH_SSE / sizeof(int16_t))` for VF, and
+`H4_Q(M, h4_VWIDTH_SSE / sizeof(float))` for FB.
+
+
+### macros for ISA-independent C code
+
+For ISA-independent C code, the following argumentless macros call
+`h4_simdvec_width()` and return the number of values per vector, for
+whatever vector ISA is being used:
 
 | macro      | description                                             |
 |------------|---------------------------------------------------------|
-| `P7_V_SSV` | Actual width of SSV vectors, in # of values.            |
-| `P7_V_VF`  | Actual width of Viterbi filter vectors, in # of values. |
-| `P7_V_FB`  | Actual width of Fwd/Bck filter vectors, in # of values. |
+| `H4_V_SSV` | Actual width of SSV vectors, in # of values.            |
+| `H4_V_VF`  | Actual width of Viterbi filter vectors, in # of values. |
+| `H4_V_FB`  | Actual width of Fwd/Bck filter vectors, in # of values. |
 
-Therefore to obtain an _actual_ $Q$ at runtime, you'd call `P7_Q(M,
-P7_V_SSV)` for SSV, and so on.
+Therefore to obtain $Q$ at runtime in ISA-independent C code, you'd
+call `H4_Q(M, H4_V_SSV)` for SSV, and so on.
+
+
+### macros for allocation sizes
 
 We support several different vector ISAs with different vector widths,
 ranging from 128-bit (SSE, NEON, Altivec/VMX) to 256-bit (AVX) to
 512-bit (AVX-512). Executables may support multiple vector ISAs,
 deciding the best one to use at runtime.  We allocate data structures
-that are suitable for any runtime-available vector ISA, which means
+that are suitable for _any_ runtime-available vector ISA, which means
 allocating for the largest compile-time supported vector width
 $V_{\mathrm{max}}$. The following constants return information
 relevant to determining allocation sizes:
 
 | constant      | description                                             |
 |---------------|---------------------------------------------------------|
-| `P7_VALIGN`   | Vectors must be aligned on this byte boundary.          |
-| `P7_VWIDTH`   | Maximum vector width, in bytes.                         |
-| `P7_VMAX_SSV` | Maximum width of SSV filter vectors, in # of values.    |
-| `P7_VMAX_VF`  | Maximum width of Viterbi filter vectors, in # of values.|
-| `P7_VMAX_FB`  | Maximum width of Fwd/Bck filter vectors, in # of values.|
+| `h4_VALIGN`   | Vectors must be aligned on this byte boundary.          |
+| `h4_VWIDTH`   | Maximum vector width, in bytes.                         |
+| `h4_VMAX_SSV` | Maximum width of SSV filter vectors, in # of values.    |
+| `h4_VMAX_VF`  | Maximum width of Viterbi filter vectors, in # of values.|
+| `h4_VMAX_FB`  | Maximum width of Fwd/Bck filter vectors, in # of values.|
 
-`P7_VALIGN`, `P7_VWIDTH`, and `P7_VMAX_SSV` are all defined to the
-same number. The reason to define three constants for the same number
-is just semantic, trying to clarify different usages in the code:
-memory alignment versus memory allocation size versus number of
-elements in a DP vector.
+`h4_VALIGN`, `h4_VWIDTH`, and `h4_VMAX_SSV` are all defined to the
+same number. We define three constants for the same number just to
+clarify different usages in the code: memory alignment versus memory
+allocation size versus maximum number of values in a DP vector.
 
 Therefore to obtain a $Q$ suitable for the largest supported vector
-ISA, we call `P7_Q(M, p7_VMAX_SSV)` for SSV, and so on. An SSV row is
-allocated for `P7_Q(M, p7_VMAX_SSV) * p7_VWIDTH` bytes (and so on for
-VF, FB), and the allocation is aligned on a `p7_VALIGN` byte boundary.
+ISA, we call `H4_Q(M, h4_VMAX_SSV)` for SSV, and so on. An SSV row is
+allocated for `H4_Q(M, h4_VMAX_SSV) * h4_VWIDTH` bytes (and so on for
+VF, FB), and the allocation is aligned on a `h4_VALIGN` byte boundary.
 
 
-### striped coordinate transformations
 
-To get $Q$ (the number of vectors needed to hold $M$ values): `P7_Q(M,
-p7_VMAX_FB)` for floats in the Forward/Backward filter, for example.
+## striped coordinate transformations
 
-To get $k$ given $q,z$: $k = zQ+q+1$.
+Our code and algorithm descriptions use the following variables consistently:
+
+| variable | description |
+|----------|-------------------------------------------------------------------------|
+|  `k`     | index over consensus profile nodes, `1..M`                              |
+|  `q`     | index over a row of `Q` vectors, `0..Q-1`                               |
+|  `z`     | index over elements/values in one vector, `0..V-1`                      |
+|  `y`     | index in a striped vector row when accessing as a C array, `0..(Q*V)-1` |
+
+
+To get $Q$ (the number of vectors needed to hold $M$ values), use
+the `H4_Q(M,V)` macro described above.
+
+To get $k$ given coordinates $q,z$: $k = zQ+q+1$.
 
 To get $q,z$ given $k$: $q = (k-1)\%Q; z = (k-1)/Q$.
 
-Let $y$ = scalar element position in a striped vector array (i.e.,
-we're accessing the vector array in as a non-SIMD array of floats or
-whatever).
+In ISA-independent C code, we can access the values in a striped
+vector row as an array of scalars (`int8_t`, `int16_t`, `float` for
+SSV, VF, FB):
 
 To get $y$ given $q,z$: $y = Vq + z$.
 
@@ -113,7 +153,8 @@ To get $k$ given $y$: $k = (y \% V)Q + y/V + 1$.
 
 
 
-### turning off subnormal floating point math
+
+## turning off subnormal floating point math
 
 In IEEE-754 floating point math, [_denormal_ numbers](
 https://en.wikipedia.org/wiki/Denormal_number) (aka _subnormal_
@@ -129,21 +170,21 @@ Backward filters underflow by design, and underflows are provably
 negligible in our results. We want to turn off the processor's use of
 denormalized FP math.
 
-Modern x86 processors support
+Current x86 processors support
 [FTZ (flush-to-zero) and DAZ (denormals-are-zero) modes](https://software.intel.com/en-us/node/523328),
 controlled by bit flags in the processor's floating-point control
 register (MXCSR).  Roughly speaking, FTZ says what happens when a
 denormal is the _result_ of an FP instruction, and DAZ says what
 happens when a denormal is the _input_ to an FP instruction.  Our
 `configure.ac` checks for support of the relevant macros that set
-these bits, and if they are supported, `p7_simdvec_Init()` sets them.
+these bits, and if they are supported, `h4_simdvec_Init()` sets them.
 
 On ARM processors, NEON vector instructions
 [always use flush-to-zero mode](http://infocenter.arm.com/help/index.jsp?topic=/com.arm.doc.dui0473c/CJAJBEAF.html).
 To enable flush-to-zero in _scalar_ floating point computation, you would set
 bit 24 in the ARM floating point control register (FPSCR).  This
 single FTZ bit controls both input and output, so it's equivalent to
-the x86 FTZ+DAZ combo. Because our main concern is with the vectorized
+the x86 FTZ+DAZ combo. Because our main concern is with the _vectorized_
 probability-space Fwd/Bck filters, it's all NEON code, and we
 currently don't bother to set the ARM FTZ bit. Also, it appears that
 many ARM compilers turn denormalized math by default.
@@ -159,7 +200,7 @@ other than x86, ARM, and Power.
 
 ---------------
 
-### memory alignment
+## memory alignment
 
 Vector memory has to be aligned to the vector width (in bytes).  SSE
 vectors, for example, must be aligned on a 16-byte boundary. 
@@ -173,9 +214,14 @@ specification, and `malloc()` can return unaligned memory.
 Our `esl_alloc_aligned()` function portably allocates suitably aligned
 memory, for up to 256-byte alignment.
 
+
+
 ---------------
 
-### "left" and "right" shifts, and endianness
+
+
+
+## "left" and "right" shifts, and endianness
 
 We describe the Farrar striped SIMD vector dynamic programming with
 values in SIMD vectors arranged in _memory order_, regardless of the

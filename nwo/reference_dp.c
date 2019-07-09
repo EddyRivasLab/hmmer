@@ -1381,6 +1381,16 @@ main(int argc, char **argv)
  * 7. "Brute" unit test
  *****************************************************************/
 #ifdef h4REFERENCE_DP_TESTDRIVE
+#include "esl_sq.h"
+#include "esl_stack.h"
+
+#include "h4_path.h"
+#include "emit.h"
+#include "logsum.h"
+#include "modelsample.h"
+#include "standardize.h"
+
+#include "reference_dp.h"
 
 /* The "brute" test, elaborate and savage, enumerates all possible
  * paths for a comparison of a profile of length M and sequence of
@@ -1420,14 +1430,7 @@ main(int argc, char **argv)
  * structure wrapped around H4_PATH, and enumerate_paths() itself),
  * so I broke it out into its own long section in the code.
  */
-#include "esl_sq.h"
-#include "esl_stack.h"
 
-#include "h4_path.h"
-#include "emit.h"
-#include "logsum.h"
-#include "modelsample.h"
-#include "reference_viterbi.h"
 
 /* struct partial_path_s
  * 
@@ -2468,7 +2471,7 @@ utest_mute_partial_cycle(void)
   hmm->flags |= h4_HASPROBS;
 
   /* Configure it, in multihit glocal L=0 mode */
-  if ( h4_profile_Config(hmm)   != eslOK) esl_fatal(msg);
+  if ( h4_standardize(hmm)      != eslOK) esl_fatal(msg);
   if ( h4_mode_SetGlocal(mo)    != eslOK) esl_fatal(msg);
   if ( h4_mode_SetLength(mo, 0) != eslOK) esl_fatal(msg);
 
@@ -2640,6 +2643,7 @@ main(int argc, char **argv)
       h4_reference_Viterbi(sq->dsq, sq->n, hmm, mo, vit, vpi, &vsc);
       h4_reference_Forward(sq->dsq, sq->n, hmm, mo, fwd, &fsc);
       //h4_refmx_Dump(stdout, fwd);
+      printf("%s vit %.6f\n", sq->name, vsc);
       printf("%s fwd %.6f\n", sq->name, fsc);
 
       h4_reference_Backward(sq->dsq, sq->n, hmm, mo, bck, &bsc);

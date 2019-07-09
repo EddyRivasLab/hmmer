@@ -9,7 +9,9 @@ etags -a LICENSE
 #
 find -L . -name "*.c"   -print -or -name "*.h"  -print | xargs etags -a
 find -L . -name "*.pl"  -print -or -name "*.pm" -print | xargs etags -a
+find -L . -name "*.py"  -print                         | xargs etags -a
 find -L . -name "*.sh"  -print                         | xargs etags -a
+find -L . -name "*.md"  -print                         | xargs etags -a
 find -L . -name "*.tex" -print                         | xargs etags -a
 find -L . -name "*.man" -print                         | xargs etags -a
 find -L . -name "*.in"  -print                         | xargs etags -a

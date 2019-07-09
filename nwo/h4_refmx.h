@@ -14,8 +14,9 @@
  */          
 #ifndef h4REFMX_INCLUDED
 #define h4REFMX_INCLUDED
-
 #include "h4_config.h"
+
+#include "h4_path.h"
 
 /*****************************************************************
  * 1. The H4_REFMX object and its access macros
@@ -107,6 +108,7 @@ extern char     *h4_refmx_DecodeSpecial(int type);
 extern char     *h4_refmx_DecodeState  (int type);
 extern int       h4_refmx_Dump      (FILE *ofp, H4_REFMX *rx);
 extern int       h4_refmx_DumpWindow(FILE *ofp, H4_REFMX *rx, int istart, int iend, int kstart, int kend);
+extern int       h4_refmx_DumpAsVF  (FILE *ofp, H4_REFMX *rx);
 extern int       h4_refmx_CountPath(const H4_PATH *pi, H4_REFMX *rxd);
 extern int       h4_refmx_CompareDecoding(const H4_REFMX *ppe, const H4_REFMX *ppa, float a_tol);
 extern int       h4_refmx_Validate(H4_REFMX *rmx, char *errbuf);

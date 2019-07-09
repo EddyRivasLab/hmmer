@@ -1,10 +1,12 @@
 #ifndef h4PATH_INCLUDED
 #define h4PATH_INCLUDED
+#include "h4_config.h"
 
 #include "easel.h"
 #include "esl_alphabet.h"
 #include "esl_random.h"
 
+#include "h4_counts.h"
 #include "h4_mode.h"
 #include "h4_profile.h"
 
@@ -58,7 +60,7 @@ extern void     h4_path_Destroy(H4_PATH *pi);
 extern int h4_path_InferLocal (const ESL_ALPHABET *abc, const ESL_DSQ *ax, int alen, const int8_t *matassign, int lcol, int rcol, H4_PATH *pi);
 extern int h4_path_InferGlocal(const ESL_ALPHABET *abc, const ESL_DSQ *ax, int alen, const int8_t *matassign, int lcol, int rcol, H4_PATH *pi);
 
-extern int h4_path_Count(const H4_PATH *pi, const ESL_DSQ *dsq, float wgt, H4_PROFILE_CT *ctm);
+extern int h4_path_Count(const H4_PATH *pi, const ESL_DSQ *dsq, float wgt, H4_COUNTS *ctm);
 
 extern int h4_path_Score(const H4_PATH *pi, const ESL_DSQ *dsq, const H4_PROFILE *hmm, const H4_MODE *mo, float *ret_sc);
 

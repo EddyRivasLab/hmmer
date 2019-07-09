@@ -2,6 +2,8 @@ PROGS = hmmer
 
 OBJS   = \
 	cmd_build.o         \
+	h4_counts.o         \
+	h4_filtermx.o       \
 	h4_hmmfile.o        \
 	h4_mode.o           \
 	h4_path.o           \
@@ -17,17 +19,23 @@ OBJS   = \
 	modelstats.o        \
 	parameterize.o      \
 	reference_dp.o      \
+	simdvec.o           \
+	standardize.o       \
+	vectorize.o         \
+	vitfilter.o         \
 	zigar.o
 
-SSE4_OBJS   =
-AVX_OBJS    =
-AVX512_OBJS =
+SSE4_OBJS   = vitfilter_sse.o
+AVX_OBJS    = vitfilter_avx.o
+AVX512_OBJS = vitfilter_avx512.o
 NEON_OBJS   =
 VMX_OBJS    =
 
 HDRS = \
 	h4_config.h         \
 	cmd_build.h         \
+	h4_counts.h         \
+	h4_filtermx.h       \
 	h4_hmmfile.h        \
 	h4_mode.h           \
 	h4_path.h           \
@@ -43,6 +51,10 @@ HDRS = \
 	modelstats.h        \
 	parameterize.h      \
 	reference_dp.h      \
+	simdvec.h           \
+	standardize.h       \
+	vectorize.h         \
+	vitfilter.h         \
 	zigar.h
 
 
@@ -54,6 +66,7 @@ UTESTS = \
 	logsum_utest       \
 	modelsample_utest  \
 	reference_dp_utest \
+	vitfilter_utest    \
 	zigar_utest
 
 STATS  =
@@ -63,8 +76,9 @@ EXPERIMENTS = \
 	h4_build_experiment2
 
 BENCHMARKS = \
-	logsum_benchmark \
-	reference_dp_benchmark 
+	logsum_benchmark        \
+	reference_dp_benchmark  \
+	vitfilter_benchmark     \
 
 EXAMPLES = \
 	h4_hmmfile_example        \
@@ -72,6 +86,7 @@ EXAMPLES = \
 	emit_example              \
 	logsum_example            \
 	reference_dp_example      \
+	vitfilter_example         \
 	zigar_example
 
 
@@ -141,39 +156,39 @@ ifndef V
 	QUIET         = @
 endif
 
-ALL_OBJS        = ${OBJS}       ${SSE_OBJS}       ${AVX_OBJS}       ${AVX512_OBJS}       ${NEON_OBJS}       ${VMX_OBJS}
-ALL_UTESTS      = ${UTESTS}     ${SSE_UTESTS}     ${AVX_UTESTS}     ${AVX512_UTESTS}     ${NEON_UTESTS}     ${VMX_UTESTS}
+ALL_OBJS        = ${OBJS}       ${SSE4_OBJS}       ${AVX_OBJS}       ${AVX512_OBJS}       ${NEON_OBJS}       ${VMX_OBJS}
+ALL_UTESTS      = ${UTESTS}     ${SSE4_UTESTS}     ${AVX_UTESTS}     ${AVX512_UTESTS}     ${NEON_UTESTS}     ${VMX_UTESTS}
 ALL_EXPERIMENTS = ${EXPERIMENTS}
-ALL_STATS       = ${STATS}      ${SSE_STATS}      ${AVX_STATS}      ${AVX512_STATS}      ${NEON_STATS}      ${VMX_STATS}
-ALL_BENCHMARKS  = ${BENCHMARKS} ${SSE_BENCHMARKS} ${AVX_BENCHMARKS} ${AVX512_BENCHMARKS} ${NEON_BENCHMARKS} ${VMX_BENCHMARKS}
-ALL_EXAMPLES    = ${EXAMPLES}   ${SSE_EXAMPLES}   ${AVX_EXAMPLES}   ${AVX512_EXAMPLES}   ${NEON_EXAMPLES}   ${VMX_EXAMPLES}
+ALL_STATS       = ${STATS}      ${SSE4_STATS}      ${AVX_STATS}      ${AVX512_STATS}      ${NEON_STATS}      ${VMX_STATS}
+ALL_BENCHMARKS  = ${BENCHMARKS} ${SSE4_BENCHMARKS} ${AVX_BENCHMARKS} ${AVX512_BENCHMARKS} ${NEON_BENCHMARKS} ${VMX_BENCHMARKS}
+ALL_EXAMPLES    = ${EXAMPLES}   ${SSE4_EXAMPLES}   ${AVX_EXAMPLES}   ${AVX512_EXAMPLES}   ${NEON_EXAMPLES}   ${VMX_EXAMPLES}
 
 
-${SSE_OBJS}:          SIMD_CFLAGS:= $(SSE4_CFLAGS)     
+${SSE4_OBJS}:         SIMD_CFLAGS:= $(SSE4_CFLAGS)     
 ${AVX_OBJS}:          SIMD_CFLAGS:= $(AVX_CFLAGS)     
 ${AVX512_OBJS}:       SIMD_CFLAGS:= $(AVX512_CFLAGS)  
 ${NEON_OBJS}:         SIMD_CFLAGS:= $(NEON_CFLAGS)    
 ${VMX_OBJS}:          SIMD_CFLAGS:= $(VMX_CFLAGS)     
 
-${SSE_UTESTS}:        SIMD_CFLAGS:= $(SSE4_CFLAGS)     
+${SSE4_UTESTS}:       SIMD_CFLAGS:= $(SSE4_CFLAGS)     
 ${AVX_UTESTS}:        SIMD_CFLAGS:= $(AVX_CFLAGS)     
 ${AVX512_UTESTS}:     SIMD_CFLAGS:= $(AVX512_CFLAGS)  
 ${NEON_UTESTS}:       SIMD_CFLAGS:= $(NEON_CFLAGS)    
 ${VMX_UTESTS}:        SIMD_CFLAGS:= $(VMX_CFLAGS)     
 
-${SSE_STATS}:         SIMD_CFLAGS:= $(SSE4_CFLAGS)     
+${SSE4_STATS}:        SIMD_CFLAGS:= $(SSE4_CFLAGS)     
 ${AVX_STATS}:         SIMD_CFLAGS:= $(AVX_CFLAGS)     
 ${AVX512_STATS}:      SIMD_CFLAGS:= $(AVX512_CFLAGS)  
 ${NEON_STATS}:        SIMD_CFLAGS:= $(NEON_CFLAGS)    
 ${VMX_STATS}:         SIMD_CFLAGS:= $(VMX_CFLAGS)     
 
-${SSE_BENCHMARKS}:    SIMD_CFLAGS:= $(SSE4_CFLAGS)     
+${SSE4_BENCHMARKS}:   SIMD_CFLAGS:= $(SSE4_CFLAGS)     
 ${AVX_BENCHMARKS}:    SIMD_CFLAGS:= $(AVX_CFLAGS)     
 ${AVX512_BENCHMARKS}: SIMD_CFLAGS:= $(AVX512_CFLAGS)  
 ${NEON_BENCHMARKS}:   SIMD_CFLAGS:= $(NEON_CFLAGS)    
 ${VMX_BENCHMARKS}:    SIMD_CFLAGS:= $(VMX_CFLAGS)     
 
-${SSE_EXAMPLES}:      SIMD_CFLAGS:= $(SSE4_CFLAGS)     
+${SSE4_EXAMPLES}:     SIMD_CFLAGS:= $(SSE4_CFLAGS)     
 ${AVX_EXAMPLES}:      SIMD_CFLAGS:= $(AVX_CFLAGS)     
 ${AVX512_EXAMPLES}:   SIMD_CFLAGS:= $(AVX512_CFLAGS)  
 ${NEON_EXAMPLES}:     SIMD_CFLAGS:= $(NEON_CFLAGS)    
