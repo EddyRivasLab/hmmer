@@ -465,8 +465,8 @@ serial_master(ESL_GETOPTS *go, struct cfg_s *cfg)
      /* Create processing pipeline and hit list accumulators */
      tophits_accumulator  = p7_tophits_Create(); 
      pipelinehits_accumulator = p7_pipeline_Create(go, 100, 100, FALSE, p7_SCAN_MODELS);
-     pipelinehits_accumulator->nseqs = 1;
-     pipelinehits_accumulator->nres = qsqDNA->n;
+     pipelinehits_accumulator->nseqs = 0;
+     pipelinehits_accumulator->nres = 0; //qsqDNA->n;
      pipelinehits_accumulator->is_translated = TRUE;
 
      if (fprintf(ofp, "Query:       %s  [L=%ld]\n", qsqDNA->name, (long) qsqDNA->n) < 0) ESL_EXCEPTION_SYS(eslEWRITE, "write failed");
@@ -529,6 +529,8 @@ serial_master(ESL_GETOPTS *go, struct cfg_s *cfg)
      {
        p7_tophits_Merge(tophits_accumulator, info[i].th);
        p7_pipeline_Merge(pipelinehits_accumulator, info[i].pli);
+       pipelinehits_accumulator->nseqs += info[i].pli->nseqs;
+       pipelinehits_accumulator->nres  += info[i].pli->nres;
 
        p7_pipeline_Destroy(info[i].pli);
        p7_tophits_Destroy(info[i].th);
@@ -644,6 +646,12 @@ serial_loop(WORKER_INFO *info, P7_HMMFILE *hfp)
 
   /* translate DNA sequence to 6 frame ORFs */
   translate_sequence(info->gcode, info->wrk, info->ntqsq);
+  for (k = 0; k < info->wrk->orf_block->count; ++k)
+  {
+      qsq_aa = &(info->wrk->orf_block->list[k]);
+      p7_pli_NewSeq(info->pli, qsq_aa);
+  }
+
 
   /* Main loop: */
   while ((status = p7_oprofile_ReadMSV(hfp, &abc, &om)) == eslOK)
@@ -778,6 +786,11 @@ pipeline_thread(void *arg)
 
         /* translate DNA sequence to 6 frame ORFs  */
         translate_sequence(info->gcode, info->wrk, qsqDNATxt);
+        for (k = 0; k < info->wrk->orf_block->count; ++k)
+        {
+            qsq_aa = &(info->wrk->orf_block->list[k]);
+            p7_pli_NewSeq(info->pli, qsq_aa);
+        }
 
         /* convert the DNA sequence to text so we can print it in the domain alignment display */
         esl_sq_Textize(qsqDNATxt);
