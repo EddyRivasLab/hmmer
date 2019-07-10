@@ -576,7 +576,7 @@ void hmmpgmd2msa_utest(int ntrials, char *hmmfile){
       p7_bg_SetLength(bg, sequences[i]->n);
       p7_oprofile_ReconfigLength(oprofile, sequences[i]->n);
   
-      p7_Pipeline(pli, oprofile, bg, sequences[i], NULL, hitlist);
+      p7_Pipeline(pli, oprofile, bg, sequences[i], NULL, hitlist, NULL);
       p7_pipeline_Reuse(pli);
     }
 

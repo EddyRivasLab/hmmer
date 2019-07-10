@@ -467,6 +467,7 @@ serial_master(ESL_GETOPTS *go, struct cfg_s *cfg)
      pipelinehits_accumulator = p7_pipeline_Create(go, 100, 100, FALSE, p7_SCAN_MODELS);
      pipelinehits_accumulator->nseqs = 1;
      pipelinehits_accumulator->nres = qsqDNA->n;
+     pipelinehits_accumulator->is_translated = TRUE;
 
      if (fprintf(ofp, "Query:       %s  [L=%ld]\n", qsqDNA->name, (long) qsqDNA->n) < 0) ESL_EXCEPTION_SYS(eslEWRITE, "write failed");
      if (qsqDNA->acc[0]  != 0 && fprintf(ofp, "Accession:   %s\n", qsqDNA->acc)     < 0) ESL_EXCEPTION_SYS(eslEWRITE, "write failed");
@@ -497,10 +498,9 @@ serial_master(ESL_GETOPTS *go, struct cfg_s *cfg)
        info[i].th  = p7_tophits_Create();
        info[i].pli = p7_pipeline_Create(go, 100, 100, FALSE, p7_SCAN_MODELS); /* M_hint = 100, L_hint = 100 are just dummies for now */
        info[i].pli->hfp = hfp;  /* for two-stage input, pipeline needs <hfp> */
+       info[i].pli->is_translated = TRUE;
        info[i].ntqsq = qsqDNA;
        info[i].ntqsq->prev_n = prev_char_cnt;
-
-      // p7_pli_NewSeq(info[i].pli, qsq);
 
 #ifdef HMMER_THREADS
        if (ncpus > 0) esl_threads_AddThread(threadObj, &info[i]);

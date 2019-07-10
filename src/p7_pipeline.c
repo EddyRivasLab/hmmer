@@ -103,7 +103,8 @@ p7_pipeline_Create(ESL_GETOPTS *go, int M_hint, int L_hint, int long_targets, en
   ESL_ALLOC(pli, sizeof(P7_PIPELINE));
 
   pli->do_alignment_score_calc = 0;
-  pli->long_targets = long_targets;
+  pli->long_targets  = long_targets;
+  pli->is_translated = FALSE; /* translated tools will need to override this */
 
   if ((pli->fwd = p7_omx_Create(M_hint, L_hint, L_hint)) == NULL) goto ERROR;
   if ((pli->bck = p7_omx_Create(M_hint, L_hint, L_hint)) == NULL) goto ERROR;
@@ -993,7 +994,8 @@ p7_Pipeline(P7_PIPELINE *pli, P7_OPROFILE *om, P7_BG *bg, const ESL_SQ *sq, cons
           }
         }
       }
-	  
+
+
       /*
         if performing translated search, we want to record the location
         of the hit in both the full DNA sequence and in the ORF provided by
@@ -1765,10 +1767,10 @@ p7_pli_Statistics(FILE *ofp, P7_PIPELINE *pli, ESL_STOPWATCH *w)
   fprintf(ofp, "-------------------------------------\n");
   if (pli->mode == p7_SEARCH_SEQS) {
     fprintf(ofp, "Query model(s):              %15" PRId64 "  (%" PRId64 " nodes)\n",     pli->nmodels, pli->nnodes);
-    fprintf(ofp, "Target sequences:            %15" PRId64 "  (%" PRId64 " residues searched)\n",  pli->nseqs,   pli->nres);
+    fprintf(ofp, "Target %-12s          %15" PRId64 "  (%" PRId64 " residues searched)\n", pli->is_translated?"orf(s):":"sequence(s):", pli->nseqs,   pli->nres);
     ntargets = pli->nseqs;
   } else {
-    fprintf(ofp, "Query sequence(s):           %15" PRId64 "  (%" PRId64 " residues searched)\n",  pli->nseqs,   pli->nres);
+    fprintf(ofp, "Query %-12s           %15" PRId64 "  (%" PRId64 " residues searched)\n", pli->is_translated?"orf(s):":"sequence(s):", pli->nseqs,   pli->nres);
     fprintf(ofp, "Target model(s):             %15" PRId64 "  (%" PRId64 " nodes)\n",     pli->nmodels, pli->nnodes);
     ntargets = pli->nmodels;
   }

@@ -109,15 +109,6 @@ static ESL_OPTIONS options[] = {
   { "--informat", eslARG_STRING,  FALSE, NULL, NULL, NULL,  NULL, NULL,  "specify that input file is in format <s>",      15 },
   { "--watson",   eslARG_NONE,    FALSE, NULL, NULL, NULL,  NULL, NULL,  "only translate top strand",                     15 },
   { "--crick",    eslARG_NONE,    FALSE, NULL, NULL, NULL,  NULL, NULL,  "only translate bottom strand",                  15 },
-
-  /* Restrict search to subset of database - hidden because these flags are
-   *   (a) currently for internal use
-   *   (b) probably going to change
-   */
-  { "--restrictdb_stkey", eslARG_STRING, "0",  NULL, NULL,    NULL,  NULL,  NULL,       "Search starts at the sequence with name <s> ",     99 },
-  { "--restrictdb_n",eslARG_INT,        "-1",  NULL, NULL,    NULL,  NULL,  NULL,       "Search <j> target sequences (starting at --restrictdb_stkey)",   99 },
-  { "--ssifile",    eslARG_STRING,       NULL, NULL, NULL,    NULL,  NULL,  NULL,       "restrictdb_x values require ssi file. Override default to <s>",  99 },
-
   
   {  0, 0, 0, 0, 0, 0, 0, 0, 0, 0 },
 };
@@ -135,18 +126,15 @@ static char banner[] = "search protein profile(s) against DNA sequence database"
 struct cfg_s {
   char            *dbfile;            /* target sequence database file                   */
   char            *hmmfile;           /* query HMM file                                  */
-
-  char             *firstseq_key;     /* name of the first sequence in the restricted db range */
-  int              n_targetseq;       /* number of sequences in the restricted range */
 };
 
 static int  serial_master(ESL_GETOPTS *go, struct cfg_s *cfg);
-static int  serial_loop  (WORKER_INFO *info, ESL_SQFILE *dbfp, int n_targetseqs);
+static int  serial_loop  (WORKER_INFO *info, ESL_SQFILE *dbfp);
 
 #ifdef HMMER_THREADS
 #define BLOCK_SIZE 1000
 
-static int  thread_loop(WORKER_INFO *info, ESL_THREADS *obj, ESL_WORK_QUEUE *queue, ESL_SQFILE *dbfp, int n_targetseqs);
+static int  thread_loop(WORKER_INFO *info, ESL_THREADS *obj, ESL_WORK_QUEUE *queue, ESL_SQFILE *dbfp);
 static void pipeline_thread(void *arg);
 #endif /*HMMER_THREADS*/
 
@@ -253,9 +241,6 @@ output_header(FILE *ofp, const ESL_GETOPTS *go, char *hmmfile, char *seqfile)
   if (esl_opt_IsUsed(go, "--F2")         && fprintf(ofp, "# Vit filter P threshold:       <= %g\n",             esl_opt_GetReal(go, "--F2"))           < 0) ESL_EXCEPTION_SYS(eslEWRITE, "write failed");
   if (esl_opt_IsUsed(go, "--F3")         && fprintf(ofp, "# Fwd filter P threshold:       <= %g\n",             esl_opt_GetReal(go, "--F3"))           < 0) ESL_EXCEPTION_SYS(eslEWRITE, "write failed");
   if (esl_opt_IsUsed(go, "--nobias")     && fprintf(ofp, "# biased composition HMM filter:   off\n")                                                   < 0) ESL_EXCEPTION_SYS(eslEWRITE, "write failed");
-  if (esl_opt_IsUsed(go, "--restrictdb_stkey") && fprintf(ofp, "# Restrict db to start at seq key: %s\n",            esl_opt_GetString(go, "--restrictdb_stkey"))  < 0) ESL_EXCEPTION_SYS(eslEWRITE, "write failed");
-  if (esl_opt_IsUsed(go, "--restrictdb_n")     && fprintf(ofp, "# Restrict db to # target seqs:    %d\n",            esl_opt_GetInteger(go, "--restrictdb_n")) < 0) ESL_EXCEPTION_SYS(eslEWRITE, "write failed");
-  if (esl_opt_IsUsed(go, "--ssifile")          && fprintf(ofp, "# Override ssi file to:            %s\n",            esl_opt_GetString(go, "--ssifile"))       < 0) ESL_EXCEPTION_SYS(eslEWRITE, "write failed");
 
   if (esl_opt_IsUsed(go, "--nonull2")    && fprintf(ofp, "# null2 bias corrections:          off\n")                                                   < 0) ESL_EXCEPTION_SYS(eslEWRITE, "write failed");
   if (esl_opt_IsUsed(go, "-Z")           && fprintf(ofp, "# sequence search space set to:    %.0f\n",           esl_opt_GetReal(go, "-Z"))             < 0) ESL_EXCEPTION_SYS(eslEWRITE, "write failed");
@@ -296,28 +281,8 @@ main(int argc, char **argv)
    */
   cfg.hmmfile    = NULL;
   cfg.dbfile     = NULL;
-  cfg.firstseq_key = NULL;
-  cfg.n_targetseq  = -1;
 
   process_commandline(argc, argv, &go, &cfg.hmmfile, &cfg.dbfile);    
-
-/* is the range restricted? */
-
-#ifndef eslAUGMENT_SSI
-  if (esl_opt_IsUsed(go, "--restrictdb_stkey") || esl_opt_IsUsed(go, "--restrictdb_n")  || esl_opt_IsUsed(go, "--ssifile")  )
-    p7_Fail("Unable to use range-control options unless an SSI index file is available. See 'esl_sfetch --index'\n");
-#else
-  if (esl_opt_IsUsed(go, "--restrictdb_stkey") )
-    if ((cfg.firstseq_key = esl_opt_GetString(go, "--restrictdb_stkey")) == NULL)  p7_Fail("Failure capturing --restrictdb_stkey\n");
-
-  if (esl_opt_IsUsed(go, "--restrictdb_n") )
-    cfg.n_targetseq = esl_opt_GetInteger(go, "--restrictdb_n");
-
-  if ( cfg.n_targetseq != -1 && cfg.n_targetseq < 1 )
-    p7_Fail("--restrictdb_n must be >= 1\n");
-
-#endif
-
 
   status = serial_master(go, &cfg);
 
@@ -419,16 +384,6 @@ serial_master(ESL_GETOPTS *go, struct cfg_s *cfg)
   else if (status == eslEINVAL)    p7_Fail("Can't autodetect format of a stdin or .gz seqfile");
   else if (status != eslOK)        p7_Fail("Unexpected error %d opening sequence file %s\n", status, cfg->dbfile);  
 
-
-  if (esl_opt_IsUsed(go, "--restrictdb_stkey") || esl_opt_IsUsed(go, "--restrictdb_n")) {
-    if (esl_opt_IsUsed(go, "--ssifile"))
-      esl_sqfile_OpenSSI(dbfp, esl_opt_GetString(go, "--ssifile"));
-    else
-      esl_sqfile_OpenSSI(dbfp, NULL);
-  }
-
-
-
   /* Open the query profile HMM file */
   status = p7_hmmfile_OpenE(cfg->hmmfile, NULL, &hfp, errbuf);
   if      (status == eslENOTFOUND) p7_Fail("File existence/permissions problem in trying to open HMM file %s.\n%s\n", cfg->hmmfile, errbuf);
@@ -524,14 +479,7 @@ serial_master(ESL_GETOPTS *go, struct cfg_s *cfg)
         if (! esl_sqfile_IsRewindable(dbfp))
           esl_fatal("Target sequence file %s isn't rewindable; can't search it with multiple queries", cfg->dbfile);
 
-        if (! esl_opt_IsUsed(go, "--restrictdb_stkey") )
-          esl_sqfile_Position(dbfp, 0); //only re-set current position to 0 if we're not planning to set it in a moment
-      }
-
-      if ( cfg->firstseq_key != NULL ) { //it's tempting to want to do this once and capture the offset position for future passes, but ncbi files make this non-trivial, so this keeps it general
-        sstatus = esl_sqfile_PositionByKey(dbfp, cfg->firstseq_key);
-        if (sstatus != eslOK)
-          p7_Fail("Failure setting restrictdb_stkey to %d\n", cfg->firstseq_key);
+        esl_sqfile_Position(dbfp, 0);
       }
 
 	  if (fprintf(ofp, "Query:       %s  [M=%d]\n", hmm->name, hmm->M)  < 0) ESL_EXCEPTION_SYS(eslEWRITE, "write failed");
@@ -549,6 +497,7 @@ serial_master(ESL_GETOPTS *go, struct cfg_s *cfg)
       pipelinehits_accumulator = p7_pipeline_Create(go, 100, 100, FALSE, p7_SEARCH_SEQS);
       pipelinehits_accumulator->nmodels = 1;
       pipelinehits_accumulator->nnodes = hmm->M;
+      pipelinehits_accumulator->is_translated = TRUE;
 
       for (i = 0; i < infocnt; ++i)
       {
@@ -558,6 +507,7 @@ serial_master(ESL_GETOPTS *go, struct cfg_s *cfg)
         info[i].th  = p7_tophits_Create();
         info[i].om  = p7_oprofile_Clone(om);
         info[i].pli = p7_pipeline_Create(go, om->M, 100, FALSE, p7_SEARCH_SEQS); /* L_hint = 100 is just a dummy for now */
+        info[i].pli->is_translated = TRUE;
         status = p7_pli_NewModel(info[i].pli, info[i].om, info[i].bg);
         if (status == eslEINVAL) p7_Fail(info->pli->errbuf);
 
@@ -581,10 +531,10 @@ serial_master(ESL_GETOPTS *go, struct cfg_s *cfg)
 
 #ifdef HMMER_THREADS
          if (ncpus > 0)
-             sstatus = thread_loop(info, threadObj, queue, dbfp, cfg->n_targetseq);
+             sstatus = thread_loop(info, threadObj, queue, dbfp);
          else
 #endif
-         sstatus = serial_loop(info, dbfp, cfg->n_targetseq);
+         sstatus = serial_loop(info, dbfp);
 
          switch(sstatus)
          {
@@ -611,7 +561,6 @@ serial_master(ESL_GETOPTS *go, struct cfg_s *cfg)
 
          esl_sq_Reuse(qsqDNA);
 		 
-      //} /* while ((cfg->n_targetseq < 0 || (cfg->n_targetseq > 0 &&... loop */
 
       /* Print the results.  */
       p7_tophits_SortBySortkey(tophits_accumulator);
@@ -713,7 +662,7 @@ serial_master(ESL_GETOPTS *go, struct cfg_s *cfg)
 
 
 static int
-serial_loop(WORKER_INFO *info, ESL_SQFILE *dbfp, int n_targetseqs)
+serial_loop(WORKER_INFO *info, ESL_SQFILE *dbfp)
 {
   int sstatus            = eslOK;
   int seq_id             = 0;
@@ -731,7 +680,7 @@ serial_loop(WORKER_INFO *info, ESL_SQFILE *dbfp, int n_targetseqs)
   info->wrk->orf_block = esl_sq_CreateDigitalBlock(BLOCK_SIZE, info->om->abc);
   if (info->wrk->orf_block == NULL)          esl_fatal("Failed to allocate sequence block");
 
-  while (sstatus == eslOK && (n_targetseqs==-1 || seq_id < n_targetseqs) ) {
+  while (sstatus == eslOK  ) {
       dbsq_dna->idx = seq_id;
 
       /* copy and convert the DNA sequence to text so we can print it in the domain alignment display */
@@ -750,7 +699,26 @@ serial_loop(WORKER_INFO *info, ESL_SQFILE *dbfp, int n_targetseqs)
       {
           dbsq_aa = &(block->list[k]);
 
+          if (   (dbsq_aa->start < dbsq_aa->end    &&  dbsq_aa->end < dbsq_dna->C )  ||
+                 (dbsq_aa->end < dbsq_aa->start    &&  dbsq_aa->start < dbsq_dna->C ) )
+              continue; /* don't bother with an orf that showed up completely within a previous window */
+
+
           p7_pli_NewSeq(info->pli, dbsq_aa);
+          /*we use overlapping windows to ensure that we don't miss something at a boundary, but now
+           * we need to adjust for overcounting candidate ORFs
+           */
+          if (dbsq_aa->start < dbsq_aa->end) {
+              if (dbsq_aa->start < dbsq_dna->C - 59 ){
+                  info->pli->nseqs--;
+                  info->pli->nres -= ESL_MIN(dbsq_aa->n,  (dbsq_dna->C - dbsq_aa->start + 1)/3);
+              }
+          } else {
+              if (dbsq_aa->end < dbsq_dna->C - 58 ){
+                  info->pli->nseqs--;
+                  info->pli->nres -= ESL_MIN(dbsq_aa->n,  (dbsq_dna->C - dbsq_aa->end + 1)/3);
+              }
+          }
 
           /*
           Use the name, accession, and description from the DNA sequence and
@@ -775,15 +743,14 @@ serial_loop(WORKER_INFO *info, ESL_SQFILE *dbfp, int n_targetseqs)
 
       prev_char_cnt += dbsq_dna->n;
 
-      sstatus = esl_sqio_ReadWindow(dbfp, info->om->max_length, info->pli->block_length, dbsq_dna);
+      /* "maxlength * 3" because we're looking for a protein of maxlength, and this is DNA */
+      sstatus = esl_sqio_ReadWindow(dbfp, info->om->max_length * 3, info->pli->block_length, dbsq_dna);
+
+
       if (sstatus == eslEOD) { // no more left of this sequence ... move along to the next sequence.
-          //add_id_length(id_length_list, dbsq->idx, dbsq->L);
-          //info->pli->nseqs++;
           esl_sq_Reuse(dbsq_dna);
           sstatus = esl_sqio_ReadWindow(dbfp, 0, info->pli->block_length, dbsq_dna);
-
           seq_id++;
-
       }
 
   }
@@ -796,7 +763,7 @@ serial_loop(WORKER_INFO *info, ESL_SQFILE *dbfp, int n_targetseqs)
 
 #ifdef HMMER_THREADS
 static int
-thread_loop(WORKER_INFO *info, ESL_THREADS *obj, ESL_WORK_QUEUE *queue, ESL_SQFILE *dbfp, int n_targetseqs)
+thread_loop(WORKER_INFO *info, ESL_THREADS *obj, ESL_WORK_QUEUE *queue, ESL_SQFILE *dbfp)
 {
   int  i;
   int  status  = eslOK;
@@ -809,7 +776,6 @@ thread_loop(WORKER_INFO *info, ESL_THREADS *obj, ESL_WORK_QUEUE *queue, ESL_SQFI
   
   ESL_ALPHABET *abcdna = esl_alphabet_Create(eslDNA);
   ESL_SQ      *tmpsq_dna = esl_sq_CreateDigital(abcdna ) ;
-  int          abort = FALSE; // in the case n_targetseqs != -1, a block may get abbreviated
 
   esl_workqueue_Reset(queue);
   esl_threads_WaitForStart(obj);
@@ -823,30 +789,15 @@ thread_loop(WORKER_INFO *info, ESL_THREADS *obj, ESL_WORK_QUEUE *queue, ESL_SQFI
     {
       block = (ESL_SQ_BLOCK *) newBlock;
 
-      if (abort) {
-        block->count = 0;
-        sstatus = eslEOF;
-      } else {
-        sstatus = esl_sqio_ReadBlock(dbfp, block, info->pli->block_length, n_targetseqs, TRUE);
-      }
+      sstatus = esl_sqio_ReadBlock(dbfp, block, info->pli->block_length, -1, TRUE);
       block->first_seqidx = info->pli->nseqs;
       seqid = block->first_seqidx;
       for (i=0; i<block->count; i++) {
         block->list[i].idx = seqid;
         block->list[i].prev_n = prev_char_cnt;
         prev_char_cnt += block->list[i].n;
-//        add_id_length(id_length_list, seqid, block->list[i].L);
         seqid++;
-
-        if (   seqid == n_targetseqs // hit the sequence target
-            && ( i<block->count-1 ||  block->complete ) // and either it's not the last sequence (so it's complete), or its complete
-        ) {
-          abort = TRUE;
-          block->count = i+1;
-          break;
-        }
       }
-      info->pli->nseqs += block->count  - ((abort || block->complete) ? 0 : 1);// if there's an incomplete sequence read into the block wait to count it until it's complete.
 
 
       if (sstatus == eslEOF) {
@@ -881,7 +832,9 @@ thread_loop(WORKER_INFO *info, ESL_THREADS *obj, ESL_WORK_QUEUE *queue, ESL_SQFI
                 ((ESL_SQ_BLOCK *)newBlock)->list->C = ((ESL_SQ_BLOCK *)newBlock)->list->n;
                 (((ESL_SQ_BLOCK *)newBlock)->count)--;
               } else {
-                ((ESL_SQ_BLOCK *)newBlock)->list->C = info->om->max_length;
+                /* This sets the overlap that the next window will contain, relative to the current
+                 * window.  "maxlength * 3" because we're looking for a protein of maxlength, and this is DNA */
+                ((ESL_SQ_BLOCK *)newBlock)->list->C = info->om->max_length * 3;
               }
 
           }
@@ -920,7 +873,6 @@ pipeline_thread(void *arg)
   ESL_SQ       *dbsq_dna    = NULL;
   ESL_SQ       *dbsq_dnatxt = esl_sq_Create();
 
-
   impl_Init();
 
   obj = (ESL_THREADS *) arg;
@@ -933,9 +885,9 @@ pipeline_thread(void *arg)
   orfblock = info->wrk->orf_block;
   if (orfblock == NULL)          esl_fatal("Failed to allocate sequence block");
 
-
   /* thread loops until all blocks have been processed */
   dnablock = (ESL_SQ_BLOCK *) newBlock; //block from threads
+
 
   while (dnablock->count > 0)
     {
@@ -964,6 +916,11 @@ pipeline_thread(void *arg)
           {
               dbsq_aa = &(orfblock->list[k]);
 
+              if (   (dbsq_aa->start < dbsq_aa->end    &&  dbsq_aa->end < dbsq_dna->C )  ||
+                     (dbsq_aa->end < dbsq_aa->start    &&  dbsq_aa->start < dbsq_dna->C ) )
+                  continue; /* don't bother with an orf that showed up completely within a previous window */
+
+
               /*
               Use the name, accession, and description from the DNA sequence and
               not from the ORF which is generated by gencode and only for internal use.
@@ -976,8 +933,21 @@ pipeline_thread(void *arg)
               if ((status = esl_sq_SetAccession(dbsq_aa, info->ntqsq->acc))    != eslOK)  esl_fatal("Set query sequence accession failed");
               if ((status = esl_sq_SetDesc     (dbsq_aa, info->ntqsq->desc))   != eslOK)  esl_fatal("Set query sequence description failed");
 
-
               p7_pli_NewSeq(info->pli, dbsq_aa);
+              /*we use overlapping windows to ensure that we don't miss something at a boundary, but now
+               * we need to adjust for overcounting candidate ORFs
+               */
+              if (dbsq_aa->start < dbsq_aa->end) {
+                  if (dbsq_aa->start < dbsq_dna->C - 59 ){
+                      info->pli->nseqs--;
+                      info->pli->nres -= ESL_MIN(dbsq_aa->n,  (dbsq_dna->C - dbsq_aa->start + 1)/3);
+                  }
+              } else {
+                  if (dbsq_aa->end < dbsq_dna->C - 58 ){
+                      info->pli->nseqs--;
+                      info->pli->nres -= ESL_MIN(dbsq_aa->n,  (dbsq_dna->C - dbsq_aa->end + 1)/3);
+                  }
+              }
 
               p7_bg_SetLength(info->bg, dbsq_aa->n);
               p7_oprofile_ReconfigLength(info->om, dbsq_aa->n);
@@ -987,8 +957,8 @@ pipeline_thread(void *arg)
               esl_sq_Reuse(dbsq_aa);
               p7_pipeline_Reuse(info->pli);
           }
-      }
 
+      }
 
       status = esl_workqueue_WorkerUpdate(info->queue, dnablock, &newBlock);
       if (status != eslOK) esl_fatal("Work queue worker failed");
