@@ -831,8 +831,8 @@ p7_tophits_ComputeNhmmerEvalues(P7_TOPHITS *th, double N, int W)
 /* Function:  p7_tophits_RemoveDuplicates()
  * Synopsis:  Remove overlapping hits.
  *
- * Purpose:   After nhmmer pipeline has completed, the TopHits object may
- *               contain duplicates if the target was broken into overlapping
+ * Purpose:   After nhmmer or translated pipeline has completed, the TopHits object
+ *               may contain duplicates if the target was broken into overlapping
  *               windows. Scan through, and remove duplicates.  Since the
  *               duplicates may be incomplete (one sequence is a partial
  *               hit because it's window didn't cover the full length of

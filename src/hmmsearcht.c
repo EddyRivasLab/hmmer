@@ -331,7 +331,6 @@ serial_master(ESL_GETOPTS *go, struct cfg_s *cfg)
   FILE            *tblfp    = NULL;              /* output stream for tabular per-seq (--tblout)    */
   FILE            *domtblfp = NULL;              /* output stream for tabular per-dom (--domtblout) */
   FILE            *pfamtblfp= NULL;              /* output stream for pfam tabular output (--pfamtblout)    */
-//  FILE            *aliscoresfp  = NULL;            /* output stream for alignment scores (--aliscoresout)   */
 
   P7_HMMFILE      *hfp      = NULL;              /* open input HMM file                             */
   ESL_SQFILE      *dbfp     = NULL;              /* open input sequence file                        */
@@ -530,15 +529,15 @@ serial_master(ESL_GETOPTS *go, struct cfg_s *cfg)
       }
 
 #ifdef HMMER_THREADS
-         if (ncpus > 0)
-             sstatus = thread_loop(info, threadObj, queue, dbfp);
-         else
+      if (ncpus > 0)
+          sstatus = thread_loop(info, threadObj, queue, dbfp);
+      else
 #endif
-         sstatus = serial_loop(info, dbfp);
+      sstatus = serial_loop(info, dbfp);
 
-         switch(sstatus)
-         {
-         case eslOK:
+      switch(sstatus)
+      {
+          case eslOK:
            /* do nothing */
            break;
          case eslEOF:
@@ -546,21 +545,25 @@ serial_master(ESL_GETOPTS *go, struct cfg_s *cfg)
            break;
          default:
            esl_fatal("Unexpected error %d processing ORFs", sstatus);
-         }
+      }
 
-         /* merge the results of the search results */
-         for (i = 0; i < infocnt; ++i)
-         {
-           p7_tophits_Merge(tophits_accumulator, info[i].th);
-           p7_pipeline_Merge(pipelinehits_accumulator, info[i].pli);
+      /* merge the results of the search results */
+      for (i = 0; i < infocnt; ++i)
+      {
+          p7_tophits_Merge(tophits_accumulator, info[i].th);
+          p7_pipeline_Merge(pipelinehits_accumulator, info[i].pli);
 
-           p7_pipeline_Destroy(info[i].pli);
-           p7_tophits_Destroy(info[i].th);
-           p7_oprofile_Destroy(info[i].om);
-         }
+          p7_pipeline_Destroy(info[i].pli);
+          p7_tophits_Destroy(info[i].th);
+          p7_oprofile_Destroy(info[i].om);
+      }
 
-         esl_sq_Reuse(qsqDNA);
+      esl_sq_Reuse(qsqDNA);
 		 
+      /* Sort and remove duplicates */
+      p7_tophits_SortBySeqidxAndAlipos(tophits_accumulator);
+      p7_tophits_RemoveDuplicates(tophits_accumulator, pipelinehits_accumulator->use_bit_cutoffs);
+
 
       /* Print the results.  */
       p7_tophits_SortBySortkey(tophits_accumulator);
