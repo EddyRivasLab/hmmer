@@ -89,7 +89,8 @@ static ESL_OPTIONS options[] = {
   { "--seed",       eslARG_INT,    "42",  NULL, "n>=0",  NULL,  NULL,  NULL,            "set RNG seed to <n> (if 0: one-time arbitrary seed)",          12 },
   { "--qformat",    eslARG_STRING,  NULL, NULL, NULL,    NULL,  NULL,  NULL,            "assert input <seqfile> is in format <s>: no autodetection",    12 },
 #ifdef HMMER_THREADS
-  { "--cpu",        eslARG_INT, NULL,"HMMER_NCPU","n>=0",NULL,  NULL,  CPUOPTS,         "number of parallel CPU workers to use for multithreads",       12 },
+  { "--cpu",        eslARG_INT, p7_NCPU,"HMMER_NCPU","n>=0",NULL,  NULL,  CPUOPTS,      "number of parallel CPU workers to use for multithreads",       12 },
+
 #endif
   /* name           type        default  env  range toggles reqs incomp  help                                          docgroup*/
   { "-c",         eslARG_INT,       "1", NULL, NULL, NULL,  NULL, NULL,  "use alt genetic code of NCBI transl table <n>", 15 },
@@ -374,7 +375,7 @@ serial_master(ESL_GETOPTS *go, struct cfg_s *cfg)
   abcAMINO = esl_alphabet_Create(eslAMINO); 
   qsqDNA = esl_sq_CreateDigital(abcDNA);
 
- 
+
   /* Open the target profile database to get the sequence alphabet */
   status = p7_hmmfile_OpenE(cfg->hmmfile, p7_HMMDBENV, &hfp, errbuf);
   if      (status == eslENOTFOUND) p7_Fail("File existence/permissions problem in trying to open HMM file %s.\n%s\n", cfg->hmmfile, errbuf);
@@ -409,7 +410,7 @@ serial_master(ESL_GETOPTS *go, struct cfg_s *cfg)
 
   output_header(ofp, go, cfg->hmmfile, cfg->seqfile);
 
-  
+
   /* Set up the genetic code. Default = NCBI 1, the standard code; allow ORFs to start at any aa
    */
   gcode = esl_gencode_Create(abcDNA, abcAMINO);
