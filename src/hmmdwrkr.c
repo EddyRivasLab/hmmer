@@ -212,7 +212,7 @@ worker_process(ESL_GETOPTS *go)
 }
 
 static int
-do_sq_by_sequences(ESL_GENCODE *gcode, ESL_GENCODE_WORKSTATE *wrk, ESL_SQ *sq)
+translate_sequence(ESL_GENCODE *gcode, ESL_GENCODE_WORKSTATE *wrk, ESL_SQ *sq)
 {
       if (wrk->do_watson) {
 	esl_gencode_ProcessStart(gcode, wrk, sq);
@@ -285,7 +285,7 @@ process_TranslatedSearchCmd(HMMD_COMMAND *cmd, WORKER_ENV *env, QUEUE_DATA *quer
      hmmpgmd_GetRanges(range_list, esl_opt_GetString(query->opts, "--seqdb_ranges"));
   }
 
-    /* Set up the genetic code. Default = NCBI 1, the standard code; allow ORFs to start at any aa
+  /* Set up the genetic code. Default = NCBI 1, the standard code; allow ORFs to start at any aa
    */
   gcode = esl_gencode_Create(abcDNA, abc);
   esl_gencode_Set(gcode, esl_opt_GetInteger(query->opts, "-c"));  // default = 1, the standard genetic code
@@ -330,7 +330,7 @@ process_TranslatedSearchCmd(HMMD_COMMAND *cmd, WORKER_ENV *env, QUEUE_DATA *quer
   wrk->orf_block = esl_sq_CreateDigitalBlock(1024, abc);
 
   /* translate DNA sequence to 6 frame ORFs */
-  do_sq_by_sequences(gcode, wrk, query->seq);
+  translate_sequence(gcode, wrk, query->seq);
 
   /* Create processing pipeline and hit list accumulators */
   tophits_accumulator  = p7_tophits_Create(); 
