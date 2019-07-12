@@ -94,7 +94,7 @@ typedef struct {
  * Throws:    <NULL> on allocation failure.
  */
 P7_PIPELINE *
-p7_pipeline_Create(ESL_GETOPTS *go, int M_hint, int L_hint, int long_targets, enum p7_pipemodes_e mode)
+p7_pipeline_Create(const ESL_GETOPTS *go, int M_hint, int L_hint, int long_targets, enum p7_pipemodes_e mode)
 {
   P7_PIPELINE *pli  = NULL;
   int          seed = (go ? esl_opt_GetInteger(go, "--seed") : 42);
