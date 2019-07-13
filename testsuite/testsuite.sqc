@@ -394,11 +394,11 @@
 1 exercise  hmmsearcht/-o              @src/hmmsearcht@  -o           %hmmsearcht.out%  !testsuite/2OG-FeII_Oxy_3.hmm! %TESTDB%
 1 exercise  hmmsearcht/-A              @src/hmmsearcht@  -A           %hmmsearchtmsa.out%  !testsuite/2OG-FeII_Oxy_3.hmm! %TESTDB%
 1 exercise  hmmsearcht/--tblout        @src/hmmsearcht@  --tblout     %hmmsearcht.tbl%  !testsuite/2OG-FeII_Oxy_3.hmm! %TESTDB%
-1 exercise  hmmsearcht/--domtblout     @src/hmmsearcht@  --domtblout  %hmmsearcht.dtbl%  !testsuite/2OG-FeII_Oxy_3.hmm! %TESTDB%
+1 exercise  hmmsearcht/--dmtblout      @src/hmmsearcht@  --domtblout  %hmmsearcht.dtbl%  !testsuite/2OG-FeII_Oxy_3.hmm! %TESTDB%
 1 exercise  hmmsearcht/--acc           @src/hmmsearcht@  --acc                        !testsuite/2OG-FeII_Oxy_3.hmm! %TESTDB%
 1 exercise  hmmsearcht/--noali         @src/hmmsearcht@  --noali                      !testsuite/2OG-FeII_Oxy_3.hmm! %TESTDB%
 1 exercise  hmmsearcht/--notrans       @src/hmmsearcht@  --notrans                    !testsuite/2OG-FeII_Oxy_3.hmm! %TESTDB%
-1 exercise  hmmsearcht/--vertcodon     @src/hmmsearcht@  --vertcodon                  !testsuite/2OG-FeII_Oxy_3.hmm! %TESTDB%
+1 exercise  hmmsearcht/--vtcodon       @src/hmmsearcht@  --vertcodon                  !testsuite/2OG-FeII_Oxy_3.hmm! %TESTDB%
 1 exercise  hmmsearcht/--notextw       @src/hmmsearcht@  --notextw                    !testsuite/2OG-FeII_Oxy_3.hmm! %TESTDB%
 1 exercise  hmmsearcht/--textw         @src/hmmsearcht@  --textw 256                  !testsuite/2OG-FeII_Oxy_3.hmm! %TESTDB%
 1 exercise  hmmsearcht/-E              @src/hmmsearcht@  -E 0.01                      !testsuite/2OG-FeII_Oxy_3.hmm! %TESTDB%

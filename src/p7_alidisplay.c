@@ -146,10 +146,7 @@ p7_alidisplay_Create(const P7_TRACE *tr, int which, const P7_OPROFILE *om, const
   sq_namelen  = strlen(sq->name);                           n += sq_namelen  + 1;	  
   sq_acclen   = strlen(sq->acc);                            n += sq_acclen   + 1; /* sq->acc is "\0" when unset */
   sq_desclen  = strlen(sq->desc);                           n += sq_desclen  + 1; /* same for desc              */
-
-  if (ntsq != NULL)    {  /* translated search only */
-      orf_namelen = strlen(sq->orfid);                      n += orf_namelen  + 1; /* same for orfname          */
-  }
+  orf_namelen = strlen(sq->orfid);                          n += orf_namelen + 1; /* same for orfname          */
 
   ESL_ALLOC(ad, sizeof(P7_ALIDISPLAY));
   ad->mem = NULL;
@@ -172,9 +169,7 @@ p7_alidisplay_Create(const P7_TRACE *tr, int which, const P7_OPROFILE *om, const
   ad->sqname  = ad->mem + pos;  pos += sq_namelen +1;
   ad->sqacc   = ad->mem + pos;  pos += sq_acclen +1;
   ad->sqdesc  = ad->mem + pos;  pos += sq_desclen +1;
-  if (ntsq != NULL)    {  /* translated search only */
-      ad->orfname = ad->mem + pos;  pos += orf_namelen +1;
-  }
+  ad->orfname = ad->mem + pos;  pos += orf_namelen +1;
 
   strcpy(ad->hmmname, om->name);
   if (om->acc  != NULL) strcpy(ad->hmmacc,  om->acc);  else ad->hmmacc[0]  = 0;
@@ -183,9 +178,7 @@ p7_alidisplay_Create(const P7_TRACE *tr, int which, const P7_OPROFILE *om, const
   strcpy(ad->sqname,  sq->name);
   strcpy(ad->sqacc,   sq->acc);
   strcpy(ad->sqdesc,  sq->desc);
-  if (ntsq != NULL)    { /* translated search only */
-      strcpy(ad->orfname,  sq->orfid);
-  }
+  strcpy(ad->orfname,  sq->orfid);
 
   /* Determine hit coords */
   ad->hmmfrom = tr->k[z1];
@@ -378,6 +371,11 @@ extern P7_ALIDISPLAY *p7_alidisplay_Create_empty()
   new_obj->memsize = 0;
   new_obj->mem = NULL;
 
+
+  new_obj->orfname = NULL;
+  new_obj->orffrom = 0;
+  new_obj->orfto   = 0;
+
   return new_obj;
 
   ERROR: // only get here if the ESL_ALLOC fails
@@ -436,6 +434,10 @@ p7_alidisplay_Clone(const P7_ALIDISPLAY *ad)
       ad2->sqfrom  = ad->sqfrom;
       ad2->sqto    = ad->sqto;
       ad2->L       = ad->L;
+
+      ad2->orfname = ad2->mem + (ad->orfname - ad->mem);
+      ad2->orffrom = ad->orffrom;
+      ad2->orfto   = ad->orfto;
     }
   else				/* deserialized */
     {
@@ -462,6 +464,11 @@ p7_alidisplay_Clone(const P7_ALIDISPLAY *ad)
       ad2->sqfrom  = ad->sqfrom;
       ad2->sqto    = ad->sqto;
       ad2->L       = ad->L;      
+
+      if ( esl_strdup(ad->orfname,  -1, &(ad2->orfname)) != eslOK) goto ERROR;
+      ad2->orffrom = ad->orffrom;
+      ad2->orfto   = ad->orfto;
+
     }
 
   return ad2;
@@ -501,14 +508,21 @@ p7_alidisplay_Sizeof(const P7_ALIDISPLAY *ad)
   n += 1 + strlen(ad->hmmdesc);
   n += 1 + strlen(ad->sqname);
   n += 1 + strlen(ad->sqacc);  
-  n += 1 + strlen(ad->sqdesc); 
+  n += 1 + strlen(ad->sqdesc);
+
+  n += 1 + strlen(ad->orfname);  /* optional field: when not present, just "" ("\0") */
  
   return n;
 }
 
+/* Total size of the fixed-length fields in a serialized P7_ALIDISPLAY
+ * 5 32-bit ints: N, hmmfrom, hmmto, M, and obj_size (the size of the serialized object)
+ * 5 64-bit ints: sqfrom, sqto, orffrom, orfto, L
+ * 1 byte for presence/absence bit vector for rfline, mmline, csline, ppline, aseq, ntseq
+ */
+#define SER_BASE_SIZE ((5 * sizeof(int)) + (5 * sizeof(int64_t)) +1)
 
-#define SER_BASE_SIZE ((5 * sizeof(int)) + (3 * sizeof(int64_t)) +1) // Total size of the fixed-length fields in a 
-// serialized P7_ALIDISPLAY 
+
 
 /* Function:  p7_alidisplay_Serialize
  * Synopsis:  Serializes a HMMD_SEARCH_STATS object into a stream of bytes
@@ -542,7 +556,7 @@ int p7_alidisplay_Serialize(const P7_ALIDISPLAY *obj, uint8_t **buf, uint32_t *n
   uint32_t network_32bit; // hold 32-bit fields after conversion to network order
   uint64_t network_64bit; // hold 64-bit fields after conversion to network order
   uint8_t presence_flags = 0; // Bit-vector that records presence or absence of optional strings
-  uint32_t hmmname_length, hmmacc_length, hmmdesc_length, sqname_length, sqacc_length, sqdesc_length;
+  uint32_t hmmname_length, hmmacc_length, hmmdesc_length, sqname_length, sqacc_length, sqdesc_length, orfname_length;
 
   // check to make sure we were passed a valid pointer 
   if(obj == NULL || buf == NULL || n == NULL){ // no object to serialize or nowhere to put a buffer pointer
@@ -551,7 +565,7 @@ int p7_alidisplay_Serialize(const P7_ALIDISPLAY *obj, uint8_t **buf, uint32_t *n
 
   // Pass 1: Compute size of the serialized data structure
   /* 11 ints: 4 int fields in P7_ALIDISPLAY + lengths of 6 variable-length strings + total length of serialized structure
-     3 int64_t fields in P7_ALIDISPLAY
+     5 int64_t fields in P7_ALIDISPLAY
      1 byte for presence/absence bit vector for rfline, mmline, csline, ppline, aseq, ntseq 
     */
   ser_size = SER_BASE_SIZE; 
@@ -611,6 +625,11 @@ int p7_alidisplay_Serialize(const P7_ALIDISPLAY *obj, uint8_t **buf, uint32_t *n
   sqdesc_length = strlen(obj->sqdesc);
   ser_size += 1 + sqdesc_length; 
 
+  if (obj->orfname != NULL) {
+      orfname_length = strlen(obj->orfname);
+      ser_size += 1 + orfname_length;  /* optional field: when not present, just "" ("\0") */
+  }
+
   // Now that we know how big the serialized data structure will be, determine if we have enough buffer space to hold it
   if(*buf == NULL){ // have no buffer, so allocate one
     ESL_ALLOC(*buf, ser_size);
@@ -661,85 +680,99 @@ int p7_alidisplay_Serialize(const P7_ALIDISPLAY *obj, uint8_t **buf, uint32_t *n
   memcpy(ptr, &network_64bit, sizeof(int64_t));
   ptr += sizeof(int64_t);
 
-  // Field 8: L
+  // Field 8: Orf_from
+  network_64bit = esl_hton64(obj->orffrom);
+  memcpy(ptr, &network_64bit, sizeof(int64_t));
+  ptr += sizeof(int64_t);
+
+  // Field 9: Orf_to
+  network_64bit = esl_hton64(obj->orfto);
+  memcpy(ptr, &network_64bit, sizeof(int64_t));
+  ptr += sizeof(int64_t);
+
+  // Field 10: L
   network_64bit = esl_hton64(obj->L);
   memcpy(ptr, &network_64bit, sizeof(int64_t));
   ptr += sizeof(int64_t);
 
-  // Field 9: presence_flags
+  // Field 11: presence_flags
   memcpy(ptr, &presence_flags, sizeof(uint8_t));
   ptr += sizeof(uint8_t);
 
   //Now, the strings, some of which are optional
   // Note that many of these strings are fixed-length if they are present
 
-  // Field 10: Rfline
+  // Field 12: Rfline
   if(presence_flags & RFLINE_PRESENT){
     strcpy((char *) ptr, obj->rfline);
     ptr += obj->N + 1;
   }
 
-  // Field 11: mmline
+  // Field 13: mmline
   if(presence_flags & MMLINE_PRESENT){
     strcpy((char *) ptr, obj->mmline);
     ptr += obj->N + 1;
   }
 
-  // Field 12: csline
+  // Field 14: csline
   if(presence_flags & CSLINE_PRESENT){
     strcpy((char *) ptr, obj->csline);
     ptr += obj->N + 1;
   }
 
-  // Field 13: Model
+  // Field 15: Model
   strcpy((char *) ptr, obj->model);
   ptr += obj->N + 1;
   
-  // Field 14: Mline
+  // Field 16: Mline
   strcpy((char *) ptr, obj->mline);
   ptr += obj->N + 1;
 
-  // Field 15: Aseq
+  // Field 17: Aseq
   if(presence_flags & ASEQ_PRESENT){
     strcpy((char *) ptr, obj->aseq);
     ptr += obj->N + 1;
   }
- 
-  // Field 16: ntseq
+
+  // Field 18: ntseq
   if(presence_flags & NTSEQ_PRESENT){
     strcpy((char *) ptr, obj->ntseq);
     ptr += (3 * obj->N) + 1;
   }
 
-  // Field 17: PPline
+  // Field 19: PPline
   if(presence_flags & PPLINE_PRESENT){
     strcpy((char *) ptr, obj->ppline);
     ptr += obj->N + 1;
   }
 
-  // Field 18: Hmmname
+  // Field 20: Hmmname
   strcpy((char *) ptr, obj->hmmname);
   ptr += hmmname_length + 1;
-  
-  // Field 19: Hmmacc
+
+  // Field 21: Hmmacc
   strcpy((char *) ptr, obj->hmmacc);
   ptr += hmmacc_length + 1;
 
-  // Field 20: Hmmdesc
+  // Field 22: Hmmdesc
   strcpy((char *) ptr, obj->hmmdesc);
   ptr += hmmdesc_length + 1;
 
-  // Field 21: Sqname
+  // Field 23: Sqname
   strcpy((char *) ptr, obj->sqname);
   ptr += sqname_length +1;
 
-  // Field 22: Sqacc
+  // Field 24: Sqacc
   strcpy((char *) ptr, obj->sqacc);
   ptr += sqacc_length +1 ;
 
-  // Field 23: Sqdesc
+  // Field 25: Sqdesc
   strcpy((char *) ptr, obj->sqdesc);
   ptr += sqdesc_length +1 ;
+
+  // Field 26: Orfname
+  strcpy((char *) ptr, obj->orfname);
+  ptr += orfname_length +1 ;
 
   // sanity-check that we computed the length correctly
   if(ptr != *buf + *n + ser_size){
@@ -805,42 +838,52 @@ extern int p7_alidisplay_Deserialize(const uint8_t *buf, uint32_t *n, P7_ALIDISP
     ret_obj->memsize = obj_size - SER_BASE_SIZE;
   }
 
-  // Second field: N
+  // Field 2: N
   memcpy(&network_32bit, ptr, sizeof(uint32_t)); // Grab the bytes out of the buffer
   ret_obj->N = esl_ntoh32(network_32bit);
   ptr += sizeof(uint32_t);
 
-  // Third field: Hmmfrom
+  // Field 3: Hmmfrom
   memcpy(&network_32bit, ptr, sizeof(uint32_t)); 
   ret_obj->hmmfrom = esl_ntoh32(network_32bit);
   ptr += sizeof(uint32_t);
 
-  // Fourth field: Hmmto
+  // Field 4: Hmmto
   memcpy(&network_32bit, ptr, sizeof(uint32_t)); 
   ret_obj->hmmto = esl_ntoh32(network_32bit);
   ptr += sizeof(uint32_t);
 
-  // Fifth field: M 
+  // Field 5: M
   memcpy(&network_32bit, ptr, sizeof(uint32_t)); 
   ret_obj->M = esl_ntoh32(network_32bit);
   ptr += sizeof(uint32_t);
 
-  // Sixth field: sqfrom
+  // Field 6: sqfrom
   memcpy(&network_64bit, ptr, sizeof(uint64_t)); 
   ret_obj->sqfrom = esl_ntoh64(network_64bit);
   ptr += sizeof(uint64_t);
 
-  // Seventh field: sqto
+  // Field 7: sqto
   memcpy(&network_64bit, ptr, sizeof(uint64_t)); 
   ret_obj->sqto = esl_ntoh64(network_64bit);
   ptr += sizeof(uint64_t);
 
-  // Eighth field: L
+  // Field 8: Orf_from
+  memcpy(&network_64bit, ptr, sizeof(uint64_t));
+  ret_obj->orffrom = esl_ntoh64(network_64bit);
+  ptr += sizeof(uint64_t);
+
+  // Field 9: Orf_to
+  memcpy(&network_64bit, ptr, sizeof(uint64_t));
+  ret_obj->orfto = esl_ntoh64(network_64bit);
+  ptr += sizeof(uint64_t);
+
+  // Field 10: L
   memcpy(&network_64bit, ptr, sizeof(uint64_t)); 
   ret_obj->L = esl_ntoh64(network_64bit);
   ptr += sizeof(uint64_t);
 
-  // Ninth field: presence flags
+  // Field 11: presence flags
   presence_flags = *ptr; // no need for memcpy with one-byte field
   ptr += sizeof(uint8_t);
 
@@ -848,8 +891,8 @@ extern int p7_alidisplay_Deserialize(const uint8_t *buf, uint32_t *n, P7_ALIDISP
   memcpy(ret_obj->mem, ptr, (obj_size - SER_BASE_SIZE)); 
   mem_ptr = ret_obj->mem;
   ptr += (obj_size - SER_BASE_SIZE);
-  // Tenth field: rfline, if present
 
+  // Field 12: rfline, if present
   if(ptr != buf + *n + obj_size){
     printf("Error: in p7_alidisplay_Deserialize, found object (ptr) to be of size %ld, expected %u.\n", (long int) (ptr - (buf + *n)), obj_size);
     //return eslEINVAL;
@@ -864,7 +907,7 @@ extern int p7_alidisplay_Deserialize(const uint8_t *buf, uint32_t *n, P7_ALIDISP
     ret_obj->rfline = NULL; 
   }
 
-  // Eleventh field: mmline, if present
+  // Field 13: mmline, if present
   if(presence_flags & MMLINE_PRESENT){
     ret_obj->mmline = mem_ptr;
     string_length = strlen(ret_obj->mmline);
@@ -874,7 +917,7 @@ extern int p7_alidisplay_Deserialize(const uint8_t *buf, uint32_t *n, P7_ALIDISP
     ret_obj->mmline = NULL; 
   }
 
-  // Twelfth field: csline, if present
+  // Field 14: csline, if present
   if(presence_flags & CSLINE_PRESENT){
     ret_obj->csline = mem_ptr;
     string_length = strlen(ret_obj->csline);
@@ -884,18 +927,17 @@ extern int p7_alidisplay_Deserialize(const uint8_t *buf, uint32_t *n, P7_ALIDISP
     ret_obj->csline = NULL; 
   }
 
-
-  // Thirteenth field: model
+  // Field 15: model
   ret_obj->model = mem_ptr;
   string_length = strlen(ret_obj->model);
   mem_ptr+= string_length + 1;
 
- // Thirteenth field: mline
+ // Field 16: mline
   ret_obj->mline = mem_ptr;
   string_length = strlen(ret_obj->mline);
   mem_ptr+= string_length + 1;
 
-  // Fourteenth field: aseq, if present
+  // Field 17: aseq, if present
   if(presence_flags & ASEQ_PRESENT){
     ret_obj->aseq = mem_ptr;
     string_length = strlen(ret_obj->aseq);
@@ -905,7 +947,7 @@ extern int p7_alidisplay_Deserialize(const uint8_t *buf, uint32_t *n, P7_ALIDISP
     ret_obj->aseq = NULL; 
   }
 
-  // Fifteenth field: ntseq, if present
+  // Field 18: ntseq, if present
   if(presence_flags & NTSEQ_PRESENT){
     ret_obj->ntseq = mem_ptr;
     string_length = strlen(ret_obj->ntseq);
@@ -915,7 +957,7 @@ extern int p7_alidisplay_Deserialize(const uint8_t *buf, uint32_t *n, P7_ALIDISP
     ret_obj->ntseq = NULL; 
   }
 
-  // Sixteenth field: ppline, if present
+  // Field 19: ppline, if present
   if(presence_flags & PPLINE_PRESENT){
     ret_obj->ppline = mem_ptr;
     string_length = strlen(ret_obj->ppline);
@@ -925,35 +967,41 @@ extern int p7_alidisplay_Deserialize(const uint8_t *buf, uint32_t *n, P7_ALIDISP
     ret_obj->ppline = NULL; 
   }
 
-  // Seventeenth field: hmmname
+  // Field 20: hmmname
   ret_obj->hmmname = mem_ptr;
   string_length = strlen(ret_obj->hmmname);
   mem_ptr+= string_length + 1;
 
-  // Eighteenth field: hmmacc
+  // Field 21: hmmacc
   ret_obj->hmmacc = mem_ptr;
   string_length = strlen(ret_obj->hmmacc);
   mem_ptr+= string_length + 1;
 
-  // Nineteenth field: hmmdesc 
+  // Field 22: hmmdesc
   ret_obj->hmmdesc = mem_ptr;
   string_length = strlen(ret_obj->hmmdesc);
   mem_ptr+= string_length + 1;
 
-  // Twentyith field: sqname
+  // Field 23: sqname
   ret_obj->sqname = mem_ptr;
   string_length = strlen(ret_obj->sqname);
   mem_ptr+= string_length + 1;
 
-  // Twentyfirst field: sqacc
+  // Field 24: sqacc
   ret_obj->sqacc = mem_ptr;
   string_length = strlen(ret_obj->sqacc);
   mem_ptr+= string_length + 1;
 
-  // Twentysecond field: sqdesc
+  // Field 25: sqdesc
   ret_obj->sqdesc = mem_ptr;
   string_length = strlen(ret_obj->sqdesc);
   mem_ptr+= string_length +1;
+
+  // Field 26: orfname
+  ret_obj->orfname = mem_ptr;
+  string_length = strlen(ret_obj->orfname);
+  mem_ptr+= string_length +1;
+
 
   // Sanity-check that we got the length right
   if(mem_ptr - ret_obj->mem != (obj_size - SER_BASE_SIZE)){
@@ -967,7 +1015,7 @@ extern int p7_alidisplay_Deserialize(const uint8_t *buf, uint32_t *n, P7_ALIDISP
     return eslEMEM;
 }
 
-/* Function:  p7_alidisplay_Serialize()
+/* Function:  p7_alidisplay_Serialize_old()
  * Synopsis:  Serialize a P7_ALIDISPLAY, using internal memory.
  *
  * Purpose:   Serialize the <P7_ALIDISPLAY> <ad>, internally converting
@@ -984,6 +1032,7 @@ extern int p7_alidisplay_Deserialize(const uint8_t *buf, uint32_t *n, P7_ALIDISP
  * Throws:    <eslEMEM> on allocation failure, and <ad> is restored to
  *            its original (deserialized) state.
  */
+
 int
 p7_alidisplay_Serialize_old(P7_ALIDISPLAY *ad)
 {
@@ -1117,6 +1166,7 @@ p7_alidisplay_Destroy(P7_ALIDISPLAY *ad)
       if (ad->sqname)  free(ad->sqname);
       if (ad->sqacc)   free(ad->sqacc);
       if (ad->sqdesc)  free(ad->sqdesc);
+      if (ad->orfname) free(ad->orfname);
     }
   free(ad);
 }
@@ -1266,7 +1316,7 @@ p7_alidisplay_translated_Print(FILE *fp, P7_ALIDISPLAY *ad, int min_aliwidth, in
   show_accessions = pli->show_accessions;
   show_translated_sequence = pli->show_translated_sequence;
   show_vertical_codon = pli->show_vertical_codon;
- 
+
    /* implement the --acc option for preferring accessions over names in output  */
   show_hmmname = (show_accessions && ad->hmmacc[0] != '\0') ? ad->hmmacc : ad->hmmname;
   show_seqname = (show_accessions && ad->sqacc[0]  != '\0') ? ad->sqacc  : ad->sqname;
@@ -1276,7 +1326,6 @@ p7_alidisplay_translated_Print(FILE *fp, P7_ALIDISPLAY *ad, int min_aliwidth, in
   if (show_translated_sequence) {
       namewidth  = ESL_MAX(namewidth, strlen(ad->orfname));
   }
-
 
   coordwidth = ESL_MAX(
                       ESL_MAX(integer_textwidth(ad->hmmfrom), integer_textwidth(ad->hmmto)),
@@ -1779,6 +1828,7 @@ p7_alidisplay_Sample(ESL_RANDOMNESS *rng, int N, P7_ALIDISPLAY **ret_ad)
   ad->rfline  = ad->mmline = ad->csline = ad->model   = ad->mline  = ad->aseq = ad->ntseq = ad->ppline = NULL;
   ad->hmmname = ad->hmmacc = ad->hmmdesc = NULL;
   ad->sqname  = ad->sqacc  = ad->sqdesc  = NULL;
+  ad->orfname = NULL;
   ad->mem     = NULL;
   ad->memsize = 0;
 
@@ -1799,6 +1849,8 @@ p7_alidisplay_Sample(ESL_RANDOMNESS *rng, int N, P7_ALIDISPLAY **ret_ad)
   esl_strdup("my_seq", -1, &(ad->sqname));
   if (esl_rnd_Roll(rng, 2) == 0) esl_strdup("ABC000001.42",           -1, &(ad->sqacc));  else esl_strdup("", -1, &(ad->sqacc));
   if (esl_rnd_Roll(rng, 2) == 0) esl_strdup("(sequence description)", -1, &(ad->sqdesc)); else esl_strdup("", -1, &(ad->sqdesc));
+
+  esl_strdup("", -1, &(ad->orfname));
 
   /* model, seq coords must look valid. */
   ad->hmmfrom = 100;
@@ -2167,6 +2219,7 @@ alidisplay_SampleFake_ntseq(ESL_RANDOMNESS *rng, int N, P7_ALIDISPLAY **ret_ad)
   ad->rfline  = ad->mmline = ad->csline = ad->model   = ad->mline  = ad->aseq = ad->ntseq = ad->ppline = NULL;
   ad->hmmname = ad->hmmacc = ad->hmmdesc = NULL;
   ad->sqname  = ad->sqacc  = ad->sqdesc  = NULL;
+  ad->orfname = NULL;
   ad->mem     = NULL;
   ad->memsize = 0;
 
@@ -2188,6 +2241,9 @@ alidisplay_SampleFake_ntseq(ESL_RANDOMNESS *rng, int N, P7_ALIDISPLAY **ret_ad)
   if (esl_rnd_Roll(rng, 2) == 0) esl_strdup("ABC000001.42",           -1, &(ad->sqacc));  else esl_strdup("", -1, &(ad->sqacc));
   if (esl_rnd_Roll(rng, 2) == 0) esl_strdup("(sequence description)", -1, &(ad->sqdesc)); else esl_strdup("", -1, &(ad->sqdesc));
 
+  esl_strdup("orf1234", -1, &(ad->orfname));
+
+
   /* model, seq coords must look valid. */
   ad->hmmfrom = 100;
   ad->hmmto   = ad->hmmfrom + nM + nD - 1;
@@ -2196,6 +2252,9 @@ alidisplay_SampleFake_ntseq(ESL_RANDOMNESS *rng, int N, P7_ALIDISPLAY **ret_ad)
   ad->sqfrom  = 1000;
   ad->sqto    = ad->sqfrom + nM + nI - 1;
   ad->L       = ad->sqto + esl_rnd_Roll(rng, 2);
+  ad->orffrom = 1;
+  ad->orfto   = ad->L * 3;
+
 
   /* rfline is free-char "reference annotation" on consensus; H3 puts '.' for inserts. */
   if (ad->rfline) {
