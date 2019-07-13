@@ -11,12 +11,8 @@
  * vector implementation, for more fully commented code.
  */
 #include "p7_config.h"
-#ifdef eslENABLE_AVX
-
-#include <x86intrin.h>
 
 #include "easel.h"
-#include "esl_avx.h"
 #include "esl_vectorops.h"
 
 #include "dp_reference/p7_refmx.h"
@@ -25,6 +21,12 @@
 #include "dp_vector/p7_oprofile.h"
 #include "dp_vector/p7_checkptmx.h"
 #include "dp_vector/fwdfilter.h"
+
+#ifdef eslENABLE_AVX
+#include <x86intrin.h>
+#include "esl_avx.h"
+
+
 
 static inline float forward_row_avx         (ESL_DSQ xi, const P7_OPROFILE *om, const __m256 *dpp, __m256 *dpc, int Q);
 static inline void  backward_row_main_avx   (ESL_DSQ xi, const P7_OPROFILE *om,       __m256 *dpp, __m256 *dpc, int Q, float scalefactor);
@@ -862,9 +864,21 @@ save_debug_row_fb_avx(P7_CHECKPTMX *ox, P7_REFMX *gx, __m256 *dpc, int i, float 
 /*---------------------------- end, debugging tools ---------------------------*/
 
 #else // ! eslENABLE_AVX
-
-/* Standard compiler-pleasing mantra for an #ifdef'd-out, empty code file. */
-void p7_fwdfilter_avx_silence_hack(void) { return; }
+/* provide callable functions even when we're `./configure --disable-avx` */
+int
+p7_ForwardFilter_avx(const ESL_DSQ *dsq, int L, const P7_OPROFILE *om, P7_CHECKPTMX *ox, float *opt_sc)
+{
+  ESL_UNUSED(dsq); ESL_UNUSED(L); ESL_UNUSED(om); ESL_UNUSED(ox); ESL_UNUSED(opt_sc); 
+  esl_fatal("AVX support was not enabled at compile time. Can't use p7_ForwardFilter_avx().");
+  return eslFAIL; // NOTREACHED
+}
+int
+p7_BackwardFilter_avx(const ESL_DSQ *dsq, int L, const P7_OPROFILE *om, P7_CHECKPTMX *ox, P7_SPARSEMASK *sm, float sm_thresh)
+{
+  ESL_UNUSED(dsq); ESL_UNUSED(L); ESL_UNUSED(om); ESL_UNUSED(ox); ESL_UNUSED(sm); ESL_UNUSED(sm_thresh); 
+  esl_fatal("AVX support was not enabled at compile time. Can't use p7_BackwardFilter_avx().");
+  return eslFAIL; // NOTREACHED
+}
 #if defined p7FWDFILTER_AVX_TESTDRIVE || p7FWDFILTER_AVX_EXAMPLE
 int main(void) { return 0; }
 #endif 

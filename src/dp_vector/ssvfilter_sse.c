@@ -6,17 +6,18 @@
  * This file is conditionally compiled when eslENABLE_SSE4 is defined.
  */
 #include "p7_config.h"
-#ifdef eslENABLE_SSE4
 
-#include <x86intrin.h>
 #include <math.h>
 
 #include "easel.h"
-#include "esl_sse.h"
 
 #include "dp_vector/p7_filtermx.h"   // Only needed for the baseline vector implementation, not production. Production is O(1) memory.
 #include "dp_vector/p7_oprofile.h"
 #include "dp_vector/ssvfilter.h"
+
+#ifdef eslENABLE_SSE4
+#include <x86intrin.h>
+#include "esl_sse.h"
 
 /* Note that some ifdefs below has to be changed if these values are
    changed. These values are chosen based on some simple speed
@@ -588,8 +589,21 @@ p7_SSVFilter_base_sse(const ESL_DSQ *dsq, int L, const P7_OPROFILE *om, P7_FILTE
 
 
 #else // ! eslENABLE_SSE4
-/* Standard compiler-pleasing mantra for an #ifdef'd-out, empty code file. */
-void p7_ssvfilter_sse_silence_hack(void) { return; }
+/* provide callable functions even when we're `./configure --disable-sse` */
+int
+p7_SSVFilter_sse(const ESL_DSQ *dsq, int L, const P7_OPROFILE *om, float *ret_sc)
+{
+  ESL_UNUSED(dsq); ESL_UNUSED(L); ESL_UNUSED(om); ESL_UNUSED(ret_sc);  // shut up, compiler, I know what I'm doing
+  esl_fatal("SSE support was not enabled at compile time. Can't use p7_SSVFilter_sse().");
+  return eslFAIL; // NOTREACHED
+}
+int
+p7_SSVFilter_base_sse(const ESL_DSQ *dsq, int L, const P7_OPROFILE *om, P7_FILTERMX *fx, float *ret_sc)
+{
+  ESL_UNUSED(dsq); ESL_UNUSED(L); ESL_UNUSED(om); ESL_UNUSED(fx); ESL_UNUSED(ret_sc);  // shut up, compiler, I know what I'm doing
+  esl_fatal("SSE support was not enabled at compile time. Can't use p7_SSVFilter_base_sse().");
+  return eslFAIL; // NOTREACHED
+}
 #if defined p7SSVFILTER_SSE_TESTDRIVE || p7SSVFILTER_SSE_EXAMPLE
 int main(void) { return 0; }
 #endif 

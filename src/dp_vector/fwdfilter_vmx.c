@@ -10,12 +10,9 @@
  *    3. Internal debugging tools.
  */
 #include "p7_config.h"
-#ifdef eslENABLE_VMX
 
-#include <altivec.h>
 #include <float.h>
 #include "easel.h"
-#include "esl_vmx.h"
 #include "esl_vectorops.h"
 
 #include "dp_reference/p7_refmx.h"
@@ -25,6 +22,9 @@
 #include "dp_vector/p7_checkptmx.h"
 #include "dp_vector/fwdfilter.h"
 
+#ifdef eslENABLE_VMX
+#include <altivec.h>
+#include "esl_vmx.h"
 
 /* Vectorized DP recursions are tediously lengthy. For some semblance
  * of clarity, we break them out into one-page-ish chunks, using
@@ -1054,7 +1054,21 @@ save_debug_row_fb_vmx(P7_CHECKPTMX *ox, P7_REFMX *gx, vector float *dpc, int i, 
 /*---------------------------- end, debugging tools ---------------------------*/
 
 #else // ! eslENABLE_VMX
-
+/* provide callable functions even when we're `./configure --disable-vmx` */
+int
+p7_ForwardFilter_vmx(const ESL_DSQ *dsq, int L, const P7_OPROFILE *om, P7_CHECKPTMX *ox, float *opt_sc)
+{
+  ESL_UNUSED(dsq); ESL_UNUSED(L); ESL_UNUSED(om); ESL_UNUSED(ox); ESL_UNUSED(opt_sc); 
+  esl_fatal("Altivec/VMX support was not enabled at compile time. Can't use p7_ForwardFilter_vmx().");
+  return eslFAIL; // NOTREACHED
+}
+int
+p7_BackwardFilter_vmx(const ESL_DSQ *dsq, int L, const P7_OPROFILE *om, P7_CHECKPTMX *ox, P7_SPARSEMASK *sm, float sm_thresh)
+{
+  ESL_UNUSED(dsq); ESL_UNUSED(L); ESL_UNUSED(om); ESL_UNUSED(ox); ESL_UNUSED(sm); ESL_UNUSED(sm_thresh); 
+  esl_fatal("Altivec/VMX support was not enabled at compile time. Can't use p7_BackwardFilter_vmx().");
+  return eslFAIL; // NOTREACHED
+}
 /* Standard compiler-pleasing mantra for an #ifdef'd-out, empty code file. */
 void p7_fwdfilter_vmx_silence_hack(void) { return; }
 #if defined p7FWDFILTER_VMX_TESTDRIVE || p7FWDFILTER_VMX_EXAMPLE

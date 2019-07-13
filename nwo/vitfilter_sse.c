@@ -10,7 +10,6 @@
  * underflow, in local alignment mode.
  */
 #include "h4_config.h"
-#ifdef eslENABLE_SSE4
 
 #include <stdio.h>
 #include <math.h>
@@ -23,6 +22,14 @@
 #include "h4_profile.h"
 #include "h4_filtermx.h"
 
+/* The includes are deliberately outside the #ifdef.  If SSE is
+ * enabled at compile-time, we provide an h4_vitfilter_sse() function
+ * that works; otherwise we provide one that issues a fatal error.
+ * This allows driver programs (such as vitfilter_benchmark) to have
+ * --sse/--avx/--avx512 options to call vitfilter_{sse,avx,avx512}
+ * directly, overriding the CPU dispatcher.
+ */
+#ifdef eslENABLE_SSE4
 
 /*****************************************************************
  * 1. Viterbi filter implementation.
@@ -211,8 +218,14 @@ h4_vitfilter_sse(const ESL_DSQ *dsq, int L, const H4_PROFILE *hmm, const H4_MODE
 
 
 #else // ! eslENABLE_SSE4
-/* Standard compiler-pleasing mantra for an #ifdef'd-out, empty code file. */
-void h4_vitfilter_sse_silence_hack(void) { return; }
+/* provide a callable function even when we're `./configure --disable-sse` */
+int
+h4_vitfilter_sse(const ESL_DSQ *dsq, int L, const H4_PROFILE *hmm, const H4_MODE *mo, H4_FILTERMX *fx, float *ret_sc)
+{
+  ESL_UNUSED(dsq); ESL_UNUSED(L); ESL_UNUSED(hmm); ESL_UNUSED(mo); ESL_UNUSED(fx); ESL_UNUSED(ret_sc);  // shut up, compiler, I know what I'm doing
+  esl_fatal("SSE support was not enabled at compile time. Can't use h4_vitfilter_sse().");
+  return eslFAIL; // NOTREACHED
+}
 #if defined h4VITFILTER_SSE_TESTDRIVE || h4VITFILTER_SSE_EXAMPLE
 int main(void) { return 0; }
 #endif 
