@@ -36,7 +36,6 @@ vit_conversion(H4_PROFILE *hmm)
   int      tg;                             // transition index in standard tsc[k] layout
   int      kb;                             // possibly offset k base - MM|IM|DM vectors are -1 (i.e. rightshifted)
   int16_t  maxval;		           // used to prevent zero cost II
-  int      ddtmp;
   int      q,t,x,z,k;
 
   ESL_DASSERT1(( hmm->flags & h4_HASBITS ));
@@ -90,16 +89,6 @@ vit_conversion(H4_PROFILE *hmm)
 	*twv = ( k <= M) ? h4_simdvec_wordify(hmm->tsc[k][h4_DD]) : -32768;
 	twv++;
       }
-
-  /* Transition score bound for "lazy F" DD path evaluation (xref J2/52) */
-  hmm->ddbound_w = -32768;	
-  for (k = 2; k < M-1; k++) 
-    {
-      ddtmp          = (int) h4_simdvec_wordify( hmm->tsc[k][h4_DD]);
-      ddtmp         += (int) h4_simdvec_wordify( hmm->tsc[k+1][h4_DM]);
-      ddtmp         -= (int) h4_simdvec_wordify( hmm->tsc[k+1][h4_LM]);
-      hmm->ddbound_w = ESL_MAX(hmm->ddbound_w, ddtmp);
-    }
  
   hmm->flags |= h4_HASVECS;
   return eslOK;

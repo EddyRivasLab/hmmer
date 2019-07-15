@@ -96,7 +96,6 @@ h4_profile_CreateShell(void)
 
   hmm->rwv       = NULL;
   hmm->twv       = NULL;
-  hmm->ddbound_w = 0;
 
   hmm->rfv       = NULL;
   hmm->tfv       = NULL;
@@ -270,7 +269,6 @@ h4_profile_Copy(const H4_PROFILE *src, H4_PROFILE *dst)
   /* vectorized scores: VF */
   esl_mat_WCopy(src->rwv,    src->abc->Kp, src->Qw*src->V/2, dst->rwv);
   esl_vec_WCopy(src->twv[0], src->Qw*h4_NVT*src->V/2,        dst->twv[0]);
-  dst->ddbound_w = src->ddbound_w;
   
   /* vectorized scores: FB */
   esl_mat_FCopy(src->rfv, src->abc->Kp, src->Qf*src->V/4, dst->rfv);

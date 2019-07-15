@@ -45,7 +45,6 @@ typedef struct {
   // VF uses striped scaled int16_t scores: e.g. 8x per 128b vector 
   int16_t **rwv;            // match scores [x=0..Kp-1][q=0..Qw-1]  
   int16_t **twv;            // transition score layout (see h4_profile.md notes)
-  int16_t   ddbound_w;      // threshold precalculated for lazy DD evaluation    
 
   // Fwd, Bck filters use striped single-precision floats: e.g. 4x per 128b vector         
   float   **rfv;            // match scores [x=0..Kp-1][q=0..Qf-1]              
