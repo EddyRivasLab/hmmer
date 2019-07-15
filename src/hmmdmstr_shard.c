@@ -1118,6 +1118,8 @@ clientside_loop(CLIENTSIDE_ARGS *data)
   time_t             date;
   char               timestamp[32];
 
+  ESL_ALPHABET      *abcDNA = NULL;       /* DNA sequence alphabet         */
+
   buf_size = MAX_BUFFER;
   if ((buffer  = malloc(buf_size))   == NULL) LOG_FATAL_MSG("malloc", errno);
   ptr = buffer;
@@ -1227,7 +1229,15 @@ clientside_loop(CLIENTSIDE_ARGS *data)
 
     if (*ptr == '>') {
       /* try to parse the input buffer as a FASTA sequence */
-      seq = esl_sq_CreateDigital(abc);
+      if (esl_opt_IsUsed(opts, "--hmmscant")) {
+          abcDNA = esl_alphabet_Create(eslDNA);
+          seq = esl_sq_CreateDigital(abcDNA);
+          if (abcDNA  != NULL) esl_alphabet_Destroy(abcDNA);
+      }
+      else {
+          seq = esl_sq_CreateDigital(abc);
+      }
+
       /* try to parse the input buffer as a FASTA sequence */
       status = esl_sqio_Parse(ptr, strlen(ptr), seq, eslSQFILE_DAEMON);
       if (status != eslOK) client_msg_longjmp(data->sock_fd, status, &jmp_env, "Error parsing FASTA sequence");

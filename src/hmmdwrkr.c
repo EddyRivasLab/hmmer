@@ -67,7 +67,7 @@ typedef struct {
 
   double            elapsed;     /* elapsed search time              */
 
-  ESL_SQ           *ntseq;    /* DNA query sequence that will be in text mode for printing when doing hmmscant */
+  ESL_SQ           *ntseq;       /* DNA query sequence that will be in text mode for printing when doing hmmscant */
 
   /* Structure created and populated by the individual threads.
    * The main thread is responsible for freeing up the memory.
@@ -188,12 +188,7 @@ worker_process(ESL_GETOPTS *go)
           {
               query = process_QueryCmd(cmd, &env);
 
-//              if (esl_opt_IsUsed(query->opts, "--hmmsearcht")) {
-//	          process_TranslatedSearchCmd(cmd, &env, query);
-//              }
-//              else {
               process_SearchCmd(cmd, &env, query);
-//              }
               free_QueueData(query);
           }
           break;
