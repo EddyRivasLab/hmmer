@@ -70,7 +70,7 @@ $output = do_cmd($cmd);
 if ($? != 0) { die "FAIL: nhmmer failed unexpectedly\n"; }
 $expect = 
 q[
-Target sequences:                          1  \(9000000 residues searched\)
+Target sequence\(s\):                        1  \(9000000 residues searched\)
 Residues passing SSV filter:          181118  \(0.0201\); expected \(0.02\)
 Residues passing bias filter:         150796  \(0.0168\); expected \(0.02\)
 Residues passing Vit filter:           17527  \(0.00195\); expected \(0.003\)
@@ -93,7 +93,7 @@ $cmd = "$builddir/src/nhmmer --tformat fasta --watson $tmppfx.hmm $database";
 $output = do_cmd($cmd);
 if ($? != 0) { die "FAIL: nhmmer failed unexpectedly\n"; }
 $expect = q[
-Target sequences:                          1  \(4500000 residues searched\)
+Target sequence\(s\):                        1  \(4500000 residues searched\)
 Residues passing SSV filter:           88023  \(0.0196\); expected \(0.02\)
 Residues passing bias filter:          72871  \(0.0162\); expected \(0.02\)
 Residues passing Vit filter:            8995  \(0.002\); expected \(0.003\)
