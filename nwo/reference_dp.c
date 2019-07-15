@@ -1758,9 +1758,9 @@ utest_brute(FILE *diagfp, ESL_RANDOMNESS *rng, int M, int L, int ntrials)
       //h4_mode_Dump(stdout, mo);
 
       /* run Forward, Backward, Viterbi */
-      if (h4_reference_Forward (sq->dsq, sq->n, hmm, mo, rmx,       &fsc) != eslOK) esl_fatal(msg);   h4_refmx_Reuse(rmx);
-      if (h4_reference_Backward(sq->dsq, sq->n, hmm, mo, rmx,       &bsc) != eslOK) esl_fatal(msg);   h4_refmx_Reuse(rmx);
-      if (h4_reference_Viterbi (sq->dsq, sq->n, hmm, mo, rmx,  vpi, &vsc) != eslOK) esl_fatal(msg);
+      if (h4_reference_Forward (sq->dsq, sq->n, hmm, mo, rmx,       &fsc) != eslOK) {esl_fatal(msg);}   h4_refmx_Reuse(rmx);  // {..} are to shut compiler up about misleading indentation
+      if (h4_reference_Backward(sq->dsq, sq->n, hmm, mo, rmx,       &bsc) != eslOK) {esl_fatal(msg);}   h4_refmx_Reuse(rmx);
+      if (h4_reference_Viterbi (sq->dsq, sq->n, hmm, mo, rmx,  vpi, &vsc) != eslOK) {esl_fatal(msg);}
 
       /* Backward and Forward scores should match */
       if (fabs(fsc - bsc) > ftol_abs) esl_fatal(msg);
@@ -2360,7 +2360,6 @@ utest_approx_decoding(FILE *diagfp, ESL_RANDOMNESS *rng, int alphatype, int M, i
 
   /* Approximate decoding by stochastic traceback  */
   if ( (rxa = h4_refmx_Create(M, sq->n))               == NULL)  esl_fatal(msg);
-  if ( (pi  = h4_path_Create())                        == NULL)  esl_fatal(msg);
   if ( h4_refmx_SetType  (rxa, M, sq->n, h4R_DECODING) != eslOK) esl_fatal(msg);      
   if ( h4_refmx_SetValues(rxa, 0.0)                    != eslOK) esl_fatal(msg);
   for (idx = 0; idx < N; idx++)

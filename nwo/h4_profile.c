@@ -321,11 +321,16 @@ h4_profile_Destroy(H4_PROFILE *hmm)
 {
   if (hmm)
     {
+      free(hmm->f);
       esl_mat_FDestroy(hmm->t);
       esl_mat_FDestroy(hmm->e);
-      free(hmm->f);
       esl_mat_FDestroy(hmm->tsc);
       esl_mat_FDestroy(hmm->rsc);
+      if (hmm->rbv) { esl_alloc_free(hmm->rbv[0]); free(hmm->rbv); }
+      if (hmm->rwv) { esl_alloc_free(hmm->rwv[0]); free(hmm->rwv); }
+      if (hmm->twv) { esl_alloc_free(hmm->twv[0]); free(hmm->twv); }
+      if (hmm->rfv) { esl_alloc_free(hmm->rfv[0]); free(hmm->rfv); }
+      if (hmm->tfv) { esl_alloc_free(hmm->tfv[0]); free(hmm->tfv); }
       free(hmm);
     }
 }
@@ -782,8 +787,7 @@ utest_occupancy(FILE *diagfp, ESL_RANDOMNESS *rng, int alphatype, int M, int N)
   for (k = 1; k <= M; k++)
     {
       sim_mocc[k] = esl_vec_DSum(ctm->e[k], ctm->abc->K) / (double) N;
-      if (k == M) sim_iocc[0] = 0.;
-      else        sim_iocc[k] = (ctm->t[k][h4_TMI] + ctm->t[k][h4_TII] + ctm->t[k][h4_TDI]) / (double) N;
+      sim_iocc[k] = (k == M ? 0.0 : (ctm->t[k][h4_TMI] + ctm->t[k][h4_TII] + ctm->t[k][h4_TDI]) / (double) N);
     }
 
   if ( h4_profile_Occupancy(hmm, mocc, iocc, &mtot, &itot) != eslOK) esl_fatal(msg);
@@ -793,15 +797,20 @@ utest_occupancy(FILE *diagfp, ESL_RANDOMNESS *rng, int alphatype, int M, int N)
     {
       for (k = 1; k <= M; k++)
 	fprintf(stdout, "%6d %12.4f %12.4f %12.4f %12.4f %12.4f %12.4f %9.4f %9.4f %9.4f\n",
-		k, mocc[k], sim_mocc[k], (mocc[k]-sim_mocc[k]) / sim_mocc[k],
-		iocc[k], sim_iocc[k], (iocc[k]-sim_iocc[k]) / sim_iocc[k],
-		exp_len, sim_len, (exp_len-sim_len)/sim_len);
+		k,
+		mocc[k], sim_mocc[k], (sim_mocc[k] > 0. ? 0.0 : (mocc[k]-sim_mocc[k]) / sim_mocc[k]),
+		iocc[k], sim_iocc[k], (sim_iocc[k] > 0. ? 0.0 : (iocc[k]-sim_iocc[k]) / sim_iocc[k]),
+		exp_len, sim_len,     (sim_len     > 0  ? 0.0 : (exp_len-sim_len)/sim_len));
     }
 
   if (esl_DCompareNew(sim_len, exp_len, 0.01, 0.0) != eslOK) esl_fatal(msg);
   for (k = 1; k <= M; k++) if (esl_DCompareNew(sim_mocc[k], mocc[k], 0.05, 0.0) != eslOK) esl_fatal(msg);
   for (k = 1; k <  M; k++) if (esl_DCompareNew(sim_iocc[k], iocc[k], 0.10, 0.0) != eslOK) esl_fatal(msg);
 
+  free(sim_iocc);
+  free(sim_mocc);
+  free(iocc);
+  free(mocc);
   h4_path_Destroy(pi);
   h4_counts_Destroy(ctm);
   h4_profile_Destroy(hmm);
@@ -844,7 +853,7 @@ main(int argc, char **argv)
   fprintf(stderr, "## %s\n", argv[0]);
   fprintf(stderr, "#  rng seed = %" PRIu32 "\n", esl_randomness_GetSeed(rng)); 
 
-  utest_occupancy(stdout, rng, eslRNA, M, N);
+  utest_occupancy(NULL, rng, eslRNA, M, N);
   
   fprintf(stderr, "#  status   = ok\n");
 

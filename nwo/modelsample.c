@@ -446,6 +446,7 @@ utest_enumerated_length(ESL_RANDOMNESS *rng)
     }
   h4_profile_Destroy(hmm);
 
+  h4_path_Destroy(pi);
   h4_mode_Destroy(mo);
   esl_sq_Destroy(sq);
   esl_alphabet_Destroy(abc);
