@@ -400,7 +400,7 @@ int p7_cuda_worker_thread_front_end_sequence_search_loop(P7_DAEMON_WORKERNODE_ST
   threads_per_block.x = 32;
   threads_per_block.y = warps_per_block;
   threads_per_block.z = 1;
-  int doneone =0;
+
   while(1){ // Iterate forever, we'll return from the function rather than exiting this loop
 
     // try to get some work from the global queue
@@ -455,6 +455,7 @@ int p7_cuda_worker_thread_front_end_sequence_search_loop(P7_DAEMON_WORKERNODE_ST
           p7_bg_NullOne(workernode->thread_state[my_id].bg, (const ESL_DSQ *) the_sequence, L, &nullsc);
           p7_SSVFilter((const ESL_DSQ *) the_sequence, L, workernode->thread_state[my_id].om, &retsc);
           buffer_state->cpu_hits[my_stream][num_sequences] = (retsc - nullsc) / eslCONST_LOG2;
+          // uncomment this code to fill cpu_hits with ssv scores so we can check filter results in CUDA land
           current_offset += L_effective;
           the_sequence += L + 2;
           sequence_start = the_sequence;
@@ -465,19 +466,11 @@ int p7_cuda_worker_thread_front_end_sequence_search_loop(P7_DAEMON_WORKERNODE_ST
           num_sequences += 1;
           L_effective = (L + 31) & ALIGNEIGHT_MASK;
         }
- /*       for(int z = 0; z < num_sequences; z++){
-          buffer_state->cpu_hits[my_stream][z] = 0;
-        } */
 
-
-     //   printf("GPU started chunk with %d sequences\n", num_sequences);
-        //printf("Seq_id at end of chunk was %llu\n", seq_id);
-        // This copy is inefficient, but required to overlap CPU-card data transfers and computation
-        // Otherwise, we could just copy from the shard itself
-        //memcpy(buffer_state->cpu_data[my_stream], data_start, current_offset);
+        //printf("GPU started chunk with %d sequences\n", num_sequences);
 
         // Copy the input data to the card
-        p7_cuda_wrapper(cudaMemcpy(buffer_state->gpu_hits[my_stream], buffer_state->cpu_hits[my_stream], num_sequences * sizeof(uint64_t), cudaMemcpyHostToDevice));
+       p7_cuda_wrapper(cudaMemcpy(buffer_state->gpu_hits[my_stream], buffer_state->cpu_hits[my_stream], num_sequences * sizeof(uint64_t), cudaMemcpyHostToDevice));
         p7_cuda_wrapper(cudaMemcpy(buffer_state->gpu_data[my_stream], buffer_state->cpu_data[my_stream], current_offset, cudaMemcpyHostToDevice));
         //printf("GPU sequences range from addresses %p to %p\n", buffer_state->gpu_data[my_stream], buffer_state->gpu_data[my_stream] + (current_offset -1));
         p7_cuda_wrapper(cudaMemcpy(buffer_state->gpu_offsets[my_stream], buffer_state->cpu_offsets[my_stream], num_sequences *sizeof(uint64_t), cudaMemcpyHostToDevice));
@@ -489,10 +482,10 @@ int p7_cuda_worker_thread_front_end_sequence_search_loop(P7_DAEMON_WORKERNODE_ST
 
         // Get the results back
         p7_cuda_wrapper(cudaMemcpy(buffer_state->cpu_hits[my_stream], buffer_state->gpu_hits[my_stream], num_sequences *sizeof(uint64_t) ,cudaMemcpyDeviceToHost));
-        p7_cuda_wrapper(cudaMemcpy(buffer_state->cpu_data2[my_stream], buffer_state->gpu_data[my_stream], current_offset, cudaMemcpyDeviceToHost));
+/*        p7_cuda_wrapper(cudaMemcpy(buffer_state->cpu_data2[my_stream], buffer_state->gpu_data[my_stream], current_offset, cudaMemcpyDeviceToHost));
         if(memcmp(buffer_state->cpu_data[my_stream], buffer_state->cpu_data2[my_stream], current_offset) != 0){
           printf("sequence data appears to have been corrupted while in GPU\n");
-        }
+        }  */  // uncomment this to check for data corruption on GPU side
 //        cudaStreamSynchronize(buffer_state->streams[my_stream]);
      /*     if(doneone==1){
           printf("GPU thread %d finished second chunk of call, which had %d sequences\n", my_id,num_sequences);
@@ -504,8 +497,13 @@ int p7_cuda_worker_thread_front_end_sequence_search_loop(P7_DAEMON_WORKERNODE_ST
         } */
         int num_hits = 0;
         for(int q = 0; q < num_sequences; q++){
-            if(1){
-         // if(buffer_state->cpu_hits[my_stream][q] ==1){ //This sequence hit
+          if(buffer_state->cpu_hits[my_stream][q] == 3){
+            char *name;
+            p7_shard_Find_Descriptor_Nexthigh(workernode->database_shards[workernode->compare_database], *((uint64_t *) buffer_state->cpu_sequences[my_stream][q]),  &name);
+      
+            printf("GPU miss-match at sequence %lu (%s) with length %lu\n", *((uint64_t *) buffer_state->cpu_sequences[my_stream][q]), name, buffer_state->cpu_lengths[my_stream][q]);
+          }
+          if(buffer_state->cpu_hits[my_stream][q] ==1){ //This sequence hit
             // get an entry to put this comparison in
             P7_BACKEND_QUEUE_ENTRY * the_entry = workernode_get_backend_queue_entry_from_pool(workernode);
             the_entry->seq_position = q;
@@ -518,7 +516,7 @@ int p7_cuda_worker_thread_front_end_sequence_search_loop(P7_DAEMON_WORKERNODE_ST
             the_entry->seq_id = *((uint64_t *) s);
             the_entry->sequence = (ESL_DSQ *) (s+ 2*sizeof(uint64_t));
             the_entry->L = buffer_state->cpu_lengths[my_stream][q];
-            the_entry->do_overthruster = 1; // The CPU front end does the full overthruster. 
+            the_entry->do_overthruster = 1;
             the_entry->next = NULL;
             workernode->thread_state[my_id].comparisons_queued += 1;
             // put the entry in the queue
@@ -531,8 +529,7 @@ int p7_cuda_worker_thread_front_end_sequence_search_loop(P7_DAEMON_WORKERNODE_ST
             num_hits++;
           }
         }
-       //printf("GPU finished chunk with %d sequences\n", num_sequences);
-        //printf("GPU found %d hits\n", num_hits);
+       //printf("GPU thread %d finished chunk with %d sequences and %d hits\n", my_id, num_sequences, num_hits);
         num_sequences = 0;
         current_offset = 0;
       }

@@ -384,9 +384,10 @@ p7_engine_Overthruster_roundtwo(P7_ENGINE *eng, ESL_DSQ *dsq, int L, P7_OPROFILE
 
   if (L == 0) return eslFAIL;
 
-  if ((status = p7_bg_NullOne(bg, dsq, L, &(eng->nullsc))) != eslOK) return status; 
+  //if ((status = p7_bg_NullOne(bg, dsq, L, &(eng->nullsc))) != eslOK) return status; 
 
   /* First level: SSV filter */
+  /*
   status = p7_SSVFilter(dsq, L, om, &(eng->sfsc));
   if (status != eslOK && status != eslERANGE) return status;
 
@@ -400,14 +401,15 @@ p7_engine_Overthruster_roundtwo(P7_ENGINE *eng, ESL_DSQ *dsq, int L, P7_OPROFILE
     return eslFAIL;
   }
   if (eng->stats) eng->stats->n_past_ssv++;
+  */
 
   /* Biased composition HMM, ad hoc, acts as a modified null */
   if  (do_biasfilter)
     {
       if ((status = p7_bg_FilterScore(bg, dsq, L, &(eng->biassc))) != eslOK) return status;
-      seq_score = (eng->sfsc - eng->biassc) / eslCONST_LOG2;
+ /*     seq_score = (eng->sfsc - eng->biassc) / eslCONST_LOG2;
       P = esl_gumbel_surv(seq_score,  om->evparam[p7_SMU],  om->evparam[p7_SLAMBDA]);
-      if (P > eng->F1) return eslFAIL;
+      if (P > eng->F1) return eslFAIL; */
     }
   else eng->biassc = eng->nullsc;
   if (eng->stats) eng->stats->n_past_bias++;

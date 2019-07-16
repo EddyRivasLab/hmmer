@@ -75,7 +75,7 @@ crew_Create(ESL_DSQDATA *dd, P7_PROFILE *gm, P7_OPROFILE *om, P7_BG *bg, int n)
 	crew->uw[u]->om = p7_oprofile_Create(gm->M, gm->abc);
 	p7_oprofile_Convert (gm, crew->uw[u]->om);
       }
-      crew->uw[u]->eng = p7_engine_Create(gm->abc, NULL, NULL, 200, 400);
+      crew->uw[u]->eng = p7_engine_Create(gm->abc, NULL, p7_engine_stats_Create(), 200, 400);
     }
   return crew;
 
@@ -239,6 +239,17 @@ main(int argc, char **argv)
   crew_Start(crew);
   crew_Finish(crew);
 
+  uint64_t n_past_ssv = 0;
+  uint64_t n_past_bias = 0;
+  uint64_t n_past_vit = 0;
+  uint64_t n_past_fwd = 0;
+  for(int q = 0; q < crew->nworkers; q++){
+    n_past_ssv += crew->uw[q]->eng->stats->n_past_ssv;
+    n_past_bias += crew->uw[q]->eng->stats->n_past_bias;
+    n_past_vit += crew->uw[q]->eng->stats->n_past_vit;
+    n_past_fwd += crew->uw[q]->eng->stats->n_past_fwd;
+  }
+  printf("n_past_ssv = %lu, n_past_bias = %lu, n_past_vit = %lu, n_past_fwd = %lu\n", n_past_ssv, n_past_bias, n_past_vit, n_past_fwd);
   crew_Destroy(crew);
   esl_dsqdata_Close(dd);
   p7_oprofile_Destroy(om);
