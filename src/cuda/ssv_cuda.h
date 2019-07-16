@@ -6,7 +6,7 @@ extern "C" {
 __device__
 float SSV_cuda(const __restrict__ uint8_t *dsq, uint64_t L, int M, int **rbv, float scale_b, float tauBM, int **om_rbv);
 #define KP 27  // number of characters in alphabet.  Make parameter.
-#define MAX_BAND_WIDTH 4
+#define MAX_BAND_WIDTH 6
 #ifdef __cplusplus // magic to make C++ compilers happy
 }
 #endif

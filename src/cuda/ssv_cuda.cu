@@ -767,118 +767,8 @@ __device__  uint calc_band_4(const __restrict__ uint8_t *dsq, int L, int Q, int 
   return xE0;   
 }
 
-__device__  uint calc_band_4_old(const __restrict__ uint8_t *dsq, int L, int Q, int q, int ** rbv){
-  int sv0 = NEGINFMASK, xE0=NEGINFMASK, sv1 = NEGINFMASK, sv2 = NEGINFMASK, sv3 = NEGINFMASK, *rsc;
-  int row=0, last_row_fetched = -1;
-  int offset;
-  int* rsc_precompute;
-  offset = (q <<5)+threadIdx.x;
-  ENSURE_DSQ(1)
-  rsc =  ((int *)__shfl_sync(0xffffffff, (uint64_t) rsc_precompute, 31)) + offset;
-  row++;
-  int num_iters = min(L, Q-(q +4)); // first band may start in middle of row
-  while(row <= L-Q){
-    while (num_iters >= 4){
-      ENSURE_DSQ(4)
-      offset+= 32;
-      STEP_4() 
-      row++;
-      offset+= 32;
-      STEP_4() 
-      row++;
-      offset+= 32;
-      STEP_4() 
-      row++;
-      offset+= 32;
-      STEP_4()
-      row++;
-      num_iters -= 4;
-    }
-    ENSURE_DSQ(num_iters); 
-    while(num_iters > 0){
-      offset+= 32;
-      STEP_4() 
-      row++;
-      num_iters--;
-    }
-      // at end of row, convert
-      ENSURE_DSQ(4)
-      offset+=32;
-      STEP_4()
-      CONVERT_4()
-      row++;
-      offset+=32;
-      STEP_4()
-      CONVERT_3()
-      row++;  
-      offset+=32;
-      STEP_4()
-      CONVERT_2()
-      row++;
-      offset = threadIdx.x;
-      STEP_4()
-      CONVERT_1()
-      row++;
-      num_iters = Q-4;
-  }
-  num_iters = min(num_iters, L-row);
-  while(row <= L){
-    while (num_iters >= 4){
-      ENSURE_DSQ(4)
-      offset+= 32;
-      STEP_4() 
-      row++;
-      offset+= 32;
-      STEP_4() 
-      row++;
-      offset+= 32;
-      STEP_4() 
-      row++;
-      offset+= 32;
-      STEP_4()
-      row++;
-      num_iters -= 4;
-    }
-    ENSURE_DSQ(num_iters); 
-    while(num_iters > 0){
-      offset+= 32;
-      STEP_4() 
-      row++;
-      num_iters--;
-    }
-    if(row <= L){
-      // at end of row, convert
-      ENSURE_DSQ(4)
-      offset += 32;
-      STEP_4()
-      CONVERT_4()
-      row++;
-    }
-   if(row <= L){
-      // at end of row, convert
-      offset += 32;
-      STEP_4()
-      CONVERT_3()
-      row++;
-    }
-    if(row <= L){
-      // at end of row, convert
-      offset += 32;
-      STEP_4()
-      CONVERT_2()
-      row++;
-    }
-    if(row <= L){
-      //don't need to convert in last row
-      STEP_4()
-    }
-  }
-
-  return xE0;   
-}
-
 __device__  uint calc_band_5(const __restrict__ uint8_t *dsq, int L, int Q, int q, int ** rbv){
-  int sv0 = NEGINFMASK, xE0=NEGINFMASK, sv1 = NEGINFMASK, sv2 = NEGINFMASK, sv3 = NEGINFMASK, sv4 = NEGINFMASK, *rsc;
+  int sv0 = NEGINFMASK, sv1 = NEGINFMASK, sv2 = NEGINFMASK, sv3 = NEGINFMASK, sv4 = NEGINFMASK, xE0=NEGINFMASK, *rsc;
   int row=0, last_row_fetched = -1;
   int offset;
   int* rsc_precompute;
@@ -887,45 +777,102 @@ __device__  uint calc_band_5(const __restrict__ uint8_t *dsq, int L, int Q, int 
   rsc =  ((int *)__shfl_sync(0xffffffff, (uint64_t) rsc_precompute, 31)) + offset;
   row++;
   int num_iters = min(L, Q-(q +5)); // first band may start in middle of row
+  // loop 1
+  while (num_iters >= 4){
+    ENSURE_DSQ(4)
+    offset+= 32;
+    STEP_5()
+    row++;
+    offset+= 32;
+    STEP_5()
+    row++;
+    offset+= 32;
+    STEP_5()
+    row++;
+    offset+= 32;
+    STEP_5()
+    row++;
+    num_iters -= 4;
+  } 
+  ENSURE_DSQ(num_iters)
+  while(num_iters > 0){
+    offset+= 32;
+    STEP_5()
+    row++;
+    num_iters--;
+  }
+   if(row <= L){  // at end of row, convert
+    ENSURE_DSQ(5)
+    offset +=32;
+    STEP_5()
+    CONVERT_5()
+    row++;
+  }
+   if(row <= L){  // at end of row, convert
+    offset += 32;
+    STEP_5()
+    CONVERT_4()
+    row++;
+  }
+   if(row <= L){  // at end of row, convert
+    offset += 32;
+    STEP_5()
+    CONVERT_3()
+    row++;
+  }
+ if(row <= L){  // at end of row, convert
+    offset += 32;
+    STEP_5()
+    CONVERT_2()
+    row++;
+  }
+  if(row <= L){  // at end of row, convert
+    offset = threadIdx.x;
+    STEP_5()
+    CONVERT_1()
+    row++;
+    num_iters = min(Q-5, L-row);
+  }
+  //loop 2
   while(row <= L-Q){
     while (num_iters >= 4){
       ENSURE_DSQ(4)
       offset+= 32;
-      STEP_5() 
+      STEP_5()
       row++;
       offset+= 32;
-      STEP_5() 
+      STEP_5()
       row++;
       offset+= 32;
-      STEP_5() 
+      STEP_5()
       row++;
       offset+= 32;
       STEP_5()
       row++;
       num_iters -= 4;
-    }
-    ENSURE_DSQ(num_iters); 
+    } 
+    ENSURE_DSQ(num_iters)
     while(num_iters > 0){
       offset+= 32;
-      STEP_5() 
+      STEP_5()
       row++;
       num_iters--;
     }
-      // at end of row, convert
+     // at end of row, convert, don't need to check here
+      offset += 32;
       ENSURE_DSQ(5)
-      offset+=32;
       STEP_5()
       CONVERT_5()
       row++;
-      offset+=32;
+      offset += 32;
       STEP_5()
       CONVERT_4()
-      row++;  
-      offset+=32;
+      row++;
+      offset += 32;
       STEP_5()
       CONVERT_3()
       row++;
-      offset+=32;
+      offset += 32;
       STEP_5()
       CONVERT_2()
       row++;
@@ -933,30 +880,29 @@ __device__  uint calc_band_5(const __restrict__ uint8_t *dsq, int L, int Q, int 
       STEP_5()
       CONVERT_1()
       row++;
-      num_iters = Q-5;
+      num_iters = min(Q-5, L-row);
   }
-  num_iters = min(num_iters, L-row);
   while(row <= L){
     while (num_iters >= 4){
       ENSURE_DSQ(4)
       offset+= 32;
-      STEP_5() 
+      STEP_5()
       row++;
       offset+= 32;
-      STEP_5() 
+      STEP_5()
       row++;
       offset+= 32;
-      STEP_5() 
+      STEP_5()
       row++;
       offset+= 32;
       STEP_5()
       row++;
       num_iters -= 4;
-    }
-    ENSURE_DSQ(num_iters); 
+    } 
+    ENSURE_DSQ(num_iters)
     while(num_iters > 0){
       offset+= 32;
-      STEP_5() 
+      STEP_5()
       row++;
       num_iters--;
     }
@@ -968,7 +914,7 @@ __device__  uint calc_band_5(const __restrict__ uint8_t *dsq, int L, int Q, int 
       CONVERT_5()
       row++;
     }
-   if(row <= L){
+    if(row <= L){
       // at end of row, convert
       offset += 32;
       STEP_5()
@@ -990,15 +936,214 @@ __device__  uint calc_band_5(const __restrict__ uint8_t *dsq, int L, int Q, int 
       row++;
     }
     if(row <= L){
-      //don't need to convert in last row
+      offset = threadIdx.x;
       STEP_5()
+      CONVERT_1()
+      row++;
+      num_iters = min(Q-5, L-row);
     }
   }
-
   return xE0;   
 }
 
 __device__  uint calc_band_6(const __restrict__ uint8_t *dsq, int L, int Q, int q, int ** rbv){
+  int sv0 = NEGINFMASK, sv1 = NEGINFMASK, sv2 = NEGINFMASK, sv3 = NEGINFMASK, sv4 = NEGINFMASK, sv5= NEGINFMASK, xE0=NEGINFMASK, *rsc;
+  int row=0, last_row_fetched = -1;
+  int offset;
+  int* rsc_precompute;
+  offset = (q <<5)+threadIdx.x;
+  ENSURE_DSQ(1)
+  rsc =  ((int *)__shfl_sync(0xffffffff, (uint64_t) rsc_precompute, 31)) + offset;
+  row++;
+  int num_iters = min(L, Q-(q +6)); // first band may start in middle of row
+  // loop 1
+  while (num_iters >= 4){
+    ENSURE_DSQ(4)
+    offset+= 32;
+    STEP_6()
+    row++;
+    offset+= 32;
+    STEP_6()
+    row++;
+    offset+= 32;
+    STEP_6()
+    row++;
+    offset+= 32;
+    STEP_6()
+    row++;
+    num_iters -= 4;
+  } 
+  ENSURE_DSQ(num_iters)
+  while(num_iters > 0){
+    offset+= 32;
+    STEP_6()
+    row++;
+    num_iters--;
+  }
+   if(row <= L){  // at end of row, convert
+    ENSURE_DSQ(6)
+    offset +=32;
+    STEP_6()
+    CONVERT_6()
+    row++;
+  }
+  if(row <= L){  // at end of row, convert
+    offset += 32;
+    STEP_6()
+    CONVERT_5()
+    row++;
+  }
+   if(row <= L){  // at end of row, convert
+    offset += 32;
+    STEP_6()
+    CONVERT_4()
+    row++;
+  }
+   if(row <= L){  // at end of row, convert
+    offset += 32;
+    STEP_6()
+    CONVERT_3()
+    row++;
+  }
+ if(row <= L){  // at end of row, convert
+    offset += 32;
+    STEP_6()
+    CONVERT_2()
+    row++;
+  }
+  if(row <= L){  // at end of row, convert
+    offset = threadIdx.x;
+    STEP_6()
+    CONVERT_1()
+    row++;
+    num_iters = min(Q-6, L-row);
+  }
+  //loop 2
+  while(row <= L-Q){
+    while (num_iters >= 4){
+      ENSURE_DSQ(4)
+      offset+= 32;
+      STEP_6()
+      row++;
+      offset+= 32;
+      STEP_6()
+      row++;
+      offset+= 32;
+      STEP_6()
+      row++;
+      offset+= 32;
+      STEP_6()
+      row++;
+      num_iters -= 4;
+    } 
+    ENSURE_DSQ(num_iters)
+    while(num_iters > 0){
+      offset+= 32;
+      STEP_6()
+      row++;
+      num_iters--;
+    }
+     // at end of row, convert, don't need to check here
+      offset += 32;
+      ENSURE_DSQ(6)
+      STEP_6()
+      CONVERT_6()
+      row++;
+      offset += 32;
+      STEP_6()
+      CONVERT_5()
+      row++;
+      offset += 32;
+      STEP_6()
+      CONVERT_4()
+      row++;
+      offset += 32;
+      STEP_6()
+      CONVERT_3()
+      row++;
+      offset += 32;
+      STEP_6()
+      CONVERT_2()
+      row++;
+      offset = threadIdx.x;
+      STEP_6()
+      CONVERT_1()
+      row++;
+      num_iters = min(Q-6, L-row);
+  }
+  while(row <= L){
+    while (num_iters >= 4){
+      ENSURE_DSQ(4)
+      offset+= 32;
+      STEP_6()
+      row++;
+      offset+= 32;
+      STEP_6()
+      row++;
+      offset+= 32;
+      STEP_6()
+      row++;
+      offset+= 32;
+      STEP_6()
+      row++;
+      num_iters -= 4;
+    } 
+    ENSURE_DSQ(num_iters)
+    while(num_iters > 0){
+      offset+= 32;
+      STEP_6()
+      row++;
+      num_iters--;
+    }
+    if(row <= L){
+      // at end of row, convert
+      ENSURE_DSQ(6)
+      offset += 32;
+      STEP_6()
+      CONVERT_6()
+      row++;
+    }
+    if(row <= L){
+      // at end of row, convert
+      offset += 32;
+      STEP_6()
+      CONVERT_5()
+      row++;
+    }
+    if(row <= L){
+      // at end of row, convert
+      offset += 32;
+      STEP_6()
+      CONVERT_4()
+      row++;
+    }
+    if(row <= L){
+      // at end of row, convert
+      offset += 32;
+      STEP_6()
+      CONVERT_3()
+      row++;
+    }
+    if(row <= L){
+      // at end of row, convert
+      offset += 32;
+      STEP_6()
+      CONVERT_2()
+      row++;
+    }
+    if(row <= L){
+      offset = threadIdx.x;
+      STEP_6()
+      CONVERT_1()
+      row++;
+      num_iters = min(Q-6, L-row);
+    }
+  }
+  return xE0;   
+}
+
+
+__device__  uint calc_band_6_old(const __restrict__ uint8_t *dsq, int L, int Q, int q, int ** rbv){
   int sv0 = NEGINFMASK, xE0=NEGINFMASK, sv1 = NEGINFMASK, sv2 = NEGINFMASK, sv3 = NEGINFMASK, sv4 = NEGINFMASK, sv5 = NEGINFMASK, 
   *rsc;
   int row=0, last_row_fetched = -1;
