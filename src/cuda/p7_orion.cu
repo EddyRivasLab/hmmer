@@ -14,7 +14,7 @@
 
 
 __global__
- void p7_orion(int num_sequences, const __restrict__ uint8_t *data, const __restrict__ uint64_t *lengths, const __restrict__ uint64_t *offsets, float *hits, P7_OPROFILE *om, double mu, double lambda){
+ void p7_orion(int num_sequences, const __restrict__ uint8_t *data, const __restrict__ uint64_t *lengths, const __restrict__ uint64_t *offsets, int8_t *hits, float *scores, P7_OPROFILE *om, double mu, double lambda){
   __shared__ uint4 shared_buffer[1024 *3];  //allocate one big lump that takes up all our shared memory
   int  Q = ((((om->M)-1) / (128)) + 1);
   //printf("M= %d Q=%d\n", om->M, Q);
@@ -55,14 +55,14 @@ __global__
 	float nullscore = (float) L * log(p1) + log(1.-p1);
 
     float score = SSV_cuda(dsq, L, om->M, rbv, om->scale_b, om->tauBM, (int **) om->rbv);
-    score = (score - nullscore)/eslCONST_LOG2; // subtract expected random score and convert to bits 
+    float adj_score = (score - nullscore)/eslCONST_LOG2; // subtract expected random score and convert to bits 
     if(threadIdx.x == 0){
-      if(fabs(hits[my_warp]- score) > (.01 * fabs(hits[my_warp]))){
+   /*   if(fabs(hits[my_warp]- score) > (.01 * fabs(hits[my_warp]))){
         printf("Miss-Match at warp %d, CUDA computed %f, CPU computed %f\n", my_warp, score, hits[my_warp]);
         hits[my_warp] = 3;
-       }  // uncomment this to check GPU work
-      else{ 
-	   	 double y  = lambda*(score-mu);
+       } // uncomment this to check GPU work
+      else{ */
+	   	 double y  = lambda*(adj_score-mu);
     	 double ey = -exp(-y);
     	 double passprob;
     	//Use 1-e^x ~ -x approximation here when e^-y is small. 
@@ -72,11 +72,13 @@ __global__
   	
         if (passprob > .02){
           hits[my_warp] = 0;
+          scores[my_warp] =0;
         }
         else{
           hits[my_warp] =1;
+          scores[my_warp] = score;
         } 
-      }
+      //}
     }
   }
  // if(threadIdx.x ==0) printf("Warp %d completed\n", (blockIdx.x * blockDim.y) + threadIdx.y);

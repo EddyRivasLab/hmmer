@@ -14,7 +14,7 @@
 #include "server/worker_node.h"
 #include <unistd.h>
 #include <time.h>
-
+#include "/usr/local/cuda-10.1/include/cuda_profiler_api.h"
 
 // Set up variables required by Easel's argument processor.  These are used by p7_server_workernode_main
 static ESL_OPTIONS options[] = {
@@ -69,7 +69,7 @@ int main(int argc, char **argv){
 
   uint64_t num_hmms = hmm_database->num_objects;
   uint64_t search_increment = num_hmms/num_searches;
-
+  cudaProfilerStart();
   P7_SHARD *database_shard = workernode->database_shards[0];
  // Performance test loop.  Perform the specified number of searches.
   for(int search = 0; search < num_searches; search++){
@@ -170,6 +170,17 @@ int main(int argc, char **argv){
   fprintf(outfile, "%" PRIu64 " hits found\n", count);
   fclose(outfile);
     gettimeofday(&end, NULL);
+     uint64_t n_past_ssv = 0;
+  uint64_t n_past_bias = 0;
+  uint64_t n_past_vit = 0;
+  uint64_t n_past_fwd = 0;
+  for(int q = 0; q < workernode->num_threads; q++){
+    n_past_ssv += workernode->thread_state[q].engine->stats->n_past_ssv;
+    n_past_bias += workernode->thread_state[q].engine->stats->n_past_bias;
+    n_past_vit += workernode->thread_state[q].engine->stats->n_past_vit;
+    n_past_fwd += workernode->thread_state[q].engine->stats->n_past_fwd;
+  }
+  printf("n_past_ssv = %lu, n_past_bias = %lu, n_past_vit = %lu, n_past_fwd = %lu\n", n_past_ssv, n_past_bias, n_past_vit, n_past_fwd);
     double ncells = (double) hmm->M * (double) database_shard->total_length;
     double elapsed_time = ((double)((end.tv_sec * 1000000 + (end.tv_usec)) - (start.tv_sec * 1000000 + start.tv_usec)))/1000000.0;
     double gcups = (ncells/elapsed_time) / 1.0e9;
@@ -178,4 +189,5 @@ int main(int argc, char **argv){
    p7_server_workernode_end_search(workernode);
   }
 
+  cudaProfilerStop();
 }

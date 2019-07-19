@@ -387,8 +387,8 @@ p7_engine_Overthruster_roundtwo(P7_ENGINE *eng, ESL_DSQ *dsq, int L, P7_OPROFILE
   //if ((status = p7_bg_NullOne(bg, dsq, L, &(eng->nullsc))) != eslOK) return status; 
 
   /* First level: SSV filter */
-  /*
-  status = p7_SSVFilter(dsq, L, om, &(eng->sfsc));
+  
+/*  status = p7_SSVFilter(dsq, L, om, &(eng->sfsc));
   if (status != eslOK && status != eslERANGE) return status;
 
   seq_score = (eng->sfsc - eng->nullsc) / eslCONST_LOG2;  
@@ -397,7 +397,7 @@ p7_engine_Overthruster_roundtwo(P7_ENGINE *eng, ESL_DSQ *dsq, int L, P7_OPROFILE
   }
   P = esl_gumbel_surv(seq_score,  om->evparam[p7_SMU],  om->evparam[p7_SLAMBDA]);
   if (P > eng->F1){
-  //  printf("Sequence failed SSV after passing CUDA SSV\n");
+   printf("Sequence failed SSV after passing CUDA SSV\n");
     return eslFAIL;
   }
   if (eng->stats) eng->stats->n_past_ssv++;
@@ -407,9 +407,9 @@ p7_engine_Overthruster_roundtwo(P7_ENGINE *eng, ESL_DSQ *dsq, int L, P7_OPROFILE
   if  (do_biasfilter)
     {
       if ((status = p7_bg_FilterScore(bg, dsq, L, &(eng->biassc))) != eslOK) return status;
- /*     seq_score = (eng->sfsc - eng->biassc) / eslCONST_LOG2;
+      seq_score = (score - eng->biassc) / eslCONST_LOG2;
       P = esl_gumbel_surv(seq_score,  om->evparam[p7_SMU],  om->evparam[p7_SLAMBDA]);
-      if (P > eng->F1) return eslFAIL; */
+      if (P > eng->F1) return eslFAIL; 
     }
   else eng->biassc = eng->nullsc;
   if (eng->stats) eng->stats->n_past_bias++;

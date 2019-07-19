@@ -51,7 +51,7 @@ static void workernode_wait_for_Work(P7_DAEMON_CHUNK_REPLY *the_reply, MPI_Datat
  * if the depth of the backend queue exceeds (1 << BACKEND_INCREMENT_FACTOR) * (number of threads already in back-end mode), the code switches a front-end 
  * thread to back-end mode.
  */
-#define BACKEND_INCREMENT_FACTOR 7
+#define BACKEND_INCREMENT_FACTOR 1
 
 /* Defining TEST_SEQUENCES causes the code to count the sequences that are visited in a search to determine whether the search examines every sequence.
  * This should always be undefined in production builds.  This macro should probably be folded into the general enable-debugging syntax
@@ -217,7 +217,7 @@ P7_DAEMON_WORKERNODE_STATE *p7_server_workernode_Create(uint32_t num_databases, 
   }
 
   // Create a base pool of backend queue entries
-  workernode->backend_pool = workernode_backend_pool_Create(workernode->num_threads *10);
+  workernode->backend_pool = workernode_backend_pool_Create(workernode->num_threads *10000);
   
   if(workernode->backend_pool == NULL){
     p7_Fail((char *)"Unable to allocate memory in p7_server_workernode_Create\n");
@@ -942,7 +942,6 @@ void *p7_server_worker_thread(void *worker_argument){
 
           p7_bg_SetFilter(workernode->thread_state[my_id].bg, workernode->thread_state[my_id].om->M, workernode->thread_state[my_id].om->compo);
         }
-        workernode->thread_state[my_id].mode = BACKEND; // force CPU threads to backend mode for testing
         stop = 0;
         while(stop == 0){  // There's still some work left to do on the current search
           switch(workernode->thread_state[my_id].mode){
@@ -1559,7 +1558,6 @@ static void worker_thread_back_end_sequence_search_loop(P7_DAEMON_WORKERNODE_STA
   int overthruster_result = eslFAIL;
   while(the_entry != NULL){
   // There's a sequence in the queue, so do the backend comparison 
-
     // configure the model and engine for this comparison
     p7_bg_SetLength(workernode->thread_state[my_id].bg, the_entry->L);           
         p7_oprofile_ReconfigLength(workernode->thread_state[my_id].om, the_entry->L);
@@ -1827,6 +1825,18 @@ void workernode_put_backend_queue_entry_in_queue(P7_DAEMON_WORKERNODE_STATE *wor
   }
 }
  
+ /* Adds a linked-list chain of backend queue entries to the backend queue in one operation to reduce overhead */
+void workernode_put_backend_chain_in_queue(P7_DAEMON_WORKERNODE_STATE *workernode, int chain_length, P7_BACKEND_QUEUE_ENTRY *chain_start, P7_BACKEND_QUEUE_ENTRY *chain_end){
+  while(pthread_mutex_trylock(&(workernode->backend_queue_lock))){
+        // spin-wait until the lock on our queue is cleared.  Should never be locked for long
+  }
+  chain_end->next = workernode->backend_queue;
+  workernode->backend_queue = chain_start;
+  workernode->backend_queue_depth +=chain_length ; // increment the count of operations in the queue
+  if(pthread_mutex_unlock(&(workernode->backend_queue_lock))){
+    p7_Fail((char *) "Couldn't unlock work mutex in p7_put_backend_queue_entry_in_queue");
+  }
+}
 
 // workernode_get_hit_list_entry_from_pool
 /*! \brief Returns an empty hit list entry (an ESL_RED_BLACK_DOUBLEKEY object whose contents are a hitlist object) from one of the workernode's pools
