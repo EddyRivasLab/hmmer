@@ -15,9 +15,8 @@ extern int (*h4_vitfilter)(const ESL_DSQ *dsq, int L, const H4_PROFILE *hmm, con
  * the implementation issues a fatal error. See additonal comments in
  * vitfilter_sse.c, etc.
  */
-extern int h4_vitfilter_sse(const ESL_DSQ *dsq, int L, const H4_PROFILE *hmm, const H4_MODE *mo, H4_FILTERMX *fx, float *ret_sc);
-extern int h4_vitfilter_avx(const ESL_DSQ *dsq, int L, const H4_PROFILE *hmm, const H4_MODE *mo, H4_FILTERMX *fx, float *ret_sc);
+extern int h4_vitfilter_sse   (const ESL_DSQ *dsq, int L, const H4_PROFILE *hmm, const H4_MODE *mo, H4_FILTERMX *fx, float *ret_sc);
+extern int h4_vitfilter_avx   (const ESL_DSQ *dsq, int L, const H4_PROFILE *hmm, const H4_MODE *mo, H4_FILTERMX *fx, float *ret_sc);
 extern int h4_vitfilter_avx512(const ESL_DSQ *dsq, int L, const H4_PROFILE *hmm, const H4_MODE *mo, H4_FILTERMX *fx, float *ret_sc);
-
 
 #endif /*p7VITFILTER_INCLUDED*/

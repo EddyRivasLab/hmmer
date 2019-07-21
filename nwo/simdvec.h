@@ -20,7 +20,9 @@
 #define h4_SCALE_W    500.0   // VF is in 1/500 bits
 #define h4_BASE_W   12000.0   // VF scores are offset 
 
-#define h4_3NAT_APPROX  4.328  
+#define h4_2NAT_APPROX  2.8853901  // for SSV singlehit: NN/CC=0;   asymptotically they score -2nat
+#define h4_3NAT_APPROX  4.3280851  // for VF multihit:   NN/CC/JJ=0,  "" -3nat
+
 
 /* Actual vector widths (in # of elements) that our SSV, VF, and F/B
  * filters use. These are runtime queries, using cpu dispatching.

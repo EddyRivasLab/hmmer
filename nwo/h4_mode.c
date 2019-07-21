@@ -256,6 +256,59 @@ h4_mode_Dump(FILE *fp, const H4_MODE *mo)
 }
 
 
+/* Function:  h4_mode_SameAsSSV()
+ * Synopsis:  Scale and round to match SSV scores.
+ * Incept:    SRE, Thu 18 Jul 2019
+ *
+ * Purpose:   Make a copy of <mo> with standard <xsc> scores set to
+ *            match the scaling and rounding of the SSV filter: scaled
+ *            by <h4_SCALE_B> and rounded to nearest integer.  When
+ *            both profile and mode have been converted by
+ *            _SameAsSSV() calls, reference Viterbi DP gives the same
+ *            score as the SSV filter does (with exceptions; see
+ *            h4_profile_SameAsSSV() for additional information).
+ *            
+ *            Before conversion, the mode <mo> should be configured by
+ *            the caller for unihit local alignment, with its length
+ *            modeling set. (However, in this implementation, only the
+ *            length model in <mo> is sctually needed. Unilocal
+ *            alignment will be set for <xmo> regardless of how <mo>
+ *            is set.)
+ *           
+ *            The copy with scaled/rounded scores is returned in
+ *            <*ret_xmo>. You must not call any reparameterization on
+ *            <xmo>, including <h4_mode_SetLength()>, because such
+ *            routines would overwrite the SSV-mimicking
+ *            parameterization with fresh (unscaled, unrounded)
+ *            scores.
+ */
+int
+h4_mode_SameAsSSV(const H4_MODE *mo, H4_MODE **ret_xmo)
+{
+  H4_MODE *xmo = NULL;
+  float    txx = h4_SCALE_B * esl_log2f( 2. / ( (float) mo->L + 2.)); // unrounded, because SSV filter adds tNN/tCC terms post-scaling as floats
+  int      status;
+
+  if (( xmo = h4_mode_Clone(mo)) == NULL) { status = eslEMEM; goto ERROR; }
+
+
+  xmo->xsc[h4_E][h4_LOOP] = -eslINFINITY;  xmo->xsc[h4_E][h4_MOVE] = 0.;
+  xmo->xsc[h4_N][h4_LOOP] = 0.;            xmo->xsc[h4_N][h4_MOVE] = txx;
+  xmo->xsc[h4_J][h4_LOOP] = 0.;            xmo->xsc[h4_J][h4_MOVE] = txx;  // J->B doesn't matter, because we're unilocal and J is unreachable, E->J=-inf
+  xmo->xsc[h4_C][h4_LOOP] = 0.;            xmo->xsc[h4_C][h4_MOVE] = txx;
+  xmo->xsc[h4_B][h4_LOOP] = 0.;            xmo->xsc[h4_B][h4_MOVE] = -eslINFINITY;
+
+  *ret_xmo = xmo;
+  return eslOK;
+
+ ERROR:
+  h4_mode_Destroy(xmo);
+  *ret_xmo = NULL;
+  return status;
+}
+
+
+
 /* Function:  h4_mode_SameAsVF()
  * Synopsis:  Scale and round to match VF.
  * Incept:    SRE, Sun 07 Jul 2019

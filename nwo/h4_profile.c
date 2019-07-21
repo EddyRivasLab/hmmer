@@ -348,22 +348,49 @@ h4_profile_Destroy(H4_PROFILE *hmm)
 int
 h4_profile_SetConventions(H4_PROFILE *hmm)
 {
-  esl_vec_FSet(hmm->e[0], hmm->abc->K, 0.0);         // e[0] is unused; we make it a valid probability vector anyway
+  int K = hmm->abc->K;
+  int M = hmm->M;
+
+  esl_vec_FSet(hmm->e[0], K, 0.0);               // e[0] is unused; we make it a valid probability vector anyway
   hmm->e[0][0] = 1.0;
 
-  hmm->t[0][h4_TMI] = 0.;                            // at [0] TMM,TMD are G->{MD}1; no I0 state, so G->MI0 = 0
+  hmm->t[0][h4_TMI] = 0.;                       // at [0] TMM,TMD are G->{MD}1; no I0 state, so G->MI0 = 0
 
-  hmm->t[0][h4_TIM] = hmm->t[hmm->M][h4_TIM] = 1.0;  // at [0] and [M], there is no insert state;
-  hmm->t[0][h4_TII] = hmm->t[hmm->M][h4_TII] = 0.0;  //   we make the transitions valid prob vectors anyway
-  hmm->t[0][h4_TID] = hmm->t[hmm->M][h4_TID] = 0.0;
+  hmm->t[0][h4_TIM] = hmm->t[M][h4_TIM] = 1.0;  // at [0] and [M], there is no insert state;
+  hmm->t[0][h4_TII] = hmm->t[M][h4_TII] = 0.0;  //   we make the transitions valid prob vectors anyway
+  hmm->t[0][h4_TID] = hmm->t[M][h4_TID] = 0.0;
 
-  hmm->t[0][h4_TDM] = hmm->t[hmm->M][h4_TDM] = 1.0;  // at [0] there is no delete state; at [M], delete -> E.
-  hmm->t[0][h4_TDI] = hmm->t[hmm->M][h4_TDI] = 0.0;  
-  hmm->t[0][h4_TDD] = hmm->t[hmm->M][h4_TDD] = 0.0;  
+  hmm->t[0][h4_TDM] = hmm->t[M][h4_TDM] = 1.0;  // at [0] there is no delete state; at [M], delete -> E.
+  hmm->t[0][h4_TDI] = hmm->t[M][h4_TDI] = 0.0;  
+  hmm->t[0][h4_TDD] = hmm->t[M][h4_TDD] = 0.0;  
 
-  hmm->t[hmm->M][h4_TMM] = 1.0;                      // at [M], match state must go M->E.
-  hmm->t[hmm->M][h4_TMI] = 0.0;
-  hmm->t[hmm->M][h4_TMD] = 0.0;
+  hmm->t[M][h4_TMM] = 1.0;                      // at [M], match state must go M->E.
+  hmm->t[M][h4_TMI] = 0.0;
+  hmm->t[M][h4_TMD] = 0.0;
+
+  hmm->tsc[0][h4_IM]    = 0.;
+  hmm->tsc[0][h4_DM]    = 0.;
+  hmm->tsc[0][h4_MI]    = -eslINFINITY;
+  hmm->tsc[0][h4_II]    = -eslINFINITY;
+  hmm->tsc[0][h4_DI]    = -eslINFINITY;
+  hmm->tsc[0][h4_GI]    = -eslINFINITY;
+  hmm->tsc[0][h4_ID]    = -eslINFINITY;
+  hmm->tsc[0][h4_DD]    = -eslINFINITY;
+  hmm->tsc[0][h4_DGE]   = -eslINFINITY;
+  hmm->tsc[M-1][h4_DGE] = 0.;
+  hmm->tsc[M][h4_MM]    = 0.;
+  hmm->tsc[M][h4_IM]    = 0.;
+  hmm->tsc[M][h4_DM]    = 0.;
+  hmm->tsc[M][h4_LM]    = -eslINFINITY;
+  hmm->tsc[M][h4_GM]    = -eslINFINITY;
+  hmm->tsc[M][h4_MI]    = -eslINFINITY;
+  hmm->tsc[M][h4_II]    = -eslINFINITY;
+  hmm->tsc[M][h4_DI]    = -eslINFINITY;
+  hmm->tsc[M][h4_GI]    = -eslINFINITY;
+  hmm->tsc[M][h4_MD]    = -eslINFINITY;
+  hmm->tsc[M][h4_ID]    = -eslINFINITY;
+  hmm->tsc[M][h4_DD]    = -eslINFINITY;
+  hmm->tsc[M][h4_DGE]   = 0.;
 
   return eslOK;
 }
@@ -676,6 +703,72 @@ h4_profile_MutePathScore(const H4_PROFILE *hmm, float *ret_sc)
 }
 
 
+/* Function:  h4_profile_SameAsSSV()
+ * Synopsis:  Scale and round standard profile scores to match SSV
+ * Incept:    SRE, Wed 17 Jul 2019 
+ *
+ * Purpose:   Make a copy of <hmm> with its standard scores scaled
+ *            rounded so reference Viterbi score matches SSV filter
+ *            score. Return the copy in <*ret_xhmm>.
+ *            
+ *            Emission scores are scaled by <h4_SCALE_B> and rounded.
+ *            Transition scores are all -infty, except for tMM's which
+ *            are 0, and tLMk's which are set to the (scaled) SSV
+ *            tauBM.
+ *            
+ *            (You also need a <H4_MODE>; see <h4_mode_SameAsSSV()>.)                                            
+ *
+ *            To convert a standard raw Viterbi score <vsc> calculated
+ *            with a "SameAsSSV" profile to a raw bit score that should
+ *            match an SSV raw bit score (as long as the SSV filter
+ *            doesn't overflow), do <(vsc / h4_SCALE_B) - h4_2NAT_APPROX>.
+ *                                                        
+ *            There are two cases where the SSV filter score won't
+ *            match the reference Viterbi score with a SameAsSSV
+ *            profile. One is if the SSV score overflows the limited
+ *            range of the SSV filter, in which case <h4_ssefilter()>
+ *            returns <eslERANGE>. The other is if there is no
+ *            nonnegative alignment diagonal; the SSV filter will
+ *            report a minimum score of 0 + tNB + tBM + tCT -
+ *            h4_2NAT_APPROX. See the ssvfilter.c
+ *            utest_compare_reference() for an example of how to
+ *            compare SSV filter scores to their reference Viterbi
+ *            emulation.
+ *
+ * Throws:    <eslEMEM> on allocation failure.
+ */
+int
+h4_profile_SameAsSSV(const H4_PROFILE *hmm, H4_PROFILE **ret_xhmm)
+{
+  H4_PROFILE *xhmm = NULL;
+  int         k,x;
+  int         status;
+
+  ESL_DASSERT1(( hmm->flags & h4_HASBITS ));
+  
+  if (( xhmm = h4_profile_Clone(hmm)) == NULL) { status = eslEMEM; goto ERROR; }
+
+  /* residue scores are scaled & rounded */
+  for (x = 0; x < hmm->abc->Kp; x++)
+    for (k = 0; k <= hmm->M; k++)
+      xhmm->rsc[x][k] = (hmm->rsc[x][k] <= -eslINFINITY) ? -eslINFINITY : roundf(h4_SCALE_B * hmm->rsc[x][k]);
+
+  /* most transitions are -inf, except edge conventions, MM=0, LMk=tauBM */
+  esl_mat_FSet(xhmm->tsc, xhmm->M+1, h4_NTSC, -eslINFINITY);                     // a brutal wipe...
+  h4_profile_SetConventions(xhmm);                                               // ... so we have to fix the edge damage
+  for (k = 0; k < xhmm->M; k++) xhmm->tsc[k][h4_LM] = h4_SCALE_B * xhmm->tauBM;  // SSV adds tauBM unscaled; but to mimic in DP, must scale it.
+  for (k = 1; k < xhmm->M; k++) xhmm->tsc[k][h4_MM] = 0;
+
+  *ret_xhmm = xhmm;
+  return eslOK;
+
+ ERROR:
+  h4_profile_Destroy(xhmm);
+  *ret_xhmm = NULL;
+  return status;
+}
+
+
 /* Function:  h4_profile_SameAsVF()
  * Synopsis:  Scale and round standard profile scores to match VF
  * Incept:    SRE, Sun 07 Jul 2019
@@ -696,7 +789,7 @@ h4_profile_MutePathScore(const H4_PROFILE *hmm, float *ret_sc)
  *            h4_3NAT_APPROX>.
  */
 int
-h4_profile_SameAsVF(H4_PROFILE *hmm, H4_PROFILE **ret_xhmm)
+h4_profile_SameAsVF(const H4_PROFILE *hmm, H4_PROFILE **ret_xhmm)
 {
   H4_PROFILE *xhmm = NULL;
   int k,s,x;

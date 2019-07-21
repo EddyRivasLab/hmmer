@@ -49,7 +49,7 @@ static int vitfilter_dispatcher(const ESL_DSQ *dsq, int L, const H4_PROFILE *hmm
  * Purpose:   Calculates an approximation of the Viterbi score for sequence
  *            <dsq> of length <L> residues, using profile <hmm>, alignment
  *            mode <mo>, and an allocated DP matrix <fx>. Return the 
- *            estimated Viterbi score (in bits) in <ret_sc>.
+ *            estimated Viterbi raw score (in bits) in <ret_sc>.
  *            
  *            The <hmm> has its striped vector parameters set (and its
  *            <h4_HASVECS) flag).
@@ -278,6 +278,7 @@ main(int argc, char **argv)
 
 #include "modelsample.h"
 #include "reference_dp.h"
+#include "simdvec.h"
 
 /* utest_compare_reference()
  * 
@@ -436,7 +437,6 @@ main(int argc, char **argv)
 
 #include "general.h"
 #include "reference_dp.h"
-#include "vectorize.h"
 #include "vitfilter.h"
 
 static ESL_OPTIONS options[] = {
@@ -473,7 +473,6 @@ main(int argc, char **argv)
   h4_hmmfile_Close(hfp);
 
   h4_mode_SetLocal(mo);
-  h4_vectorize(hmm);  // SRE: maybe we move this into hmmfile_Read()?
 
   //h4_profile_Dump(stdout, hmm);
   //h4_mode_Dump(stdout, mo);

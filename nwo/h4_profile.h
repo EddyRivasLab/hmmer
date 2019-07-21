@@ -39,8 +39,8 @@ typedef struct {
   float   **rsc;            // match emission scores. [0..Kp-1][0.1..M]
 
   // SSV uses striped scaled int8_t scores: e.g. 16x per 128b vector 
-  int8_t  **rbv;            // match scores [x=0..Kp-1][q=0..Qb-1]               
-  float     tauBM;          // constant B->Mk score:    log 2/M(M+1)             
+  int8_t  **rbv;            // match scores [x=0..Kp-1][q=0..Qb+h4_EXTRA_SB-1]               
+  float     tauBM;          // constant B->Mk score:    log 2/M(M+1) (not scaled! added post-unscaling)         
 
   // VF uses striped scaled int16_t scores: e.g. 8x per 128b vector 
   int16_t **rwv;            // match scores [x=0..Kp-1][q=0..Qw-1]  
@@ -136,5 +136,6 @@ extern int         h4_profile_Dump   (FILE *fp, H4_PROFILE *hmm);
 extern int         h4_profile_Validate(const H4_PROFILE *hmm, char *errbuf);
 extern int         h4_profile_Compare(const H4_PROFILE *h1, const H4_PROFILE *h2);
 extern int         h4_profile_MutePathScore(const H4_PROFILE *hmm, float *ret_sc);
-extern int         h4_profile_SameAsVF(H4_PROFILE *hmm, H4_PROFILE **ret_xhmm);
+extern int         h4_profile_SameAsSSV(const H4_PROFILE *hmm, H4_PROFILE **ret_xhmm);
+extern int         h4_profile_SameAsVF (const H4_PROFILE *hmm, H4_PROFILE **ret_xhmm);
 #endif /* h4PROFILE_INCLUDED */

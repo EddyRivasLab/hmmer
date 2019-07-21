@@ -85,7 +85,8 @@ Depends on _base_, _models_, _matrices_.
 
 | .c file         | within-group dependencies    |
 |-----------------|------------------------------|
-| `vitfilter_sse` |                              |
+| `ssvfilter*`    |                              |
+| `vitfilter*`    |                              |
 
 
 ### hmmer itself

@@ -12,6 +12,7 @@
 #include "simdvec.h"
 #include "h4_profile.h"
 
+static int ssv_conversion(H4_PROFILE *hmm);
 static int vit_conversion(H4_PROFILE *hmm);
 
 int
@@ -19,8 +20,45 @@ h4_vectorize(H4_PROFILE *hmm)
 {
   int status;
 
+  if (( status = ssv_conversion(hmm)) != eslOK) return status;
   if (( status = vit_conversion(hmm)) != eslOK) return status;
 
+  return eslOK;
+}
+
+
+/* ssv_conversion()
+ * Build SSV filter parts of profile <hmm>: scaled int8_t scores.
+ *
+ * xref J2/66, J4/138: analysis of original MSVFilter() scoring system 
+ *
+ * Returns:   <eslOK> on success.
+ */
+static int
+ssv_conversion(H4_PROFILE *hmm)
+{
+  int     M = hmm->M;               // query profile length
+  int     V = hmm->V;               // number of int8 scores per vector
+  int     Q = hmm->Qb;              // # of striped vectors per row
+  int     x, k, q, z;
+  int8_t *rbv;
+
+  ESL_DASSERT1(( hmm->flags & h4_HASBITS ));
+  ESL_DASSERT1(( hmm->abc ));
+
+  hmm->tauBM   = logf(2.0f / ((float) M * (float) (M+1)));   // Local alignment, uniform fragment length model. Not scaled! SSV adds it afterwards.
+
+  for (x = 0; x < hmm->abc->Kp; x++)
+    {
+      rbv = hmm->rbv[x];
+      for (q = 0; q < Q + h4_EXTRA_SB; q++)   // Knudsen's tricksy SSV needs to have h4_EXTRA_SB vector copies appended, circularly permuted
+	for (z = 0; z < V; z++)
+	  {
+	    k = z*Q + (q%Q) + 1;
+	    *rbv = (k <= M ? h4_simdvec_byteify(hmm->rsc[x][k]) : -128);
+	    rbv++;
+	  }
+    }
   return eslOK;
 }
 

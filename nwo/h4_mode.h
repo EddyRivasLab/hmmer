@@ -60,6 +60,7 @@ extern int      h4_mode_SetLength   (H4_MODE *mo, int L);
 extern void     h4_mode_Destroy     (H4_MODE *mo);
 
 extern int      h4_mode_Dump(FILE *fp, const H4_MODE *mo);
-extern int      h4_mode_SameAsVF(const H4_MODE *mo, H4_MODE **ret_xmo);
+extern int      h4_mode_SameAsSSV(const H4_MODE *mo, H4_MODE **ret_xmo);
+extern int      h4_mode_SameAsVF (const H4_MODE *mo, H4_MODE **ret_xmo);
 
 #endif //h4MODE_INCLUDED

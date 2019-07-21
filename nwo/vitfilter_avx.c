@@ -32,7 +32,4 @@ h4_vitfilter_avx(const ESL_DSQ *dsq, int L, const H4_PROFILE *hmm, const H4_MODE
   esl_fatal("AVX support was not enabled at compile time. Can't use h4_vitfilter_avx().");
   return eslFAIL; // NOTREACHED
 }
-#if defined h4VITFILTER_AVX_TESTDRIVE || h4VITFILTER_AVX_EXAMPLE
-int main(void) { return 0; }
-#endif 
 #endif // eslENABLE_AVX or not

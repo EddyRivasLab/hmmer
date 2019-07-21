@@ -25,7 +25,7 @@ h4_vitfilter_avx512(const ESL_DSQ *dsq, int L, const H4_PROFILE *hmm, const H4_M
 
 
 #else // ! eslENABLE_AVX512
-/* provide a callable function even when we're `./configure --disable-avx` */
+/* provide a callable function even when we're `./configure --disable-avx512` */
 int
 h4_vitfilter_avx512(const ESL_DSQ *dsq, int L, const H4_PROFILE *hmm, const H4_MODE *mo, H4_FILTERMX *fx, float *ret_sc)
 {
@@ -33,7 +33,4 @@ h4_vitfilter_avx512(const ESL_DSQ *dsq, int L, const H4_PROFILE *hmm, const H4_M
   esl_fatal("AVX512 support was not enabled at compile time. Can't use h4_vitfilter_avx512().");
   return eslFAIL; // NOTREACHED
 }
-#if defined h4VITFILTER_AVX512_TESTDRIVE || h4VITFILTER_AVX512_EXAMPLE
-int main(void) { return 0; }
-#endif 
 #endif // eslENABLE_AVX512 or not
