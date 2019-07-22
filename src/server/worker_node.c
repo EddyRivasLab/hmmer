@@ -751,7 +751,7 @@ int p7_server_workernode_create_threads(P7_DAEMON_WORKERNODE_STATE *workernode){
 
     // The ordering of which threads are GPU and CPU is a bit important here.  By creating the GPU threads first, 
     // the GPU threads can use their IDs to determine which CUDA device to talk to.
-    if((i < workernode->cuda_config->num_cards) &&(i < workernode->num_threads)){
+    if((i < workernode->cuda_config->num_cards) &&(i <workernode->num_threads)){
       // Take out the last i<1 when we're ready to think about multiple GPUs
       // Create as many GPU worker threads as there are cards, but make sure we create at least one CPU worker thread
         if(pthread_create(&(workernode->thread_objs[i]), &attr, p7_server_cuda_worker_thread, (void *) the_argument)){
