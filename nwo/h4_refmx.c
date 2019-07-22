@@ -141,8 +141,9 @@ h4_refmx_GrowTo(H4_REFMX *rx, int M, int L)
 	    rx->dp[r][x] = -eslINFINITY;
 	}
     }
-  rx->M = 0;
-  rx->L = 0;
+  rx->M    = 0;
+  rx->L    = 0;
+  rx->type = h4R_UNSET;
   return eslOK;
 
  ERROR:

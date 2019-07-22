@@ -2,6 +2,7 @@ PROGS = hmmer
 
 OBJS   = \
 	cmd_build.o         \
+	h4_checkptmx.o      \
 	h4_counts.o         \
 	h4_filtermx.o       \
 	h4_hmmfile.o        \
@@ -10,6 +11,7 @@ OBJS   = \
 	h4_prior.o          \
 	h4_profile.o        \
 	h4_refmx.o          \
+	h4_sparsemask.o     \
 	build.o             \
 	emit.o              \
 	eweight.o           \
@@ -35,6 +37,7 @@ VMX_OBJS    = ssvfilter_vmx.o    vitfilter_vmx.o
 HDRS = \
 	h4_config.h         \
 	cmd_build.h         \
+	h4_checkptmx.h      \
 	h4_counts.h         \
 	h4_filtermx.h       \
 	h4_hmmfile.h        \
@@ -43,6 +46,7 @@ HDRS = \
 	h4_prior.h          \
 	h4_profile.h        \
 	h4_refmx.h          \
+	h4_sparsemask.h     \
 	build.h             \
 	emit.h              \
 	eweight.h           \
