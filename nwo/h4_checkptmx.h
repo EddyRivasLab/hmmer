@@ -45,11 +45,12 @@ typedef struct {
 
 #if eslDEBUGLEVEL > 0
   /* Info for dumping debugging info, conditionally compiled */
-  int       do_dumping;         // TRUE if matrix is in dumping mode
   FILE     *dfp;                // open output stream for debug dumps
   int       dump_maxpfx;        // each line prefixed by tag of up to this # chars
   int       dump_width;         // cell values in diagnostic output are fprintf'ed:
   int       dump_precision;     //   dfp, "%*.*f", dbg_width, dbg_precision, val
+  int       do_logify;          // TRUE to dump as log probs, not probs
+
 
   H4_REFMX *fwd;                // full Forward matrix, saved for unit test diffs
   H4_REFMX *bck;                // ... full Backward matrix, ditto
@@ -64,6 +65,10 @@ typedef struct {
 #define h4C_I       1
 #define h4C_D       2
 #define h4C_NSCELLS 3
+
+#define H4C_MQ(dp, q)     ((dp)[(q) * h4C_NSCELLS + h4C_M])
+#define H4C_IQ(dp, q)     ((dp)[(q) * h4C_NSCELLS + h4C_I])
+#define H4C_DQ(dp, q)     ((dp)[(q) * h4C_NSCELLS + h4C_D])
 
 /* indices for special states/values at end of a DP row */
 #define h4C_E       0
@@ -82,5 +87,10 @@ extern size_t        h4_checkptmx_Sizeof(const H4_CHECKPTMX *cpx);
 extern size_t        h4_checkptmx_MinSizeof(int M, int L);
 extern void          h4_checkptmx_Destroy(H4_CHECKPTMX *cpx);
 
+#if eslDEBUGLEVEL > 0
+extern int h4_checkptmx_SetDumpMode(H4_CHECKPTMX *cpx, FILE *dfp);
+extern int h4_checkptmx_DumpFBHeader(const H4_CHECKPTMX *cpx);
+extern int h4_checkptmx_DumpFBRow(const H4_CHECKPTMX *cpx, int rowi, const float *dpc, const char *pfx);
+#endif // eslDEBUGLEVEL > 0
 
 #endif // h4CHECKPTMX_INCLUDED

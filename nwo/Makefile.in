@@ -15,6 +15,7 @@ OBJS   = \
 	build.o             \
 	emit.o              \
 	eweight.o           \
+	fbfilter.o          \
 	general.o           \
 	logsum.o            \
 	modelsample.o       \
@@ -28,11 +29,11 @@ OBJS   = \
 	vitfilter.o         \
 	zigar.o
 
-SSE4_OBJS   = ssvfilter_sse.o    vitfilter_sse.o
-AVX_OBJS    = ssvfilter_avx.o    vitfilter_avx.o
-AVX512_OBJS = ssvfilter_avx512.o vitfilter_avx512.o
-NEON_OBJS   = ssvfilter_neon.o   vitfilter_neon.o
-VMX_OBJS    = ssvfilter_vmx.o    vitfilter_vmx.o
+SSE4_OBJS   = fbfilter_sse.o    ssvfilter_sse.o    vitfilter_sse.o
+AVX_OBJS    = fbfilter_avx.o    ssvfilter_avx.o    vitfilter_avx.o
+AVX512_OBJS = fbfilter_avx512.o ssvfilter_avx512.o vitfilter_avx512.o
+NEON_OBJS   = fbfilter_neon.o   ssvfilter_neon.o   vitfilter_neon.o
+VMX_OBJS    = fbfilter_vmx.o    ssvfilter_vmx.o    vitfilter_vmx.o
 
 HDRS = \
 	h4_config.h         \
@@ -50,6 +51,7 @@ HDRS = \
 	build.h             \
 	emit.h              \
 	eweight.h           \
+	fbfilter.h          \
 	general.h           \
 	logsum.h            \
 	modelsample.h       \
@@ -92,6 +94,7 @@ EXAMPLES = \
 	h4_hmmfile_example        \
 	h4_path_example           \
 	emit_example              \
+	fbfilter_example          \
 	logsum_example            \
 	reference_dp_example      \
 	ssvfilter_example         \

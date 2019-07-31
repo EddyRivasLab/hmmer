@@ -90,6 +90,7 @@ h4_mode_Copy(const H4_MODE *mo, H4_MODE *m2)
   for (s = 0; s < h4_NX; s++)
     for (t = 0; t < h4_NXT; t++)
       {
+	m2->xf[s][t]  = mo->xf[s][t];
 	m2->xsc[s][t] = mo->xsc[s][t];
 	m2->xw[s][t]  = mo->xw[s][t];
       }
@@ -134,11 +135,17 @@ h4_mode_SetCustom(H4_MODE *mo, int L, float nj, float pglocal)
   ESL_DASSERT1(( nj >= 0. ));
   ESL_DASSERT1(( pglocal >= 0. && pglocal <= 1. ));
 
-  mo->xsc[h4_E][h4_LOOP] = esl_log2f(nj / (nj + 1.));
-  mo->xsc[h4_E][h4_MOVE] = esl_log2f(1. / (nj + 1.));
+  mo->xf[h4_E][h4_LOOP]  = nj / (nj + 1.);
+  mo->xf[h4_E][h4_MOVE]  = 1. / (nj + 1.);
 
-  mo->xsc[h4_B][h4_LOOP] = esl_log2f(1. - pglocal);
-  mo->xsc[h4_B][h4_MOVE] = esl_log2f(pglocal);
+  mo->xf[h4_B][h4_LOOP]  = 1. - pglocal;
+  mo->xf[h4_B][h4_MOVE]  = pglocal;
+
+  mo->xsc[h4_E][h4_LOOP] = esl_log2f( mo->xf[h4_E][h4_LOOP] );
+  mo->xsc[h4_E][h4_MOVE] = esl_log2f( mo->xf[h4_E][h4_MOVE] );
+
+  mo->xsc[h4_B][h4_LOOP] = esl_log2f( mo->xf[h4_B][h4_LOOP] );
+  mo->xsc[h4_B][h4_MOVE] = esl_log2f( mo->xf[h4_B][h4_MOVE] );
 
   mo->nj      = nj;
   mo->pglocal = pglocal;
@@ -212,12 +219,14 @@ int
 h4_mode_SetLength(H4_MODE *mo, int L)
 {
   ESL_DASSERT1(( L >= 0 && L <= 100000 ));
-  float p    = (float) L / (float) (L+1);
-  float q    = 1.0f / (float) (L+1);
-  mo->nullsc = (float) L * log2f(p) + log2f(q);
 
-  mo->xsc[h4_N][h4_LOOP] = mo->xsc[h4_J][h4_LOOP] = mo->xsc[h4_C][h4_LOOP] = esl_log2f( (float) L    / ( (float) L + 2. + mo->nj));
-  mo->xsc[h4_N][h4_MOVE] = mo->xsc[h4_J][h4_MOVE] = mo->xsc[h4_C][h4_MOVE] = esl_log2f((2. + mo->nj) / ( (float) L + 2. + mo->nj));
+  mo->nullsc = (float) L * log2f((float) L / (float) (L+1)) +  log2f(1.0f / (float) (L+1));
+
+  mo->xf[h4_N][h4_LOOP] = mo->xf[h4_J][h4_LOOP] = mo->xf[h4_C][h4_LOOP] =  (float) L    / ( (float) L + 2. + mo->nj);
+  mo->xf[h4_N][h4_MOVE] = mo->xf[h4_J][h4_MOVE] = mo->xf[h4_C][h4_MOVE] = (2. + mo->nj) / ( (float) L + 2. + mo->nj);
+
+  mo->xsc[h4_N][h4_LOOP] = mo->xsc[h4_J][h4_LOOP] = mo->xsc[h4_C][h4_LOOP] = esl_log2f(mo->xf[h4_N][h4_LOOP]);
+  mo->xsc[h4_N][h4_MOVE] = mo->xsc[h4_J][h4_MOVE] = mo->xsc[h4_C][h4_MOVE] = esl_log2f(mo->xf[h4_N][h4_MOVE]);
 
   mo->xw[h4_N][h4_LOOP]  = mo->xw[h4_J][h4_LOOP]  = mo->xw[h4_C][h4_LOOP]  = 0;
   mo->xw[h4_N][h4_MOVE]  = mo->xw[h4_J][h4_MOVE]  = mo->xw[h4_C][h4_MOVE]  = h4_simdvec_wordify(mo->xsc[h4_N][h4_MOVE]);
@@ -247,11 +256,11 @@ h4_mode_Destroy(H4_MODE *mo)
 int
 h4_mode_Dump(FILE *fp, const H4_MODE *mo)
 {
-  printf("E->J: %9.5f    E->C: %9.5f\n", mo->xsc[0][0], mo->xsc[0][1]);
-  printf("N->N: %9.5f    N->B: %9.5f\n", mo->xsc[1][0], mo->xsc[1][1]);
-  printf("J->J: %9.5f    J->B: %9.5f\n", mo->xsc[2][0], mo->xsc[2][1]); 
-  printf("C->C: %9.5f    C->T: %9.5f\n", mo->xsc[3][0], mo->xsc[3][1]); 
-  printf("B->L: %9.5f    B->G: %9.5f\n", mo->xsc[4][0], mo->xsc[4][1]); 
+  printf("E->J: %9.5f    E->C: %9.5f\n", mo->xsc[h4_E][h4_LOOP], mo->xsc[h4_E][h4_MOVE]);
+  printf("N->N: %9.5f    N->B: %9.5f\n", mo->xsc[h4_N][h4_LOOP], mo->xsc[h4_N][h4_MOVE]);
+  printf("J->J: %9.5f    J->B: %9.5f\n", mo->xsc[h4_J][h4_LOOP], mo->xsc[h4_J][h4_MOVE]); 
+  printf("C->C: %9.5f    C->T: %9.5f\n", mo->xsc[h4_C][h4_LOOP], mo->xsc[h4_C][h4_MOVE]); 
+  printf("B->L: %9.5f    B->G: %9.5f\n", mo->xsc[h4_B][h4_LOOP], mo->xsc[h4_B][h4_MOVE]); 
   return eslOK;
 }
 

@@ -23,8 +23,9 @@
  * a H4_PROFILE as const in big (parallelized) searches. 
  */
 typedef struct {
-  float   xsc[h4_NX][h4_NXT];   // special transitions [ENJCB][LOOP,MOVE]
-  int16_t xw[h4_NX][h4_NXT];    // 16-bit scaled/offset bit scores for VF
+  float   xf[h4_NX][h4_NXT];    // probabilities [ENJCB][LOOP,MOVE] (i.e. in FB filter)
+  float   xsc[h4_NX][h4_NXT];   // log2 bit scores (i.e. in reference DP)
+  int16_t xw[h4_NX][h4_NXT];    // 16-bit scaled/offset log2 bit scores (i.e. in VF)
 
   float nullsc;                 // null1 score correction for length L
   int   L;                      // current configured target seq length                      unset=-1

@@ -6,6 +6,7 @@
  * 
  * Contents:
  *    1. The <H4_CHECKPTMX> object
+ *    2. Debugging, development tools
  */
 #include "h4_config.h"
 
@@ -237,11 +238,11 @@ h4_checkptmx_Create(int M, int L, int64_t redline)
     cpx->dpf[r] = cpx->dp_mem + (r * cpx->allocW);  
   
 #if eslDEBUGLEVEL > 0
-  cpx->do_dumping     = FALSE;
   cpx->dfp            = NULL;
   cpx->dump_maxpfx    = 5;       
   cpx->dump_width     = 9;
   cpx->dump_precision = 4;
+  cpx->do_logify      = TRUE;
   cpx->fwd            = NULL;
   cpx->bck            = NULL;
   cpx->pp             = NULL;
@@ -464,3 +465,155 @@ h4_checkptmx_Destroy(H4_CHECKPTMX *cpx)
 }
 /*--------------- end, H4_CHECKPTMX object -----------------------*/
 
+
+
+
+/*****************************************************************
+ * 2. Debugging, development routines
+ *****************************************************************/
+#if eslDEBUGLEVEL > 0
+
+/* Function:  h4_checkptmx_SetDumpMode()
+ * Synopsis:  Toggle dump mode flag in a H4_CHECKPTMX.
+ *
+ * Purpose:   Toggles whether DP matrix rows will be dumped for examination
+ *            during <h4_fwdfilter()>, <h4_bckfilter()>.
+ *            Dumping has to be done row by row, on the fly during the
+ *            DP calculations, not afterwards, because the DP routines
+ *            are memory efficient (checkpointed) and they do not save
+ *            all their rows.
+ * 
+ *            To turn on dumping, <dfp> is an open <FILE> pointer for
+ *            dump output (such as <stderr>).
+ *            
+ *            To turn off dumping, <dfp> is <NULL>.
+ *            
+ * Args:      cpx        - DP matrix object to set
+ *            dfp       - open FILE * for debugging output, or NULL
+ *
+ * Returns:   <eslOK> on success.
+ */
+int
+h4_checkptmx_SetDumpMode(H4_CHECKPTMX *cpx, FILE *dfp)
+{
+  cpx->dfp           = dfp;
+  return eslOK;
+}
+
+
+/* checkptmx_DecodeX()
+ * Converts a special X statecode to a string.
+ * Used below in _DumpFBHeader()
+ */
+static char *
+checkptmx_DecodeX(int xcode)
+{
+  switch (xcode) {
+  case h4C_E:     return "E"; 
+  case h4C_N:     return "N"; 
+  case h4C_JJ:    return "JJ"; 
+  case h4C_J:     return "J"; 
+  case h4C_B:     return "B"; 
+  case h4C_CC:    return "CC"; 
+  case h4C_C:     return "C"; 
+  case h4C_SCALE: return "SCALE"; 
+  default:        return "?";
+  }
+}
+
+/* checkptmx_get_val()
+ * Access a score at position k for state s in a striped vector row.
+ * Used below in _DumpFBRow() 
+ */
+static float
+checkptmx_get_val(const H4_CHECKPTMX *cpx, const float *dpc, int k, int s, int do_logify)
+{
+  if (k == 0) return 0.0;
+  int q = H4_Q_FROM_K(k,cpx->Q);
+  int z = H4_Z_FROM_K(k,cpx->Q);
+  if (do_logify) return esl_log2f(dpc[(q*h4C_NSCELLS + s)*cpx->Vf + z]);
+  else           return           dpc[(q*h4C_NSCELLS + s)*cpx->Vf + z];
+}
+
+
+/* Function:  h4_checkptmx_DumpFBHeader()
+ * Synopsis:  Prints the header of the fwd/bck dumps.
+ *
+ * Purpose:   Print the header that accompanies <h4_checkptmx_DumpFBRow()>.
+ */
+int
+h4_checkptmx_DumpFBHeader(const H4_CHECKPTMX *cpx)
+{
+  int maxpfx = cpx->dump_maxpfx;
+  int width  = cpx->dump_width;
+  int M      = cpx->M;
+  int k,s;
+
+  fprintf(cpx->dfp, "%*s", maxpfx, "");
+  fprintf(cpx->dfp, "      ");
+  for (k = 0; k <= M;          k++) fprintf(cpx->dfp, " %*d", width, k);
+  for (s = 0; s < h4C_NXCELLS; s++) fprintf(cpx->dfp, " %*s", width, checkptmx_DecodeX(s));
+  fputc('\n', cpx->dfp);
+
+  fprintf(cpx->dfp, "%*s", maxpfx, "");
+  fprintf(cpx->dfp, "      ");
+  for (k = 0; k <= M+h4C_NXCELLS;  k++) fprintf(cpx->dfp, " %*s", width, "--------");
+  fputc('\n', cpx->dfp);
+
+  return eslOK;
+}
+
+
+
+/* Function:  h4_checkptmx_DumpFBRow()
+ * Synopsis:  Dump one row from fwd or bck version of the matrix.
+ *
+ * Purpose:   Dump current row <dpc> of forward or backward calculations from
+ *            DP matrix <cpx> for diagnostics. The index <rowi> is used
+ *            as a row label, along with an additional free-text label
+ *            <pfx>.  (The checkpointed backward implementation
+ *            interleaves backward row calculations with recalculated
+ *            fwd rows, both of which it is dumping; they need to be
+ *            labeled something like "fwd" and "bck" to distinguish
+ *            them in the debugging dump.)
+ *
+ *            Independent of vector ISA. A vectorized caller passes
+ *            the striped row <dpc> cast to <float *>, and we access
+ *            it here by translating to normal coords k=1..M.
+ */
+int
+h4_checkptmx_DumpFBRow(const H4_CHECKPTMX *cpx, int rowi, const float *dpc, const char *pfx)
+{
+  const float *xc  = dpc + cpx->Vf * cpx->Q * h4C_NSCELLS;
+  int    maxpfx    = cpx->dump_maxpfx;
+  int    width     = cpx->dump_width;
+  int    precision = cpx->dump_precision;
+  int    k,z;
+
+  /* Line 1. M cells, unstriped */
+  fprintf(cpx->dfp, "%*s %3d M", maxpfx, pfx, rowi);
+  for (k = 0; k <= cpx->M; k++) 
+    fprintf(cpx->dfp, " %*.*f", width, precision, checkptmx_get_val(cpx, dpc, k, h4C_M, cpx->do_logify));
+
+  /* Line 1 end: specials */
+  for (z = 0; z < h4C_NXCELLS; z++)
+    fprintf(cpx->dfp, " %*.*f", width, precision, (cpx->do_logify ? esl_log2f(xc[z]) : xc[z]));
+  fputc('\n', cpx->dfp);
+
+  /* Line 2: I cells, unstriped */
+  fprintf(cpx->dfp, "%*s %3d I", maxpfx, pfx, rowi);
+  for (k = 0; k <= cpx->M; k++) 
+    fprintf(cpx->dfp, " %*.*f", width, precision, checkptmx_get_val(cpx, dpc, k, h4C_I, cpx->do_logify));
+  fputc('\n', cpx->dfp);
+
+  /* Line 3. D cells, unstriped */
+  fprintf(cpx->dfp, "%*s %3d D", maxpfx, pfx, rowi);
+  for (k = 0; k <= cpx->M; k++)
+    fprintf(cpx->dfp, " %*.*f", width, precision, checkptmx_get_val(cpx, dpc, k, h4C_D, cpx->do_logify));
+  fputc('\n', cpx->dfp);
+  fputc('\n', cpx->dfp);
+
+  return eslOK;
+}
+
+#endif // eslDEBUGLEVEL > 0

@@ -14,6 +14,8 @@
 
 static int ssv_conversion(H4_PROFILE *hmm);
 static int vit_conversion(H4_PROFILE *hmm);
+static int  fb_conversion(H4_PROFILE *hmm);
+
 
 int
 h4_vectorize(H4_PROFILE *hmm)
@@ -22,7 +24,9 @@ h4_vectorize(H4_PROFILE *hmm)
 
   if (( status = ssv_conversion(hmm)) != eslOK) return status;
   if (( status = vit_conversion(hmm)) != eslOK) return status;
+  if (( status =  fb_conversion(hmm)) != eslOK) return status;
 
+  hmm->flags |= h4_HASVECS;
   return eslOK;
 }
 
@@ -128,8 +132,73 @@ vit_conversion(H4_PROFILE *hmm)
 	twv++;
       }
  
-  hmm->flags |= h4_HASVECS;
   return eslOK;
 }
 
 
+
+/* fb_conversion()
+ * Builds the Fwd/Bck part of the vectorized profile parameters, in
+ * <rfv> and <tfv>.
+ *
+ */
+static int
+fb_conversion(H4_PROFILE *hmm)
+{
+  int    M  = hmm->M;
+  int    Vf = hmm->V / sizeof(float); 
+  int    Q  = hmm->Qf;
+  float *rfv, *tfv; 
+  int    q,t,x,z,k,tg,kb;               // see vf_conversion(), which follows same looping patterns.
+
+  /* striped match odds ratios */
+  for (x = 0; x < hmm->abc->Kp; x++)
+    {
+      rfv = hmm->rfv[x];
+      for (q = 0; q < Q; q++)
+	for (z = 0; z < Vf; z++)
+	  {
+	    k    = z*Q + q + 1;
+	    *rfv = (k <= M ? exp2f(hmm->rsc[x][k]) : 0.);  // convert to odds ratio
+	    rfv++;
+	  }
+    }
+
+  /* transition odds ratios, all but DD's. 
+   * follows same pattern as VF conversion above, except we don't need to impose a threshold on tII.
+   */
+  tfv = hmm->tfv[0];  
+  for (q = 0; q < Q; q++)
+    for (t = h4_VBM; t <= h4_VID; t++)
+      {
+	switch (t) {
+	case h4_VBM: tg = h4_LM;   kb = q;   break;  
+	case h4_VMM: tg = h4_MM;   kb = q;   break;  
+	case h4_VIM: tg = h4_IM;   kb = q;   break;
+	case h4_VDM: tg = h4_DM;   kb = q;   break;
+	case h4_VMI: tg = h4_MI;   kb = q+1; break; 
+	case h4_VII: tg = h4_II;   kb = q+1; break;  
+	case h4_VDI: tg = h4_DI;   kb = q+1; break;
+	case h4_VMD: tg = h4_MD;   kb = q+1; break; 
+	case h4_VID: tg = h4_ID;   kb = q+1; break; 
+	}
+
+	for (z = 0; z < Vf; z++)
+	  {  
+	    k    = z*Q + kb;                                                      
+	    *tfv = (k >= 0 && k <= M) ? exp2f(hmm->tsc[k][tg]) : 0.;
+	    tfv++;
+	  }
+      }
+
+  /* Finally, DD's */
+  for (q = 0; q < Q; q++)
+    for (z = 0; z < Vf; z++)
+      {
+	k    = z*Q + q+1;
+	*tfv = (k <= M) ? exp2f(hmm->tsc[k][h4_DD]) : 0.;
+	tfv++;
+      }
+
+  return eslOK;
+}

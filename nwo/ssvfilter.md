@@ -2,9 +2,9 @@
 # ssvfilter: the first and fastest acceleration filter
 
 ```
-            the acceleration filters
-  ----------------------------------------------
-  SSV filter -> Viterbi filter -> Forward filter 
+                   the HMMER4 acceleration filters
+  -----------------------------------------------------------------
+  SSV filter -> Viterbi filter -> Forward filter -> Backward filter
   ^^^^^^^^^
 (you are here)
 ```

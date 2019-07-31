@@ -19,5 +19,6 @@
 
 #undef h4LOGSUM_SLOWEXACT     // TRUE when --enable-exact-logsum is set from ./configure. Replace fast FLogsum() with slow exact one. Testing purposes only! 
 
+#define h4SPARSIFY_THRESH 0.01
 
 #endif /*H4_CONFIGH_INCLUDED*/
