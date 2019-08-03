@@ -1,6 +1,6 @@
 /* Forward/Backward filters; x86 SSE version
  * 
- * See fwdfilter.md for notes.
+ * See fbfilter.md for notes.
  *
  * This file is conditionally compiled when eslENABLE_SSE4 is defined.
  *
@@ -77,7 +77,9 @@ h4_fwdfilter_sse(const ESL_DSQ *dsq, int L, const H4_PROFILE *hmm, const H4_MODE
   int i;                                          // counter over residues/rows 1..L 
   int b;                                          // counter down through checkpointed blocks, Rb+Rc..1
   int w;                                          // counter down through rows in a checkpointed block
+#if eslDEBUGLEVEL > 0
   int do_dumping = (cpx->dfp? TRUE : FALSE);
+#endif
 
   /* First make sure <cpx> is allocated big enough.
    * (DO NOT set any ptrs into the matrix until after this potential reallocation!)
@@ -390,9 +392,11 @@ forward_row_sse(ESL_DSQ xi, const H4_PROFILE *hmm, const H4_MODE *mo, const __m1
   float        *xc   = (float *) (dpc + Q * h4C_NSCELLS);   //      ... and current row
   __m128       xEv   = zerov;
   __m128       xBv   = _mm_set1_ps(xp[h4C_B]);
+  __m128       d_eps = _mm_set1_ps(1.0001);
   __m128 mpv, ipv, dpv;
   __m128 mcv, icv, dcv;
   __m128 sv;
+  register __m128 cv;
   int    q;
   int    z;
 
@@ -432,41 +436,50 @@ forward_row_sse(ESL_DSQ xi, const H4_PROFILE *hmm, const H4_MODE *mo, const __m1
       dcv    = _mm_add_ps(dcv, _mm_mul_ps(icv, *tp));     tp++;
     }
 
-  /* so far we've only done DD paths within 1 segment.  Need to extend
-   * them into 2..4 segments.  On small models, empirically best to go
-   * ahead and do all 3 extra passes.  On large models, small win in
-   * checking whether the increment for DD extension has dropped below
-   * machine eps.
+  /* Now the equivalent of Farrar's "lazy F" step. DD paths, alas,
+   * don't parallelize well. So far we've only done DD paths within 1
+   * segment. Now, alas, we need to extend them. I've tried three
+   * ways:
+   * 
+   *   1. just go ahead and fully serialize, run V-1 loops
+   *   2. stop when extending path mass drops below machine eps.
+   *   3. stop when that mass is < a specified relative eps.
+   *
+   * Empirically, (2) seems to run fastest, on a wide range of
+   * different model lengths. In the past (in H3) (1) was faster for
+   * small models, so I'm leaving that code here pseudogenized for
+   * future exaptation.  (3) uses an expensive division, and I wasn't
+   * able to see any benefit.
+   *
+   * H3 kept the _mm_movemask_ps() test outside the inner loop, on
+   * the theory that the conditional branch would be expensive, but 
+   * upon testing, it's better to put it inside.
    */
-  if (hmm->M < 100)   // small model version, fully serialized		
+  for (z = 1; z < 4; z++) // Vf = 4 for SSE
     {
-      for (z = 1; z < 4; z++)   // Vf = 4 for SSE
+      cv  = zerov;
+      dcv = esl_sse_rightshiftz_float(dcv);   
+      for (q = 0; q < Q; q++)
 	{
-	  dcv  = esl_sse_rightshiftz_float(dcv);
-	  for (q = 0; q < Q; q++)
-	    {
-	      H4C_DQ(dpc,q) = _mm_add_ps(dcv, H4C_DQ(dpc, q));
-	      dcv           = _mm_mul_ps(dcv, itsc[q]);         // extend dcv tmp var, not stored H4C_DQ(q) val
-	    }
+	  sv = _mm_add_ps(dcv, H4C_DQ(dpc,q));                  // sv is tmp var for D(i,q)
+	  cv = _mm_or_ps(cv, _mm_cmpgt_ps(sv, H4C_DQ(dpc, q))); // testing whether any sv element > D(i,q) element, without conditional branch
+	  H4C_DQ(dpc,q) = sv;                                   // store sv as the updated D(i,q)
+	  dcv = _mm_mul_ps(dcv, itsc[q]);                       // and extend DD paths one more.
+	  if (! _mm_movemask_ps(cv)) break;                     // if we didn't change any D(i,q), break out.
 	}
+      if (! _mm_movemask_ps(cv)) break;                         // if we broke out because we didn't change D(i,q), break again.
     }
-  else               // large model version, allows early stopping, w/ overhead of checking 
-    {
-      for (z = 1; z < 4; z++)
-	{
-	  register __m128 cv = zerov;
-
-	  dcv  = esl_sse_rightshiftz_float(dcv);
-	  for (q = 0; q < Q; q++)
-	    {
-	      sv = _mm_add_ps(dcv, H4C_DQ(dpc,q));                  // sv is tmp var for D(i,q)
-	      cv = _mm_or_ps(cv, _mm_cmpgt_ps(sv, H4C_DQ(dpc, q))); // testing whether any sv element > D(i,q) element, without conditional branch
-	      H4C_DQ(dpc,q) = sv;                                   // store sv as the updated D(i,q)
-	      dcv = _mm_mul_ps(dcv, itsc[q]);                       // and extend DD paths one more.
-	    }
-	  if (! _mm_movemask_ps(cv)) break;                         // if we didn't change any D(i,q), break out.
-	}
-    }  
+ 
+  // pseudogenized alternative version, fully serialized
+  // for (z = 1; z < 4; z++)   
+  //   {
+  //     dcv  = esl_sse_rightshiftz_float(dcv);
+  //     for (q = 0; q < Q; q++)
+  // 	  {
+  // 	    H4C_DQ(dpc,q) = _mm_add_ps(dcv, H4C_DQ(dpc, q));
+  // 	    dcv           = _mm_mul_ps(dcv, itsc[q]);         
+  // 	  }
+  //   }
 
   /* Add Dk's to xEv */
   for (q = 0; q < Q; q++) xEv = _mm_add_ps(H4C_DQ(dpc,q), xEv);

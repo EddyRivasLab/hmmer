@@ -175,9 +175,7 @@ Current x86 processors support
 controlled by bit flags in the processor's floating-point control
 register (MXCSR).  Roughly speaking, FTZ says what happens when a
 denormal is the _result_ of an FP instruction, and DAZ says what
-happens when a denormal is the _input_ to an FP instruction.  Our
-`configure.ac` checks for support of the relevant macros that set
-these bits, and if they are supported, `h4_simdvec_Init()` sets them.
+happens when a denormal is the _input_ to an FP instruction.  
 
 On ARM processors, NEON vector instructions
 [always use flush-to-zero mode](http://infocenter.arm.com/help/index.jsp?topic=/com.arm.doc.dui0473c/CJAJBEAF.html).
@@ -196,6 +194,14 @@ setting a PowerPC processor to flush-to-zero mode.
 Therefore we currently only enable flush-to-zero mode(s) on x86
 platforms.  We have not yet considered what happens on architectures
 other than x86, ARM, and Power.
+
+`configure.ac` checks for support of the relevant macros that set the
+necessary processor flags. If they are supported,
+`simdvec.c::h4_simdvec_Init()` sets them. The `general.c::h4_Init()`
+initialization routine calls `h4_simdvec_Init()` as one of its steps.
+`h4_Init()` is called by `h4_CreateDefaultApp()`, so all driver
+programs automatically have the right flags set. The main `hmmer`
+program also calls `h4_Init()`.
 
 
 ---------------

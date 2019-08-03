@@ -16,7 +16,7 @@
 |-----------|---------------------------|
 | `logsum`  |                           |
 | `simdvec` |                           |
-| `general` | `logsum`                  |
+| `general` | `logsum`,`simdvec`        |
 
 
 ### models 
@@ -66,8 +66,11 @@ Depends on _base_, _models_.
 
 | .c file        | within-group dependencies    |
 |----------------|------------------------------|
-| `h4_filtermx`  |                              |
 | `h4_refmx`     |                              |
+| `h4_filtermx`  |                              |
+| `h4_checkptmx` | [*]                          |
+
+[*] Depends on `h4_refmx` when `eslDEBUGLEVEL` is on.
 
 
 ### reference DP
@@ -87,7 +90,7 @@ Depends on _base_, _models_, _matrices_.
 |-----------------|------------------------------|
 | `ssvfilter*`    |                              |
 | `vitfilter*`    |                              |
-
+| `fbfilter*`     |                              |
 
 ### hmmer itself
 

@@ -231,8 +231,6 @@ h4_checkptmx_Create(int M, int L, int64_t redline)
   cpx->dp_mem = esl_alloc_aligned(sizeof(float) * cpx->allocN, h4_VALIGN);  // dp_mem is aligned vector memory
   if (cpx->dp_mem == NULL) { status = eslEMEM; goto ERROR; }
 
-  ESL_DASSERT1(( cpx->allocN <= cpx->redline ));  // remember, internally, allocN and redline are both in units of # of floats
-
   ESL_ALLOC( cpx->dpf, sizeof(float **) * cpx->allocR);    
   for (r = 0; r < cpx->validR; r++)
     cpx->dpf[r] = cpx->dp_mem + (r * cpx->allocW);  
@@ -461,6 +459,8 @@ h4_checkptmx_Destroy(H4_CHECKPTMX *cpx)
       if (cpx->bck)    h4_refmx_Destroy(cpx->bck);
       if (cpx->pp)     h4_refmx_Destroy(cpx->pp);
 #endif
+
+      free(cpx);
     }
 }
 /*--------------- end, H4_CHECKPTMX object -----------------------*/

@@ -46,7 +46,7 @@ glocal will result in errors due to underflow.
 
 
 
-### running time, theory and practice
+## running time, theory and practice
 
 Checkpointing requires more time in theory, but in practice you
 probably won't notice. 
@@ -65,9 +65,20 @@ optimized, such that it's actually slightly faster (with
 checkpointing) than the original HMMER3 implementation of Forward
 and Backward without checkpointing.
 
+### turn off denormalized floating point computation
+
+On Intel platforms, best speed performance requires setting the DAZ
+and FTZ CPU flags to turn off denormalized floating point
+computations. Computation of the DD paths, in particular, results in
+many expected underflows. Of the various HMMER dynamic programming
+routines, the F/B filter is uniquely sensitive to how the hardware
+does denormalized FP computation, because it is the only place where
+we do dynamic programming in probability space instead of log space.
 
 
-### debugging and testing methods
+
+
+## debugging and testing methods
 
 When compiled with nonzero `eslDEBUGLEVEL` (specifically, when
 `fbfilter.c` and `h4_checkptmx.[ch]` are thus compiled), the
@@ -76,7 +87,7 @@ debugging dumps and unit test comparisons.
    
 
 
-#### dumping vector matrices for examination
+### dumping vector matrices for examination
 
 The values from the vectorized `H4_CHECKPTMX` can be dumped during DP
 calculations by calling `h4_checkptmx_SetDumpMode()` on the
@@ -93,7 +104,7 @@ hand; see `fbfilter_example -D`.
      
 
 
-#### saving matrices for comparison to reference
+### saving matrices for comparison to reference
 
 With a nonzero `eslDEBUGLEVEL` compile flag, a caller may additionally
 provide an allocated `H4_REFMX` to the `H4_CHECKPTMX`, to enable
@@ -111,7 +122,7 @@ to the reference implementation. See `utest_scores()`.
      
 
 
-#### high-precision comparison to reference
+### high-precision comparison to reference
 
 Normally the reference implementation uses a table-driven log-sum-exp
 approximation (see `logsum.c`), in order to do stable numerical

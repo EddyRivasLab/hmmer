@@ -71,6 +71,7 @@ UTESTS = \
 	h4_mode_utest      \
 	h4_path_utest      \
 	h4_profile_utest   \
+	fbfilter_utest     \
 	logsum_utest       \
 	modelsample_utest  \
 	reference_dp_utest \
@@ -85,6 +86,7 @@ EXPERIMENTS = \
 	h4_build_experiment2
 
 BENCHMARKS = \
+	fbfilter_benchmark      \
 	logsum_benchmark        \
 	reference_dp_benchmark  \
 	ssvfilter_benchmark     \

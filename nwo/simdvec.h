@@ -127,7 +127,7 @@
 
 #define h4_EXTRA_SB 17   // see ssvfilter.c for explanation
 
-
+extern void    h4_simdvec_Init(void);
 extern int     h4_simdvec_width  (void);
 extern int8_t  h4_simdvec_byteify(float sc);
 extern int16_t h4_simdvec_wordify(float sc);

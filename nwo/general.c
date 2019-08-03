@@ -6,6 +6,7 @@
 #include "esl_getopts.h"
 
 #include "logsum.h"
+#include "simdvec.h"
 
 /* Function:  h4_Init()
  * Synopsis:  Initialize a new H4 process or thread.
@@ -17,7 +18,7 @@
  *                approximation of the log-sum-exp operation, used by
  *                non-SIMD Forward/Backward code.
  *
- *              - TK: set processor flags to turn off denormalized
+ *              - set processor flags to turn off denormalized
  *                floating point math; performance penalty is too 
  *                high.
  *
@@ -28,12 +29,11 @@
 int
 h4_Init(void)
 {
-  /* We do a lot of log-sum-exp operations using a table-driven
-   * approximation; initialize the table.
-   */
+  // Initialize the lookup table for fast approximate log-sum-exp operations (see logsum.md)
   h4_logsum_Init();
 
-  /* TK: simdvec_Init() */
+  // Set processor flags to turn off denormalized floating point math (see simdvec.md) 
+  h4_simdvec_Init();
 
   return eslOK;
 }
