@@ -67,16 +67,17 @@ HDRS = \
 
 
 UTESTS = \
-	h4_hmmfile_utest   \
-	h4_mode_utest      \
-	h4_path_utest      \
-	h4_profile_utest   \
-	fbfilter_utest     \
-	logsum_utest       \
-	modelsample_utest  \
-	reference_dp_utest \
-	ssvfilter_utest    \
-	vitfilter_utest    \
+	h4_hmmfile_utest    \
+	h4_mode_utest       \
+	h4_path_utest       \
+	h4_profile_utest    \
+	h4_sparsemask_utest \
+	fbfilter_utest      \
+	logsum_utest        \
+	modelsample_utest   \
+	reference_dp_utest  \
+	ssvfilter_utest     \
+	vitfilter_utest     \
 	zigar_utest
 
 STATS  =
@@ -95,6 +96,7 @@ BENCHMARKS = \
 EXAMPLES = \
 	h4_hmmfile_example        \
 	h4_path_example           \
+	h4_sparsemask_example     \
 	emit_example              \
 	fbfilter_example          \
 	logsum_example            \

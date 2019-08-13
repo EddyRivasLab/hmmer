@@ -31,7 +31,7 @@
 ## rationale:
 
    * k=0 column is only present for indexing k=1..M conveniently;
-     all k=0 cells are $-\infty$.
+     all k=0 cells are $-\infty$ (even in a decoding matrix).
    * i=0 row is Forward's initialization condition: only S $\rightarrow$ N $\rightarrow$ B $\rightarrow$ {LG} path prefix is
      possible, and S $\rightarrow$ N is 1.0 
    * i=0 row is Backward's termination condition: unneeded for

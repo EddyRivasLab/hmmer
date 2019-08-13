@@ -47,6 +47,7 @@ typedef struct {
 #define h4_path_IsM(s)     ( (s) == h4P_MG || (s) == h4P_ML )
 #define h4_path_IsI(s)     ( (s) == h4P_IG || (s) == h4P_IL )
 #define h4_path_IsD(s)     ( (s) == h4P_DG || (s) == h4P_DL )
+#define h4_path_IsX(s)     ( (s) == h4P_N  || (s) == h4P_J || (s) == h4P_C )
 
 extern H4_PATH *h4_path_Create (void);
 extern H4_PATH *h4_path_Clone  (const H4_PATH *pi);

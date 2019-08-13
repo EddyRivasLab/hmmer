@@ -499,6 +499,94 @@ h4_refmx_CountPath(const H4_PATH *pi, H4_REFMX *rxd)
 }
 
 
+
+
+/* Function:  h4_refmx_Compare()
+ * Synopsis:  Compare two DP matrices for equality (within given absolute tolerance)
+ *
+ * Purpose:   Compare all the values in DP matrices <rx1>, <rx2> for
+ *            equality within absolute epsilon <a_tol>. <rx1> is
+ *            considered to be the reference (the one that's expected
+ *            to be most accurate). Return <eslOK> if all cell
+ *            comparisons succeed; <eslFAIL> if not.
+ *            
+ *            Absolute difference comparison is preferred over
+ *            relative differences. Numerical error accumulation in DP
+ *            scales more with the number of terms than their
+ *            magnitude. DP cells with values close to zero (and hence
+ *            small absolute differences) may reasonably have large
+ *            relative differences.
+ */
+int
+h4_refmx_Compare(const H4_REFMX *rx1, const H4_REFMX *rx2, float a_tol)
+{
+  char msg[] = "H4_REFMX comparison failed";
+  int i,k,y;
+  
+  if (rx1->M    != rx2->M)    ESL_FAIL(eslFAIL, NULL, msg);
+  if (rx1->L    != rx2->L)    ESL_FAIL(eslFAIL, NULL, msg);
+  if (rx1->type != rx2->type) ESL_FAIL(eslFAIL, NULL, msg);
+  
+  for (i = 0; i <= rx1->L; i++)
+    {
+      for (k = 0; k <= rx1->M; k++)   
+	for (y = 0; y < h4R_NSCELLS; y++)
+	  if ( esl_FCompareNew(H4R_MX(rx1,i,k,y), H4R_MX(rx2,i,k,y), 0.0, a_tol) == eslFAIL) ESL_FAIL(eslFAIL, NULL, msg);
+      for (y = 0; y < h4R_NXCELLS; y++)
+	if ( esl_FCompareNew(H4R_XMX(rx1,i,y), H4R_XMX(rx2,i,y), 0.0, a_tol)     == eslFAIL) ESL_FAIL(eslFAIL, NULL, msg);
+    }
+  return eslOK;	
+}
+
+/* Function:  h4_refmx_CompareLocal()
+ * Synopsis:  Compare two DP matrices (local paths only) for equality 
+ *
+ * Purpose:   A variant of <h4_refmx_Compare()> that compares only 
+ *            cells on local paths. <MG,IG,DG,G> states are excluded.
+ *            
+ *            This gets used in unit tests that compare Backwards
+ *            matrices computed by the bckfilter() with the
+ *            reference implementation. You can't expect these Bck
+ *            matrices to compare completely equal.  In the f/b filter,
+ *            glocal paths are all -inf by construction (they're not
+ *            evaluated at all).  In reference DP, in local
+ *            mode, backwards values are still finite along glocal paths
+ *            (G/MG/IG/DG) because the zero transition that prohibits
+ *            the path is the B->G transition, which isn't evaluated
+ *            in the recursion until the *beginning* of glocal paths. 
+ */
+int
+h4_refmx_CompareLocal(const H4_REFMX *rx1, const H4_REFMX *rx2, float a_tol)
+{
+  char msg[] = "H4_REFMX local path comparison failed";
+  int i,k;
+  
+  if (rx1->M    != rx2->M)    ESL_FAIL(eslFAIL, NULL, msg);
+  if (rx1->L    != rx2->L)    ESL_FAIL(eslFAIL, NULL, msg);
+  if (rx1->type != rx2->type) ESL_FAIL(eslFAIL, NULL, msg);
+  
+  for (i = 0; i <= rx1->L; i++)
+    {
+      for (k = 0; k <= rx1->M; k++)   
+	{
+	  if ( esl_FCompareNew(H4R_MX(rx1,i,k,h4R_ML), H4R_MX(rx2,i,k,h4R_ML), 0.0, a_tol) == eslFAIL) ESL_FAIL(eslFAIL, NULL, msg);
+	  if ( esl_FCompareNew(H4R_MX(rx1,i,k,h4R_IL), H4R_MX(rx2,i,k,h4R_IL), 0.0, a_tol) == eslFAIL) ESL_FAIL(eslFAIL, NULL, msg);
+	  if ( esl_FCompareNew(H4R_MX(rx1,i,k,h4R_DL), H4R_MX(rx2,i,k,h4R_DL), 0.0, a_tol) == eslFAIL) ESL_FAIL(eslFAIL, NULL, msg);
+	}
+      if ( esl_FCompareNew(H4R_XMX(rx1,i,h4R_E),  H4R_XMX(rx2,i,h4R_E),  0.0, a_tol) == eslFAIL)   ESL_FAIL(eslFAIL, NULL, msg);
+      if ( esl_FCompareNew(H4R_XMX(rx1,i,h4R_N),  H4R_XMX(rx2,i,h4R_N),  0.0, a_tol) == eslFAIL)   ESL_FAIL(eslFAIL, NULL, msg);
+      if ( esl_FCompareNew(H4R_XMX(rx1,i,h4R_J),  H4R_XMX(rx2,i,h4R_J),  0.0, a_tol) == eslFAIL)   ESL_FAIL(eslFAIL, NULL, msg);
+      if ( esl_FCompareNew(H4R_XMX(rx1,i,h4R_B),  H4R_XMX(rx2,i,h4R_B),  0.0, a_tol) == eslFAIL)   ESL_FAIL(eslFAIL, NULL, msg);
+      if ( esl_FCompareNew(H4R_XMX(rx1,i,h4R_L),  H4R_XMX(rx2,i,h4R_L),  0.0, a_tol) == eslFAIL)   ESL_FAIL(eslFAIL, NULL, msg);
+      if ( esl_FCompareNew(H4R_XMX(rx1,i,h4R_C),  H4R_XMX(rx2,i,h4R_C),  0.0, a_tol) == eslFAIL)   ESL_FAIL(eslFAIL, NULL, msg);
+      if ( esl_FCompareNew(H4R_XMX(rx1,i,h4R_JJ), H4R_XMX(rx2,i,h4R_JJ), 0.0, a_tol) == eslFAIL)   ESL_FAIL(eslFAIL, NULL, msg);
+      if ( esl_FCompareNew(H4R_XMX(rx1,i,h4R_CC), H4R_XMX(rx2,i,h4R_CC), 0.0, a_tol) == eslFAIL)   ESL_FAIL(eslFAIL, NULL, msg);
+    }
+  return eslOK;	
+}
+
+
+
 /* Function:  h4_refmx_CompareDecoding()
  * Synopsis:  Compare exact vs. approximate posterior decoding matrices
  * Incept:    SRE, Tue 21 May 2019

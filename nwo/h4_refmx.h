@@ -110,6 +110,8 @@ extern int       h4_refmx_Dump      (FILE *ofp, H4_REFMX *rx);
 extern int       h4_refmx_DumpWindow(FILE *ofp, H4_REFMX *rx, int istart, int iend, int kstart, int kend);
 extern int       h4_refmx_DumpAsVF  (FILE *ofp, H4_REFMX *rx);
 extern int       h4_refmx_CountPath(const H4_PATH *pi, H4_REFMX *rxd);
+extern int       h4_refmx_Compare        (const H4_REFMX *rx1, const H4_REFMX *rx2, float a_tol);
+extern int       h4_refmx_CompareLocal   (const H4_REFMX *rx1, const H4_REFMX *rx2, float a_tol);
 extern int       h4_refmx_CompareDecoding(const H4_REFMX *ppe, const H4_REFMX *ppa, float a_tol);
 extern int       h4_refmx_Validate(H4_REFMX *rmx, char *errbuf);
 #endif /*h4REFMX_INCLUDED*/

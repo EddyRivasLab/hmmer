@@ -45,9 +45,8 @@
 #include "fbfilter.h"
 
 static int fwdfilter_dispatcher(const ESL_DSQ *dsq, int L, const H4_PROFILE *hmm, const H4_MODE *mo, H4_CHECKPTMX *cpx, float *opt_sc);
-#if 0
 static int bckfilter_dispatcher(const ESL_DSQ *dsq, int L, const H4_PROFILE *hmm, const H4_MODE *mo, H4_CHECKPTMX *cpx, H4_SPARSEMASK *sm, float sm_thresh);
-#endif
+
 
 /*****************************************************************
  * 1. h4_fwdfilter(), h4_bckfilter() 
@@ -57,11 +56,10 @@ int
 (*h4_fwdfilter)(const ESL_DSQ *dsq, int L, const H4_PROFILE *hmm, const H4_MODE *mo, H4_CHECKPTMX *cpx, float *opt_sc) =
   fwdfilter_dispatcher;
 
-#if 0
 int
 (*h4_bckfilter)(const ESL_DSQ *dsq, int L, const H4_PROFILE *hmm, const H4_MODE *mo, H4_CHECKPTMX *cpx, H4_SPARSEMASK *sm, float sm_thresh) =
   bckfilter_dispatcher;
-#endif
+
 
 
 /*****************************************************************
@@ -117,13 +115,12 @@ fwdfilter_dispatcher(const ESL_DSQ *dsq, int L, const H4_PROFILE *hmm, const H4_
 
 
 
-#if 0
 static int
 bckfilter_dispatcher(const ESL_DSQ *dsq, int L, const H4_PROFILE *hmm, const H4_MODE *mo, H4_CHECKPTMX *cpx, H4_SPARSEMASK *sm, float sm_thresh)
 {
   /* SRE: for now */
   h4_bckfilter = h4_bckfilter_sse;
-  return h4_bckfilter_sse(dsq, L, hmm, mo, cpx, opt_sc);
+  return h4_bckfilter_sse(dsq, L, hmm, mo, cpx, sm, sm_thresh);
 
 #ifdef eslENABLE_AVX512
   if (esl_cpu_has_avx512())
@@ -162,7 +159,7 @@ bckfilter_dispatcher(const ESL_DSQ *dsq, int L, const H4_PROFILE *hmm, const H4_
   esl_fatal("bckfilter_dispatcher found no vector implementation - that shouldn't happen.");
 }
 
-#endif
+
 
 
 /*****************************************************************
@@ -213,6 +210,7 @@ main(int argc, char **argv)
   H4_PROFILE     *hmm        = NULL;
   H4_MODE        *mo         = h4_mode_Create();
   H4_CHECKPTMX   *cpx        = h4_checkptmx_Create(100,100,ESL_MBYTES(32));
+  H4_SPARSEMASK  *sm         = h4_sparsemask_Create(100,100);
   int             L          = esl_opt_GetInteger(go, "-L");
   int             N          = esl_opt_GetInteger(go, "-N");
   int             do_fwdonly = esl_opt_GetBoolean(go, "-F");
@@ -246,7 +244,8 @@ main(int argc, char **argv)
       h4_fwdfilter(dsq[i], L, hmm, mo, cpx, &vfsc);
       if (! do_fwdonly)
 	{
-	  /* SRE: TBW */
+	  h4_bckfilter(dsq[i], L, hmm, mo, cpx, sm, h4SPARSIFY_THRESH);
+	  h4_sparsemask_Reuse(sm);
 	}
     }
   esl_stopwatch_Stop(w);
@@ -263,6 +262,7 @@ main(int argc, char **argv)
 
   for (i = 0; i < N; i++) free(dsq[i]);
   free(dsq);
+  h4_sparsemask_Destroy(sm);
   h4_checkptmx_Destroy(cpx);
   h4_profile_Destroy(hmm);
   h4_mode_Destroy(mo);
@@ -293,20 +293,35 @@ main(int argc, char **argv)
 static void
 utest_compare_reference(ESL_RANDOMNESS *rng, ESL_ALPHABET *abc, int M, int L, int nseq, int64_t ramlimit)
 {
-  char          msg[]  = "fbfilter compare_reference unit test failed";
-  ESL_DSQ      *dsq    = NULL;                             // will point either to sq->dsq or dsqmem for homologous vs. random seqs
-  ESL_DSQ      *dsqmem = malloc(sizeof(ESL_DSQ) * (L+2));  // iid random seqs go here
-  ESL_SQ       *sq     = esl_sq_CreateDigital(abc);        // homologous (emitted) seqs go here
-  H4_PROFILE   *hmm    = NULL;
-  H4_MODE      *mo     = h4_mode_Create();
-  H4_REFMX     *fwd    = h4_refmx_Create(M,L);
-  H4_CHECKPTMX *cpx    = h4_checkptmx_Create(M,L,ramlimit);
-  int           tL;
-  float         fsc, fsc_ref;
-  float         ftol   = (h4_logsum_IsSlowExact() ? 0.001 : 0.1);
+  char           msg[]  = "fbfilter compare_reference unit test failed";
+  ESL_DSQ       *dsq    = NULL;                             // will point either to sq->dsq or dsqmem for homologous vs. random seqs
+  ESL_DSQ       *dsqmem = malloc(sizeof(ESL_DSQ) * (L+2));  // iid random seqs go here
+  ESL_SQ        *sq     = esl_sq_CreateDigital(abc);        // homologous (emitted) seqs go here
+  H4_PROFILE    *hmm    = NULL;
+  H4_MODE       *mo     = h4_mode_Create();
+  H4_REFMX      *fwd    = h4_refmx_Create(M,L);
+  H4_REFMX      *bck    = h4_refmx_Create(M,L);
+  H4_REFMX      *pp     = h4_refmx_Create(M,L);
+  H4_CHECKPTMX  *cpx    = h4_checkptmx_Create(M,L,ramlimit);
+  H4_SPARSEMASK *sm     = h4_sparsemask_Create(M,L);
+  int            tL;
+  float          fsc, fsc_ref, bsc_ref;
+  float          ftol   = (h4_logsum_IsSlowExact() ?  0.001 : 0.1);
+#if eslDEBUGLEVEL > 0
+  float          pptol  = (h4_logsum_IsSlowExact() ? 0.0001 : 0.01);  /* posterior decoding values differ by no more than this */
+#endif
 
   if ( h4_modelsample(rng, abc, M, &hmm) != eslOK) esl_fatal(msg); 
   if ( h4_mode_SetLocal(mo)              != eslOK) esl_fatal(msg);  // FB filter is local-only. It ignores local/glocal setting of <mo>, but set <mo> for multilocal anyway.
+
+  /* In debugging mode, set checkpoint mx to record full fwd/bck/pp matrices for
+   * comparison to reference implementation.
+   */
+#if eslDEBUGLEVEL > 0
+  cpx->fwd = h4_refmx_Create(M,L);
+  cpx->bck = h4_refmx_Create(M,L);
+  cpx->pp  = h4_refmx_Create(M,L);
+#endif
 
   while (nseq--)
     {
@@ -328,13 +343,28 @@ utest_compare_reference(ESL_RANDOMNESS *rng, ESL_ALPHABET *abc, int M, int L, in
 	  tL  = sq->n;
 	}
 
-      if ( h4_mode_SetLength(mo, tL)                             != eslOK) esl_fatal(msg);
-      if ( h4_fwdfilter(dsq, tL, hmm, mo, cpx, &fsc)             != eslOK) esl_fatal(msg);
-      if ( h4_reference_Forward(dsq, tL, hmm, mo, fwd, &fsc_ref) != eslOK) esl_fatal(msg);
+      if ( h4_mode_SetLength(mo, tL)                                  != eslOK) esl_fatal(msg);
+      if ( h4_fwdfilter(dsq, tL, hmm, mo, cpx, &fsc)                  != eslOK) esl_fatal(msg);
+      if ( h4_bckfilter(dsq, tL, hmm, mo, cpx, sm, h4SPARSIFY_THRESH) != eslOK) esl_fatal(msg);
+
+      if ( h4_reference_Forward (dsq, tL, hmm, mo, fwd, &fsc_ref)     != eslOK) esl_fatal(msg);
+      if ( h4_reference_Backward(dsq, tL, hmm, mo, bck, &bsc_ref)     != eslOK) esl_fatal(msg);
+      if ( h4_reference_Decoding(dsq, tL, hmm, mo, fwd, bck, pp)      != eslOK) esl_fatal(msg);
 
       if ( fabs(fsc - fsc_ref) > ftol) esl_fatal(msg);
 
+#if eslDEBUGLEVEL > 0
+      if ( fabs(cpx->bcksc - bsc_ref) > ftol) esl_fatal(msg);
+
+      if ( h4_refmx_Compare     (pp,  cpx->pp,  pptol) != eslOK) esl_fatal(msg);
+      if ( h4_refmx_Compare     (fwd, cpx->fwd, ftol)  != eslOK) esl_fatal(msg);
+      if ( h4_refmx_CompareLocal(bck, cpx->bck, ftol)  != eslOK) esl_fatal(msg);
+#endif      
+			
+      h4_sparsemask_Reuse(sm);
       h4_refmx_Reuse(fwd);
+      h4_refmx_Reuse(bck);
+      h4_refmx_Reuse(pp);
     }
   
   free(dsqmem);
@@ -342,6 +372,9 @@ utest_compare_reference(ESL_RANDOMNESS *rng, ESL_ALPHABET *abc, int M, int L, in
   h4_profile_Destroy(hmm);
   h4_mode_Destroy(mo);
   h4_refmx_Destroy(fwd);
+  h4_refmx_Destroy(bck);
+  h4_refmx_Destroy(pp);
+  h4_sparsemask_Destroy(sm);
   h4_checkptmx_Destroy(cpx);
 }
 #endif // h4FBFILTER_TESTDRIVE
@@ -454,7 +487,8 @@ main(int argc, char **argv)
   ESL_SQ         *sq      = NULL;
   H4_REFMX       *fwd     = NULL;
   H4_CHECKPTMX   *cpx     = NULL;
-  float           fsc, fsc_ref;
+  H4_SPARSEMASK  *sm      = NULL;
+  float           fsc, bsc, fsc_ref;
   int             status;
 
   if ( h4_hmmfile_Open(hmmfile, NULL, &hfp) != eslOK) esl_fatal("couldn't open profile file %s", hmmfile);
@@ -465,8 +499,9 @@ main(int argc, char **argv)
     esl_fatal("couldn't open sequence file %s", seqfile);
   sq = esl_sq_CreateDigital(abc);
 
-  cpx = h4_checkptmx_Create(hmm->M, 400, ESL_MBYTES(32));
-  fwd = h4_refmx_Create(hmm->M, 400);
+  cpx = h4_checkptmx_Create (hmm->M, 400, ESL_MBYTES(32));
+  sm  = h4_sparsemask_Create(hmm->M, 400);
+  fwd = h4_refmx_Create     (hmm->M, 400);
 
   h4_mode_SetLocal(mo);  // FB filter is implicitly local. We set local mode so reference Fwd scores match FB.
   
@@ -479,20 +514,29 @@ main(int argc, char **argv)
 #endif
 
       h4_fwdfilter(sq->dsq, sq->n, hmm, mo, cpx, &fsc);
+      h4_bckfilter(sq->dsq, sq->n, hmm, mo, cpx, sm, h4SPARSIFY_THRESH);
       h4_reference_Forward(sq->dsq, sq->n, hmm, mo, fwd, &fsc_ref);
 
-      h4_refmx_Dump(stdout, fwd);
+      bsc = 0.0;
+#if eslDEBUGLEVEL > 0
+      bsc = cpx->bcksc;   // backward score only available in debugging mode
+#endif      
+
+      //h4_refmx_Dump(stdout, fwd);
 
       printf("fwdfilter raw score (bits): %.2f\n", fsc);
+      printf("bckfilter raw score (bits): %.2f\n", bsc);
       printf("reference Fwd score (bits): %.2f\n", fsc_ref);
 
       h4_refmx_Reuse(fwd);
+      h4_sparsemask_Reuse(sm);
       esl_sq_Reuse(sq);
     }
   if      (status == eslEFORMAT) esl_fatal("Parse failed\n  %s", esl_sqfile_GetErrorBuf(sqfp));
   else if (status != eslEOF)     esl_fatal("Unexpected error %d in reading", status);
 
 
+  h4_sparsemask_Destroy(sm);
   h4_checkptmx_Destroy(cpx);
   h4_refmx_Destroy(fwd);
   esl_sq_Destroy(sq);

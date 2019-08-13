@@ -51,8 +51,7 @@ typedef struct {
   int       dump_precision;     //   dfp, "%*.*f", dbg_width, dbg_precision, val
   int       do_logify;          // TRUE to dump as log probs, not probs
 
-
-  H4_REFMX *fwd;                // full Forward matrix, saved for unit test diffs
+  H4_REFMX *fwd;                // full Forward matrix, saved for unit test diffs if non-NULL
   H4_REFMX *bck;                // ... full Backward matrix, ditto
   H4_REFMX *pp;                 // ... full posterior probability matrix, ditto
   float     bcksc;              // Backwards score: which we check against Forward

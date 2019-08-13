@@ -696,7 +696,7 @@ h4_reference_Decoding(const ESL_DSQ *dsq, int L, const H4_PROFILE *hmm, const H4
   float    *ppp;                //  ... and for decoding. bckp and ppp may be pointing to same memory; care is taken to access bckp before writing ppp
   float     denom;              // sum of pp for all emitting states on row i; should be 1.0; used for renormalization of roundoff error accumulation.
   float     sc;                 // overall Forward/Backward score, used for normalization
-  int       i,k;                // indices for rows/residues, columns/profile positions, states
+  int       i,k;                // indices for rows/residues, columns/profile positions
   float     delta;		// additions to DGk's, resulting from unfolding wing-retracted entry/exit paths 
   int       status;
 
@@ -757,9 +757,9 @@ h4_reference_Decoding(const ESL_DSQ *dsq, int L, const H4_PROFILE *hmm, const H4
       
 
       /* Main decoding. */
-      fwdp  = fwd->dp[i] + h4R_NSCELLS;  // fwdp on i,k=1
-      bckp += h4R_NSCELLS;               // bckp on i,k=1
-      ppp   = pp->dp[i] + h4R_NSCELLS;   // ppp  on i,k=1  
+      fwdp  = fwd->dp[i] + h4R_NSCELLS;               // fwdp on i,k=1
+      bckp += h4R_NSCELLS;                            // bckp on i,k=1
+      ppp   = pp->dp[i]  + h4R_NSCELLS;               // ppp  on i,k=1
       denom = 0.0;
       for (k = 1; k <= M; k++, ppp+= h4R_NSCELLS, fwdp+= h4R_NSCELLS, bckp += h4R_NSCELLS )
 	{

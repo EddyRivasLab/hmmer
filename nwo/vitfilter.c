@@ -445,14 +445,13 @@ static ESL_OPTIONS options[] = {
   { "--version", eslARG_NONE,   FALSE, NULL, NULL,  NULL,  NULL, NULL, "show HMMER version info",               0 },
   {  0, 0, 0, 0, 0, 0, 0, 0, 0, 0 },
 };
-static char usage[]  = "[-options] <hmmfile> <seqfile>";
-static char banner[] = "example of using the Viterbi filter";
-
 
 int
 main(int argc, char **argv)
 {
-  ESL_GETOPTS    *go      = h4_CreateDefaultApp(options, 2, argc, argv, banner, usage);
+  ESL_GETOPTS    *go      = h4_CreateDefaultApp(options, 2, argc, argv,
+						"example of using the Viterbi filter",
+						"[-options] <hmmfile> <seqfile>");
   char           *hmmfile = esl_opt_GetArg(go, 1);
   char           *seqfile = esl_opt_GetArg(go, 2);
   ESL_ALPHABET   *abc     = NULL;

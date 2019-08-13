@@ -4,6 +4,10 @@
 #define h4SPARSEMASK_INCLUDED
 #include "h4_config.h"
 
+#include "esl_random.h"
+
+#include "h4_path.h"
+
 #include "simdvec.h"
 
 struct h4_sparsemask_seg_s {
@@ -47,10 +51,21 @@ typedef struct {
 
 extern H4_SPARSEMASK *h4_sparsemask_Create(int M, int L);
 extern int            h4_sparsemask_Reinit(H4_SPARSEMASK *sm, int M, int L);
-extern size_t         h4_sparsemask_Sizeof(const H4_SPARSEMASK *sm);
+extern size_t         h4_sparsemask_Sizeof   (const H4_SPARSEMASK *sm);
 extern size_t         h4_sparsemask_MinSizeof(const H4_SPARSEMASK *sm);
-extern int            h4_sparsemask_Reuse(H4_SPARSEMASK *sm);
+extern int            h4_sparsemask_Reuse  (H4_SPARSEMASK *sm);
 extern void           h4_sparsemask_Destroy(H4_SPARSEMASK *sm);
+
+extern int            h4_sparsemask_StartRow (H4_SPARSEMASK *sm, int i);
+extern int            h4_sparsemask_Add      (H4_SPARSEMASK *sm, int q, int r);
+extern int            h4_sparsemask_FinishRow(H4_SPARSEMASK *sm);
+extern int            h4_sparsemask_Finish   (H4_SPARSEMASK *sm);
+extern int            h4_sparsemask_AddAll   (H4_SPARSEMASK *sm);
+
+extern int            h4_sparsemask_Dump(FILE *ofp, H4_SPARSEMASK *sm);
+extern int            h4_sparsemask_Compare(const H4_SPARSEMASK *sm1, const H4_SPARSEMASK *sm2);
+extern int            h4_sparsemask_Validate(const H4_SPARSEMASK *sm, char *errbuf);
+extern int            h4_sparsemask_SetFromTrace(H4_SPARSEMASK *sm, ESL_RANDOMNESS *rng, const H4_PATH *pi);
 
 
 #endif // h4SPARSEMASK_INCLUDED

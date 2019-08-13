@@ -1,10 +1,11 @@
-# `H4_SPARSEMASK` : marks cells to be included in sparse DP
+# `H4_SPARSEMASK` : marks cells included in sparse DP
     
 A `H4_SPARSEMASK` is the interface between the vectorized acceleration
-filters and sparse DP analysis. The checkpointed Forward/Backward
-filter makes the sparse mask, which then gets handed off to downstream
-sparse DP analysis. The data structure is designed to fit how the
-vectorized forward/backward filter works.
+filters and sparse dynamic programming. The checkpointed
+Forward/Backward filter makes the sparse mask, which then gets handed
+off to all sparse DP routines to constrain their dynamic programming
+matrix (a `H4_SPARSEMX`). The `H4_SPARSEMASK` data structure is
+designed to fit how the vectorized forward/backward filter works.
 
 ## [1] on the layout of `H4_SPARSEMASK`: why `kmem[]` is in reverse order during construction
 
@@ -82,7 +83,7 @@ To traverse them in backwards order:
 
 
     
-#### [2] on phases of construction of `H4_SPARSEMASK`: why `k[]`, `i[]` aren't set until the end
+## [2] on phases of construction of `H4_SPARSEMASK`: why `k[]`, `i[]` aren't set until the end
 
 Constraints in play:
 
@@ -110,7 +111,7 @@ reallocating `seg[]` and resetting `salloc` if needed, setting
 
 
 
-#### [3] on sorting striped indices: why V (four) "slots" are used, then contiguated
+## [3] on sorting striped indices: why V (four) "slots" are used, then contiguated
 
 Because the rows in the f/b filter are striped, sparse cells are found
 out of order, and need to be sorted M..1 for storage in <kmem>. We can

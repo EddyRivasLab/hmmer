@@ -98,7 +98,8 @@ typedef struct {
 /* 10 (h4_NVT) vectorized transition scores.
  * Vector filters are local only: so no GMk, GIk entry or DkG exit
  * DD must come last because of special layout of these scores: see h4_profile.md notes
- * do not change order. vectorize.c::vit_conversion() assumes VBM = 0, VID next to last, VDD last
+ * do not change order:
+ *     vectorize.c::vit_conversion() assumes VBM = 0, VID next to last, VDD last;
  */
 #define h4_VBM 0
 #define h4_VMM 1
