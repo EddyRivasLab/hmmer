@@ -379,11 +379,11 @@ process_TranslatedSearchCmd(HMMD_COMMAND_SHARD *cmd, WORKER_ENV *env, QUEUE_DATA
         info[i].blk_size  = &blk_size;     /* ditto */
         info[i].limit     = &limit;        /* ditto. TODO: come back and clean this up. */
 
-          info[i].sq_list   = NULL;
-          info[i].sq_cnt    = 0;
-          info[i].db_Z      = 0;
-          info[i].om_list   = &env->hmm_db->list[query->inx];
-          info[i].om_cnt    = query->cnt;
+        info[i].sq_list   = NULL;
+        info[i].sq_cnt    = 0;
+        info[i].db_Z      = 0;
+        info[i].om_list   = &env->hmm_db->list[query->inx];
+        info[i].om_cnt    = query->cnt;
 
         esl_threads_AddThread(threadObj, &info[i]);
 

@@ -252,11 +252,6 @@ process_TranslatedSearchCmd(HMMD_COMMAND *cmd, WORKER_ENV *env, QUEUE_DATA *quer
   P7_PIPELINE      *pipelinehits_accumulator = NULL; /* to hold the pipeline hit information from all 6 frame translations */
   RANGE_LIST       *range_list;  /* (optional) list of ranges searched within the seqdb */
 
-  if (query->cmd_type == HMMD_CMD_SEARCH) {
-    LOG_FATAL_MSG("ERROR: hmmsearcht option is not implemented", EPERM);
-    return;
-  }
-
   w = esl_stopwatch_Create();
   abc = esl_alphabet_Create(eslAMINO);
   abcDNA = esl_alphabet_Create(eslDNA); 
@@ -275,8 +270,8 @@ process_TranslatedSearchCmd(HMMD_COMMAND *cmd, WORKER_ENV *env, QUEUE_DATA *quer
   range_list = NULL;
         
   if (esl_opt_IsUsed(query->opts, "--seqdb_ranges")) {
-  ESL_ALLOC(range_list, sizeof(RANGE_LIST));
-     hmmpgmd_GetRanges(range_list, esl_opt_GetString(query->opts, "--seqdb_ranges"));
+      ESL_ALLOC(range_list, sizeof(RANGE_LIST));
+      hmmpgmd_GetRanges(range_list, esl_opt_GetString(query->opts, "--seqdb_ranges"));
   }
 
   /* Set up the genetic code. Default = NCBI 1, the standard code; allow ORFs to start at any aa
@@ -294,7 +289,7 @@ process_TranslatedSearchCmd(HMMD_COMMAND *cmd, WORKER_ENV *env, QUEUE_DATA *quer
    */
   wrk = esl_gencode_WorkstateCreate(query->opts, gcode);
 
-  threadObj = esl_threads_Create(&scan_thread);
+  threadObj = esl_threads_Create(&scan_thread); /* hmmsearcht not implemented, so always do scant*/
 
 
   if (query->query_type == HMMD_SEQUENCE) {
@@ -364,11 +359,11 @@ process_TranslatedSearchCmd(HMMD_COMMAND *cmd, WORKER_ENV *env, QUEUE_DATA *quer
         info[i].blk_size  = &blk_size;     /* ditto */
         info[i].limit     = &limit;	       /* ditto. TODO: come back and clean this up. */
 
-          info[i].sq_list   = NULL;
-          info[i].sq_cnt    = 0;
-          info[i].db_Z      = 0;
-          info[i].om_list   = &env->hmm_db->list[query->inx];
-          info[i].om_cnt    = query->cnt;
+        info[i].sq_list   = NULL;
+        info[i].sq_cnt    = 0;
+        info[i].db_Z      = 0;
+        info[i].om_list   = &env->hmm_db->list[query->inx];
+        info[i].om_cnt    = query->cnt;
 
         esl_threads_AddThread(threadObj, &info[i]);
 
