@@ -330,6 +330,7 @@ process_search(WORKERSIDE_ARGS *args, QUEUE_DATA *query)
   // start timer after we make sure the relevant database exists to make cleanup easier on error
   w = esl_stopwatch_Create();
   esl_stopwatch_Start(w);
+
   init_results(&results);
 
   //if range(s) are given, count how many of the seqdb's sequences are within supplied range(s)
@@ -388,7 +389,6 @@ process_search(WORKERSIDE_ARGS *args, QUEUE_DATA *query)
         --ready_workers;
         worker            = worker->next;
       }
-
       args->completed = 0;
 
       /* notify all the worker threads of the new query */
@@ -400,11 +400,9 @@ process_search(WORKERSIDE_ARGS *args, QUEUE_DATA *query)
     if (args->ready > 0) {
       /* Wait for all the workers to complete */
       if ((n = pthread_mutex_lock (&args->work_mutex)) != 0) LOG_FATAL_MSG("mutex lock", n);
-
       while (args->completed < args->ready) {
         if ((n = pthread_cond_wait (&args->complete_cond, &args->work_mutex)) != 0) LOG_FATAL_MSG("cond wait", n);
       }
-
       if ((n = pthread_mutex_unlock (&args->work_mutex)) != 0) LOG_FATAL_MSG("mutex unlock", n);
     }
 
@@ -724,6 +722,14 @@ gather_results(QUEUE_DATA *query, WORKERSIDE_ARGS *comm, SEARCH_RESULTS *results
 
       results->status.msg_size    += worker->status.msg_size - sizeof(HMMD_SEARCH_STATS);
 
+      if (esl_opt_IsUsed(query->opts, "--hmmscant")) {
+          /* tracking # orfs for the single query; don't want to double count from multiple threads,
+           * which performed search of different hmms, but same orfs */
+          if (results->stats.nseqs == 0)
+              results->stats.nseqs        += worker->stats.nseqs;
+      }
+
+
       if((results->stats.nhits- previous_hits) >0){ // There are new hits to deal with
         // Add enough space to the list of hits for all the hits from this worker
         results->hits = realloc(results->hits, results->stats.nhits * sizeof (P7_HIT *));
@@ -758,8 +764,9 @@ gather_results(QUEUE_DATA *query, WORKERSIDE_ARGS *comm, SEARCH_RESULTS *results
     results->stats.nmodels = 1;
     results->stats.nseqs   = comm->seq_db->db[query->dbx].K;
   } else {
-    results->stats.nseqs   = 1;
     results->stats.nmodels = comm->hmm_db->n;
+    if (!esl_opt_IsUsed(query->opts, "--hmmscant"))
+        results->stats.nseqs   = 1;
   }
     
   if (results->stats.Z_setby == p7_ZSETBY_NTARGETS) {
@@ -1540,8 +1547,6 @@ workerside_loop(WORKERSIDE_ARGS *data, WORKER_DATA *worker)
       break;
     }
 
-    //printf ("Writing %d bytes to %s [MSG = %d/%d]\n", (int)MSG_SIZE(worker->cmd), worker->ip_addr, worker->cmd->hdr.command, worker->cmd->hdr.length);
-
     esl_stopwatch_Start(w);
 
     /* write search message in two parts */
@@ -1611,9 +1616,11 @@ workerside_loop(WORKERSIDE_ARGS *data, WORKER_DATA *worker)
       if(p7_hmmd_search_stats_Deserialize(buf, &buf_position, &(worker->stats)) != eslOK){
         LOG_FATAL_MSG("Couldn't deserialize HMMD_SEARCH_STATS", errno);
       }
+
       stats = &worker->stats;
       if(stats->nhits > 0){
         worker->hits = malloc(stats->nhits * sizeof(P7_HIT *));
+
         if(worker->hits == NULL){
           LOG_FATAL_MSG("malloc", errno);
         }
