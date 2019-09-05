@@ -761,6 +761,14 @@ gather_results(QUEUE_DATA_SHARD *query, WORKERSIDE_ARGS *comm, SEARCH_RESULTS *r
       results->stats.Z             = worker->stats.Z;
 
       results->status.msg_size    += worker->status.msg_size - sizeof(HMMD_SEARCH_STATS);
+
+      if (esl_opt_IsUsed(query->opts, "--hmmscant")) {
+          /* tracking # orfs for the single query; don't want to double count from multiple threads,
+           * which performed search of different hmms, but same orfs */
+          if (results->stats.nseqs == 0)
+              results->stats.nseqs        += worker->stats.nseqs;
+      }
+
       if((results->stats.nhits- previous_hits) >0){ // There are new hits to deal with
         // Add enough space to the list of hits for all the hits from this worker
        results->hits = realloc(results->hits, results->stats.nhits * sizeof (P7_HIT *));
@@ -795,8 +803,10 @@ gather_results(QUEUE_DATA_SHARD *query, WORKERSIDE_ARGS *comm, SEARCH_RESULTS *r
     results->stats.nmodels = 1;
     results->stats.nseqs   = comm->seq_db->db[query->dbx].K;
   } else {
-    results->stats.nseqs   = 1;
+
     results->stats.nmodels = comm->hmm_db->n;
+    if (!esl_opt_IsUsed(query->opts, "--hmmscant"))
+        results->stats.nseqs   = 1;
   }
     
   if (results->stats.Z_setby == p7_ZSETBY_NTARGETS) {
@@ -1579,8 +1589,6 @@ workerside_loop(WORKERSIDE_ARGS *data, WORKER_DATA *worker)
       }
       break;
     }
-
-    //printf ("Writing %d bytes to %s [MSG = %d/%d]\n", (int)MSG_SIZE(worker->cmd), worker->ip_addr, worker->cmd->hdr.command, worker->cmd->hdr.length);
 
     esl_stopwatch_Start(w);
 

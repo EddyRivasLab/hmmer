@@ -138,6 +138,7 @@ hmmpgmd2msa(void *data, P7_HMM *hmm, ESL_SQ *qsq, int *incl, int incl_size, int 
     th.unsrt[i].acc = NULL;
     th.unsrt[i].desc = NULL;
     th.unsrt[i].dcl = NULL;
+    th.unsrt[i].orfid = NULL;
 
     if(p7_hit_Deserialize((uint8_t *) p, &n, &(th.unsrt[i])) != eslOK){
       printf("Unable to deserialize hit %d\n", i);

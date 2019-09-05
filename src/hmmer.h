@@ -1720,6 +1720,8 @@ extern int         p7_tophits_GetMaxNameLength(P7_TOPHITS *h);
 extern int         p7_tophits_GetMaxAccessionLength(P7_TOPHITS *h);
 extern int         p7_tophits_GetMaxShownLength(P7_TOPHITS *h);
 extern void        p7_tophits_Destroy(P7_TOPHITS *h);
+extern int         p7_tophits_Reuse(P7_TOPHITS *h);
+
 
 extern int p7_tophits_ComputeNhmmerEvalues(P7_TOPHITS *th, double N, int W);
 extern int p7_tophits_RemoveDuplicates(P7_TOPHITS *th, int using_bit_cutoffs);

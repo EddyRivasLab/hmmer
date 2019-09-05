@@ -43,6 +43,7 @@ extern P7_HIT *p7_hit_Create_empty(){
   the_hit->name = NULL;
   the_hit->acc = NULL;
   the_hit->desc = NULL;
+  the_hit->orfid = NULL;
   the_hit->window_length = 0;
   the_hit->sortkey = 0.0;
   the_hit->score = 0.0;
@@ -100,6 +101,9 @@ extern void p7_hit_Destroy(P7_HIT *the_hit){
     free(the_hit->desc);
   }
 
+  if(the_hit->orfid != NULL){
+    free(the_hit->orfid);
+  }
 
 
   // need to do this manually rather than calling p7_domain_Destroy because we have an array of hits as one record
@@ -154,11 +158,12 @@ extern void p7_hit_Destroy(P7_HIT *the_hit){
 #define SER_BASE_SIZE (10 * sizeof(int)) + (4 * sizeof(double)) + (4 * sizeof(float)) + sizeof(uint32_t) + (2 * sizeof(int64_t)) + 1 
 #define ACC_PRESENT (1 << 0)
 #define DESC_PRESENT (1 << 1)
+#define ORFID_PRESENT (1 << 2)
 
 extern int p7_hit_Serialize(const P7_HIT *obj, uint8_t **buf, uint32_t *n, uint32_t *nalloc){
 
   int status; // error variable used by ESL_ALLOC
-  int name_size, acc_size, desc_size;
+  int name_size, acc_size, desc_size, orfid_size;
   uint32_t ser_size; // size of the structure when serialized
   uint8_t *ptr; // current position within the buffer
   uint32_t network_32bit; // hold 32-bit fields after conversion to network order
@@ -195,6 +200,16 @@ extern int p7_hit_Serialize(const P7_HIT *obj, uint8_t **buf, uint32_t *n, uint3
   else{
     desc_size = 0;
   }
+
+  if(obj->orfid != NULL){
+    orfid_size = strlen(obj->orfid) + 1;
+    ser_size += orfid_size;
+    presence_flags += ORFID_PRESENT;
+  }
+  else{
+    orfid_size = 0;
+  }
+
 
   // Note: dcl array isn't considered part of the base object for purposes of serializing.  Each of its P7_DOMAIN objects 
   // are serialized as separate objects after the serialized base object
@@ -336,6 +351,12 @@ extern int p7_hit_Serialize(const P7_HIT *obj, uint8_t **buf, uint32_t *n, uint3
   if(obj->desc != NULL){
     strcpy((char *) ptr, obj->desc);
     ptr += desc_size;
+  }
+
+  //field 26: orfid string, if present
+  if(obj->orfid != NULL){
+    strcpy((char *) ptr, obj->orfid);
+    ptr += orfid_size;
   }
 
   // sanity check
@@ -555,6 +576,23 @@ extern int p7_hit_Deserialize(const uint8_t *buf, uint32_t *n, P7_HIT *ret_obj){
     ret_obj->desc = NULL;
   }
 
+  //field 26: orfid, if present
+  if(ret_obj->orfid != NULL){
+    free(ret_obj->orfid);
+  }
+
+  if(presence_flags & ORFID_PRESENT){
+    string_length = strlen((char *) ptr) +1;
+
+    ESL_ALLOC(ret_obj->orfid, string_length);
+
+    strcpy(ret_obj->orfid, (char *) ptr);
+    ptr += string_length;
+  }
+  else{
+    ret_obj->orfid = NULL;
+  }
+
   // sanity check
   if((ptr - (buf + *n)) !=obj_size){
     printf("Error: Size of serialized object did not match expected in p7_hit_Deserialize\n");
@@ -649,6 +687,19 @@ extern int p7_hit_TestSample(ESL_RAND64 *rng, P7_HIT **ret_obj){
   else{
     the_obj->desc = NULL;
   }
+
+  // 50% chance of orfid string
+  if(esl_rand64_Roll(rng, 2) == 0){
+    string_length = esl_rand64_Roll(rng, 100) + 1;
+
+    // generate a random string of printable characters
+    ESL_ALLOC(the_obj->orfid, string_length + 1);
+    esl_rsq_Sample(rng32, eslRSQ_SAMPLE_PRINT, string_length, &(the_obj->orfid));
+  }
+  else{
+    the_obj->orfid = NULL;
+  }
+
 
   the_obj->window_length = (int) esl_rand64(rng);
   the_obj->sortkey = esl_rand64_double(rng);
@@ -979,7 +1030,7 @@ static void utest_Serialize(int ntrials){
     for(i = 0; i< ntrials; i++){
         serial[i] = NULL;
     }
-  
+
   ESL_RAND64 *rng = esl_rand64_Create(0);
 
   for(i = 0; i < ntrials; i++){
@@ -988,7 +1039,7 @@ static void utest_Serialize(int ntrials){
     }
     if(p7_hit_Serialize(serial[i], buf, &n, &nalloc) != eslOK){
       esl_fatal(msg);
-    } 
+    }
   }
 
   n = 0; // reset to start of buffer
