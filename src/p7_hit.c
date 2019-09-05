@@ -688,6 +688,19 @@ extern int p7_hit_TestSample(ESL_RAND64 *rng, P7_HIT **ret_obj){
     the_obj->desc = NULL;
   }
 
+  // 50% chance of orfid string
+  if(esl_rand64_Roll(rng, 2) == 0){
+    string_length = esl_rand64_Roll(rng, 100) + 1;
+
+    // generate a random string of printable characters
+    ESL_ALLOC(the_obj->orfid, string_length + 1);
+    esl_rsq_Sample(rng32, eslRSQ_SAMPLE_PRINT, string_length, &(the_obj->orfid));
+  }
+  else{
+    the_obj->orfid = NULL;
+  }
+
+
   the_obj->window_length = (int) esl_rand64(rng);
   the_obj->sortkey = esl_rand64_double(rng);
   the_obj->score = (float) esl_rand64_double(rng);
@@ -1017,7 +1030,7 @@ static void utest_Serialize(int ntrials){
     for(i = 0; i< ntrials; i++){
         serial[i] = NULL;
     }
-  
+
   ESL_RAND64 *rng = esl_rand64_Create(0);
 
   for(i = 0; i < ntrials; i++){
@@ -1026,7 +1039,7 @@ static void utest_Serialize(int ntrials){
     }
     if(p7_hit_Serialize(serial[i], buf, &n, &nalloc) != eslOK){
       esl_fatal(msg);
-    } 
+    }
   }
 
   n = 0; // reset to start of buffer
