@@ -21,6 +21,14 @@
 #include <unistd.h>
 #include <time.h>
 
+#ifdef __NVVP_PROFILE_ON
+#include "nvToolsExt.h"
+#include "nvToolsExtCudaRt.h"
+#endif
+
+int backend_dequeued = 0;
+int backend_returned = 0;
+
 // Forward declarations for static functions
 static int worker_thread_front_end_sequence_search_loop(P7_DAEMON_WORKERNODE_STATE *workernode, uint32_t my_id);
 static void worker_thread_back_end_sequence_search_loop(P7_DAEMON_WORKERNODE_STATE *workernode, uint32_t my_id);
@@ -217,6 +225,7 @@ P7_DAEMON_WORKERNODE_STATE *p7_server_workernode_Create(uint32_t num_databases, 
   }
 
   // Create a base pool of backend queue entries
+  printf("Creating %d backend queue entries\n", workernode->num_threads * 10000);
   workernode->backend_pool = workernode_backend_pool_Create(workernode->num_threads *10000);
   
   if(workernode->backend_pool == NULL){
@@ -247,7 +256,9 @@ ERROR:
  */
 void p7_server_workernode_Destroy(P7_DAEMON_WORKERNODE_STATE *workernode){
   int i;
-
+  extern int backend_dequeued;
+  extern int backend_returned;
+  printf("%d backend queue entries were taken from the backend queue, and %d returned to the backend pool\n", backend_dequeued, backend_returned);
   // free the database shards we're holding in memory
   for(i = 0; i < workernode->num_shards; i++){
     if(workernode->database_shards[i] != NULL){
@@ -264,13 +275,30 @@ void p7_server_workernode_Destroy(P7_DAEMON_WORKERNODE_STATE *workernode){
   // Free the backend queue entries
   P7_BACKEND_QUEUE_ENTRY *current, *next;
   current = workernode->backend_pool;
+  int backend_entries = 0;
   while(current != NULL){
     next = current->next;
     p7_sparsemask_Destroy(current->sm);
     free(current);
     current = next;
+    backend_entries++;
    }
-    
+  printf("Backend pool had %d entries at search end\n", backend_entries);
+  if(workernode->backend_queue != NULL){
+    current = workernode->backend_queue;
+    backend_entries = 0;
+    while(current != NULL){
+      next = current->next;
+      p7_sparsemask_Destroy(current->sm);
+      free(current);
+      current = next;
+      backend_entries++;
+   }
+   printf("Backend queue had %d entries at search end.  This should not happen\n", backend_entries);
+  }
+  else{
+    printf("Backend queue was empty at search end, as expected\n");
+  }
   //Free the workernode state objects
   for(i = 0; i < workernode->num_threads; i++){
     if(workernode->thread_state[i].engine != NULL){
@@ -1553,10 +1581,12 @@ static void worker_thread_back_end_sequence_search_loop(P7_DAEMON_WORKERNODE_STA
 
   // Grab a sequence to work on
   P7_BACKEND_QUEUE_ENTRY *the_entry = workernode_get_backend_queue_entry_from_queue(workernode);
-
+int entries_dequeued = 0;
+  int entries_returned = 0;
   ESL_RED_BLACK_DOUBLEKEY *the_hit_entry;
   int overthruster_result = eslFAIL;
   while(the_entry != NULL){
+    entries_dequeued++;
   // There's a sequence in the queue, so do the backend comparison 
     // configure the model and engine for this comparison
     p7_bg_SetLength(workernode->thread_state[my_id].bg, the_entry->L);           
@@ -1615,7 +1645,8 @@ static void worker_thread_back_end_sequence_search_loop(P7_DAEMON_WORKERNODE_STA
 
     // Done with the comparison, reset for next time
     overthruster_result = eslFAIL;
-    workernode_put_backend_queue_entry_in_pool(workernode, the_entry); // Put the entry back in the free pool
+    workernode_put_backend_queue_entry_in_pool(workernode, the_entry); // Put the entry back in the free pools
+      entries_returned++;
     p7_engine_Reuse(workernode->thread_state[my_id].engine);  // Reset engine structure for next comparison
     the_entry = workernode_get_backend_queue_entry_from_queue(workernode); //see if there's another backend operation to do
   }
@@ -1629,7 +1660,9 @@ static void worker_thread_back_end_sequence_search_loop(P7_DAEMON_WORKERNODE_STA
   if(workernode->backend_queue == NULL ){  // Check this while we have the lock to prevent a race condition between 
     // enqueuing an entry in an empty backend queue and the last backend thread deciding there's no front-end work to do.
     // If we don't switch to front-end mode, we'll just call this function again immediately
-
+     if(entries_dequeued != entries_returned){
+        printf("CPU backend search loop dequeued %d entries but returned %d\n", entries_dequeued, entries_returned);
+      }
     workernode->thread_state[my_id].mode = CPU_FRONTEND; // change my mode to frontend
     workernode->num_backend_threads -= 1;
     //printf("Threads, %d, %d\n", workernode->num_threads - workernode->num_backend_threads, workernode->num_backend_threads);
@@ -1725,7 +1758,7 @@ ERROR:
  *  \returns A pointer to an empty backend queue entry.  Calls p7_Fail to end the program with an error message if it is unable to allocate memory. 
  */
 P7_BACKEND_QUEUE_ENTRY *workernode_get_backend_queue_entry_from_pool(P7_DAEMON_WORKERNODE_STATE *workernode){
-  
+
   P7_BACKEND_QUEUE_ENTRY *the_entry;
 
   // lock the backend pool to prevent multiple threads getting the same entry.
@@ -1735,6 +1768,7 @@ P7_BACKEND_QUEUE_ENTRY *workernode_get_backend_queue_entry_from_pool(P7_DAEMON_W
 
     
   if(workernode->backend_pool == NULL){  // There are no free entries, so allocate some more.
+   // printf("calling workernode_backend_pool_Create to create %d entries\n", workernode->num_threads *10);
     workernode->backend_pool = workernode_backend_pool_Create(workernode->num_threads * 10);
    
     if(workernode->backend_pool == NULL){
@@ -1763,6 +1797,7 @@ P7_BACKEND_QUEUE_ENTRY *workernode_get_backend_queue_entry_from_queue(P7_DAEMON_
   while(pthread_mutex_trylock(&(workernode->backend_queue_lock))){
         // spin-wait until the lock on our queue is cleared.  Should never be locked for long
   }
+  extern backend_dequeued;
   // Grab the head of the queue
   the_entry = workernode->backend_queue;
 
@@ -1780,7 +1815,7 @@ P7_BACKEND_QUEUE_ENTRY *workernode_get_backend_queue_entry_from_queue(P7_DAEMON_
   if(pthread_mutex_unlock(&(workernode->backend_queue_lock))){
     p7_Fail((char *) "Couldn't unlock work mutex in p7_get_backend_queue_entry_from_queue");
   }
-  
+  backend_dequeued++;
   return(the_entry);
 }
 
@@ -1791,6 +1826,7 @@ P7_BACKEND_QUEUE_ENTRY *workernode_get_backend_queue_entry_from_queue(P7_DAEMON_
  *  \returns Nothing.
  */ 
 void workernode_put_backend_queue_entry_in_pool(P7_DAEMON_WORKERNODE_STATE *workernode, P7_BACKEND_QUEUE_ENTRY *the_entry){
+ extern backend_returned;
   while ( pthread_mutex_trylock(&(workernode->backend_pool_lock)) != 0)
     {
         // spin-wait until the lock on our queue is cleared.  Should never be locked for long
@@ -1802,6 +1838,7 @@ void workernode_put_backend_queue_entry_in_pool(P7_DAEMON_WORKERNODE_STATE *work
   if(pthread_mutex_unlock(&(workernode->backend_pool_lock))){
     p7_Fail((char *) "Couldn't unlock work mutex in p7_get_backend_queue_entry_in_pool");
   }
+  backend_returned++;
 }
 
 

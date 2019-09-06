@@ -36,7 +36,7 @@ include ../Makefile-subdirs.mk
 
 ${CUDA_OBJS}:  %.o : %.cu ${HDRS} 
 ifeq ($(NVCC_FOUND),yes) 
-	${NVCC} -O3 -g -arch=compute_60 -code=sm_61 --maxrregcount=64 ${MYINCDIRS} -I/usr/include/mpi -c -dc $< 
+	${NVCC} -O3 -g -arch=compute_60 -code=sm_61 --maxrregcount=64 ${MYINCDIRS} -I/usr/include/mpi -L/usr/local/cuda/lib64 -c -dc $< 
 else 
 
 endif

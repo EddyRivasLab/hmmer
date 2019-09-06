@@ -188,6 +188,6 @@ int main(int argc, char **argv){
 
    p7_server_workernode_end_search(workernode);
   }
-
+  p7_server_workernode_Destroy(workernode);
   cudaProfilerStop();
 }

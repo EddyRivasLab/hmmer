@@ -4,6 +4,13 @@
 #include "ssv_cuda.h"
 #include "p7_orion.h"
 #include "p7_cuda_error.h"
+#define __NVVP_PROFILE_ON  //add events for better profiling 
+
+#ifdef __NVVP_PROFILE_ON
+#include "nvToolsExt.h"
+#include "nvToolsExtCudaRt.h"
+#endif
+
 #define BACKEND_SWITCH_THRESHOLD 1000000
 
 typedef struct p7_cuda_buffers{
@@ -190,6 +197,7 @@ extern "C" void workernode_put_backend_queue_entry_in_queue(P7_DAEMON_WORKERNODE
 extern "C" void workernode_put_backend_chain_in_queue(P7_DAEMON_WORKERNODE_STATE *workernode, int chain_length, P7_BACKEND_QUEUE_ENTRY *chain_start, P7_BACKEND_QUEUE_ENTRY *chain_end);
 void *p7_server_cuda_worker_thread(void *worker_argument){
   int stop;
+
 
   // unpack the box that is the pthread single argument
   P7_DAEMON_WORKER_ARGUMENT *my_argument = (P7_DAEMON_WORKER_ARGUMENT *) worker_argument;
@@ -501,7 +509,8 @@ static void p7_cuda_worker_thread_back_end_sequence_search_loop(P7_DAEMON_WORKER
   //printf("GPU thread %d entering back-end mode with %d entries in queue\n", my_id, workernode->backend_queue_depth);
   // Grab a sequence to work on
   P7_BACKEND_QUEUE_ENTRY *the_entry = workernode_get_backend_queue_entry_from_queue(workernode);
-
+  int entries_dequeued = 1;
+  int entries_returned = 0;
   ESL_RED_BLACK_DOUBLEKEY *the_hit_entry;
   int overthruster_result = eslFAIL;
   while(the_entry != NULL){
@@ -565,15 +574,20 @@ static void p7_cuda_worker_thread_back_end_sequence_search_loop(P7_DAEMON_WORKER
     // Done with the comparison, reset for next time
     overthruster_result = eslFAIL;
     workernode_put_backend_queue_entry_in_pool(workernode, the_entry); // Put the entry back in the free pool
+    entries_returned++;
     p7_engine_Reuse(workernode->thread_state[my_id].engine);  // Reset engine structure for next comparison
 
   
     if((workernode->backend_queue_depth < BACKEND_SWITCH_THRESHOLD / 2) && (cleanup == 0)){ // The backend queue has shrunk enough that we should go
       // back to processing filters in CUDA
      //printf("GPU thread %d leaving back-end mode with %d entries in backend queue\n", my_id, workernode->backend_queue_depth);
+      if(entries_dequeued != entries_returned){
+        printf("CUDA backend search loop dequeued %d entries but returned %d\n", entries_dequeued, entries_returned);
+      }
       return;
     }
     the_entry = workernode_get_backend_queue_entry_from_queue(workernode); //see if there's another backend operation to do
+    entries_dequeued++;
   }
   // Should only get here very rarely, in the odd case where the backend queue goes from over the threshold to empty very quickly
   return;
@@ -581,6 +595,46 @@ static void p7_cuda_worker_thread_back_end_sequence_search_loop(P7_DAEMON_WORKER
 
 
 void send_sequence_chunk_to_cuda_card(P7_DAEMON_WORKERNODE_STATE *workernode, P7_CUDA_BUFFERS *buffer_state, uint64_t *chunk_end, uint64_t work_end, char **sequence_data, int stream, dim3 threads_per_block, dim3 num_blocks, P7_OPROFILE *om, double mu, double lambda){
+#ifdef __NVVP_PROFILE_ON //define the events we'll use in profiling
+  char prep_event_string[] = "Prep -1111111111";
+  nvtxEventAttributes_t prep_event = {0};
+  prep_event.version = NVTX_VERSION;
+  prep_event.size = NVTX_EVENT_ATTRIB_STRUCT_SIZE;
+  prep_event.colorType = NVTX_COLOR_ARGB;
+  prep_event.color = 0xffff00; //yellow
+  prep_event.messageType = NVTX_MESSAGE_TYPE_ASCII;
+  prep_event.message.ascii = prep_event_string;
+
+  char send_event_string[] = "Send -1111111111";
+  nvtxEventAttributes_t send_event = {0};
+  send_event.version = NVTX_VERSION;
+  send_event.size = NVTX_EVENT_ATTRIB_STRUCT_SIZE;
+  send_event.colorType = NVTX_COLOR_ARGB;
+  send_event.color = 0xff8000; //orange
+  send_event.messageType = NVTX_MESSAGE_TYPE_ASCII;
+  send_event.message.ascii = send_event_string;
+
+  char comp_event_string[] = "Comp -1111111111";
+  nvtxEventAttributes_t comp_event = {0};
+  comp_event.version = NVTX_VERSION;
+  comp_event.size = NVTX_EVENT_ATTRIB_STRUCT_SIZE;
+  comp_event.colorType = NVTX_COLOR_ARGB;
+  comp_event.color = 0x0000FF; //blue
+  comp_event.messageType = NVTX_MESSAGE_TYPE_ASCII;
+  comp_event.message.ascii = comp_event_string;
+
+
+  char recv_event_string[] = "Recv -1111111111";
+  nvtxEventAttributes_t recv_event = {0};
+  recv_event.version = NVTX_VERSION;
+  recv_event.size = NVTX_EVENT_ATTRIB_STRUCT_SIZE;
+  recv_event.colorType = NVTX_COLOR_ARGB;
+  recv_event.color = 0x0000FF; //green
+  recv_event.messageType = NVTX_MESSAGE_TYPE_ASCII;
+  recv_event.message.ascii = recv_event_string;
+#endif 
+
+
   uint64_t seq_id;
   uint32_t num_sequences = 0;
   uint64_t L, L_effective;
@@ -594,8 +648,10 @@ void send_sequence_chunk_to_cuda_card(P7_DAEMON_WORKERNODE_STATE *workernode, P7
 
   // Round sequence length up to next multiple of eight
   L_effective = (L + 31) & ALIGNEIGHT_MASK; 
-
-
+#ifdef __NVVP_PROFILE_ON
+  sprintf(prep_event_string, "Prep %d", stream);  // This will fail miserably if stream is more than 10 digits, so don't do that
+  nvtxRangeId_t prep = nvtxRangeStartEx(&prep_event);
+#endif
   while((seq_id <= work_end) &&(num_sequences < MAX_SEQUENCES) && ((current_offset + L_effective) < DATA_BUFFER_SIZE)){
     //There's room in the buffer for the next sequence.  Note that this assumes that the data buffer
     //is larger than the longest possible sequence, so DATA_BUFFER_SIZE should not be made less than 100K
@@ -620,24 +676,45 @@ void send_sequence_chunk_to_cuda_card(P7_DAEMON_WORKERNODE_STATE *workernode, P7
     L_effective = (L + 31) & ALIGNEIGHT_MASK;
     //printf("num_sequences = %d, seq_id = %lu, current_offset = %lu, last_sequence = %lu, work_end = %lu\n", num_sequences, seq_id, current_offset, last_sequence, work_end);
   }
-
+#ifdef __NVVP_PROFILE_ON
+  nvtxRangeEnd(prep);
+#endif
   //printf("GPU started chunk with %d sequences\n", num_sequences);
   buffer_state->num_sequences[stream] = num_sequences;
   // Copy the input data to the card
   // uncomment this to check SSV p7_cuda_wrapper(cudaMemcpy(buffer_state->gpu_hits[my_stream], buffer_state->cpu_hits[my_stream], num_sequences * sizeof(uint64_t), cudaMemcpyHostToDevice));
+#ifdef __NVVP_PROFILE_ON
+  sprintf(send_event_string, "Send %d", stream);  // This will fail miserably if stream is more than 10 digits, so don't do that
+  nvtxRangeId_t send = nvtxRangeStartEx(&send_event);
+#endif
   p7_cuda_wrapper(cudaMemcpyAsync(buffer_state->gpu_data[stream], buffer_state->cpu_data[stream], current_offset, cudaMemcpyHostToDevice, buffer_state->streams[stream]));
   //printf("GPU sequences range from addresses %p to %p\n", buffer_state->gpu_data[my_stream], buffer_state->gpu_data[my_stream] + (current_offset -1));
   p7_cuda_wrapper(cudaMemcpyAsync(buffer_state->gpu_offsets[stream], buffer_state->cpu_offsets[stream], num_sequences *sizeof(uint64_t), cudaMemcpyHostToDevice, buffer_state->streams[stream]));
 
   p7_cuda_wrapper(cudaMemcpyAsync(buffer_state->gpu_lengths[stream], buffer_state->cpu_lengths[stream], num_sequences *sizeof(uint64_t), cudaMemcpyHostToDevice, buffer_state->streams[stream]));
+#ifdef __NVVP_PROFILE_ON
+  nvtxRangeEnd(send);
+#endif
+#ifdef __NVVP_PROFILE_ON
+  sprintf(comp_event_string, "Comp %d", stream);  // This will fail miserably if stream is more than 10 digits, so don't do that
+  nvtxRangeId_t comp = nvtxRangeStartEx(&comp_event);
+#endif
   //printf("GPU Thread %d starting chunk with %d sequences and length %lu\n", my_id, num_sequences, current_offset);
   p7_orion<<<num_blocks, threads_per_block, 0, buffer_state->streams[stream]>>>(num_sequences, (uint8_t *) buffer_state->gpu_data[stream], buffer_state->gpu_lengths[stream], buffer_state->gpu_offsets[stream], buffer_state->gpu_hits[stream], buffer_state->gpu_scores[stream], om, mu, lambda);
   p7_kernel_error_check();
-
+#ifdef __NVVP_PROFILE_ON
+  nvtxRangeEnd(comp);
+#endif
+#ifdef __NVVP_PROFILE_ON
+  sprintf(recv_event_string, "Recv %d", stream);  // This will fail miserably if stream is more than 10 digits, so don't do that
+  nvtxRangeId_t recv = nvtxRangeStartEx(&recv_event);
+#endif
   // Get the results back
   p7_cuda_wrapper(cudaMemcpyAsync(buffer_state->cpu_hits[stream], buffer_state->gpu_hits[stream], num_sequences *sizeof(int8_t) ,cudaMemcpyDeviceToHost, buffer_state->streams[stream]));
   p7_cuda_wrapper(cudaMemcpyAsync(buffer_state->cpu_scores[stream], buffer_state->gpu_scores[stream], num_sequences *sizeof(float) ,cudaMemcpyDeviceToHost, buffer_state->streams[stream]));
-
+#ifdef __NVVP_PROFILE_ON
+  nvtxRangeEnd(recv);
+#endif
   // update values for next call
   *chunk_end = seq_id;
   *sequence_data = the_sequence - (2* sizeof(uint64_t)); //subtract off the two uint64_t we looked at to determine that the sequence wouldn't fit
@@ -646,9 +723,39 @@ void send_sequence_chunk_to_cuda_card(P7_DAEMON_WORKERNODE_STATE *workernode, P7
 }
 
 void parse_CUDA_chunk_results(P7_DAEMON_WORKERNODE_STATE *workernode, P7_CUDA_BUFFERS *buffer_state, uint32_t my_id, uint32_t stream){
-  // First, synchronize so that we're sure the stream is done computing and copying data
-  cudaStreamSynchronize(buffer_state->streams[stream]);
+#ifdef __NVVP_PROFILE_ON
+  char wait_event_string[] = "Wait -1111111111";
+  nvtxEventAttributes_t wait_event = {0};
+  wait_event.version = NVTX_VERSION;
+  wait_event.size = NVTX_EVENT_ATTRIB_STRUCT_SIZE;
+  wait_event.colorType = NVTX_COLOR_ARGB;
+  wait_event.color = 0xFF0000; //red
+  wait_event.messageType = NVTX_MESSAGE_TYPE_ASCII;
+  wait_event.message.ascii = wait_event_string;
 
+  char pass_event_string[] = "Pass -1111111111";
+  nvtxEventAttributes_t pass_event = {0};
+  pass_event.version = NVTX_VERSION;
+  pass_event.size = NVTX_EVENT_ATTRIB_STRUCT_SIZE;
+  pass_event.colorType = NVTX_COLOR_ARGB;
+  pass_event.color = 0xFF00BB; //purple
+  pass_event.messageType = NVTX_MESSAGE_TYPE_ASCII;
+  pass_event.message.ascii = pass_event_string;
+#endif 
+
+#ifdef __NVVP_PROFILE_ON
+  sprintf(wait_event_string, "Wait %d", stream);  // This will fail miserably if stream is more than 10 digits, so don't do that
+  nvtxRangeId_t waitev = nvtxRangeStartEx(&wait_event);
+#endif
+    // First, synchronize so that we're sure the stream is done computing and copying data
+  cudaStreamSynchronize(buffer_state->streams[stream]);
+#ifdef __NVVP_PROFILE_ON
+  nvtxRangeEnd(waitev);
+#endif  
+#ifdef __NVVP_PROFILE_ON
+  sprintf(pass_event_string, "Pass %d", stream);  // This will fail miserably if stream is more than 10 digits, so don't do that
+  nvtxRangeId_t passev = nvtxRangeStartEx(&pass_event);
+#endif
   int num_hits = 0;
   P7_BACKEND_QUEUE_ENTRY *chain_start = NULL;
   P7_BACKEND_QUEUE_ENTRY *chain_end = NULL;
@@ -682,4 +789,7 @@ void parse_CUDA_chunk_results(P7_DAEMON_WORKERNODE_STATE *workernode, P7_CUDA_BU
   if(num_hits > 0){
     workernode_put_backend_chain_in_queue(workernode, num_hits, chain_start, chain_end);
   }
+  #ifdef __NVVP_PROFILE_ON
+  nvtxRangeEnd(passev);
+#endif 
 }

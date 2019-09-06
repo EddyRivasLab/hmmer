@@ -19,7 +19,7 @@ VMX_CFLAGS    = @VMX_CFLAGS@
 CPPFLAGS      = @CPPFLAGS@
 LDFLAGS       = @LDFLAGS@
 DEFS          = @DEFS@
-LIBS          = ${LIBTMP} -lhmmer -leasel -ldivsufsort @MPILIBS@ @LIBS@ -lm -lcudart -lstdc++
+LIBS          = ${LIBTMP} -lhmmer -leasel -ldivsufsort @MPILIBS@ @LIBS@ -lm -lcudart -lnvToolsExt -lstdc++
 
 AR            = @AR@ 
 RANLIB        = @RANLIB@
