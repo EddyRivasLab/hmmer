@@ -225,7 +225,7 @@ P7_DAEMON_WORKERNODE_STATE *p7_server_workernode_Create(uint32_t num_databases, 
   }
 
   // Create a base pool of backend queue entries
-  printf("Creating %d backend queue entries\n", workernode->num_threads * 10000);
+  //printf("Creating %d backend queue entries\n", workernode->num_threads * 10000);
   workernode->backend_pool = workernode_backend_pool_Create(workernode->num_threads *10000);
   
   if(workernode->backend_pool == NULL){

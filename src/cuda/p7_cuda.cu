@@ -12,7 +12,7 @@
 #include "easel.h"
 #include "hmmer.h"
 #include "p7_config.h"
-
+#include "p7_cuda_error.h"
 
 int p7_query_cuda(P7_CUDA_CONFIG *ret_config){
 #ifndef eslENABLE_CUDA // if we weren't compiled with CUDA support, never find any cards 
@@ -20,9 +20,10 @@ int p7_query_cuda(P7_CUDA_CONFIG *ret_config){
 	ret_config->card_sms = NULL;
 	return eslOK;
 #endif
-	int num_cards;
+	int num_cards=0;
 
-	cudaGetDeviceCount(&num_cards);
+	p7_cuda_wrapper(cudaGetDeviceCount(&num_cards));
+printf("%d CUDA cards detected\n", num_cards);
 	ret_config->num_cards = num_cards;
 
 	if(num_cards == 0){
