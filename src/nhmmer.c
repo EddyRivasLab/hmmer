@@ -1550,7 +1550,29 @@ pipeline_thread(void *arg)
           info->pli->nres += dbsq->W;
       }
     }
+ 
+    // Check how much space the block structure is using and re-allocate if it has grown to more than   
+    // 20*info->pli->block_length bytes
+    // This loop iterates from 0 to block->listsize rather than block->count because we want to count all of the
+    // block's sub-structures, not just the ones that contained sequence data after the last call to ReadBlock().    
+    // This doesn't check some of the less-common sub-structures in a sequence, but it should be good enough for
+    // our goal of keeping block size under control.
+    uint64_t block_space = 0;
+    for(i=0; i<block->listSize; i++){
+      block_space += block->list[i].nalloc;
+      block_space += block->list[i].aalloc;   
+      block_space += block->list[i].dalloc;
+      block_space += block->list[i].srcalloc; 
+      block_space += block->list[i].salloc;
+      if (block->list[i].ss != NULL){ 
+        block_space += block->list[i].salloc; // ss field is not always presesnt, but takes salloc bytes if it is
+      }
+    }
 
+    if(block_space > 0*info->pli->block_length){  
+      esl_sq_DestroyBlock(block); 
+      block = esl_sq_CreateDigitalBlock(BLOCK_SIZE, info->om->abc);
+    }
       status = esl_workqueue_WorkerUpdate(info->queue, block, &newBlock);
       if (status != eslOK) esl_fatal("Work queue worker failed");
 
@@ -1558,6 +1580,28 @@ pipeline_thread(void *arg)
 
   }
 
+  // Check how much space the block structure is using and re-allocate if it has grown to more than   
+  // 20*info->pli->block_length bytes.
+  // This loop iterates from 0 to block->listsize rather than block->count because we want to count all of the
+  // block's sub-structures, not just the ones that contained sequence data after the last call to ReadBlock().    
+  // This doesn't check some of the less-common sub-structures in a sequence, but it should be good enough for
+  // our goal of keeping block size under control.
+  uint64_t block_space = 0;
+  for(i=0; i<block->listSize; i++){
+    block_space += block->list[i].nalloc;
+    block_space += block->list[i].aalloc;   
+    block_space += block->list[i].dalloc;
+    block_space += block->list[i].srcalloc; 
+    block_space += block->list[i].salloc;
+    if (block->list[i].ss != NULL){ 
+      block_space += block->list[i].salloc; // ss field is not always presesnt, but takes salloc bytes if it is
+    }
+  }
+
+  if(block_space > 20*info->pli->block_length){  
+    esl_sq_DestroyBlock(block); 
+    block = esl_sq_CreateDigitalBlock(BLOCK_SIZE, info->om->abc);  
+  }
   status = esl_workqueue_WorkerUpdate(info->queue, block, NULL);
   if (status != eslOK) esl_fatal("Work queue worker failed");
 
