@@ -24,7 +24,7 @@ depends on the Easel library, also at
 ```
    % wget http://eddylab.org/software/hmmer/hmmer.tar.gz
    % tar zxf hmmer.tar.gz
-   % cd hmmer-3.2.1
+   % cd hmmer-3.3
    % ./configure --prefix /your/install/path
    % make
    % make check                 # optional: run automated tests

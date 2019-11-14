@@ -489,7 +489,7 @@ def jackhmmer_hbb_uniprot(deffp):
         print(m.group(1), file=f, end='')
 
     m = re.search(r"""
-                    @@\s+Round:\s+5
+                    @@\s+Round:\s+4
                     (?s:.+?)
                     (
                       @@\s+New\s+targets\s+included:

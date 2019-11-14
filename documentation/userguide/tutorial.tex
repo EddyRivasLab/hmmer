@@ -887,9 +887,12 @@ After round 2, more distant globin sequences have been found:
    \xsreoutput{inclusions/jackhmmer-hbb-uniprot.out6}
 
 Because new sequences were included, it keeps going to round three,
-and then again to round four and five. After round five, the search
-ends quietly because there's a default maximum of five iterations, and
-you get:
+and then again to round four. After round four, the search ends
+because it didn't find any new hits; it considers the search to be
+``converged'' and it stops. (It would also eventually stop at a
+certain maximum number of iterations; the default maximum is 5, and
+you can set a different maximum with the \mono{-N} option.)  The end
+of the output is:
 
    \xsreoutput{inclusions/jackhmmer-hbb-uniprot.out7}
 
