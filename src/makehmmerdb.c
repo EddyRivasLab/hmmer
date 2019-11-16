@@ -588,7 +588,7 @@ main(int argc, char **argv)
       }
     }
 
-    if(block_space > 0*block_size){
+    if(block_space > 20*block_size){
       int was_complete = block->complete; 
       
       ESL_SQ_BLOCK *new_block = esl_sq_CreateDigitalBlock(FM_BLOCK_COUNT, abc);
