@@ -588,7 +588,7 @@ main(int argc, char **argv)
       }
     }
 
-    if(block_space > 0*block_size){
+    if(block_space > 20*block_size){
       ESL_SQ_BLOCK *new_block = esl_sq_CreateDigitalBlock(FM_BLOCK_COUNT, abc);
       new_block->count = block->count; // copying this field shouldn't be necessary, but I can't guarantee that it isn't.
       new_block->listSize = block->listSize;  

@@ -51,7 +51,7 @@ do_cmd($cmd);
 for $i (0..$#formats) {
    $fmt = $formats[$i];
    $ext = $exts[$i];
-
+   
    $cmd = "$builddir/src/hmmsearch --tformat $fmt $tmppfx.hmm $srcdir/testsuite/20aa-alitest$ext 2>&1";
    $output = do_cmd($cmd);
 
@@ -74,7 +74,7 @@ do_cmd($cmd);  # yes, twice
 for $i (0..$#formats) {
    $fmt = $formats[$i];
    $ext = $exts[$i];
-
+   
    $cmd = "$builddir/src/phmmer --tformat $fmt $tmppfx.fa $srcdir/testsuite/20aa-alitest$ext 2>&1";
    $output = do_cmd($cmd);
 
@@ -108,7 +108,7 @@ do_cmd($cmd);
 for $i (0..$#formats) {
    $fmt = $formats[$i];
    $ext = $exts[$i];
-
+   
    $cmd = "$builddir/src/nhmmer --tformat $fmt $tmppfx.hmm $srcdir/testsuite/3box-alitest$ext 2>&1";
    $output = do_cmd($cmd);
 
