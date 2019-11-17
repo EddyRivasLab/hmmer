@@ -883,7 +883,7 @@ extern int p7_alidisplay_Deserialize(const uint8_t *buf, uint32_t *n, P7_ALIDISP
 
   // Sanity-check that we got the length right
   if(mem_ptr - ret_obj->mem != (obj_size - SER_BASE_SIZE)){
-    printf("Error: at end of p7_alidisplay_Deserialize, found strings to be of size %ld, expected %ld.\n", (mem_ptr - ret_obj->mem), (obj_size - SER_BASE_SIZE));
+    printf("Error: at end of p7_alidisplay_Deserialize, found strings to be of size %ld, expected %ld.\n", (long)(mem_ptr - ret_obj->mem), (long)(obj_size - SER_BASE_SIZE));
     return eslEINVAL;
   }
   *n += obj_size; 
