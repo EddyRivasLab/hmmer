@@ -75,6 +75,7 @@ In rough order of importance, the 18 HMMER programs are:
 \monob{hmmlogo}     & produce a conservation logo graphic from a profile\\
 \monob{hmmconvert}  & convert between different profile file formats \\
 \monob{hmmpgmd}     & search daemon for the \mono{hmmer.org} website \\
+\monob{hmmpgmd\_shard}     & sharded search daemon for the \mono{hmmer.org} website \\
 \monob{makehmmerdb} & prepare an \mono{nhmmer} binary database \\
 \monob{hmmsim}      & collect score distributions on random sequences\\
 \monob{alimask}     & add column mask to a multiple sequence alignment \\
@@ -657,14 +658,24 @@ simply regurgitated as \mono{CS} or \mono{RF} annotation lines
 here. The \mono{fn3} profile had a consensus structure annotation line.
 
 The line starting with \mono{fn3} is the consensus of the query
-profile. Capital letters represent the most conserved (high information
-content) positions. Dots (\mono{.}) in this line indicate insertions
+profile: the residue with the highest emission probability at each
+position.\sidenote{For a single sequence query in \mono{phmmer}, the
+  consensus is the sequence itself. Oddly, this is not necessarily the
+  highest probability sequence; for example, under a BLOSUM62 scoring
+  matrix, where the query has an M, you are more likely to see an
+  aligned L, not an M.} Capital letters represent particularly
+highly conserved positions.\sidenote{For protein models, $\geq$ 50\%
+  emission probability; for DNA/DNA, $\geq$ 90\%.}
+Dots (\mono{.}) in this line indicate insertions
 in the target sequence with respect to the profile.
 
 The midline indicates matches between the query profile and target
-sequence. A \mono{+} indicates positive score, which can be
-interpreted as ``conservative substitution'', with respect to what the
-profile expects at that position.
+sequence. A letter indicates an exact match to the profile consensus.
+A \mono{+} indicates that this residue has a positive log-odds
+emission score, a ``conservative substitution'' given what the profile
+expects at that position.\sidenote{That is, the emission probability
+  $e(a)$ for this aligned residue $a$ is $> f_a$, its background
+  frequency: it's a likely residue, just not the most likely one.}
 
 The line starting with \mono{7LESS\_DROME} is the target sequence.
 Dashes (\mono{-}) in this line indicate deletions in the target
@@ -876,9 +887,12 @@ After round 2, more distant globin sequences have been found:
    \xsreoutput{inclusions/jackhmmer-hbb-uniprot.out6}
 
 Because new sequences were included, it keeps going to round three,
-and then again to round four and five. After round five, the search
-ends quietly because there's a default maximum of five iterations, and
-you get:
+and then again to round four. After round four, the search ends
+because it didn't find any new hits; it considers the search to be
+``converged'' and it stops. (It would also eventually stop at a
+certain maximum number of iterations; the default maximum is 5, and
+you can set a different maximum with the \mono{-N} option.)  The end
+of the output is:
 
    \xsreoutput{inclusions/jackhmmer-hbb-uniprot.out7}
 
@@ -1074,8 +1088,68 @@ have this property (hmmbuild and the four search programs).
 
 
 
+\subsection{Summary statistics for a profile database: hmmstat}
 
+Our \mono{minifam} profile ``database'' example only contains three
+profiles, but real profile databases like Pfam can contain many
+thousands. The \mono{hmmstat} program is a utility that summarizes the
+content of a profile database. If you do:
 
+   \vspace{1ex}
+   \user{\% hmmstat minifam}
+   \vspace{1ex}
+
+you'll get:
+   
+   \xsreoutput{inclusions/hmmstat-minifam.out}
+   
+The output is one line per profile, numbered. Some of the fields are
+more meaningful to you than others; some are sort of cryptic relics
+of development that we haven't cleaned up yet:
+
+\begin{sreitems}{\monob{accession}}
+
+\item [\monob{idx}]       Number, in order in the database.
+\item [\monob{name}]      Name of the profile.
+\item [\monob{accession}] Accession (if present; else '-')
+\item [\monob{nseq}]      Number of sequences in the alignment this
+  profile was built from.
+
+\item [\monob{eff\_nseq}]  Effective sequence number. 
+   This was the ``effective'' number of independent sequences that
+   \mono{hmmbuild's} default ``entropy weighting'' step decided on,
+   given the phylogenetic similarity of the \mono{nseq} sequences in
+   the input alignment.
+   
+\item [\monob{M}] Length of the profile in consensus residues (match states).
+
+\item [\monob{relent}] Mean relative entropy of the match state
+  emission probabilities, relative to default null background
+  frequencies, in bits. This is the average bit score per aligned
+  consensus residue. This quantity is the target of \mono{hmmbuild}'s
+  entropy weighting procedure for determining \monob{eff\_nseq}.
+
+\item [\monob{info}] Mean information content per match state emission
+  probability vector, in bits. Probably not useful to you. Information
+  content is just a slightly different calculation from
+  \monob{relent}.
+
+\item [\monob{p relE}] Mean positional relative entropy, in bits.
+  Also probably not useful to you. This is an average relative entropy
+  per position that takes into account the transition
+  (insertion/deletion) probabilities.  It should be a more accurate
+  estimation of the average bit score contributed per aligned model
+  consensus position.
+
+\item [\monob{compKL}] Kullback-Leibler (KL) divergence from the
+  average composition of the profile's consensus match states to the
+  default background frequency distribution, in bits.  The higher this
+  number, the more biased the residue composition of the profile
+  is. Highly biased profiles may produce more false positives in
+  searches, and can also slow the HMMER3 acceleration pipeline, by
+  causing too many nonhomologous sequences to pass the filters.
+
+\end{sreitems}
 
 
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
@@ -1113,7 +1187,7 @@ probabilities into and out of their inserted residue.
 
 This notation is only for your convenience in output files. You can
 see the structure of the profile reflected in the pattern of
-residues and gap characters \marginnote[-20ex]{By default, \mono{hmmalign}
+residues and gap characters \marginnote{By default, \mono{hmmalign}
   removes any columns that are all deletion characters, so the number
   of apparent match columns in a displayed alignment is $\leq$ the
   actual number of match states in the profile. To prevent this
@@ -1131,7 +1205,7 @@ Important: insertions relative to a profile are
 and another has an insertion of length 2 in the same place in the
 profile. The alignment will have ten insert columns, to accomodate the
 longest insertion.  The residues of the shorter insertion are thrown
-down in an arbitrary order.\marginnote[-4ex]{By arbitrary HMMER convention,
+down in an arbitrary order.\marginnote[2ex]{By arbitrary HMMER convention,
   the insertion is divided in half; half is left-justified, and the
   other half is right-justified, leaving '.' characters in the
   middle.}  Notice that in the previous paragraph I oh-so-carefully

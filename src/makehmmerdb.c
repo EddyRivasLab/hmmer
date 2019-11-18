@@ -568,9 +568,35 @@ main(int argc, char **argv)
   while (status == eslOK ) {
 
     //reset block as an empty vessel
-    for (i=0; i<block->count; i++)
-        esl_sq_Reuse(block->list + i);
+    for (i=0; i<block->count; i++){
+      esl_sq_Reuse(block->list + i);  
+    }
+    // Check how much space the block structure is using and re-allocate if it has grown to more than 20*block_size bytes
+    // this loop iterates from 0 to block->listsize rather than block->count because we want to count all of the
+    // block's sub-structures, not just the ones that contained sequence data after the last call to ReadBlock()    
+    // This doesn't check some of the less-common sub-structures in a sequence, but it should be good enough for
+    // our goal of keeping block size under control
+    uint64_t block_space = 0;
+    for(i=0; i<block->listSize; i++){
+      block_space += block->list[i].nalloc;
+      block_space += block->list[i].aalloc;   
+      block_space += block->list[i].dalloc;
+      block_space += block->list[i].srcalloc; 
+      block_space += block->list[i].salloc;
+      if (block->list[i].ss != NULL){ 
+        block_space += block->list[i].salloc; // ss field is not always presesnt, but takes salloc bytes if it is
+      }
+    }
 
+    if(block_space > 20*block_size){
+      ESL_SQ_BLOCK *new_block = esl_sq_CreateDigitalBlock(FM_BLOCK_COUNT, abc);
+      new_block->count = block->count; // copying this field shouldn't be necessary, but I can't guarantee that it isn't.
+      new_block->listSize = block->listSize;  
+      new_block->complete = block->complete;  
+      new_block->first_seqidx = block->first_seqidx;
+      esl_sq_DestroyBlock(block);   
+      block = new_block; 
+    }
     if (use_tmpsq) {
         esl_sq_Copy(tmpsq , block->list);
         block->complete = FALSE;  //this lets ReadBlock know that it needs to append to a small bit of previously-read seqeunce
@@ -580,6 +606,7 @@ main(int argc, char **argv)
         block->complete = TRUE;
     }
 
+    
     status = esl_sqio_ReadBlock(sqfp, block, block_size, -1, alphatype != eslAMINO);
     if (status == eslEOF) continue;
     if (status != eslOK)  esl_fatal("Parse failed (sequence file %s): status:%d\n%s\n",

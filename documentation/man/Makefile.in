@@ -23,11 +23,13 @@ INSTALL     = @INSTALL@
 MANS =  hmmer\
 	hmmalign\
 	hmmbuild\
+	hmmc2\
 	hmmconvert\
 	hmmemit\
 	hmmfetch\
 	hmmlogo\
 	hmmpgmd\
+	hmmpgmd_shard\
 	hmmpress\
 	hmmscan\
 	hmmsearch\

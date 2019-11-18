@@ -1,7 +1,7 @@
 HMMER - Biological sequence analysis with profile hidden Markov models
-Copyright (C) 1992-2018 Sean R. Eddy
-Copyright (C) 2000-2018 Howard Hughes Medical Institute
-Copyright (C) 2015-2018 President and Fellows of Harvard College
+Copyright (C) 1992-2019 Sean R. Eddy
+Copyright (C) 2000-2019 Howard Hughes Medical Institute
+Copyright (C) 2015-2019 President and Fellows of Harvard College
 Copyright (C) 1992-2004 Washington University School of Medicine
 Copyright (C) 1992-1994 MRC Laboratory of Molecular Biology
 -----------------------------------------------------------------------
@@ -39,12 +39,12 @@ incorporated from other sources, including:
    X Consortium                    
 
 HMMER uses the Easel software library, which has its own license and
-copyright information. See easel/COPYRIGHT and easel/LICENSE.
+copyright information. See easel/LICENSE.
 
 HMMER includes patent-pending SIMD technology under a nonexclusive
-license from Michael Farrar. You are sublicensed to use this
-technology specifically for the use, modification, and redistribution
-of HMMER.
+license from the estate of Michael Farrar. You are sublicensed to use
+this technology specifically for the use, modification, and
+redistribution of HMMER.
 
 HMMER development is supported in part by the National Human Genome
 Research Institute of the US National Institutes of Health under grant

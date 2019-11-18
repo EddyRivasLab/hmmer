@@ -424,7 +424,7 @@ p7_Builder(P7_BUILDER *bld, ESL_MSA *msa, P7_BG *bg,
   if ((status =  validate_msa         (bld, msa))                       != eslOK) goto ERROR;
   if ((status =  esl_msa_Checksum     (msa, &checksum))                 != eslOK) ESL_XFAIL(status, bld->errbuf, "Failed to calculate checksum"); 
   if ((status =  relative_weights     (bld, msa))                       != eslOK) goto ERROR;
-  if ((status =  esl_msa_MarkFragments(msa, bld->fragthresh))           != eslOK) goto ERROR;
+  if ((status =  esl_msa_MarkFragments_old(msa, bld->fragthresh))           != eslOK) goto ERROR;
   if ((status =  build_model          (bld, msa, &hmm, tr_ptr))         != eslOK) goto ERROR;
 
 
@@ -774,7 +774,7 @@ p7_Builder_MaxLength (P7_HMM *hmm, double emit_thresh)
  * 
  * HMMER uses a convention for missing data characters: they
  * indicate that a sequence is a fragment.  (See
- * esl_msa_MarkFragments()).
+ * esl_msa_MarkFragments_old()).
  *
  * Because of the way these fragments will be handled in tracebacks,
  * we reject any alignment that uses missing data characters in any

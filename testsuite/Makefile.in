@@ -4,7 +4,7 @@ VPATH          = @srcdir@
 
 SQCLEVEL = 2
 
-ESLDIR = @HMMER_ESLDIR@
+ESLDIR  = @HMMER_ESLDIR@
 
 ALIS = 	20aa\
 	Caudal_act\
@@ -34,10 +34,11 @@ endif
 .PHONY: check hmms clean distclean
 
 check: 
+	@command -v python3 >/dev/null 2>&1 || { echo >&2 "python3 is required for 'make check', but is not in your PATH. Aborting."; exit 1; }
 	@echo 
 	@echo Running HMMER test suite...
 	@echo
-	@${srcdir}/../${ESLDIR}/devkit/sqc ${SQCLEVEL} ${srcdir}/testsuite.sqc .. ${srcdir}/..
+	@${srcdir}/../${ESLDIR}/devkit/sqc -e ${SQCLEVEL} ${srcdir}/testsuite.sqc .. ${srcdir}/..
 
 hmms:
 	for ali in ${ALIS}; do\

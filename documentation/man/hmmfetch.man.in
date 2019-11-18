@@ -146,10 +146,7 @@ instead of to standard output.
 .B \-O
 Output HMM(s) to individual file(s) named
 .I key
-instead of standard output. With the
-.B \-f 
-option, this can result in many files
-being created.
+instead of standard output.
 
 .TP
 .B \-\-index

@@ -16,15 +16,48 @@
 #include <stdio.h>
 #include <string.h>
 #include <ctype.h>
+#include <string.h>
 
 #include "easel.h"
 #include "hmmer.h"
 
+// Define bit-vector constants used in the _Serialize() and _Deserialize routines
+#define RFLINE_PRESENT (1 << 0)
+#define MMLINE_PRESENT (1 << 1)
+#define CSLINE_PRESENT (1 << 2)
+#define PPLINE_PRESENT (1 << 3)
+#define ASEQ_PRESENT (1 << 4)
+#define NTSEQ_PRESENT (1 << 5)
 
 /*****************************************************************
  * 1. The P7_ALIDISPLAY object
  *****************************************************************/
 
+/* A P7_ALIDISPLAY structure originally had two possible states: 
+ * "serialized", in which all of the variable-length fields of the structure
+ * were pointers into one block of allocated memory, which was pointed to by the
+ * structure's "mem" field, and
+ * "deserialized", in which each of the variable-length fields of the structure
+ * were separate regions of allocated memory.  The intent of this was that 
+ * "serialized" structures would be faster to create, as they only require one
+ * memory allocation, and easier to send over sockets, but that "deserialized"
+ * structures would be easier to modify and/or reuse.  However, HMMER currently
+ * does not ever modify or reuse P7_ALIDISPLAY structures.
+ * 
+ * P7_ALIDISPLAY structures are created in "serialized" mode. The only time they 
+ * were ever converted into "deserialized" mode was in hmmpgmd2msa, and this was
+ * somewhat unnecessary. 
+ *
+ * Now, we have added _Serialize() and _Deserialize() functions that have the more
+ * traditional behavior of converting P7_ALIDISPLAY structures to and from 
+ * contiguous blocks of bytes for transmission over sockets.  With this change,
+ * P7_ALIDISPLAY structures will always be in "serialized" mode, and will never be 
+ * converted to their "deserialized" mode.  (Yes, this terminology is confusing.)
+ * 
+ * For H3, we will leave the existing code to handle the "serialized" and "deserialized"
+ * modes in place.  HMMER's output code is being heavily revised for H4, and we will
+ * revisit how these modes are handled in H4 once that portion of the code stabilizes.
+ */ 
 
 /* Function:  p7_alidisplay_Create()
  * Synopsis:  Create an alignment display, from trace and oprofile.
@@ -212,7 +245,8 @@ p7_alidisplay_Create(const P7_TRACE *tr, int which, const P7_OPROFILE *om, const
   ad->mline [z2-z1+1] = '\0';
   ad->aseq  [z2-z1+1] = '\0';
   ad->N = z2-z1+1;
-
+  ad->ntseq = NULL;  // Mark this NULL so it doesn't cause problems with serialization.  
+  // nhmmer can reset it if it wants later
   esl_sq_Destroy(ntorfseqtxt);  
 
 	
@@ -223,7 +257,58 @@ p7_alidisplay_Create(const P7_TRACE *tr, int which, const P7_OPROFILE *om, const
   return NULL;
 }
 
+/* Function: p7_alidisplay_Create_empty()
+ * Synopsis: Creates an empty P7_ALIDISPLAY object
+ *
+ * Purpose:  Creates an empty P7_ALIDISPLAY object, one that does not contain an alignment to
+ *           display but has been initialized to reasonable values (NULL for all strings, 0 for the amount
+ *           of memory allocated in its buffer, etc.).  This is mainly intended to be used to create a structure
+ *           that a serialized P7_ALIDISPLAY object can be deserialized into.
+ *
+ * Returns:  Pointer to the new <P7_ALIDISPLAY>
+ *
+ * Throws:   Returns NULL if unable to allocate memory
+ */
+extern P7_ALIDISPLAY *p7_alidisplay_Create_empty()
+{
+  P7_ALIDISPLAY *new_obj;
+  int status;  // standard ESL_ALLOC error condition
 
+  ESL_ALLOC(new_obj, sizeof(P7_ALIDISPLAY));
+
+  // Init fields to sensible "empty" values
+  new_obj->rfline = NULL;
+  new_obj->mmline = NULL;
+  new_obj->csline = NULL;
+  new_obj->model = NULL; 
+  new_obj->mline = NULL;
+  new_obj->aseq = NULL;
+  new_obj->ntseq = NULL;
+  new_obj->ppline = NULL;
+  new_obj->N = 0;
+
+  new_obj->hmmname = NULL; 
+  new_obj->hmmacc = NULL;
+  new_obj->hmmdesc = NULL;
+  new_obj->hmmfrom = 0;
+  new_obj->hmmto = 0;
+  new_obj->M = 0;
+
+  new_obj->sqname = NULL;
+  new_obj->sqacc = NULL;
+  new_obj->sqdesc = NULL;
+  new_obj->sqfrom = 0;
+  new_obj->sqto = 0;
+  new_obj->L = 0;
+
+  new_obj->memsize = 0;
+  new_obj->mem = NULL;
+
+  return new_obj;
+
+  ERROR: // only get here if the ESL_ALLOC fails
+    return NULL;
+}
 /* Function:  p7_alidisplay_Clone()
  * Synopsis:  Make a duplicate of an ALIDISPLAY.
  *
@@ -347,6 +432,467 @@ p7_alidisplay_Sizeof(const P7_ALIDISPLAY *ad)
   return n;
 }
 
+
+#define SER_BASE_SIZE ((5 * sizeof(int)) + (3 * sizeof(int64_t)) +1) // Total size of the fixed-length fields in a 
+// serialized P7_ALIDISPLAY 
+
+/* Function:  p7_alidisplay_Serialize
+ * Synopsis:  Serializes a HMMD_SEARCH_STATS object into a stream of bytes
+ *.           that can be reliably transmitted over internet sockets
+ *
+ * Purpose:   Converts an architecture-dependent P7_SEARCH_STATS object into a contiguous stream
+ *            of bytes with each field of the data structure in network byte order for transmission
+ *            over sockets.  The serialized byte stream may be part of a larger allocated buffer.
+ *            If the provided buffer is NULL, allocates a new buffer large enough for the serialized object
+ *            If the provided buffer is not large enough to hold the serialized object and its existing data, re-allocates
+ *            a larger buffer
+ *
+ * Inputs:    obj: A pointer to the HMMD_SEARCH_STATS object to be serialized
+ *            buf: Handle to the buffer that the object should be serialized into.  If *buf is NULL,
+ *                 a new buffer will be allocated.  buf == NULL is not allowed.
+ *            n:   Offset (in bytes) from the start of the buffer to where the serialized object should start.
+ *            nalloc: size (in bytes) of the buffer passed in buf 
+ *
+ *Returns:    On success: returns eslOK, sets *buf to the base of the buffer containing the object
+ *            if allocation or re-allocation was requried, sets *n to the offset from the start of the buffer
+ *            to the first position after the serialized object and sets *nalloc to the new size of the buffer 
+ *            if allocation or re-allocation was required.
+ *
+ * Throws:    Returns eslEMEM if unable to allocate or re-allocate memory.  Returns eslEINVAL if obj == NULL, n == NULL, or buf == NULL
+ */
+int p7_alidisplay_Serialize(const P7_ALIDISPLAY *obj, uint8_t **buf, uint32_t *n, uint32_t *nalloc){
+
+  int status; // error variable used by ESL_ALLOC
+  uint32_t ser_size; // size of the structure when serialized
+  uint8_t *ptr; // current position within the buffer
+  uint32_t network_32bit; // hold 32-bit fields after conversion to network order
+  uint64_t network_64bit; // hold 64-bit fields after conversion to network order
+  uint8_t presence_flags = 0; // Bit-vector that records presence or absence of optional strings
+  uint32_t hmmname_length, hmmacc_length, hmmdesc_length, sqname_length, sqacc_length, sqdesc_length;
+
+  // check to make sure we were passed a valid pointer 
+  if(obj == NULL || buf == NULL || n == NULL){ // no object to serialize or nowhere to put a buffer pointer
+    return(eslEINVAL);
+  }
+
+  // Pass 1: Compute size of the serialized data structure
+  /* 11 ints: 4 int fields in P7_ALIDISPLAY + lengths of 6 variable-length strings + total length of serialized structure
+     3 int64_t fields in P7_ALIDISPLAY
+     1 byte for presence/absence bit vector for rfline, mmline, csline, ppline, aseq, ntseq 
+    */
+  ser_size = SER_BASE_SIZE; 
+
+  // This method will work regardless of whether the object is in "serialized" or "deserialized" format
+  // it's also blatantly stolen from the _Sizeof() routine.  
+  // Note that we can't just call _Sizeof() to figure out how big the serialized data structure will be because
+  // the serialized structure has some fields that differ from the base P7_ALIDISPLAY structure
+
+  if (obj->rfline){
+    presence_flags += RFLINE_PRESENT;
+    ser_size += obj->N+1; /* +1 for \0 */
+  }
+  
+  if (obj->mmline) {
+    presence_flags += MMLINE_PRESENT;
+    ser_size += obj->N+1;
+  }
+
+  if (obj->csline){
+    presence_flags += CSLINE_PRESENT;
+    ser_size += obj->N+1; 
+  }
+
+  ser_size += 2 * (obj->N+1);           /* model, mline */
+  
+  if (obj->aseq){
+    presence_flags += ASEQ_PRESENT;
+    ser_size += obj->N+1;
+  }
+
+  if (obj->ntseq){
+    presence_flags += NTSEQ_PRESENT;
+    ser_size += (3 * obj->N) + 1;           /* ntseq */
+  }
+
+  if (obj->ppline){
+    presence_flags += PPLINE_PRESENT;
+    ser_size += obj->N+1;
+  }
+
+  hmmname_length = strlen(obj->hmmname);
+  ser_size += 1 + hmmname_length;
+
+  hmmacc_length = strlen(obj->hmmacc);   
+  ser_size += 1 + hmmacc_length;    /* optional acc, desc fields: when not present, just "" ("\0") */
+
+  hmmdesc_length = strlen(obj->hmmdesc);
+  ser_size += 1 + hmmdesc_length;
+
+  sqname_length = strlen(obj->sqname);
+  ser_size += 1 + sqname_length;
+
+  sqacc_length = strlen(obj->sqacc);
+  ser_size += 1 + sqacc_length;  
+
+  sqdesc_length = strlen(obj->sqdesc);
+  ser_size += 1 + sqdesc_length; 
+
+  // Now that we know how big the serialized data structure will be, determine if we have enough buffer space to hold it
+  if(*buf == NULL){ // have no buffer, so allocate one
+    ESL_ALLOC(*buf, ser_size);
+    *nalloc = ser_size;
+  }
+
+  if((*n + ser_size) > *nalloc){ //have a buffer, but it's not big enough
+    ESL_REALLOC(*buf, (*n + ser_size));
+    *nalloc = *n + ser_size;
+  }
+
+  // Pass 2: serialize the structure
+
+  //First, the fixed-length field
+  ptr = *buf + *n; // point to the start of empty space in the buffer
+
+  network_32bit = esl_hton32(ser_size); // first field in the serialized object is its size
+  memcpy(ptr, &network_32bit, sizeof(uint32_t)); // Write size of the serialized object into the buffer
+  ptr += sizeof(uint32_t);
+
+  // Field 2: N
+  network_32bit = esl_hton32(obj->N);
+  memcpy(ptr, &network_32bit, sizeof(uint32_t));
+  ptr += sizeof(uint32_t);
+ 
+  // Field 3: Hmmfrom field
+  network_32bit = esl_hton32(obj->hmmfrom);
+  memcpy(ptr, &network_32bit, sizeof(uint32_t));
+  ptr += sizeof(uint32_t);
+
+  // Field 4: Hmmto field
+  network_32bit = esl_hton32(obj->hmmto);
+  memcpy(ptr, &network_32bit, sizeof(uint32_t));
+  ptr += sizeof(uint32_t);
+
+  // Field 5: M field
+  network_32bit = esl_hton32(obj->M);
+  memcpy(ptr, &network_32bit, sizeof(uint32_t));
+  ptr += sizeof(uint32_t);
+
+  // Field 6: Sqfrom
+  network_64bit = esl_hton64(obj->sqfrom);
+  memcpy(ptr, &network_64bit, sizeof(int64_t));
+  ptr += sizeof(int64_t);
+
+  // Field 7: Sqto
+  network_64bit = esl_hton64(obj->sqto);
+  memcpy(ptr, &network_64bit, sizeof(int64_t));
+  ptr += sizeof(int64_t);
+
+  // Field 8: L
+  network_64bit = esl_hton64(obj->L);
+  memcpy(ptr, &network_64bit, sizeof(int64_t));
+  ptr += sizeof(int64_t);
+
+  // Field 9: presence_flags
+  memcpy(ptr, &presence_flags, sizeof(uint8_t));
+  ptr += sizeof(uint8_t);
+
+  //Now, the strings, some of which are optional
+  // Note that many of these strings are fixed-length if they are present
+
+  // Field 10: Rfline
+  if(presence_flags & RFLINE_PRESENT){
+    strcpy((char *) ptr, obj->rfline);
+    ptr += obj->N + 1;
+  }
+
+  // Field 11: mmline
+  if(presence_flags & MMLINE_PRESENT){
+    strcpy((char *) ptr, obj->mmline);
+    ptr += obj->N + 1;
+  }
+
+  // Field 12: csline
+  if(presence_flags & CSLINE_PRESENT){
+    strcpy((char *) ptr, obj->csline);
+    ptr += obj->N + 1;
+  }
+
+  // Field 13: Model
+  strcpy((char *) ptr, obj->model);
+  ptr += obj->N + 1;
+  
+  // Field 14: Mline
+  strcpy((char *) ptr, obj->mline);
+  ptr += obj->N + 1;
+
+  // Field 15: Aseq
+  if(presence_flags & ASEQ_PRESENT){
+    strcpy((char *) ptr, obj->aseq);
+    ptr += obj->N + 1;
+  }
+ 
+  // Field 16: ntseq
+  if(presence_flags & NTSEQ_PRESENT){
+    strcpy((char *) ptr, obj->ntseq);
+    ptr += (3 * obj->N) + 1;
+  }
+
+  // Field 17: PPline
+  if(presence_flags & PPLINE_PRESENT){
+    strcpy((char *) ptr, obj->ppline);
+    ptr += obj->N + 1;
+  }
+
+  // Field 18: Hmmname
+  strcpy((char *) ptr, obj->hmmname);
+  ptr += hmmname_length + 1;
+  
+  // Field 19: Hmmacc
+  strcpy((char *) ptr, obj->hmmacc);
+  ptr += hmmacc_length + 1;
+
+  // Field 20: Hmmdesc
+  strcpy((char *) ptr, obj->hmmdesc);
+  ptr += hmmdesc_length + 1;
+
+  // Field 21: Sqname
+  strcpy((char *) ptr, obj->sqname);
+  ptr += sqname_length +1;
+
+  // Field 22: Sqacc
+  strcpy((char *) ptr, obj->sqacc);
+  ptr += sqacc_length +1 ;
+
+  // Field 23: Sqdesc
+  strcpy((char *) ptr, obj->sqdesc);
+  ptr += sqdesc_length +1 ;
+
+  // sanity-check that we computed the length correctly
+  if(ptr != *buf + *n + ser_size){
+    printf("Serialized object length did not match computed length in p7_alidisplay_Serialize\n");
+    return eslEINVAL;
+  }
+
+  *n = ptr - *buf; // update n to be just past the serialized object
+  return eslOK; // If we make it here, everything succeeded, so return a pass
+
+  ERROR:
+    return eslEMEM;
+}
+
+/* Function:  p7_alidisplay_Deserialize
+ * Synopsis:  Derializes a P7_ALIDISPLAY object from a stream of bytes in network order into
+ *            a valid data structure
+ *
+ * Purpose:   Deserializes a serialized P7_ALIDISPLAY object from
+ *.           buf starting at position position *pos.  
+ *
+ * Inputs:    buf: the buffer that the object should be de-serialized from
+ *            pos: a pointer to the offset from the start of buf to the beginning of the object
+ *            ret_obj: a P7_ALIDISPLAY structure to deserialize the object into.  May not be NULL. May either be an 
+ *            "empty" object created with p7_alidisplay_Create_empty, or a P7_ALIDISPLAY object containing valid data
+ *
+ * Returns:   On success: returns eslOK, deserializes the P7_ALIDISPLAY object into ret_object, and updates 
+ *.           pos to point to the position after the end of the P7_ALIDISPLAY object.
+ *
+ * Throws:    Returns eslEINVAL if ret_obj == NULL, buf == NULL, or N == NULL.  Returnts eslEMEM if unable to increase
+ *            the buffer in ret_obj to match the size of the deserialized object.           
+ */
+extern int p7_alidisplay_Deserialize(const uint8_t *buf, uint32_t *n, P7_ALIDISPLAY *ret_obj){
+  int status;  // Standard Easel error code variable
+
+  uint8_t *ptr;
+  char *mem_ptr;
+  uint64_t network_64bit; // holds 64-bit values in network order 
+  uint32_t network_32bit; // holds 64-bit values in network order 
+  uint32_t obj_size; // How much space does the variable-length portion of the serialized object take up?
+  uint8_t presence_flags; // bit-vector that tells us which strings are present in the object
+  int string_length; // used to hold the length of strings copied out of serialized object
+
+  if ((buf == NULL) || (ret_obj == NULL) || (n == NULL)){ // check to make sure we've been passed valid objects
+      return(eslEINVAL);
+  }
+
+  mem_ptr = NULL; // set this for safety
+  ptr = (uint8_t *) buf + *n; // Get pointer to start of the object
+  //First field: Size of the serialized object.  Copy out of buffer into scalar variable to deal with memory alignment, convert to 
+  // host machine order
+  memcpy(&network_32bit, ptr, sizeof(uint32_t)); // Grab the bytes out of the buffer
+  obj_size = esl_ntoh32(network_32bit);
+  ptr += sizeof(uint32_t);
+
+  if(ret_obj->memsize < (obj_size - SER_BASE_SIZE)){  // ret_obj doesn't have enough space for this P7_ALIDISPLAY
+    if(ret_obj->mem != NULL){
+      ESL_REALLOC(ret_obj->mem, (obj_size - SER_BASE_SIZE));
+    }
+    else{
+      ESL_ALLOC(ret_obj->mem, (obj_size - SER_BASE_SIZE));
+    }
+    ret_obj->memsize = obj_size - SER_BASE_SIZE;
+  }
+
+  // Second field: N
+  memcpy(&network_32bit, ptr, sizeof(uint32_t)); // Grab the bytes out of the buffer
+  ret_obj->N = esl_ntoh32(network_32bit);
+  ptr += sizeof(uint32_t);
+
+  // Third field: Hmmfrom
+  memcpy(&network_32bit, ptr, sizeof(uint32_t)); 
+  ret_obj->hmmfrom = esl_ntoh32(network_32bit);
+  ptr += sizeof(uint32_t);
+
+  // Fourth field: Hmmto
+  memcpy(&network_32bit, ptr, sizeof(uint32_t)); 
+  ret_obj->hmmto = esl_ntoh32(network_32bit);
+  ptr += sizeof(uint32_t);
+
+  // Fifth field: M 
+  memcpy(&network_32bit, ptr, sizeof(uint32_t)); 
+  ret_obj->M = esl_ntoh32(network_32bit);
+  ptr += sizeof(uint32_t);
+
+  // Sixth field: sqfrom
+  memcpy(&network_64bit, ptr, sizeof(uint64_t)); 
+  ret_obj->sqfrom = esl_ntoh64(network_64bit);
+  ptr += sizeof(uint64_t);
+
+  // Seventh field: sqto
+  memcpy(&network_64bit, ptr, sizeof(uint64_t)); 
+  ret_obj->sqto = esl_ntoh64(network_64bit);
+  ptr += sizeof(uint64_t);
+
+  // Eighth field: L
+  memcpy(&network_64bit, ptr, sizeof(uint64_t)); 
+  ret_obj->L = esl_ntoh64(network_64bit);
+  ptr += sizeof(uint64_t);
+
+  // Ninth field: presence flags
+  presence_flags = *ptr; // no need for memcpy with one-byte field
+  ptr += sizeof(uint8_t);
+
+  // Bulk copy the strings into the alidisplay's mem field
+  memcpy(ret_obj->mem, ptr, (obj_size - SER_BASE_SIZE)); 
+  mem_ptr = ret_obj->mem;
+  ptr += (obj_size - SER_BASE_SIZE);
+  // Tenth field: rfline, if present
+
+  if(ptr != buf + *n + obj_size){
+    printf("Error: in p7_alidisplay_Deserialize, found object (ptr) to be of size %ld, expected %u.\n", (long int) (ptr - (buf + *n)), obj_size);
+    //return eslEINVAL;
+  }
+
+  if(presence_flags & RFLINE_PRESENT){
+    ret_obj->rfline = mem_ptr;
+    string_length = strlen(ret_obj->rfline);
+    mem_ptr+= string_length +1; // + 1 to account for end-of-string character
+  }
+  else{ // not present
+    ret_obj->rfline = NULL; 
+  }
+
+  // Eleventh field: mmline, if present
+  if(presence_flags & MMLINE_PRESENT){
+    ret_obj->mmline = mem_ptr;
+    string_length = strlen(ret_obj->mmline);
+    mem_ptr+= string_length + 1;
+  }
+  else{ // not present
+    ret_obj->mmline = NULL; 
+  }
+
+  // Twelfth field: csline, if present
+  if(presence_flags & CSLINE_PRESENT){
+    ret_obj->csline = mem_ptr;
+    string_length = strlen(ret_obj->csline);
+    mem_ptr+= string_length + 1;
+  }
+  else{ // not present
+    ret_obj->csline = NULL; 
+  }
+
+
+  // Thirteenth field: model
+  ret_obj->model = mem_ptr;
+  string_length = strlen(ret_obj->model);
+  mem_ptr+= string_length + 1;
+
+ // Thirteenth field: mline
+  ret_obj->mline = mem_ptr;
+  string_length = strlen(ret_obj->mline);
+  mem_ptr+= string_length + 1;
+
+  // Fourteenth field: aseq, if present
+  if(presence_flags & ASEQ_PRESENT){
+    ret_obj->aseq = mem_ptr;
+    string_length = strlen(ret_obj->aseq);
+    mem_ptr+= string_length + 1;
+  }
+  else{ // not present
+    ret_obj->aseq = NULL; 
+  }
+
+  // Fifteenth field: ntseq, if present
+  if(presence_flags & NTSEQ_PRESENT){
+    ret_obj->ntseq = mem_ptr;
+    string_length = strlen(ret_obj->ntseq);
+    mem_ptr+= string_length + 1;
+  }
+  else{ // not present
+    ret_obj->ntseq = NULL; 
+  }
+
+  // Sixteenth field: ppline, if present
+  if(presence_flags & PPLINE_PRESENT){
+    ret_obj->ppline = mem_ptr;
+    string_length = strlen(ret_obj->ppline);
+    mem_ptr+= string_length + 1;
+  }
+  else{ // not present
+    ret_obj->ppline = NULL; 
+  }
+
+  // Seventeenth field: hmmname
+  ret_obj->hmmname = mem_ptr;
+  string_length = strlen(ret_obj->hmmname);
+  mem_ptr+= string_length + 1;
+
+  // Eighteenth field: hmmacc
+  ret_obj->hmmacc = mem_ptr;
+  string_length = strlen(ret_obj->hmmacc);
+  mem_ptr+= string_length + 1;
+
+  // Nineteenth field: hmmdesc 
+  ret_obj->hmmdesc = mem_ptr;
+  string_length = strlen(ret_obj->hmmdesc);
+  mem_ptr+= string_length + 1;
+
+  // Twentyith field: sqname
+  ret_obj->sqname = mem_ptr;
+  string_length = strlen(ret_obj->sqname);
+  mem_ptr+= string_length + 1;
+
+  // Twentyfirst field: sqacc
+  ret_obj->sqacc = mem_ptr;
+  string_length = strlen(ret_obj->sqacc);
+  mem_ptr+= string_length + 1;
+
+  // Twentysecond field: sqdesc
+  ret_obj->sqdesc = mem_ptr;
+  string_length = strlen(ret_obj->sqdesc);
+  mem_ptr+= string_length +1;
+
+  // Sanity-check that we got the length right
+  if(mem_ptr - ret_obj->mem != (obj_size - SER_BASE_SIZE)){
+    printf("Error: at end of p7_alidisplay_Deserialize, found strings to be of size %ld, expected %ld.\n", (long)(mem_ptr - ret_obj->mem), (long)(obj_size - SER_BASE_SIZE));
+    return eslEINVAL;
+  }
+  *n += obj_size; 
+  return eslOK;  // as usual, if we get to the end of the routine without failing, return success
+
+  ERROR: // only get here if we can't allocate memory
+    return eslEMEM;
+}
+
 /* Function:  p7_alidisplay_Serialize()
  * Synopsis:  Serialize a P7_ALIDISPLAY, using internal memory.
  *
@@ -365,7 +911,7 @@ p7_alidisplay_Sizeof(const P7_ALIDISPLAY *ad)
  *            its original (deserialized) state.
  */
 int
-p7_alidisplay_Serialize(P7_ALIDISPLAY *ad)
+p7_alidisplay_Serialize_old(P7_ALIDISPLAY *ad)
 {
   int pos;
   int n;
@@ -418,7 +964,7 @@ p7_alidisplay_Serialize(P7_ALIDISPLAY *ad)
  *            its original (serialized) state.
  */
 int
-p7_alidisplay_Deserialize(P7_ALIDISPLAY *ad)
+p7_alidisplay_Deserialize_old(P7_ALIDISPLAY *ad)
 {
   int pos;
   int n;
@@ -1206,31 +1752,291 @@ main(int argc, char **argv)
  * 5. Unit tests.
  ****************************************************************/
 #ifdef p7ALIDISPLAY_TESTDRIVE
-static void
-utest_Serialize(ESL_RANDOMNESS *rng, int ntrials, int N)
+
+/*Testing function that generates a P7_ALIDISPLAY containing a nucleotide sequence string rather than an amino
+  *sequence string.  This function should only be used for testing the serialization/deserializaton code.  No attempt
+  *is made to make the nucleotide string be reasonable or even valid -- it's just a valid C string of the correct length
+  * Like p7_alidisplay_Sample, which it is based on, it randomly selects which of the optional fields should be present in the 
+  * alidisplay */
+static int
+alidisplay_SampleFake_ntseq(ESL_RANDOMNESS *rng, int N, P7_ALIDISPLAY **ret_ad)
 {
-  char          msg[] = "utest_Serialize failed";
-  P7_ALIDISPLAY *ad   = NULL;
-  P7_ALIDISPLAY *ad2  = NULL;
-  int trial;
+  P7_ALIDISPLAY *ad            = NULL;
+  char          *guidestring   = NULL;  /* string [0..N-1] composed of MDI */
+  int            nM            = 0;
+  int            nD            = 0;
+  int            nI            = 0;
+  enum p7t_statetype_e last_st;
+  int            pos;
+  int            status;
 
-  for (trial = 0; trial < ntrials; trial++)
+  ESL_ALLOC(guidestring, sizeof(char) * (N+1));
+
+  guidestring[0] = 'M'; nM++; last_st = p7T_M; /* local alignments must start with M */
+  for (pos = 1; pos < N-1; pos++)
     {
-      if ( p7_alidisplay_Sample(rng, N, &ad) != eslOK) esl_fatal(msg);
-      if ( (ad2 = p7_alidisplay_Clone(ad))   == NULL)  esl_fatal(msg);
-      if ( p7_alidisplay_Compare(ad, ad2)    != eslOK) esl_fatal(msg);
+      switch (last_st) 
+  {
+  case p7T_M:
+    switch (esl_rnd_Roll(rng, 3)) 
+      {
+      case 0: guidestring[pos] = 'M'; nM++; last_st = p7T_M; break;
+      case 1: guidestring[pos] = 'D'; nD++; last_st = p7T_D; break;
+      case 2: guidestring[pos] = 'I'; nI++; last_st = p7T_I; break;
+      }
+    break;
 
-      if ( p7_alidisplay_Serialize(ad)       != eslOK) esl_fatal(msg);
-      if ( p7_alidisplay_Compare(ad, ad2)    != eslOK) esl_fatal(msg);
+  case p7T_I: 
+    switch (esl_rnd_Roll(rng, 2))
+      {
+      case 0: guidestring[pos] = 'M'; nM++; last_st = p7T_M; break;
+      case 1: guidestring[pos] = 'I'; nI++; last_st = p7T_I; break;
+      }
+    break;
 
-      if ( p7_alidisplay_Deserialize(ad)     != eslOK) esl_fatal(msg);
-      if ( p7_alidisplay_Compare(ad, ad2)    != eslOK) esl_fatal(msg);
-
-      p7_alidisplay_Destroy(ad);
-      p7_alidisplay_Destroy(ad2);
+  case p7T_D: 
+    switch (esl_rnd_Roll(rng, 2)) 
+      {
+      case 0: guidestring[pos] = 'M'; nM++; last_st = p7T_M; break;
+      case 1: guidestring[pos] = 'D'; nD++; last_st = p7T_D; break;
+      }
+    break;
+    
+  default:
+    break;
+  }
     }
+  /* local alignments can end on M or D. (optimal local alignments can only end on M) */
+  switch (last_st) {
+  case p7T_I:
+    guidestring[N-1] = 'M';  nM++;  break;
+  default:   
+    switch (esl_rnd_Roll(rng, 2)) {
+    case 0: guidestring[N-1] = 'M'; nM++; break;
+    case 1: guidestring[N-1] = 'D'; nD++; break;
+    }
+    break;
+  }
+  guidestring[N] = '\0';
+
+  ESL_ALLOC(ad, sizeof(P7_ALIDISPLAY));
+  ad->rfline  = ad->mmline = ad->csline = ad->model   = ad->mline  = ad->aseq = ad->ntseq = ad->ppline = NULL;
+  ad->hmmname = ad->hmmacc = ad->hmmdesc = NULL;
+  ad->sqname  = ad->sqacc  = ad->sqdesc  = NULL;
+  ad->mem     = NULL;
+  ad->memsize = 0;
+
+  /* Optional lines are added w/ 50% chance */
+  if (esl_rnd_Roll(rng, 2) == 0)  ESL_ALLOC(ad->rfline, sizeof(char) * (N+1));
+  if (esl_rnd_Roll(rng, 2) == 0)  ESL_ALLOC(ad->mmline, sizeof(char) * (N+1));
+  if (esl_rnd_Roll(rng, 2) == 0)  ESL_ALLOC(ad->csline, sizeof(char) * (N+1));
+  if (esl_rnd_Roll(rng, 2) == 0)  ESL_ALLOC(ad->ppline, sizeof(char) * (N+1));
+  ESL_ALLOC(ad->model, sizeof(char) * (N+1));
+  ESL_ALLOC(ad->mline, sizeof(char) * (N+1));
+  ESL_ALLOC(ad->ntseq,  sizeof(char) * ((3 *N)+1));
+  ad->N = N;
+
+  esl_strdup("my_hmm", -1, &(ad->hmmname));
+  if (esl_rnd_Roll(rng, 2) == 0) esl_strdup("PF000007",          -1, &(ad->hmmacc));  else esl_strdup("", -1, &(ad->hmmacc));
+  if (esl_rnd_Roll(rng, 2) == 0) esl_strdup("(hmm description)", -1, &(ad->hmmdesc)); else esl_strdup("", -1, &(ad->hmmdesc));
+
+  esl_strdup("my_seq", -1, &(ad->sqname));
+  if (esl_rnd_Roll(rng, 2) == 0) esl_strdup("ABC000001.42",           -1, &(ad->sqacc));  else esl_strdup("", -1, &(ad->sqacc));
+  if (esl_rnd_Roll(rng, 2) == 0) esl_strdup("(sequence description)", -1, &(ad->sqdesc)); else esl_strdup("", -1, &(ad->sqdesc));
+
+  /* model, seq coords must look valid. */
+  ad->hmmfrom = 100;
+  ad->hmmto   = ad->hmmfrom + nM + nD - 1;
+  ad->M       = ad->hmmto + esl_rnd_Roll(rng, 2);
+
+  ad->sqfrom  = 1000;
+  ad->sqto    = ad->sqfrom + nM + nI - 1;
+  ad->L       = ad->sqto + esl_rnd_Roll(rng, 2);
+
+  /* rfline is free-char "reference annotation" on consensus; H3 puts '.' for inserts. */
+  if (ad->rfline) {
+    for (pos = 0; pos < N; pos++)
+      ad->rfline[pos] = (guidestring[pos] == 'I' ? '.' : 'x');
+    ad->rfline[pos] = '\0';
+  }
+
+  /* mmline indicates which columns should be masked (assigned background distribution), '.' indicates no mask; H3 puts '.' for inserts. */
+  if (ad->mmline) {
+    for (pos = 0; pos < N; pos++)
+      ad->mmline[pos] = (guidestring[pos] == 'I' ? '.' : '.');
+    ad->mmline[pos] = '\0';
+  }
+
+  /* csline is optional. It has free-char "consensus structure annotation" on consensus positions. H3 puts '.' on inserts. */
+  if (ad->csline) {
+    for (pos = 0; pos < N; pos++)
+      ad->csline[pos] = (guidestring[pos] == 'I' ? '.' : 'X');
+    ad->csline[pos] = '\0';
+  }
+  
+  /* the mandatory three-line alignment display:
+   *
+   *   guidestring:    MMMDI
+   *   model:          XXXX.
+   *   mline:          A+   
+   *   ntseq:           AAA-a
+   */
+  for (pos = 0; pos < N; pos++)
+    {
+      switch (guidestring[pos]) {
+      case 'M':
+  ad->model[pos] = 'X';
+  switch (esl_rnd_Roll(rng, 3)) {
+  case 0: ad->mline[pos] = 'A';    
+  case 1: ad->mline[pos] = '+';
+  case 2: ad->mline[pos] = ' ';
+  }
+  if (ad->mline[pos] == ' ' && esl_rnd_Roll(rng, 50) == 0) ad->ntseq[pos] = '*';  // dirty aligned sequence up with nasty * stop codons, about 1/(3*50) of the time.
+  else                                                     ad->ntseq[pos] = 'A';  // ... they would only be aligned to ' ' on an mline.
+  break;                                                                         // ... they might appear aligned to a match or insert state (see iss#135)
+
+      case 'D':
+  ad->model[pos] = 'X';
+  ad->mline[pos] = ' ';
+  ad->ntseq[pos]  = '-';
+  break;
+
+      case 'I':
+  ad->model[pos] = '.';
+  ad->mline[pos] = ' ';
+  ad->ntseq[pos]  = 'a';
+  break;
+      }
+    }
+  ad->model[pos] = '\0';
+  ad->mline[pos] = '\0';
+
+  // pad out ntseq to the 3N length it needs
+  for (pos = N; pos <  (3 * N); pos++){
+    if(esl_rnd_Roll(rng, 50) == 0) ad->ntseq[pos] = '*';  // dirty aligned sequence up with nasty * stop codons, about 1/(3*50) of the time.
+    else                                                     ad->ntseq[pos] = 'A';  // ... they would only be aligned to ' ' on an mline.
+  }
+  ad->ntseq[pos]  = '\0';
+
+  /* ppline is optional */
+  if (ad->ppline) {
+    for (pos = 0; pos < N; pos++)
+      ad->ppline[pos] = (guidestring[pos] == 'D' ? '.' : p7_alidisplay_EncodePostProb(esl_random(rng)));
+    ad->ppline[pos] = '\0';
+  }
+
+  free(guidestring);
+  *ret_ad = ad; 
+  return eslOK;
+
+ ERROR:
+  if (guidestring) free(guidestring);
+  if (ad)          p7_alidisplay_Destroy(ad);
+  *ret_ad = NULL;
+  return status;
+}
+
+
+
+
+static void
+utest_Serialize(ESL_RANDOMNESS *rng, int ntrials)
+{
+  char msg[]               = "utest_Serialize failed";
+  P7_ALIDISPLAY **serial   = malloc(ntrials * sizeof(P7_ALIDISPLAY *));
+  P7_ALIDISPLAY **deserial = malloc(ntrials * sizeof(P7_ALIDISPLAY *));
+  uint8_t       **buf      = malloc(sizeof(uint8_t *));
+  uint32_t        n        = 0;
+  uint32_t        nalloc   = 0;
+  int             alignment_length;
+  int             i;
+
+  *buf = NULL;
+  for (i = 0; i < ntrials; i++)
+    {
+      // Create random alignment to serialize
+      alignment_length = (esl_random_uint32(rng) %300) + 50;
+      if (esl_rnd_Roll(rng, 2) == 0)
+	{ // 50% chance of alidisplay with an amino sequence, 50% chance of alidisplay with nucleotide seq.
+	  if (p7_alidisplay_Sample(rng, alignment_length, &(serial[i])) != eslOK) esl_fatal(msg);
+	}
+      else
+	{
+	  if (alidisplay_SampleFake_ntseq(rng, alignment_length, &(serial[i])) != eslOK) esl_fatal(msg);
+	}
+      if (p7_alidisplay_Serialize(serial[i], buf, &n, &nalloc) != eslOK) esl_fatal(msg);
+    } 
+
+  n = 0; // reset to start of buffer
+  for (i = 0; i < ntrials; i++)
+    {
+      if ((deserial[i] = p7_alidisplay_Create_empty())     == NULL)  esl_fatal(msg);
+      if( p7_alidisplay_Deserialize(*buf, &n, deserial[i]) != eslOK) esl_fatal(msg);
+    }
+
+  // free the buffer here to make sure we've actually copied all the data out of it into the new structures
+  free(*buf);
+  free(buf);
+  for (i = 0; i < ntrials; i++)
+    if (p7_alidisplay_Compare(serial[i], deserial[i]) != eslOK) esl_fatal(msg); // deserialized structure didn't match serialized
+  // haven't failed yet, so we've succeeded.  Clean up and exit
+
+  for (i = 0; i < ntrials; i++) {
+    p7_alidisplay_Destroy(serial[i]);
+    p7_alidisplay_Destroy(deserial[i]);
+  }
+  free(serial);
+  free(deserial);
   return;
 }
+
+// Test that the _Serialize() function generates the correct errors when passed invalid arguments
+static void
+utest_serialize_error_conditions(ESL_RANDOMNESS *rng)
+{
+  char msg[]            = "utest_serialize_error_conditions failed";
+  P7_ALIDISPLAY *foo    = NULL;
+  uint8_t      **buf    = malloc(sizeof(uint8_t *)); 
+  uint32_t       n      = 0;
+  uint32_t       nalloc = 0;
+
+  // Create an alisplay to work with.  Don't really care about its contents -- other tests will verify
+  // correct serialization and deserialization
+  *buf = NULL; // set buf to valid value
+  if ( p7_alidisplay_Sample(rng, 100, &foo)              != eslOK)     esl_fatal(msg);
+  if ( p7_alidisplay_Serialize(foo, NULL, &n,   &nalloc) != eslEINVAL) esl_fatal(msg);   // Test 1: _Serialize returns error if passed NULL buffer
+  if ( p7_alidisplay_Serialize(foo,  buf, NULL, &nalloc) != eslEINVAL) esl_fatal(msg);   // Test 2: error on NULL n ptr
+  if ( p7_alidisplay_Serialize(NULL, buf, &n,   &nalloc) != eslEINVAL) esl_fatal(msg);   // Test 3: error on NULL object ptr
+
+  if (buf) { free(*buf); free(buf); }
+  p7_alidisplay_Destroy(foo);
+  return;
+}
+
+static void
+utest_deserialize_error_conditions(ESL_RANDOMNESS *rng)
+{
+  char            msg[]    = "utest_deserialize_error_conditions failed";
+  P7_ALIDISPLAY  *sampled  = NULL; // sampled alidisplay that we'll serialze
+  P7_ALIDISPLAY  *deserial = NULL; // alidisplay to hold the deserialized object
+  uint8_t        *buf      = NULL;
+  uint32_t        n = 0, nalloc = 0;
+
+  if ((deserial = p7_alidisplay_Create_empty())            == NULL)  esl_fatal(msg);
+  if ( p7_alidisplay_Sample(rng, 100, &sampled)            != eslOK) esl_fatal(msg);
+  if ( p7_alidisplay_Serialize(sampled, &buf, &n, &nalloc) != eslOK) esl_fatal(msg);
+
+
+  if ( p7_alidisplay_Deserialize(NULL, &n, deserial)  != eslEINVAL) esl_fatal(msg);   // Test 1: error on buf == NULL;
+  if ( p7_alidisplay_Deserialize(buf, NULL, deserial) != eslEINVAL) esl_fatal(msg);   // Test 2: error on n == NULL
+  if ( p7_alidisplay_Deserialize(buf, &n, NULL)       != eslEINVAL) esl_fatal(msg);   // Test 3: error on serialized object == NULL
+
+  free(buf);
+  p7_alidisplay_Destroy(deserial);
+  p7_alidisplay_Destroy(sampled);
+  return;
+}
+
 
 static void
 utest_Backconvert(int be_verbose, ESL_RANDOMNESS *rng, ESL_ALPHABET *abc, int ntrials, int N)
@@ -1244,7 +2050,7 @@ utest_Backconvert(int be_verbose, ESL_RANDOMNESS *rng, ESL_ALPHABET *abc, int nt
   for (trial = 0; trial < ntrials; trial++)
     {
       if ( p7_alidisplay_Sample(rng, N, &ad)                     != eslOK) esl_fatal(msg);
-      if ( p7_alidisplay_Serialize(ad)                           != eslOK) esl_fatal(msg);
+      if ( p7_alidisplay_Serialize_old(ad)                           != eslOK) esl_fatal(msg);
       if (be_verbose && p7_alidisplay_Dump(stdout, ad)           != eslOK) esl_fatal(msg);
       if ( p7_alidisplay_Backconvert(ad, abc, &sq, &tr)          != eslOK) esl_fatal(msg);
       if (be_verbose && p7_trace_Dump(stdout, tr, NULL, sq->dsq) != eslOK) esl_fatal(msg);
@@ -1256,6 +2062,8 @@ utest_Backconvert(int be_verbose, ESL_RANDOMNESS *rng, ESL_ALPHABET *abc, int nt
     }
   return;
 }
+
+
 #endif /*p7ALIDISPLAY_TESTDRIVE*/
 /*------------------- end, unit tests ---------------------------*/
 
@@ -1295,8 +2103,11 @@ main(int argc, char **argv)
   int             L          = esl_opt_GetInteger(go, "-L");
   int             be_verbose = esl_opt_GetBoolean(go, "-v");
 
-  utest_Serialize  (            rng,      N, L);
+  //utest_Serialize_old  (            rng,      N, L);
+  utest_Serialize(rng, 100);
   utest_Backconvert(be_verbose, rng, abc, N, L);
+  utest_serialize_error_conditions(rng);
+  utest_deserialize_error_conditions(rng);
 
   esl_alphabet_Destroy(abc);
   esl_randomness_Destroy(rng);

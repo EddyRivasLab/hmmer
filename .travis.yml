@@ -1,0 +1,14 @@
+language: c
+
+env:
+  - SQC_NONZERO_EXIT=1
+
+script:
+  - git clone -b develop https://github.com/${TRAVIS_REPO_SLUG/hmmer/easel}.git
+  - ln -s easel/aclocal.m4 aclocal.m4
+  - autoconf
+  - ./configure
+  - make
+  - make dev
+  - make check
+

@@ -61,7 +61,7 @@ static int annotate_model(P7_HMM *hmm, int *matassign, ESL_MSA *msa);
  *           no consensus columns, a <eslENORESULT> error is returned.
  *           
  * Args:     msa     - multiple sequence alignment
- *           bld       - holds information on regions requiring masking, optionally NULL -> no masking
+ *           bld     - holds information on regions requiring masking, optionally NULL -> no masking
  *           ret_hmm - RETURN: counts-form HMM
  *           opt_tr  - optRETURN: array of tracebacks for aseq's
  *           
@@ -474,7 +474,7 @@ utest_fragments(void)
    *
    * The X->Dk and Dk->X cases should never happen, but we don't
    * prohibit them. They can only arise in an input file, because
-   * esl_msa_MarkFragments() converts everything before/after
+   * esl_msa_MarkFragments_old() converts everything before/after
    * first/last residue to ~, and won't leave a gap character in
    * between.
    *

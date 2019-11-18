@@ -20,7 +20,16 @@ BEGIN {
 
 # The test creates the following files:
 # $tmppfx.hmm         a profile HMM file containing two copies of a single query hmm
-
+#
+# If a previous Easel test has generated a $tmppfx.hmm file and
+# pressed it to binary, you could get a very confusing failure; when
+# we create our $tmppfx.hmm here, the previous binary database will be
+# silently read instead. To avoid this, quietly remove any previous
+# pressed indices.
+if (-e "$tmppfx.hmm.h3f") { unlink "$tmppfx.hmm.h3f"; }
+if (-e "$tmppfx.hmm.h3i") { unlink "$tmppfx.hmm.h3i"; }
+if (-e "$tmppfx.hmm.h3m") { unlink "$tmppfx.hmm.h3m"; }
+if (-e "$tmppfx.hmm.h3p") { unlink "$tmppfx.hmm.h3p"; }
 
 # Verify that we have all the executables we need for the test.
 @h3progs =  ( "hmmsearch", "phmmer", "nhmmer");
@@ -30,9 +39,9 @@ foreach $h3prog  (@h3progs)  { if (! -x "$builddir/src/$h3prog")          { die 
 foreach $easel_prog  (@easel_progs)  { if (! -x "$builddir/easel/miniapps/$easel_progs")   { die "FAIL: didn't find $easel_prog executable in $builddir/easel/miniapps\n";              } }
 
 
+
 @formats = ("ncbi" , "fasta",  "afa", "stockholm");
 @exts    = (  "",   ".fa", ".afa", ".sto");
-
 
 # Test hmmsearch.  Make a query with two copies of the hmm. 
 # Should get the same number of hits with both searches
@@ -42,7 +51,7 @@ do_cmd($cmd);
 for $i (0..$#formats) {
    $fmt = $formats[$i];
    $ext = $exts[$i];
-
+   
    $cmd = "$builddir/src/hmmsearch --tformat $fmt $tmppfx.hmm $srcdir/testsuite/20aa-alitest$ext 2>&1";
    $output = do_cmd($cmd);
 
@@ -50,7 +59,7 @@ for $i (0..$#formats) {
    my ($second) = ( $output =~ /Domain search space  \(domZ\):\s+(\d+)/g);
 
    if ($first != 4 || $second != 4) {
-      die "FAIL: hmmsearch results failed to build correctly\n";
+      die "FAIL: rewound second search gave different results for hmmsearch, $fmt format";
    }
 }
 
@@ -65,7 +74,7 @@ do_cmd($cmd);  # yes, twice
 for $i (0..$#formats) {
    $fmt = $formats[$i];
    $ext = $exts[$i];
-
+   
    $cmd = "$builddir/src/phmmer --tformat $fmt $tmppfx.fa $srcdir/testsuite/20aa-alitest$ext 2>&1";
    $output = do_cmd($cmd);
 
@@ -73,7 +82,7 @@ for $i (0..$#formats) {
    my ($second) = ( $output =~ /Domain search space  \(domZ\):\s+(\d+)/g);
 
    if ($first != 4 || $second != 4) {
-      die "FAIL: hmmsearch results failed to build correctly\n";
+      die "FAIL: rewound second search gave different results for phmmer, $fmt format";
    }
 }
 
@@ -99,7 +108,7 @@ do_cmd($cmd);
 for $i (0..$#formats) {
    $fmt = $formats[$i];
    $ext = $exts[$i];
-
+   
    $cmd = "$builddir/src/nhmmer --tformat $fmt $tmppfx.hmm $srcdir/testsuite/3box-alitest$ext 2>&1";
    $output = do_cmd($cmd);
 
@@ -107,7 +116,7 @@ for $i (0..$#formats) {
    my ($second) = ( $output =~ /Total number of hits:\s+(\d+)/g);
 
    if ($first != 2 || $second != 2) {
-      die "FAIL: hmmsearch results failed to build correctly\n";
+      die "FAIL: rewound second search gave different results for nhmmer, $fmt format";
    }
 }
 

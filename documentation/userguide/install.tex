@@ -53,7 +53,12 @@ To compile:
   \user{\% make}
   \vspace{1ex}
 
-Optionally, to compile and run a test suite:
+Optionally, to compile and run a test suite\sidenote{The test suite
+  uses scripts, and requires that you have \mono{python3} and
+  \mono{perl}. We haven't encountered any systems without perl.  If
+  you don't have \mono{python3}, \mono{make check} will fail and tell
+  you so. But HMMER is still fine, and you can install it -- running
+  the test suite is optional!}:
 
   \vspace{1ex}
   \user{\% make check}
@@ -77,7 +82,7 @@ You can change the \mono{/usr/local} prefix to any directory you want
 when you do the \mono{./configure} step, using the \mono{./configure
   {-}{-}prefix} option, as in \mono{./configure {-}{-}prefix
   /the/directory/you/want}. For example, you might do
-\mono{./configure {-}{-}prefix=\$\{HOME}\}, for installation in
+\mono{./configure {-}{-}prefix=\$\{HOME\}}, for installation in
 \mono{bin/} and \mono{share/man/man1} subdirectories in your own home
 directory.
 
@@ -105,7 +110,9 @@ branch:\sidenote{As of 3.2, our git master branch is the stable
   
   \vspace{1ex}
   \user{\% git clone https://github.com/EddyRivasLab/hmmer hmmer-\HMMERversion{}} \\
-  \user{\% cd hmmer-\HMMERversion{}}
+  \user{\% cd hmmer-\HMMERversion{}} \\
+  \user{\% git clone https://github.com/EddyRivasLab/easel } \\
+  \user{\% autoconf }
   \vspace{1ex}
 
 This is now essentially the same as if you unpacked a tarball, so from
@@ -115,6 +122,19 @@ One difference is that our distribution tarballs include this user
 guide as a PDF, in addition to its \LaTeX\ source code. The github
 repo only has the source \LaTeX\ files. To compile the PDF, see
 ``compiling the user guide'' in the gory details below.
+
+You need our Easel library, in addition to the HMMER repository. We
+don't guarantee that the two master branches are necessarily
+compatible at all times. It's possible that the Easel master branch
+has advanced in support of an Infernal release, for example. You might
+have to check out the Easel tag that corresponds to the more recent
+stable HMMER release. These Easel tags end in ``h'': for example,
+\mono{easel-0.45h}.
+
+If you want to suggest changes to us by submitting a pull request on
+GitHub, please base your changes against our \mono{develop} branches.
+Our master branches are for stable releases.
+
 
 
 \section{Gory details}
@@ -205,7 +225,7 @@ your bets and install up-to-date versions of GNU command line tools
 such as GNU make and GNU grep.
 
 Running the test suite (and some of our development tools, if you
-delve deep into our codebase) requires Perl and Python to be
+delve deep into our codebase) requires Perl and Python3 to be
 installed.  If you don't have them (which should be rare), \mono{make
   check} won't work for you, but that's ok because \mono{make} and
 \mono{make install} will still work fine.

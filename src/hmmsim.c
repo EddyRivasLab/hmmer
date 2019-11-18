@@ -556,6 +556,10 @@ mpi_worker(ESL_GETOPTS *go, struct cfg_s *cfg)
   /* Main worker loop */
   while (p7_hmm_MPIRecv(0, 0, MPI_COMM_WORLD, &wbuf, &wn, &(cfg->abc), &hmm) == eslOK) 
     {
+    if (cfg->bg == NULL) { // first time only
+          if (esl_opt_GetBoolean(go, "--bgflat")) cfg->bg = p7_bg_CreateUniform(cfg->abc);
+          else                                    cfg->bg = p7_bg_Create(cfg->abc);
+        }
       if ((status = process_workunit(go, cfg, errbuf, hmm, xv, av, &mu, &lambda)) != eslOK) goto CLEANERROR;
 
       pos = 0;
@@ -626,6 +630,9 @@ process_workunit(ESL_GETOPTS *go, struct cfg_s *cfg, char *errbuf, P7_HMM *hmm, 
   double Eft          = esl_opt_GetReal   (go, "--Eft");
   float  nu           = esl_opt_GetReal   (go, "--nu");
 
+
+  // reseed the RNG to its initial value, to allow reproduction of results
+  esl_randomness_Init(cfg->r, esl_opt_GetInteger(go, "--seed"));
   /* Optionally set a custom background, determined by model composition;
    * an experimental hack. 
    */
@@ -634,7 +641,7 @@ process_workunit(ESL_GETOPTS *go, struct cfg_s *cfg, char *errbuf, P7_HMM *hmm, 
       float *p = NULL;
       float  KL;
 
-      p7_hmm_CompositionKLDist(hmm, cfg->bg, &KL, &p);
+      p7_hmm_CompositionKLD(hmm, cfg->bg, &KL, &p);
       esl_vec_FCopy(p, cfg->abc->K, cfg->bg->f);
     }
 

@@ -1,6 +1,6 @@
 # hmmsearch :: search profile(s) against a sequence database
-# HMMER 3.2.1 (June 2018); http://hmmer.org/
-# Copyright (C) 2018 Howard Hughes Medical Institute.
+# HMMER 3.3 (Nov 2019); http://hmmer.org/
+# Copyright (C) 2019 Howard Hughes Medical Institute.
 # Freely distributed under the BSD open source license.
 # - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
 # query HMM file:                  globins4.hmm

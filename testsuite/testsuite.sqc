@@ -29,18 +29,23 @@
 1 exercise generic_msv        @src/generic_msv_utest@
 1 exercise generic_stotrace   @src/generic_stotrace_utest@
 1 exercise generic_viterbi    @src/generic_viterbi_utest@
+1 exercise hmmd_search_status    @src/hmmd_search_status_utest@
 1 exercise logsum             @src/logsum_utest@
 1 exercise modelconfig        @src/modelconfig_utest@
 1 exercise seqmodel           @src/seqmodel_utest@
 1 exercise p7_alidisplay      @src/p7_alidisplay_utest@
 1 exercise p7_bg              @src/p7_bg_utest@
+1 exercise p7_domain          @src/p7_domain_utest@
 1 exercise p7_gmx             @src/p7_gmx_utest@
+1 exercise p7_hit             @src/p7_hit_utest@
 1 exercise p7_hmm             @src/p7_hmm_utest@
 1 exercise p7_hmmfile         @src/p7_hmmfile_utest@
+1 exercise p7_hmmd_search_stats @src/p7_hmmd_search_stats_utest@
 1 exercise p7_profile         @src/p7_profile_utest@
 1 exercise p7_tophits         @src/p7_tophits_utest@
 1 exercise p7_trace           @src/p7_trace_utest@
 1 exercise p7_scoredata       @src/p7_scoredata_utest@
+
 
 1 exercise decoding           @src/impl/decoding_utest@
 1 exercise fwdback            @src/impl/fwdback_utest@
@@ -50,7 +55,7 @@
 1 exercise optacc             @src/impl/optacc_utest@
 1 exercise stotrace           @src/impl/stotrace_utest@
 1 exercise vitfilter          @src/impl/vitfilter_utest@
-
+1 exercise  hmmpgmd2msa               @src/hmmpgmd2msa_utest@     !testsuite/Caudal_act.hmm!
 # Still to come, unit tests for
 #   emit.c
 #   errors.c
@@ -389,8 +394,8 @@
 1 exercise  hmmbuild_variation    !testsuite/i1-build-variation.sh!     @src/hmmbuild@   !testsuite/Caudal_act.sto!          %OUTFILES%
 1 exercise  hmmscan_variation     !testsuite/i2-search-variation.sh!    @src/hmmscan@    %MINIFAM.HMM%   %TESTSEQ% %OUTFILES%
 1 exercise  hmmsearch_variation   !testsuite/i2-search-variation.sh!    @src/hmmsearch@  %CAUDAL.HMM%    %TESTDB%  %OUTFILES%
-1 exercise  phmmer_variation      !testsuite/i3-seqsearch-variation.sh! @src/phmmer@     %TESTSEQ%       %TESTDB%  %OUTFILES%
-3 exercise  jackhmmer_variation   !testsuite/i3-seqsearch-variation.sh! @src/jackhmmer@  %TESTSEQ%       %TESTDB%  %OUTFILES%
+1 exercise  phmmer_variation      !testsuite/i3-seqsearch-variation.sh! @src/phmmer@                               %OUTFILES%
+3 exercise  jackhmmer_variation   !testsuite/i3-seqsearch-variation.sh! @src/jackhmmer@                            %OUTFILES%
 1 exercise  mapali                !testsuite/i6-hmmalign-mapali.pl!     @src/hmmalign@   @easel/miniapps/esl-reformat@  !testsuite!  %OUTFILES%
 1 exercise  fragments             !testsuite/i7-hmmbuild-fragments.pl!  @src/hmmbuild@               %OUTFILES%
 1 exercise  nonresidues           !testsuite/i8-nonresidues.pl!         @@ !! %OUTFILES%
@@ -407,10 +412,10 @@
 #comment out fmindex test until it's been returned to life
 #1 exercise  fmindex-core          !testsuite/i20-fmindex-core.pl!       @@ !! %OUTFILES%
 1 exercise  rewind                !testsuite/i21-rewind.pl!             @@ !! %OUTFILES%
-
+1 exercise  hmmpgmd_shard_ga      !testsuite/i22-hmmpgmd-shard-ga.pl!   @@ !! %OUTFILES% 
+1 exercise  bad-fasta             !testsuite/i23-bad-fasta.sh!          @@ !! %OUTFILES% 
 1 exercise  brute-itest           @src/itest_brute@  
 1 exercise  hmmpress-itest        !src/hmmpress.itest.pl! @src/hmmpress@ %MINIFAM.HMM% %TMPPFX%
-
 
 ################################################################
 # Fixed bug tests
@@ -418,9 +423,10 @@
 
 #           xxxxxxxxxxxxxxxxxxxx
 1 exercise  h39                  @src/hmmsearch@ !testsuite/M1.hmm! !testsuite/M1.sto!
-1 exercise  h45                  !testsuite/i4-zerolength-seqs.sh! @@ !! %MINIFAM.HMM% %OUTFILES%
-1 exercise  h50                  !testsuite/i5-hmmbuild-naming.pl! @@ !! %OUTFILES%
-1 exercise  h82                  !testsuite/i16-build-allins.pl!   @@ !! %OUTFILES%
+1 exercise  h45                  !testsuite/i4-zerolength-seqs.sh!    @@ !! %MINIFAM.HMM% %OUTFILES%
+1 exercise  h50                  !testsuite/i5-hmmbuild-naming.pl!    @@ !! %OUTFILES%
+1 exercise  h82                  !testsuite/i16-build-allins.pl!      @@ !! %OUTFILES%
+1 exercise  iss159               !testsuite/iss159-nhmmer-overlap.py! @@ !! %OUTFILES%
 
 ################################################################
 # valgrind tests  (optional. 'make SQCLEVEL=3 check')

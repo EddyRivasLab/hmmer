@@ -1459,11 +1459,38 @@ thread_loop(WORKER_INFO *info, ID_LENGTH_LIST *id_length_list, ESL_THREADS *obj,
 
       if (sstatus == eslOK) {
 
-          status = esl_workqueue_ReaderUpdate(queue, block, &newBlock);
-          if (status != eslOK) esl_fatal("Work queue reader failed");
+          status = esl_workqueue_ReaderUpdate(queue, block, &newBlock); 
 
+
+          if (status != eslOK) esl_fatal("Work queue reader failed");
+          // Check how much space the new structure is using and re-allocate if it has grown to more than 20*block_size bytes
+          // this loop iterates from 0 to newBlock->listsize rather than newBlock->count because we want to count all of the
+          // block's sub-structures, not just the ones that contained sequence data after the last call to ReadBlock()    
+          // This doesn't check some of the less-common sub-structures in a sequence, but it should be good enough for
+          // our goal of keeping block size under control
+          
+          // Do this check before copying any data from block into newBlock because otherwise, the reallocation clobbers  
+          // information that's needed when block ends in mid sequence.
+	  
+          uint64_t block_space = 0;
+          for(i=0; i<((ESL_SQ_BLOCK *)newBlock)->listSize; i++){
+            block_space += ((ESL_SQ_BLOCK *)newBlock)->list[i].nalloc;
+            block_space += ((ESL_SQ_BLOCK *)newBlock)->list[i].aalloc;   
+            block_space += ((ESL_SQ_BLOCK *)newBlock)->list[i].dalloc;
+            block_space += ((ESL_SQ_BLOCK *)newBlock)->list[i].srcalloc; 
+            block_space += ((ESL_SQ_BLOCK *)newBlock)->list[i].salloc;
+            if (((ESL_SQ_BLOCK *)newBlock)->list[i].ss != NULL){ 
+              block_space += ((ESL_SQ_BLOCK *)newBlock)->list[i].salloc; // ss field is not always presesnt, but takes salloc bytes if it is
+            }
+          }
+
+          if(block_space > 20* info->pli->block_length){  
+            if(esl_sq_BlockReallocSequences(((ESL_SQ_BLOCK *)newBlock)) != eslOK){
+              esl_fatal( "Error reallocating sequence data in block.\n");
+            }  
+	  } 
           //newBlock needs all this information so the next ReadBlock call will know what to do
-          ((ESL_SQ_BLOCK *)newBlock)->complete = block->complete;
+          ((ESL_SQ_BLOCK *)newBlock)->complete = block->complete; 
           if (!block->complete) {
               // Push the captured copy of the previously-read sequence into the new block,
               // in preparation for ReadWindow  (double copy ... slower than necessary)
@@ -1550,17 +1577,15 @@ pipeline_thread(void *arg)
           info->pli->nres += dbsq->W;
       }
     }
-
+ 
       status = esl_workqueue_WorkerUpdate(info->queue, block, &newBlock);
       if (status != eslOK) esl_fatal("Work queue worker failed");
 
       block = (ESL_SQ_BLOCK *) newBlock;
 
   }
-
   status = esl_workqueue_WorkerUpdate(info->queue, block, NULL);
   if (status != eslOK) esl_fatal("Work queue worker failed");
-
   esl_threads_Finished(obj, workeridx);
   return;
 }

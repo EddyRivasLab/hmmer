@@ -40,14 +40,15 @@
 
 #include "easel.h"
 #include "esl_alphabet.h"	/* ESL_DSQ, ESL_ALPHABET */
-#include "esl_dirichlet.h"	/* ESL_MIXDCHLET         */
 #include "esl_dmatrix.h"	/* ESL_DMATRIX           */
 #include "esl_getopts.h"	/* ESL_GETOPTS           */
 #include "esl_histogram.h"      /* ESL_HISTOGRAM         */
 #include "esl_hmm.h"	        /* ESL_HMM               */
 #include "esl_keyhash.h"        /* ESL_KEYHASH           */
+#include "esl_mixdchlet.h"	/* ESL_MIXDCHLET         */
 #include "esl_msa.h"		/* ESL_MSA               */
 #include "esl_random.h"		/* ESL_RANDOMNESS        */
+#include "esl_rand64.h" /* ESL_RAND64 */
 #include "esl_sq.h"		/* ESL_SQ                */
 #include "esl_scorematrix.h"    /* ESL_SCOREMATRIX       */
 #include "esl_stopwatch.h"      /* ESL_STOPWATCH         */
@@ -1405,7 +1406,7 @@ extern int   p7_island_Viterbi(ESL_DSQ *dsq, int L, P7_PROFILE *gm, P7_GMX *mx, 
 extern int   p7_h2io_WriteASCII(FILE *fp, P7_HMM *hmm);
 
 /* hmmer.c */
-extern void         p7_banner(FILE *fp, char *progname, char *banner);
+extern void         p7_banner(FILE *fp, const char *progname, char *banner);
 extern ESL_GETOPTS *p7_CreateDefaultApp(ESL_OPTIONS *options, int nargs, int argc, char **argv, char *banner, char *usage);
 extern int          p7_AminoFrequencies(float *f);
 
@@ -1429,7 +1430,7 @@ extern double p7_MeanMatchEntropy        (const P7_HMM *hmm);
 extern double p7_MeanMatchRelativeEntropy(const P7_HMM *hmm, const P7_BG *bg);
 extern double p7_MeanForwardScore        (const P7_HMM *hmm, const P7_BG *bg);
 extern int    p7_MeanPositionRelativeEntropy(const P7_HMM *hmm, const P7_BG *bg, double *ret_entropy);
-extern int    p7_hmm_CompositionKLDist(P7_HMM *hmm, P7_BG *bg, float *ret_KL, float **opt_avp);
+extern int    p7_hmm_CompositionKLD(const P7_HMM *hmm, const P7_BG *bg, float *ret_KL, float **opt_avp);
 
 
 /* mpisupport.c */
@@ -1465,10 +1466,13 @@ extern int p7_tracealign_getMSAandStats(P7_HMM *hmm, ESL_SQ  **sq, int N, ESL_MS
 
 /* p7_alidisplay.c */
 extern P7_ALIDISPLAY *p7_alidisplay_Create(const P7_TRACE *tr, int which, const P7_OPROFILE *om, const ESL_SQ *sq, const ESL_SQ *ntsq);
+extern P7_ALIDISPLAY *p7_alidisplay_Create_empty();
 extern P7_ALIDISPLAY *p7_alidisplay_Clone(const P7_ALIDISPLAY *ad);
 extern size_t         p7_alidisplay_Sizeof(const P7_ALIDISPLAY *ad);
-extern int            p7_alidisplay_Serialize(P7_ALIDISPLAY *ad);
-extern int            p7_alidisplay_Deserialize(P7_ALIDISPLAY *ad);
+extern int            p7_alidisplay_Serialize(const P7_ALIDISPLAY *obj, uint8_t **buf, uint32_t *n, uint32_t *nalloc);
+extern int            p7_alidisplay_Deserialize(const uint8_t *buf, uint32_t *n, P7_ALIDISPLAY *ret_obj);
+extern int            p7_alidisplay_Serialize_old(P7_ALIDISPLAY *ad);
+extern int            p7_alidisplay_Deserialize_old(P7_ALIDISPLAY *ad);
 extern void           p7_alidisplay_Destroy(P7_ALIDISPLAY *ad);
 extern char           p7_alidisplay_EncodePostProb(float p);
 extern float          p7_alidisplay_DecodePostProb(char pc);
@@ -1508,6 +1512,14 @@ extern int p7_Builder      (P7_BUILDER *bld, ESL_MSA *msa, P7_BG *bg, P7_HMM **o
 extern int p7_SingleBuilder(P7_BUILDER *bld, ESL_SQ *sq,   P7_BG *bg, P7_HMM **opt_hmm, P7_TRACE  **opt_tr,    P7_PROFILE **opt_gm, P7_OPROFILE **opt_om); 
 extern int p7_Builder_MaxLength      (P7_HMM *hmm, double emit_thresh);
 
+/* p7_domain.c */
+extern P7_DOMAIN *p7_domain_Create_empty();
+extern void p7_domain_Destroy(P7_DOMAIN *obj);
+extern int p7_domain_Serialize(const P7_DOMAIN *obj, uint8_t **buf, uint32_t *n, uint32_t *nalloc);
+extern int p7_domain_Deserialize(const uint8_t *buf, uint32_t *n, P7_DOMAIN *ret_obj);
+extern int p7_domain_TestSample(ESL_RAND64 *rng, P7_DOMAIN **ret_obj);
+extern int p7_domain_Compare(P7_DOMAIN *first, P7_DOMAIN *second, double atol, double rtol);
+
 /* p7_domaindef.c */
 extern P7_DOMAINDEF *p7_domaindef_Create (ESL_RANDOMNESS *r);
 extern int           p7_domaindef_Fetch  (P7_DOMAINDEF *ddef, int which, int *opt_i, int *opt_j, float *opt_sc, P7_ALIDISPLAY **opt_ad);
@@ -1532,6 +1544,13 @@ extern int     p7_gmx_Compare(P7_GMX *gx1, P7_GMX *gx2, float tolerance);
 extern int     p7_gmx_Dump(FILE *fp, P7_GMX *gx, int flags);
 extern int     p7_gmx_DumpWindow(FILE *fp, P7_GMX *gx, int istart, int iend, int kstart, int kend, int show_specials);
 
+/* p7_hit.c */
+extern P7_HIT *p7_hit_Create_empty();
+extern void p7_hit_Destroy(P7_HIT *the_hit);
+extern int p7_hit_Serialize(const P7_HIT *obj, uint8_t **buf, uint32_t *n, uint32_t *nalloc);
+extern int p7_hit_Deserialize(const uint8_t *buf, uint32_t *n, P7_HIT *ret_obj);
+extern int p7_hit_TestSample(ESL_RAND64 *rng, P7_HIT **ret_obj);
+extern int p7_hit_Compare(P7_HIT *first, P7_HIT *second, double atol, double rtol);
 
 /* p7_hmm.c */
 /*      1. The P7_HMM object: allocation, initialization, destruction. */
@@ -1571,11 +1590,11 @@ extern int     p7_hmm_CalculateOccupancy(const P7_HMM *hmm, float *mocc, float *
 
 
 /* p7_hmmfile.c */
-extern int  p7_hmmfile_OpenE    (char *filename, char *env, P7_HMMFILE **ret_hfp, char *errbuf);
-extern int  p7_hmmfile_OpenENoDB(char *filename, char *env, P7_HMMFILE **ret_hfp, char *errbuf);
-extern int  p7_hmmfile_Open     (char *filename, char *env, P7_HMMFILE **ret_hfp); /* deprecated */
-extern int  p7_hmmfile_OpenNoDB (char *filename, char *env, P7_HMMFILE **ret_hfp); /* deprecated */
-extern int  p7_hmmfile_OpenBuffer(char *buffer, int size, P7_HMMFILE **ret_hfp);
+extern int  p7_hmmfile_OpenE    (const char *filename, char *env, P7_HMMFILE **ret_hfp, char *errbuf);
+extern int  p7_hmmfile_OpenENoDB(const char *filename, char *env, P7_HMMFILE **ret_hfp, char *errbuf);
+extern int  p7_hmmfile_Open     (const char *filename, char *env, P7_HMMFILE **ret_hfp); /* deprecated */
+extern int  p7_hmmfile_OpenNoDB (const char *filename, char *env, P7_HMMFILE **ret_hfp); /* deprecated */
+extern int  p7_hmmfile_OpenBuffer(const char *buffer, int size, P7_HMMFILE **ret_hfp);
 extern void p7_hmmfile_Close(P7_HMMFILE *hfp);
 #ifdef HMMER_THREADS
 extern int  p7_hmmfile_CreateLock(P7_HMMFILE *hfp);
@@ -1609,7 +1628,7 @@ extern void p7_null3_score(const ESL_ALPHABET *abc, const ESL_DSQ *dsq, P7_TRACE
 extern void p7_null3_windowed_score(const ESL_ALPHABET *abc, const ESL_DSQ *dsq, int start, int stop, P7_BG *bg, float *ret_sc);
 
 /* p7_pipeline.c */
-extern P7_PIPELINE *p7_pipeline_Create(ESL_GETOPTS *go, int M_hint, int L_hint, int long_targets, enum p7_pipemodes_e mode);
+extern P7_PIPELINE *p7_pipeline_Create(const ESL_GETOPTS *go, int M_hint, int L_hint, int long_targets, enum p7_pipemodes_e mode);
 extern int          p7_pipeline_Reuse  (P7_PIPELINE *pli);
 extern void         p7_pipeline_Destroy(P7_PIPELINE *pli);
 extern int          p7_pipeline_Merge  (P7_PIPELINE *p1, P7_PIPELINE *p2);

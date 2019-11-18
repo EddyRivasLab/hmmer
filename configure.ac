@@ -61,7 +61,6 @@ AC_PREREQ(2.63)
 # It's sort of standard to expect them in m4/, don't 
 # be confused that they're down in easel.
 #
-m4_include([easel/m4/ax_compiler_vendor.m4])
 m4_include([easel/m4/ax_gcc_func_attribute.m4])
 
 m4_include([easel/m4/esl_sse.m4])
@@ -70,12 +69,13 @@ m4_include([easel/m4/esl_vmx.m4])
 m4_include([easel/m4/ax_mpi.m4])
 m4_include([easel/m4/ax_pthread.m4])
 
+m4_include([easel/m4/esl_pic_flags.m4])
 
 ################################################################
 # 2. AC_INIT
 ################################################################
 
-AC_INIT(HMMER, 3.2.1, sean@eddylab.org, hmmer)
+AC_INIT(HMMER, 3.3, sean@eddylab.org, hmmer)
 AC_MSG_NOTICE([Configuring HMMER3 for your system.])
 
 # remember if the user is overriding CFLAGS
@@ -107,8 +107,8 @@ fi
 # to use HMMER as a library inside other packages, with no name clashes.
 ################################################################
 
-HMMER_DATE="June 2018"
-HMMER_COPYRIGHT="Copyright (C) 2018 Howard Hughes Medical Institute."
+HMMER_DATE="Nov 2019"
+HMMER_COPYRIGHT="Copyright (C) 2019 Howard Hughes Medical Institute."
 HMMER_LICENSE="Freely distributed under the BSD open source license."
 HMMER_VERSION=$PACKAGE_VERSION
 HMMER_URL="http://hmmer.org/"
@@ -116,10 +116,10 @@ HMMER_URL="http://hmmer.org/"
 HMMER_ESLDIR="easel"
 HMMER_SADIR="libdivsufsort"
 
-EASEL_DATE="June 2018"
-EASEL_COPYRIGHT="Copyright (C) 2018 Howard Hughes Medical Institute."
+EASEL_DATE="Nov 2019"
+EASEL_COPYRIGHT="Copyright (C) 2019 Howard Hughes Medical Institute."
 EASEL_LICENSE="Freely distributed under the BSD open source license."
-EASEL_VERSION="0.45h"
+EASEL_VERSION="0.46"
 EASEL_URL="http://bioeasel.org/"
 
 AC_SUBST(HMMER_DATE)
@@ -147,6 +147,7 @@ AC_DEFINE_UNQUOTED([EASEL_DATE],      ["$EASEL_DATE"],      [Easel release date]
 AC_DEFINE_UNQUOTED([EASEL_COPYRIGHT], ["$EASEL_COPYRIGHT"], [Easel copyright])
 AC_DEFINE_UNQUOTED([EASEL_LICENSE],   ["$EASEL_LICENSE"],   [Easel license])
 AC_DEFINE_UNQUOTED([EASEL_VERSION],   ["$EASEL_VERSION"],   [Easel version])
+AC_DEFINE_UNQUOTED([EASEL_URL],       ["$EASEL_URL"],       [Easel web URL])
 
 
 # Figure out what host we're compiling on.
@@ -199,7 +200,10 @@ AC_ARG_ENABLE(vmx,     [AS_HELP_STRING([--enable-vmx],     [enable our Altivec/V
 AC_ARG_ENABLE(threads, [AS_HELP_STRING([--enable-threads], [enable POSIX threads parallelization])],     enable_threads=$enableval, enable_threads=check)
 AC_ARG_ENABLE(mpi,     [AS_HELP_STRING([--enable-mpi],     [enable MPI parallelization])],               enable_mpi=$enableval,     enable_mpi=no)
 
-AC_ARG_WITH(gsl,       [AS_HELP_STRING([--with-gsl],       [use the GSL, GNU Scientific Library])],       with_gsl=$withval,         with_gsl=no)
+AC_ARG_ENABLE(pic,     [AS_HELP_STRING([--enable-pic],     [enable position-independent code])],         enable_pic=$enableval,     enable_pic=no)
+
+AC_ARG_WITH(gsl,       [AS_HELP_STRING([--with-gsl],       [use the GSL, GNU Scientific Library])],      with_gsl=$withval,         with_gsl=no)
+
 
 
 
@@ -221,18 +225,12 @@ fi
 ################################################################
 
 AC_PROG_CC
+AC_PROG_CC_STDC
 AC_PROG_CPP
 AC_PROG_INSTALL
 AC_PROG_RANLIB
 AC_PATH_PROG([AR], [ar], [:], [$PATH:/usr/ccs/bin:/usr/xpg4/bin])
 AC_PROG_LN_S
-
-# AC_PROG_CC_STDC wants to append -c99 to icc; icc doesn't like this.
-AX_COMPILER_VENDOR
-if test "$ax_cv_c_compiler_vendor" != "intel"; then
-  AC_PROG_CC_STDC
-fi
-
 
 # Select our default optimization flags in CFLAGS.
 #  --enable-gcov, --enable-gprof, and --enable-debugging are mutually exclusive.
@@ -275,6 +273,12 @@ if test "$enable_mpi" = "yes"; then
     AC_MSG_ERROR([MPI library not found for --enable-mpi]))
 fi
 
+
+# PIC (position-independent code) for shared library support
+#
+if test "$enable_pic" = "yes"; then
+   ESL_PIC_FLAGS
+fi
 
 
 # Support for POSIX multithreading (we should generally have this)
@@ -408,6 +412,13 @@ if test "${HAVE_GZIP}" = "no"; then
 else
   AC_DEFINE(HAVE_GZIP, 1, [Support external gzip decompression])
 fi
+
+# We need python 3 for 'make check' and some dev tools. sqc checks
+# too, as does the Makefile, but we also check in ./configure, so we
+# don't recommend 'make check' to the user if they can't use it.
+# 
+AC_CHECK_PROG(HAVE_PYTHON3, python3, yes)
+
 
 ################################################################
 # 6. Checks for libraries
@@ -576,15 +587,16 @@ AC_SYS_LARGEFILE
 
 # HMMER Makefiles.
 AC_CONFIG_FILES([ \
-  Makefile                          \
-  src/Makefile                      \
-  testsuite/Makefile                \
-  profmark/Makefile                 \
-  src/impl_${impl_choice}/Makefile  \
-  documentation/Makefile            \
-  documentation/man/Makefile        \
-  documentation/userguide/Makefile  \
-  libdivsufsort/Makefile            \
+  Makefile                                     \
+  src/Makefile                                 \
+  testsuite/Makefile                           \
+  profmark/Makefile                            \
+  src/impl_${impl_choice}/Makefile             \
+  documentation/Makefile                       \
+  documentation/man/Makefile                   \
+  documentation/userguide/Makefile             \
+  documentation/userguide/inclusions/Makefile  \
+  libdivsufsort/Makefile                       \
   ])
 
 # Easel Makefiles.
@@ -599,6 +611,7 @@ AC_CONFIG_FILES([ \
 # HMMER_VERSION, HMMER_DATE, HMMER_COPYRIGHT
 AC_CONFIG_FILES([ \
   documentation/userguide/titlepage.tex  \
+  documentation/userguide/titlepage_daemon.tex  \
   documentation/userguide/copyright.tex  \
   ])
 
@@ -608,12 +621,14 @@ AC_CONFIG_FILES([ \
   documentation/man/alimask.man     \
   documentation/man/hmmalign.man    \
   documentation/man/hmmbuild.man    \
+  documentation/man/hmmc2.man       \
   documentation/man/hmmconvert.man  \
   documentation/man/hmmemit.man     \
   documentation/man/hmmer.man       \
   documentation/man/hmmfetch.man    \
   documentation/man/hmmlogo.man     \
   documentation/man/hmmpgmd.man     \
+  documentation/man/hmmpgmd_shard.man     \
   documentation/man/hmmpress.man    \
   documentation/man/hmmscan.man     \
   documentation/man/hmmsearch.man   \
@@ -642,6 +657,7 @@ AC_CONFIG_FILES([ \
   easel/miniapps/esl-construct.man   \
   easel/miniapps/esl-histplot.man    \
   easel/miniapps/esl-mask.man        \
+  easel/miniapps/esl-mixdchlet.man   \
   easel/miniapps/esl-reformat.man    \
   easel/miniapps/esl-selectn.man     \
   easel/miniapps/esl-seqrange.man    \
@@ -673,17 +689,25 @@ AC_OUTPUT
 echo "
 
 HMMER configuration:
-     compiler:             ${CC} ${CFLAGS} ${SSE_CFLAGS} ${VMX_CFLAGS} ${PTHREAD_CFLAGS} 
-     host:                 $host
-     linker:               ${LDFLAGS}
-     libraries:            ${LIBS} ${LIBGSL} ${PTHREAD_LIBS}
-     DP implementation:    ${impl_choice}
-
-Do 'make'  to build HMMER, and optionally:
-   'make check'  to run self tests,
-   'make install'  to install programs and man pages,
-   '(cd easel; make install)'  to install Easel tools.
-"
+   compiler:             ${CC} ${CFLAGS} ${SSE_CFLAGS} ${VMX_CFLAGS} ${PTHREAD_CFLAGS} ${PIC_CFLAGS}
+   host:                 $host
+   linker:               ${LDFLAGS}
+   libraries:            ${LIBS} ${LIBGSL} ${PTHREAD_LIBS}
+   DP implementation:    ${impl_choice}"
 
 
+if test x"$HAVE_PYTHON3" = x"yes"; then echo "
+Now do 'make'  to build HMMER, and optionally:
+       'make check'  to run self tests,
+       'make install'  to install programs and man pages,
+       '(cd easel; make install)'  to install Easel tools.
+";
+else echo "
+   (No python3 found, so 'make check' is disabled.)
+
+Now do 'make'  to build HMMER, and optionally:
+       'make install'  to install programs and man pages,
+       '(cd easel; make install)'  to install Easel tools.
+";
+fi
 
