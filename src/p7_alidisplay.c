@@ -883,7 +883,7 @@ extern int p7_alidisplay_Deserialize(const uint8_t *buf, uint32_t *n, P7_ALIDISP
 
   // Sanity-check that we got the length right
   if(mem_ptr - ret_obj->mem != (obj_size - SER_BASE_SIZE)){
-    printf("Error: at end of p7_alidisplay_Deserialize, found strings to be of size %ld, expected %ld.\n", (mem_ptr - ret_obj->mem), (obj_size - SER_BASE_SIZE));
+    printf("Error: at end of p7_alidisplay_Deserialize, found strings to be of size %ld, expected %ld.\n", (long)(mem_ptr - ret_obj->mem), (long)(obj_size - SER_BASE_SIZE));
     return eslEINVAL;
   }
   *n += obj_size; 
@@ -1939,226 +1939,101 @@ alidisplay_SampleFake_ntseq(ESL_RANDOMNESS *rng, int N, P7_ALIDISPLAY **ret_ad)
 
 
 
-static void utest_Serialize(int ntrials){
-  int i;
-  uint8_t **buf=NULL;
-  uint32_t n;
-  uint32_t nalloc;
-  P7_ALIDISPLAY **serial=NULL, **deserial=NULL;
-  int status, alignment_length;
-  char msg[] = "utest_Serialize failed";
+static void
+utest_Serialize(ESL_RANDOMNESS *rng, int ntrials)
+{
+  char msg[]               = "utest_Serialize failed";
+  P7_ALIDISPLAY **serial   = malloc(ntrials * sizeof(P7_ALIDISPLAY *));
+  P7_ALIDISPLAY **deserial = malloc(ntrials * sizeof(P7_ALIDISPLAY *));
+  uint8_t       **buf      = malloc(sizeof(uint8_t *));
+  uint32_t        n        = 0;
+  uint32_t        nalloc   = 0;
+  int             alignment_length;
+  int             i;
 
-  ESL_ALLOC(buf, sizeof(uint8_t *));
   *buf = NULL;
-  n = 0; 
-  nalloc = 0;
-
-  // Create a randomness object
-  ESL_RANDOMNESS *rng;
-  rng = esl_randomness_Create(0);
-
-  ESL_ALLOC(serial, ntrials * sizeof(P7_ALIDISPLAY *));
-  ESL_ALLOC(deserial, ntrials * sizeof(P7_ALIDISPLAY *));
-
-  for(i = 0; i < ntrials; i++){
-    // Create random alignment to serialize
-    alignment_length = (esl_random_uint32(rng) %300) + 50;
-    if (esl_rnd_Roll(rng, 2) == 0){ // 50% chance of alidisplay with an amino sequence, 50% chance of alidisplay with nucleotide seq.
-      if(p7_alidisplay_Sample(rng, alignment_length, &(serial[i])) != eslOK){
-        esl_fatal(msg);
-      }
-    }
-    else{
-      if(alidisplay_SampleFake_ntseq(rng, alignment_length, &(serial[i])) != eslOK){
-        esl_fatal(msg);
-      }
-    }
-    if(p7_alidisplay_Serialize(serial[i], buf, &n, &nalloc) != eslOK){
-      esl_fatal(msg);
+  for (i = 0; i < ntrials; i++)
+    {
+      // Create random alignment to serialize
+      alignment_length = (esl_random_uint32(rng) %300) + 50;
+      if (esl_rnd_Roll(rng, 2) == 0)
+	{ // 50% chance of alidisplay with an amino sequence, 50% chance of alidisplay with nucleotide seq.
+	  if (p7_alidisplay_Sample(rng, alignment_length, &(serial[i])) != eslOK) esl_fatal(msg);
+	}
+      else
+	{
+	  if (alidisplay_SampleFake_ntseq(rng, alignment_length, &(serial[i])) != eslOK) esl_fatal(msg);
+	}
+      if (p7_alidisplay_Serialize(serial[i], buf, &n, &nalloc) != eslOK) esl_fatal(msg);
     } 
-  }
 
   n = 0; // reset to start of buffer
-
-  
-
-  for(i = 0; i < ntrials; i++){
-    deserial[i] = p7_alidisplay_Create_empty();
-      if(deserial[i] == NULL){
-      esl_fatal(msg);
+  for (i = 0; i < ntrials; i++)
+    {
+      if ((deserial[i] = p7_alidisplay_Create_empty())     == NULL)  esl_fatal(msg);
+      if( p7_alidisplay_Deserialize(*buf, &n, deserial[i]) != eslOK) esl_fatal(msg);
     }
-    if(p7_alidisplay_Deserialize(*buf, &n, deserial[i]) != eslOK){
-      esl_fatal(msg);
-    }
-  }
+
   // free the buffer here to make sure we've actually copied all the data out of it into the new structures
   free(*buf);
   free(buf);
-  for(i = 0; i < ntrials; i++){
-    if(p7_alidisplay_Compare(serial[i], deserial[i]) != eslOK){ // deserialized structure didn't match serialized
-      esl_fatal(msg);
-    }
-
-  }
+  for (i = 0; i < ntrials; i++)
+    if (p7_alidisplay_Compare(serial[i], deserial[i]) != eslOK) esl_fatal(msg); // deserialized structure didn't match serialized
   // haven't failed yet, so we've succeeded.  Clean up and exit
 
-  for(i = 0; i < ntrials; i++){
+  for (i = 0; i < ntrials; i++) {
     p7_alidisplay_Destroy(serial[i]);
     p7_alidisplay_Destroy(deserial[i]);
   }
   free(serial);
   free(deserial);
-
   return;
-
-  ERROR:
-    if(buf != NULL){
-      if(*buf != NULL){
-        free(*buf);
-      }
-      free(buf);
-    }
-
-    if(serial != NULL){
-      for(i = 0; i < ntrials; i++){
-        if(serial[i] != NULL){
-          p7_alidisplay_Destroy(serial[i]);
-        }
-      }
-      free(serial);
-    }
-
-    if(deserial == NULL){
-      for(i = 0; i < ntrials; i++){
-        if(deserial[i] != NULL){
-          p7_alidisplay_Destroy(deserial[i]);
-        }
-      }
-      free(deserial);
-    }
-
-    esl_fatal(msg);
-
 }
 
 // Test that the _Serialize() function generates the correct errors when passed invalid arguments
-static void utest_Serialize_error_conditions(){
-  int status;  // Easel error code variable
-  P7_ALIDISPLAY *foo;
-  uint8_t **buf=NULL;
-  uint32_t n;
-  uint32_t nalloc;
+static void
+utest_serialize_error_conditions(ESL_RANDOMNESS *rng)
+{
+  char msg[]            = "utest_serialize_error_conditions failed";
+  P7_ALIDISPLAY *foo    = NULL;
+  uint8_t      **buf    = malloc(sizeof(uint8_t *)); 
+  uint32_t       n      = 0;
+  uint32_t       nalloc = 0;
 
-  char msg[] = "utest_Serialize_error_conditions failed";
   // Create an alisplay to work with.  Don't really care about its contents -- other tests will verify
   // correct serialization and deserialization
-  ESL_ALLOC(foo, sizeof(P7_ALIDISPLAY *));
-  ESL_RANDOMNESS *rng;
-  rng = esl_randomness_Create(0);
-  if(p7_alidisplay_Sample(rng, 100, &foo) != eslOK){
-    esl_fatal(msg);
-  }
+  *buf = NULL; // set buf to valid value
+  if ( p7_alidisplay_Sample(rng, 100, &foo)              != eslOK)     esl_fatal(msg);
+  if ( p7_alidisplay_Serialize(foo, NULL, &n,   &nalloc) != eslEINVAL) esl_fatal(msg);   // Test 1: _Serialize returns error if passed NULL buffer
+  if ( p7_alidisplay_Serialize(foo,  buf, NULL, &nalloc) != eslEINVAL) esl_fatal(msg);   // Test 2: error on NULL n ptr
+  if ( p7_alidisplay_Serialize(NULL, buf, &n,   &nalloc) != eslEINVAL) esl_fatal(msg);   // Test 3: error on NULL object ptr
 
-  n = 0; 
-  nalloc = 0;
-
-  // Test 1: _Serialize returns error if passed NULL buffer
-  buf = NULL;
-
-  if(p7_alidisplay_Serialize(foo, buf, &n, &nalloc) != eslEINVAL){
-    esl_fatal(msg);
-  }
-  else{
-    printf("null buffer check passed\n");
-  }
-
-  ESL_ALLOC(buf, sizeof(uint8_t *)); // set buf to valid value
-  *buf = NULL;
-
-  // Test 2: error on NULL n ptr
-  if(p7_alidisplay_Serialize(foo, buf, NULL, &nalloc) != eslEINVAL){
-    esl_fatal(msg);
-  }
-  else{
-    printf("invalid n check passed\n");
-  }
-
-  // Test 3: error on NULL object ptr
-  if(p7_alidisplay_Serialize(NULL, buf, &n, &nalloc) != eslEINVAL){
-    esl_fatal(msg);
-  }
-  else{
-    printf("invalid object check passed\n");
-  }
-
-  if(buf !=NULL && *buf != NULL){
-    free(*buf);
-  }
-  if(buf != NULL){
-    free(buf); 
-  }
-
+  if (buf) { free(*buf); free(buf); }
   p7_alidisplay_Destroy(foo);
-
   return;
-
-  ERROR:
-    if(foo != NULL){
-      p7_alidisplay_Destroy(foo);
-    }
-
-    if(buf !=NULL && *buf != NULL){
-      free(*buf);
-    }
-    if(buf != NULL){
-      free(buf); 
-    }
-    esl_fatal(msg);
 }
 
-static void utest_Deserialize_error_conditions(){
-  P7_ALIDISPLAY *sampled = NULL; // sampled alidisplay that we'll serialze
-  P7_ALIDISPLAY *deserial = NULL; // alidisplay to hold the deserialized object
-  char msg[]="utest_Deserialize_error_conditions failed";
-  uint8_t *buf = NULL;
-  uint32_t n = 0, nalloc = 0;
+static void
+utest_deserialize_error_conditions(ESL_RANDOMNESS *rng)
+{
+  char            msg[]    = "utest_deserialize_error_conditions failed";
+  P7_ALIDISPLAY  *sampled  = NULL; // sampled alidisplay that we'll serialze
+  P7_ALIDISPLAY  *deserial = NULL; // alidisplay to hold the deserialized object
+  uint8_t        *buf      = NULL;
+  uint32_t        n = 0, nalloc = 0;
 
-  ESL_RANDOMNESS *rng        = esl_randomness_Create(0);
+  if ((deserial = p7_alidisplay_Create_empty())            == NULL)  esl_fatal(msg);
+  if ( p7_alidisplay_Sample(rng, 100, &sampled)            != eslOK) esl_fatal(msg);
+  if ( p7_alidisplay_Serialize(sampled, &buf, &n, &nalloc) != eslOK) esl_fatal(msg);
 
-  deserial = p7_alidisplay_Create_empty();
-  if(deserial == NULL){
-    esl_fatal(msg);
-  }
 
-  if( p7_alidisplay_Sample(rng, 100, &sampled) != eslOK){ // don't really care what this alignment contains, just need a valid one
-    // to pass to Deserialize
-    esl_fatal(msg);
-  }
-  if(p7_alidisplay_Serialize(sampled, &buf, &n, &nalloc) != eslOK){ // serialize an object to deserialize
-    esl_fatal(msg);
-  }
+  if ( p7_alidisplay_Deserialize(NULL, &n, deserial)  != eslEINVAL) esl_fatal(msg);   // Test 1: error on buf == NULL;
+  if ( p7_alidisplay_Deserialize(buf, NULL, deserial) != eslEINVAL) esl_fatal(msg);   // Test 2: error on n == NULL
+  if ( p7_alidisplay_Deserialize(buf, &n, NULL)       != eslEINVAL) esl_fatal(msg);   // Test 3: error on serialized object == NULL
 
-  // Test 1: error on buf == NULL;
-  if(p7_alidisplay_Deserialize(NULL, &n, deserial) != eslEINVAL){
-    esl_fatal(msg);
-  }
-  printf("Test 1 passed\n");
-
-  // Test 2: error on n == NULL
-  if(p7_alidisplay_Deserialize(buf, NULL, deserial) != eslEINVAL){
-    esl_fatal(msg);
-  }
-  printf("Test 2 passed\n");
-
-  // Test 3: error on serialized object == NULL
-  if(p7_alidisplay_Deserialize(buf, &n, NULL) != eslEINVAL){
-    esl_fatal(msg);
-  }
-  printf("Test 3 passed\n");
-
+  free(buf);
   p7_alidisplay_Destroy(deserial);
   p7_alidisplay_Destroy(sampled);
-  esl_randomness_Destroy(rng);
   return;
 }
 
@@ -2229,10 +2104,11 @@ main(int argc, char **argv)
   int             be_verbose = esl_opt_GetBoolean(go, "-v");
 
   //utest_Serialize_old  (            rng,      N, L);
-  utest_Serialize(100);
+  utest_Serialize(rng, 100);
   utest_Backconvert(be_verbose, rng, abc, N, L);
-  utest_Serialize_error_conditions();
-  utest_Deserialize_error_conditions();
+  utest_serialize_error_conditions(rng);
+  utest_deserialize_error_conditions(rng);
+
   esl_alphabet_Destroy(abc);
   esl_randomness_Destroy(rng);
   esl_getopts_Destroy(go);

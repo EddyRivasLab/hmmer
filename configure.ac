@@ -657,6 +657,7 @@ AC_CONFIG_FILES([ \
   easel/miniapps/esl-construct.man   \
   easel/miniapps/esl-histplot.man    \
   easel/miniapps/esl-mask.man        \
+  easel/miniapps/esl-mixdchlet.man   \
   easel/miniapps/esl-reformat.man    \
   easel/miniapps/esl-selectn.man     \
   easel/miniapps/esl-seqrange.man    \
