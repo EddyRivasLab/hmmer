@@ -459,6 +459,7 @@ p7_alidisplay_Sizeof(const P7_ALIDISPLAY *ad)
  *            if allocation or re-allocation was required.
  *
  * Throws:    Returns eslEMEM if unable to allocate or re-allocate memory.  Returns eslEINVAL if obj == NULL, n == NULL, or buf == NULL
+ *            Returns eslFAIL if one of the internal calculations fails a consistency check.
  */
 int p7_alidisplay_Serialize(const P7_ALIDISPLAY *obj, uint8_t **buf, uint32_t *n, uint32_t *nalloc){
 
@@ -669,8 +670,7 @@ int p7_alidisplay_Serialize(const P7_ALIDISPLAY *obj, uint8_t **buf, uint32_t *n
 
   // sanity-check that we computed the length correctly
   if(ptr != *buf + *n + ser_size){
-    printf("Serialized object length did not match computed length in p7_alidisplay_Serialize\n");
-    return eslEINVAL;
+    ESL_EXCEPTION(eslFAIL, "Serialized object length did not match computed length in p7_alidisplay_Serialize");
   }
 
   *n = ptr - *buf; // update n to be just past the serialized object
@@ -695,8 +695,9 @@ int p7_alidisplay_Serialize(const P7_ALIDISPLAY *obj, uint8_t **buf, uint32_t *n
  * Returns:   On success: returns eslOK, deserializes the P7_ALIDISPLAY object into ret_object, and updates 
  *.           pos to point to the position after the end of the P7_ALIDISPLAY object.
  *
- * Throws:    Returns eslEINVAL if ret_obj == NULL, buf == NULL, or N == NULL.  Returnts eslEMEM if unable to increase
- *            the buffer in ret_obj to match the size of the deserialized object.           
+ * Throws:    Returns eslEINVAL if ret_obj == NULL, buf == NULL, or N == NULL.  Returns eslEMEM if unable to increase
+ *            the buffer in ret_obj to match the size of the deserialized object. Returns eslFAIL if one of the
+ *            internal calculations fails a consistency check.
  */
 extern int p7_alidisplay_Deserialize(const uint8_t *buf, uint32_t *n, P7_ALIDISPLAY *ret_obj){
   int status;  // Standard Easel error code variable
@@ -777,8 +778,7 @@ extern int p7_alidisplay_Deserialize(const uint8_t *buf, uint32_t *n, P7_ALIDISP
   // Tenth field: rfline, if present
 
   if(ptr != buf + *n + obj_size){
-    printf("Error: in p7_alidisplay_Deserialize, found object (ptr) to be of size %ld, expected %u.\n", (long int) (ptr - (buf + *n)), obj_size);
-    //return eslEINVAL;
+    ESL_EXCEPTION(eslFAIL, "In p7_alidisplay_Deserialize, found object (ptr) to be of size %ld, expected %u.\n", (long int) (ptr - (buf + *n)), obj_size);
   }
 
   if(presence_flags & RFLINE_PRESENT){
@@ -883,8 +883,7 @@ extern int p7_alidisplay_Deserialize(const uint8_t *buf, uint32_t *n, P7_ALIDISP
 
   // Sanity-check that we got the length right
   if(mem_ptr - ret_obj->mem != (obj_size - SER_BASE_SIZE)){
-    printf("Error: at end of p7_alidisplay_Deserialize, found strings to be of size %ld, expected %ld.\n", (long)(mem_ptr - ret_obj->mem), (long)(obj_size - SER_BASE_SIZE));
-    return eslEINVAL;
+    ESL_EXCEPTION(eslFAIL, "At end of p7_alidisplay_Deserialize, found strings to be of size %ld, expected %ld.\n", (long)(mem_ptr - ret_obj->mem), (long)(obj_size - SER_BASE_SIZE));
   }
   *n += obj_size; 
   return eslOK;  // as usual, if we get to the end of the routine without failing, return success
