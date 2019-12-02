@@ -499,7 +499,8 @@ p7_tophits_GetMaxPositionLength(P7_TOPHITS *h)
   int64_t i;
   int max = 0;
   int n;
-  char buffer [13];
+  char buffer [26];  // SRE: this was [13], not sufficient for int64. 
+                     //      rule of thumb: 3*sizeof(int) + 2
 
   for (i = 0; i < h->N; i++) {
     if (h->unsrt[i].dcl[0].iali > 0) {
