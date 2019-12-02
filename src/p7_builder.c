@@ -481,7 +481,7 @@ p7_Builder(P7_BUILDER *bld, ESL_MSA *msa, P7_BG *bg,
  *            
  * Args:      bld       - build configuration
  *            sq        - query sequence
- *            bg        - null model (needed to paramaterize insert emission probs)
+ *            bg        - null model (needed to parameterize insert emission probs)
  *            opt_hmm   - optRETURN: new HMM
  *            opt_gm    - optRETURN: profile corresponding to <hmm>
  *            opt_om    - optRETURN: optimized profile corresponding to <gm>
