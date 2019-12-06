@@ -607,7 +607,7 @@ main(int argc, char **argv)
     }
 
     
-    status = esl_sqio_ReadBlock(sqfp, block, block_size, -1, alphatype != eslAMINO);
+    status = esl_sqio_ReadBlock(sqfp, block, block_size, -1, /*max_init_window=*/FALSE, alphatype != eslAMINO);
     if (status == eslEOF) continue;
     if (status != eslOK)  esl_fatal("Parse failed (sequence file %s): status:%d\n%s\n",
                                                   sqfp->filename, status, esl_sqfile_GetErrorBuf(sqfp));
