@@ -1422,7 +1422,7 @@ thread_loop(WORKER_INFO *info, ID_LENGTH_LIST *id_length_list, ESL_THREADS *obj,
         block->count = 0;
         sstatus = eslEOF;
       } else {
-        sstatus = esl_sqio_ReadBlock(dbfp, block, info->pli->block_length, n_targetseqs, TRUE);
+        sstatus = esl_sqio_ReadBlock(dbfp, block, info->pli->block_length, n_targetseqs, /*max_init_window=*/FALSE, TRUE);
       }
 
       block->first_seqidx = info->pli->nseqs;
