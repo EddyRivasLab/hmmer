@@ -46,7 +46,7 @@ p7_gmx_Create(int allocM, int allocL)
 
   /* Set the row pointers. */
   for (i = 0; i <= allocL; i++) 
-    gx->dp[i] = gx->dp_mem + i * (allocM+1) * p7G_NSCELLS;
+    gx->dp[i] = gx->dp_mem + (uint64_t) i * (uint64_t) (allocM+1) * p7G_NSCELLS;
 
   /* Initialize memory that's allocated but unused, only to keep
    * valgrind and friends happy.
@@ -135,7 +135,7 @@ p7_gmx_GrowTo(P7_GMX *gx, int M, int L)
       gx->allocW = M+1;
       gx->validR = ESL_MIN(gx->ncells / gx->allocW, gx->allocR);
       for (i = 0; i < gx->validR; i++) 
-	gx->dp[i] = gx->dp_mem + i * (gx->allocW) * p7G_NSCELLS;
+        gx->dp[i] = gx->dp_mem + (uint64_t) i * (uint64_t) gx->allocW * p7G_NSCELLS;
     }
 
   gx->M      = 0;
