@@ -649,7 +649,7 @@ int serialize_utest(){
 int serialize_error_conditions_utest(){
   int status;  // Easel error code variable
   HMMD_SEARCH_STATS foo;
-  uint8_t **buf, *buf_ptr=NULL;
+  uint8_t **buf;
   uint32_t n;
   uint32_t nalloc;
 
