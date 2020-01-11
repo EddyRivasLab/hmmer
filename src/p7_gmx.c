@@ -414,10 +414,16 @@ utest_GrowTo(void)
   M = 179;   L = 55;    p7_gmx_GrowTo(gx, M, L);  gmx_testpattern(gx, M, L);
   M = 87;    L = 57;    p7_gmx_GrowTo(gx, M, L);  gmx_testpattern(gx, M, L);
 
-  /* and this exercises iss#176. Only do this on 64-bit systems. */
-  M = 71582; L = 10000;
-  if ((uint64_t) (M+1) * (uint64_t) (L+1) * p7G_NSCELLS * sizeof(float) < SIZE_MAX / 2)
-    { p7_gmx_GrowTo(gx, M, L);  gmx_testpattern(gx, M, L);  }
+  /* and this exercises iss#176. Only do this on 64-bit systems, and only if a large alloc is possible (we need 8.6G to exercise the bug!) */
+  if ( (uint64_t) (M+1) * (uint64_t) (L+1) * p7G_NSCELLS * sizeof(float) < SIZE_MAX / 2)
+    {
+      void *p = malloc(10000000000ULL);  // check that a 10G allocation succeeds
+      if (p != NULL)
+	{
+	  free(p);
+	  M = 71582; L = 10000; p7_gmx_GrowTo(gx, M, L);  gmx_testpattern(gx, M, L);
+	}
+    }
 
   p7_gmx_Destroy(gx);
 }
