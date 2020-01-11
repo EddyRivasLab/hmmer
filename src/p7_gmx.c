@@ -34,6 +34,10 @@ p7_gmx_Create(int allocM, int allocL)
   P7_GMX *gx = NULL;
   int     i;
 
+  /* don't try to make large allocs on 32-bit systems */
+  if ( (uint64_t) (allocM+1) * (uint64_t) (allocL+1) * sizeof(float) * p7G_NSCELLS > SIZE_MAX / 2)
+    return NULL;
+
   /* level 1: the structure itself */
   ESL_ALLOC(gx, sizeof(P7_GMX));
   gx->dp     = NULL;
@@ -103,6 +107,9 @@ p7_gmx_GrowTo(P7_GMX *gx, int M, int L)
 
   if (M < gx->allocW && L < gx->validR) return eslOK;
   
+  /* don't try to make large allocs on 32-bit systems */
+  if ( (uint64_t) (M+1) * (uint64_t) (L+1) * sizeof(float) * p7G_NSCELLS > SIZE_MAX / 2) return eslEMEM;
+
   /* must we realloc the 2D matrices? (or can we get away with just
    * jiggering the row pointers, if we are growing in one dimension
    * while shrinking in another?)
@@ -407,8 +414,10 @@ utest_GrowTo(void)
   M = 179;   L = 55;    p7_gmx_GrowTo(gx, M, L);  gmx_testpattern(gx, M, L);
   M = 87;    L = 57;    p7_gmx_GrowTo(gx, M, L);  gmx_testpattern(gx, M, L);
 
-  /* and this exercises iss#176 */
-  M = 71582; L = 10000; p7_gmx_GrowTo(gx, M, L);  gmx_testpattern(gx, M, L);  
+  /* and this exercises iss#176. Only do this on 64-bit systems. */
+  M = 71582; L = 10000;
+  if ((uint64_t) (M+1) * (uint64_t) (L+1) * p7G_NSCELLS * sizeof(float) < SIZE_MAX / 2)
+    { p7_gmx_GrowTo(gx, M, L);  gmx_testpattern(gx, M, L);  }
 
   p7_gmx_Destroy(gx);
 }
