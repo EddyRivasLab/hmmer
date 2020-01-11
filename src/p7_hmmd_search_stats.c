@@ -570,6 +570,7 @@ utest_serialize()
   for (i = 0; i < 100; i++)
     free(serial[i].hit_offsets);
   free(serial);
+  free(deserial->hit_offsets);
   free(deserial);
   free(*buffer);
   free(buffer);
