@@ -505,204 +505,121 @@ double random_double(double min, double max){
 // serializes and deserializes 100 random HMMD_SEARCH_STATS structures
 // returns eslOK if all of the deserialized structures matched the 
 // ones they were serialized from, eslFAIL if not, eslEMEM if unable to allocate memory
-
-int serialize_utest(){
-  int status; // ESL_ALLOC error value
+static void
+utest_serialize()
+{
+  char msg[] = "serialize utest failed";
   HMMD_SEARCH_STATS *serial=NULL, *deserial=NULL;
-  uint8_t **buffer=NULL;
+  uint8_t **buffer = NULL;
+  double    low    = -1000.0;
+  double    high   = 1000.0;
   uint32_t pos, buffer_size;
+  int i,j;
+  int status;
+
   srand(time(0)); // reseed randomness
-  
-  ESL_ALLOC(serial, 100 * sizeof(HMMD_SEARCH_STATS));
-  ESL_ALLOC(deserial, sizeof(HMMD_SEARCH_STATS));
+  ESL_ALLOC(serial,  100 * sizeof(HMMD_SEARCH_STATS));
+  ESL_ALLOC(deserial,      sizeof(HMMD_SEARCH_STATS));
   deserial->hit_offsets = NULL;
   ESL_ALLOC(buffer, sizeof(uint8_t *));
-  *buffer = NULL; //force Serialize to allocate the first buffer
-  pos = 0;
+  *buffer     = NULL; //force Serialize to allocate the first buffer
+  pos         = 0;
   buffer_size = 0;
 
-  int i,j;
-  double low = -1000.0;
-  double high = 1000.0;
+  for (i = 0; i < 100; i++)
+    {
+      // assign random values to each field in the data structure and then serialize
+      serial[i].elapsed     = random_double(low, high);
+      serial[i].user        = random_double(low, high);
+      serial[i].sys         = random_double(low, high);
+      serial[i].Z           = random_double(low, high);
+      serial[i].domZ        = random_double(low, high);
+      serial[i].Z_setby     = (enum p7_zsetby_e) rand() % p7_ZSETBY_FILEINFO;
+      serial[i].domZ_setby  = (enum p7_zsetby_e) rand() % p7_ZSETBY_FILEINFO;
+      serial[i].nmodels     = rand();
+      serial[i].nseqs       = rand();
+      serial[i].n_past_msv  = rand();
+      serial[i].n_past_bias = rand();
+      serial[i].n_past_vit  = rand();
+      serial[i].n_past_fwd  = rand();
+      serial[i].nhits       = rand() % 10000; // keep the size of the hit_offsets array reasonable
+      serial[i].nreported   = rand();
+      serial[i].nincluded   = rand();
 
-  for(i = 0; i < 100; i++){
-    // assign random values to each field in the data structure and then serialize
-    serial[i].elapsed = random_double(low, high);
-    serial[i].user = random_double(low, high);
-    serial[i].sys = random_double(low, high);
-    serial[i].Z = random_double(low, high);
-    serial[i].domZ = random_double(low, high);
-    serial[i].Z_setby = (enum p7_zsetby_e) rand() % p7_ZSETBY_FILEINFO;
-    serial[i].domZ_setby = (enum p7_zsetby_e) rand() % p7_ZSETBY_FILEINFO;
-    serial[i].nmodels = rand();
-    serial[i].nseqs = rand();
-    serial[i].n_past_msv = rand();
-    serial[i].n_past_bias = rand();
-    serial[i].n_past_vit = rand();
-    serial[i].n_past_fwd = rand();
-    serial[i].nhits = rand() % 10000; // keep the size of the hit_offsets array reasonable
-    serial[i].nreported = rand();
-    serial[i].nincluded = rand();
+      if ((rand() % 2) == 0){ // 50% chance of hit_offsets array
+	ESL_ALLOC(serial[i].hit_offsets, serial[i].nhits * sizeof(uint64_t));
+	for(j = 0; j < serial[i].nhits; j++){
+	  serial[i].hit_offsets[j] = (((uint64_t) rand()) << 32) + ((uint64_t) rand());
+	}
+      }
+      else serial[i].hit_offsets = NULL;
 
-    if((rand() % 2) == 0){ // 50% chance of hit_offsets array
-      ESL_ALLOC(serial[i].hit_offsets, serial[i].nhits * sizeof(uint64_t));
-      for(j = 0; j < serial[i].nhits; j++){
-        serial[i].hit_offsets[j] = (((uint64_t) rand()) << 32) + ((uint64_t) rand());
-      }
+      if (p7_hmmd_search_stats_Serialize(&(serial[i]), buffer, &pos, &buffer_size) != eslOK) esl_fatal(msg);
     }
-    else{
-      serial[i].hit_offsets = NULL;
-    }
-    if(p7_hmmd_search_stats_Serialize(&(serial[i]), buffer, &pos, &buffer_size) != eslOK){
-      if(serial != NULL){
-        free(serial);
-      }
-      if(deserial != NULL){
-        free(deserial);
-      }
-      if(buffer !=NULL && *buffer != NULL){
-        free(*buffer);
-      }
-      if(buffer != NULL){
-        free(buffer); 
-      }
-      return eslFAIL;
-    }
-  }
   
   // Should now have 100 serialized structures in buffer
   // Go through, deserialize each one, and compare to the structure it was serialized from
-
   pos = 0;
-
-  for(i = 0; i < 100; i++){
-    if(p7_hmmd_search_stats_Deserialize(*buffer, &pos, deserial) != eslOK){
-      if(serial != NULL){
-        free(serial);
-      }
-      if(deserial != NULL){
-        free(deserial);
-      }
-      if(buffer !=NULL && *buffer != NULL){
-        free(*buffer);
-      }
-      if(buffer != NULL){
-        free(buffer); 
-      }
-      return eslFAIL;
+  for (i = 0; i < 100; i++)
+    {
+      if (p7_hmmd_search_stats_Deserialize(*buffer, &pos, deserial) != eslOK) esl_fatal(msg);
+      if (hmmd_search_stats_Same(&(serial[i]), deserial)            != eslOK) esl_fatal(msg);
     }
-
-    if(hmmd_search_stats_Same(&(serial[i]), deserial) != eslOK){
-      if(serial != NULL){
-        free(serial);
-      }
-      if(deserial != NULL){
-        free(deserial);
-      }
-      if(buffer !=NULL && *buffer != NULL){
-        free(*buffer);
-      }
-      if(buffer != NULL){
-        free(buffer); 
-      }
-      return eslFAIL;
-    }
-  }
 
   // If we make it this far without failing out, we've succeeded
-  if(serial != NULL){
-    for(i = 0; i < 100; i++){
-      if(serial[i].hit_offsets != NULL){
-        free(serial[i].hit_offsets);
-      }
-    }
-    free(serial);
-  }
-  if(deserial != NULL){
-    free(deserial);
-  }
-  if(buffer !=NULL && *buffer != NULL){
-    free(*buffer);
-  }
-  if(buffer != NULL){
-    free(buffer); 
-  }
-  return eslOK;
+  for (i = 0; i < 100; i++)
+    free(serial[i].hit_offsets);
+  free(serial);
+  free(deserial);
+  free(*buffer);
+  free(buffer);
+  return;
 
-  ERROR:
-    if(serial != NULL){
-      free(serial);
-    }
-    if(deserial != NULL){
-      free(deserial);
-    }
-    if(buffer !=NULL && *buffer != NULL){
-      free(*buffer);
-    }
-    if(buffer != NULL){
-      free(buffer); 
-    }
-    return eslEMEM;
+ ERROR:
+  esl_fatal(msg);
 }
 
 // Test that the _Serialize() function generates the correct errors when passed invalid arguments
-int serialize_error_conditions_utest(){
-  int status;  // Easel error code variable
+static void
+utest_serialize_error_conditions()
+{
+  char msg[]      = "serialize_error_conditions utest failed";
+  uint8_t **buf   = NULL;
+  uint32_t n      = 0;
+  uint32_t nalloc = 0;
   HMMD_SEARCH_STATS foo;
-  uint8_t **buf;
-  uint32_t n;
-  uint32_t nalloc;
-
-  n = 0; 
-  nalloc = 0;
+  int status;  
 
   // Start out with foo initialized to valid values
-  foo.elapsed = 1.0;
-  foo.user = 2.0;
-  foo.sys = 3.0;
-  foo.Z = 4.0;
-  foo.domZ = 5.0;
-  foo.Z_setby = p7_ZSETBY_NTARGETS;
-  foo.domZ_setby = p7_ZSETBY_NTARGETS;
-  foo.nmodels = 1;
-  foo.nseqs = 2;
-  foo.n_past_msv = 3;
+  foo.elapsed     = 1.0;
+  foo.user        = 2.0;
+  foo.sys         = 3.0;
+  foo.Z           = 4.0;
+  foo.domZ        = 5.0;
+  foo.Z_setby     = p7_ZSETBY_NTARGETS;
+  foo.domZ_setby  = p7_ZSETBY_NTARGETS;
+  foo.nmodels     = 1;
+  foo.nseqs       = 2;
+  foo.n_past_msv  = 3;
   foo.n_past_bias = 4;
-  foo.n_past_vit = 5;
-  foo.n_past_fwd = 6;
-  foo.nhits = 7;
-  foo.nreported = 8;
-  foo.nincluded = 9;
+  foo.n_past_vit  = 5;
+  foo.n_past_fwd  = 6;
+  foo.nhits       = 7;
+  foo.nreported   = 8;
+  foo.nincluded   = 9;
   foo.hit_offsets = NULL;
 
   // Test 1: _Serialize returns error if passed NULL buffer
   buf = NULL;
-
-  if(p7_hmmd_search_stats_Serialize(&foo, buf, &n, &nalloc) != eslEINVAL){
-    return eslFAIL;
-  }
-  else{
-   //printf ("null buffer check passed\n");
-  }
-
-  ESL_ALLOC(buf, sizeof(uint8_t *)); // set buf to valid value
-  *buf = NULL;
+  if (p7_hmmd_search_stats_Serialize(&foo, buf, &n, &nalloc) != eslEINVAL) esl_fatal(msg);
 
   // Test 2: error on NULL n ptr
-  if(p7_hmmd_search_stats_Serialize(&foo, buf, NULL, &nalloc) != eslEINVAL){
-    return eslFAIL;
-  }
-  else{
-    //printf("invalid n check passed\n");
-  }
+  ESL_ALLOC(buf, sizeof(uint8_t *)); 
+  *buf = NULL;
+  if (p7_hmmd_search_stats_Serialize(&foo, buf, NULL, &nalloc) != eslEINVAL) esl_fatal(msg);
 
   // Test 3: error on NULL object ptr
-  if(p7_hmmd_search_stats_Serialize(NULL, buf, &n, &nalloc) != eslEINVAL){
-    return eslFAIL;
-  }
-  else{
-    //printf("invalid object check passed\n");
-  }
+  if (p7_hmmd_search_stats_Serialize(NULL, buf, &n, &nalloc) != eslEINVAL) esl_fatal(msg);
 
  /* Comment these tests out now that Serialize() has been debugged because invalid enums terminate the utest
   // Test 4: invalid enum in Z_setby field
@@ -725,26 +642,25 @@ int serialize_error_conditions_utest(){
     //printf("invalid domZ_setby check passed\n");
   }
 */
+
   if (buf) free(*buf);
   free(buf);
-  return eslOK;  // As usual, reaching the end of the test without failing out means we passed
+  return;
 
  ERROR:
-  if (buf) free(*buf);
-  free(buf);
-  return eslEMEM;
+  esl_fatal(msg);
 }
 
-//Test that the _Deserialize() function returns the correct errors when passed invalid data
-int deserialize_error_conditions_utest(){
-  int status;  // Easel error code variable
+// test that the _Deserialize() function returns the correct errors when passed invalid data
+static void
+utest_deserialize_error_conditions()
+{
+  char msg[]      = "deserialize_error_conditions utest failed";
+  uint8_t **buf   = NULL;
+  uint32_t n      = 0;
+  uint32_t nalloc = 0;
   HMMD_SEARCH_STATS foo;
-  uint8_t **buf;
-  uint32_t n;
-  uint32_t nalloc;
-
-  n = 0; 
-  nalloc = 0;
+  int status; 
 
   // Start out with foo initialized to valid values
   foo.elapsed = 1.0;
@@ -764,36 +680,27 @@ int deserialize_error_conditions_utest(){
   foo.nreported = 8;
   foo.nincluded = 9;
   foo.hit_offsets = NULL;
+
   // Test 1: should return eslEINVAL if buf == NULL
   ESL_ALLOC(buf, sizeof(uint8_t *));
   *buf = NULL;
-  
-  if(p7_hmmd_search_stats_Deserialize(*buf, &n, &foo) != eslEINVAL){
-    return eslFAIL;
-  }
-  else{
-    //printf("null buffer check passed\n");
-  }
+
+  if (p7_hmmd_search_stats_Deserialize(*buf, &n, &foo) != eslEINVAL) esl_fatal(msg);
+
+  if (buf) free(*buf);
+  free(buf);
 
   // Test 2: invalid Z_setby enum in serialized buffer
-  buf = malloc(sizeof(uint8_t *));
+  buf  = malloc(sizeof(uint8_t *));
   *buf = NULL;
-  if(p7_hmmd_search_stats_Serialize(&foo, buf, &n, &nalloc) != eslOK){
-    free(buf);
-    //printf("Couldn't serialize structure to test deserialize\n");
-    return eslFAIL;
-  }
 
+  if (p7_hmmd_search_stats_Serialize(&foo, buf, &n, &nalloc) != eslOK) esl_fatal(msg);
   n = 0; // reset to beginning of buffer
 
   // sanity check: make sure we can deserialize the base serialized buffer before we muck with it
-  if(p7_hmmd_search_stats_Deserialize(*buf, &n, &foo) != eslOK){
-    free(*buf);
-    free(buf);
-    //printf("Couldn't deserialize base serialized structure\n");
-    return eslFAIL;
-  }
-/* comment these tests out because invalid enum values cause the utest to terminate
+  if (p7_hmmd_search_stats_Deserialize(*buf, &n, &foo) != eslOK) esl_fatal(msg);
+
+  /* comment these tests out because invalid enum values cause the utest to terminate
   //Now, put invalid value in the buffer at the position of the Z_setby enum
   (*buf)[40] = 255;
   n = 0; // reset to start of buffer
@@ -830,46 +737,25 @@ int deserialize_error_conditions_utest(){
     //printf("Invalid domZ_setby field check passed\n");
   }
 */
+
   //test 4: NULL n
   (*buf)[41] = p7_ZSETBY_FILEINFO; // reset domZ_setby to valid value
-  n = 0; // reset to beginning of buffer
+  n = 0;                           // reset to beginning of buffer
 
   // sanity check: make sure we've reset the buffer to a valid state
-  if(p7_hmmd_search_stats_Deserialize(*buf, &n, &foo) != eslOK){
-    free(*buf);
-    free(buf);
-    //printf("Didn't reset domZ_setby to valid value\n");
-    return eslFAIL;
-  }
-
+  if (p7_hmmd_search_stats_Deserialize(*buf, &n, &foo) != eslOK) esl_fatal(msg);
 
   n = 0; // reset to start of buffer
-  if(p7_hmmd_search_stats_Deserialize(*buf, NULL, &foo) != eslEINVAL){
-    free(*buf);
-    free(buf);
-    return eslFAIL;
-  }
-  else{
-    //printf("Null n check passed\n");
-  }
+  if (p7_hmmd_search_stats_Deserialize(*buf, NULL, &foo) != eslEINVAL) esl_fatal(msg);
 
+  
   // end. If we get here, we've passed
-  if(*buf != NULL){
-    free(*buf);
-  }
-  if(buf != NULL){
-    free(buf);
-  }
-  return eslOK;
+  if (buf) free(*buf);
+  free(buf);
+  return;
 
-ERROR:
-  if(*buf != NULL){
-    free(*buf);
-  }
-  if(buf != NULL){
-    free(buf);
-  }
-  return eslEMEM;
+ ERROR:
+  esl_fatal(msg);
 }
 #endif
 
@@ -878,27 +764,13 @@ ERROR:
  *****************************************************************/      
 #ifdef p7HMMD_SEARCH_STATS_TESTDRIVE
 
-#include "esl_getopts.h"
-
 int
 main(int argc, char **argv)
 {
+  utest_serialize_error_conditions();
+  utest_deserialize_error_conditions();
+  utest_serialize();
 
-  char           *msg       = "p7_hmmd_search_stats_utest failed";
-
-  if(serialize_error_conditions_utest() != eslOK){
-    esl_fatal(msg);
-  }
-
-  if(deserialize_error_conditions_utest() != eslOK){
-    esl_fatal(msg);
-  }
-
-
-  if(serialize_utest() != eslOK){
-    esl_fatal(msg);
-  }
-
-  return eslOK; // If we get here, test passed
+  return eslOK; 
 }
 #endif
