@@ -673,6 +673,7 @@ int serialize_error_conditions_utest(){
   foo.nhits = 7;
   foo.nreported = 8;
   foo.nincluded = 9;
+  foo.hit_offsets = NULL;
 
   // Test 1: _Serialize returns error if passed NULL buffer
   buf = NULL;
@@ -685,6 +686,7 @@ int serialize_error_conditions_utest(){
   }
 
   ESL_ALLOC(buf, sizeof(uint8_t *)); // set buf to valid value
+  *buf = NULL;
 
   // Test 2: error on NULL n ptr
   if(p7_hmmd_search_stats_Serialize(&foo, buf, NULL, &nalloc) != eslEINVAL){
@@ -723,16 +725,14 @@ int serialize_error_conditions_utest(){
     //printf("invalid domZ_setby check passed\n");
   }
 */
-  if(buf !=NULL && *buf != NULL){
-    free(*buf);
-  }
+  if (buf) free(*buf);
+  free(buf);
   return eslOK;  // As usual, reaching the end of the test without failing out means we passed
 
-  ERROR:
-    if(buf !=NULL && *buf != NULL){
-      free(*buf);
-    }
-    return eslEMEM;
+ ERROR:
+  if (buf) free(*buf);
+  free(buf);
+  return eslEMEM;
 }
 
 //Test that the _Deserialize() function returns the correct errors when passed invalid data
