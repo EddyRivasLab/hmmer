@@ -45,7 +45,7 @@ ${CUDA_LIB}: ${CUDA_OBJS} ${HDRS}
 ifeq ($(NVCC_FOUND),yes) 
 	${NVCC} -arch=compute_60 -code=sm_61 -dlink ${CUDA_OBJS} -o hmmerCuda.o ;\
 	${AR} -r ${top_builddir}/src/libhmmer.a ${CUDA_OBJS} hmmerCuda.o ;\
-	${RANLIB} ${top_builddir}/src/libhmmer.a ;\
+	${RANLIB} ${top_builddir}/src/libhmmer.a ;
 else 
 
 endif

@@ -14,7 +14,7 @@
 #include "server/worker_node.h"
 #include <unistd.h>
 #include <time.h>
-#include "/usr/local/cuda-10.1/include/cuda_profiler_api.h"
+#include "/usr/include/cuda_profiler_api.h"
 
 // Set up variables required by Easel's argument processor.  These are used by p7_server_workernode_main
 static ESL_OPTIONS options[] = {

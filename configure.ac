@@ -222,7 +222,7 @@ AC_ARG_ENABLE(cuda,     [AS_HELP_STRING([--enable-cuda],     [enable CUDA accele
 
 AC_ARG_ENABLE(threads, [AS_HELP_STRING([--enable-threads], [enable POSIX threads parallelization])],     enable_threads=$enableval, enable_threads=check)
 AC_ARG_ENABLE(mpi,     [AS_HELP_STRING([--enable-mpi],     [enable MPI parallelization])],               enable_mpi=$enableval,     enable_mpi=no)
-
+AC_ARG_ENABLE(pic,     [AS_HELP_STRING([--enable-pic],     [enable position-independent code])],         enable_pic=$enableval,     enable_pic=no)
 AC_ARG_WITH(cuda,      [AS_HELP_STRING([--with-cuda=PATH],       [specify the path to the CUDA installation (default /usr/local/cuda)])],       cuda_path=$withval,         cuda_path="/usr/local/cuda")
 AC_ARG_WITH(gsl,       [AS_HELP_STRING([--with-gsl],       [use the GSL, GNU Scientific Library])],       with_gsl=$withval,         with_gsl=no)
 
@@ -296,6 +296,11 @@ if test "$enable_mpi" = "yes"; then
     AC_MSG_ERROR([MPI library not found for --enable-mpi]))
 fi
 
+# PIC (position-independent code) for shared library support
+ #
+ if test "$enable_pic" = "yes"; then
+    ESL_PIC_FLAGS
+ fi
 
 # Support for POSIX multithreading (we should generally have this)
 #
@@ -675,6 +680,7 @@ HMMER configuration:
     AVX512_CFLAGS : ${AVX512_CFLAGS}
       NEON_CFLAGS : ${NEON_CFLAGS}
        VMX_CFLAGS : ${VMX_CFLAGS}
+       PIC_CFLAGS : ${PIC_CFLAGS}
              LIBS : ${LIBGSL} ${MPILIBS} ${PTHREAD_LIBS} ${LIBS}
           PYTHON3 : ${ac_cv_path_PYTHON3}
 
