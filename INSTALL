@@ -1,12 +1,12 @@
 Brief installation instructions. 
-HMMER @HMMER_VERSION@; @HMMER_DATE@
+HMMER 3.3; Nov 2019
 http://hmmer.org
 -------------------------------------------------------------
 
-Starting from a source distribution, hmmer-@HMMER_VERSION@.tar.gz:
- uncompress:                uncompress hmmer-@HMMER_VERSION@.tar.gz  
- unpack:                    tar xf hmmer-@HMMER_VERSION@.tar
- move into new directory:   cd hmmer-@HMMER_VERSION@
+Starting from a source distribution, hmmer-3.3.tar.gz:
+ uncompress:                uncompress hmmer-3.3.tar.gz  
+ unpack:                    tar xf hmmer-3.3.tar
+ move into new directory:   cd hmmer-3.3
  configure:                 ./configure
  build:                     make
  automated tests:           make check
