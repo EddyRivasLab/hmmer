@@ -295,7 +295,7 @@ distclean: clean
 
 clean:
 	-rm -f ${PROGS} ${UTESTS} ${STATS} ${BENCHMARKS} ${EXAMPLES} ${EXPERIMENTS} libhmmer.a
-	-rm -f *~ *.o 
+	-rm -f *~ *.o TAGS
 	-rm -f *.gcno *.gcda *.gcov
 	for prog in ${PROGS} ${UTESTS} ${STATS} ${BENCHMARKS} ${EXAMPLES} ${EXPERIMENTS}; do\
 	  if test -d $$prog.dSYM; then rm -rf $$prog.dSYM; fi; \
