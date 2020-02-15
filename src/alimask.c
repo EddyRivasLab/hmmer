@@ -259,6 +259,7 @@ main(int argc, char **argv)
   int           mask_range_cnt = 0;
   uint32_t      mask_starts[100]; // over-the-top allocation.
   uint32_t      mask_ends[100];
+  int64_t       pos1, pos2;       // esl_regexp_ParseCoordString() works in int64_t coords now; this is a hackaround
 
   char         *rangestr;
   char         *range;
@@ -313,10 +314,11 @@ main(int argc, char **argv)
   }
 
   while ( (status = esl_strtok(&rangestr, ",", &range) ) == eslOK) {
-    status = esl_regexp_ParseCoordString(range, mask_starts + mask_range_cnt, mask_ends + mask_range_cnt );
+    status = esl_regexp_ParseCoordString(range, &pos1, &pos2);
     if (status == eslESYNTAX) esl_fatal("range flags take coords <from>..<to>; %s not recognized", range);
     if (status == eslFAIL)    esl_fatal("Failed to find <from> or <to> coord in %s", range);
-
+    mask_starts[mask_range_cnt] = (uint32_t) pos1;
+    mask_ends[mask_range_cnt]   = (uint32_t) pos2;
     mask_range_cnt++;
   }
 
