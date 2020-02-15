@@ -1,20 +1,42 @@
 #! /bin/sh
 
-etags    configure.ac
-etags -a INSTALL
-etags -a LICENSE
+# Default: index both hmmer and easel. To do easel, need `find -L` to
+# follow symlinks.
+#
+# `-x`: only index hmmer. Higher-level ~/src/makeTAGS.sh calls us with
+# that option, for indexing entire stack of lab code (easel, hmmer3,
+# hmmer4, infernal) without redundancy.
+#
 
-# Recursively add all .c, .h, .pl, *.tex, *.in  (*.in includes Makefiles, .man's)
-#  -L : follow symlinks; Easel may be a symlink, for example
-find -L . -name "*.c"      -print -or -name "*.h"  -print | xargs etags -a
-find -L . -name "*.pl"     -print -or -name "*.pm" -print | xargs etags -a
-find -L . -name "*.sh"     -print                         | xargs etags -a
-find -L . -name "*.tex"    -print                         | xargs etags -a
-find -L . -name "*.in"     -print                         | xargs etags -a
-find -L . -name "*.sqc"    -print                         | xargs etags -a
-find -L . -name "*README*" -print                         | xargs etags -a
+while [[ "$#" -gt 0 ]]; do case $1 in
+  -x) optx=1;;
+  *) echo "Unknown option: $1"; exit 1;;
+esac; shift; done
 
-# Easel
-etags -a easel/configure.ac
-etags -a easel/LICENSE
+if [ $optx ]; then
+    opt=""
+    excl=" -path ./easel -prune -or"
+    out="-o TAGS.part"
+else
+    opt="-L"
+    excl=""
+    out=""
+fi    
+
+
+etags    $out configure.ac
+etags -a $out INSTALL
+etags -a $out LICENSE
+
+find $opt . $excl -name "*.c"   -print -or -name "*.h"  -print | xargs etags -a $out
+find $opt . $excl -name "*.pl"  -print -or -name "*.pm" -print | xargs etags -a $out
+find $opt . $excl -name "*.py"  -print                         | xargs etags -a $out
+find $opt . $excl -name "*.sh"  -print                         | xargs etags -a $out
+find $opt . $excl -name "*.md"  -print                         | xargs etags -a $out
+find $opt . $excl -name "*.tex" -print                         | xargs etags -a $out
+find $opt . $excl -name "*.man" -print                         | xargs etags -a $out
+find $opt . $excl -name "*.in"  -print                         | xargs etags -a $out
+find $opt . $excl -name "*.sqc" -print                         | xargs etags -a $out
+find $opt . $excl -name "*README" -print                       | xargs etags -a $out
+
 
