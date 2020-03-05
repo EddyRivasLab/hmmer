@@ -132,4 +132,14 @@ extern int     h4_simdvec_width  (void);
 extern int8_t  h4_simdvec_byteify(float sc);
 extern int16_t h4_simdvec_wordify(float sc);
 
+/* x86-specific initialization of FTZ/DAZ cpu flags is split out into
+ * sse/avx/avx512 implementation-specific code. Following how the DP
+ * code dispatchers work, these functions are always provided, either
+ * as a working version (when the implementation is turned on) or in a
+ * stub (when it's off).
+ */
+extern void    h4_simdvec_init_sse(void); 
+extern void    h4_simdvec_init_avx(void); 
+extern void    h4_simdvec_init_avx512(void); 
+
 #endif // h4SIMDVEC_INCLUDED

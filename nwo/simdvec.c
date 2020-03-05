@@ -8,29 +8,27 @@
 
 #include "simdvec.h"
 
-#if defined eslENABLE_SSE4 || eslENABLE_AVX || eslENABLE_AVX512
-#ifdef HAVE_FLUSH_ZERO_MODE
-#include <xmmintrin.h>    // x86 SSE : FTZ
-#endif
-#ifdef HAVE_DENORMALS_ZERO_MODE
-#include <pmmintrin.h>    // x86 SSE3 : DAZ
-#endif
-#endif
-
 void
 h4_simdvec_Init(void)
 {
-#if defined eslENABLE_SSE4 || eslENABLE_AVX || eslENABLE_AVX512
+  int done = FALSE;
+
   /* On x86 platforms, turn off denormalized floating-point, if possible.  
    * Vectorized prob-space Fwd/Bck filter underflows by design, and underflows
    * are negligible. See notes in simdvec.md.
+   *
+   * The _{sse/avx/avx512) init functions are essentially identical; our
+   * Makefiles don't give us the ability to have a _x86() init function across
+   * all three. We have to provide all three, but we only need to call one.
    */
-#ifdef HAVE_FLUSH_ZERO_MODE
-  _MM_SET_FLUSH_ZERO_MODE(_MM_FLUSH_ZERO_ON);
-#endif  
-#ifdef HAVE_DENORMAL_ZERO_MODE
-  _MM_SET_DENORMALS_ZERO_MODE(_MM_DENORMALS_ZERO_ON);
+#if defined eslENABLE_AVX512
+  if (! done && esl_cpu_has_avx512()) { h4_simdvec_init_avx512(); done = TRUE; }
 #endif
+#if defined eslENABLE_AVX
+  if (! done && esl_cpu_has_avx())    { h4_simdvec_init_avx();    done = TRUE; }
+#endif
+#if defined eslENABLE_SSE
+  if (! done && esl_cpu_has_sse4())   { h4_simdvec_init_sse();    done = TRUE; }
 #endif
 }
 
