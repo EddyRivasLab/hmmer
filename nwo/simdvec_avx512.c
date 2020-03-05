@@ -38,7 +38,6 @@ void
 h4_simdvec_init_avx512(void)
 {
   esl_fatal("AVX512 support was not enabled at compile time. Can't use h4_simdvec_init_avx512().");
-  return eslFAIL; // NOTREACHED
 }
 #endif // eslENABLE_AVX512 or not
 

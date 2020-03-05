@@ -58,7 +58,6 @@ void
 h4_simdvec_init_sse(void)
 {
   esl_fatal("SSE support was not enabled at compile time. Can't use h4_simdvec_init_sse().");
-  return eslFAIL; // NOTREACHED
 }
 #endif // eslENABLE_SSE4 or not
 
