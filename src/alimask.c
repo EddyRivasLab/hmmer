@@ -377,16 +377,20 @@ main(int argc, char **argv)
 
   // convert model coordinates to alignment coordinates, if necessary
   if (esl_opt_IsUsed(go, "--modelrange") || esl_opt_IsUsed(go, "--model2ali") || esl_opt_IsUsed(go, "--ali2model") ) {
+    ESL_MSAWEIGHT_CFG *cfg     = esl_msaweight_cfg_Create();
+    float              symfrac = esl_opt_GetReal(go, "--symfrac");
+    int                do_hand = esl_opt_IsOn(go, "--hand");
 
-    float symfrac = esl_opt_GetReal(go, "--symfrac");
-    int do_hand  =  esl_opt_IsOn(go, "--hand");
+    cfg->ignore_rf = (do_hand ? FALSE : TRUE);  // PB weights only use RF-marked consensus cols if --hand is on. [iss #180]
 
     //same as p7_builder relative_weights
     if      (esl_opt_IsOn(go, "--wnone")  )                  { esl_vec_DSet(msa->wgt, msa->nseq, 1.); }
     else if (esl_opt_IsOn(go, "--wgiven") )                  ;
-    else if (esl_opt_IsOn(go, "--wpb")    )                  status = esl_msaweight_PB(msa);
+    else if (esl_opt_IsOn(go, "--wpb")    )                  status = esl_msaweight_PB_adv(cfg, msa, /*ESL_MSAWEIGHT_DAT=*/ NULL);
     else if (esl_opt_IsOn(go, "--wgsc")   )                  status = esl_msaweight_GSC(msa);
     else if (esl_opt_IsOn(go, "--wblosum"))                  status = esl_msaweight_BLOSUM(msa, esl_opt_GetReal(go, "--wid"));
+
+    esl_msaweight_cfg_Destroy(cfg);
 
     if ((status =  esl_msa_MarkFragments_old(msa, esl_opt_GetReal(go, "--fragthresh")))           != eslOK) goto ERROR;
 
