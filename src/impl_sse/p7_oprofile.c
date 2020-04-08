@@ -669,8 +669,7 @@ biased_byteify(P7_OPROFILE *om, float sc)
   uint8_t b;
 
   sc  = -1.0f * roundf(om->scale_b * sc);                          /* ugh. sc is now an integer cost represented in a float...           */
-  b   = (sc > 255 - om->bias_b) ? 255 : (uint8_t) sc + om->bias_b; /* and now we cast, saturate, and bias it to an unsigned char cost... */
-  return b;
+  b   = (sc > 255 - om->bias_b) ? 255 : (uint8_t) (sc + om->bias_b); /* and now we cast, saturate, and bias it to an unsigned char cost... */  return b;
 }
  
 /* unbiased_byteify()
