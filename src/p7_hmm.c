@@ -145,8 +145,8 @@ p7_hmm_CreateBody(P7_HMM *hmm, int M, const ESL_ALPHABET *abc)
 
   /* level 2 */
   ESL_ALLOC(hmm->t[0],   (p7H_NTRANSITIONS*(M+1)) * sizeof(float));
-  ESL_ALLOC(hmm->mat[0], (abc->K*(M+1))           * sizeof(float));
-  ESL_ALLOC(hmm->ins[0], (abc->K*(M+1))           * sizeof(float));
+  ESL_ALLOC(hmm->mat[0], ((abc->K+1)*(M+1))       * sizeof(float));
+  ESL_ALLOC(hmm->ins[0], ((abc->K+1)*(M+1))       * sizeof(float));
   for (k = 1; k <= M; k++) {
     hmm->mat[k] = hmm->mat[0] + k * hmm->abc->K;
     hmm->ins[k] = hmm->ins[0] + k * hmm->abc->K;
