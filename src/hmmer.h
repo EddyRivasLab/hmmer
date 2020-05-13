@@ -28,7 +28,8 @@
 #define P7_HMMERH_INCLUDED
 #include "p7_config.h"
 
-#include <stdio.h>		/* FILE */
+#include <stdio.h>		
+#include <stddef.h>             // ptrdiff_t 
 
 #ifdef HMMER_MPI
 #include "mpi.h"

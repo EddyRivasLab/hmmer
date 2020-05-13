@@ -588,10 +588,14 @@ main(int argc, char **argv)
       }
     }
 
-    if(block_space > 20*block_size){  
-      esl_sq_DestroyBlock(block); 
-      block = esl_sq_CreateDigitalBlock(FM_BLOCK_COUNT, abc); 
-      printf("Block Size reached %llu bytes, re-allocating\n",block_space);
+    if(block_space > 20*block_size){
+      ESL_SQ_BLOCK *new_block = esl_sq_CreateDigitalBlock(FM_BLOCK_COUNT, abc);
+      new_block->count = block->count; // copying this field shouldn't be necessary, but I can't guarantee that it isn't.
+      new_block->listSize = block->listSize;  
+      new_block->complete = block->complete;  
+      new_block->first_seqidx = block->first_seqidx;
+      esl_sq_DestroyBlock(block);   
+      block = new_block; 
     }
     if (use_tmpsq) {
         esl_sq_Copy(tmpsq , block->list);
@@ -603,7 +607,7 @@ main(int argc, char **argv)
     }
 
     
-    status = esl_sqio_ReadBlock(sqfp, block, block_size, -1, alphatype != eslAMINO);
+    status = esl_sqio_ReadBlock(sqfp, block, block_size, -1, /*max_init_window=*/FALSE, alphatype != eslAMINO);
     if (status == eslEOF) continue;
     if (status != eslOK)  esl_fatal("Parse failed (sequence file %s): status:%d\n%s\n",
                                                   sqfp->filename, status, esl_sqfile_GetErrorBuf(sqfp));

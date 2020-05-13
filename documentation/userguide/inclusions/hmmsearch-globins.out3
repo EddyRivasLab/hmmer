@@ -1,14 +1,14 @@
 Internal pipeline statistics summary:
 -------------------------------------
 Query model(s):                            1  (149 nodes)
-Target sequences:                     557992  (200270360 residues searched)
-Passed MSV filter:                     21429  (0.0384038); expected 11159.8 (0.02)
-Passed bias filter:                    17573  (0.0314933); expected 11159.8 (0.02)
-Passed Vit filter:                      2369  (0.00424558); expected 558.0 (0.001)
-Passed Fwd filter:                      1127  (0.00201974); expected 5.6 (1e-05)
-Initial search space (Z):             557992  [actual number of targets]
-Domain search space  (domZ):            1126  [number of targets reported over threshold]
-# CPU time: 18.74u 3.82s 00:00:22.56 Elapsed: 00:00:09.72
-# Mc/sec: 3058.68
+Target sequences:                     559228  (200905869 residues searched)
+Passed MSV filter:                     20590  (0.0368186); expected 11184.6 (0.02)
+Passed bias filter:                    16888  (0.0301988); expected 11184.6 (0.02)
+Passed Vit filter:                      2315  (0.00413964); expected 559.2 (0.001)
+Passed Fwd filter:                      1128  (0.00201707); expected 5.6 (1e-05)
+Initial search space (Z):             559228  [actual number of targets]
+Domain search space  (domZ):            1128  [number of targets reported over threshold]
+# CPU time: 2.63u 0.09s 00:00:02.72 Elapsed: 00:00:01.09
+# Mc/sec: 27339.82
 //
 [ok]

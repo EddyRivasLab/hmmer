@@ -80,6 +80,7 @@ EASEL_MANPAGES = \
 	esl-construct.man  \
 	esl-histplot.man   \
 	esl-mask.man       \
+	esl-mixdchlet.man  \
 	esl-reformat.man   \
 	esl-selectn.man    \
 	esl-seqrange.man   \

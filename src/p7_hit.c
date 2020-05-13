@@ -151,7 +151,7 @@ extern void p7_hit_Destroy(P7_HIT *the_hit){
  *            if allocation or re-allocation was required.
  *
  * Throws:    Returns eslEMEM if unable to allocate or re-allocate memory.  Returns eslEINVAL if obj == NULL, n == NULL, buf == NULL,
- *.           or if *buf = NULL and either *n != 0 or *nalloc != 0
+ *.           or if *buf = NULL and either *n != 0 or *nalloc != 0. Returns eslFAIL if a consistency check fails.
  */
 
 // base size is 1 int (serialized size) + 1 byte (presence flags) longer than the sum of the fixed-width elements in the structure
@@ -361,8 +361,7 @@ extern int p7_hit_Serialize(const P7_HIT *obj, uint8_t **buf, uint32_t *n, uint3
 
   // sanity check
   if(ptr -(*buf + *n) != ser_size){
-    printf("Size of serialized object did not match expectation in p7_hit_Serialize\n");
-    return eslEINVAL;
+    ESL_EXCEPTION(eslFAIL, "Size of serialized object did not match expectation in p7_hit_Serialize\n");
   }
 
   *n = ptr - *buf;  // update n to point to end of serialized region
@@ -395,7 +394,7 @@ ERROR:
  *.           n to point to the position after the end of the P7_HIT object.
  *
  * Throws:    Returns eslEINVAL if ret_obj == NULL, buf == NULL, or n == NULL.  Returnts eslEMEM if unable to allocate
- *            required memory in ret_obj         
+ *            required memory in ret_obj. Returns eslFAIL if an consistency check fails.         
  */
 extern int p7_hit_Deserialize(const uint8_t *buf, uint32_t *n, P7_HIT *ret_obj){
 
@@ -595,8 +594,7 @@ extern int p7_hit_Deserialize(const uint8_t *buf, uint32_t *n, P7_HIT *ret_obj){
 
   // sanity check
   if((ptr - (buf + *n)) !=obj_size){
-    printf("Error: Size of serialized object did not match expected in p7_hit_Deserialize\n");
-    return eslEINVAL;
+    ESL_EXCEPTION(eslFAIL, "Error: Size of serialized object did not match expected in p7_hit_Deserialize\n");
   }
 
   ESL_ALLOC(ret_obj->dcl, ret_obj->ndom * sizeof(P7_DOMAIN));
@@ -900,7 +898,7 @@ static void utest_Serialize_error_conditions(){
     esl_fatal(msg);
   }
   else{
-    printf("null buffer check passed\n");
+    //printf("null buffer check passed\n");
   }
 
   ESL_ALLOC(buf, sizeof(uint8_t *)); // set buf to valid value
@@ -911,7 +909,7 @@ static void utest_Serialize_error_conditions(){
     esl_fatal(msg);
   }
   else{
-    printf("invalid n check passed\n");
+    //printf("invalid n check passed\n");
   }
 
   // Test 3: error on NULL object ptr
@@ -919,7 +917,7 @@ static void utest_Serialize_error_conditions(){
     esl_fatal(msg);
   }
   else{
-    printf("invalid object check passed\n");
+    //printf("invalid object check passed\n");
   }
 
   // Test 4: n != 0 and *buf == NULL
@@ -928,7 +926,7 @@ static void utest_Serialize_error_conditions(){
     esl_fatal(msg);
   }
   else{
-    printf("Non-zero n with NULL buffer check passed\n");
+    //printf("Non-zero n with NULL buffer check passed\n");
   }
 
   // Test 5: Nalloc != 0 and *buf == NULL
@@ -938,7 +936,7 @@ static void utest_Serialize_error_conditions(){
     esl_fatal(msg);
   }
   else{
-    printf("Non-zero nalloc with NULL buffer check passed\n");
+    //printf("Non-zero nalloc with NULL buffer check passed\n");
   }
 
   if(buf !=NULL && *buf != NULL){
@@ -992,19 +990,19 @@ static void utest_Deserialize_error_conditions(){
   if(p7_hit_Deserialize(NULL, &n, deserial) != eslEINVAL){
     esl_fatal(msg);
   }
-  printf("Test 1 passed\n");
+  //printf("Test 1 passed\n");
 
   // Test 2: error on n == NULL
   if(p7_hit_Deserialize(buf, NULL, deserial) != eslEINVAL){
     esl_fatal(msg);
   }
-  printf("Test 2 passed\n");
+  //printf("Test 2 passed\n");
 
   // Test 3: error on serialized object == NULL
   if(p7_hit_Deserialize(buf, &n, NULL) != eslEINVAL){
     esl_fatal(msg);
   }
-  printf("Test 3 passed\n");
+  //printf("Test 3 passed\n");
 
   p7_hit_Destroy(deserial);
   p7_hit_Destroy(sampled);
