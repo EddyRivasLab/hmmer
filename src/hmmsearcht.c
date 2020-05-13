@@ -792,7 +792,7 @@ thread_loop(WORKER_INFO *info, ESL_THREADS *obj, ESL_WORK_QUEUE *queue, ESL_SQFI
     {
       block = (ESL_SQ_BLOCK *) newBlock;
 
-      sstatus = esl_sqio_ReadBlock(dbfp, block, info->pli->block_length, -1, TRUE);
+      sstatus = esl_sqio_ReadBlock(dbfp, block, info->pli->block_length, -1,  /*max_init_window=*/FALSE, TRUE);
       block->first_seqidx = info->pli->nseqs;
       seqid = block->first_seqidx;
       for (i=0; i<block->count; i++) {
