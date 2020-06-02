@@ -1309,6 +1309,7 @@ serial_loop(WORKER_INFO *info, ID_LENGTH_LIST *id_length_list, ESL_SQFILE *dbfp,
       dbsq->idx = seq_id;
       p7_pli_NewSeq(info->pli, dbsq);
 
+      printf("%s\n", dbsq->name);
       if (info->pli->strands != p7_STRAND_BOTTOMONLY) {
 
         info->pli->nres -= dbsq->C; // to account for overlapping region of windows
