@@ -894,10 +894,7 @@ rescore_isolated_domain(P7_DOMAINDEF *ddef, P7_OPROFILE *om, const ESL_SQ *sq, c
       p7_Backward(sq->dsq + i-1, Ld, om, ox1, ox2, NULL);
 
       status = p7_Decoding(om, ox1, ox2, ox2);      /* <ox2> is now overwritten with post probabilities     */
-      if (status == eslERANGE) {                    /* rare: numeric overflow; domain is assumed to be repetitive garbage [J3/119-212] */
-          p7_trace_Reuse(ddef->tr);
-          return eslFAIL;
-      }
+      if (status == eslERANGE) { status = eslFAIL; goto ERROR; }  /* rare: numeric overflow; domain is assumed to be repetitive garbage [J3/119-212] */
 
       /* Find an optimal accuracy alignment */
       p7_OptimalAccuracy(om, ox2, ox1, &oasc);      /* <ox1> is now overwritten with OA scores              */
