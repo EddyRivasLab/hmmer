@@ -1459,10 +1459,17 @@ thread_loop(WORKER_INFO *info, ID_LENGTH_LIST *id_length_list, ESL_THREADS *obj,
 
       if (sstatus == eslOK) {
 
+          /* Capture "complete" status prior to placing current block into the work
+           * queue, to avoid appearance of a race condition. With only one reader
+           * thread, there isn't really a race risk, since "complete" is only set
+           * during the esl_sqio_ReadBlock() function call earlier in this loop
+           * (i.e. "complete" isn't altered by the worker threads)*/
+          int prev_complete = block->complete;
           status = esl_workqueue_ReaderUpdate(queue, block, &newBlock); 
 
 
           if (status != eslOK) esl_fatal("Work queue reader failed");
+
           // Check how much space the new structure is using and re-allocate if it has grown to more than 20*block_size bytes
           // this loop iterates from 0 to newBlock->listsize rather than newBlock->count because we want to count all of the
           // block's sub-structures, not just the ones that contained sequence data after the last call to ReadBlock()    
@@ -1488,10 +1495,11 @@ thread_loop(WORKER_INFO *info, ID_LENGTH_LIST *id_length_list, ESL_THREADS *obj,
             if(esl_sq_BlockReallocSequences(((ESL_SQ_BLOCK *)newBlock)) != eslOK){
               esl_fatal( "Error reallocating sequence data in block.\n");
             }  
-	  } 
+          }
+
           //newBlock needs all this information so the next ReadBlock call will know what to do
-          ((ESL_SQ_BLOCK *)newBlock)->complete = block->complete; 
-          if (!block->complete) {
+          ((ESL_SQ_BLOCK *)newBlock)->complete = prev_complete;
+          if (!prev_complete) {
               // Push the captured copy of the previously-read sequence into the new block,
               // in preparation for ReadWindow  (double copy ... slower than necessary)
               esl_sq_Copy(tmpsq, ((ESL_SQ_BLOCK *)newBlock)->list);
