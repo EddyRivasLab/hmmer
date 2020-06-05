@@ -7,16 +7,17 @@
  * This file is conditionally compiled when eslENABLE_AVX512 is defined.
  */
 #include "p7_config.h"
-#ifdef eslENABLE_AVX512
 
-#include <x86intrin.h>
 #include <math.h>
 
 #include "easel.h"
-#include "esl_avx512.h"
 
 #include "dp_vector/p7_oprofile.h"
 #include "dp_vector/ssvfilter.h"
+
+#ifdef eslENABLE_AVX512
+#include <x86intrin.h>
+#include "esl_avx512.h"
 
 #define MAX_BANDS 30
 
@@ -769,9 +770,14 @@ p7_SSVFilter_avx512(const ESL_DSQ *dsq, int L, const P7_OPROFILE *om, float *ret
 }
 
 #else // ! eslENABLE_AVX512
-
-/* Standard compiler-pleasing mantra for an #ifdef'd-out, empty code file. */
-void p7_ssvfilter_avx512_silence_hack(void) { return; }
+/* provide a callable function even when we're `./configure --disable-avx512` */
+int
+p7_SSVFilter_avx512(const ESL_DSQ *dsq, int L, const P7_OPROFILE *om, float *ret_sc)
+{
+  ESL_UNUSED(dsq); ESL_UNUSED(L); ESL_UNUSED(om); ESL_UNUSED(ret_sc);  // shut up, compiler, I know what I'm doing
+  esl_fatal("AVX512 support was not enabled at compile time. Can't use p7_SSVFilter_avx512().");
+  return eslFAIL; // NOTREACHED
+}
 #if defined p7SSVFILTER_AVX512_TESTDRIVE || p7SSVFILTER_AVX512_EXAMPLE
 int main(void) { return 0; }
 #endif 

@@ -37,8 +37,8 @@ static ESL_OPTIONS build_options[] = {
   { "--wnone",      eslARG_NONE,  FALSE,                        NULL, NULL,   WGTOPTS, NULL, NULL,     "no relative weighting; set them all to 1",                 4 },
   { "--wgiven",     eslARG_NONE,  FALSE,                        NULL, NULL,   WGTOPTS, NULL, NULL,     "use weights given in input MSA file",                      4 },
   /* effective sequence number (absolute weighting) */
-  { "--enone",      eslARG_NONE,  FALSE,                        NULL, NULL,   EFFOPTS, NULL, NULL,     "no relative weighting; set them all to 1",                 5 },
-  { "--eset",       eslARG_REAL,  FALSE,                        NULL, NULL,   EFFOPTS, NULL, NULL,     "use weights given in input MSA file",                      5 },
+  { "--enone",      eslARG_NONE,  FALSE,                        NULL, NULL,   EFFOPTS, NULL, NULL,     "no effective seq # weighting; use nseq",                   5 },
+  { "--eset",       eslARG_REAL,  FALSE,                        NULL, NULL,   EFFOPTS, NULL, NULL,     "set eff seq # for all models to <x>",                      5 },
   { "--etarg",      eslARG_REAL,  FALSE,                        NULL, "x>0",     NULL, NULL, EFFOPTS,  "set entropy weighting target to <x> bits",                 5 },
   { "--esigma",     eslARG_REAL,  FALSE,                        NULL, "x>0",     NULL, NULL, EFFOPTS,  "set sigma parameter for entropy weighting to <x>",         5 },
   /* other options */

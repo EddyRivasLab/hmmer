@@ -16,6 +16,8 @@
 #include "esl_vectorops.h"
 
 #include "logsum.h"
+#include "simdvec.h"
+
 #include "h4_path.h"
 #include "h4_refmx.h"
 
@@ -139,8 +141,9 @@ h4_refmx_GrowTo(H4_REFMX *rx, int M, int L)
 	    rx->dp[r][x] = -eslINFINITY;
 	}
     }
-  rx->M = 0;
-  rx->L = 0;
+  rx->M    = 0;
+  rx->L    = 0;
+  rx->type = h4R_UNSET;
   return eslOK;
 
  ERROR:
@@ -385,6 +388,51 @@ h4_refmx_DumpWindow(FILE *ofp, H4_REFMX *rx, int istart, int iend, int kstart, i
 }
 
 
+
+static int
+score_to_vf(float sc)
+{
+  if      (sc == -32768.)      return -32768;
+  else if (sc == -eslINFINITY) return -32768;
+  else                         return (int) (sc + h4_BASE_W);
+}
+
+int
+h4_refmx_DumpAsVF(FILE *ofp, H4_REFMX *rx)
+{
+  int i,k;
+  
+  /* header */
+  fprintf(ofp, "       ");
+  for (k = 0; k <= rx->M;  k++) fprintf(ofp, "%6d ", k);
+  fprintf(ofp, "%6s %6s %6s %6s %6s\n", "E", "N", "J", "B", "C");
+  fprintf(ofp, "       ");
+  for (k = 0; k <= rx->M+5;  k++) fprintf(ofp, "%6s ", "------");
+  fprintf(ofp, "\n");
+
+  for (i = 0; i <= rx->L; i++)
+    {
+      fprintf(ofp, "%3d ML ", i);
+      for (k = 0; k <= rx->M;    k++)  fprintf(ofp, "%6d ", score_to_vf(rx->dp[i][k * h4R_NSCELLS + h4R_ML]));
+      fprintf(ofp, "%6d ", score_to_vf(rx->dp[i][ (rx->M+1) * h4R_NSCELLS + h4R_E]));
+      fprintf(ofp, "%6d ", 0);   // in VF, N = 0 for all i 
+      fprintf(ofp, "%6d ", score_to_vf(rx->dp[i][ (rx->M+1) * h4R_NSCELLS + h4R_J]));
+      fprintf(ofp, "%6d ", score_to_vf(rx->dp[i][ (rx->M+1) * h4R_NSCELLS + h4R_B]));
+      fprintf(ofp, "%6d ", score_to_vf(rx->dp[i][ (rx->M+1) * h4R_NSCELLS + h4R_C]));
+      fprintf(ofp, "\n");
+
+      fprintf(ofp, "%3d IL ", i);
+      for (k = 0; k <= rx->M;    k++)  fprintf(ofp, "%6d ", score_to_vf(rx->dp[i][k * h4R_NSCELLS + h4R_IL]));
+      fprintf(ofp, "\n");
+
+      fprintf(ofp, "%3d DL ", i);
+      for (k = 0; k <= rx->M;    k++)  fprintf(ofp, "%6d ", score_to_vf(rx->dp[i][k * h4R_NSCELLS + h4R_DL]));
+      fprintf(ofp, "\n\n");
+    }
+  return eslOK;
+}
+
+
 /* Function:  h4_refmx_CountPath()
  * Synopsis:  Count a path into a DP matrix, for approximate decoding.
  * Incept:    SRE, Tue 21 May 2019
@@ -449,6 +497,94 @@ h4_refmx_CountPath(const H4_PATH *pi, H4_REFMX *rxd)
   ESL_DASSERT1(( i == rxd->L+1 ));
   return eslOK;
 }
+
+
+
+
+/* Function:  h4_refmx_Compare()
+ * Synopsis:  Compare two DP matrices for equality (within given absolute tolerance)
+ *
+ * Purpose:   Compare all the values in DP matrices <rx1>, <rx2> for
+ *            equality within absolute epsilon <a_tol>. <rx1> is
+ *            considered to be the reference (the one that's expected
+ *            to be most accurate). Return <eslOK> if all cell
+ *            comparisons succeed; <eslFAIL> if not.
+ *            
+ *            Absolute difference comparison is preferred over
+ *            relative differences. Numerical error accumulation in DP
+ *            scales more with the number of terms than their
+ *            magnitude. DP cells with values close to zero (and hence
+ *            small absolute differences) may reasonably have large
+ *            relative differences.
+ */
+int
+h4_refmx_Compare(const H4_REFMX *rx1, const H4_REFMX *rx2, float a_tol)
+{
+  char msg[] = "H4_REFMX comparison failed";
+  int i,k,y;
+  
+  if (rx1->M    != rx2->M)    ESL_FAIL(eslFAIL, NULL, msg);
+  if (rx1->L    != rx2->L)    ESL_FAIL(eslFAIL, NULL, msg);
+  if (rx1->type != rx2->type) ESL_FAIL(eslFAIL, NULL, msg);
+  
+  for (i = 0; i <= rx1->L; i++)
+    {
+      for (k = 0; k <= rx1->M; k++)   
+	for (y = 0; y < h4R_NSCELLS; y++)
+	  if ( esl_FCompareNew(H4R_MX(rx1,i,k,y), H4R_MX(rx2,i,k,y), 0.0, a_tol) == eslFAIL) ESL_FAIL(eslFAIL, NULL, msg);
+      for (y = 0; y < h4R_NXCELLS; y++)
+	if ( esl_FCompareNew(H4R_XMX(rx1,i,y), H4R_XMX(rx2,i,y), 0.0, a_tol)     == eslFAIL) ESL_FAIL(eslFAIL, NULL, msg);
+    }
+  return eslOK;	
+}
+
+/* Function:  h4_refmx_CompareLocal()
+ * Synopsis:  Compare two DP matrices (local paths only) for equality 
+ *
+ * Purpose:   A variant of <h4_refmx_Compare()> that compares only 
+ *            cells on local paths. <MG,IG,DG,G> states are excluded.
+ *            
+ *            This gets used in unit tests that compare Backwards
+ *            matrices computed by the bckfilter() with the
+ *            reference implementation. You can't expect these Bck
+ *            matrices to compare completely equal.  In the f/b filter,
+ *            glocal paths are all -inf by construction (they're not
+ *            evaluated at all).  In reference DP, in local
+ *            mode, backwards values are still finite along glocal paths
+ *            (G/MG/IG/DG) because the zero transition that prohibits
+ *            the path is the B->G transition, which isn't evaluated
+ *            in the recursion until the *beginning* of glocal paths. 
+ */
+int
+h4_refmx_CompareLocal(const H4_REFMX *rx1, const H4_REFMX *rx2, float a_tol)
+{
+  char msg[] = "H4_REFMX local path comparison failed";
+  int i,k;
+  
+  if (rx1->M    != rx2->M)    ESL_FAIL(eslFAIL, NULL, msg);
+  if (rx1->L    != rx2->L)    ESL_FAIL(eslFAIL, NULL, msg);
+  if (rx1->type != rx2->type) ESL_FAIL(eslFAIL, NULL, msg);
+  
+  for (i = 0; i <= rx1->L; i++)
+    {
+      for (k = 0; k <= rx1->M; k++)   
+	{
+	  if ( esl_FCompareNew(H4R_MX(rx1,i,k,h4R_ML), H4R_MX(rx2,i,k,h4R_ML), 0.0, a_tol) == eslFAIL) ESL_FAIL(eslFAIL, NULL, msg);
+	  if ( esl_FCompareNew(H4R_MX(rx1,i,k,h4R_IL), H4R_MX(rx2,i,k,h4R_IL), 0.0, a_tol) == eslFAIL) ESL_FAIL(eslFAIL, NULL, msg);
+	  if ( esl_FCompareNew(H4R_MX(rx1,i,k,h4R_DL), H4R_MX(rx2,i,k,h4R_DL), 0.0, a_tol) == eslFAIL) ESL_FAIL(eslFAIL, NULL, msg);
+	}
+      if ( esl_FCompareNew(H4R_XMX(rx1,i,h4R_E),  H4R_XMX(rx2,i,h4R_E),  0.0, a_tol) == eslFAIL)   ESL_FAIL(eslFAIL, NULL, msg);
+      if ( esl_FCompareNew(H4R_XMX(rx1,i,h4R_N),  H4R_XMX(rx2,i,h4R_N),  0.0, a_tol) == eslFAIL)   ESL_FAIL(eslFAIL, NULL, msg);
+      if ( esl_FCompareNew(H4R_XMX(rx1,i,h4R_J),  H4R_XMX(rx2,i,h4R_J),  0.0, a_tol) == eslFAIL)   ESL_FAIL(eslFAIL, NULL, msg);
+      if ( esl_FCompareNew(H4R_XMX(rx1,i,h4R_B),  H4R_XMX(rx2,i,h4R_B),  0.0, a_tol) == eslFAIL)   ESL_FAIL(eslFAIL, NULL, msg);
+      if ( esl_FCompareNew(H4R_XMX(rx1,i,h4R_L),  H4R_XMX(rx2,i,h4R_L),  0.0, a_tol) == eslFAIL)   ESL_FAIL(eslFAIL, NULL, msg);
+      if ( esl_FCompareNew(H4R_XMX(rx1,i,h4R_C),  H4R_XMX(rx2,i,h4R_C),  0.0, a_tol) == eslFAIL)   ESL_FAIL(eslFAIL, NULL, msg);
+      if ( esl_FCompareNew(H4R_XMX(rx1,i,h4R_JJ), H4R_XMX(rx2,i,h4R_JJ), 0.0, a_tol) == eslFAIL)   ESL_FAIL(eslFAIL, NULL, msg);
+      if ( esl_FCompareNew(H4R_XMX(rx1,i,h4R_CC), H4R_XMX(rx2,i,h4R_CC), 0.0, a_tol) == eslFAIL)   ESL_FAIL(eslFAIL, NULL, msg);
+    }
+  return eslOK;	
+}
+
 
 
 /* Function:  h4_refmx_CompareDecoding()

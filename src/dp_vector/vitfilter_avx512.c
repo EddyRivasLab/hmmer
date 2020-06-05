@@ -4,19 +4,19 @@
  * Other vector implementations derive from it.
  */
 #include "p7_config.h"
-#ifdef eslENABLE_AVX512
 
 #include <stdio.h>
 #include <math.h>
 
-#include <x86intrin.h>
-
 #include "easel.h"
-#include "esl_avx512.h"
 #include "esl_gumbel.h"
 
 #include "dp_vector/p7_oprofile.h"
 #include "dp_vector/p7_filtermx.h"
+
+#ifdef eslENABLE_AVX512
+#include <x86intrin.h>
+#include "esl_avx512.h"
 
 
 /*****************************************************************
@@ -183,9 +183,14 @@ p7_ViterbiFilter_avx512(const ESL_DSQ *dsq, int L, const P7_OPROFILE *om, P7_FIL
 
 
 #else // ! eslENABLE_AVX512
-
-/* Standard compiler-pleasing mantra for an #ifdef'd-out, empty code file. */
-void p7_vitfilter_avx512_silence_hack(void) { return; }
+/* provide a callable function even when we're `./configure --disable-avx512` */
+int
+p7_ViterbiFilter_avx512(const ESL_DSQ *dsq, int L, const P7_OPROFILE *om, P7_FILTERMX *ox, float *ret_sc)
+{
+  ESL_UNUSED(dsq); ESL_UNUSED(L); ESL_UNUSED(om); ESL_UNUSED(ox); ESL_UNUSED(ret_sc);  // shut up, compiler, I know what I'm doing
+  esl_fatal("AVX512 support was not enabled at compile time. Can't use p7_ViterbiFilter_avx512().");
+  return eslFAIL; // NOTREACHED
+}
 #if defined p7VITFILTER_AVX512_TESTDRIVE || p7VITFILTER_AVX512_EXAMPLE
 int main(void) { return 0; }
 #endif 

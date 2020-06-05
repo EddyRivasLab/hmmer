@@ -10,12 +10,8 @@
  *    3. Internal debugging tools.
  */
 #include "p7_config.h"
-#ifdef eslENABLE_SSE4
-
-#include <x86intrin.h>
 
 #include "easel.h"
-#include "esl_sse.h"
 #include "esl_vectorops.h"
 
 #include "dp_reference/p7_refmx.h"
@@ -24,6 +20,11 @@
 #include "dp_vector/p7_oprofile.h"
 #include "dp_vector/p7_checkptmx.h"
 #include "dp_vector/fwdfilter.h"
+
+#ifdef eslENABLE_SSE4
+#include <x86intrin.h>
+#include "esl_sse.h"
+
 
 
 /* Vectorized DP recursions are tediously lengthy. For some semblance
@@ -1031,9 +1032,21 @@ save_debug_row_fb_sse(P7_CHECKPTMX *ox, P7_REFMX *gx, __m128 *dpc, int i, float 
 /*---------------------------- end, debugging tools ---------------------------*/
 
 #else // ! eslENABLE_SSE4
-
-/* Standard compiler-pleasing mantra for an #ifdef'd-out, empty code file. */
-void p7_fwdfilter_sse_silence_hack(void) { return; }
+/* provide callable functions even when we're `./configure --disable-sse` */
+int
+p7_ForwardFilter_sse(const ESL_DSQ *dsq, int L, const P7_OPROFILE *om, P7_CHECKPTMX *ox, float *opt_sc)
+{
+  ESL_UNUSED(dsq); ESL_UNUSED(L); ESL_UNUSED(om); ESL_UNUSED(ox); ESL_UNUSED(opt_sc); 
+  esl_fatal("SSE support was not enabled at compile time. Can't use p7_ForwardFilter_sse().");
+  return eslFAIL; // NOTREACHED
+}
+int
+p7_BackwardFilter_sse(const ESL_DSQ *dsq, int L, const P7_OPROFILE *om, P7_CHECKPTMX *ox, P7_SPARSEMASK *sm, float sm_thresh)
+{
+  ESL_UNUSED(dsq); ESL_UNUSED(L); ESL_UNUSED(om); ESL_UNUSED(ox); ESL_UNUSED(sm); ESL_UNUSED(sm_thresh); 
+  esl_fatal("SSE support was not enabled at compile time. Can't use p7_BackwardFilter_sse().");
+  return eslFAIL; // NOTREACHED
+}
 #if defined p7FWDFILTER_SSE_TESTDRIVE || p7FWDFILTER_SSE_EXAMPLE
 int main(void) { return 0; }
 #endif 

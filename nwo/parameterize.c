@@ -3,11 +3,12 @@
 #include "easel.h"
 #include "esl_vectorops.h"
 
+#include "h4_counts.h"
 #include "h4_prior.h"
 #include "h4_profile.h"
 
 
-/* Function:  h4_Parameterize()
+/* Function:  h4_parameterize()
  * Synopsis:  Convert counts to probability parameters in a profile HMM
  * Incept:    SRE, Sun 24 Jun 2018 [World Cup, Poland v. Colombia]
  *
@@ -21,7 +22,7 @@
  *            rescale all values in a model (almost of which are
  *            counts, but some are 1.0 probabilities in fixed boundary
  *            conditions that aren't observed counts) before 
- *            calling <h4_Parameterize()> on the reweighted counts.
+ *            calling <h4_parameterize()> on the reweighted counts.
  *            
  *            <pri> can be NULL, in which case counts are simply
  *            renormalized to set <hmm> parameters.
@@ -38,7 +39,7 @@
  *            in the entropy weighting iterative optimization.
  */
 int
-h4_Parameterize(const H4_PROFILE_CT *ctm, const H4_PRIOR *pri, H4_PROFILE *hmm)
+h4_parameterize(const H4_COUNTS *ctm, const H4_PRIOR *pri, H4_PROFILE *hmm)
 {
   double p[h4_MAXABET];
   int    M = ctm->M;

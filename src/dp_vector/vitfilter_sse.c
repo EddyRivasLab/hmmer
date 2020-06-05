@@ -10,21 +10,23 @@
  * underflow, in local alignment mode.
  */
 #include "p7_config.h"
-#ifdef eslENABLE_SSE4
 
 #include <stdio.h>
 #include <math.h>
 
-#include <x86intrin.h>
-
 #include "easel.h"
 #include "esl_gumbel.h"
-#include "esl_sse.h"
 
 #include "search/p7_pipeline.h"
 
 #include "dp_vector/p7_oprofile.h"
 #include "dp_vector/p7_filtermx.h"
+
+#ifdef eslENABLE_SSE4
+#include <x86intrin.h>
+#include "esl_sse.h"
+
+
 
 
 /*****************************************************************
@@ -204,9 +206,14 @@ p7_ViterbiFilter_sse(const ESL_DSQ *dsq, int L, const P7_OPROFILE *om, P7_FILTER
 }
 
 #else // ! eslENABLE_SSE4
-
-/* Standard compiler-pleasing mantra for an #ifdef'd-out, empty code file. */
-void p7_vitfilter_sse_silence_hack(void) { return; }
+/* provide a callable function even when we're `./configure --disable-sse` */
+int
+p7_ViterbiFilter_sse(const ESL_DSQ *dsq, int L, const P7_OPROFILE *om, P7_FILTERMX *ox, float *ret_sc)
+{
+  ESL_UNUSED(dsq); ESL_UNUSED(L); ESL_UNUSED(om); ESL_UNUSED(ox); ESL_UNUSED(ret_sc);  // shut up, compiler, I know what I'm doing
+  esl_fatal("SSE support was not enabled at compile time. Can't use p7_ViterbiFilter_sse().");
+  return eslFAIL; // NOTREACHED
+}
 #if defined p7VITFILTER_SSE_TESTDRIVE || p7VITFILTER_SSE_EXAMPLE
 int main(void) { return 0; }
 #endif 

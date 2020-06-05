@@ -696,7 +696,7 @@ h4_reference_Decoding(const ESL_DSQ *dsq, int L, const H4_PROFILE *hmm, const H4
   float    *ppp;                //  ... and for decoding. bckp and ppp may be pointing to same memory; care is taken to access bckp before writing ppp
   float     denom;              // sum of pp for all emitting states on row i; should be 1.0; used for renormalization of roundoff error accumulation.
   float     sc;                 // overall Forward/Backward score, used for normalization
-  int       i,k;                // indices for rows/residues, columns/profile positions, states
+  int       i,k;                // indices for rows/residues, columns/profile positions
   float     delta;		// additions to DGk's, resulting from unfolding wing-retracted entry/exit paths 
   int       status;
 
@@ -757,9 +757,9 @@ h4_reference_Decoding(const ESL_DSQ *dsq, int L, const H4_PROFILE *hmm, const H4
       
 
       /* Main decoding. */
-      fwdp  = fwd->dp[i] + h4R_NSCELLS;  // fwdp on i,k=1
-      bckp += h4R_NSCELLS;               // bckp on i,k=1
-      ppp   = pp->dp[i] + h4R_NSCELLS;   // ppp  on i,k=1  
+      fwdp  = fwd->dp[i] + h4R_NSCELLS;               // fwdp on i,k=1
+      bckp += h4R_NSCELLS;                            // bckp on i,k=1
+      ppp   = pp->dp[i]  + h4R_NSCELLS;               // ppp  on i,k=1
       denom = 0.0;
       for (k = 1; k <= M; k++, ppp+= h4R_NSCELLS, fwdp+= h4R_NSCELLS, bckp += h4R_NSCELLS )
 	{
@@ -1381,6 +1381,16 @@ main(int argc, char **argv)
  * 7. "Brute" unit test
  *****************************************************************/
 #ifdef h4REFERENCE_DP_TESTDRIVE
+#include "esl_sq.h"
+#include "esl_stack.h"
+
+#include "h4_path.h"
+#include "emit.h"
+#include "logsum.h"
+#include "modelsample.h"
+#include "standardize.h"
+
+#include "reference_dp.h"
 
 /* The "brute" test, elaborate and savage, enumerates all possible
  * paths for a comparison of a profile of length M and sequence of
@@ -1420,14 +1430,7 @@ main(int argc, char **argv)
  * structure wrapped around H4_PATH, and enumerate_paths() itself),
  * so I broke it out into its own long section in the code.
  */
-#include "esl_sq.h"
-#include "esl_stack.h"
 
-#include "h4_path.h"
-#include "emit.h"
-#include "logsum.h"
-#include "modelsample.h"
-#include "reference_viterbi.h"
 
 /* struct partial_path_s
  * 
@@ -1755,9 +1758,9 @@ utest_brute(FILE *diagfp, ESL_RANDOMNESS *rng, int M, int L, int ntrials)
       //h4_mode_Dump(stdout, mo);
 
       /* run Forward, Backward, Viterbi */
-      if (h4_reference_Forward (sq->dsq, sq->n, hmm, mo, rmx,       &fsc) != eslOK) esl_fatal(msg);   h4_refmx_Reuse(rmx);
-      if (h4_reference_Backward(sq->dsq, sq->n, hmm, mo, rmx,       &bsc) != eslOK) esl_fatal(msg);   h4_refmx_Reuse(rmx);
-      if (h4_reference_Viterbi (sq->dsq, sq->n, hmm, mo, rmx,  vpi, &vsc) != eslOK) esl_fatal(msg);
+      if (h4_reference_Forward (sq->dsq, sq->n, hmm, mo, rmx,       &fsc) != eslOK) {esl_fatal(msg);}   h4_refmx_Reuse(rmx);  // {..} are to shut compiler up about misleading indentation
+      if (h4_reference_Backward(sq->dsq, sq->n, hmm, mo, rmx,       &bsc) != eslOK) {esl_fatal(msg);}   h4_refmx_Reuse(rmx);
+      if (h4_reference_Viterbi (sq->dsq, sq->n, hmm, mo, rmx,  vpi, &vsc) != eslOK) {esl_fatal(msg);}
 
       /* Backward and Forward scores should match */
       if (fabs(fsc - bsc) > ftol_abs) esl_fatal(msg);
@@ -2357,7 +2360,6 @@ utest_approx_decoding(FILE *diagfp, ESL_RANDOMNESS *rng, int alphatype, int M, i
 
   /* Approximate decoding by stochastic traceback  */
   if ( (rxa = h4_refmx_Create(M, sq->n))               == NULL)  esl_fatal(msg);
-  if ( (pi  = h4_path_Create())                        == NULL)  esl_fatal(msg);
   if ( h4_refmx_SetType  (rxa, M, sq->n, h4R_DECODING) != eslOK) esl_fatal(msg);      
   if ( h4_refmx_SetValues(rxa, 0.0)                    != eslOK) esl_fatal(msg);
   for (idx = 0; idx < N; idx++)
@@ -2468,7 +2470,7 @@ utest_mute_partial_cycle(void)
   hmm->flags |= h4_HASPROBS;
 
   /* Configure it, in multihit glocal L=0 mode */
-  if ( h4_profile_Config(hmm)   != eslOK) esl_fatal(msg);
+  if ( h4_standardize(hmm)      != eslOK) esl_fatal(msg);
   if ( h4_mode_SetGlocal(mo)    != eslOK) esl_fatal(msg);
   if ( h4_mode_SetLength(mo, 0) != eslOK) esl_fatal(msg);
 
@@ -2640,6 +2642,7 @@ main(int argc, char **argv)
       h4_reference_Viterbi(sq->dsq, sq->n, hmm, mo, vit, vpi, &vsc);
       h4_reference_Forward(sq->dsq, sq->n, hmm, mo, fwd, &fsc);
       //h4_refmx_Dump(stdout, fwd);
+      printf("%s vit %.6f\n", sq->name, vsc);
       printf("%s fwd %.6f\n", sq->name, fsc);
 
       h4_reference_Backward(sq->dsq, sq->n, hmm, mo, bck, &bsc);

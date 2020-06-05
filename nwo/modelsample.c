@@ -19,7 +19,11 @@
 
 #include "h4_profile.h"
 
+#include "standardize.h"
+#include "vectorize.h"
+
 #include "modelsample.h"
+
 
 static void zeropeppered_probvector(ESL_RANDOMNESS *rng, float *p, int n);
 
@@ -62,7 +66,8 @@ h4_modelsample(ESL_RANDOMNESS *rng, const ESL_ALPHABET *abc, int M, H4_PROFILE *
     esl_dirichlet_FSampleUniform(rng, abc->K, hmm->e[k]);
 
   hmm->flags |= h4_HASPROBS;
-  h4_profile_Config(hmm); // sets HASBITS flag 
+  if (( status = h4_standardize(hmm)) != eslOK) goto ERROR;
+  if (( status = h4_vectorize(hmm))   != eslOK) goto ERROR;
   *ret_hmm = hmm;
   return eslOK;
 
@@ -111,7 +116,8 @@ h4_modelsample_zeropeppered(ESL_RANDOMNESS *rng, const ESL_ALPHABET *abc, int M,
     zeropeppered_probvector(rng, hmm->e[k], abc->K);
 
   hmm->flags |= h4_HASPROBS;
-  h4_profile_Config(hmm);
+  if (( status = h4_standardize(hmm)) != eslOK) goto ERROR;
+  if (( status = h4_vectorize(hmm))   != eslOK) goto ERROR;
   *ret_hmm = hmm;
   return eslOK;
 
@@ -180,7 +186,8 @@ h4_modelsample_Enumerable(ESL_RANDOMNESS *rng, const ESL_ALPHABET *abc, int M, H
     esl_dirichlet_FSampleUniform(rng, abc->K, hmm->e[k]);    
 
   hmm->flags |= h4_HASPROBS;
-  h4_profile_Config(hmm);
+  if (( status = h4_standardize(hmm)) != eslOK) goto ERROR;
+  if (( status = h4_vectorize(hmm))   != eslOK) goto ERROR;
   *ret_hmm = hmm;
   return eslOK;
 
@@ -251,7 +258,8 @@ h4_modelsample_Enumerable2(ESL_RANDOMNESS *rng, const ESL_ALPHABET *abc, int M, 
     esl_dirichlet_FSampleUniform(rng, abc->K, hmm->e[k]);
 
   hmm->flags |= h4_HASPROBS;
-  h4_profile_Config(hmm);
+  if (( status = h4_standardize(hmm)) != eslOK) goto ERROR;
+  if (( status = h4_vectorize(hmm))   != eslOK) goto ERROR;
   *ret_hmm = hmm;
   return eslOK;
 
@@ -312,7 +320,8 @@ h4_modelsample_SinglePath(ESL_RANDOMNESS *rng, const ESL_ALPHABET *abc, int M, H
     hmm->e[k][esl_rnd_Roll(rng, abc->K)] = 1.0f;
 
   hmm->flags |= h4_HASPROBS;
-  h4_profile_Config(hmm);
+  if (( status = h4_standardize(hmm)) != eslOK) goto ERROR;
+  if (( status = h4_vectorize(hmm))   != eslOK) goto ERROR;
   *ret_hmm = hmm;
   return eslOK;
 
@@ -437,6 +446,7 @@ utest_enumerated_length(ESL_RANDOMNESS *rng)
     }
   h4_profile_Destroy(hmm);
 
+  h4_path_Destroy(pi);
   h4_mode_Destroy(mo);
   esl_sq_Destroy(sq);
   esl_alphabet_Destroy(abc);

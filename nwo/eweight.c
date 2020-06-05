@@ -10,6 +10,7 @@
 #include "esl_matrixops.h"
 #include "esl_rootfinder.h"
 
+#include "h4_counts.h"
 #include "h4_prior.h"
 #include "h4_profile.h"
 #include "modelstats.h"
@@ -20,12 +21,12 @@
  * Bundle of info to pass to objective function for Easel rootfinder
  */
 struct ew_param_s {
-  const H4_PROFILE_CT *orig_ctm;   // ptr to the original count-based HMM, which remains unchanged 
-  const H4_PRIOR      *pri;	   // Dirichlet mixture priors used to parameterize from counts 
-  H4_PROFILE_CT       *ctm;        // working space: copy of <orig_ctm> that we can scale and parameterize
-  H4_PROFILE          *hmm;	   // parameterized model for current effective seq #
-  int                  nseq;       // number of sequences that were counted into <ctm>
-  float                etarget;	   // target for average score per match emission vector (bits)
+  const H4_COUNTS *orig_ctm;   // ptr to the original count-based HMM, which remains unchanged 
+  const H4_PRIOR  *pri;        // Dirichlet mixture priors used to parameterize from counts 
+  H4_COUNTS       *ctm;        // working space: copy of <orig_ctm> that we can scale and parameterize
+  H4_PROFILE      *hmm;        // parameterized model for current effective seq #
+  int              nseq;       // number of sequences that were counted into <ctm>
+  float            etarget;    // target for average score per match emission vector (bits)
 };
 
 
@@ -53,7 +54,7 @@ eweight_target_f(double Neff, void *data, double *ret_fx)
   esl_mat_DScale(p->ctm->t, p->ctm->M+1, h4_NT,          (float) Neff / (float) p->nseq);
 
   /* Parameterize the model, combining weighted counts w/ prior. */
-  if (( status = h4_Parameterize(p->ctm, p->pri, p->hmm)) != eslOK) goto ERROR;
+  if (( status = h4_parameterize(p->ctm, p->pri, p->hmm)) != eslOK) goto ERROR;
   *ret_fx = (double) (h4_MeanMatchKL(p->hmm) - p->etarget);
   return eslOK;
 
@@ -113,7 +114,7 @@ eweight_target_f(double Neff, void *data, double *ret_fx)
  *            nonfatal handler, <*ret_Neff> is set to <nseq>.
  */
 int
-h4_EntropyWeight(const H4_PROFILE_CT *ctm, const H4_PRIOR *pri, int nseq, float etarget, float *ret_Neff)
+h4_EntropyWeight(const H4_COUNTS *ctm, const H4_PRIOR *pri, int nseq, float etarget, float *ret_Neff)
 {
   ESL_ROOTFINDER *R = NULL;
   struct ew_param_s p;
@@ -124,12 +125,12 @@ h4_EntropyWeight(const H4_PROFILE_CT *ctm, const H4_PRIOR *pri, int nseq, float 
   /* Set up the data bundle we pass to the rootfinder */
   p.orig_ctm = ctm;
   p.pri      = pri;
-  p.ctm      = h4_profile_ct_Create(ctm->abc, ctm->M);
-  p.hmm      = h4_profile_Create   (ctm->abc, ctm->M);
+  p.ctm      = h4_counts_Create (ctm->abc, ctm->M);
+  p.hmm      = h4_profile_Create(ctm->abc, ctm->M);
   p.nseq     = nseq;
   p.etarget  = etarget;
 
-  /* If the diversity of the input data already gives us a profile w/ fx < 0,
+  /* If the diversity of the input data already gives us a profile w/ fx <= 0,
    * no need to use entropy weighting to further reduce its mean score.
    *
    * Otherwise, use the Easel rootfinder to dial in on fx ~ 0. 
@@ -145,11 +146,18 @@ h4_EntropyWeight(const H4_PROFILE_CT *ctm, const H4_PRIOR *pri, int nseq, float 
       esl_rootfinder_SetAbsoluteTolerance(R, 0.01); /* getting Neff to ~2 sig digits is fine */
       if ((status = esl_root_Bisection(R, 0., (double) nseq, &Neff)) != eslOK) goto ERROR;            // (0,nseq) defines the interval that root is in
     }
-  
- ERROR: // also normal:
+  else Neff = (float) nseq;
+
   h4_profile_Destroy(p.hmm);
-  h4_profile_ct_Destroy(p.ctm);
+  h4_counts_Destroy(p.ctm);
+  esl_rootfinder_Destroy(R);  
+  *ret_Neff = Neff;
+  return eslOK;
+  
+ ERROR: 
+  h4_profile_Destroy(p.hmm);
+  h4_counts_Destroy(p.ctm);
   esl_rootfinder_Destroy(R);  // this is fine even if R is NULL.
-  *ret_Neff = (status == eslOK ? (float) Neff : (float) nseq);
+  *ret_Neff = (float) nseq;
   return status;
 }

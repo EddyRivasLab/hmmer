@@ -6,18 +6,18 @@
  * This file is conditionally compiled when eslENABLE_VMX is defined.
  */
 #include "p7_config.h"
-#ifdef eslENABLE_VMX
 
-#include <altivec.h>
 #include <math.h>
 
 #include "easel.h"
-#include "esl_vmx.h"
 
 #include "dp_vector/p7_filtermx.h"   // Only needed for the baseline vector implementation, not production. Production is O(1) memory.
 #include "dp_vector/p7_oprofile.h"
 #include "dp_vector/ssvfilter.h"
 
+#ifdef eslENABLE_VMX
+#include <altivec.h>
+#include "esl_vmx.h"
 
 // Altivec has 32 vector registers.
 // Performance seems sligtly better when we leave two of them free for
@@ -844,8 +844,14 @@ p7_SSVFilter_base_vmx(const ESL_DSQ *dsq, int L, const P7_OPROFILE *om, P7_FILTE
 
 
 #else // ! eslENABLE_VMX
-/* Standard compiler-pleasing mantra for an #ifdef'd-out, empty code file. */
-void p7_ssvfilter_vmx_silence_hack(void) { return; }
+/* provide a callable function even when we're `./configure --disable-vmx` */
+int
+p7_SSVFilter_vmx(const ESL_DSQ *dsq, int L, const P7_OPROFILE *om, float *ret_sc)
+{
+  ESL_UNUSED(dsq); ESL_UNUSED(L); ESL_UNUSED(om); ESL_UNUSED(ret_sc);  // shut up, compiler, I know what I'm doing
+  esl_fatal("Altivec/VMX support was not enabled at compile time. Can't use p7_SSVFilter_vmx().");
+  return eslFAIL; // NOTREACHED
+}
 #if defined p7SSVFILTER_VMX_TESTDRIVE || p7SSVFILTER_VMX_EXAMPLE
 int main(void) { return 0; }
 #endif 

@@ -202,10 +202,11 @@ This is potentially confusing, so here's a brief explanation of
 endianness and SIMD vectors.
 
 Consider a 4-byte integer `ABCD`, where `A` is the most significant
-(largest) byte and `D` is the least significant byte. Suppose we have
-an array of four such integers, indexed 0..3. On little-endian (LE)
-versus big-endian (BE) architectures, these 16 bytes are laid out in
-memory (with addresses increasing from left to right) as:
+(largest) byte and `D` is the least significant byte. Additionally,
+suppose we have an array of four such integers, indexed 0..3. On
+little-endian (LE) versus big-endian (BE) architectures, these 16
+bytes are laid out in memory (with addresses increasing from left to
+right) as:
 
 ```
   in memory:

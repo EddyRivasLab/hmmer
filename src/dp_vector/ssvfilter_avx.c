@@ -6,16 +6,18 @@
  * This file is conditionally compiled when eslENABLE_AVX is defined.
  */
 #include "p7_config.h"
-#ifdef eslENABLE_AVX
 
-#include <x86intrin.h>
 #include <math.h>
 
 #include "easel.h"
-#include "esl_avx.h"
 
 #include "dp_vector/p7_oprofile.h"
 #include "dp_vector/ssvfilter.h"
+
+#ifdef eslENABLE_AVX
+#include <x86intrin.h>
+#include "esl_avx.h"
+
 
 /* Note that some ifdefs below has to be changed if these values are
    changed. These values are chosen based on some simple speed
@@ -522,9 +524,14 @@ p7_SSVFilter_avx(const ESL_DSQ *dsq, int L, const P7_OPROFILE *om, float *ret_sc
 }
 
 #else // ! eslENABLE_AVX
-
-/* Standard compiler-pleasing mantra for an #ifdef'd-out, empty code file. */
-void p7_ssvfilter_avx_silence_hack(void) { return; }
+/* provide a callable function even when we're `./configure --disable-avx` */
+int
+p7_SSVFilter_avx(const ESL_DSQ *dsq, int L, const P7_OPROFILE *om, float *ret_sc)
+{
+  ESL_UNUSED(dsq); ESL_UNUSED(L); ESL_UNUSED(om); ESL_UNUSED(ret_sc);  // shut up, compiler, I know what I'm doing
+  esl_fatal("AVX support was not enabled at compile time. Can't use p7_SSVFilter_avx().");
+  return eslFAIL; // NOTREACHED
+}
 #if defined p7SSVFILTER_AVX_TESTDRIVE || p7SSVFILTER_AVX_EXAMPLE
 int main(void) { return 0; }
 #endif 

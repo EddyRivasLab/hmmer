@@ -20,6 +20,7 @@
 #include "esl_alphabet.h"
 #include "esl_random.h"
 
+#include "h4_counts.h"
 #include "h4_mode.h"
 #include "h4_profile.h"
 #include "h4_path.h"
@@ -554,7 +555,7 @@ h4_path_InferGlocal(const ESL_ALPHABET *abc, const ESL_DSQ *ax, int alen, const 
  *            Now the effect on <hmm> is undefined, and caller shouldn't use it.
  */
 int
-h4_path_Count(const H4_PATH *pi, const ESL_DSQ *dsq, float wgt, H4_PROFILE_CT *ctm)
+h4_path_Count(const H4_PATH *pi, const ESL_DSQ *dsq, float wgt, H4_COUNTS *ctm)
 {
   int    z;             // position in trace, 0..Z-1
   int    r;             // position in a runlength, 0..rle-1
@@ -1257,7 +1258,7 @@ utest_counting(void)
   ESL_DSQ       *ax        = malloc(sizeof(ESL_DSQ) * (alen+2));
   int8_t        *matassign = malloc(sizeof(int8_t) * (alen+1));
   H4_PATH       *pi        = h4_path_Create();
-  H4_PROFILE_CT *ctm       = NULL;
+  H4_COUNTS     *ctm       = NULL;
   int            M         = 0;
   int            idx, apos, k;
   char           errbuf[eslERRBUFSIZE];
@@ -1269,7 +1270,7 @@ utest_counting(void)
       if (matassign[apos]) M++;
     }
 
-  if ((ctm = h4_profile_ct_Create(abc, M)) == NULL) esl_fatal(msg);
+  if ((ctm = h4_counts_Create(abc, M)) == NULL) esl_fatal(msg);
 
   for (idx = 0; idx < nseq; idx++)
     {
@@ -1279,8 +1280,6 @@ utest_counting(void)
       if ( h4_path_Count(pi, ax, 1.0, ctm)                           != eslOK) esl_fatal(msg);
       h4_path_Reuse(pi);
     }
-
-  //h4_profile_ct_Dump(stdout, hmm);
 
   /* For the emissions, every sequence has a "GAATTC" consensus */
   if (ctm->e[1][2] != (double) nseq) esl_fatal(msg);
@@ -1300,7 +1299,7 @@ utest_counting(void)
 
   free(ax);
   free(matassign);
-  h4_profile_ct_Destroy(ctm);
+  h4_counts_Destroy(ctm);
   h4_path_Destroy(pi);
   esl_alphabet_Destroy(abc);
 }  

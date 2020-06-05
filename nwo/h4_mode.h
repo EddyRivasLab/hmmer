@@ -23,10 +23,11 @@
  * a H4_PROFILE as const in big (parallelized) searches. 
  */
 typedef struct {
-  float xsc[h4_NX][h4_NXT];     // special transitions [ENJCB][LOOP,MOVE]
+  float   xf[h4_NX][h4_NXT];    // probabilities [ENJCB][LOOP,MOVE] (i.e. in FB filter)
+  float   xsc[h4_NX][h4_NXT];   // log2 bit scores (i.e. in reference DP)
+  int16_t xw[h4_NX][h4_NXT];    // 16-bit scaled/offset log2 bit scores (i.e. in VF)
 
   float nullsc;                 // null1 score correction for length L
-
   int   L;                      // current configured target seq length                      unset=-1
   float nj;                     // expected # of J's: 0.0 = unihit; 1.0 = standard multihit. unset=-1.
   float pglocal;                // B->G probability
@@ -46,6 +47,8 @@ typedef struct {
 
 
 extern H4_MODE *h4_mode_Create      (void);
+extern H4_MODE *h4_mode_Clone(const H4_MODE *mo);
+extern int      h4_mode_Copy (const H4_MODE *mo, H4_MODE *m2);
 extern int      h4_mode_SetCustom   (H4_MODE *mo, int L, float nj, float pglocal);
 extern int      h4_mode_SetDefault  (H4_MODE *mo);
 extern int      h4_mode_SetLocal    (H4_MODE *mo);
@@ -58,5 +61,7 @@ extern int      h4_mode_SetLength   (H4_MODE *mo, int L);
 extern void     h4_mode_Destroy     (H4_MODE *mo);
 
 extern int      h4_mode_Dump(FILE *fp, const H4_MODE *mo);
+extern int      h4_mode_SameAsSSV(const H4_MODE *mo, H4_MODE **ret_xmo);
+extern int      h4_mode_SameAsVF (const H4_MODE *mo, H4_MODE **ret_xmo);
 
 #endif //h4MODE_INCLUDED

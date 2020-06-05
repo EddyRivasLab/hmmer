@@ -15,9 +15,6 @@
  *    3. Internal debugging tools.
  */
 #include "p7_config.h"
-#ifdef eslENABLE_NEON
-
-#include <arm_neon.h>
 
 #include "easel.h"
 #include "esl_neon.h"
@@ -29,6 +26,9 @@
 #include "dp_vector/p7_oprofile.h"
 #include "dp_vector/p7_checkptmx.h"
 #include "dp_vector/fwdfilter.h"
+
+#ifdef eslENABLE_NEON
+#include <arm_neon.h>
 
 static inline float forward_row_neon         (ESL_DSQ xi, const P7_OPROFILE *om, const esl_neon_128f_t *dpp, esl_neon_128f_t *dpc, int Q);
 static inline void  backward_row_main_neon   (ESL_DSQ xi, const P7_OPROFILE *om,       esl_neon_128f_t *dpp, esl_neon_128f_t *dpc, int Q, float scalefactor);
@@ -905,7 +905,21 @@ save_debug_row_fb_neon(P7_CHECKPTMX *ox, P7_REFMX *gx, esl_neon_128f_t *dpc, int
 
                                          
 #else // ! eslENABLE_NEON
-
+/* provide callable functions even when we're `./configure --disable-neon` */
+int
+p7_ForwardFilter_neon(const ESL_DSQ *dsq, int L, const P7_OPROFILE *om, P7_CHECKPTMX *ox, float *opt_sc)
+{
+  ESL_UNUSED(dsq); ESL_UNUSED(L); ESL_UNUSED(om); ESL_UNUSED(ox); ESL_UNUSED(opt_sc); 
+  esl_fatal("ARM NEON support was not enabled at compile time. Can't use p7_ForwardFilter_neon().");
+  return eslFAIL; // NOTREACHED
+}
+int
+p7_BackwardFilter_neon(const ESL_DSQ *dsq, int L, const P7_OPROFILE *om, P7_CHECKPTMX *ox, P7_SPARSEMASK *sm, float sm_thresh)
+{
+  ESL_UNUSED(dsq); ESL_UNUSED(L); ESL_UNUSED(om); ESL_UNUSED(ox); ESL_UNUSED(sm); ESL_UNUSED(sm_thresh); 
+  esl_fatal("ARM NEON support was not enabled at compile time. Can't use p7_BackwardFilter_neon().");
+  return eslFAIL; // NOTREACHED
+}
 /* Standard compiler-pleasing mantra for an #ifdef'd-out, empty code file. */
 void p7_fwdfilter_neon_silence_hack(void) { return; }
 #if defined p7FWDFILTER_NEON_TESTDRIVE || p7FWDFILTER_NEON_EXAMPLE

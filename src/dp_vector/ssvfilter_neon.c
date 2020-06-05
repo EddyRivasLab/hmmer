@@ -6,16 +6,17 @@
  * This file is conditionally compiled when eslENABLE_AVX is defined.
  */
 #include "p7_config.h"
-#ifdef eslENABLE_NEON
 
-#include <arm_neon.h>
 #include <math.h>
-
 #include "easel.h"
-#include "esl_neon.h"
 
 #include "dp_vector/p7_oprofile.h"
 #include "dp_vector/ssvfilter.h"
+
+#ifdef eslENABLE_NEON
+#include <arm_neon.h>
+#include "esl_neon.h"
+
 
 /* Note that some ifdefs below has to be changed if these values are
    changed. These values are chosen based on some simple speed
@@ -465,9 +466,14 @@ p7_SSVFilter_neon(const ESL_DSQ *dsq, int L, const P7_OPROFILE *om, float *ret_s
 
 
 #else // ! eslENABLE_NEON
-
-/* Standard compiler-pleasing mantra for an #ifdef'd-out, empty code file. */
-void p7_ssvfilter_neon_silence_hack(void) { return; }
+/* provide a callable function even when we're `./configure --disable-neon` */
+int
+p7_SSVFilter_neon(const ESL_DSQ *dsq, int L, const P7_OPROFILE *om, float *ret_sc)
+{
+  ESL_UNUSED(dsq); ESL_UNUSED(L); ESL_UNUSED(om); ESL_UNUSED(ret_sc);  // shut up, compiler, I know what I'm doing
+  esl_fatal("ARM NEON support was not enabled at compile time. Can't use p7_SSVFilter_neon().");
+  return eslFAIL; // NOTREACHED
+}
 #if defined p7SSVFILTER_NEON_TESTDRIVE || p7SSVFILTER_NEON_EXAMPLE
 int main(void) { return 0; }
 #endif 

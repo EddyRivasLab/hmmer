@@ -2,58 +2,82 @@ PROGS = hmmer
 
 OBJS   = \
 	cmd_build.o         \
+	h4_checkptmx.o      \
+	h4_counts.o         \
+	h4_filtermx.o       \
 	h4_hmmfile.o        \
 	h4_mode.o           \
 	h4_path.o           \
 	h4_prior.o          \
 	h4_profile.o        \
 	h4_refmx.o          \
+	h4_sparsemask.o     \
 	build.o             \
 	emit.o              \
 	eweight.o           \
+	fbfilter.o          \
 	general.o           \
 	logsum.o            \
 	modelsample.o       \
 	modelstats.o        \
 	parameterize.o      \
 	reference_dp.o      \
+	simdvec.o           \
+	ssvfilter.o         \
+	standardize.o       \
+	vectorize.o         \
+	vitfilter.o         \
 	zigar.o
 
-SSE4_OBJS   =
-AVX_OBJS    =
-AVX512_OBJS =
-NEON_OBJS   =
-VMX_OBJS    =
+SSE4_OBJS   = fbfilter_sse.o    ssvfilter_sse.o    vitfilter_sse.o    simdvec_sse.o
+AVX_OBJS    = fbfilter_avx.o    ssvfilter_avx.o    vitfilter_avx.o    simdvec_avx.o
+AVX512_OBJS = fbfilter_avx512.o ssvfilter_avx512.o vitfilter_avx512.o simdvec_avx512.o
+NEON_OBJS   = fbfilter_neon.o   ssvfilter_neon.o   vitfilter_neon.o
+VMX_OBJS    = fbfilter_vmx.o    ssvfilter_vmx.o    vitfilter_vmx.o
 
 HDRS = \
 	h4_config.h         \
 	cmd_build.h         \
+	h4_checkptmx.h      \
+	h4_counts.h         \
+	h4_filtermx.h       \
 	h4_hmmfile.h        \
 	h4_mode.h           \
 	h4_path.h           \
 	h4_prior.h          \
 	h4_profile.h        \
 	h4_refmx.h          \
+	h4_sparsemask.h     \
 	build.h             \
 	emit.h              \
 	eweight.h           \
+	fbfilter.h          \
 	general.h           \
 	logsum.h            \
 	modelsample.h       \
 	modelstats.h        \
 	parameterize.h      \
 	reference_dp.h      \
+	simdvec.h           \
+	ssvfilter.h         \
+	standardize.h       \
+	vectorize.h         \
+	vitfilter.h         \
 	zigar.h
 
 
 UTESTS = \
-	h4_hmmfile_utest   \
-	h4_mode_utest      \
-	h4_path_utest      \
-	h4_profile_utest   \
-	logsum_utest       \
-	modelsample_utest  \
-	reference_dp_utest \
+	h4_hmmfile_utest    \
+	h4_mode_utest       \
+	h4_path_utest       \
+	h4_profile_utest    \
+	h4_sparsemask_utest \
+	fbfilter_utest      \
+	logsum_utest        \
+	modelsample_utest   \
+	reference_dp_utest  \
+	ssvfilter_utest     \
+	vitfilter_utest     \
 	zigar_utest
 
 STATS  =
@@ -63,15 +87,22 @@ EXPERIMENTS = \
 	h4_build_experiment2
 
 BENCHMARKS = \
-	logsum_benchmark \
-	reference_dp_benchmark 
+	fbfilter_benchmark      \
+	logsum_benchmark        \
+	reference_dp_benchmark  \
+	ssvfilter_benchmark     \
+	vitfilter_benchmark     \
 
 EXAMPLES = \
 	h4_hmmfile_example        \
 	h4_path_example           \
+	h4_sparsemask_example     \
 	emit_example              \
+	fbfilter_example          \
 	logsum_example            \
 	reference_dp_example      \
+	ssvfilter_example         \
+	vitfilter_example         \
 	zigar_example
 
 
@@ -141,39 +172,39 @@ ifndef V
 	QUIET         = @
 endif
 
-ALL_OBJS        = ${OBJS}       ${SSE_OBJS}       ${AVX_OBJS}       ${AVX512_OBJS}       ${NEON_OBJS}       ${VMX_OBJS}
-ALL_UTESTS      = ${UTESTS}     ${SSE_UTESTS}     ${AVX_UTESTS}     ${AVX512_UTESTS}     ${NEON_UTESTS}     ${VMX_UTESTS}
+ALL_OBJS        = ${OBJS}       ${SSE4_OBJS}       ${AVX_OBJS}       ${AVX512_OBJS}       ${NEON_OBJS}       ${VMX_OBJS}
+ALL_UTESTS      = ${UTESTS}     ${SSE4_UTESTS}     ${AVX_UTESTS}     ${AVX512_UTESTS}     ${NEON_UTESTS}     ${VMX_UTESTS}
 ALL_EXPERIMENTS = ${EXPERIMENTS}
-ALL_STATS       = ${STATS}      ${SSE_STATS}      ${AVX_STATS}      ${AVX512_STATS}      ${NEON_STATS}      ${VMX_STATS}
-ALL_BENCHMARKS  = ${BENCHMARKS} ${SSE_BENCHMARKS} ${AVX_BENCHMARKS} ${AVX512_BENCHMARKS} ${NEON_BENCHMARKS} ${VMX_BENCHMARKS}
-ALL_EXAMPLES    = ${EXAMPLES}   ${SSE_EXAMPLES}   ${AVX_EXAMPLES}   ${AVX512_EXAMPLES}   ${NEON_EXAMPLES}   ${VMX_EXAMPLES}
+ALL_STATS       = ${STATS}      ${SSE4_STATS}      ${AVX_STATS}      ${AVX512_STATS}      ${NEON_STATS}      ${VMX_STATS}
+ALL_BENCHMARKS  = ${BENCHMARKS} ${SSE4_BENCHMARKS} ${AVX_BENCHMARKS} ${AVX512_BENCHMARKS} ${NEON_BENCHMARKS} ${VMX_BENCHMARKS}
+ALL_EXAMPLES    = ${EXAMPLES}   ${SSE4_EXAMPLES}   ${AVX_EXAMPLES}   ${AVX512_EXAMPLES}   ${NEON_EXAMPLES}   ${VMX_EXAMPLES}
 
 
-${SSE_OBJS}:          SIMD_CFLAGS:= $(SSE4_CFLAGS)     
+${SSE4_OBJS}:         SIMD_CFLAGS:= $(SSE4_CFLAGS)     
 ${AVX_OBJS}:          SIMD_CFLAGS:= $(AVX_CFLAGS)     
 ${AVX512_OBJS}:       SIMD_CFLAGS:= $(AVX512_CFLAGS)  
 ${NEON_OBJS}:         SIMD_CFLAGS:= $(NEON_CFLAGS)    
 ${VMX_OBJS}:          SIMD_CFLAGS:= $(VMX_CFLAGS)     
 
-${SSE_UTESTS}:        SIMD_CFLAGS:= $(SSE4_CFLAGS)     
+${SSE4_UTESTS}:       SIMD_CFLAGS:= $(SSE4_CFLAGS)     
 ${AVX_UTESTS}:        SIMD_CFLAGS:= $(AVX_CFLAGS)     
 ${AVX512_UTESTS}:     SIMD_CFLAGS:= $(AVX512_CFLAGS)  
 ${NEON_UTESTS}:       SIMD_CFLAGS:= $(NEON_CFLAGS)    
 ${VMX_UTESTS}:        SIMD_CFLAGS:= $(VMX_CFLAGS)     
 
-${SSE_STATS}:         SIMD_CFLAGS:= $(SSE4_CFLAGS)     
+${SSE4_STATS}:        SIMD_CFLAGS:= $(SSE4_CFLAGS)     
 ${AVX_STATS}:         SIMD_CFLAGS:= $(AVX_CFLAGS)     
 ${AVX512_STATS}:      SIMD_CFLAGS:= $(AVX512_CFLAGS)  
 ${NEON_STATS}:        SIMD_CFLAGS:= $(NEON_CFLAGS)    
 ${VMX_STATS}:         SIMD_CFLAGS:= $(VMX_CFLAGS)     
 
-${SSE_BENCHMARKS}:    SIMD_CFLAGS:= $(SSE4_CFLAGS)     
+${SSE4_BENCHMARKS}:   SIMD_CFLAGS:= $(SSE4_CFLAGS)     
 ${AVX_BENCHMARKS}:    SIMD_CFLAGS:= $(AVX_CFLAGS)     
 ${AVX512_BENCHMARKS}: SIMD_CFLAGS:= $(AVX512_CFLAGS)  
 ${NEON_BENCHMARKS}:   SIMD_CFLAGS:= $(NEON_CFLAGS)    
 ${VMX_BENCHMARKS}:    SIMD_CFLAGS:= $(VMX_CFLAGS)     
 
-${SSE_EXAMPLES}:      SIMD_CFLAGS:= $(SSE4_CFLAGS)     
+${SSE4_EXAMPLES}:     SIMD_CFLAGS:= $(SSE4_CFLAGS)     
 ${AVX_EXAMPLES}:      SIMD_CFLAGS:= $(AVX_CFLAGS)     
 ${AVX512_EXAMPLES}:   SIMD_CFLAGS:= $(AVX512_CFLAGS)  
 ${NEON_EXAMPLES}:     SIMD_CFLAGS:= $(NEON_CFLAGS)    
@@ -264,7 +295,7 @@ distclean: clean
 
 clean:
 	-rm -f ${PROGS} ${UTESTS} ${STATS} ${BENCHMARKS} ${EXAMPLES} ${EXPERIMENTS} libhmmer.a
-	-rm -f *~ *.o 
+	-rm -f *~ *.o TAGS
 	-rm -f *.gcno *.gcda *.gcov
 	for prog in ${PROGS} ${UTESTS} ${STATS} ${BENCHMARKS} ${EXAMPLES} ${EXPERIMENTS}; do\
 	  if test -d $$prog.dSYM; then rm -rf $$prog.dSYM; fi; \
