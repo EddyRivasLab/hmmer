@@ -30,19 +30,6 @@
 /* set the max residue count to 1/4 meg when reading a block */
 #define NHMMER_MAX_RESIDUE_COUNT (1024 * 256)  /* 1/4 Mb */
 
-
-/* These aid in the manual indication of query format for nhmmer
- * and are used to override autodetection of the query as being an
- * HMM, MSA, or unaligned fasta.  The values keep out of the way of
- * sqio formats (<=100) and msa formats (>100, functionally in the
- * hundreds).
- */
-#define NHMMER_QFORMAT_UNKNOWN          0      /* query file format is unknown*/
-#define NHMMER_QFORMAT_HMM              10001  /* query file is an HMM */
-#define NHMMER_QFORMAT_MSA              10002  /* query file is a multiple sequence alignment; the specific format depends on the eslMSAFILE_* defines in esl_msafile.h. */
-#define NHMMER_QFORMAT_SEQ              10003  /* query file is a multiple sequence alignment; the specific format depends on the eslMSAFILE_* defines in esl_msafile.h. */
-
-
 typedef struct {
 #ifdef HMMER_THREADS
   ESL_WORK_QUEUE   *queue;
@@ -84,7 +71,6 @@ static int             assign_Lengths(P7_TOPHITS *th, ID_LENGTH_LIST *id_length_
 #define INCOPTS     "--incE,--incT,--cut_ga,--cut_nc,--cut_tc"
 #define INCDOMOPTS  "--incdomE,--incdomT,--cut_ga,--cut_nc,--cut_tc"
 #define THRESHOPTS  "-E,-T,--domE,--domT,--incE,--incT,--incdomE,--incdomT,--cut_ga,--cut_nc,--cut_tc"
-#define QFORMATS     "--qhmm,--qseq,--qmsa"
 
 
 #define CPUOPTS     NULL
@@ -145,10 +131,7 @@ static ESL_OPTIONS options[] = {
 #endif
 
 /* Other options */
-  { "--qhmm",       eslARG_NONE,         NULL, NULL, NULL,    NULL,  NULL,       QFORMATS,     "assert query is an hmm file",                                   12 },
-  { "--qseq",     eslARG_NONE,         NULL, NULL, NULL,    NULL,  NULL,       QFORMATS,     "assert query is an unaligned fasta file",                       12 },
-  { "--qmsa",       eslARG_NONE,         NULL, NULL, NULL,    NULL,  NULL,       QFORMATS,     "assert query is an aligned file format; can use --qformat to specify",             12 },
-  { "--qformat",    eslARG_STRING,       NULL, NULL, NULL,    NULL,  "--qmsa",       NULL,     "assert query msa <seqfile> is in format <s>",                       12 },
+  { "--qformat",    eslARG_STRING,       NULL, NULL, NULL,    NULL,  NULL ,          NULL,     "assert query is in format <s> (can be seq or msa format)",      12 },
   { "--tformat",    eslARG_STRING,       NULL, NULL, NULL,    NULL,  NULL,           NULL,     "assert target <seqdb> is in format <s>",                        12 },
   { "--nonull2",    eslARG_NONE,         NULL, NULL, NULL,    NULL,  NULL,           NULL,     "turn off biased composition score corrections",                 12 },
   { "-Z",           eslARG_REAL,        FALSE, NULL, "x>0",   NULL,  NULL,           NULL,     "set database size (Megabases) to <x> for E-value calculations", 12 },
@@ -381,8 +364,8 @@ output_header(FILE *ofp, const ESL_GETOPTS *go, char *queryfile, char *seqfile, 
     if (esl_opt_GetInteger(go, "--seed") == 0 && fprintf(ofp, "# random number seed:              one-time arbitrary\n")                              < 0) ESL_EXCEPTION_SYS(eslEWRITE, "write failed");
     else if                              (  fprintf(ofp, "# random number seed set to:       %d\n",             esl_opt_GetInteger(go, "--seed"))     < 0) ESL_EXCEPTION_SYS(eslEWRITE, "write failed");
   }
-  if (esl_opt_IsUsed(go, "--qformat")    && fprintf(ofp, "# query <seqfile> format asserted: %s\n",             esl_opt_GetString(go, "--qformat"))   < 0) ESL_EXCEPTION_SYS(eslEWRITE, "write failed");
-  if (esl_opt_IsUsed(go, "--tformat")    && fprintf(ofp, "# targ <seqfile> format asserted:  %s\n",             esl_opt_GetString(go, "--tformat"))   < 0) ESL_EXCEPTION_SYS(eslEWRITE, "write failed");
+  if (esl_opt_IsUsed(go, "--qformat")    && fprintf(ofp, "# query format asserted: %s\n",              esl_opt_GetString(go, "--qformat"))   < 0) ESL_EXCEPTION_SYS(eslEWRITE, "write failed");
+  if (esl_opt_IsUsed(go, "--tformat")    && fprintf(ofp, "# target format asserted:  %s\n",            esl_opt_GetString(go, "--tformat"))   < 0) ESL_EXCEPTION_SYS(eslEWRITE, "write failed");
   if (esl_opt_IsUsed(go, "--w_beta")     && fprintf(ofp, "# window length beta value:        %g\n",             esl_opt_GetReal(go, "--w_beta"))      < 0) ESL_EXCEPTION_SYS(eslEWRITE, "write failed");
   if (esl_opt_IsUsed(go, "--w_length")   && fprintf(ofp, "# window length :                  %d\n",             esl_opt_GetInteger(go, "--w_length")) < 0) ESL_EXCEPTION_SYS(eslEWRITE, "write failed");
   if (esl_opt_IsUsed(go, "--block_length")&&fprintf(ofp, "# block length :                   %d\n",             esl_opt_GetInteger(go, "--block_length")) < 0) ESL_EXCEPTION_SYS(eslEWRITE, "write failed");
@@ -410,7 +393,7 @@ main(int argc, char **argv)
    */
   cfg.queryfile  = NULL;
   cfg.dbfile     = NULL;
-  cfg.qfmt       = NHMMER_QFORMAT_UNKNOWN;
+  cfg.qfmt       = eslSQFILE_UNKNOWN;
   cfg.do_mpi     = FALSE;               /* this gets reset below, if we init MPI */
   cfg.nproc      = 0;                   /* this gets reset below, if we init MPI */
   cfg.my_rank    = 0;                   /* this gets reset below, if we init MPI */
@@ -420,19 +403,18 @@ main(int argc, char **argv)
 
   process_commandline(argc, argv, &go, &cfg.queryfile, &cfg.dbfile);
 
-
-  if (esl_opt_IsOn(go, "--qseq")) {
-      cfg.qfmt = NHMMER_QFORMAT_SEQ;
-  } else if (esl_opt_IsOn(go, "--qhmm")) {
-      cfg.qfmt = NHMMER_QFORMAT_HMM;
-  } else if (esl_opt_IsOn(go, "--qmsa")) {
-      if (esl_opt_IsOn(go, "--qformat")) {
-        cfg.qfmt = esl_msafile_EncodeFormat(esl_opt_GetString(go, "--qformat"));
-        if (cfg.qfmt == eslMSAFILE_UNKNOWN) p7_Fail("%s is not a recognized input file format\n", esl_opt_GetString(go, "--qformat"));
-      } else {
-        cfg.qfmt = NHMMER_QFORMAT_MSA;
+  if (esl_opt_IsOn(go, "--qformat")) { /* is this an msa or a single sequence file? */
+      cfg.qfmt = esl_sqio_EncodeFormat(esl_opt_GetString(go, "--qformat")); // try single sequence format
+      if (cfg.qfmt == eslSQFILE_UNKNOWN) {
+          cfg.qfmt = esl_msafile_EncodeFormat(esl_opt_GetString(go, "--qformat"));
+          if (cfg.qfmt == eslMSAFILE_UNKNOWN) p7_Fail("%s is not a recognized input file format\n", esl_opt_GetString(go, "--qformat"));
+      } else { /* disallow target-only formats */
+          if (cfg.qfmt == eslSQFILE_NCBI    || cfg.qfmt == eslSQFILE_DAEMON ||
+              cfg.qfmt == eslSQFILE_HMMPGMD || cfg.qfmt == eslSQFILE_FMINDEX )
+                  p7_Fail("%s is not a valid query format\n", esl_opt_GetString(go, "--qformat"));
       }
   }
+
 
   if (esl_opt_IsUsed(go, "--restrictdb_stkey") )
     if ((cfg.firstseq_key = esl_opt_GetString(go, "--restrictdb_stkey")) == NULL)  p7_Fail("Failure capturing --restrictdb_stkey\n");
@@ -600,59 +582,65 @@ serial_master(ESL_GETOPTS *go, struct cfg_s *cfg)
    */
 
   /* (1)
-  * If we were told a specific query file type, just do what we're told
-  */
-  if (cfg->qfmt == NHMMER_QFORMAT_HMM) {
-      status = nhmmer_open_hmm_file(cfg, &hfp, errbuf, &abc, &hmm);
-      if (status != eslOK) p7_Fail("Unknown error reading hmm from file %s (%d)\n", cfg->queryfile, status);
-  } else if (cfg->qfmt == NHMMER_QFORMAT_MSA) {
+   * If we were told a specific query file type, just do what we're told
+   * Note, the file format codes follow this rule:
+   *  - 0 is an unknown/unassigned format (eslSQFILE_UNKNOWN, eslMSAFILE_UNKNOWN)
+   *  - <=100 is reserved for sqio, for unaligned formats
+   *  - >100  is reserved for msa, for aligned formats
+   */
+  if (cfg->qfmt > 100 /* msa file */) {
       status = nhmmer_open_msa_file(cfg, &qfp_msa, &abc, &msa);
       if (status != eslOK) p7_Fail("Error reading msa from file %s (%d)\n", cfg->queryfile, status);
-  } else if (cfg->qfmt == NHMMER_QFORMAT_SEQ) {
+  } else if (cfg->qfmt > 0 /* sequence file */) {
       status = nhmmer_open_seq_file(cfg, &qfp_sq, &abc, &qsq);
       if (status != eslOK) p7_Fail("Error reading sequence from file %s (%d)\n", cfg->queryfile, status);
   }
 
 
-  /* (2)
-   * Guessing query format.
-   *
-   * First check if it's an HMM.  This fails easily if it's not,
-   * and lets us either (a) give up right away if the input is piped (not rewindable),
-   * or (b) continue guessing
-   *
-   * If it isn't an HMM, and it's a rewindable file, we'll check to see
-   * if it's obviously an MSA file or obviously a sequence file
-   * If not obvious, we'll force the user to tell us.
-   * That looks like this:
-   * - Try to open it as an MSA file
-   *    - if ok
-   *        - if FASTA or A2M, it might be a seq file, so give "must specify" message
-   *        - otherwise, it's an MSA
-   *    - if not
-   *        - it's probably a seq file, test that
-   */
 
-  if ( cfg->qfmt == NHMMER_QFORMAT_UNKNOWN ) {
+/* (2)
+ * Guessing query format.
+ *
+ * First check if it's an HMM.  This fails easily if it's not,
+ * and lets us either (a) give up right away if the input is piped (not rewindable),
+ * or (b) continue guessing
+ *
+ * If it isn't an HMM, and it's a rewindable file, we'll check to see
+ * if it's obviously an MSA file or obviously a sequence file
+ * If not obvious, we'll force the user to tell us.
+ * That looks like this:
+ *      - Try to open it as an MSA file
+ *         - if ok (i.e. it opens and passes the MSA check, including that
+ *           all sequences are the same length)
+ *            - if it's a FASTA or A2M format, it still might be a sequence
+ *              file
+ *                 - if the "MSA" is a single sequence, then rewind and call it
+ *                   a sequence input.  Otherwise give "must specify" message
+ *            - otherwise, it's an MSA;  proceed accordingly
+ *         - if not ok (i.e. it's not an MSA file)
+ *            - if it's anything, it must be a sequence file, proceed accordingly *
+ */
+
+  if ( cfg->qfmt == eslSQFILE_UNKNOWN ) {
       status = nhmmer_open_hmm_file(cfg, &hfp, errbuf, &abc, &hmm);
       if (status != eslOK) { /* if it is eslOK, then it's an HMM, so we're done guessing */
           if (hfp!=NULL) { p7_hmmfile_Close(hfp); hfp=NULL;}
           if (strcmp(cfg->queryfile, "-") == 0 ) {
               /* we can't rewind a piped file, so we can't perform any more autodetection on the query format*/
-              p7_Fail("Must specify query file type (--qmsa, --qseq, --qhmm) to read <alignfile> from stdin ('-')");
+              p7_Fail("Must specify query file format (--qformat) to read <query file> from stdin ('-')");
           } else {
               status = nhmmer_open_msa_file(cfg, &qfp_msa, &abc, &msa);
               if (status == eslOK) {
                   if ( qfp_msa->format == eslMSAFILE_AFA || qfp_msa->format == eslMSAFILE_A2M) {
                       /* this could just be a sequence file with o single sequence (in which case, fall through
                        * to the "sequence" case), or with several same-sized sequences (in which case ask for guidance) */
-                      if (msa->nseq > 1) p7_Fail("Unable to guess query file type; please specify (--qmsa, --qseq, --qhmm)");
+                      if (msa->nseq > 1) p7_Fail("Unable to guess query file type; please specify (--qformat)");
                   } else {
                       /* if ok, and not fasta or a2m, then it's an MSA ... proceed */
-                      cfg->qfmt = NHMMER_QFORMAT_MSA;
+                      cfg->qfmt = eslSQFILE_UNKNOWN;
                   }
               }
-              if ( cfg->qfmt == NHMMER_QFORMAT_UNKNOWN ) { /* it's not an MSA, try seq */
+              if ( cfg->qfmt == eslSQFILE_UNKNOWN ) { /* it's not an MSA, try seq */
                   if (qfp_msa) { esl_msafile_Close(qfp_msa); qfp_msa = NULL; }
                   status = nhmmer_open_seq_file(cfg, &qfp_sq, &abc, &qsq);
                   if (status != eslOK) p7_Fail("Error reading query file %s (%d)\n", cfg->queryfile, status);
@@ -870,7 +858,7 @@ serial_master(ESL_GETOPTS *go, struct cfg_s *cfg)
   }
 
 
-  /* Outer loop: over each query HMM or alignment in <queryfile>. */
+  /* Outer loop: over each query HMM or alignment in <query file>. */
   while (qhstatus == eslOK) {
       P7_PROFILE      *gm      = NULL;
       P7_OPROFILE     *om      = NULL;       /* optimized query profile                  */
