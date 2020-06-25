@@ -5,7 +5,10 @@
  */
 #ifndef h4MODE_INCLUDED
 #define h4MODE_INCLUDED
-
+#ifdef __cplusplus // magic to make C++ compilers happy
+extern "C"
+{
+#endif
 #include "h4_config.h"
 
 /* Constants defining fixed sizes.
@@ -63,5 +66,7 @@ extern void     h4_mode_Destroy     (H4_MODE *mo);
 extern int      h4_mode_Dump(FILE *fp, const H4_MODE *mo);
 extern int      h4_mode_SameAsSSV(const H4_MODE *mo, H4_MODE **ret_xmo);
 extern int      h4_mode_SameAsVF (const H4_MODE *mo, H4_MODE **ret_xmo);
-
+#ifdef __cplusplus // magic to make C++ compilers happy
+}
+#endif
 #endif //h4MODE_INCLUDED

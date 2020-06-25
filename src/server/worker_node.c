@@ -374,7 +374,7 @@ int p7_server_workernode_Setup(uint32_t num_databases, char **database_names, ui
     p7_Fail((char *)"Unable to allocate memory in p7_server_workernode_Setup\n");
   }
 
-  if(p7_query_cuda(cuda_config) != eslOK){
+  if(p7_configure_cuda(cuda_config) != eslOK){
     p7_Fail((char *) "Error while attempting to detect CUDA hardware");
   }
 

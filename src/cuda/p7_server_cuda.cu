@@ -2,9 +2,10 @@
 #include "esl_red_black.h"
 #include "easel.h"
 #include "ssv_cuda.h"
+#include "p7_cuda.h"
 #include "p7_orion.h"
 #include "p7_cuda_error.h"
-#define __NVVP_PROFILE_ON  //add events for better profiling 
+//#define __NVVP_PROFILE_ON  //add events for better profiling 
 
 #ifdef __NVVP_PROFILE_ON
 #include "nvToolsExt.h"
@@ -13,25 +14,7 @@
 
 #define BACKEND_SWITCH_THRESHOLD 1000000
 
-typedef struct p7_cuda_buffers{
-  unsigned int num_streams;
-  uint64_t **cpu_offsets; //offsets from the start of the data buffer to the start of each sequence, CPU copy
-  uint64_t **gpu_offsets; //offsets from the start of the data buffer to the start of each sequence, GPU copy
-  char **cpu_data; // buffers for sequence data on CPU
-  char **cpu_data2;
-  char **gpu_data; // buffers for sequence data on GPU
-  uint32_t *cpu_num_hits; // Number of hits found in this chunk of sequences, CPU copy
-  uint32_t *gpu_num_hits; // Number of hits found in this chunk of sequences, GPU copy
-  int8_t **cpu_hits; // IDs of sequences that hit, CPU copy
-  int8_t **gpu_hits; // IDs of sequences that hit, GPU copy
-  float **cpu_scores;
-  float **gpu_scores;
-  uint64_t **cpu_lengths; // sequence lengths
-  uint64_t **gpu_lengths;
-  char ***cpu_sequences; // Original locations of sequences
-  cudaStream_t *streams;  // Stream identifiers
-  uint32_t *num_sequences; // The number of sequences in the chunk currently being processed by each stream
-} P7_CUDA_BUFFERS;
+
 
 char * restripe_char(char *source, int source_chars_per_vector, int dest_chars_per_vector, int source_length, int *dest_length);
 
@@ -40,9 +23,9 @@ void SSV_cuda(int num_sequences, const __restrict__ uint8_t *data, const __restr
 
 
 static void p7_cuda_worker_thread_back_end_sequence_search_loop(P7_DAEMON_WORKERNODE_STATE *workernode,  uint32_t my_id, int cleanup);
-void send_sequence_chunk_to_cuda_card(P7_DAEMON_WORKERNODE_STATE *workernode, P7_CUDA_BUFFERS *buffer_state, uint64_t *chunk_end, uint64_t work_end, char **sequence_data, int stream, dim3 threads_per_block, dim3 num_blocks, P7_OPROFILE *om, double mu, double lambda);
+void send_sequence_chunk_to_cuda_card(P7_DAEMON_WORKERNODE_STATE *workernode, P7_CUDA_CONFIG *cuda_config, uint32_t my_id, uint64_t *chunk_end, uint64_t work_end, char **sequence_data, int stream, dim3 threads_per_block, dim3 num_blocks, P7_OPROFILE *om, double mu, double lambda);
 
-void parse_CUDA_chunk_results(P7_DAEMON_WORKERNODE_STATE *workernode, P7_CUDA_BUFFERS *buffer_state, uint32_t my_id, uint32_t stream);
+void parse_CUDA_chunk_results(P7_DAEMON_WORKERNODE_STATE *workernode, P7_CUDA_CONFIG *cuda_config, uint32_t my_id, uint32_t stream);
 // GPU kernel that copies values from the CPU version of an OPROFILE to one on the GPU.  Should generally only be called on one GPU core
 __global__ void copy_oprofile_values_to_card(P7_OPROFILE *the_profile, float tauBM, float scale_b, float scale_w, int16_t base_w, int16_t ddbound_w, int L, int M, int V, int max_length, int allocM, int allocQb, int allocQw, int allocQf, int mode, float nj, int is_shadow, int8_t **rbv){
 
@@ -174,16 +157,88 @@ char * restripe_char(char *source, int source_chars_per_vector, int dest_chars_p
   return dest;
 
 }
+int16_t *restripe_vitfilter(int16_t *source, int source_int16s_per_vector, int dest_int16s_per_vector, int source_length, int *dest_length){
+  int dest_num_vectors;
+  int source_num_vectors;
+  int16_t *dest;
+  source_num_vectors = (source_length /sizeof(int16_t)) / source_int16s_per_vector;
+  if (source_num_vectors * source_int16s_per_vector *sizeof(int16_t)!= source_length) {
+    source_num_vectors++;
+  }
+  dest_num_vectors = (source_length/sizeof(int16_t)) / dest_int16s_per_vector;
+  if (dest_num_vectors * dest_int16s_per_vector * sizeof(int16_t) != source_length) {
+    dest_num_vectors++; // round up if source length isn't a multiple of
+                             // the dest vector length
+  }
 
+  *dest_length = dest_num_vectors * dest_int16s_per_vector * sizeof(int16_t);
+  dest = (int16_t *)malloc(*dest_length);
+  int source_pos, dest_pos;
+  int i;
 
-int p7_cuda_worker_thread_front_end_sequence_search_loop(P7_DAEMON_WORKERNODE_STATE *workernode, uint32_t my_id, P7_CUDA_BUFFERS *buffer_state, P7_OPROFILE *om, double mu, double lambda);
+  for (i = 0; i < (source_length / sizeof(int16_t)); i++) {
+    source_pos = ((i % source_num_vectors) * source_int16s_per_vector) +
+                 (i / source_num_vectors);
+    dest_pos = ((i % dest_num_vectors) * dest_int16s_per_vector) +
+               (i / dest_num_vectors);
+    dest[dest_pos] = source[source_pos];
+  }
 
-#define NUM_STREAMS 4
-#define BACKEND_INCREMENT_FACTOR 7
-//DATA_BUFFER_SIZE must be at least 100K + 18 to guarantee that it can hold at least one sequence,
-//as our max. sequence length is 100K
-#define DATA_BUFFER_SIZE 16777216  // 16M
-#define MAX_SEQUENCES 1048567 // 1M
+  // pad out the dest vector with zeroes if necessary
+  for (; i < dest_num_vectors * dest_int16s_per_vector; i++) {
+    dest_pos = ((i % dest_num_vectors) * dest_int16s_per_vector) +
+               (i / dest_num_vectors);
+    //  printf("Padding 0 at location %d \n", dest_pos);
+    dest[dest_pos] = -32768;
+  }
+
+  return(dest);
+}
+
+float *restripe_fwdfilter(float *source, int source_floats_per_vector,
+                            int dest_floats_per_vector, int source_length,
+                            int *dest_length) {
+  int dest_num_vectors;
+  int source_num_vectors;
+  float *dest;
+  source_num_vectors =
+      (source_length / sizeof(float)) / source_floats_per_vector;
+  if (source_num_vectors * source_floats_per_vector *sizeof(float) != source_length) {
+    source_num_vectors++;
+  }
+  dest_num_vectors = (source_length / sizeof(float)) / dest_floats_per_vector;
+  if (dest_num_vectors * dest_floats_per_vector * sizeof(float) != source_length) {
+    dest_num_vectors++; // round up if source length isn't a multiple of
+                        // the dest vector length
+  }
+
+  *dest_length = dest_num_vectors * dest_floats_per_vector * sizeof(float);
+  dest = (float *)malloc(*dest_length);
+  int source_pos, dest_pos;
+  int i;
+
+  for (i = 0; i < (source_length / sizeof(float)); i++) {
+    source_pos = ((i % source_num_vectors) * source_floats_per_vector) +
+                 (i / source_num_vectors);
+    dest_pos = ((i % dest_num_vectors) * dest_floats_per_vector) +
+               (i / dest_num_vectors);
+    dest[dest_pos] = source[source_pos];
+  }
+
+  // pad out the dest vector with zeroes if necessary
+  for (; i < dest_num_vectors * dest_floats_per_vector; i++) {
+    dest_pos = ((i % dest_num_vectors) * dest_floats_per_vector) +
+               (i / dest_num_vectors);
+    //  printf("Padding 0 at location %d \n", dest_pos);
+    dest[dest_pos] = -32768;
+  }
+
+  return (dest);
+}
+
+int p7_cuda_worker_thread_front_end_sequence_search_loop(P7_DAEMON_WORKERNODE_STATE *workernode, uint32_t my_id,
+P7_CUDA_CONFIG *cuda_config, P7_OPROFILE *om, double mu, double lambda);
+
 
 extern "C" P7_BACKEND_QUEUE_ENTRY *workernode_get_backend_queue_entry_from_pool(P7_DAEMON_WORKERNODE_STATE *workernode);
 extern "C" ESL_RED_BLACK_DOUBLEKEY *workernode_get_hit_list_entry_from_pool(P7_DAEMON_WORKERNODE_STATE *workernode, uint32_t my_id);
@@ -203,6 +258,7 @@ void *p7_server_cuda_worker_thread(void *worker_argument){
   P7_DAEMON_WORKER_ARGUMENT *my_argument = (P7_DAEMON_WORKER_ARGUMENT *) worker_argument;
   uint32_t my_id = my_argument->my_id;
   P7_DAEMON_WORKERNODE_STATE *workernode = my_argument->workernode;
+  P7_CUDA_CONFIG *cuda_config = workernode->cuda_config;
   cudaSetDevice(my_id);
   printf("thread %d starting as cuda thread\n", my_id);
 
@@ -226,68 +282,6 @@ void *p7_server_cuda_worker_thread(void *worker_argument){
   workernode->thread_state[my_id].empty_hit_pool = p7_hitlist_entry_pool_Create(HITLIST_POOL_SIZE);
    if(workernode->thread_state[my_id].empty_hit_pool == NULL){
     p7_Fail((char *) "Unable to allocate memory in p7_server_worker_thread\n");
-  }
-
-  P7_CUDA_BUFFERS buffer_state;
-
-  // allocate the buffers we'll use to transfer data to/from the card
-  // use regular malloc for the arrays that hold the pointers to the buffers because
-  // we won't be copying them to the card frequently
-  buffer_state.num_streams = NUM_STREAMS;
-  buffer_state.cpu_offsets = (uint64_t **) malloc(buffer_state.num_streams * sizeof(uint64_t *));
-  buffer_state.gpu_offsets = (uint64_t **) malloc(buffer_state.num_streams * sizeof(uint64_t *));
-  buffer_state.cpu_data = (char **) malloc(buffer_state.num_streams * sizeof(char *));
-  buffer_state.cpu_data2 = (char **) malloc(buffer_state.num_streams * sizeof(char *));
-  buffer_state.num_sequences = (uint32_t *) malloc(buffer_state.num_streams * sizeof(uint32_t));
-  buffer_state.gpu_data = (char **) malloc(buffer_state.num_streams * sizeof(char *));
-  buffer_state.cpu_hits = (int8_t **) malloc(buffer_state.num_streams * sizeof(int8_t *));
-  buffer_state.gpu_hits = (int8_t **) malloc(buffer_state.num_streams * sizeof(int8_t *));
-  buffer_state.cpu_scores = (float **) malloc(buffer_state.num_streams * sizeof(float *));
-  buffer_state.gpu_scores = (float **) malloc(buffer_state.num_streams * sizeof(float *));
-  buffer_state.cpu_lengths = (uint64_t **) malloc(buffer_state.num_streams * sizeof(uint64_t *));
-  buffer_state.gpu_lengths = (uint64_t **) malloc(buffer_state.num_streams * sizeof(uint64_t *));
-  buffer_state.cpu_sequences = (char ***) malloc(buffer_state.num_streams * sizeof(char **));
-  buffer_state.streams = (cudaStream_t *) malloc(buffer_state.num_streams * sizeof(cudaStream_t));
- 
-  if((buffer_state.cpu_offsets == NULL) || (buffer_state.gpu_offsets == NULL) || (buffer_state.cpu_scores == NULL) || (buffer_state.gpu_scores == NULL) || (buffer_state.num_sequences == NULL) ||
-    (buffer_state.cpu_data == NULL) || (buffer_state.gpu_data == NULL) || (buffer_state.cpu_hits == NULL)
-    || (buffer_state.gpu_hits == NULL) || (buffer_state.cpu_sequences == NULL) || (buffer_state.streams == NULL)) {
-    p7_Fail((char *) "Unable to allocate memory in p7_server_cuda_worker_thread\n");
-  }
-
-  //cpu_num_hits and gpu_num_hits get allocated using cudaMallocHost because they're one-d arrays
-  p7_cuda_wrapper(cudaMallocHost((void **) &(buffer_state.cpu_num_hits), (buffer_state.num_streams * sizeof(uint32_t))));
-  
-  p7_cuda_wrapper(cudaMallocHost((void **) &(buffer_state.gpu_num_hits), (buffer_state.num_streams * sizeof(uint32_t))));
-  
-  //allocate the actual buffers. Use cudaMallocHost here for buffers on the CPU side to 
-  //pin the buffers in RAM, which improves copy performance
-  for(int i = 0; i < buffer_state.num_streams; i++){
-
-    p7_cuda_wrapper(cudaMallocHost((void **) &(buffer_state.cpu_offsets[i]), (MAX_SEQUENCES * sizeof(uint64_t))));
-
-  
-    p7_cuda_wrapper(cudaMalloc((void **) &(buffer_state.gpu_offsets[i]), (MAX_SEQUENCES * sizeof(uint64_t))));
-
-    p7_cuda_wrapper(cudaMallocHost((void **) &(buffer_state.cpu_data[i]), DATA_BUFFER_SIZE));
-    p7_cuda_wrapper(cudaMallocHost((void **) &(buffer_state.cpu_data2[i]), DATA_BUFFER_SIZE));
-    p7_cuda_wrapper(cudaMalloc((void **) &(buffer_state.gpu_data[i]), DATA_BUFFER_SIZE));
-
-
-    p7_cuda_wrapper(cudaMallocHost((void **) &(buffer_state.cpu_hits[i]), (MAX_SEQUENCES * sizeof(int8_t))));
-
-    p7_cuda_wrapper(cudaMalloc((void **) &(buffer_state.gpu_hits[i]), (MAX_SEQUENCES * sizeof(int8_t))));
-    p7_cuda_wrapper(cudaMallocHost((void **) &(buffer_state.cpu_scores[i]), (MAX_SEQUENCES * sizeof(float))));
-    p7_cuda_wrapper(cudaMalloc((void **) &(buffer_state.gpu_scores[i]), (MAX_SEQUENCES * sizeof(float))));
-
-    p7_cuda_wrapper(cudaMallocHost((void **) &(buffer_state.cpu_sequences[i]), (MAX_SEQUENCES * sizeof(char *))));
-
-    p7_cuda_wrapper(cudaMallocHost((void **) &(buffer_state.cpu_lengths[i]), (MAX_SEQUENCES * sizeof(uint64_t))));
-
-    p7_cuda_wrapper(cudaMalloc((void **) &(buffer_state.gpu_lengths[i]), (MAX_SEQUENCES * sizeof(uint64_t))));
-
-    p7_cuda_wrapper(cudaStreamCreate(&(buffer_state.streams[i])));
-
   }
 
   // Tell the master thread that we're awake and ready to go
@@ -341,7 +335,7 @@ void *p7_server_cuda_worker_thread(void *worker_argument){
 
         stop = 0;
         while(stop == 0){
-          stop = p7_cuda_worker_thread_front_end_sequence_search_loop(workernode, my_id, &buffer_state, card_OPROFILE, workernode->thread_state[my_id].om->evparam[p7_SMU], workernode->thread_state[my_id].om->evparam[p7_SLAMBDA]);
+          stop = p7_cuda_worker_thread_front_end_sequence_search_loop(workernode, my_id, cuda_config, card_OPROFILE, workernode->thread_state[my_id].om->evparam[p7_SMU], workernode->thread_state[my_id].om->evparam[p7_SLAMBDA]);
         }
         break;
 
@@ -362,6 +356,7 @@ void *p7_server_cuda_worker_thread(void *worker_argument){
 
     pthread_mutex_unlock(&(workernode->wait_lock));  // We come out of pthread_cond_wait holding the lock
   }
+  /*
   for(int i = 0; i < buffer_state.num_streams; i++){
     p7_cuda_wrapper(cudaFree(buffer_state.gpu_offsets[i]));
     p7_cuda_wrapper(cudaFreeHost(buffer_state.cpu_offsets[i]));
@@ -383,7 +378,9 @@ void *p7_server_cuda_worker_thread(void *worker_argument){
   free(buffer_state.cpu_lengths);
   free(buffer_state.cpu_sequences);
   free(buffer_state.streams);
+  */
    // We've been shut down, so exit the thread
+   printf("Exiting CUDA thread\n");
    pthread_exit(NULL);
 
 }
@@ -391,7 +388,7 @@ void *p7_server_cuda_worker_thread(void *worker_argument){
 
 #define ALIGNEIGHT_MASK 0xffffffffffffffe0 // mask off low three bits
 
-int p7_cuda_worker_thread_front_end_sequence_search_loop(P7_DAEMON_WORKERNODE_STATE *workernode, uint32_t my_id, P7_CUDA_BUFFERS *buffer_state, P7_OPROFILE *om, double mu, double lambda){
+int p7_cuda_worker_thread_front_end_sequence_search_loop(P7_DAEMON_WORKERNODE_STATE *workernode, uint32_t my_id, P7_CUDA_CONFIG *cuda_config, P7_OPROFILE *om, double mu, double lambda){
   uint64_t start,end;
   uint64_t seq_id=0;
   char *the_sequence, *data_start;
@@ -446,17 +443,17 @@ int p7_cuda_worker_thread_front_end_sequence_search_loop(P7_DAEMON_WORKERNODE_ST
           //printf("GPU thread switching to front-end processing\n");
         }
 
-        send_sequence_chunk_to_cuda_card(workernode, buffer_state, &seq_id, end, &the_sequence, my_stream, threads_per_block, num_blocks, om, mu, lambda);
+        send_sequence_chunk_to_cuda_card(workernode, cuda_config, my_id, &seq_id, end, &the_sequence, my_stream, threads_per_block, num_blocks, om, mu, lambda);
         num_chunks_submitted +=1;
 
     //    printf("CUDA card processed chunk of %d sequences ending at %lu\n", num_sequences, seq_id);
-/*        p7_cuda_wrapper(cudaMemcpy(buffer_state->cpu_data2[my_stream], buffer_state->gpu_data[my_stream], current_offset, cudaMemcpyDeviceToHost));
-        if(memcmp(buffer_state->cpu_data[my_stream], buffer_state->cpu_data2[my_stream], current_offset) != 0){
+/*        p7_cuda_wrapper(cudaMemcpy(cuda_config->card_mem[my_id].cpu_data2[my_stream], cuda_config->card_mem[my_id].gpu_data[my_stream], current_offset, cudaMemcpyDeviceToHost));
+        if(memcmp(cuda_config->card_mem[my_id].cpu_data[my_stream], cuda_config->card_mem[my_id].cpu_data2[my_stream], current_offset) != 0){
           printf("sequence data appears to have been corrupted while in GPU\n");
         }  */  // uncomment this to check for data corruption on GPU side
-        if(num_chunks_submitted >= buffer_state->num_streams){
+        if(num_chunks_submitted >= cuda_config->card_mem[my_id].num_streams){
           //let the number of chunks we've submitted to the GPU get num_streams ahead before we start parsing
-          parse_CUDA_chunk_results(workernode, buffer_state, my_id, (num_chunks_parsed % buffer_state->num_streams));
+          parse_CUDA_chunk_results(workernode, cuda_config, my_id, (num_chunks_parsed % cuda_config->card_mem[my_id].num_streams));
           num_chunks_parsed++;
         }
         if (workernode->backend_queue_depth > (workernode->num_backend_threads << BACKEND_INCREMENT_FACTOR)){
@@ -467,7 +464,7 @@ int p7_cuda_worker_thread_front_end_sequence_search_loop(P7_DAEMON_WORKERNODE_ST
         
        //printf("GPU thread %d finished chunk with %d sequences and %d hits\n", my_id, num_sequences, num_hits);
         my_stream++;
-        if(my_stream == buffer_state->num_streams){
+        if(my_stream == cuda_config->card_mem[my_id].num_streams){
           my_stream = 0;
         }
       }
@@ -476,7 +473,7 @@ int p7_cuda_worker_thread_front_end_sequence_search_loop(P7_DAEMON_WORKERNODE_ST
     else{
       // Parse all the remaining unparsed chunks
       for(int i = num_chunks_parsed; i < num_chunks_submitted; i++){
-        parse_CUDA_chunk_results(workernode, buffer_state, my_id, (i % buffer_state->num_streams));
+        parse_CUDA_chunk_results(workernode, cuda_config, my_id, (i % cuda_config->card_mem[my_id].num_streams));
       }
       if(!work_on_global){
           if(workernode->backend_queue_depth != 0){
@@ -594,7 +591,7 @@ static void p7_cuda_worker_thread_back_end_sequence_search_loop(P7_DAEMON_WORKER
 }
 
 
-void send_sequence_chunk_to_cuda_card(P7_DAEMON_WORKERNODE_STATE *workernode, P7_CUDA_BUFFERS *buffer_state, uint64_t *chunk_end, uint64_t work_end, char **sequence_data, int stream, dim3 threads_per_block, dim3 num_blocks, P7_OPROFILE *om, double mu, double lambda){
+void send_sequence_chunk_to_cuda_card(P7_DAEMON_WORKERNODE_STATE *workernode, P7_CUDA_CONFIG *cuda_config, uint32_t my_id, uint64_t *chunk_end, uint64_t work_end, char **sequence_data, int stream, dim3 threads_per_block, dim3 num_blocks, P7_OPROFILE *om, double mu, double lambda){
 #ifdef __NVVP_PROFILE_ON //define the events we'll use in profiling
   char prep_event_string[] = "Prep -1111111111";
   nvtxEventAttributes_t prep_event = {0};
@@ -655,15 +652,15 @@ void send_sequence_chunk_to_cuda_card(P7_DAEMON_WORKERNODE_STATE *workernode, P7
   while((seq_id <= work_end) &&(num_sequences < MAX_SEQUENCES) && ((current_offset + L_effective) < DATA_BUFFER_SIZE)){
     //There's room in the buffer for the next sequence.  Note that this assumes that the data buffer
     //is larger than the longest possible sequence, so DATA_BUFFER_SIZE should not be made less than 100K
-    buffer_state->cpu_lengths[stream][num_sequences] = L;
-    buffer_state->cpu_sequences[stream][num_sequences] = sequence_start;
-    buffer_state->cpu_offsets[stream][num_sequences] = current_offset;
-    memcpy((buffer_state->cpu_data[stream] + current_offset), the_sequence +1, L);
+    cuda_config->card_mem[my_id].cpu_lengths[stream][num_sequences] = L;
+    cuda_config->card_mem[my_id].cpu_sequences[stream][num_sequences] = sequence_start;
+    cuda_config->card_mem[my_id].cpu_offsets[stream][num_sequences] = current_offset;
+    memcpy((cuda_config->card_mem[my_id].cpu_data[stream] + current_offset), the_sequence +1, L);
     /*      float retsc, nullsc;
           p7_bg_SetLength(workernode->thread_state[my_id].bg, L);
           p7_bg_NullOne(workernode->thread_state[my_id].bg, (const ESL_DSQ *) the_sequence, L, &nullsc);
           p7_SSVFilter((const ESL_DSQ *) the_sequence, L, workernode->thread_state[my_id].om, &retsc);
-          buffer_state->cpu_hits[my_stream][num_sequences] = (retsc - nullsc) / eslCONST_LOG2; */
+          cuda_config->card_mem[my_id].cpu_hits[my_stream][num_sequences] = (retsc - nullsc) / eslCONST_LOG2; */
           // uncomment this code to fill cpu_hits with ssv scores so we can check filter results in CUDA land
     current_offset += L_effective;
     the_sequence += L + 2;
@@ -680,18 +677,18 @@ void send_sequence_chunk_to_cuda_card(P7_DAEMON_WORKERNODE_STATE *workernode, P7
   nvtxRangeEnd(prep);
 #endif
   //printf("GPU started chunk with %d sequences\n", num_sequences);
-  buffer_state->num_sequences[stream] = num_sequences;
+  cuda_config->card_mem[my_id].num_sequences[stream] = num_sequences;
   // Copy the input data to the card
-  // uncomment this to check SSV p7_cuda_wrapper(cudaMemcpy(buffer_state->gpu_hits[my_stream], buffer_state->cpu_hits[my_stream], num_sequences * sizeof(uint64_t), cudaMemcpyHostToDevice));
+  // uncomment this to check SSV p7_cuda_wrapper(cudaMemcpy(cuda_config->card_mem[my_id].gpu_hits[my_stream], cuda_config->card_mem[my_id].cpu_hits[my_stream], num_sequences * sizeof(uint64_t), cudaMemcpyHostToDevice));
 #ifdef __NVVP_PROFILE_ON
   sprintf(send_event_string, "Send %d", stream);  // This will fail miserably if stream is more than 10 digits, so don't do that
   nvtxRangeId_t send = nvtxRangeStartEx(&send_event);
 #endif
-  p7_cuda_wrapper(cudaMemcpyAsync(buffer_state->gpu_data[stream], buffer_state->cpu_data[stream], current_offset, cudaMemcpyHostToDevice, buffer_state->streams[stream]));
-  //printf("GPU sequences range from addresses %p to %p\n", buffer_state->gpu_data[my_stream], buffer_state->gpu_data[my_stream] + (current_offset -1));
-  p7_cuda_wrapper(cudaMemcpyAsync(buffer_state->gpu_offsets[stream], buffer_state->cpu_offsets[stream], num_sequences *sizeof(uint64_t), cudaMemcpyHostToDevice, buffer_state->streams[stream]));
+  p7_cuda_wrapper(cudaMemcpyAsync(cuda_config->card_mem[my_id].gpu_data[stream], cuda_config->card_mem[my_id].cpu_data[stream], current_offset, cudaMemcpyHostToDevice, cuda_config->card_mem[my_id].streams[stream]));
+  //printf("GPU sequences range from addresses %p to %p\n", cuda_config->card_mem[my_id].gpu_data[my_stream], cuda_config->card_mem[my_id].gpu_data[my_stream] + (current_offset -1));
+  p7_cuda_wrapper(cudaMemcpyAsync(cuda_config->card_mem[my_id].gpu_offsets[stream], cuda_config->card_mem[my_id].cpu_offsets[stream], num_sequences *sizeof(uint64_t), cudaMemcpyHostToDevice, cuda_config->card_mem[my_id].streams[stream]));
 
-  p7_cuda_wrapper(cudaMemcpyAsync(buffer_state->gpu_lengths[stream], buffer_state->cpu_lengths[stream], num_sequences *sizeof(uint64_t), cudaMemcpyHostToDevice, buffer_state->streams[stream]));
+  p7_cuda_wrapper(cudaMemcpyAsync(cuda_config->card_mem[my_id].gpu_lengths[stream], cuda_config->card_mem[my_id].cpu_lengths[stream], num_sequences *sizeof(uint64_t), cudaMemcpyHostToDevice, cuda_config->card_mem[my_id].streams[stream]));
 #ifdef __NVVP_PROFILE_ON
   nvtxRangeEnd(send);
 #endif
@@ -700,7 +697,7 @@ void send_sequence_chunk_to_cuda_card(P7_DAEMON_WORKERNODE_STATE *workernode, P7
   nvtxRangeId_t comp = nvtxRangeStartEx(&comp_event);
 #endif
   //printf("GPU Thread %d starting chunk with %d sequences and length %lu\n", my_id, num_sequences, current_offset);
-  p7_orion<<<num_blocks, threads_per_block, 0, buffer_state->streams[stream]>>>(num_sequences, (uint8_t *) buffer_state->gpu_data[stream], buffer_state->gpu_lengths[stream], buffer_state->gpu_offsets[stream], buffer_state->gpu_hits[stream], buffer_state->gpu_scores[stream], om, mu, lambda);
+  p7_orion<<<num_blocks, threads_per_block, 0, cuda_config->card_mem[my_id].streams[stream]>>>(num_sequences, (uint8_t *) cuda_config->card_mem[my_id].gpu_data[stream], cuda_config->card_mem[my_id].gpu_lengths[stream], cuda_config->card_mem[my_id].gpu_offsets[stream], cuda_config->card_mem[my_id].gpu_hits[stream], cuda_config->card_mem[my_id].gpu_scores[stream], om, mu, lambda);
   p7_kernel_error_check();
 #ifdef __NVVP_PROFILE_ON
   nvtxRangeEnd(comp);
@@ -710,8 +707,8 @@ void send_sequence_chunk_to_cuda_card(P7_DAEMON_WORKERNODE_STATE *workernode, P7
   nvtxRangeId_t recv = nvtxRangeStartEx(&recv_event);
 #endif
   // Get the results back
-  p7_cuda_wrapper(cudaMemcpyAsync(buffer_state->cpu_hits[stream], buffer_state->gpu_hits[stream], num_sequences *sizeof(int8_t) ,cudaMemcpyDeviceToHost, buffer_state->streams[stream]));
-  p7_cuda_wrapper(cudaMemcpyAsync(buffer_state->cpu_scores[stream], buffer_state->gpu_scores[stream], num_sequences *sizeof(float) ,cudaMemcpyDeviceToHost, buffer_state->streams[stream]));
+  p7_cuda_wrapper(cudaMemcpyAsync(cuda_config->card_mem[my_id].cpu_hits[stream], cuda_config->card_mem[my_id].gpu_hits[stream], num_sequences *sizeof(int8_t) ,cudaMemcpyDeviceToHost, cuda_config->card_mem[my_id].streams[stream]));
+  p7_cuda_wrapper(cudaMemcpyAsync(cuda_config->card_mem[my_id].cpu_scores[stream], cuda_config->card_mem[my_id].gpu_scores[stream], num_sequences *sizeof(float) ,cudaMemcpyDeviceToHost, cuda_config->card_mem[my_id].streams[stream]));
 #ifdef __NVVP_PROFILE_ON
   nvtxRangeEnd(recv);
 #endif
@@ -722,7 +719,7 @@ void send_sequence_chunk_to_cuda_card(P7_DAEMON_WORKERNODE_STATE *workernode, P7
   return;
 }
 
-void parse_CUDA_chunk_results(P7_DAEMON_WORKERNODE_STATE *workernode, P7_CUDA_BUFFERS *buffer_state, uint32_t my_id, uint32_t stream){
+void parse_CUDA_chunk_results(P7_DAEMON_WORKERNODE_STATE *workernode, P7_CUDA_CONFIG *cuda_config, uint32_t my_id, uint32_t stream){
 #ifdef __NVVP_PROFILE_ON
   char wait_event_string[] = "Wait -1111111111";
   nvtxEventAttributes_t wait_event = {0};
@@ -748,7 +745,7 @@ void parse_CUDA_chunk_results(P7_DAEMON_WORKERNODE_STATE *workernode, P7_CUDA_BU
   nvtxRangeId_t waitev = nvtxRangeStartEx(&wait_event);
 #endif
     // First, synchronize so that we're sure the stream is done computing and copying data
-  cudaStreamSynchronize(buffer_state->streams[stream]);
+  cudaStreamSynchronize(cuda_config->card_mem[my_id].streams[stream]);
 #ifdef __NVVP_PROFILE_ON
   nvtxRangeEnd(waitev);
 #endif  
@@ -759,21 +756,21 @@ void parse_CUDA_chunk_results(P7_DAEMON_WORKERNODE_STATE *workernode, P7_CUDA_BU
   int num_hits = 0;
   P7_BACKEND_QUEUE_ENTRY *chain_start = NULL;
   P7_BACKEND_QUEUE_ENTRY *chain_end = NULL;
-  for(int q = 0; q < buffer_state->num_sequences[stream]; q++){
+  for(int q = 0; q < cuda_config->card_mem[my_id].num_sequences[stream]; q++){
 
-    if(buffer_state->cpu_hits[stream][q] !=0){ //This sequence hit
+    if(cuda_config->card_mem[my_id].cpu_hits[stream][q] !=0){ //This sequence hit
       // get an entry to put this comparison in
       P7_BACKEND_QUEUE_ENTRY * the_entry = workernode_get_backend_queue_entry_from_pool(workernode);
       the_entry->seq_position = q;
-      the_entry->seq_in_chunk = buffer_state->num_sequences[stream];
+      the_entry->seq_in_chunk = cuda_config->card_mem[my_id].num_sequences[stream];
       // Skip the sparsemask swapping, as the GPU doesn't do enough of the overthruster to
       // populate a sparse mask
-      the_entry->score = buffer_state->cpu_scores[stream][q];
+      the_entry->score = cuda_config->card_mem[my_id].cpu_scores[stream][q];
       // populate the fields
-      char *s = buffer_state->cpu_sequences[stream][q];
+      char *s = cuda_config->card_mem[my_id].cpu_sequences[stream][q];
       the_entry->seq_id = *((uint64_t *) s);
       the_entry->sequence = (ESL_DSQ *) (s+ 2*sizeof(uint64_t));
-      the_entry->L = buffer_state->cpu_lengths[stream][q];
+      the_entry->L = cuda_config->card_mem[my_id].cpu_lengths[stream][q];
       the_entry->do_overthruster = 1;
       the_entry->next = NULL;
       workernode->thread_state[my_id].comparisons_queued += 1;
