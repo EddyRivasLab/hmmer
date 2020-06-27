@@ -906,7 +906,6 @@ serial_master(ESL_GETOPTS *go, struct cfg_s *cfg)
 
       if (hmmoutfp != NULL) {
         if ((status = p7_hmmfile_WriteASCII(hmmoutfp, -1, hmm)) != eslOK) ESL_FAIL(status, errbuf, "HMM save failed");
-        fclose(hmmoutfp);
       }
 
       nquery++;
@@ -1203,6 +1202,8 @@ serial_master(ESL_GETOPTS *go, struct cfg_s *cfg)
                 qhstatus, qfp_sq->filename);
   }
 
+  if (hmmoutfp != NULL)
+        fclose(hmmoutfp);
 
  /* Terminate outputs - any last words?
    */
