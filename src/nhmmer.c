@@ -583,22 +583,15 @@ serial_master(ESL_GETOPTS *go, struct cfg_s *cfg)
 
   /* (1)
    * If we were told a specific query file type, just do what we're told
-   * Note, the file format codes follow this rule:
-   *  - 0 is an unknown/unassigned format (eslSQFILE_UNKNOWN, eslMSAFILE_UNKNOWN)
-   *  - <=100 is reserved for sqio, for unaligned formats
-   *  - >100  is reserved for msa, for aligned formats
-   *
-   *  These values follow the rules laid out in esl_msa.h and esl_sqio.h
    */
-  if (cfg->qfmt > 100 /* msa file */) {
+  if (esl_sqio_IsAlignment(cfg->qfmt) /* msa file */) {
       status = nhmmer_open_msa_file(cfg, &qfp_msa, &abc, &msa);
       if (status != eslOK) p7_Fail("Error reading msa from file %s (%d)\n", cfg->queryfile, status);
-  } else if (cfg->qfmt > 0 /* sequence file */) {
+  } else if (cfg->qfmt != eslSQFILE_UNKNOWN /* sequence file */) {
       status = nhmmer_open_seq_file(cfg, &qfp_sq, &abc, &qsq);
       if (status != eslOK) p7_Fail("Error reading sequence from file %s (%d)\n", cfg->queryfile, status);
   }
-
-
+  
 
 /* (2)
  * Guessing query format.
