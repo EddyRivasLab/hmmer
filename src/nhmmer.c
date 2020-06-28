@@ -637,7 +637,7 @@ serial_master(ESL_GETOPTS *go, struct cfg_s *cfg)
                       if (msa->nseq > 1) p7_Fail("Unable to guess query file type; please specify (--qformat)");
                   } else {
                       /* if ok, and not fasta or a2m, then it's an MSA ... proceed */
-                      cfg->qfmt = eslSQFILE_UNKNOWN;
+                      cfg->qfmt = qfp_msa->format;
                   }
               }
               if ( cfg->qfmt == eslSQFILE_UNKNOWN ) { /* it's not an MSA, try seq */
