@@ -587,6 +587,8 @@ serial_master(ESL_GETOPTS *go, struct cfg_s *cfg)
    *  - 0 is an unknown/unassigned format (eslSQFILE_UNKNOWN, eslMSAFILE_UNKNOWN)
    *  - <=100 is reserved for sqio, for unaligned formats
    *  - >100  is reserved for msa, for aligned formats
+   *
+   *  These values follow the rules laid out in esl_msa.h and esl_sqio.h
    */
   if (cfg->qfmt > 100 /* msa file */) {
       status = nhmmer_open_msa_file(cfg, &qfp_msa, &abc, &msa);
