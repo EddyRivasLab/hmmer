@@ -702,7 +702,11 @@ serial_master(ESL_GETOPTS *go, struct cfg_s *cfg)
   if (dbfp == NULL ) {
 
 #if !defined (eslENABLE_SSE)
-    p7_Fail("fmindex is a valid sequence database file format only on systems supporting SSE vector instructions\n");
+    if (dbformat == eslSQFILE_FMINDEX) {
+        p7_Fail("fmindex is a valid sequence database file format only on systems supporting SSE vector instructions\n");
+    } else {
+        p7_Fail("Failed to autodetect format for target sequence database %s\n", cfg->dbfile);
+    }
 #endif
 
     if (dbformat != eslSQFILE_FMINDEX && strcmp(cfg->dbfile, "-") == 0 ) {
@@ -711,7 +715,11 @@ serial_master(ESL_GETOPTS *go, struct cfg_s *cfg)
     }
 
     if (esl_opt_IsOn(go, "--max")) {
-      p7_Fail("--max flag is incompatible with the fmindex target type\n");
+        if (dbformat == eslSQFILE_FMINDEX) {
+            p7_Fail("--max flag is incompatible with the fmindex target type\n");
+        } else {
+            p7_Fail("Failed to autodetect target sequence format; --max flag is compatible only with sequence formats\n");
+        }
     }
 
     fm_configAlloc(&fm_cfg);
@@ -720,9 +728,12 @@ serial_master(ESL_GETOPTS *go, struct cfg_s *cfg)
     if((fm_meta->fp = fopen(cfg->dbfile, "rb")) == NULL)
       p7_Fail("Failed to open target sequence database %s for reading\n",      cfg->dbfile);
 
-    if ( (status = fm_readFMmeta(fm_meta)) != eslOK)
-      p7_Fail("Failed to read FM meta data from target sequence database %s\n",      cfg->dbfile);
-
+    if ( (status = fm_readFMmeta(fm_meta)) != eslOK) {
+        if (dbformat == eslSQFILE_FMINDEX)
+            p7_Fail("Failed to read FM meta data from target sequence database %s\n", cfg->dbfile);
+        else
+            p7_Fail("Failed to autodetect format for target sequence database %s\n", cfg->dbfile);
+    }
     /* Sanity check */
     if ( ! ( fm_meta->alph_type == fm_DNA && (fm_meta->alph_size > 0 && fm_meta->alph_size < 30)  ) ) {
       p7_Fail("Unable to autodetect format of %s\n",   cfg->dbfile);
