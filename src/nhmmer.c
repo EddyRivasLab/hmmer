@@ -591,7 +591,7 @@ serial_master(ESL_GETOPTS *go, struct cfg_s *cfg)
       status = nhmmer_open_seq_file(cfg, &qfp_sq, &abc, &qsq);
       if (status != eslOK) p7_Fail("Error reading sequence from file %s (%d)\n", cfg->queryfile, status);
   }
-  
+
 
 /* (2)
  * Guessing query format.
@@ -629,7 +629,7 @@ serial_master(ESL_GETOPTS *go, struct cfg_s *cfg)
                   if ( qfp_msa->format == eslMSAFILE_AFA || qfp_msa->format == eslMSAFILE_A2M) {
                       /* this could just be a sequence file with o single sequence (in which case, fall through
                        * to the "sequence" case), or with several same-sized sequences (in which case ask for guidance) */
-                      if (msa->nseq > 1) p7_Fail("Unable to guess query file type; please specify (--qformat)");
+                      if (msa->nseq > 1) p7_Fail("Unable to guess query file type - could be either aligned or unaligned; please specify (--qformat)");
                   } else {
                       /* if ok, and not fasta or a2m, then it's an MSA ... proceed */
                       cfg->qfmt = qfp_msa->format;
