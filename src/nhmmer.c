@@ -406,8 +406,7 @@ main(int argc, char **argv)
   if (esl_opt_IsOn(go, "--qformat")) { /* is this an msa or a single sequence file? */
       cfg.qfmt = esl_sqio_EncodeFormat(esl_opt_GetString(go, "--qformat")); // try single sequence format
       if (cfg.qfmt == eslSQFILE_UNKNOWN) {
-          cfg.qfmt = esl_msafile_EncodeFormat(esl_opt_GetString(go, "--qformat"));
-          if (cfg.qfmt == eslMSAFILE_UNKNOWN) p7_Fail("%s is not a recognized input file format\n", esl_opt_GetString(go, "--qformat"));
+          p7_Fail("%s is not a recognized input file format\n", esl_opt_GetString(go, "--qformat"));
       } else { /* disallow target-only formats */
           if (cfg.qfmt == eslSQFILE_NCBI    || cfg.qfmt == eslSQFILE_DAEMON ||
               cfg.qfmt == eslSQFILE_HMMPGMD || cfg.qfmt == eslSQFILE_FMINDEX )
@@ -464,7 +463,7 @@ nhmmer_open_msa_file(struct cfg_s *cfg,  ESL_MSAFILE **qfp_msa, ESL_ALPHABET **a
 
 static int
 nhmmer_open_seq_file (struct cfg_s *cfg, ESL_SQFILE **qfp_sq, ESL_ALPHABET **abc, ESL_SQ **qsq) {
-    int status = esl_sqfile_Open(cfg->queryfile, eslSQFILE_UNKNOWN, NULL, qfp_sq);
+    int status = esl_sqfile_Open(cfg->queryfile, cfg->qfmt, NULL, qfp_sq);
     if (status == eslENOTFOUND) p7_Fail("File existence/permissions problem in trying to open query file %s.\n", cfg->queryfile);
     if (status == eslOK) {
         if (*abc == NULL) {
@@ -607,8 +606,8 @@ serial_master(ESL_GETOPTS *go, struct cfg_s *cfg)
  *      - Try to open it as an MSA file
  *         - if ok (i.e. it opens and passes the MSA check, including that
  *           all sequences are the same length)
- *            - if it's a FASTA or A2M format, it still might be a sequence
- *              file
+ *            - if it's a FASTA format, it still might be a sequence file
+ *              (note: a2m is FASTA-like, but explicitly a multiple sequence alignment)
  *                 - if the "MSA" is a single sequence, then rewind and call it
  *                   a sequence input.  Otherwise give "must specify" message
  *            - otherwise, it's an MSA;  proceed accordingly
@@ -626,12 +625,12 @@ serial_master(ESL_GETOPTS *go, struct cfg_s *cfg)
           } else {
               status = nhmmer_open_msa_file(cfg, &qfp_msa, &abc, &msa);
               if (status == eslOK) {
-                  if ( qfp_msa->format == eslMSAFILE_AFA || qfp_msa->format == eslMSAFILE_A2M) {
+                  if ( qfp_msa->format == eslMSAFILE_AFA) {
                       /* this could just be a sequence file with o single sequence (in which case, fall through
                        * to the "sequence" case), or with several same-sized sequences (in which case ask for guidance) */
                       if (msa->nseq > 1) p7_Fail("Unable to guess query file type - could be either aligned or unaligned; please specify (--qformat)");
                   } else {
-                      /* if ok, and not fasta or a2m, then it's an MSA ... proceed */
+                      /* if ok, and not fasta, then it's an MSA ... proceed */
                       cfg->qfmt = qfp_msa->format;
                   }
               }
