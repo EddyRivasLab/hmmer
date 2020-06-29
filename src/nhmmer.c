@@ -722,7 +722,8 @@ serial_master(ESL_GETOPTS *go, struct cfg_s *cfg)
         }
     }
 
-    fm_configAlloc(&fm_cfg);
+    status = fm_configAlloc(&fm_cfg);
+    if (status != eslOK) p7_Fail("unable to allocate memory to store FM meta data\n");
     fm_meta = fm_cfg->meta;
 
     if((fm_meta->fp = fopen(cfg->dbfile, "rb")) == NULL)
