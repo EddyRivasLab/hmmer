@@ -628,7 +628,7 @@ serial_master(ESL_GETOPTS *go, struct cfg_s *cfg)
                   if ( qfp_msa->format == eslMSAFILE_AFA) {
                       /* this could just be a sequence file with o single sequence (in which case, fall through
                        * to the "sequence" case), or with several same-sized sequences (in which case ask for guidance) */
-                      if (msa->nseq > 1) p7_Fail("Unable to guess query file type - could be either aligned or unaligned; please specify (--qformat)");
+                      if (msa->nseq > 1) p7_Fail("Query file type could be either aligned or unaligned; please specify (--qformat [afa|fasta])");
                   } else {
                       /* if ok, and not fasta, then it's an MSA ... proceed */
                       cfg->qfmt = qfp_msa->format;
