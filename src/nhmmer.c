@@ -464,18 +464,17 @@ nhmmer_open_msa_file(struct cfg_s *cfg,  ESL_MSAFILE **qfp_msa, ESL_ALPHABET **a
 
 
 static int
-nhmmer_open_seq_file (struct cfg_s *cfg, ESL_SQFILE **qfp_sq, ESL_ALPHABET **abc, ESL_SQ **qsq) {
+nhmmer_open_seq_file (struct cfg_s *cfg, ESL_SQFILE **qfp_sq, ESL_ALPHABET **abc, ESL_SQ **qsq, int used_qsingle_seqs) {
     int status = esl_sqfile_Open(cfg->queryfile, cfg->qfmt, NULL, qfp_sq);
     if (status == eslENOTFOUND) p7_Fail("File existence/permissions problem in trying to open query file %s.\n", cfg->queryfile);
     if (status == eslOK) {
         if (*abc == NULL) {
             int q_type = eslUNKNOWN;
             status = esl_sqfile_GuessAlphabet(*qfp_sq, &q_type);
-            if ((*qfp_sq)->format == eslSQFILE_FASTA && status == eslEFORMAT) {
-                /* specifically handle:
-                 * input is an afa w/ gaps, but it's been submitted w/ --qformat fasta or --qsingle_seqs flag
-                 * Don't die w/ a complaint about gap characters - try to do what the user obviously wants ...
-                 */
+            if (  (*qfp_sq)->format == eslSQFILE_FASTA  /* we've guessed or been told it's a single sequence fasta file */
+                && status == eslEFORMAT /* format error most likely to be due to presence of a gap character, so it's really an afa file */
+                && used_qsingle_seqs  /* we were instructed to treat the input as single seqs, so override the fasta guess/instruction, and force single-sequence handling of afa file */
+                ) {
                 status = esl_sqfile_Open(cfg->queryfile, eslMSAFILE_AFA, NULL, qfp_sq);
                 if (status == eslOK && *abc == NULL)
                         status = esl_sqfile_GuessAlphabet(*qfp_sq, &q_type);
@@ -598,7 +597,7 @@ serial_master(ESL_GETOPTS *go, struct cfg_s *cfg)
       status = nhmmer_open_msa_file(cfg, &qfp_msa, &abc, &msa);
       if (status != eslOK) p7_Fail("Error reading msa from file %s (%d)\n", cfg->queryfile, status);
   } else if (cfg->qfmt != eslSQFILE_UNKNOWN /* sequence file */) {
-      status = nhmmer_open_seq_file(cfg, &qfp_sq, &abc, &qsq);
+      status = nhmmer_open_seq_file(cfg, &qfp_sq, &abc, &qsq, esl_opt_IsOn(go, "--qsingle_seqs"));
       if (status != eslOK) p7_Fail("Error reading sequence from file %s (%d)\n", cfg->queryfile, status);
   }
 
@@ -635,7 +634,7 @@ serial_master(ESL_GETOPTS *go, struct cfg_s *cfg)
               p7_Fail("Must specify query file format (--qformat) to read <query file> from stdin ('-')");
           } else {
               if (esl_opt_IsOn(go, "--qsingle_seqs")) { /* only try to open as a seq file*/
-                  status = nhmmer_open_seq_file(cfg, &qfp_sq, &abc, &qsq);
+                  status = nhmmer_open_seq_file(cfg, &qfp_sq, &abc, &qsq, esl_opt_IsOn(go, "--qsingle_seqs"));
                   if (status != eslOK) p7_Fail("Error reading query file %s (%d)\n", cfg->queryfile, status);
               } else { /* first try as an msa, then fall back to seq */
                   status = nhmmer_open_msa_file(cfg, &qfp_msa, &abc, &msa);
@@ -655,7 +654,7 @@ serial_master(ESL_GETOPTS *go, struct cfg_s *cfg)
                           esl_msafile_Close(qfp_msa);
                           qfp_msa = NULL;
                       }
-                      status = nhmmer_open_seq_file(cfg, &qfp_sq, &abc, &qsq);
+                      status = nhmmer_open_seq_file(cfg, &qfp_sq, &abc, &qsq, esl_opt_IsOn(go, "--qsingle_seqs"));
                       if (status != eslOK) p7_Fail("Error reading query file %s (%d)\n", cfg->queryfile, status);
                   }
               }
