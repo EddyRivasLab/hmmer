@@ -471,6 +471,15 @@ nhmmer_open_seq_file (struct cfg_s *cfg, ESL_SQFILE **qfp_sq, ESL_ALPHABET **abc
         if (*abc == NULL) {
             int q_type = eslUNKNOWN;
             status = esl_sqfile_GuessAlphabet(*qfp_sq, &q_type);
+            if ((*qfp_sq)->format == eslSQFILE_FASTA && status == eslEFORMAT) {
+                /* specifically handle:
+                 * input is an afa w/ gaps, but it's been submitted w/ --qformat fasta or --qsingle_seqs flag
+                 * Don't die w/ a complaint about gap characters - try to do what the user obviously wants ...
+                 */
+                status = esl_sqfile_Open(cfg->queryfile, eslMSAFILE_AFA, NULL, qfp_sq);
+                if (status == eslOK && *abc == NULL)
+                        status = esl_sqfile_GuessAlphabet(*qfp_sq, &q_type);
+            }
             if (status == eslEFORMAT) p7_Fail("Parse failed (sequence file %s):\n%s\n", (*qfp_sq)->filename, esl_sqfile_GetErrorBuf(*qfp_sq));
             if (q_type == eslUNKNOWN) p7_Fail("Unable to guess alphabet for query file %s\n", cfg->queryfile);
             *abc = esl_alphabet_Create(q_type);
