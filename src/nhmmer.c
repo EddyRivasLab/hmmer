@@ -132,6 +132,7 @@ static ESL_OPTIONS options[] = {
 
 /* Other options */
   { "--qformat",    eslARG_STRING,       NULL, NULL, NULL,    NULL,  NULL ,          NULL,     "assert query is in format <s> (can be seq or msa format)",      12 },
+  { "--qsingle_seqs", eslARG_NONE,       NULL, NULL, NULL,    NULL,  NULL ,          NULL,     "force query to be read as individual sequences, even if in an msa format", 12 },
   { "--tformat",    eslARG_STRING,       NULL, NULL, NULL,    NULL,  NULL,           NULL,     "assert target <seqdb> is in format <s>",                        12 },
   { "--nonull2",    eslARG_NONE,         NULL, NULL, NULL,    NULL,  NULL,           NULL,     "turn off biased composition score corrections",                 12 },
   { "-Z",           eslARG_REAL,        FALSE, NULL, "x>0",   NULL,  NULL,           NULL,     "set database size (Megabases) to <x> for E-value calculations", 12 },
@@ -358,14 +359,15 @@ output_header(FILE *ofp, const ESL_GETOPTS *go, char *queryfile, char *seqfile, 
   if (esl_opt_IsUsed(go, "--nonull2")    && fprintf(ofp, "# null2 bias corrections:          off\n")                                                   < 0) ESL_EXCEPTION_SYS(eslEWRITE, "write failed");
 
   if (esl_opt_IsUsed(go, "--watson")    && fprintf(ofp, "# search only top strand:          on\n")                                                  < 0) ESL_EXCEPTION_SYS(eslEWRITE, "write failed");
-  if (esl_opt_IsUsed(go, "--crick") && fprintf(ofp, "# search only bottom strand:       on\n")                                                  < 0) ESL_EXCEPTION_SYS(eslEWRITE, "write failed");
-  if (esl_opt_IsUsed(go, "-Z")           && fprintf(ofp, "# database size is set to:         %.1f Mb\n",        esl_opt_GetReal(go, "-Z"))            < 0) ESL_EXCEPTION_SYS(eslEWRITE, "write failed");
+  if (esl_opt_IsUsed(go, "--crick")     && fprintf(ofp, "# search only bottom strand:       on\n")                                                  < 0) ESL_EXCEPTION_SYS(eslEWRITE, "write failed");
+  if (esl_opt_IsUsed(go, "-Z")          && fprintf(ofp, "# database size is set to:         %.1f Mb\n",        esl_opt_GetReal(go, "-Z"))            < 0) ESL_EXCEPTION_SYS(eslEWRITE, "write failed");
   if (esl_opt_IsUsed(go, "--seed"))  {
     if (esl_opt_GetInteger(go, "--seed") == 0 && fprintf(ofp, "# random number seed:              one-time arbitrary\n")                              < 0) ESL_EXCEPTION_SYS(eslEWRITE, "write failed");
     else if                              (  fprintf(ofp, "# random number seed set to:       %d\n",             esl_opt_GetInteger(go, "--seed"))     < 0) ESL_EXCEPTION_SYS(eslEWRITE, "write failed");
   }
-  if (esl_opt_IsUsed(go, "--qformat")    && fprintf(ofp, "# query format asserted: %s\n",              esl_opt_GetString(go, "--qformat"))   < 0) ESL_EXCEPTION_SYS(eslEWRITE, "write failed");
-  if (esl_opt_IsUsed(go, "--tformat")    && fprintf(ofp, "# target format asserted:  %s\n",            esl_opt_GetString(go, "--tformat"))   < 0) ESL_EXCEPTION_SYS(eslEWRITE, "write failed");
+  if (esl_opt_IsUsed(go, "--qformat")    && fprintf(ofp, "# query format asserted:           %s\n",              esl_opt_GetString(go, "--qformat"))   < 0) ESL_EXCEPTION_SYS(eslEWRITE, "write failed");
+  if (esl_opt_IsUsed(go, "--qsingle_seqs")&& fprintf(ofp,"# query contains individual seqs:  on\n")                                                  < 0) ESL_EXCEPTION_SYS(eslEWRITE, "write failed");
+  if (esl_opt_IsUsed(go, "--tformat")    && fprintf(ofp, "# target format asserted:          %s\n",            esl_opt_GetString(go, "--tformat"))   < 0) ESL_EXCEPTION_SYS(eslEWRITE, "write failed");
   if (esl_opt_IsUsed(go, "--w_beta")     && fprintf(ofp, "# window length beta value:        %g\n",             esl_opt_GetReal(go, "--w_beta"))      < 0) ESL_EXCEPTION_SYS(eslEWRITE, "write failed");
   if (esl_opt_IsUsed(go, "--w_length")   && fprintf(ofp, "# window length :                  %d\n",             esl_opt_GetInteger(go, "--w_length")) < 0) ESL_EXCEPTION_SYS(eslEWRITE, "write failed");
   if (esl_opt_IsUsed(go, "--block_length")&&fprintf(ofp, "# block length :                   %d\n",             esl_opt_GetInteger(go, "--block_length")) < 0) ESL_EXCEPTION_SYS(eslEWRITE, "write failed");
@@ -583,7 +585,7 @@ serial_master(ESL_GETOPTS *go, struct cfg_s *cfg)
   /* (1)
    * If we were told a specific query file type, just do what we're told
    */
-  if (esl_sqio_IsAlignment(cfg->qfmt) /* msa file */) {
+  if (esl_sqio_IsAlignment(cfg->qfmt) /* msa file */ && !esl_opt_IsOn(go, "--qsingle_seqs") /* msa intent is not overridden */) {
       status = nhmmer_open_msa_file(cfg, &qfp_msa, &abc, &msa);
       if (status != eslOK) p7_Fail("Error reading msa from file %s (%d)\n", cfg->queryfile, status);
   } else if (cfg->qfmt != eslSQFILE_UNKNOWN /* sequence file */) {
@@ -623,21 +625,30 @@ serial_master(ESL_GETOPTS *go, struct cfg_s *cfg)
               /* we can't rewind a piped file, so we can't perform any more autodetection on the query format*/
               p7_Fail("Must specify query file format (--qformat) to read <query file> from stdin ('-')");
           } else {
-              status = nhmmer_open_msa_file(cfg, &qfp_msa, &abc, &msa);
-              if (status == eslOK) {
-                  if ( qfp_msa->format == eslMSAFILE_AFA) {
-                      /* this could just be a sequence file with o single sequence (in which case, fall through
-                       * to the "sequence" case), or with several same-sized sequences (in which case ask for guidance) */
-                      if (msa->nseq > 1) p7_Fail("Query file type could be either aligned or unaligned; please specify (--qformat [afa|fasta])");
-                  } else {
-                      /* if ok, and not fasta, then it's an MSA ... proceed */
-                      cfg->qfmt = qfp_msa->format;
-                  }
-              }
-              if ( cfg->qfmt == eslSQFILE_UNKNOWN ) { /* it's not an MSA, try seq */
-                  if (qfp_msa) { esl_msafile_Close(qfp_msa); qfp_msa = NULL; }
+              if (esl_opt_IsOn(go, "--qsingle_seqs")) { /* only try to open as a seq file*/
                   status = nhmmer_open_seq_file(cfg, &qfp_sq, &abc, &qsq);
                   if (status != eslOK) p7_Fail("Error reading query file %s (%d)\n", cfg->queryfile, status);
+              } else { /* first try as an msa, then fall back to seq */
+                  status = nhmmer_open_msa_file(cfg, &qfp_msa, &abc, &msa);
+                  if (status == eslOK) {
+                      if (qfp_msa->format == eslMSAFILE_AFA) {
+                          /* this could just be a sequence file with o single sequence (in which case, fall through
+                           * to the "sequence" case), or with several same-sized sequences (in which case ask for guidance) */
+                          if (msa->nseq > 1)
+                              p7_Fail("Query file type could be either aligned or unaligned; please specify (--qformat [afa|fasta])");
+                      } else {
+                          /* if ok, and not fasta, then it's an MSA ... proceed */
+                          cfg->qfmt = qfp_msa->format;
+                      }
+                  }
+                  if (cfg->qfmt == eslSQFILE_UNKNOWN) { /* it's not an MSA, try seq */
+                      if (qfp_msa) {
+                          esl_msafile_Close(qfp_msa);
+                          qfp_msa = NULL;
+                      }
+                      status = nhmmer_open_seq_file(cfg, &qfp_sq, &abc, &qsq);
+                      if (status != eslOK) p7_Fail("Error reading query file %s (%d)\n", cfg->queryfile, status);
+                  }
               }
           }
       }
