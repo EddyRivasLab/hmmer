@@ -368,12 +368,6 @@ abnormally heavy load.
 .SH OPTIONS FOR SPECIFYING THE ALPHABET
 
 .TP
-.B \-\-amino
-Assert that sequences in 
-.I msafile
-are protein, bypassing alphabet autodetection.
-
-.TP
 .B \-\-dna
 Assert that sequences in
 .I msafile
@@ -504,8 +498,18 @@ common choices include:
 .BR phylip .
 For more information, and for codes for some less common formats,
 see main documentation.
-The string
-.I <s>
+
+
+.TP
+.BI \-\-qsingle_seqs
+Force
+.I queryfile
+to be read as individual sequences, even if it is in
+an msa format. For example, if the input is in aligned
+.BR stockholm
+format, the
+.BR \-\-qsingle_seqs
+ flag will cause each sequence in that alignment to be used as a seperate query sequence.
 
 .TP
 .BI \-\-tformat " <s>"
