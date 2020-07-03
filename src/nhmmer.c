@@ -451,12 +451,6 @@ nhmmer_open_msa_file(struct cfg_s *cfg,  ESL_MSAFILE **qfp_msa, ESL_ALPHABET **a
     int status = esl_msafile_Open(abc, cfg->queryfile, NULL, cfg->qfmt, NULL, qfp_msa);
     if (status == eslENOTFOUND) p7_Fail("File existence/permissions problem in trying to open query file %s.\n", cfg->queryfile);
     if (status == eslOK) {
-        if (*abc == NULL) {
-            int q_type = eslUNKNOWN;
-            esl_msafile_GuessAlphabet(*qfp_msa, &q_type);
-            if (q_type == eslUNKNOWN) p7_Fail("Unable to guess alphabet for query file %s\n", cfg->queryfile);
-            *abc = esl_alphabet_Create(q_type);
-        }
         status = esl_msafile_Read(*qfp_msa, msa);
     }
     return status;
@@ -662,6 +656,9 @@ serial_master(ESL_GETOPTS *go, struct cfg_s *cfg)
           }
       }
   }
+
+  if (! (abc->type == eslRNA || abc->type == eslDNA))
+     p7_Fail("Invalid alphabet type in query for nhmmer. Expect DNA or RNA\n");
 
 
   /* nhmmer accepts _target_ files that are either (i) some sequence file format, or
