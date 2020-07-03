@@ -475,6 +475,7 @@ nhmmer_open_seq_file (struct cfg_s *cfg, ESL_SQFILE **qfp_sq, ESL_ALPHABET **abc
                 && status == eslEFORMAT /* format error most likely to be due to presence of a gap character, so it's really an afa file */
                 && used_qsingle_seqs  /* we were instructed to treat the input as single seqs, so override the fasta guess/instruction, and force single-sequence handling of afa file */
                 ) {
+                esl_sqfile_Close(*qfp_sq);
                 status = esl_sqfile_Open(cfg->queryfile, eslMSAFILE_AFA, NULL, qfp_sq);
                 if (status == eslOK && *abc == NULL)
                         status = esl_sqfile_GuessAlphabet(*qfp_sq, &q_type);
