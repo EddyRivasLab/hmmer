@@ -696,6 +696,10 @@ serial_master(ESL_GETOPTS *go, struct cfg_s *cfg)
     else if (status == eslEINVAL)    p7_Fail("Can't autodetect format of a stdin or .gz seqfile");
     else if (status != eslOK)        p7_Fail("Unexpected error %d opening target sequence database file %s\n", status, cfg->dbfile);
     else {
+      int q_type = eslUNKNOWN;
+      status = esl_sqfile_GuessAlphabet(dbfp, &q_type);
+      if (! (q_type == eslDNA || q_type == eslRNA))
+          p7_Fail("Invalid alphabet type in target for nhmmer. Expect DNA or RNA\n");
 
       /*success; move forward with other necessary steps*/
       if (esl_opt_IsUsed(go, "--restrictdb_stkey") || esl_opt_IsUsed(go, "--restrictdb_n")) {
