@@ -475,17 +475,17 @@ nhmmer_open_seq_file (struct cfg_s *cfg, ESL_SQFILE **qfp_sq, ESL_ALPHABET **abc
                         status = esl_sqfile_GuessAlphabet(*qfp_sq, &q_type);
             }
             if (status == eslEFORMAT) p7_Fail("Parse failed (sequence file %s):\n%s\n", (*qfp_sq)->filename, esl_sqfile_GetErrorBuf(*qfp_sq));
-            if (q_type == eslUNKNOWN) p7_Fail("Unable to guess alphabet for query file %s\n", cfg->queryfile);
+            if (q_type == eslUNKNOWN) p7_Fail("Unable to guess alphabet for the %s%squery file %s\n", esl_sqio_DecodeFormat(cfg->qfmt), (cfg->qfmt==eslSQFILE_UNKNOWN ? "":"-formatted "), cfg->queryfile);
             *abc = esl_alphabet_Create(q_type);
         }
         if (!((*abc)->type == eslRNA || (*abc)->type == eslDNA))
-            p7_Fail("Invalid alphabet type in query for nhmmer. Expect DNA or RNA\n");
+            p7_Fail("Invalid alphabet type in the %s%squery file %s. Expect DNA or RNA\n", esl_sqio_DecodeFormat(cfg->qfmt), (cfg->qfmt==eslSQFILE_UNKNOWN ? "":"-formatted "), cfg->queryfile);
 
         esl_sqfile_SetDigital(*qfp_sq, *abc);
         // read first sequence
         *qsq = esl_sq_CreateDigital(*abc);
         status = esl_sqio_Read(*qfp_sq, *qsq);
-        if (status != eslOK) p7_Fail("reading sequence from file %s (%d)\n", cfg->queryfile, status);
+        if (status != eslOK) p7_Fail("reading sequence from file %s (%d): \n%s\n", cfg->queryfile, status, esl_sqfile_GetErrorBuf(*qfp_sq));
     }
     return status;
 }
@@ -590,10 +590,10 @@ serial_master(ESL_GETOPTS *go, struct cfg_s *cfg)
    */
   if (esl_sqio_IsAlignment(cfg->qfmt) /* msa file */ && !esl_opt_IsOn(go, "--qsingle_seqs") /* msa intent is not overridden */) {
       status = nhmmer_open_msa_file(cfg, &qfp_msa, &abc, &msa);
-      if (status != eslOK) p7_Fail("Error reading msa from file %s (%d)\n", cfg->queryfile, status);
+      if (status != eslOK) p7_Fail("Error reading msa from the %s-formatted file %s (%d)\n", esl_sqio_DecodeFormat(cfg->qfmt), cfg->queryfile, status);
   } else if (cfg->qfmt != eslSQFILE_UNKNOWN /* sequence file */) {
       status = nhmmer_open_seq_file(cfg, &qfp_sq, &abc, &qsq, esl_opt_IsOn(go, "--qsingle_seqs"));
-      if (status != eslOK) p7_Fail("Error reading sequence from file %s (%d)\n", cfg->queryfile, status);
+      if (status != eslOK) p7_Fail("Error reading sequence from the %s-formatted file %s (%d)\n", esl_sqio_DecodeFormat(cfg->qfmt), cfg->queryfile, status);
   }
 
 
