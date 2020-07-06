@@ -654,11 +654,14 @@ serial_master(ESL_GETOPTS *go, struct cfg_s *cfg)
                   }
               }
           }
+      }  else {
+          if (esl_opt_IsOn(go, "--qsingle_seqs"))
+              p7_Fail("--qsingle_seqs flag is incompatible with an hmm-formatted query file\n");
       }
   }
 
   if (! (abc->type == eslRNA || abc->type == eslDNA))
-     p7_Fail("Invalid alphabet type in query for nhmmer. Expect DNA or RNA\n");
+     p7_Fail("Invalid alphabet type in query for nhmmer. Expect DNA or RNA.\n");
 
 
   /* nhmmer accepts _target_ files that are either (i) some sequence file format, or
@@ -699,7 +702,7 @@ serial_master(ESL_GETOPTS *go, struct cfg_s *cfg)
       int q_type = eslUNKNOWN;
       status = esl_sqfile_GuessAlphabet(dbfp, &q_type);
       if (! (q_type == eslDNA || q_type == eslRNA))
-          p7_Fail("Invalid alphabet type in target for nhmmer. Expect DNA or RNA\n");
+          p7_Fail("Invalid alphabet type in target for nhmmer. Expect DNA or RNA.\n");
 
       /*success; move forward with other necessary steps*/
       if (esl_opt_IsUsed(go, "--restrictdb_stkey") || esl_opt_IsUsed(go, "--restrictdb_n")) {
