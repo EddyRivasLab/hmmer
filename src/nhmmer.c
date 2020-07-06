@@ -648,6 +648,7 @@ serial_master(ESL_GETOPTS *go, struct cfg_s *cfg)
                       if (qfp_msa) {
                           esl_msafile_Close(qfp_msa);
                           qfp_msa = NULL;
+                          esl_msa_Destroy(msa);
                       }
                       status = nhmmer_open_seq_file(cfg, &qfp_sq, &abc, &qsq, esl_opt_IsOn(go, "--qsingle_seqs"));
                       if (status != eslOK) p7_Fail("Error reading query file %s (%d)\n", cfg->queryfile, status);
