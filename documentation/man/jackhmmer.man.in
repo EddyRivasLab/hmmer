@@ -707,6 +707,12 @@ common choices include:
 .BR psiblast ,
 .BR clustal ,
 .BR phylip .
+.B jackhmmer
+always uses a single sequence query to start its search, so when the input
+.I seqfile
+is an alignment,
+.B jackhmmer
+reads it one unaligned query sequence at a time, not as an alignment.
 For more information, and for codes for some less common formats,
 see main documentation.
 The string
