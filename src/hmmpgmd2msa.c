@@ -138,6 +138,7 @@ hmmpgmd2msa(void *data, P7_HMM *hmm, ESL_SQ *qsq, int *incl, int incl_size, int 
     th.unsrt[i].acc = NULL;
     th.unsrt[i].desc = NULL;
     th.unsrt[i].dcl = NULL;
+    th.unsrt[i].orfid = NULL;
 
     if(p7_hit_Deserialize((uint8_t *) p, &n, &(th.unsrt[i])) != eslOK){
       printf("Unable to deserialize hit %d\n", i);
@@ -576,7 +577,7 @@ void hmmpgmd2msa_utest(int ntrials, char *hmmfile){
       p7_bg_SetLength(bg, sequences[i]->n);
       p7_oprofile_ReconfigLength(oprofile, sequences[i]->n);
   
-      p7_Pipeline(pli, oprofile, bg, sequences[i], NULL, hitlist);
+      p7_Pipeline(pli, oprofile, bg, sequences[i], NULL, hitlist, NULL);
       p7_pipeline_Reuse(pli);
     }
 

@@ -95,6 +95,16 @@ static ESL_OPTIONS searchOpts[] = {
   { "--watson",   eslARG_NONE,    FALSE, NULL, NULL, NULL,  NULL, "--seqdb",  "only translate top strand",                     15 },
   { "--crick",    eslARG_NONE,    FALSE, NULL, NULL, NULL,  NULL, "--seqdb",  "only translate bottom strand",                  15 },
 
+
+  /* Hidden options, the first required for the client to parse lines with "--hmmscant"
+   *
+   */
+  { "--hmmscant",   eslARG_NONE,        NULL,  NULL, NULL,    NULL,  NULL,  "--seqdb",       "search hmm database with a 6 frame translated DNA sequence",        99 },
+  { "--notrans",    eslARG_NONE,        FALSE, NULL, NULL,    NULL,  NULL,  NULL,            "don't show the translated DNA sequence in domain alignment",   99 }, /*for hmmscant */
+  { "--vertcodon",  eslARG_NONE,        FALSE, NULL, NULL,    NULL,  NULL,  NULL,            "show the DNA vertically in domain alignment",                  99 }, /*for hmmscant */
+
+
+
   {  0, 0, 0, 0, 0, 0, 0, 0, 0, 0 },
 };
 
@@ -122,6 +132,7 @@ output_header(FILE *ofp, const ESL_GETOPTS *sopt, char *seqfile, char *banner)
   if (esl_opt_IsUsed(sopt, "--noali")     && fprintf(ofp, "# show alignments in output:       no\n")                                                    < 0) ESL_EXCEPTION_SYS(eslEWRITE, "write failed");
   if (esl_opt_IsUsed(sopt, "--notextw")   && fprintf(ofp, "# max ASCII text line length:      unlimited\n")                                             < 0) ESL_EXCEPTION_SYS(eslEWRITE, "write failed");
   if (esl_opt_IsUsed(sopt, "--textw")     && fprintf(ofp, "# max ASCII text line length:      %d\n",             esl_opt_GetInteger(sopt, "--textw"))   < 0) ESL_EXCEPTION_SYS(eslEWRITE, "write failed");  
+  if (esl_opt_IsUsed(sopt, "--notrans")   && fprintf(ofp, "# show translated DNA sequence:    no\n")                                                    < 0) ESL_EXCEPTION_SYS(eslEWRITE, "write failed");
   if (esl_opt_IsUsed(sopt, "--popen")     && fprintf(ofp, "# gap open probability:            %f\n",             esl_opt_GetReal   (sopt, "--popen"))   < 0) ESL_EXCEPTION_SYS(eslEWRITE, "write failed");
   if (esl_opt_IsUsed(sopt, "--pextend")   && fprintf(ofp, "# gap extend probability:          %f\n",             esl_opt_GetReal   (sopt, "--pextend")) < 0) ESL_EXCEPTION_SYS(eslEWRITE, "write failed");
   if (esl_opt_IsUsed(sopt, "--mx")        && fprintf(ofp, "# subst score matrix (built-in):   %s\n",             esl_opt_GetString (sopt, "--mx"))      < 0) ESL_EXCEPTION_SYS(eslEWRITE, "write failed");
@@ -520,6 +531,7 @@ int main(int argc, char *argv[])
           th->unsrt[i].acc = NULL;
           th->unsrt[i].desc = NULL;
           th->unsrt[i].dcl = NULL;
+          th->unsrt[i].orfid = NULL;
           if((buf_offset -hits_start) != stats->hit_offsets[i]){
             printf("Hit offset %d did not match expected.  Found %d, expected %" PRIu64 "\n", i, (buf_offset-hits_start), stats->hit_offsets[i]);
           }
@@ -539,7 +551,7 @@ int main(int argc, char *argv[])
         if (ali)    { p7_tophits_Domains(stdout, th, pli, 120); fprintf(stdout, "\n\n"); }
         p7_pli_Statistics(stdout, pli, w);  
 
-        p7_pipeline_Destroy(pli); 
+        p7_pipeline_Destroy(pli);
         p7_tophits_Destroy(th);
         free(buf);
 

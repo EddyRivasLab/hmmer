@@ -62,13 +62,16 @@ In rough order of importance, the 18 HMMER programs are:
 \begin{tabular}{rp{4in}}
 \monob{hmmbuild}    & build profile from input multiple alignment\\
 \monob{hmmalign}    & make multiple sequence alignment using a profile\\
-\monob{hmmsearch}   & search profile against sequence database\\
-\monob{hmmscan}     & search sequence against profile database\\
+\monob{hmmsearch}   & search protein profile against protein sequence database\\
+\monob{hmmscan}     & search protein sequence against protein profile database\\
 \monob{hmmpress}    & prepare profile database for \mono{hmmscan}\\
 \monob{phmmer}      & search single sequence against sequence database\\
-\monob{jackhmmer}   & iteratively search single sequence against database\\
+\monob{jackhmmer}   & iteratively search single protein sequence against
+database\\
 \monob{nhmmer}      & search DNA query against DNA sequence database\\
 \monob{nhmmscan}    & search DNA sequence against a DNA profile database\\
+\monob{hmmsearcht}     & search protein profile(s) against DNA sequence database\\
+\monob{hmmscant}   & search DNA sequence against a protein profile database\\
 \monob{hmmfetch}    & retrieve profile(s) from a profile file \\
 \monob{hmmstat}     & show summary statistics for a profile file \\
 \monob{hmmemit}     & generate (sample) sequences from a profile \\
@@ -95,11 +98,17 @@ query sequence, then run profile searches.)
 
 \mono{nhmmer} is the equivalent of \mono{hmmsearch} and \mono{phmmer},
 but is capable of searching long, chromosome-size target DNA
-sequences.  \mono{nhmmscan} is the equivalent of \mono{hmmscan},
-capable of using chromosome-size DNA sequences as a query into a
-profile database.
+sequences with DNA sequences/profiles. \mono{nhmmscan} is the equivalent of
+\mono{hmmscan}, capable of using chromosome-size DNA sequences as a query into a
+DNA profile database.
 \marginnote{\mono{nhmmer} and \mono{nhmmscan} were added in HMMER3.1.}
 
+\mono{hmmsearcht} is analagous to \mono{hmmsearch} and \mono{nhmmer},
+but searches long, chromosome-size target DNA
+sequences with proten profile(s).  \mono{hmmscant} is the equivalent of
+\mono{hmmscan} and \mono{nhmmscan}, capable of using chromosome-size DNA
+sequences as a query into a protein profile database.
+\marginnote{\mono{hmmsearcht} and \mono{hmmscant} were added in HMMER3.3??.}
 
 
 
@@ -153,7 +162,7 @@ change into that directory now.
 If you do a \mono{ls}, you'll see there are several example files in
 the \mono{tutorial} directory:
 
-\begin{sreitems}{\monob{dna\_target.fa}}
+\begin{sreitems}{\monob{dna\_made1\_target.fa}}
 \item[\monob{globins4.sto}] An example alignment of four globin sequences, in
   Stockholm format. This alignment is a subset of a famous old
   published structural alignment from Don Bashford.\cite{Bashford87}
@@ -178,8 +187,12 @@ the \mono{tutorial} directory:
 \item[\monob{MADE1.sto}] An example DNA alignment, a subset
 of the Dfam seed alignment for the MADE1 transposable element family. 
 %
-\item[\monob{dna\_target.fa}] A 330Kb sequence from human chromosome
+\item[\monob{dna\_made1\_target.fa}] A 330Kb sequence from human chromosome
   1 in FASTA format, containing four MADE1 elements.
+%
+\item[\monob{dna\_pkinase\_target.fa}] A 5Kb sequence from human chromosome
+  22 in FASTA format, containing one segment of a pkinase domain.
+\item[]
 \end{sreitems}
 
 
@@ -227,7 +240,7 @@ chapter on page \pageref{chapter:formats}.
  
 
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-\section{Searching a sequence database with a profile}
+\section{Searching a protein sequence database with a protein profile}
 
 Now let's go through the \mono{hmmbuild}/\mono{hmmsearch} example in a
 bit more detail.
@@ -907,7 +920,7 @@ automating lots of searches and you want to be sure that they worked.
 
 
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-\section{Searching a profile database with a query sequence}
+\section{Searching a protein profile database with a protein query sequence}
 
 Rather than searching a single profile against a collection of
 sequences, you might want to wish to annotate a single sequence by
@@ -1153,7 +1166,7 @@ of development that we haven't cleaned up yet:
 
 
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-\section{Creating multiple alignments with hmmalign}
+\section{Searching nucleotide sequences vs. nucleotide sequences/profiles}
 
 The file \mono{globins45.fa} is a FASTA file containing 45
 unaligned globin sequences. To align all of these to the
@@ -1293,10 +1306,10 @@ for several important genomes.  The alignment
 \mono{tutorial/MADE1.sto} is a representative alignment of 100 human
 MADE1 transposable elements, a subset of the Dfam MADE1
 alignment. We'll use the MADE1 alignment to show how
-\mono{nhmmer}/\mono{nhmmscan} work, which are similar to
+\mono{nhmmer}/\mono{nhmmscan} work; they work similarly to
 \mono{hmmsearch}/\mono{hmmscan}.
 
-\subsection{Step 1: build a profile with hmmbuild}
+\subsection{Step 1: build a DNA profile with hmmbuild}
 
 \mono{hmmbuild} works for both protein and DNA profiles, so:
 
@@ -1327,12 +1340,12 @@ longer than W due to plentiful insertions.
 
 \subsection{Step 2: search the DNA sequence database with nhmmer}
 
-We'll use \mono{dna\_target.fa} as the target sequence
+We'll use \mono{dna\_made1\_target.fa} as the target sequence
 database. It is a FASTA format file containing one 330Kb long DNA
 sequence extracted from human chromosome 1.
 
 \mono{nhmmer} accepts a target DNA sequence database in the same
-formats as hmmsearch (typically FASTA). For the query, it accepts
+formats as \mono{hmmsearch} (typically FASTA). For the query, it accepts
 either a profile file as produced above by hmmbuild, or a file
 containing either one DNA sequence or an alignment of multiple DNA
 sequences.
@@ -1346,10 +1359,10 @@ disk, and the default file name is chosen by appending ``.hmm'' to the
 name of the sequence file name. This can be overridden with the
 \mono{-{}-hmmout} flag.
 
-To search \mono{dna\_target.fa} with our \mono{MADE1.hmm} profile:
+To search \mono{dna\_made1\_target.fa} with our \mono{MADE1.hmm} profile:
 
    \vspace{1ex}
-   \user{\% nhmmer MADE1.hmm dna\_target.fa}
+   \user{\% nhmmer MADE1.hmm dna\_made1\_target.fa}
    \vspace{1ex}
 
 This output is largely similar to that of hmmsearch. The key
@@ -1378,7 +1391,7 @@ target database sequence.\marginnote{\mono{nhmmer} automatically
 
 For example, note that the top hits here are coming in overlapping
 pairs, corresponding to the forward and reverse strands, like the hit
-to \NMHafrom{}..\NMHato on the forward strand and a hit to
+to \NMHafrom{}..\NMHato{} on the forward strand and a hit to
 \NMHbfrom{}..\NMHbto{} on the reverse strand. This is because the
 MADE1 DNA element is a near-perfect palindrome.\marginnote{DNA
   elements that have a unique orientation will only hit on one strand.
@@ -1472,7 +1485,254 @@ elapsed time.
 analog to \mono{jackhmmer}.
 
 
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+\section{Searching nucleotide sequences vs. protein profiles}
 
+So far, we've discussed tools for comparing protein profile(s) to
+protein sequence(s), and for comparing DNA profile(s) to DNA
+sequences(s). When we seek to match protein-coding regions in 
+DNA (or RNA) sequence, we need new tools. While it is possible to 
+identify those regions with a nucleotide profile using
+\mono{nhmmer} (see previous section), a more powerful strategy 
+is to search the nucleotide sequence using the nuanced scoring of protein
+search. This approach, called translated search, avoids penalizing synonymous 
+nucleotide substitutions, and accounts for relationships between 
+amino acids that may be missed in a less subtle nucleotide comparison. 
+
+Translated search in HMMER is performed with two tools. The tool 
+\mono{hmmsearcht} is used to compare one or more protein profiles to a 
+nucleotide target database (e.g. a file of chromosomes), and is 
+analgous to \mono{nhmmer} and \mono{hmmsearch}. The tool 
+\mono{hmmscant} is used to compare one or more nucleotide 
+sequences to a database of protein profiles (e.g. Pfam), and is 
+analgous to \mono{nhmmcan} and \mono{hmmscan}.
+
+Here, we'll go through the \mono{hmmbuild}/\mono{hmmsearcht} example in
+some detail.
+
+\subsection{Step 1: build a profile with \mono{hmmbuild}}
+
+Run \mono{hmmbuild} to build a profile from the Pkinase
+alignment:
+
+   \vspace{1ex}
+   \user{\% hmmbuild Pkinase.hmm Pkinase.sto}
+   \vspace{1ex}
+
+and you got some output that looks like:
+
+  \xsreoutput{inclusions/hmmbuild-Pkinase.out}
+
+This is exactly the same as Step 1 in the section entitled 
+``Searching a protein sequence database with a protein profile''
+(see that section for more details). Here we present the highlights.
+
+
+\subsection{Step 2: search the DNA sequence database with hmmsearcht}
+
+We'll use \mono{dna\_pkinase\_target.fa} as the target sequence
+database. It is a FASTA format file containing one 5Kb long DNA
+sequence extracted from human chromosome 22.
+
+\mono{hmmsearcht} accepts a target DNA sequence database in the same
+formats as \mono{hmmsearch} (typically FASTA). For the query, it accepts
+a protein profile file as produced above by hmmbuild.
+
+To search \mono{dna\_pkinase\_target.fa} with our \mono{Pkinase.hmm} profile:
+
+   \vspace{1ex}
+   \user{\% hmmsearcht Pkinase.hmm dna\_pkinase\_target.fa}
+   \vspace{1ex}
+
+This output is largely similar to that of \mono{hmmsearch}. The key
+differences are that (1) each hit is not to a full sequence in the 
+target database, but to a single open reading frame (ORF) among all 
+the ORFs found on both strands of the nucleotide sequence, and 
+(2) the output is adjusted to account for the fact that nucleotide
+triples (codons) from the DNA are aligned to amino acid positions from the
+protein profile.
+
+The first section is the \emph{header} that tells you what program you
+ran, on what, and with what options, as in \mono{hmmsearch}.
+
+The second section is the \emph{top hits} list. It is a list
+of ranked top hits (sorted by E-value, most significant hit first),
+formatted much like the \mono{hmmsearch} output \emph{top hits} list:
+
+   \xsreoutput{inclusions/hmmsearcht-pkinase.out}
+   
+For each hit, the table shows its \emph{E-value}, \emph{bit score},
+\emph{bias}, \emph{target sequence name} and \emph{target sequence
+  description}, much like \mono{hmmsearch}.
+
+The ``start'' and ``end'' columns are the coordinates in the nucleotide
+sequence where the ORF containing the hit is found. When the ``end'' is smaller
+than ``start'', this means the ORF is found on the reverse complement of the
+target database sequence.\marginnote{\mono{hmmsearcht} automatically
+  searches both strands.}
+   
+In the third output section, for each hit in the top hits list, there 
+is a table providing detailed information about the hit, with a line for 
+each infered domain, followed by the alignment(s) inferred for the hit. 
+The \mono{Pkinase} hit looks like:
+   
+   \xsreoutput{inclusions/hmmsearcht-pkinase.out2}
+
+All these pieces of information are as described for \mono{hmmsearch}. 
+
+Under the domain table, an ``optimal posterior accuracy'' alignment
+is computed within each domain's envelope and displayed. For example,
+Pkinase domain 1 in the \monob{dna\_pkinase\_target.fa} 
+output is shown as:
+
+      \xsreoutput{inclusions/hmmsearcht-pkinase.out3}
+      
+This largely agrees with the output from \mono{hmmsearch}, though 
+the alignment is spread out to accommodate the codons in the
+protein-coding DNA. The initial header line starts with a == 
+as a handle for a parsing script to grab hold of. The second line
+regurgitates reference line annotation inherited from the multiple
+alignment (as in \mono{hmmsearch}), while the third line (starting 
+with Pkinase) is the consensus of the profile. The fourth line 
+indicates matches between the profile and target sequence and 
+the fifth line presents the amino acid sequence encoded by the 
+matched DNA.  In each of these lines, the printed character is 
+surrounded by an extra preceding and following space character, 
+so that each position fills 3 characters in order to remain in 
+sync with the 6th line, which presents the DNA that encodes 
+the amino acids in the 5th line. The bottom line
+represents the posterior probability (essentially the expected 
+accuracy) of each aligned residue.
+
+
+Finally, at the bottom of the file, you'll see some summary statistics. For
+example, at the bottom of the Pkinase search output, you'll find something
+like:
+      
+   \xsreoutput{inclusions/hmmsearcht-pkinase.out4}
+
+These are similar to the summary statistics from \mono{hmmsearch}, 
+with the number of sequences matching each stage being simply the
+number of ORFs passing each stage.
+
+\mono{hmmscant} is to \mono{hmmscan} as \mono{hmmsearcht} is to
+\mono{hmmsearch}.  There is not currently a iterative translated
+search (protein\textendash{}DNA) analog to \mono{jackhmmer}.
+
+
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+\section{Creating multiple alignments with hmmalign}
+
+The file \mono{globins45.fa} is a FASTA file containing 45
+unaligned globin sequences. To align all of these to the
+\mono{globins4} profile and make a multiple sequence alignment:
+
+   \vspace{1ex}
+   \user{\% hmmalign globins4.hmm globins45.fa}
+   \vspace{1ex}
+
+The output of this is a Stockholm format multiple alignment file. The
+first few lines of it look like:
+
+   \xsreoutput{inclusions/hmmalign-globins.out}
+
+and so on. (I've truncated long lines.)
+
+First thing to notice here is that \mono{hmmalign} uses both lower
+case and upper case residues, and it uses two different characters for
+gaps.  This is because there are two different kinds of columns:
+``match'' columns in which residues are assigned to match states and
+gaps are treated as deletions relative to consensus, and ``insert''
+columns where residues are assigned to insert states and gaps in other
+sequences are just padding for the alignment to accomodate those
+insertions. In a match column, residues are upper case, and a '-'
+character means a deletion relative to the consensus. In an insert
+column, residues are lower case, and a '.' is padding.  A '-' deletion
+has a cost: transition probabilities were assessed, penalizing the
+transition into and out of a deletion. A '.' pad has no cost per se;
+instead, the sequence(s) with insertions are paying transition
+probabilities into and out of their inserted residue.
+
+This notation is only for your convenience in output files. You can
+see the structure of the profile reflected in the pattern of
+residues and gap characters \marginnote[-20ex]{By default, \mono{hmmalign}
+  removes any columns that are all deletion characters, so the number
+  of apparent match columns in a displayed alignment is $\leq$ the
+  actual number of match states in the profile. To prevent this
+  trimming and see columns for all match states, use the
+  \mono{-{}-allcol} option. This can be helpful if you're writing a
+  postprocessor that's trying to keep track of what columns are
+  assigned to what match states in the profile.}.  In input files, in
+most alignment formats\sidenote[][1ex]{A2M format is an important exception!} HMMER is
+case-insensitive, and it does not distinguish between different gap
+characters: '-' (dash), '.' (period), or even '\_' (underscore) are
+accepted as gap characters.
+
+Important: insertions relative to a profile are
+\emph{unaligned}. Suppose one sequence has an insertion of length 10
+and another has an insertion of length 2 in the same place in the
+profile. The alignment will have ten insert columns, to accomodate the
+longest insertion.  The residues of the shorter insertion are thrown
+down in an arbitrary order.\marginnote[-4ex]{By arbitrary HMMER convention,
+  the insertion is divided in half; half is left-justified, and the
+  other half is right-justified, leaving '.' characters in the
+  middle.}  Notice that in the previous paragraph I oh-so-carefully
+said residues are ``assigned'' to a state, not ``aligned'' to a
+state. For match states, assigned and aligned are the same thing: a
+one-to-one correspondence between a residue and a consensus match
+state in the profile. But there may be one \emph{or more} residues
+assigned to the same insert state.
+
+Don't be confused by the unaligned nature of profile 
+insertions. You're sure to see cases where lower-case inserted
+residues are ``obviously misaligned''.  This is just because HMMER
+isn't trying to ``align'' them in the first place. It's assigning
+them to unaligned insertions.
+
+Enough about the sequences in the alignment. Now, notice all those
+\mono{PP} annotation lines. That's posterior probability annotation,
+as in the single sequence alignments that \mono{hmmscan} and
+\mono{hmmsearch} showed. This represents the confidence that each
+residue is assigned where it should be.
+
+Again, that's ``assigned'', not ``aligned''. The posterior probability
+assigned to an inserted residue is the probability that it is assigned
+to the insert state corresponding to that column. Because the same
+insert state might correspond to more than one column, the probability
+on an insert residue is \emph{not} the probability that it belongs in
+that particular column; again, if there's a choice of column for
+putting an inserted residue, that choice is arbitrary.
+
+\mono{hmmalign} currently has a, um, feature that you may dislike.
+Recall that HMMER only does local alignments. Here, we know that we've
+provided full length globin sequences, and \mono{globins4} is a full
+length globin profile. We'd probably like \mono{hmmalign} to produce a
+global alignment. It can't currently do that. If it doesn't quite
+manage to extend its local alignment to the full length of a target
+globin sequence, you'll get a weird-looking effect, as the nonmatching
+termini are pulled out to the left or right. For example, look at the
+N-terminal \mono{g} in \mono{MYG\_HORSE} above. HMMER is about 80\%
+confident that this residue is nonhomologous, though any sensible
+person would align it into the first globin consensus column.
+
+Look at the end of that first block of Stockholm alignment, where you'll
+see:
+
+   \xsreoutput{inclusions/hmmalign-globins.out}
+
+The \mono{\#=GC PP\_cons} line is Stockholm-format \emph{consensus
+  posterior probability} annotation for the entire column. It's the
+arithmetic mean of the per-residue posterior probabilities in that
+column. This should prove useful in phylogenetic inference
+applications, for example, where it's common to mask away
+nonconfidently aligned columns of a multiple alignment. The
+\mono{PP\_cons} line provides an objective measure of the confidence
+assigned to each column.
+
+The \mono{\#=GC RF} line is Stockholm-format \emph{reference
+  coordinate annotation}, with an x marking each column that the
+profile considered to be consensus.
 
 
 

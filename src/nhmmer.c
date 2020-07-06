@@ -154,7 +154,6 @@ static ESL_OPTIONS options[] = {
   { "--seed",       eslARG_INT,          "42", NULL, "n>=0",  NULL,  NULL,           NULL,     "set RNG seed to <n> (if 0: one-time arbitrary seed)",           12 },
   { "--w_beta",     eslARG_REAL,         NULL, NULL, NULL,    NULL,  NULL,           NULL,     "tail mass at which window length is determined",                12 },
   { "--w_length",   eslARG_INT,          NULL, NULL, NULL,    NULL,  NULL,           NULL,     "window length - essentially max expected hit length" ,          12 },
-  { "--block_length", eslARG_INT,        NULL, NULL, "n>=50000", NULL, NULL,         NULL,     "length of blocks read from target database (threaded) ",        12 },
   { "--watson",     eslARG_NONE,         NULL, NULL, NULL,    NULL,  NULL,       "--crick",    "only search the top strand",                                    12 },
   { "--crick",      eslARG_NONE,         NULL, NULL, NULL,    NULL,  NULL,       "--watson",   "only search the bottom strand",                                 12 },
 
@@ -186,11 +185,14 @@ static ESL_OPTIONS options[] = {
   { "--domT",       eslARG_REAL,        FALSE, NULL, NULL,    NULL,  NULL,  DOMREPOPTS,      "Not used",   99 },
   { "--incdomE",    eslARG_REAL,       "0.01", NULL, "x>0",   NULL,  NULL,  INCDOMOPTS,      "Not used",   99 },
   { "--incdomT",    eslARG_REAL,        FALSE, NULL, NULL,    NULL,  NULL,  INCDOMOPTS,      "Not used",   99 },
+  { "--notrans",    eslARG_NONE,        FALSE, NULL, NULL,    NULL,  NULL,  NULL,            "don't show the translated DNA sequence in domain alignment",  99 }, /*for hmmscant */
+  { "--vertcodon",  eslARG_NONE,        FALSE, NULL, NULL,    NULL,  NULL,  NULL,            "show the DNA vertically in domain alignment",                 99 }, /*for hmmscant */
 
 
 
-#ifdef HMMER_THREADS 
-  { "--cpu",        eslARG_INT, p7_NCPU,"HMMER_NCPU","n>=0",NULL,  NULL,  CPUOPTS,         "number of parallel CPU workers to use for multithreads",      12 },
+#ifdef HMMER_THREADS
+  { "--block_length", eslARG_INT,        NULL, NULL, "n>=50000", NULL, NULL,    NULL,      "length of blocks read from target database (threaded) ",      12 },
+  { "--cpu",        eslARG_INT, p7_NCPU,"HMMER_NCPU","n>=0",    NULL,  NULL,    CPUOPTS,   "number of parallel CPU workers to use for multithreads",      12 },
 #endif
   {  0, 0, 0, 0, 0, 0, 0, 0, 0, 0 },
 };
@@ -199,17 +201,12 @@ static ESL_OPTIONS options[] = {
 /* struct cfg_s : "Global" application configuration shared by all threads/processes
  * 
  * This structure is passed to routines within main.c, as a means of semi-encapsulation
- * of shared data amongst different parallel processes (threads or MPI processes).
+ * of shared data amongst different parallel processes (threads).
  */
 struct cfg_s {
   char            *dbfile;            /* target sequence database file                   */
   char            *queryfile;         /* query file (hmm, fasta, or some MSA)            */
   int              qfmt;
-
-
-  int              do_mpi;            /* TRUE if we're doing MPI parallelization         */
-  int              nproc;             /* how many MPI processes, total                   */
-  int              my_rank;           /* who am I, in 0..nproc-1                         */
 
   char             *firstseq_key;     /* name of the first sequence in the restricted db range */
   int              n_targetseq;       /* number of sequences in the restricted range */
@@ -410,9 +407,6 @@ main(int argc, char **argv)
   cfg.queryfile  = NULL;
   cfg.dbfile     = NULL;
   cfg.qfmt       = NHMMER_QFORMAT_UNKNOWN;
-  cfg.do_mpi     = FALSE;               /* this gets reset below, if we init MPI */
-  cfg.nproc      = 0;                   /* this gets reset below, if we init MPI */
-  cfg.my_rank    = 0;                   /* this gets reset below, if we init MPI */
 
   cfg.firstseq_key = NULL;
   cfg.n_targetseq  = -1;
@@ -1290,7 +1284,7 @@ serial_master(ESL_GETOPTS *go, struct cfg_s *cfg)
    return eslFAIL;
 }
 
-//TODO: MPI code needs to be added here
+
 static int
 serial_loop(WORKER_INFO *info, ID_LENGTH_LIST *id_length_list, ESL_SQFILE *dbfp, char *firstseq_key, int n_targetseqs)
 {

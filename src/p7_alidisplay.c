@@ -98,9 +98,12 @@ p7_alidisplay_Create(const P7_TRACE *tr, int which, const P7_OPROFILE *om, const
   int            k,x,i,s;
   int            hmm_namelen, hmm_acclen, hmm_desclen;
   int            sq_namelen,  sq_acclen,  sq_desclen;
+  int            orf_namelen; /* used for translated search only */
   int            status;
+  char           n1,n2,n3;
+
   ESL_SQ         *ntorfseqtxt = NULL;
-  
+
   /* First figure out which piece of the trace (from first match to last match) 
    * we're going to represent, and how big it is.
    */
@@ -131,7 +134,7 @@ p7_alidisplay_Create(const P7_TRACE *tr, int which, const P7_OPROFILE *om, const
    * bookkeeping.  
    */
   n = (z2-z1+2) * 3;                     /* model, mline, aseq mandatory         */
-
+  if (ntsq != NULL)       n += 3*(z2-z1+1)+1; /* nucleotide sequence                  */
   if (om->rf[0]  != 0)    n += z2-z1+2;  /* optional reference line              */
   if (om->mm[0]  != 0)    n += z2-z1+2;  /* optional reference line              */
   if (om->cs[0]  != 0)    n += z2-z1+2;  /* optional structure line              */
@@ -143,7 +146,8 @@ p7_alidisplay_Create(const P7_TRACE *tr, int which, const P7_OPROFILE *om, const
   sq_namelen  = strlen(sq->name);                           n += sq_namelen  + 1;	  
   sq_acclen   = strlen(sq->acc);                            n += sq_acclen   + 1; /* sq->acc is "\0" when unset */
   sq_desclen  = strlen(sq->desc);                           n += sq_desclen  + 1; /* same for desc              */
- 
+  orf_namelen = strlen(sq->orfid);                          n += orf_namelen + 1; /* same for orfname          */
+
   ESL_ALLOC(ad, sizeof(P7_ALIDISPLAY));
   ad->mem = NULL;
 
@@ -157,7 +161,7 @@ p7_alidisplay_Create(const P7_TRACE *tr, int which, const P7_OPROFILE *om, const
   ad->model   = ad->mem + pos;  pos += z2-z1+2;
   ad->mline   = ad->mem + pos;  pos += z2-z1+2;
   ad->aseq    = ad->mem + pos;  pos += z2-z1+2;
-
+  if (ntsq != NULL)    { ad->ntseq  = ad->mem + pos;  pos += 3*(z2-z1+1)+1;} else { ad->ntseq = NULL; } /* for the nucleotide sequence there will be 3 times as many bytes */
   if (tr->pp != NULL)  { ad->ppline = ad->mem + pos;  pos += z2-z1+2;} else { ad->ppline = NULL; }
   ad->hmmname = ad->mem + pos;  pos += hmm_namelen +1;
   ad->hmmacc  = ad->mem + pos;  pos += hmm_acclen +1;
@@ -165,6 +169,7 @@ p7_alidisplay_Create(const P7_TRACE *tr, int which, const P7_OPROFILE *om, const
   ad->sqname  = ad->mem + pos;  pos += sq_namelen +1;
   ad->sqacc   = ad->mem + pos;  pos += sq_acclen +1;
   ad->sqdesc  = ad->mem + pos;  pos += sq_desclen +1;
+  ad->orfname = ad->mem + pos;  pos += orf_namelen +1;
 
   strcpy(ad->hmmname, om->name);
   if (om->acc  != NULL) strcpy(ad->hmmacc,  om->acc);  else ad->hmmacc[0]  = 0;
@@ -173,6 +178,7 @@ p7_alidisplay_Create(const P7_TRACE *tr, int which, const P7_OPROFILE *om, const
   strcpy(ad->sqname,  sq->name);
   strcpy(ad->sqacc,   sq->acc);
   strcpy(ad->sqdesc,  sq->desc);
+  strcpy(ad->orfname,  sq->orfid);
 
   /* Determine hit coords */
   ad->hmmfrom = tr->k[z1];
@@ -207,7 +213,7 @@ p7_alidisplay_Create(const P7_TRACE *tr, int which, const P7_OPROFILE *om, const
     ad->ppline[z-z1] = '\0';
   }
 
-  
+
   /* mandatory three alignment display lines: model, mline, aseq */
   for (z = z1; z <= z2; z++) 
     {
@@ -215,6 +221,53 @@ p7_alidisplay_Create(const P7_TRACE *tr, int which, const P7_OPROFILE *om, const
       i = tr->i[z];
       x = sq->dsq[i];
       s = tr->st[z];
+      if (ntsq != NULL)    { 
+         /*
+          * if there is a nucleotide sequence then we want to record the location 
+          * of the hit in that sequence and not the location of the hit in the ORF 
+          * provided by esl_gencode_ProcessOrf (esl_gencode.c) used in p7_alidisplay_Create
+          * in p7_alidisplay.c.
+          * The ORF has already been saved in ntorfseqtxt and converted into
+          * a reverse complement if the hit was found in the reverse complement of the
+          * query sequence.		  
+          * sq->start is the start location of the ORF in the nucleotide sequence and 
+          * ad->sqfrom is the start of the hit in the ORF in amino acid locations
+          *           
+          *     tr->i[z1]=sqfrom=3   tr->i[z2]=sqto=8
+                       |------hit-----|  	       
+                 E  Y  H  A  G  f  G  H  F  H  W  H 
+                GAGTACCACGCGGGCTTTGGCCACTTTCACTGGCAT
+	            |------------ORF----------|	 
+           sq->start=4 		            sq->end=30 
+          *
+          *
+          *
+          * digitized sequence [1..n], or NULL if text 
+          * char seq index [0..n-1] so nucleotide text seq index 
+          * is 3*(i-1)		 
+          */
+         n1 = n2 = n3 = 78; /* use a capital 'N' for a don't know character instead of a sentinel byte used in ad->aseq */
+         if(i > 0)
+		 {
+
+            if (sq->start < sq->end) {
+                n1 = ntsq->seq[  sq->start-1 + 3*(i-1)];
+                n2 = ntsq->seq[  sq->start-1 + 3*(i-1) + 1];
+                n3 = ntsq->seq[  sq->start-1 + 3*(i-1) + 2];
+            }
+            else
+            {
+                n1 = ntsq->seq[  sq->start-1 - 3*(i-1)] ;
+                n2 = ntsq->seq[  sq->start-1 - ( 3*(i-1) + 1) ] ;
+                n3 = ntsq->seq[  sq->start-1 - ( 3*(i-1) + 2) ] ;
+
+                n1 = ntsq->abc->sym [ ntsq->abc->complement[ ntsq->abc->inmap[(int)n1] ] ];
+                n2 = ntsq->abc->sym [ ntsq->abc->complement[ ntsq->abc->inmap[(int)n2] ] ];
+                n3 = ntsq->abc->sym [ ntsq->abc->complement[ ntsq->abc->inmap[(int)n3] ] ];
+
+            }
+         }
+        }
 
       switch (s) {
       case p7T_M:
@@ -223,19 +276,33 @@ p7_alidisplay_Create(const P7_TRACE *tr, int which, const P7_OPROFILE *om, const
         else if (p7_oprofile_FGetEmission(om, k, x) > 1.0)               ad->mline[z-z1] = '+'; /* >1 not >0; om has odds ratios, not scores */
         else                                                             ad->mline[z-z1] = ' ';
         ad->aseq  [z-z1] = toupper(Alphabet[x]);
+        if (ntsq != NULL)    { 
+           ad->ntseq [3*(z-z1)] = toupper(n1);
+           ad->ntseq [3*(z-z1)+1] = toupper(n2);
+           ad->ntseq [3*(z-z1)+2] = toupper(n3);
+		}
         break;
 	
       case p7T_I:
         ad->model [z-z1] = '.';
         ad->mline [z-z1] = ' ';
         ad->aseq  [z-z1] = tolower(Alphabet[x]);
+        if (ntsq != NULL)    { 
+           ad->ntseq [3*(z-z1)] = toupper(n1);
+           ad->ntseq [3*(z-z1)+1] = toupper(n2);
+           ad->ntseq [3*(z-z1)+2] = toupper(n3);
+		}
         break;
 	
       case p7T_D:
         ad->model [z-z1] = om->consensus[k];
         ad->mline [z-z1] = ' ';
         ad->aseq  [z-z1] = '-';
-
+        if (ntsq != NULL)    { 
+           ad->ntseq [3*(z-z1)] = '-';
+           ad->ntseq [3*(z-z1)+1] = '-';
+           ad->ntseq [3*(z-z1)+2] = '-';
+		}
         break;
 
       default: ESL_XEXCEPTION(eslEINVAL, "invalid state in trace: not M,D,I");
@@ -244,9 +311,9 @@ p7_alidisplay_Create(const P7_TRACE *tr, int which, const P7_OPROFILE *om, const
   ad->model [z2-z1+1] = '\0';
   ad->mline [z2-z1+1] = '\0';
   ad->aseq  [z2-z1+1] = '\0';
+  if (ntsq != NULL)
+     ad->ntseq  [3*(z2-z1+1)] = '\0';
   ad->N = z2-z1+1;
-  ad->ntseq = NULL;  // Mark this NULL so it doesn't cause problems with serialization.  
-  // nhmmer can reset it if it wants later
   esl_sq_Destroy(ntorfseqtxt);  
 
 	
@@ -303,6 +370,11 @@ extern P7_ALIDISPLAY *p7_alidisplay_Create_empty()
 
   new_obj->memsize = 0;
   new_obj->mem = NULL;
+
+
+  new_obj->orfname = NULL;
+  new_obj->orffrom = 0;
+  new_obj->orfto   = 0;
 
   return new_obj;
 
@@ -362,6 +434,10 @@ p7_alidisplay_Clone(const P7_ALIDISPLAY *ad)
       ad2->sqfrom  = ad->sqfrom;
       ad2->sqto    = ad->sqto;
       ad2->L       = ad->L;
+
+      ad2->orfname = ad2->mem + (ad->orfname - ad->mem);
+      ad2->orffrom = ad->orffrom;
+      ad2->orfto   = ad->orfto;
     }
   else				/* deserialized */
     {
@@ -388,6 +464,11 @@ p7_alidisplay_Clone(const P7_ALIDISPLAY *ad)
       ad2->sqfrom  = ad->sqfrom;
       ad2->sqto    = ad->sqto;
       ad2->L       = ad->L;      
+
+      if ( esl_strdup(ad->orfname,  -1, &(ad2->orfname)) != eslOK) goto ERROR;
+      ad2->orffrom = ad->orffrom;
+      ad2->orfto   = ad->orfto;
+
     }
 
   return ad2;
@@ -427,14 +508,21 @@ p7_alidisplay_Sizeof(const P7_ALIDISPLAY *ad)
   n += 1 + strlen(ad->hmmdesc);
   n += 1 + strlen(ad->sqname);
   n += 1 + strlen(ad->sqacc);  
-  n += 1 + strlen(ad->sqdesc); 
+  n += 1 + strlen(ad->sqdesc);
+
+  n += 1 + strlen(ad->orfname);  /* optional field: when not present, just "" ("\0") */
  
   return n;
 }
 
+/* Total size of the fixed-length fields in a serialized P7_ALIDISPLAY
+ * 5 32-bit ints: N, hmmfrom, hmmto, M, and obj_size (the size of the serialized object)
+ * 5 64-bit ints: sqfrom, sqto, orffrom, orfto, L
+ * 1 byte for presence/absence bit vector for rfline, mmline, csline, ppline, aseq, ntseq
+ */
+#define SER_BASE_SIZE ((5 * sizeof(int)) + (5 * sizeof(int64_t)) +1)
 
-#define SER_BASE_SIZE ((5 * sizeof(int)) + (3 * sizeof(int64_t)) +1) // Total size of the fixed-length fields in a 
-// serialized P7_ALIDISPLAY 
+
 
 /* Function:  p7_alidisplay_Serialize
  * Synopsis:  Serializes a HMMD_SEARCH_STATS object into a stream of bytes
@@ -469,7 +557,7 @@ int p7_alidisplay_Serialize(const P7_ALIDISPLAY *obj, uint8_t **buf, uint32_t *n
   uint32_t network_32bit; // hold 32-bit fields after conversion to network order
   uint64_t network_64bit; // hold 64-bit fields after conversion to network order
   uint8_t presence_flags = 0; // Bit-vector that records presence or absence of optional strings
-  uint32_t hmmname_length, hmmacc_length, hmmdesc_length, sqname_length, sqacc_length, sqdesc_length;
+  uint32_t hmmname_length, hmmacc_length, hmmdesc_length, sqname_length, sqacc_length, sqdesc_length, orfname_length;
 
   // check to make sure we were passed a valid pointer 
   if(obj == NULL || buf == NULL || n == NULL){ // no object to serialize or nowhere to put a buffer pointer
@@ -478,7 +566,7 @@ int p7_alidisplay_Serialize(const P7_ALIDISPLAY *obj, uint8_t **buf, uint32_t *n
 
   // Pass 1: Compute size of the serialized data structure
   /* 11 ints: 4 int fields in P7_ALIDISPLAY + lengths of 6 variable-length strings + total length of serialized structure
-     3 int64_t fields in P7_ALIDISPLAY
+     5 int64_t fields in P7_ALIDISPLAY
      1 byte for presence/absence bit vector for rfline, mmline, csline, ppline, aseq, ntseq 
     */
   ser_size = SER_BASE_SIZE; 
@@ -538,6 +626,11 @@ int p7_alidisplay_Serialize(const P7_ALIDISPLAY *obj, uint8_t **buf, uint32_t *n
   sqdesc_length = strlen(obj->sqdesc);
   ser_size += 1 + sqdesc_length; 
 
+  if (obj->orfname != NULL) {
+      orfname_length = strlen(obj->orfname);
+      ser_size += 1 + orfname_length;  /* optional field: when not present, just "" ("\0") */
+  }
+
   // Now that we know how big the serialized data structure will be, determine if we have enough buffer space to hold it
   if(*buf == NULL){ // have no buffer, so allocate one
     ESL_ALLOC(*buf, ser_size);
@@ -588,85 +681,99 @@ int p7_alidisplay_Serialize(const P7_ALIDISPLAY *obj, uint8_t **buf, uint32_t *n
   memcpy(ptr, &network_64bit, sizeof(int64_t));
   ptr += sizeof(int64_t);
 
-  // Field 8: L
+  // Field 8: Orf_from
+  network_64bit = esl_hton64(obj->orffrom);
+  memcpy(ptr, &network_64bit, sizeof(int64_t));
+  ptr += sizeof(int64_t);
+
+  // Field 9: Orf_to
+  network_64bit = esl_hton64(obj->orfto);
+  memcpy(ptr, &network_64bit, sizeof(int64_t));
+  ptr += sizeof(int64_t);
+
+  // Field 10: L
   network_64bit = esl_hton64(obj->L);
   memcpy(ptr, &network_64bit, sizeof(int64_t));
   ptr += sizeof(int64_t);
 
-  // Field 9: presence_flags
+  // Field 11: presence_flags
   memcpy(ptr, &presence_flags, sizeof(uint8_t));
   ptr += sizeof(uint8_t);
 
   //Now, the strings, some of which are optional
   // Note that many of these strings are fixed-length if they are present
 
-  // Field 10: Rfline
+  // Field 12: Rfline
   if(presence_flags & RFLINE_PRESENT){
     strcpy((char *) ptr, obj->rfline);
     ptr += obj->N + 1;
   }
 
-  // Field 11: mmline
+  // Field 13: mmline
   if(presence_flags & MMLINE_PRESENT){
     strcpy((char *) ptr, obj->mmline);
     ptr += obj->N + 1;
   }
 
-  // Field 12: csline
+  // Field 14: csline
   if(presence_flags & CSLINE_PRESENT){
     strcpy((char *) ptr, obj->csline);
     ptr += obj->N + 1;
   }
 
-  // Field 13: Model
+  // Field 15: Model
   strcpy((char *) ptr, obj->model);
   ptr += obj->N + 1;
   
-  // Field 14: Mline
+  // Field 16: Mline
   strcpy((char *) ptr, obj->mline);
   ptr += obj->N + 1;
 
-  // Field 15: Aseq
+  // Field 17: Aseq
   if(presence_flags & ASEQ_PRESENT){
     strcpy((char *) ptr, obj->aseq);
     ptr += obj->N + 1;
   }
- 
-  // Field 16: ntseq
+
+  // Field 18: ntseq
   if(presence_flags & NTSEQ_PRESENT){
     strcpy((char *) ptr, obj->ntseq);
     ptr += (3 * obj->N) + 1;
   }
 
-  // Field 17: PPline
+  // Field 19: PPline
   if(presence_flags & PPLINE_PRESENT){
     strcpy((char *) ptr, obj->ppline);
     ptr += obj->N + 1;
   }
 
-  // Field 18: Hmmname
+  // Field 20: Hmmname
   strcpy((char *) ptr, obj->hmmname);
   ptr += hmmname_length + 1;
-  
-  // Field 19: Hmmacc
+
+  // Field 21: Hmmacc
   strcpy((char *) ptr, obj->hmmacc);
   ptr += hmmacc_length + 1;
 
-  // Field 20: Hmmdesc
+  // Field 22: Hmmdesc
   strcpy((char *) ptr, obj->hmmdesc);
   ptr += hmmdesc_length + 1;
 
-  // Field 21: Sqname
+  // Field 23: Sqname
   strcpy((char *) ptr, obj->sqname);
   ptr += sqname_length +1;
 
-  // Field 22: Sqacc
+  // Field 24: Sqacc
   strcpy((char *) ptr, obj->sqacc);
   ptr += sqacc_length +1 ;
 
-  // Field 23: Sqdesc
+  // Field 25: Sqdesc
   strcpy((char *) ptr, obj->sqdesc);
   ptr += sqdesc_length +1 ;
+
+  // Field 26: Orfname
+  strcpy((char *) ptr, obj->orfname);
+  ptr += orfname_length +1 ;
 
   // sanity-check that we computed the length correctly
   if(ptr != *buf + *n + ser_size){
@@ -732,42 +839,52 @@ extern int p7_alidisplay_Deserialize(const uint8_t *buf, uint32_t *n, P7_ALIDISP
     ret_obj->memsize = obj_size - SER_BASE_SIZE;
   }
 
-  // Second field: N
+  // Field 2: N
   memcpy(&network_32bit, ptr, sizeof(uint32_t)); // Grab the bytes out of the buffer
   ret_obj->N = esl_ntoh32(network_32bit);
   ptr += sizeof(uint32_t);
 
-  // Third field: Hmmfrom
+  // Field 3: Hmmfrom
   memcpy(&network_32bit, ptr, sizeof(uint32_t)); 
   ret_obj->hmmfrom = esl_ntoh32(network_32bit);
   ptr += sizeof(uint32_t);
 
-  // Fourth field: Hmmto
+  // Field 4: Hmmto
   memcpy(&network_32bit, ptr, sizeof(uint32_t)); 
   ret_obj->hmmto = esl_ntoh32(network_32bit);
   ptr += sizeof(uint32_t);
 
-  // Fifth field: M 
+  // Field 5: M
   memcpy(&network_32bit, ptr, sizeof(uint32_t)); 
   ret_obj->M = esl_ntoh32(network_32bit);
   ptr += sizeof(uint32_t);
 
-  // Sixth field: sqfrom
+  // Field 6: sqfrom
   memcpy(&network_64bit, ptr, sizeof(uint64_t)); 
   ret_obj->sqfrom = esl_ntoh64(network_64bit);
   ptr += sizeof(uint64_t);
 
-  // Seventh field: sqto
+  // Field 7: sqto
   memcpy(&network_64bit, ptr, sizeof(uint64_t)); 
   ret_obj->sqto = esl_ntoh64(network_64bit);
   ptr += sizeof(uint64_t);
 
-  // Eighth field: L
+  // Field 8: Orf_from
+  memcpy(&network_64bit, ptr, sizeof(uint64_t));
+  ret_obj->orffrom = esl_ntoh64(network_64bit);
+  ptr += sizeof(uint64_t);
+
+  // Field 9: Orf_to
+  memcpy(&network_64bit, ptr, sizeof(uint64_t));
+  ret_obj->orfto = esl_ntoh64(network_64bit);
+  ptr += sizeof(uint64_t);
+
+  // Field 10: L
   memcpy(&network_64bit, ptr, sizeof(uint64_t)); 
   ret_obj->L = esl_ntoh64(network_64bit);
   ptr += sizeof(uint64_t);
 
-  // Ninth field: presence flags
+  // Field 11: presence flags
   presence_flags = *ptr; // no need for memcpy with one-byte field
   ptr += sizeof(uint8_t);
 
@@ -775,8 +892,8 @@ extern int p7_alidisplay_Deserialize(const uint8_t *buf, uint32_t *n, P7_ALIDISP
   memcpy(ret_obj->mem, ptr, (obj_size - SER_BASE_SIZE)); 
   mem_ptr = ret_obj->mem;
   ptr += (obj_size - SER_BASE_SIZE);
-  // Tenth field: rfline, if present
 
+  // Field 12: rfline, if present
   if(ptr != buf + *n + obj_size){
     ESL_EXCEPTION(eslFAIL, "In p7_alidisplay_Deserialize, found object (ptr) to be of size %ld, expected %u.\n", (long int) (ptr - (buf + *n)), obj_size);
   }
@@ -790,7 +907,7 @@ extern int p7_alidisplay_Deserialize(const uint8_t *buf, uint32_t *n, P7_ALIDISP
     ret_obj->rfline = NULL; 
   }
 
-  // Eleventh field: mmline, if present
+  // Field 13: mmline, if present
   if(presence_flags & MMLINE_PRESENT){
     ret_obj->mmline = mem_ptr;
     string_length = strlen(ret_obj->mmline);
@@ -800,7 +917,7 @@ extern int p7_alidisplay_Deserialize(const uint8_t *buf, uint32_t *n, P7_ALIDISP
     ret_obj->mmline = NULL; 
   }
 
-  // Twelfth field: csline, if present
+  // Field 14: csline, if present
   if(presence_flags & CSLINE_PRESENT){
     ret_obj->csline = mem_ptr;
     string_length = strlen(ret_obj->csline);
@@ -810,18 +927,17 @@ extern int p7_alidisplay_Deserialize(const uint8_t *buf, uint32_t *n, P7_ALIDISP
     ret_obj->csline = NULL; 
   }
 
-
-  // Thirteenth field: model
+  // Field 15: model
   ret_obj->model = mem_ptr;
   string_length = strlen(ret_obj->model);
   mem_ptr+= string_length + 1;
 
- // Thirteenth field: mline
+ // Field 16: mline
   ret_obj->mline = mem_ptr;
   string_length = strlen(ret_obj->mline);
   mem_ptr+= string_length + 1;
 
-  // Fourteenth field: aseq, if present
+  // Field 17: aseq, if present
   if(presence_flags & ASEQ_PRESENT){
     ret_obj->aseq = mem_ptr;
     string_length = strlen(ret_obj->aseq);
@@ -831,7 +947,7 @@ extern int p7_alidisplay_Deserialize(const uint8_t *buf, uint32_t *n, P7_ALIDISP
     ret_obj->aseq = NULL; 
   }
 
-  // Fifteenth field: ntseq, if present
+  // Field 18: ntseq, if present
   if(presence_flags & NTSEQ_PRESENT){
     ret_obj->ntseq = mem_ptr;
     string_length = strlen(ret_obj->ntseq);
@@ -841,7 +957,7 @@ extern int p7_alidisplay_Deserialize(const uint8_t *buf, uint32_t *n, P7_ALIDISP
     ret_obj->ntseq = NULL; 
   }
 
-  // Sixteenth field: ppline, if present
+  // Field 19: ppline, if present
   if(presence_flags & PPLINE_PRESENT){
     ret_obj->ppline = mem_ptr;
     string_length = strlen(ret_obj->ppline);
@@ -851,35 +967,41 @@ extern int p7_alidisplay_Deserialize(const uint8_t *buf, uint32_t *n, P7_ALIDISP
     ret_obj->ppline = NULL; 
   }
 
-  // Seventeenth field: hmmname
+  // Field 20: hmmname
   ret_obj->hmmname = mem_ptr;
   string_length = strlen(ret_obj->hmmname);
   mem_ptr+= string_length + 1;
 
-  // Eighteenth field: hmmacc
+  // Field 21: hmmacc
   ret_obj->hmmacc = mem_ptr;
   string_length = strlen(ret_obj->hmmacc);
   mem_ptr+= string_length + 1;
 
-  // Nineteenth field: hmmdesc 
+  // Field 22: hmmdesc
   ret_obj->hmmdesc = mem_ptr;
   string_length = strlen(ret_obj->hmmdesc);
   mem_ptr+= string_length + 1;
 
-  // Twentyith field: sqname
+  // Field 23: sqname
   ret_obj->sqname = mem_ptr;
   string_length = strlen(ret_obj->sqname);
   mem_ptr+= string_length + 1;
 
-  // Twentyfirst field: sqacc
+  // Field 24: sqacc
   ret_obj->sqacc = mem_ptr;
   string_length = strlen(ret_obj->sqacc);
   mem_ptr+= string_length + 1;
 
-  // Twentysecond field: sqdesc
+  // Field 25: sqdesc
   ret_obj->sqdesc = mem_ptr;
   string_length = strlen(ret_obj->sqdesc);
   mem_ptr+= string_length +1;
+
+  // Field 26: orfname
+  ret_obj->orfname = mem_ptr;
+  string_length = strlen(ret_obj->orfname);
+  mem_ptr+= string_length +1;
+
 
   // Sanity-check that we got the length right
   if(mem_ptr - ret_obj->mem != (obj_size - SER_BASE_SIZE)){
@@ -892,7 +1014,7 @@ extern int p7_alidisplay_Deserialize(const uint8_t *buf, uint32_t *n, P7_ALIDISP
     return eslEMEM;
 }
 
-/* Function:  p7_alidisplay_Serialize()
+/* Function:  p7_alidisplay_Serialize_old()
  * Synopsis:  Serialize a P7_ALIDISPLAY, using internal memory.
  *
  * Purpose:   Serialize the <P7_ALIDISPLAY> <ad>, internally converting
@@ -909,6 +1031,7 @@ extern int p7_alidisplay_Deserialize(const uint8_t *buf, uint32_t *n, P7_ALIDISP
  * Throws:    <eslEMEM> on allocation failure, and <ad> is restored to
  *            its original (deserialized) state.
  */
+
 int
 p7_alidisplay_Serialize_old(P7_ALIDISPLAY *ad)
 {
@@ -1042,6 +1165,7 @@ p7_alidisplay_Destroy(P7_ALIDISPLAY *ad)
       if (ad->sqname)  free(ad->sqname);
       if (ad->sqacc)   free(ad->sqacc);
       if (ad->sqdesc)  free(ad->sqdesc);
+      if (ad->orfname) free(ad->orfname);
     }
   free(ad);
 }
@@ -1133,12 +1257,281 @@ int
 p7_alidisplay_Print(FILE *fp, P7_ALIDISPLAY *ad, int min_aliwidth, int linewidth, P7_PIPELINE *pli)
 {
    int status;
-   if ((status = p7_nontranslated_alidisplay_Print(fp, ad, min_aliwidth, linewidth, pli->show_accessions)) != eslOK) return status;
+	/* if there is a target sequence then we must be calling from hmmscant to print the target sequence in the domain alignment display */
+	if( ad->ntseq == NULL)
+   {	   
+      if ((status = p7_alidisplay_nontranslated_Print(fp, ad, min_aliwidth, linewidth, pli->show_accessions)) != eslOK) return status;
+   }
+   else
+   {
+      if ((status = p7_alidisplay_translated_Print(fp, ad, min_aliwidth, linewidth, pli)) != eslOK) return status;
+   }
 
 	return status;
 }
 
-/* Function:  p7_nontranslated_alidisplay_Print()
+/* Function:  p7_alidisplay_translated_Print()
+ * Synopsis:  Human readable output of <P7_ALIDISPLAY> for hmmscant
+ *
+ * Purpose:   Prints alignment <ad> to stream <fp>.
+ *            
+ *            Put at least <min_aliwidth> alignment characters per
+ *            line; try to make lines no longer than <linewidth>
+ *            characters, including name, coords, and spacing.  The
+ *            width of lines may exceed <linewidth>, if that's what it
+ *            takes to put a name, coords, and <min_aliwidth>
+ *            characters of alignment on a line.
+ *            
+ *            As a special case, if <linewidth> is negative or 0, then
+ *            alignments are formatted in a single block of unlimited
+ *            line length.
+ *
+ * Returns:   <eslOK> on success.
+ *
+ * Throws:    <eslEWRITE> on write error, such as filling the disk.
+ */
+int
+p7_alidisplay_translated_Print(FILE *fp, P7_ALIDISPLAY *ad, int min_aliwidth, int linewidth, P7_PIPELINE *pli)
+{
+  char *buf          = NULL;
+  char *show_hmmname = NULL;
+  char *show_seqname = NULL;
+  int   namewidth, coordwidth, aliwidth;
+  int   pos;
+  int   status;
+  int   ni, nk;
+  int   z;
+  long  i1,i2;
+  int   k1,k2;
+  int   o1,o2; /* start/end positions in alidisplay within an orf */
+  int   k;
+
+  int   npos;
+  int   i,j;
+  int   show_accessions;
+  int   show_translated_sequence;
+  int   show_vertical_codon;
+  
+  show_accessions = pli->show_accessions;
+  show_translated_sequence = pli->show_translated_sequence;
+  show_vertical_codon = pli->show_vertical_codon;
+
+   /* implement the --acc option for preferring accessions over names in output  */
+  show_hmmname = (show_accessions && ad->hmmacc[0] != '\0') ? ad->hmmacc : ad->hmmname;
+  show_seqname = (show_accessions && ad->sqacc[0]  != '\0') ? ad->sqacc  : ad->sqname;
+
+  /* dynamically size the output lines */
+  namewidth  = ESL_MAX(strlen(show_hmmname), strlen(show_seqname));
+  if (show_translated_sequence) {
+      namewidth  = ESL_MAX(namewidth, strlen(ad->orfname));
+  }
+
+  coordwidth = ESL_MAX(
+                      ESL_MAX(integer_textwidth(ad->hmmfrom), integer_textwidth(ad->hmmto)),
+                      ESL_MAX(integer_textwidth(ad->sqfrom), integer_textwidth(ad->sqto)));
+					  
+  aliwidth   = (linewidth > 0) ? linewidth - namewidth - 2*coordwidth - 5 : ad->N;
+  
+  if (aliwidth < ad->N && aliwidth < min_aliwidth) aliwidth = min_aliwidth; /* at least, regardless of some silly linewidth setting */
+
+  if (!show_vertical_codon) aliwidth /= 3;
+
+  ESL_ALLOC(buf, sizeof(char) * (aliwidth+1));
+  buf[aliwidth] = 0;
+
+  /* Break the alignment into multiple blocks of width aliwidth for printing */
+  i1 = ad->sqfrom;
+  k1 = ad->hmmfrom;
+  o1 = ad->orffrom;
+
+  for (pos = 0; pos < ad->N; pos += aliwidth)
+    {
+      if (pos > 0) { if (fprintf(fp, "\n") < 0) ESL_XEXCEPTION_SYS(eslEWRITE, "alignment display write failed"); } /* blank line betweeen blocks */
+
+      ni = nk = 0; 
+      for (z = pos; z < pos + aliwidth && z < ad->N; z++) {
+        if (ad->model[z] != '.') nk++; /* k advances except on insert states */
+        if (ad->aseq[z]  != '-') ni++; /* i advances except on delete states */
+      }
+
+      k2 = k1+nk-1;
+      if (ad->sqfrom < ad->sqto) i2 = i1+(ni-1)*3+2;
+      else                       i2 = i1-(ni*3)+1; // revcomp hit for DNA
+      o2 = o1+(ni-1);
+
+	  if (ad->csline != NULL) 
+	  {
+  	     if (fprintf(fp, "  %*s ", namewidth+coordwidth+1, " ") < 0) ESL_XEXCEPTION_SYS(eslEWRITE, "alignment display write failed"); 
+         for (i = 0; i < aliwidth; i++)
+	        {
+		       if (ad->csline[pos+i] == 0) break; 
+		       if (fprintf(fp, 
+			     (show_vertical_codon) ? "%c" : " %c ", 
+				 ad->csline[pos+i]) < 0) ESL_XEXCEPTION_SYS(eslEWRITE, "alignment display write failed"); 
+	        }
+        if (fprintf(fp, " CS\n") < 0) ESL_XEXCEPTION_SYS(eslEWRITE, "alignment display write failed");
+	  }
+
+	  if (ad->rfline != NULL) 
+	  {
+         if (fprintf(fp, "  %*s ", namewidth+coordwidth+1, " ") < 0) ESL_XEXCEPTION_SYS(eslEWRITE, "alignment display write failed"); 
+         for (i = 0; i < aliwidth; i++)
+	        {
+		       if (ad->rfline[pos+i] == 0) break; 
+		       if (fprintf(fp,
+			      (show_vertical_codon) ? "%c" : " %c ", 
+			      ad->rfline[pos+i]) < 0) ESL_XEXCEPTION_SYS(eslEWRITE, "alignment display write failed"); 
+	        }
+        if (fprintf(fp, " RF\n") < 0) ESL_XEXCEPTION_SYS(eslEWRITE, "alignment display write failed");
+	  }
+
+	  if (ad->mmline != NULL) 
+	  {
+         if (fprintf(fp, "  %*s ", namewidth+coordwidth+1, " ") < 0) ESL_XEXCEPTION_SYS(eslEWRITE, "alignment display write failed"); 
+         for (i = 0; i < aliwidth; i++)
+	        {
+		       if (ad->mmline[pos+i] == 0) break; 
+		       if (fprintf(fp, 
+			      (show_vertical_codon) ? "%c" : " %c ", 
+			      ad->mmline[pos+i]) < 0) ESL_XEXCEPTION_SYS(eslEWRITE, "alignment display write failed"); 
+	        }
+        if (fprintf(fp, " MM\n") < 0) ESL_XEXCEPTION_SYS(eslEWRITE, "alignment display write failed");
+	  }
+	 
+      if (fprintf(fp, "  %*s %*d ", namewidth,  show_hmmname, coordwidth, k1) < 0) ESL_XEXCEPTION_SYS(eslEWRITE, "alignment display write failed"); 
+      for (i = 0; i < aliwidth; i++)
+	     {
+		    if (ad->model[pos+i] == 0) break; 
+		    if (fprintf(fp,
+			   (show_vertical_codon) ? "%c" : " %c ", 
+			    ad->model[pos+i]) < 0) ESL_XEXCEPTION_SYS(eslEWRITE, "alignment display write failed");
+	     }
+      if (fprintf(fp, " %-*d\n", coordwidth, k2) < 0) ESL_XEXCEPTION_SYS(eslEWRITE, "alignment display write failed"); 
+
+      if (fprintf(fp, "  %*s ", namewidth+coordwidth+1, " ") < 0) ESL_XEXCEPTION_SYS(eslEWRITE, "alignment display write failed"); 
+      for (i = 0; i < aliwidth; i++)
+	     {
+		   if (ad->mline[pos+i] == 0) break; 
+		    if (fprintf(fp,
+			   (show_vertical_codon) ? "%c" : " %c ", 
+               ad->mline[pos+i]) < 0) ESL_XEXCEPTION_SYS(eslEWRITE, "alignment display write failed"); 
+	     }
+      if (fprintf(fp, "\n") < 0) ESL_XEXCEPTION_SYS(eslEWRITE, "alignment display write failed"); 
+
+      if (show_translated_sequence)
+	    {
+		   if (fprintf(fp, "  %*s", namewidth, ad->orfname)  < 0) ESL_XEXCEPTION_SYS(eslEWRITE, "alignment display write failed");
+		   if (ni > 0) 
+		   {
+			 if (fprintf(fp, " %*d ", coordwidth, o1)  < 0) ESL_XEXCEPTION_SYS(eslEWRITE, "alignment display write failed");
+		   }
+		   else
+		   {		  
+			 if (fprintf(fp, " %*s ", coordwidth, "-") < 0) ESL_XEXCEPTION_SYS(eslEWRITE, "alignment display write failed");
+		   }
+		  
+		   for (i = 0; i < aliwidth; i++)
+			  {
+			    if (ad->aseq[pos+i] == 0) break; 
+			    if (fprintf(fp,
+			      (show_vertical_codon) ? "%c" : " %c ", 
+				   ad->aseq[pos+i]) < 0) ESL_XEXCEPTION_SYS(eslEWRITE, "alignment display write failed"); 
+			  }
+		  
+		   if (ni > 0)
+		   {		  
+			 if (fprintf(fp, " %-*d\n", coordwidth, o2)  < 0) ESL_XEXCEPTION_SYS(eslEWRITE, "alignment display write failed");
+		   }
+		   else
+		   {		  
+			 if (fprintf(fp, " %*s\n", coordwidth, "-") < 0) ESL_XEXCEPTION_SYS(eslEWRITE, "alignment display write failed");
+		   }
+		}
+	  
+      if (fprintf(fp, "  %*s", namewidth, show_seqname)  < 0) ESL_XEXCEPTION_SYS(eslEWRITE, "alignment display write failed");
+      if (ni > 0) 
+	   {
+ 	      if (fprintf(fp, " %*ld ", coordwidth, i1)  < 0) ESL_XEXCEPTION_SYS(eslEWRITE, "alignment display write failed");
+	   }
+	   else
+	   {		  
+		 if (fprintf(fp, " %*s ", coordwidth, "-") < 0) ESL_XEXCEPTION_SYS(eslEWRITE, "alignment display write failed");
+       }
+
+	  npos = pos * 3;
+      if(show_vertical_codon)
+	  {
+         /*
+          * Display the DNA codon vertically instead of horizontally
+          */	   
+         for(k = 0; k < 3; k++)
+	     {	
+		   if(k != 0)   
+		   { 
+             if (fprintf(fp, "  %*s", namewidth, " ") < 0) ESL_XEXCEPTION_SYS(eslEWRITE, "alignment display write failed");
+ 	         if (fprintf(fp, " %*s ", coordwidth, " ")  < 0) ESL_XEXCEPTION_SYS(eslEWRITE, "alignment display write failed");			
+		   }
+		
+	       for (i = 0, j = 0; j < aliwidth; i+=3, j++)
+	       {
+			  if (ad->ntseq[npos+i] == 0) break; 
+              if (fprintf(fp, "%c", ad->ntseq[npos+i+k])  < 0) ESL_XEXCEPTION_SYS(eslEWRITE, "alignment display write failed");
+	       }
+		   if(k < 2)  
+ 	        if (fprintf(fp, "\n")  < 0) ESL_XEXCEPTION_SYS(eslEWRITE, "alignment display write failed");
+	     }
+	  }
+	  else
+      {
+	
+         /*
+          * Display the DNA codon horizontally
+          */	   
+	     for (i = 0, j = 0; j < aliwidth; i+=3, j++)
+	     {
+		    if (ad->ntseq[npos+i] == 0) break; 
+            if (fprintf(fp, "%c%c%c", ad->ntseq[npos+i],ad->ntseq[npos+i+1],ad->ntseq[npos+i+2])  < 0) ESL_XEXCEPTION_SYS(eslEWRITE, "alignment display write failed");
+	     }
+	  }		
+		
+      if (ni > 0)
+        {		  
+ 	        if (fprintf(fp, " %-*ld\n", coordwidth, i2)  < 0) ESL_XEXCEPTION_SYS(eslEWRITE, "alignment display write failed");
+        }
+      else
+        {		  
+            if (fprintf(fp, " %*s\n", coordwidth, "-") < 0) ESL_XEXCEPTION_SYS(eslEWRITE, "alignment display write failed");
+        }
+	
+      if (fprintf(fp, "  %*s ", namewidth+coordwidth+1, "")  < 0) ESL_XEXCEPTION_SYS(eslEWRITE, "alignment display write failed");
+
+	  for (i = 0; i < aliwidth; i++)
+	     {
+		   if (ad->ppline[pos+i] == 0) break; 
+           if (fprintf(fp, 
+			   (show_vertical_codon) ? "%c" : " %c ", 
+		       ad->ppline[pos+i])  < 0) ESL_XEXCEPTION_SYS(eslEWRITE, "alignment display write failed");
+		 }
+
+	 if (fprintf(fp, " PP\n")  < 0) ESL_XEXCEPTION_SYS(eslEWRITE, "alignment display write failed");	  
+	  
+     /* print DNA sequence */
+
+      k1 += nk;
+      if   (ad->sqfrom < ad->sqto)  i1 += ni*3;
+      else                          i1 -= ni*3;  // revcomp hit for DNA
+      o1 += ni;
+    }
+  fflush(fp);
+  free(buf);
+  return eslOK;
+
+ ERROR:
+  if (buf) free(buf);
+  return status;
+}  
+
+/* Function:  p7_alidisplay_Print()
  * Synopsis:  Human readable output of <P7_ALIDISPLAY>
  *
  * Purpose:   Prints alignment <ad> to stream <fp>.
@@ -1159,7 +1552,7 @@ p7_alidisplay_Print(FILE *fp, P7_ALIDISPLAY *ad, int min_aliwidth, int linewidth
  * Throws:    <eslEWRITE> on write error, such as filling the disk.
  */
 int
-p7_nontranslated_alidisplay_Print(FILE *fp, P7_ALIDISPLAY *ad, int min_aliwidth, int linewidth, int show_accessions)
+p7_alidisplay_nontranslated_Print(FILE *fp, P7_ALIDISPLAY *ad, int min_aliwidth, int linewidth, int show_accessions)
 {
   char *buf          = NULL;
   char *show_hmmname = NULL;
@@ -1434,6 +1827,7 @@ p7_alidisplay_Sample(ESL_RANDOMNESS *rng, int N, P7_ALIDISPLAY **ret_ad)
   ad->rfline  = ad->mmline = ad->csline = ad->model   = ad->mline  = ad->aseq = ad->ntseq = ad->ppline = NULL;
   ad->hmmname = ad->hmmacc = ad->hmmdesc = NULL;
   ad->sqname  = ad->sqacc  = ad->sqdesc  = NULL;
+  ad->orfname = NULL;
   ad->mem     = NULL;
   ad->memsize = 0;
 
@@ -1454,6 +1848,8 @@ p7_alidisplay_Sample(ESL_RANDOMNESS *rng, int N, P7_ALIDISPLAY **ret_ad)
   esl_strdup("my_seq", -1, &(ad->sqname));
   if (esl_rnd_Roll(rng, 2) == 0) esl_strdup("ABC000001.42",           -1, &(ad->sqacc));  else esl_strdup("", -1, &(ad->sqacc));
   if (esl_rnd_Roll(rng, 2) == 0) esl_strdup("(sequence description)", -1, &(ad->sqdesc)); else esl_strdup("", -1, &(ad->sqdesc));
+
+  esl_strdup("", -1, &(ad->orfname));
 
   /* model, seq coords must look valid. */
   ad->hmmfrom = 100;
@@ -1822,6 +2218,7 @@ alidisplay_SampleFake_ntseq(ESL_RANDOMNESS *rng, int N, P7_ALIDISPLAY **ret_ad)
   ad->rfline  = ad->mmline = ad->csline = ad->model   = ad->mline  = ad->aseq = ad->ntseq = ad->ppline = NULL;
   ad->hmmname = ad->hmmacc = ad->hmmdesc = NULL;
   ad->sqname  = ad->sqacc  = ad->sqdesc  = NULL;
+  ad->orfname = NULL;
   ad->mem     = NULL;
   ad->memsize = 0;
 
@@ -1843,6 +2240,9 @@ alidisplay_SampleFake_ntseq(ESL_RANDOMNESS *rng, int N, P7_ALIDISPLAY **ret_ad)
   if (esl_rnd_Roll(rng, 2) == 0) esl_strdup("ABC000001.42",           -1, &(ad->sqacc));  else esl_strdup("", -1, &(ad->sqacc));
   if (esl_rnd_Roll(rng, 2) == 0) esl_strdup("(sequence description)", -1, &(ad->sqdesc)); else esl_strdup("", -1, &(ad->sqdesc));
 
+  esl_strdup("orf1234", -1, &(ad->orfname));
+
+
   /* model, seq coords must look valid. */
   ad->hmmfrom = 100;
   ad->hmmto   = ad->hmmfrom + nM + nD - 1;
@@ -1851,6 +2251,9 @@ alidisplay_SampleFake_ntseq(ESL_RANDOMNESS *rng, int N, P7_ALIDISPLAY **ret_ad)
   ad->sqfrom  = 1000;
   ad->sqto    = ad->sqfrom + nM + nI - 1;
   ad->L       = ad->sqto + esl_rnd_Roll(rng, 2);
+  ad->orffrom = 1;
+  ad->orfto   = ad->L * 3;
+
 
   /* rfline is free-char "reference annotation" on consensus; H3 puts '.' for inserts. */
   if (ad->rfline) {
@@ -2191,7 +2594,7 @@ main(int argc, char **argv)
   p7_pli_NewSeq(pli, sq);
   p7_bg_SetLength(bg, sq->n);
   p7_oprofile_ReconfigLength(om, sq->n);
-  p7_Pipeline(pli, om, bg, sq, NULL, hitlist);
+  p7_Pipeline(pli, om, bg, sq, NULL, hitlist, NULL);
 
   if (hitlist->N == 0) { p7_Fail("target sequence doesn't hit"); }
 

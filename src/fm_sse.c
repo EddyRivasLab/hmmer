@@ -102,8 +102,13 @@ fm_configInit( FM_CFG *cfg, ESL_GETOPTS *go )
    */
    if (cfg->meta->alph_type == fm_DNA)
      trim_chunk_count = 64; //2-bit steps
-   else // then cfg->meta->alph_type == fm_AMINO, we suppose
+   else if (cfg->meta->alph_type == fm_AMINO)
      trim_chunk_count = 16; //8-bit steps
+   else {
+     esl_fatal("Error: unknown alphabet in fm_sse\n");
+     return eslFAIL;
+   }
+
 
   //chars_per_vector = 128/meta->charBits;
   cfg->fm_masks_v         = NULL;

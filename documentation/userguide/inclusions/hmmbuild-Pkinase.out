@@ -1,0 +1,14 @@
+# hmmbuild :: profile HMM construction from multiple sequence alignments
+# HMMER 3.2.1 (June 2018); http://hmmer.org/
+# Copyright (C) 2018 Howard Hughes Medical Institute.
+# Freely distributed under the BSD open source license.
+# - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+# input alignment file:             Pkinase.sto
+# output HMM file:                  Pkinase.hmm
+# - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+
+# idx name                  nseq  alen  mlen eff_nseq re/pos description
+#---- -------------------- ----- ----- ----- -------- ------ -----------
+1     Pkinase                 38   419   264     2.63  0.591 Protein kinase domain
+
+# CPU time: 0.27u 0.00s 00:00:00.27 Elapsed: 00:00:00.27

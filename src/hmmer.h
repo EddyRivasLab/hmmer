@@ -583,7 +583,7 @@ typedef struct p7_alidisplay_s {
   char *model;                  /* aligned query consensus sequence     */
   char *mline;                  /* "identities", conservation +'s, etc. */
   char *aseq;                   /* aligned target sequence              */
-  char *ntseq;                  /* nucleotide target sequence if nhmmscant */
+  char *ntseq;                  /* nucleotide target sequence if hmmscant */
   char *ppline;		        /* posterior prob annotation; or NULL   */
   int   N;		        /* length of strings                    */
 
@@ -595,10 +595,13 @@ typedef struct p7_alidisplay_s {
   int   M;			/* length of model                      */
 
   char *sqname;			/* name of target sequence              */
+  char *orfname;        /* name of ORF within target sequence (assigned by hmmer pipeline)  */
   char *sqacc;			/* accession of target seq; or [0]='\0' */
   char *sqdesc;			/* description of targ seq; or [0]='\0' */
   int64_t  sqfrom;		/* start position on sequence (1..L)    */
-  int64_t  sqto;  	        /* end position on sequence   (1..L)    */
+  int64_t  sqto;        /* end position on sequence   (1..L)    */
+  int64_t  orffrom;     /* start position on sequence (1..L)    */
+  int64_t  orfto;       /* end position on sequence   (1..L)    */
   int64_t  L;			/* length of sequence                   */
 
   int   memsize;                /* size of allocated block of memory    */
@@ -711,6 +714,7 @@ typedef struct p7_hit_s {
   char   *name;			/* name of the target               (mandatory)           */
   char   *acc;			/* accession of the target          (optional; else NULL) */
   char   *desc;			/* description of the target        (optional; else NULL) */
+  char   *orfid;    /* unique ORF identifier            (mandatory for translated search, not used otherwise)           */
   int    window_length;         /* for later use in e-value computation, when splitting long sequences */
   double sortkey;		/* number to sort by; big is better                       */
 
@@ -736,6 +740,7 @@ typedef struct p7_hit_s {
 
   int64_t  seqidx;          /*unique identifier to track the database sequence from which this hit came*/
   int64_t  subseq_start; /*used to track which subsequence of a full_length target this hit came from, for purposes of removing duplicates */
+  int64_t  target_len;   /* used in translated search to hold the length of the nucleotide sequence */
 
   P7_DOMAIN *dcl;	/* domain coordinate list and alignment display */
   esl_pos_t  offset;	/* used in socket communications, in serialized communication: offset of P7_DOMAIN msg for this P7_HIT */
@@ -1240,11 +1245,14 @@ typedef struct p7_pipeline_s {
   enum p7_pipemodes_e mode;    	/* p7_SCAN_MODELS | p7_SEARCH_SEQS          */
   int           long_targets;   /* TRUE if the target sequences are expected to be very long (e.g. dna chromosome search in nhmmer) */
   int           strands;         /*  p7_STRAND_TOPONLY  | p7_STRAND_BOTTOMONLY |  p7_STRAND_BOTH */
-  int 		    	W;              /* window length for nhmmer scan - essentially maximum length of model that we expect to find*/
+  int           W;              /* window length for nhmmer scan - essentially maximum length of model that we expect to find*/
   int           block_length;   /* length of overlapping blocks read in the multi-threaded variant (default MAX_RESIDUE_COUNT) */
 
   int           show_accessions;/* TRUE to output accessions not names      */
   int           show_alignments;/* TRUE to output alignments (default)      */
+  int           is_translated;  /* TRUE is hmmscant or hmmsearcht           */
+  int           show_translated_sequence; /* TRUE to display translated DNA sequence in domain display for hmmscant */
+  int           show_vertical_codon; /* TRUE to display the DNA codon vertically in the alignment display */
 
   P7_HMMFILE   *hfp;		/* COPY of open HMM database (if scan mode) */
   char          errbuf[eslERRBUFSIZE];
@@ -1479,8 +1487,8 @@ extern float          p7_alidisplay_DecodePostProb(char pc);
 extern char           p7_alidisplay_EncodeAliPostProb(float p, float hi, float med, float lo);
 
 extern int            p7_alidisplay_Print(FILE *fp, P7_ALIDISPLAY *ad, int min_aliwidth, int linewidth, P7_PIPELINE *pli);
-extern int            p7_translated_alidisplay_Print(FILE *fp, P7_ALIDISPLAY *ad, int min_aliwidth, int linewidth, P7_PIPELINE *pli);
-extern int            p7_nontranslated_alidisplay_Print(FILE *fp, P7_ALIDISPLAY *ad, int min_aliwidth, int linewidth, int show_accessions);
+extern int            p7_alidisplay_translated_Print(FILE *fp, P7_ALIDISPLAY *ad, int min_aliwidth, int linewidth, P7_PIPELINE *pli);
+extern int            p7_alidisplay_nontranslated_Print(FILE *fp, P7_ALIDISPLAY *ad, int min_aliwidth, int linewidth, int show_accessions);
 
 extern int            p7_alidisplay_Backconvert(const P7_ALIDISPLAY *ad, const ESL_ALPHABET *abc, ESL_SQ **ret_sq, P7_TRACE **ret_tr);
 extern int            p7_alidisplay_Sample(ESL_RANDOMNESS *rng, int N, P7_ALIDISPLAY **ret_ad);
@@ -1642,7 +1650,7 @@ extern int p7_pli_DomainIncludable  (P7_PIPELINE *pli, float dom_score, double l
 extern int p7_pli_NewModel          (P7_PIPELINE *pli, const P7_OPROFILE *om, P7_BG *bg);
 extern int p7_pli_NewModelThresholds(P7_PIPELINE *pli, const P7_OPROFILE *om);
 extern int p7_pli_NewSeq            (P7_PIPELINE *pli, const ESL_SQ *sq);
-extern int p7_Pipeline              (P7_PIPELINE *pli, P7_OPROFILE *om, P7_BG *bg, const ESL_SQ *sq, const ESL_SQ *ntsq, P7_TOPHITS *th);
+extern int p7_Pipeline              (P7_PIPELINE *pli, P7_OPROFILE *om, P7_BG *bg, const ESL_SQ *sq, const ESL_SQ *ntsq, P7_TOPHITS *th, const P7_SCOREDATA *data);
 extern int p7_Pipeline_LongTarget   (P7_PIPELINE *pli, P7_OPROFILE *om, P7_SCOREDATA *data,
                                      P7_BG *bg, P7_TOPHITS *hitlist, int64_t seqidx,
                                      const ESL_SQ *sq, int complementarity,
@@ -1712,6 +1720,8 @@ extern int         p7_tophits_GetMaxNameLength(P7_TOPHITS *h);
 extern int         p7_tophits_GetMaxAccessionLength(P7_TOPHITS *h);
 extern int         p7_tophits_GetMaxShownLength(P7_TOPHITS *h);
 extern void        p7_tophits_Destroy(P7_TOPHITS *h);
+extern int         p7_tophits_Reuse(P7_TOPHITS *h);
+
 
 extern int p7_tophits_ComputeNhmmerEvalues(P7_TOPHITS *th, double N, int W);
 extern int p7_tophits_RemoveDuplicates(P7_TOPHITS *th, int using_bit_cutoffs);

@@ -761,6 +761,14 @@ gather_results(QUEUE_DATA_SHARD *query, WORKERSIDE_ARGS *comm, SEARCH_RESULTS *r
       results->stats.Z             = worker->stats.Z;
 
       results->status.msg_size    += worker->status.msg_size - sizeof(HMMD_SEARCH_STATS);
+
+      if (esl_opt_IsUsed(query->opts, "--hmmscant")) {
+          /* tracking # orfs for the single query; don't want to double count from multiple threads,
+           * which performed search of different hmms, but same orfs */
+          if (results->stats.nseqs == 0)
+              results->stats.nseqs        += worker->stats.nseqs;
+      }
+
       if((results->stats.nhits- previous_hits) >0){ // There are new hits to deal with
         // Add enough space to the list of hits for all the hits from this worker
        results->hits = realloc(results->hits, results->stats.nhits * sizeof (P7_HIT *));
@@ -795,8 +803,10 @@ gather_results(QUEUE_DATA_SHARD *query, WORKERSIDE_ARGS *comm, SEARCH_RESULTS *r
     results->stats.nmodels = 1;
     results->stats.nseqs   = comm->seq_db->db[query->dbx].K;
   } else {
-    results->stats.nseqs   = 1;
+
     results->stats.nmodels = comm->hmm_db->n;
+    if (!esl_opt_IsUsed(query->opts, "--hmmscant"))
+        results->stats.nseqs   = 1;
   }
     
   if (results->stats.Z_setby == p7_ZSETBY_NTARGETS) {
@@ -1118,6 +1128,8 @@ clientside_loop(CLIENTSIDE_ARGS *data)
   time_t             date;
   char               timestamp[32];
 
+  ESL_ALPHABET      *abcDNA = NULL;       /* DNA sequence alphabet         */
+
   buf_size = MAX_BUFFER;
   if ((buffer  = malloc(buf_size))   == NULL) LOG_FATAL_MSG("malloc", errno);
   ptr = buffer;
@@ -1227,7 +1239,15 @@ clientside_loop(CLIENTSIDE_ARGS *data)
 
     if (*ptr == '>') {
       /* try to parse the input buffer as a FASTA sequence */
-      seq = esl_sq_CreateDigital(abc);
+      if (esl_opt_IsUsed(opts, "--hmmscant")) {
+          abcDNA = esl_alphabet_Create(eslDNA);
+          seq = esl_sq_CreateDigital(abcDNA);
+          if (abcDNA  != NULL) esl_alphabet_Destroy(abcDNA);
+      }
+      else {
+          seq = esl_sq_CreateDigital(abc);
+      }
+
       /* try to parse the input buffer as a FASTA sequence */
       status = esl_sqio_Parse(ptr, strlen(ptr), seq, eslSQFILE_DAEMON);
       if (status != eslOK) client_msg_longjmp(data->sock_fd, status, &jmp_env, "Error parsing FASTA sequence");
@@ -1569,8 +1589,6 @@ workerside_loop(WORKERSIDE_ARGS *data, WORKER_DATA *worker)
       }
       break;
     }
-
-    //printf ("Writing %d bytes to %s [MSG = %d/%d]\n", (int)MSG_SIZE(worker->cmd), worker->ip_addr, worker->cmd->hdr.command, worker->cmd->hdr.length);
 
     esl_stopwatch_Start(w);
 
