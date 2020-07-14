@@ -6,7 +6,7 @@
 #ifdef __cplusplus // magic to make C++ compilers happy
 extern "C" {
 #endif
-
+#include<stdio.h>
 // CUDA error checking code
 #define CHECK_FOR_CUDA_ERRORS //Undefine this in production to speed things up by removing run-time error checks
 

@@ -1,9 +1,9 @@
 CC     = nvcc 
-CFLAGS = -O3 -g -lineinfo --ptxas-options=-v --maxrregcount=64 -arch=compute_60 -code=sm_61  -lineinfo --Wno-deprecated-declarations --compiler-options "-msse4.1" 
+CFLAGS = -O0 -g -lineinfo --ptxas-options=-v --maxrregcount=64 -arch=compute_60 -code=sm_61  -lineinfo --Wno-deprecated-declarations --compiler-options "-msse4.1" 
 HOME = ../
-all:   px_cuda_packed
+all:   px_serial
 
-px:     px.c Makefile
+px:     px_serial.c Makefile
 	${CC} ${CFLAGS} -o px -L ${HOME}/src -L ${HOME}/lib/easel -I ${HOME}/src -I /usr/include/mpi -I ${HOME}/lib/easel px.c -lhmmer -leasel -lm -lmpi
 
 px_serial:  px_serial.c Makefile

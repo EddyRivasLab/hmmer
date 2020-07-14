@@ -20,7 +20,9 @@ int p7_configure_cuda(P7_CUDA_CONFIG *ret_config){
 	ret_config->card_sms = NULL;
 	return eslOK;
 #endif
-	int num_cards=0;
+  int num_cards=0;
+  int i=0;
+  int j=0;
 	size_t free_mem;
 	size_t mask = 0xffffffffe0000000; // AND-ing with this should round down to half-gigabyte boundary
     p7_cuda_wrapper(cudaGetDeviceCount(&num_cards));
@@ -51,119 +53,64 @@ printf("%d CUDA cards detected\n", num_cards);
             (ret_config->card_mem==NULL)) {
                 goto ERROR;
         	}
-        cudaDeviceProp card_properties;
-		for(int i = 0; i < num_cards; i++){
-            printf("Handling card %d\n",i);
-			//Get the information we need about the card
-			cudaGetDeviceProperties(&card_properties, i);
-			ret_config->card_sms[i] = card_properties.multiProcessorCount;
-			ret_config->shared_per_block[i] = card_properties.sharedMemPerBlock;
-			ret_config->reg_per_block[i] = card_properties.regsPerBlock;
-			ret_config->reg_per_sm[i] = card_properties.regsPerMultiprocessor;
-			ret_config->threads_per_warp[i] = card_properties.warpSize;
-			if(card_properties.warpSize != 32){
-				printf("Your CUDA card %d reports that it has %d threads per warp.  HMMER currently only runs on CUDA cards with 32 threads/warp, so CUDA acceleration is being disabled.\n", i, card_properties.warpSize);
-				goto ERROR;
-			}
-			if(ret_config->reg_per_block[i] < ret_config->reg_per_sm[i]){
-				ret_config->warps_per_block[i] = ret_config->reg_per_block[i]/(P7_CUDA_REG_PER_THREAD *ret_config->threads_per_warp[i]);
-			}
-			else{
-				ret_config->warps_per_block[i] = ret_config->reg_per_block[i] /(P7_CUDA_REG_PER_THREAD *
-                ret_config->threads_per_warp[i]);
-            }
-			//cudaMemGetInfo(&free_mem, &total);
-        	ret_config->card_mem_sizes[i] = free_mem & mask;
+    cudaDeviceProp card_properties;
+    for (i = 0; i < num_cards; i++) {
+      printf("Handling card %d\n", i);
+      // Get the information we need about the card
+      cudaSetDevice(i); // make the right card active
+      cudaGetDeviceProperties(&card_properties, i);
+      ret_config->card_sms[i] = card_properties.multiProcessorCount;
+      ret_config->shared_per_block[i] = card_properties.sharedMemPerBlock;
+      ret_config->reg_per_block[i] = card_properties.regsPerBlock;
+      ret_config->reg_per_sm[i] = card_properties.regsPerMultiprocessor;
+      ret_config->threads_per_warp[i] = card_properties.warpSize;
+      if (card_properties.warpSize != 32) {
+        printf("Your CUDA card %d reports that it has %d threads per warp.  "
+               "HMMER currently only runs on CUDA cards with 32 threads/warp, "
+               "so CUDA acceleration is being disabled.\n",
+               i, card_properties.warpSize);
+        goto ERROR;
+      }
+      if (ret_config->reg_per_block[i] < ret_config->reg_per_sm[i]) {
+        ret_config->warps_per_block[i] =
+            ret_config->reg_per_block[i] /
+            (P7_CUDA_REG_PER_THREAD * ret_config->threads_per_warp[i]);
+      } else {
+        ret_config->warps_per_block[i] =
+            ret_config->reg_per_block[i] /
+            (P7_CUDA_REG_PER_THREAD * ret_config->threads_per_warp[i]);
+      }
+      // cudaMemGetInfo(&free_mem, &total);
+      ret_config->card_mem_sizes[i] = free_mem & mask;
 
-            // allocate the buffers we'll use to transfer data to/from the
-            // card. use regular malloc for the arrays that hold the pointers
-            // to the buffers because we won't be copying them to the card
-            // frequently
-            ret_config->card_mem[i].num_streams = NUM_STREAMS;
-            ret_config->card_mem[i].cpu_offsets = (uint64_t **)malloc(ret_config->card_mem[i].num_streams * sizeof(uint64_t *));
-            ret_config->card_mem[i].gpu_offsets = (uint64_t **)malloc(ret_config->card_mem[i].num_streams * sizeof(uint64_t *));
-            ret_config->card_mem[i].cpu_data = (char **)malloc(ret_config->card_mem[i].num_streams * sizeof(char *));
-            ret_config->card_mem[i].cpu_data2 = (char **)malloc(ret_config->card_mem[i].num_streams * sizeof(char *));
-            ret_config->card_mem[i].num_sequences = (uint32_t *)malloc(ret_config->card_mem[i].num_streams * sizeof(uint32_t));
-            ret_config->card_mem[i].gpu_data =(char **)malloc(ret_config->card_mem[i].num_streams * sizeof(char *));
-            ret_config->card_mem[i].cpu_hits = (int8_t **)malloc(ret_config->card_mem[i].num_streams * sizeof(int8_t *));
-            ret_config->card_mem[i].gpu_hits = (int8_t **)malloc(ret_config->card_mem[i].num_streams * sizeof(int8_t *));
-            ret_config->card_mem[i].cpu_scores = (float **)malloc(ret_config->card_mem[i].num_streams * sizeof(float *));
-            ret_config->card_mem[i].gpu_scores = (float **)malloc(ret_config->card_mem[i].num_streams * sizeof(float *));
-            ret_config->card_mem[i].cpu_lengths = (uint64_t **)malloc(ret_config->card_mem[i].num_streams * sizeof(uint64_t *));
-            ret_config->card_mem[i].gpu_lengths = (uint64_t **)malloc(ret_config->card_mem[i].num_streams * sizeof(uint64_t *));
-            ret_config->card_mem[i].cpu_sequences = (char ***)malloc(ret_config->card_mem[i].num_streams * sizeof(char **));
-            ret_config->card_mem[i].streams = (cudaStream_t *)malloc(ret_config->card_mem[i].num_streams * sizeof(cudaStream_t));
+      ret_config->card_mem[i].num_streams = NUM_STREAMS;
 
-            if ((ret_config->card_mem[i].cpu_offsets == NULL) ||
-                (ret_config->card_mem[i].gpu_offsets == NULL) ||
-                (ret_config->card_mem[i].cpu_scores == NULL) ||
-                (ret_config->card_mem[i].gpu_scores == NULL) ||
-                (ret_config->card_mem[i].num_sequences == NULL) ||
-                (ret_config->card_mem[i].cpu_data == NULL) ||
-                (ret_config->card_mem[i].gpu_data == NULL) ||
-                (ret_config->card_mem[i].cpu_hits == NULL) ||
-                (ret_config->card_mem[i].gpu_hits == NULL) ||
-                (ret_config->card_mem[i].cpu_sequences == NULL) ||
-                (ret_config->card_mem[i].streams == NULL)) {
-                p7_Fail((char *)"Unable to allocate memory in p7_configure_cudan");
-                }
+      ret_config->card_mem[i].cpu_offsets = (uint64_t **)malloc(
+          ret_config->card_mem[i].num_streams * sizeof(uint64_t *));
 
-            // cpu_num_hits and gpu_num_hits get allocated using
-            // cudaMallocHost because they're one-d arrays
-            p7_cuda_wrapper(cudaMallocHost((void **)&(ret_config->card_mem[i].cpu_num_hits),(ret_config->card_mem[i].num_streams * sizeof(uint32_t))));
-
-            p7_cuda_wrapper(cudaMallocHost((void **)&(ret_config->card_mem[i].gpu_num_hits),(ret_config->card_mem[i].num_streams * sizeof(uint32_t))));
-
-            // allocate the actual buffers. Use cudaMallocHost here for
-            // buffers on the CPU side to pin the buffers in RAM, which
-            // improves copy performance
-            printf("allocating buffers for streams\n");
-            for (int j = 0; j < ret_config->card_mem[i].num_streams; j++) {
-printf("Handling stream %d\n", j);
-                p7_cuda_wrapper(cudaMallocHost((void **)&(ret_config->card_mem[i].cpu_offsets[j]), (MAX_SEQUENCES * sizeof(uint64_t))));
-printf("1\n");
-                p7_cuda_wrapper(cudaMalloc((void **)&(ret_config->card_mem[i].gpu_offsets[j]), (MAX_SEQUENCES * sizeof(uint64_t))));
-printf("2\n");
-                p7_cuda_wrapper(cudaMallocHost((void **)&(ret_config->card_mem[i].cpu_data[j]), DATA_BUFFER_SIZE));
-printf("3\n");
-                p7_cuda_wrapper(cudaMallocHost((void **)&(ret_config->card_mem[i].cpu_data2[j]), DATA_BUFFER_SIZE));
-printf("4\n");
-                p7_cuda_wrapper(cudaMalloc((void **)&(ret_config->card_mem[i].gpu_data[j]), DATA_BUFFER_SIZE));
-printf("a\n");
-                p7_cuda_wrapper(cudaMallocHost((void **)&(ret_config->card_mem[i].cpu_hits[j]), (MAX_SEQUENCES * sizeof(int8_t))));
-
-                p7_cuda_wrapper(cudaMalloc((void **)&(ret_config->card_mem[i].gpu_hits[j]), (MAX_SEQUENCES * sizeof(int8_t))));
-                p7_cuda_wrapper(cudaMallocHost((void **)&(ret_config->card_mem[i].cpu_scores[j]), (MAX_SEQUENCES * sizeof(float))));
-
-                p7_cuda_wrapper(cudaMalloc((void **)&(ret_config->card_mem[i].gpu_scores[j]), (MAX_SEQUENCES * sizeof(float))));
-printf("b\n");
-                p7_cuda_wrapper(cudaMallocHost((void **)&(ret_config->card_mem[i].cpu_sequences[j]), (MAX_SEQUENCES * sizeof(char *))));
-
-                p7_cuda_wrapper(cudaMallocHost((void **)&(ret_config->card_mem[i].cpu_lengths[j]), (MAX_SEQUENCES * sizeof(uint64_t))));
-
-                p7_cuda_wrapper(cudaMalloc((void **)&(ret_config->card_mem[i].gpu_lengths[j]), (MAX_SEQUENCES * sizeof(uint64_t))));
-printf("c\n");
-                p7_cuda_wrapper(cudaStreamCreate(&(ret_config->card_mem[i].streams[j])));
-            }
-            printf("Done with buffers\n");
-        }
+      if (ret_config->card_mem[i].cpu_offsets == NULL) {
+        goto ERROR;
+      }
+      for (j = 0; j < ret_config->card_mem[i].num_streams; j++) {
+        printf("foo");
+      }
     }
-    printf("leaving p7_configure_cuda\n");
-	return eslOK;
+  }
+      printf("leaving p7_configure_cuda\n");
+      return eslOK;
 
-ERROR:
-//FIXME: free memory on error
-  ret_config->num_cards = 0;
-  ret_config->card_sms = NULL;
-  ret_config->shared_per_block = NULL;
-  ret_config->card_mem_sizes = NULL;
-  ret_config->reg_per_block = NULL;
-  ret_config->reg_per_sm = NULL;
-  ret_config->shared_per_block = NULL;
-  ret_config->threads_per_warp = NULL;
-  ret_config->warps_per_block = NULL;
-  return eslEMEM;
+    ERROR:
+      // FIXME: free memory on error
+      ret_config->num_cards = 0;
+      ret_config->card_sms = NULL;
+      ret_config->shared_per_block = NULL;
+      ret_config->card_mem_sizes = NULL;
+      ret_config->reg_per_block = NULL;
+      ret_config->reg_per_sm = NULL;
+      ret_config->shared_per_block = NULL;
+      ret_config->threads_per_warp = NULL;
+      ret_config->warps_per_block = NULL;
+      return eslEMEM;
 }
 
 void p7_cuda_config_Destroy(P7_CUDA_CONFIG *cuda_config){

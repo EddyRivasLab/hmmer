@@ -14,10 +14,12 @@ BENCHMARKS =
 
 EXAMPLES = 
 
-CUDA_OBJS = p7_cuda.o \
+CUDA_OBJS = h4_profile_cuda.o \
+			p7_cuda.o \
 			ssv_cuda.o \
 			p7_orion.o \
-			p7_server_cuda.o
+			p7_server_cuda.o \
+      vitfilter_cuda.o
 
 CUDA_LIB = libhmmercuda.a
 
