@@ -25,6 +25,7 @@
 #include "esl_keyhash.h"
 #include "esl_msa.h"
 #include "esl_msacluster.h"
+#include "esl_msa_iset.h"
 #include "esl_msashuffle.h"
 #include "esl_msafile.h"
 #include "esl_random.h"
@@ -36,9 +37,11 @@
 #include "esl_composition.h"
 
 static char banner[] = "construct a benchmark profile training/test set";
-static char usage[]  = "[options] <basename> <msafile> <seqdb>\n";
+static char usage[]  = "[options] <basename> <msafile> <seqdb> <splitting algorithm>\n";
 
 #define SHUF_OPTS "--mono,--di,--markov0,--markov1,--reverse"   /* toggle group, seq shuffling options          */
+#define SEP_OPTS "--cluster,--cyan,--cyan2,--cobalt,--hybrid"   /* toggle group, seperating set algorithm  options          */
+
 
 static ESL_OPTIONS options[] = {
   /* name         type        default env   range togs  reqs  incomp      help                                                   docgroup */
@@ -68,6 +71,13 @@ static ESL_OPTIONS options[] = {
   { "--minDPL", eslARG_INT,   "100", NULL, NULL, NULL, NULL, NULL,           "minimum segment length for DP shuffling",                      4 },
   { "--seed",   eslARG_INT,     "0", NULL, NULL, NULL, NULL, NULL,           "specify random number generator seed",                         4 },
   { "--pid",    eslARG_NONE,  FALSE, NULL, NULL, NULL, NULL, NULL,           "create optional .pid file, %id's for all train/test domain pairs", 4 },
+    
+      /* Options controlling method of splitting into testing and training sets  */
+  { "--cluster",    eslARG_NONE,"default", NULL, NULL, SEP_OPTS, NULL, NULL, "original cluster alg of profmark",                5 },
+  { "--cyan",      eslARG_NONE,    FALSE, NULL, NULL, SEP_OPTS, NULL, NULL, "not yet implemented",       5 },
+  { "--cyan2", eslARG_NONE,    FALSE, NULL, NULL, SEP_OPTS, NULL, NULL, "not yet implemented",       5 },
+  { "--cobalt", eslARG_NONE,    FALSE, NULL, NULL, SEP_OPTS, NULL, NULL, "not yet implemented",       5 },
+  { "--hybrid", eslARG_NONE,    FALSE, NULL, NULL, SEP_OPTS, NULL, NULL, "training set is biggest cluster, testing set from cobalt",                                       5 },
   { 0,0,0,0,0,0,0,0,0,0 },
 };
 
@@ -111,6 +121,7 @@ struct cfg_s {
 static int  process_dbfile      (struct cfg_s *cfg, char *dbfile, int dbfmt);
 static int  remove_fragments    (struct cfg_s *cfg, ESL_MSA *msa, ESL_MSA **ret_filteredmsa, int *ret_nfrags);
 static int  separate_sets       (struct cfg_s *cfg, ESL_MSA *msa, ESL_MSA **ret_trainmsa, ESL_STACK **ret_teststack);
+static int  separate_sets_hybrid(struct cfg_s *cfg, ESL_MSA *msa, ESL_MSA **ret_trainmsa, ESL_STACK **ret_teststack);
 static int  synthesize_positives(ESL_GETOPTS *go, struct cfg_s *cfg, char *testname, ESL_STACK *teststack, int *ret_ntest);
 static int  synthesize_negatives(ESL_GETOPTS *go, struct cfg_s *cfg, int nneg);
 static int  set_random_segment  (ESL_GETOPTS *go, struct cfg_s *cfg, FILE *logfp, ESL_DSQ *dsq, int L);
@@ -137,6 +148,8 @@ cmdline_help(char *argv0, ESL_GETOPTS *go)
   esl_usage (stdout, argv0, usage);
   puts("\n where general options are:");
   esl_opt_DisplayHelp(stdout, go, 1, 2, 80);
+  puts("\n options controlling which seperation method:");
+  esl_opt_DisplayHelp(stdout, go, 5, 2, 80);
   puts("\n options controlling segment randomization method:");
   esl_opt_DisplayHelp(stdout, go, 2, 2, 80);
   puts("\n options declaring a particular alphabet:");
@@ -176,7 +189,7 @@ main(int argc, char **argv)
   if (esl_opt_ProcessCmdline(go, argc, argv) != eslOK) cmdline_failure(argv[0], "Failed to parse command line: %s\n", go->errbuf);
   if (esl_opt_VerifyConfig(go)               != eslOK) cmdline_failure(argv[0], "Error in app configuration:   %s\n", go->errbuf);
   if (esl_opt_GetBoolean(go, "-h"))                    cmdline_help(argv[0], go);
-  if (esl_opt_ArgNumber(go)                  != 3)     cmdline_failure(argv[0], "Incorrect number of command line arguments\n");
+  if (esl_opt_ArgNumber(go)                  != 3                                                                                                               )     cmdline_failure(argv[0], "Incorrect number of command line arguments\n");
   basename = esl_opt_GetArg(go, 1); 
   alifile  = esl_opt_GetArg(go, 2);
   dbfile   = esl_opt_GetArg(go, 3);
@@ -234,7 +247,21 @@ main(int argc, char **argv)
       esl_msa_Hash(origmsa);
 
       remove_fragments(&cfg, origmsa, &msa, &nfrags);
-      separate_sets   (&cfg, msa, &trainmsa, &teststack);
+      
+      
+/* Now apply the seperation algorithm */
+  if (esl_opt_GetBoolean(go, "--cluster")){
+      separate_sets(&cfg, msa, &trainmsa, &teststack);
+  }
+  else if (esl_opt_GetBoolean(go, "--hybrid")){
+      separate_sets_hybrid(&cfg, msa, &trainmsa, &teststack);
+  }
+  else{
+      printf("running seperate sets because else statement\n");
+      separate_sets(&cfg, msa, &trainmsa, &teststack);
+  }
+      
+      
 
       if ( esl_stack_ObjectCount(teststack) >= 2) 
 	{
@@ -250,7 +277,7 @@ main(int argc, char **argv)
 	  
 	  if (esl_opt_GetBoolean(go, "--pid")) write_pids(cfg.pidfp, origmsa, trainmsa, teststack);
 
-	  synthesize_positives(go, &cfg, msa->name, teststack, &ntest);
+	  //synthesize_positives(go, &cfg, msa->name, teststack, &ntest);
 
 	  esl_msafile_Write(cfg.out_msafp, trainmsa, eslMSAFILE_STOCKHOLM);
 
@@ -265,7 +292,8 @@ main(int argc, char **argv)
     }
   if  (nali == 0) esl_fatal("No alignments found in file %s\n", alifile);
   
-  synthesize_negatives(go, &cfg, esl_opt_GetInteger(go, "-N"));
+ // printf("hello world!\n");
+  //synthesize_negatives(go, &cfg, esl_opt_GetInteger(go, "-N"));
 
   fclose(cfg.out_msafp);
   fclose(cfg.out_seqfp);
@@ -429,6 +457,94 @@ separate_sets(struct cfg_s *cfg, ESL_MSA *msa, ESL_MSA **ret_trainmsa, ESL_STACK
   *ret_teststack = NULL;
   return status;
 }
+
+
+
+
+/* Alternate Step 2. Extract the training set and test set via Cobalt
+ */
+static int
+separate_sets_hybrid(struct cfg_s *cfg, ESL_MSA *msa, ESL_MSA **ret_trainmsa, ESL_STACK **ret_teststack)
+{      
+  ESL_MSA   *trainmsa  = NULL;
+  ESL_MSA   *test_msa  = NULL;
+  ESL_STACK *teststack = NULL;
+  ESL_SQ    *sq        = NULL;
+  int *assignment = NULL;
+  int *nin        = NULL;
+  int *useme      = NULL;
+  int  nc         = 0;
+  int  c;
+  int  ctrain;			/* index of the cluster that becomes the training alignment */
+  int  nskip;
+  int  i;
+  int  status;
+
+  if ((teststack = esl_stack_PCreate()) == NULL) { status = eslEMEM; goto ERROR; }
+  ESL_ALLOC(useme, sizeof(int) * msa->nseq);
+
+
+  if ((status = esl_msacluster_SingleLinkage(msa, cfg->idthresh1, &assignment, &nin, &nc)) != eslOK) goto ERROR;
+  ctrain = esl_vec_IArgMax(nin, nc);
+  //if ((status = esl_msa_iset_Cobalt(msa, cfg->idthresh1, &assignment, &nin, &nc, cfg->r)) != eslOK) goto ERROR;
+  //ntrain = esl_vec_IMax(nin, nc);   // We don't need <ntrain> for anything, but this is how you'd get it.
+
+  for (i = 0; i < msa->nseq; i++) useme[i] = (assignment[i] == ctrain) ? 1 : 0;
+  if ((status = esl_msa_SequenceSubset(msa, useme, &trainmsa)) != eslOK) goto ERROR;
+
+  /* If all the seqs went into the training msa, none are left for testing; we're done here */
+  if (trainmsa->nseq == msa->nseq) {
+    free(useme);
+    free(assignment);
+    free(nin);
+    *ret_trainmsa  = trainmsa;
+    *ret_teststack = teststack;
+    return eslOK;
+  }
+
+  /* Put all the other sequences into an MSA of their own; from these, we'll
+   * choose test sequences.
+   */
+
+  for (i = 0; i < msa->nseq; i++) useme[i] = (assignment[i] != ctrain) ? 1 : 0;
+  if ((status = esl_msa_SequenceSubset(msa, useme, &test_msa))                             != eslOK) goto ERROR;
+
+  /* Cluster those test sequences. */
+    
+ // printf("calling esl_msa_iset_Cobalt\n");
+  free(nin);         nin        = NULL;
+  free(assignment);  assignment = NULL;
+  if ((status = esl_msa_iset_Cobalt(test_msa, cfg->idthresh2, &assignment, &nin, cfg->r)) != eslOK) goto ERROR;
+  for (i=0; i < test_msa->nseq; i++){
+	if (assignment[i] == 1) {
+	    esl_sq_FetchFromMSA(test_msa, i, &sq);
+	    esl_stack_PPush(teststack, (void *) sq);
+	  } 
+	}
+    
+
+  esl_msa_Destroy(test_msa);
+  free(useme);
+  free(nin);
+  free(assignment);
+
+  *ret_trainmsa  = trainmsa;
+  *ret_teststack = teststack;
+  return eslOK;
+
+ ERROR:
+  if (useme      != NULL) free(useme);
+  if (assignment != NULL) free(assignment);
+  if (nin        != NULL) free(nin);
+  esl_msa_Destroy(trainmsa); 
+  esl_msa_Destroy(test_msa); 
+  while (esl_stack_PPop(teststack, (void **) &sq) == eslOK) esl_sq_Destroy(sq);
+  esl_stack_Destroy(teststack);
+  *ret_trainmsa  = NULL;
+  *ret_teststack = NULL;
+  return status;
+}
+
 
 
 /* Each test sequence will contain one or two domains, depending on whether --single is set.
