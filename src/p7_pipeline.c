@@ -663,7 +663,18 @@ p7_pipeline_Merge(P7_PIPELINE *p1, P7_PIPELINE *p2)
  *
  * Throws:    <eslEMEM> on allocation failure.
  *
+ *            <eslETYPE> if <sq> is more than 100K long, which can
+ *            happen when someone uses hmmsearch/hmmscan instead of
+ *            nhmmer/nhmmscan on a genome DNA seq db.
+ *
  * Xref:      J4/25.
+ *
+ * Note:      Error handling needs improvement. The <eslETYPE> exception
+ *            was added as a late bugfix. It really should be an <eslEINVAL>
+ *            normal error (because it's a user error). But then we need
+ *            all our p7_Pipeline() calls to check their return status
+ *            and handle normal errors appropriately, which we haven't 
+ *            been careful enough about. [SRE H9/4]
  */
 int
 p7_Pipeline(P7_PIPELINE *pli, P7_OPROFILE *om, P7_BG *bg, const ESL_SQ *sq, const ESL_SQ *ntsq, P7_TOPHITS *hitlist)
@@ -683,6 +694,7 @@ p7_Pipeline(P7_PIPELINE *pli, P7_OPROFILE *om, P7_BG *bg, const ESL_SQ *sq, cons
   int              status;
   
   if (sq->n == 0) return eslOK;    /* silently skip length 0 seqs; they'd cause us all sorts of weird problems */
+  if (sq->n > 100000) ESL_EXCEPTION(eslETYPE, "Target sequence length > 100K, over comparison pipeline limit.\n(Did you mean to use nhmmer/nhmmscan?)");
 
   p7_omx_GrowTo(pli->oxf, om->M, 0, sq->n);    /* expand the one-row omx if needed */
 
