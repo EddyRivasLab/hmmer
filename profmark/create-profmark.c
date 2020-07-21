@@ -9,9 +9,9 @@
  *   <basename>.tbl  - table summarizing the benchmark
  *   <basename>.msa  - MSA queries, stockholm format
  *   <basename>.fa   - sequence targets, fasta format
- *   <basename>.pos  - table summarizing positive test set
- *   <basename>.neg  - table summarizing negative test set                
- * 
+ *   <basename>.pos  - table summarizing positive test seth
+ *   <basename>.neg  - table summarizing negative test set
+ *
  */
 
 #include <stdlib.h>
@@ -71,7 +71,7 @@ static ESL_OPTIONS options[] = {
   { "--minDPL", eslARG_INT,   "100", NULL, NULL, NULL, NULL, NULL,           "minimum segment length for DP shuffling",                      4 },
   { "--seed",   eslARG_INT,     "0", NULL, NULL, NULL, NULL, NULL,           "specify random number generator seed",                         4 },
   { "--pid",    eslARG_NONE,  FALSE, NULL, NULL, NULL, NULL, NULL,           "create optional .pid file, %id's for all train/test domain pairs", 4 },
-    
+
       /* Options controlling method of splitting into testing and training sets  */
   { "--cluster",    eslARG_NONE,"default", NULL, NULL, SEP_OPTS, NULL, NULL, "original cluster alg of profmark",                5 },
   { "--cyan",      eslARG_NONE,    FALSE, NULL, NULL, SEP_OPTS, NULL, NULL, "not yet implemented",       5 },
@@ -143,7 +143,7 @@ cmdline_failure(char *argv0, char *format, ...)
 }
 
 static void
-cmdline_help(char *argv0, ESL_GETOPTS *go) 
+cmdline_help(char *argv0, ESL_GETOPTS *go)
 {
   esl_banner(stdout, argv0, banner);
   esl_usage (stdout, argv0, usage);
@@ -183,15 +183,15 @@ main(int argc, char **argv)
   int           ntest;		/* # of test sequences created     */
   int           nali;		/* number of alignments read       */
   double        avgid;
-  int dev=FALSE;
-  
+  int dev=TRUE;
+
   /* Parse command line */
   go = esl_getopts_Create(options);
   if (esl_opt_ProcessCmdline(go, argc, argv) != eslOK) cmdline_failure(argv[0], "Failed to parse command line: %s\n", go->errbuf);
   if (esl_opt_VerifyConfig(go)               != eslOK) cmdline_failure(argv[0], "Error in app configuration:   %s\n", go->errbuf);
   if (esl_opt_GetBoolean(go, "-h"))                    cmdline_help(argv[0], go);
   if (esl_opt_ArgNumber(go)                  != 3                                                                                                               )     cmdline_failure(argv[0], "Incorrect number of command line arguments\n");
-  basename = esl_opt_GetArg(go, 1); 
+  basename = esl_opt_GetArg(go, 1);
   alifile  = esl_opt_GetArg(go, 2);
   dbfile   = esl_opt_GetArg(go, 3);
   alifmt   = eslMSAFILE_STOCKHOLM;
@@ -206,10 +206,10 @@ main(int argc, char **argv)
   cfg.idthresh2  = esl_opt_GetReal(go, "-2");
   cfg.test_lens  = NULL;
   cfg.ntest      = 0;
-  cfg.max_ntest  = (esl_opt_IsOn(go, "--maxtest")  ? esl_opt_GetInteger(go, "--maxtest")  : 0); 
-  cfg.max_ntrain = (esl_opt_IsOn(go, "--maxtrain") ? esl_opt_GetInteger(go, "--maxtrain") : 0); 
+  cfg.max_ntest  = (esl_opt_IsOn(go, "--maxtest")  ? esl_opt_GetInteger(go, "--maxtest")  : 0);
+  cfg.max_ntrain = (esl_opt_IsOn(go, "--maxtrain") ? esl_opt_GetInteger(go, "--maxtrain") : 0);
 
-  /* Open the output files */ 
+  /* Open the output files */
   if (snprintf(outfile, 256, "%s.msa", basename) >= 256)  esl_fatal("Failed to construct output MSA file name");
   if ((cfg.out_msafp = fopen(outfile, "w"))      == NULL) esl_fatal("Failed to open MSA output file %s\n", outfile);
   if (snprintf(outfile, 256, "%s.fa",  basename) >= 256)  esl_fatal("Failed to construct output FASTA file name");
@@ -244,12 +244,12 @@ main(int argc, char **argv)
   while ((status = esl_msafile_Read(afp, &origmsa)) != eslEOF)
     {
       if (status != eslOK) esl_msafile_ReadFailure(afp, status);
-      esl_msa_ConvertDegen2X(origmsa); 
+      esl_msa_ConvertDegen2X(origmsa);
       esl_msa_Hash(origmsa);
 
       remove_fragments(&cfg, origmsa, &msa, &nfrags);
-      
-      
+
+
 /* Now apply the seperation algorithm */
   if (esl_opt_GetBoolean(go, "--cluster")){
       separate_sets(&cfg, msa, &trainmsa, &teststack);
@@ -264,10 +264,10 @@ main(int argc, char **argv)
       printf("running seperate sets because else statement\n");
       separate_sets(&cfg, msa, &trainmsa, &teststack);
   }
-      
-      
 
-      if ( esl_stack_ObjectCount(teststack) >= 2) 
+
+
+      if ( esl_stack_ObjectCount(teststack) >= 2)
 	{
 	  /* randomize test domain order, and apply size limit if any */
 	  esl_stack_Shuffle(cfg.r, teststack);
@@ -278,12 +278,12 @@ main(int argc, char **argv)
 	  esl_msashuffle_PermuteSequenceOrder(cfg.r, trainmsa);
 	  if (cfg.max_ntrain) msa_select_topn(&trainmsa, cfg.max_ntrain);
 	  esl_msa_MinimGaps(trainmsa, NULL, NULL, FALSE);
-	  
+
 	  if (esl_opt_GetBoolean(go, "--pid")) write_pids(cfg.pidfp, origmsa, trainmsa, teststack);
 
 	  if (!dev) synthesize_positives(go, &cfg, msa->name, teststack, &ntest);
 
-	  esl_msafile_Write(cfg.out_msafp, trainmsa, eslMSAFILE_STOCKHOLM);
+	  if (!dev) esl_msafile_Write(cfg.out_msafp, trainmsa, eslMSAFILE_STOCKHOLM);
 
 	  esl_dst_XAverageId(cfg.abc, trainmsa->ax, trainmsa->nseq, 10000, &avgid); /* 10000 is max_comparisons, before sampling kicks in */
 	  fprintf(cfg.tblfp, "%-20s  %3.0f%% %6d %6d %6d %6d %6d %6d\n", msa->name, 100.*avgid, (int) trainmsa->alen, msa->nseq, nfrags, trainmsa->nseq, ntestdom, ntest);
@@ -295,7 +295,7 @@ main(int argc, char **argv)
       esl_msa_Destroy(msa);
     }
   if  (nali == 0) esl_fatal("No alignments found in file %s\n", alifile);
-  
+
   if (!dev) synthesize_negatives(go, &cfg, esl_opt_GetInteger(go, "-N"));
 
   fclose(cfg.out_msafp);
@@ -310,8 +310,8 @@ main(int argc, char **argv)
   esl_getopts_Destroy(go);
   return 0;
 }
-      
-  
+
+
 /* Open the source sequence database for negative subseqs;
  * upon return, cfg->dbfp is open (digital, SSI indexed);
  * cfg->db_maxL and cfg->db_nseq are set.
@@ -321,7 +321,7 @@ process_dbfile(struct cfg_s *cfg, char *dbfile, int dbfmt)
 {
   ESL_SQ     *sq    = esl_sq_CreateDigital(cfg->abc);
   int         status;
-  
+
   /* Open the sequence file in digital mode */
   status = esl_sqfile_OpenDigital(cfg->abc, dbfile, dbfmt, NULL, &(cfg->dbfp));
   if      (status == eslENOTFOUND) esl_fatal("No such file %s", dbfile);
@@ -357,12 +357,12 @@ remove_fragments(struct cfg_s *cfg, ESL_MSA *msa, ESL_MSA **ret_filteredmsa, int
   int      i;
   int      status;
 
-  for (i = 0; i < msa->nseq; i++) 
+  for (i = 0; i < msa->nseq; i++)
     len += esl_abc_dsqrlen(msa->abc, msa->ax[i]);
   len *= cfg->fragfrac / (double) msa->nseq;
 
   ESL_ALLOC(useme, sizeof(int) * msa->nseq);
-  for (i = 0; i < msa->nseq; i++) 
+  for (i = 0; i < msa->nseq; i++)
     useme[i] = (esl_abc_dsqrlen(msa->abc, msa->ax[i]) < len) ? 0 : 1;
 
   if ((status = esl_msa_SequenceSubset(msa, useme, ret_filteredmsa)) != eslOK) goto ERROR;
@@ -372,7 +372,7 @@ remove_fragments(struct cfg_s *cfg, ESL_MSA *msa, ESL_MSA **ret_filteredmsa, int
   return eslOK;
 
  ERROR:
-  if (useme != NULL) free(useme); 
+  if (useme != NULL) free(useme);
   *ret_filteredmsa = NULL;
   return status;
 }
@@ -381,7 +381,7 @@ remove_fragments(struct cfg_s *cfg, ESL_MSA *msa, ESL_MSA **ret_filteredmsa, int
  */
 static int
 separate_sets(struct cfg_s *cfg, ESL_MSA *msa, ESL_MSA **ret_trainmsa, ESL_STACK **ret_teststack)
-{      
+{
   ESL_MSA   *trainmsa  = NULL;
   ESL_MSA   *test_msa  = NULL;
   ESL_STACK *teststack = NULL;
@@ -452,8 +452,8 @@ separate_sets(struct cfg_s *cfg, ESL_MSA *msa, ESL_MSA **ret_trainmsa, ESL_STACK
   if (useme      != NULL) free(useme);
   if (assignment != NULL) free(assignment);
   if (nin        != NULL) free(nin);
-  esl_msa_Destroy(trainmsa); 
-  esl_msa_Destroy(test_msa); 
+  esl_msa_Destroy(trainmsa);
+  esl_msa_Destroy(test_msa);
   while (esl_stack_PPop(teststack, (void **) &sq) == eslOK) esl_sq_Destroy(sq);
   esl_stack_Destroy(teststack);
   *ret_trainmsa  = NULL;
@@ -469,7 +469,7 @@ separate_sets(struct cfg_s *cfg, ESL_MSA *msa, ESL_MSA **ret_trainmsa, ESL_STACK
 
 static int
 separate_sets_hybrid(struct cfg_s *cfg, ESL_MSA *msa, ESL_MSA **ret_trainmsa, ESL_STACK **ret_teststack)
-{      
+{
   ESL_MSA   *trainmsa  = NULL;
   ESL_MSA   *test_msa  = NULL;
   ESL_STACK *teststack = NULL;
@@ -512,18 +512,18 @@ separate_sets_hybrid(struct cfg_s *cfg, ESL_MSA *msa, ESL_MSA **ret_trainmsa, ES
   if ((status = esl_msa_SequenceSubset(msa, useme, &test_msa))                             != eslOK) goto ERROR;
 
   /* Cluster those test sequences. */
-    
+
  // printf("calling esl_msa_iset_Cobalt\n");
   free(nin);         nin        = NULL;
   free(assignment);  assignment = NULL;
-  if ((status = esl_msa_iset_Cobalt(test_msa, cfg->idthresh2, &assignment, &nin, cfg->r)) != eslOK) goto ERROR;
+  if ((status = esl_msa_iset_Cyan(test_msa, cfg->idthresh2, &assignment, &nin, cfg->r)) != eslOK) goto ERROR;
   for (i=0; i < test_msa->nseq; i++){
 	if (assignment[i] == 1) {
 	    esl_sq_FetchFromMSA(test_msa, i, &sq);
 	    esl_stack_PPush(teststack, (void *) sq);
-	  } 
+	  }
 	}
-    
+
 
   esl_msa_Destroy(test_msa);
   free(useme);
@@ -538,8 +538,8 @@ separate_sets_hybrid(struct cfg_s *cfg, ESL_MSA *msa, ESL_MSA **ret_trainmsa, ES
   if (useme      != NULL) free(useme);
   if (assignment != NULL) free(assignment);
   if (nin        != NULL) free(nin);
-  esl_msa_Destroy(trainmsa); 
-  esl_msa_Destroy(test_msa); 
+  esl_msa_Destroy(trainmsa);
+  esl_msa_Destroy(test_msa);
   while (esl_stack_PPop(teststack, (void **) &sq) == eslOK) esl_sq_Destroy(sq);
   esl_stack_Destroy(teststack);
   *ret_trainmsa  = NULL;
@@ -552,7 +552,7 @@ separate_sets_hybrid(struct cfg_s *cfg, ESL_MSA *msa, ESL_MSA **ret_trainmsa, ES
  */
 static int
 separate_sets_cobalt(struct cfg_s *cfg, ESL_MSA *msa, ESL_MSA **ret_trainmsa, ESL_STACK **ret_teststack)
-{      
+{
   ESL_MSA   *trainmsa  = NULL;
   ESL_MSA   *test_msa  = NULL;
   ESL_STACK *teststack = NULL;
@@ -566,9 +566,9 @@ separate_sets_cobalt(struct cfg_s *cfg, ESL_MSA *msa, ESL_MSA **ret_trainmsa, ES
 
 if ((teststack = esl_stack_PCreate()) == NULL) { status = eslEMEM; goto ERROR; }
   ESL_ALLOC(useme, sizeof(int) * msa->nseq);
-      
+
   if ((status = esl_msa_bi_iset_Cobalt(msa, cfg->idthresh1, &assignment, &nin, &larger, cfg->r)) != eslOK) goto ERROR;
-  
+
   for (i = 0; i < msa->nseq; i++) useme[i] = (assignment[i] == larger) ? 1 : 0;
   if ((status = esl_msa_SequenceSubset(msa, useme, &trainmsa)) != eslOK) goto ERROR;
 
@@ -594,7 +594,7 @@ if ((teststack = esl_stack_PCreate()) == NULL) { status = eslEMEM; goto ERROR; }
   if ((status = esl_msa_SequenceSubset(msa, useme, &test_msa))!= eslOK) goto ERROR;
 
   /* Cluster those test sequences. */
-    
+
   free(nin);         nin        = NULL;
   free(assignment);  assignment = NULL;
   if ((status = esl_msa_iset_Cobalt(test_msa, cfg->idthresh2, &assignment, &nin, cfg->r)) != eslOK) goto ERROR;
@@ -602,9 +602,9 @@ if ((teststack = esl_stack_PCreate()) == NULL) { status = eslEMEM; goto ERROR; }
 	if (assignment[i] == 1) {
 	    esl_sq_FetchFromMSA(test_msa, i, &sq);
 	    esl_stack_PPush(teststack, (void *) sq);
-	  } 
+	  }
 	}
-    
+
 
   esl_msa_Destroy(test_msa);
   free(useme);
@@ -619,15 +619,15 @@ if ((teststack = esl_stack_PCreate()) == NULL) { status = eslEMEM; goto ERROR; }
   if (useme      != NULL) free(useme);
   if (assignment != NULL) free(assignment);
   if (nin        != NULL) free(nin);
-  esl_msa_Destroy(trainmsa); 
-  esl_msa_Destroy(test_msa); 
+  esl_msa_Destroy(trainmsa);
+  esl_msa_Destroy(test_msa);
   while (esl_stack_PPop(teststack, (void **) &sq) == eslOK) esl_sq_Destroy(sq);
   esl_stack_Destroy(teststack);
   *ret_trainmsa  = NULL;
   *ret_teststack = NULL;
   return status;
 
-  
+
 }
 
 
@@ -653,13 +653,13 @@ synthesize_positives(ESL_GETOPTS *go, struct cfg_s *cfg, char *testname, ESL_STA
       ESL_RALLOC(cfg->test_lens, p, (cfg->ntest+1) * sizeof(struct testseq_s));
 
       /* Pop our one or two test domains off the stack */
-      esl_stack_PPop(teststack, &p);   
-      domain1 = p; 
+      esl_stack_PPop(teststack, &p);
+      domain1 = p;
       d1n     = domain1->n;
 
       if (ndomains == 2)
 	{
-	  esl_stack_PPop(teststack, &p); 
+	  esl_stack_PPop(teststack, &p);
 	  domain2 = p;
 	  d2n = domain2->n;
 	}
@@ -671,13 +671,13 @@ synthesize_positives(ESL_GETOPTS *go, struct cfg_s *cfg, char *testname, ESL_STA
 
       /* Select a random total sequence length */
       if (d1n+d2n > cfg->db_maxL) esl_fatal("can't construct test seq; no db seq >= %d residues\n", d1n+d2n);
-      do {                                                     
+      do {
 	if (esl_ssi_FindNumber(cfg->dbfp->data.ascii.ssi, esl_rnd_Roll(cfg->r, cfg->db_nseq), NULL, NULL, NULL, &L, NULL) != eslOK)
 	  esl_fatal("failed to look up a random seq");
       } while (L < d1n+d2n);
 
       /* Now figure out the embedding */
-      if (ndomains == 2) 
+      if (ndomains == 2)
 	{
 	  /* Select random lengths of three flanking domains;
 	   * Imagine picking two "insert after" points i,j in sequence 1..L', for
@@ -688,32 +688,32 @@ synthesize_positives(ESL_GETOPTS *go, struct cfg_s *cfg, char *testname, ESL_STA
 	    j = esl_rnd_Roll(cfg->r, L - d1n - d2n + 1 ); /* j = 0..L' */
 	  } while (i > j);
 
-	  /* now 1           .. i         = random region 1 (if i==0, there's none); 
+	  /* now 1           .. i         = random region 1 (if i==0, there's none);
 	   *     i+1         .. i+d1n     = domain 1
 	   *     i+d1n+1     .. j+d1n     = random region 2 (if i==j, there's none);
 	   *     j+d1n+1     .. j+d1n+d2n = domain 2
 	   *     j+d1n+d2n+1 .. L         = random region 3 (if j == L-d1n-d2n, there's none);
 	   */
-	  L1 = i;			
+	  L1 = i;
 	  L2 = j-i;
 	  L3 = L - d1n - d2n - j;
 	}
-      else 
+      else
 	{ /* embedding one domain */
 	  i = esl_rnd_Roll(cfg->r, L - d1n + 1 ); /* i = 0..L' */
-	  /* now 1           .. i         = random region 1 (if i==0, there's none); 
+	  /* now 1           .. i         = random region 1 (if i==0, there's none);
 	   *     i+1         .. i+d1n     = domain 1
 	   *     i+d1n+1     .. L         = random region 2 (if i==j, there's none);
 	   */
-	  L1 = i;			
+	  L1 = i;
 	  L2 = L - d1n - L1;
 	  L3 = 0;
 	}
-      
+
       sq = esl_sq_CreateDigital(cfg->abc);
       esl_sq_GrowTo(sq, L);
       sq->n = L;
-      if (ndomains == 2) 
+      if (ndomains == 2)
 	{
 	  esl_sq_FormatName(sq, "%s/%d/%d-%d/%d-%d", testname, cfg->ntest, i+1, i+d1n, j+d1n+1, j+d1n+d2n);
 	  esl_sq_FormatDesc(sq, "domains: %s %s", domain1->name, domain2->name);
@@ -732,7 +732,7 @@ synthesize_positives(ESL_GETOPTS *go, struct cfg_s *cfg, char *testname, ESL_STA
       memcpy(sq->dsq+i+1,     domain1->dsq+1, sizeof(ESL_DSQ) * d1n);
       fprintf(cfg->possummfp, " %-24s %5d %5d", domain1->name, 1, d1n);
       set_random_segment(go, cfg, cfg->possummfp, sq->dsq+i+d1n+1,     L2);
-      if (ndomains == 2) 
+      if (ndomains == 2)
 	{
 	  memcpy(sq->dsq+j+d1n+1, domain2->dsq+1, sizeof(ESL_DSQ) * d2n);
 	  fprintf(cfg->possummfp, " %-24s %5d %5d", domain2->name, 1, d2n);
@@ -790,7 +790,7 @@ synthesize_negatives(ESL_GETOPTS *go, struct cfg_s *cfg, int nneg)
       esl_sq_FormatDesc(sq, "L=%d in segments: %d/%d/%d/%d/%d", cfg->test_lens[a].L, L1, d1n, L2, d2n, L3);
       sq->n = cfg->test_lens[a].L;
 
-      fprintf(cfg->negsummfp, "%-15s %5d %5d %5d %5d %5d %5d", 
+      fprintf(cfg->negsummfp, "%-15s %5d %5d %5d %5d %5d %5d",
 	      sq->name, (int) sq->n,
 	      L1, d1n, L2, d2n, L3);
 
@@ -802,7 +802,7 @@ synthesize_negatives(ESL_GETOPTS *go, struct cfg_s *cfg, int nneg)
       set_random_segment(go, cfg, cfg->negsummfp, sq->dsq+1+L1+d1n+L2+d2n, L3);
 
       fprintf(cfg->negsummfp, "\n");
-  
+
       esl_sqio_Write(cfg->out_seqfp, sq, eslSQFILE_FASTA, FALSE);
 
       esl_sq_Reuse(sq);
@@ -816,13 +816,13 @@ synthesize_negatives(ESL_GETOPTS *go, struct cfg_s *cfg, int nneg)
  * concatenated sequence database, select a random subseq, shuffle it
  * by the chosen algorithm; set dsq[1..L] to the resulting randomized
  * segment.
- * 
+ *
  * If <logfp> is non-NULL, append one or more "<sqname> <from> <to>"
  * fields to current line, to record where the random segment was
  * selected from. This is useful in cases where we want to track back
  * the origin of a high-scoring segment, in case the randomization
  * wasn't good enough to obscure the identity of a segment.
- * 
+ *
  */
 static int
 set_random_segment(ESL_GETOPTS *go, struct cfg_s *cfg, FILE *logfp, ESL_DSQ *dsq, int L)
@@ -840,30 +840,30 @@ set_random_segment(ESL_GETOPTS *go, struct cfg_s *cfg, FILE *logfp, ESL_DSQ *dsq
 
   /* fetch a random subseq from the source database */
   esl_sq_GrowTo(sq, L);
-  if (db_dependent) 
+  if (db_dependent)
     {
-      do {                                                     
+      do {
 	if (pkey != NULL) free(pkey);
 	if (esl_ssi_FindNumber(cfg->dbfp->data.ascii.ssi, esl_rnd_Roll(cfg->r, cfg->db_nseq), NULL, NULL, NULL, &Lseq, &pkey) != eslOK)
 	  esl_fatal("failed to look up a random seq");
       } while (Lseq < L);
 
-      start = 1 + esl_rnd_Roll(cfg->r, Lseq-L);              
+      start = 1 + esl_rnd_Roll(cfg->r, Lseq-L);
       end   = start + L - 1;
       if (esl_sqio_FetchSubseq(cfg->dbfp, pkey, start, end, sq) != eslOK) esl_fatal("failed to fetch subseq");
       esl_sq_ConvertDegen2X(sq);
     }
 
   /* log sequence source info: <name> <start> <end> */
-  if (logfp != NULL && db_dependent) 
-    fprintf(logfp, " %-24s %5d %5d", pkey, start, end); 
+  if (logfp != NULL && db_dependent)
+    fprintf(logfp, " %-24s %5d %5d", pkey, start, end);
 
   /* Now apply the appropriate randomization algorithm */
   if      (esl_opt_GetBoolean(go, "--mono"))    status = esl_rsq_XShuffle  (cfg->r, sq->dsq, L, sq->dsq);
   else if (esl_opt_GetBoolean(go, "--di")) {
     if (L < minDPL)                             status = esl_rsq_XShuffle  (cfg->r, sq->dsq, L, sq->dsq);
     else                                        status = esl_rsq_XShuffleDP(cfg->r, sq->dsq, L, cfg->abc->Kp, sq->dsq);
-  } 
+  }
   else if (esl_opt_GetBoolean(go, "--markov0")) status = esl_rsq_XMarkov0  (cfg->r, sq->dsq, L, cfg->abc->Kp, sq->dsq);
   else if (esl_opt_GetBoolean(go, "--markov1")) status = esl_rsq_XMarkov1  (cfg->r, sq->dsq, L, cfg->abc->Kp, sq->dsq);
   else if (esl_opt_GetBoolean(go, "--reverse")) status = esl_rsq_XReverse  (sq->dsq, L, sq->dsq);
@@ -875,7 +875,7 @@ set_random_segment(ESL_GETOPTS *go, struct cfg_s *cfg, FILE *logfp, ESL_DSQ *dsq
   free(pkey);
   return eslOK;
 }
-  
+
 
 static void
 msa_select_topn(ESL_MSA **msaptr, int n)
@@ -909,7 +909,7 @@ pstack_select_topn(ESL_STACK **stackptr, int n)
   int        i;
 
   if (n > (*stackptr)->n) return;
-  
+
   new = esl_stack_PCreate();
   for (i = n-1; i >= 0; i--)
     esl_stack_PPush(new, (*stackptr)->pdata[i]);
@@ -917,8 +917,8 @@ pstack_select_topn(ESL_STACK **stackptr, int n)
   *stackptr = new;
   return;
 }
-  
-    
+
+
 
 static void
 write_pids(FILE *pidfp, ESL_MSA *origmsa, ESL_MSA *trainmsa, ESL_STACK *teststack)
@@ -945,7 +945,3 @@ write_pids(FILE *pidfp, ESL_MSA *origmsa, ESL_MSA *trainmsa, ESL_STACK *teststac
 	}
     }
 }
-
-
-
-  
