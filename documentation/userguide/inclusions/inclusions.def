@@ -1,8 +1,8 @@
 \newcommand{\UNIrelease}{2019\_02}
 \newcommand{\UNInseq}{559,228}
 
-\newcommand{\HMMERversion}{3.3}
-\newcommand{\HMMERdate}{Nov 2019}
+\newcommand{\HMMERversion}{3.3.1}
+\newcommand{\HMMERdate}{Jul 2020}
 
 \newcommand{\BGLnseq}{4}
 \newcommand{\BGLalen}{171}
@@ -12,7 +12,7 @@
 \newcommand{\BGLre}{0.589}
 
 \newcommand{\HMMERfmtversion}{f}
-\newcommand{\HMMERsavestamp}{[3.3 | Nov 2019]}
+\newcommand{\HMMERsavestamp}{[3.3.1 | Jul 2020]}
 
 \newcommand{\SGUevalue}{4.8e-65}
 \newcommand{\SGUbitscore}{223.2}
@@ -24,7 +24,7 @@
 \newcommand{\SGUbiaspass}{16888}
 \newcommand{\SGUvitpass}{2315}
 \newcommand{\SGUfwdpass}{1128}
-\newcommand{\SGUelapsed}{1.1}
+\newcommand{\SGUelapsed}{1.0}
 
 \newcommand{\SFSevalue}{5.6e-57}
 \newcommand{\SFSbitscore}{176.4}

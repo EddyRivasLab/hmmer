@@ -1,4 +1,4 @@
-HMMER3/f [3.3 | Nov 2019]
+HMMER3/f [3.3.1 | Jul 2020]
 NAME  globins4
 LENG  149
 ALPH  amino
@@ -7,7 +7,7 @@ MM    no
 CONS  yes
 CS    no
 MAP   yes
-DATE  Wed Nov 13 10:07:56 2019
+DATE  Tue Jul 21 10:15:03 2020
 NSEQ  4
 EFFN  0.964844
 CKSUM 2027839109
