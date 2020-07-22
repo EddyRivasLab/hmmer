@@ -123,6 +123,7 @@ static int  remove_fragments    (struct cfg_s *cfg, ESL_MSA *msa, ESL_MSA **ret_
 static int  separate_sets       (struct cfg_s *cfg, ESL_MSA *msa, ESL_MSA **ret_trainmsa, ESL_STACK **ret_teststack);
 static int  separate_sets_hybrid(struct cfg_s *cfg, ESL_MSA *msa, ESL_MSA **ret_trainmsa, ESL_STACK **ret_teststack);
 static int  separate_sets_cobalt(struct cfg_s *cfg, ESL_MSA *msa, ESL_MSA **ret_trainmsa, ESL_STACK **ret_teststack);
+static int  separate_sets_cyan(struct cfg_s *cfg, ESL_MSA *msa, ESL_MSA **ret_trainmsa, ESL_STACK **ret_teststack);
 static int  synthesize_positives(ESL_GETOPTS *go, struct cfg_s *cfg, char *testname, ESL_STACK *teststack, int *ret_ntest);
 static int  synthesize_negatives(ESL_GETOPTS *go, struct cfg_s *cfg, int nneg);
 static int  set_random_segment  (ESL_GETOPTS *go, struct cfg_s *cfg, FILE *logfp, ESL_DSQ *dsq, int L);
@@ -183,7 +184,7 @@ main(int argc, char **argv)
   int           ntest;		/* # of test sequences created     */
   int           nali;		/* number of alignments read       */
   double        avgid;
-  int dev=TRUE;
+  int dev=FALSE;
 
   /* Parse command line */
   go = esl_getopts_Create(options);
@@ -259,6 +260,9 @@ main(int argc, char **argv)
   }
   else if (esl_opt_GetBoolean(go, "--cobalt")){
       separate_sets_cobalt(&cfg, msa, &trainmsa, &teststack);
+  }
+  else if (esl_opt_GetBoolean(go, "--cyan")){
+      separate_sets_cyan(&cfg, msa, &trainmsa, &teststack);
   }
   else{
       printf("running seperate sets because else statement\n");
@@ -630,6 +634,90 @@ if ((teststack = esl_stack_PCreate()) == NULL) { status = eslEMEM; goto ERROR; }
 
 }
 
+
+
+
+/* Alternate Step 2. Extract the training set and test set via Cobalt
+ */
+static int
+separate_sets_cyan(struct cfg_s *cfg, ESL_MSA *msa, ESL_MSA **ret_trainmsa, ESL_STACK **ret_teststack)
+{
+  ESL_MSA   *trainmsa  = NULL;
+  ESL_MSA   *test_msa  = NULL;
+  ESL_STACK *teststack = NULL;
+  ESL_SQ    *sq        = NULL;
+  int *assignment = NULL;
+  int *nin        = NULL;
+  int *useme      = NULL;
+  int  larger;
+  int  i;
+  int  status;
+
+if ((teststack = esl_stack_PCreate()) == NULL) { status = eslEMEM; goto ERROR; }
+  ESL_ALLOC(useme, sizeof(int) * msa->nseq);
+
+  if ((status = esl_msa_bi_iset_Cyan(msa, cfg->idthresh1, &assignment, &nin, &larger, cfg->r)) != eslOK) goto ERROR;
+
+  for (i = 0; i < msa->nseq; i++) useme[i] = (assignment[i] == larger) ? 1 : 0;
+  if ((status = esl_msa_SequenceSubset(msa, useme, &trainmsa)) != eslOK) goto ERROR;
+
+  /* If all the seqs went into the training msa, none are left for testing; we're done here */
+  if (trainmsa->nseq == msa->nseq) {
+    free(useme);
+    free(assignment);
+    free(nin);
+    *ret_trainmsa  = trainmsa;
+    *ret_teststack = teststack;
+    return eslOK;
+  }
+
+  /* Put all the other sequences into an MSA of their own; from these, we'll
+   * choose test sequences.
+   */
+ int smaller;
+ if (larger==1) smaller=2;
+ else if (larger==2) smaller=1;
+ else printf("problem with larger");
+
+  for (i = 0; i < msa->nseq; i++) useme[i] = (assignment[i] == smaller) ? 1 : 0;
+  if ((status = esl_msa_SequenceSubset(msa, useme, &test_msa))!= eslOK) goto ERROR;
+
+  /* Cluster those test sequences. */
+
+  free(nin);         nin        = NULL;
+  free(assignment);  assignment = NULL;
+  if ((status = esl_msa_iset_Cyan(test_msa, cfg->idthresh2, &assignment, &nin, cfg->r)) != eslOK) goto ERROR;
+  for (i=0; i < test_msa->nseq; i++){
+	if (assignment[i] == 1) {
+	    esl_sq_FetchFromMSA(test_msa, i, &sq);
+	    esl_stack_PPush(teststack, (void *) sq);
+	  }
+	}
+
+
+  esl_msa_Destroy(test_msa);
+  free(useme);
+  free(nin);
+  free(assignment);
+
+  *ret_trainmsa  = trainmsa;
+  *ret_teststack = teststack;
+  return eslOK;
+
+ ERROR:
+  if (useme      != NULL) free(useme);
+  if (assignment != NULL) free(assignment);
+  if (nin        != NULL) free(nin);
+  esl_msa_Destroy(trainmsa);
+  esl_msa_Destroy(test_msa);
+  while (esl_stack_PPop(teststack, (void **) &sq) == eslOK) esl_sq_Destroy(sq);
+  esl_stack_Destroy(teststack);
+  *ret_trainmsa  = NULL;
+  *ret_teststack = NULL;
+  return status;
+
+
+}
 
 
 /* Each test sequence will contain one or two domains, depending on whether --single is set.
