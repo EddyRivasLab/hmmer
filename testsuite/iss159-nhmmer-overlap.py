@@ -55,8 +55,8 @@ if retcode != 0: sys.exit("FAIL: hmmbuild failed")
 try:
     retcode = subprocess.call(['{}/src/nhmmer'.format(builddir), '--crick', '--tblout', '{}.tbl'.format(tmppfx), '{}.hmm'.format(tmppfx), '{}.fa'.format(tmppfx)], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
 except:
-    sys.exit("FAIL: hmmbuild failed")
-if retcode != 0: sys.exit("FAIL: hmmbuild failed")
+    sys.exit("FAIL: nhmmer failed")
+if retcode != 0: sys.exit("FAIL: nhmmer failed")
 
 
 # From the .tbl output, extract a list of envelopes;

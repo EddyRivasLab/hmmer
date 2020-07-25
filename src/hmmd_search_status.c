@@ -220,7 +220,7 @@ static void utest_Serialize_error_conditions(){
     esl_fatal(msg);
   }
   else{
-    printf("null buffer check passed\n");
+   // printf("null buffer check passed\n");
   }
 
   ESL_ALLOC(buf, sizeof(uint8_t *)); // set buf to valid value
@@ -231,7 +231,7 @@ static void utest_Serialize_error_conditions(){
     esl_fatal(msg);
   }
   else{
-    printf("invalid n check passed\n");
+    //printf("invalid n check passed\n");
   }
 
   // Test 3: error on NULL object ptr
@@ -239,7 +239,7 @@ static void utest_Serialize_error_conditions(){
     esl_fatal(msg);
   }
   else{
-    printf("invalid object check passed\n");
+    //printf("invalid object check passed\n");
   }
 
   // Test 4: n != 0 and *buf == NULL
@@ -248,7 +248,7 @@ static void utest_Serialize_error_conditions(){
     esl_fatal(msg);
   }
   else{
-    printf("Non-zero n with NULL buffer check passed\n");
+   // printf("Non-zero n with NULL buffer check passed\n");
   }
 
   // Test 5: Nalloc != 0 and *buf == NULL
@@ -258,7 +258,7 @@ static void utest_Serialize_error_conditions(){
     esl_fatal(msg);
   }
   else{
-    printf("Non-zero nalloc with NULL buffer check passed\n");
+   // printf("Non-zero nalloc with NULL buffer check passed\n");
   }
 
   if(buf !=NULL && *buf != NULL){
@@ -311,19 +311,19 @@ static void utest_Deserialize_error_conditions(){
   if(hmmd_search_status_Deserialize(NULL, &n, deserial) != eslEINVAL){
     esl_fatal(msg);
   }
-  printf("Test 1 passed\n");
+  //printf("Test 1 passed\n");
 
   // Test 2: error on n == NULL
   if(hmmd_search_status_Deserialize(buf, NULL, deserial) != eslEINVAL){
     esl_fatal(msg);
   }
-  printf("Test 2 passed\n");
+ // printf("Test 2 passed\n");
 
   // Test 3: error on serialized object == NULL
   if(hmmd_search_status_Deserialize(buf, &n, NULL) != eslEINVAL){
     esl_fatal(msg);
   }
-  printf("Test 3 passed\n");
+  //printf("Test 3 passed\n");
 
   free(deserial);
   free(sampled);
