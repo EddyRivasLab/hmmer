@@ -17,9 +17,9 @@
   HMM(s). `--qformat` allows user to specify input sequence file format
   (unaligned or aligned formats) and override the guesser;
   `--qsingle_seqs` allows an MSA format to be read as set(s) of single
-  query sequences instead of as MSA(s). (PR #194)
-
-
+  query sequences instead of as MSA(s). Also, fixed a problem where
+  nhmmer would run on a protein target sequence file without complaint.
+  (iss #171, iss #196, PR #194)
 
 ## bug fixes:
 
@@ -33,8 +33,15 @@
   problems. The comparison engine now exits with an error if the
   target sequence length is >100K.
 
-* nhmmer now catches the case where a user tries to run it on protein
-  query or target sequences. (iss #196)
+* nhmmer now gives a less confusing error message when it tries to
+  open a sequence file as FMindex format and fails. (iss #195, PR
+  #200)
+
+* fixed a problem where nhmmer failed to reset its background model
+  composition after p7_Decoding() fails with a range error on highly
+  repetitive sequence, causing remainder of target sequence
+  comparisons to be performed with a corrupted bg. (iss #198, PR
+  #199).
 
 * removed a stray printf() from nhmmer.
 
@@ -47,6 +54,9 @@
   was only present in nhmmer for some experiment anyway, and was never 
   hooked up in hmmscan. Fixed by removing the option. (iss #190)
 
+* fixed p7_gmx_utest unit test failures (segfaults and malloc
+  failures) for large L,M inputs. (iss #176)
+
 * fixed a problem where nhmmer's sequence windows, when scanning a
   long target sequence, depended on previous sequences in the file,
   thus meaning that subseq windows depended on target database
@@ -57,9 +67,6 @@
 * fixed possible buffer overflow in
   p7_tophits_GetMaxPositionLength(). (Did not occur in practice;
   required a terabase of target sequence to exercise.)
-
-* fixed p7_gmx_utest unit test failures (segfaults and malloc
-  failures) for large L,M inputs. (iss #176)
 
 * fixed p7_hmmd_search_stats unit test problems with memory corruption
   and leaks, detected on OS/X. 

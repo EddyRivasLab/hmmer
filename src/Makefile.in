@@ -29,7 +29,6 @@ CPPFLAGS       = @CPPFLAGS@
 LDFLAGS        = @LDFLAGS@
 DEFS           = @DEFS@
 LIBS           = -lhmmer -leasel -ldivsufsort  @LIBS@ @LIBGSL@ @PTHREAD_LIBS@ -lm
-MPILIBS        = @MPILIBS@
 
 AR        = @AR@ 
 RANLIB    = @RANLIB@
@@ -272,13 +271,13 @@ ${PROGOBJS}:    ${HDRS} p7_config.h
 ${AUXPROGOBJS}: ${HDRS} p7_config.h
 
 ${PROGS} ${AUXPROGS}: % : %.o  libhmmer.a ../${ESLDIR}/libeasel.a 
-	${QUIET_GEN}${CC} ${CFLAGS} ${PTHREAD_CFLAGS} ${PIC_CFLAGS} ${SSE_CFLAGS} ${VMX_CFLAGS} ${DEFS} ${LDFLAGS} ${MYLIBDIRS} -o $@ $@.o ${MPILIBS} ${LIBS}
+	${QUIET_GEN}${CC} ${CFLAGS} ${PTHREAD_CFLAGS} ${PIC_CFLAGS} ${SSE_CFLAGS} ${VMX_CFLAGS} ${DEFS} ${LDFLAGS} ${MYLIBDIRS} -o $@ $@.o ${LIBS}
 
 .c.o:
 	${QUIET_CC}${CC} ${CFLAGS} ${PTHREAD_CFLAGS} ${PIC_CFLAGS} ${SSE_CFLAGS} ${VMX_CFLAGS} ${DEFS} ${CPPFLAGS} ${MYINCDIRS} -o $@ -c $<
 
 ${ITESTS}: % : %.o libhmmer.a ${HDRS} p7_config.h
-	${QUIET_GEN}${CC} ${CFLAGS} ${PTHREAD_CFLAGS} ${PIC_CFLAGS} ${SSE_CFLAGS} ${VMX_CFLAGS} ${DEFS} ${LDFLAGS} ${MYLIBDIRS} -o $@ $@.o ${MPILIBS} ${LIBS}
+	${QUIET_GEN}${CC} ${CFLAGS} ${PTHREAD_CFLAGS} ${PIC_CFLAGS} ${SSE_CFLAGS} ${VMX_CFLAGS} ${DEFS} ${LDFLAGS} ${MYLIBDIRS} -o $@ $@.o ${LIBS}
 
 ${UTESTS}: libhmmer.a  ${HDRS} p7_config.h
 	@BASENAME=`echo $@ | sed -e 's/_utest//' | sed -e 's/^p7_//'` ;\
