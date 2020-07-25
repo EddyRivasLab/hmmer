@@ -66,7 +66,7 @@ m4_include([easel/m4/ax_gcc_func_attribute.m4])
 m4_include([easel/m4/esl_sse.m4])
 m4_include([easel/m4/esl_vmx.m4])
 
-m4_include([easel/m4/ax_mpi.m4])
+m4_include([easel/m4/ax_prog_cc_mpi.m4])
 m4_include([easel/m4/ax_pthread.m4])
 
 m4_include([easel/m4/esl_pic_flags.m4])
@@ -224,7 +224,17 @@ fi
 # 5. Checks for programs, including ${CC} and ${CFLAGS}.
 ################################################################
 
-AC_PROG_CC
+# Choose our compiler - which might be mpicc, if enable_mpi is "yes".
+#   AX_PROG_CC_MPI will call AC_PROG_CC if enable_mpi is "no".
+#
+AX_PROG_CC_MPI([test x"$enable_mpi" = xyes],
+    [AC_DEFINE(HAVE_MPI,  1, [Use MPI parallelization])
+     AC_DEFINE(HMMER_MPI, 1, [Use MPI parallelization])
+     AC_SUBST([MPI_UTESTS],     ["mpi_utest"])
+     AC_SUBST([MPI_BENCHMARKS], ["mpi_benchmark"])],
+    [ if test x"$enable_mpi" = xyes; then
+        AC_MSG_ERROR([MPI library not found for --enable-mpi]);
+      fi])
 AC_PROG_CC_STDC
 AC_PROG_CPP
 AC_PROG_INSTALL
@@ -251,26 +261,6 @@ elif test "$enable_debugging" != "no"; then
    fi
 elif test "$esl_cflags_env_set" != "yes"; then
    CFLAGS="-O3"
-fi
-
-
-
-# MPI parallelization.
-#   If MPI support is available, AX_MPI macro sets @MPICC@ and @MPILIBS@.
-#   
-#   We set @CC@ to mpicc (TODO: may be better to use AX_PROG_CC_MPI)
-#      define HAVE_MPI for Easel,
-#      define HMMER_MPI for HMMER.
-#        
-if test "$enable_mpi" = "yes"; then
-  AX_MPI([
-    CC=$MPICC
-    AC_DEFINE(HAVE_MPI, 1, [Use MPI parallelization])
-    AC_DEFINE(HMMER_MPI, 1, [Use MPI parallelization])
-    AC_SUBST([MPI_UTESTS], ["mpi_utest"])
-    AC_SUBST([MPI_BENCHMARKS], ["mpi_benchmark"])
-    ],
-    AC_MSG_ERROR([MPI library not found for --enable-mpi]))
 fi
 
 
