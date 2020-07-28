@@ -189,7 +189,7 @@ main(int argc, char **argv)
   int           ntest;		/* # of test sequences created     */
   int           nali;		/* number of alignments read       */
   double        avgid;
-  int dev=TRUE;
+  int dev=FALSE;
 
   /* Parse command line */
   go = esl_getopts_Create(options);
