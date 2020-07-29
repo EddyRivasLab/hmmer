@@ -185,12 +185,8 @@ main(int argc, char **argv)
   int           ntest;		/* # of test sequences created     */
   int           nali;		/* number of alignments read       */
   double        avgid;
-<<<<<<< Updated upstream
-  int dev=FALSE;
-=======
-  int 			dev=FALSE;	/* development mode; if true do not synthesize seqs and see below for .tbl changes */
- 
->>>>>>> Stashed changes
+  int           dev; /* if in dev mode, don't synthesize sequences and see below for changes to .tbl file */
+
 
   /* Parse command line */
   go = esl_getopts_Create(options);
