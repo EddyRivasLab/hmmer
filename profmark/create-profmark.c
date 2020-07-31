@@ -37,7 +37,7 @@
 #include "esl_composition.h"
 
 static char banner[] = "construct a benchmark profile training/test set";
-static char usage[]  = "[options] <basename> <msafile> <seqdb> <splitting algorithm>\n";
+static char usage[]  = "[options] <basename> <msafile> <seqdb>\n";
 
 #define SHUF_OPTS "--mono,--di,--markov0,--markov1,--reverse"   /* toggle group, seq shuffling options          */
 #define SEP_OPTS "--cluster,--cobalt,--blue,--random"   /* toggle group, seperating set algorithm  options          */
