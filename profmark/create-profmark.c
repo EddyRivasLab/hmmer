@@ -76,13 +76,14 @@ static ESL_OPTIONS options[] = {
   { "--pid",    eslARG_NONE,  FALSE, NULL, NULL, NULL, NULL, NULL,           "create optional .pid file, %id's for all train/test domain pairs", 4 },
   { "--dev",  eslARG_NONE,  FALSE, NULL, NULL, NULL, NULL, NULL,           "do not synthesize sequences, .tbl file is different", 4 },
   { "--printout",  eslARG_NONE,  FALSE, NULL, NULL, NULL, NULL, NULL,           "print out families that the algorithm failed to split", 4 },
+    { "--rp",    eslARG_REAL, "0.75", NULL,"0<x<=1.0",NULL,NULL,NULL,         "in random algorithm, select training seqs iid Bernoulli(x)",        4 },
 
 
   /* Options controlling method of splitting into testing and training sets  */
   { "--cluster",    eslARG_NONE,"default", NULL, NULL, SEP_OPTS, NULL, NULL, "single linkage clustering",	5 },
   { "--cobalt", eslARG_NONE,    FALSE, NULL, NULL, SEP_OPTS, NULL, NULL, "greedy algorithm with random order",       5 },
   { "--blue", eslARG_NONE,    FALSE, NULL, NULL, SEP_OPTS, NULL, NULL, "multi-round random election process",       5 },
-  { "--random", eslARG_NONE,    FALSE, NULL, NULL, SEP_OPTS, NULL, NULL, "random independent selection of training set",       5 },
+  { "--random", eslARG_NONE,    FALSE, NULL, NULL, SEP_OPTS, NULL, NULL, "random iid selection of training set",       5 },
 
   { 0,0,0,0,0,0,0,0,0,0 },
 };
@@ -320,8 +321,6 @@ main(int argc, char **argv)
 
   if  (nali == 0) esl_fatal("Algorithm failed to seperate all families in MSA\n", alifile);
 
-  printf("%d", esl_opt_GetInteger(go, "-N"));
-
   if (!dev) synthesize_negatives(go, &cfg, esl_opt_GetInteger(go, "-N"));
 
   if (!dev){
@@ -435,10 +434,10 @@ separate_sets(struct cfg_s *cfg, ESL_MSA *msa, ESL_MSA **ret_trainmsa, ESL_STACK
   ESL_ALLOC(useme, sizeof(int) * msa->nseq);
 
 
-  if (esl_opt_GetBoolean(go, "--cluster") || esl_opt_GetBoolean(go, "--random")){
+  if (esl_opt_GetBoolean(go, "--cluster") ){
 
     if (esl_opt_GetInteger(go, "-R")!=1){
-      printf("Best of multiple rounds is not supported for cluster and random algorithms. Running algorithm once.\n");
+      printf("Best of multiple rounds is not supported for cluster algorithm. Running algorithm once.\n");
     }
 
     if ((status = esl_msacluster_SingleLinkage(msa, cfg->idthresh1, &assignment, &nin, &nc)) != eslOK) goto ERROR;
@@ -493,9 +492,71 @@ separate_sets(struct cfg_s *cfg, ESL_MSA *msa, ESL_MSA **ret_trainmsa, ESL_STACK
 
   }  
 
+  else if (esl_opt_GetBoolean(go, "--random")){
+      
+    if (esl_opt_GetInteger(go, "-R")>1){
+          printf("Best of multiple rounds is not supported for random algorithm. Running algorithm once.\n");
+    }
+      
 
+    /* separate sequences into training set and proto-test set*/
+   
+    if ((status = esl_msa_bi_iset_Random(msa, cfg->idthresh1, &assignment, &nin, cfg->r, esl_opt_GetReal(go, "--rp"))) != eslOK) goto ERROR;
+    
+       
+    c_train=0; /* size of training set */
+    c_test=0; /* size of proto test set */
+    for (i = 0; i < msa->nseq; i++){ 
+        if (assignment[i] == 1) c_train++;
+        if (assignment[i] == 2) c_test++;
+        useme[i] = (assignment[i] == 1) ? 1 : 0;
+    }
+
+    /* If fewer sequences than --mintrain are in training or there are not at least --mintest sequences in proto test set, then we're done here */
+    if (c_train < esl_opt_GetInteger(go,"--mintrain") || c_test < esl_opt_GetInteger(go, "--mintest")) {
+      free(useme);
+      free(assignment);
+      free(nin);
+      *ret_trainmsa  = trainmsa;
+      *ret_teststack = teststack;
+      return eslOK;
+    }
+    
+    if ((status = esl_msa_SequenceSubset(msa, useme, &trainmsa)) != eslOK) goto ERROR;
+
+    /* Put all the other sequences into an MSA of their own; from these, we'll
+     * choose test sequences.
+     */
+    
+    for (i = 0; i < msa->nseq; i++) useme[i] = (assignment[i] == 2) ? 1 : 0;
+    if ((status = esl_msa_SequenceSubset(msa, useme, &test_msa))!= eslOK) goto ERROR;
+
+    /* Cluster those test sequences. */
+
+    free(nin);         nin        = NULL;
+    free(assignment);  assignment = NULL;
+
+ 
+    if ((status = esl_msa_iset_Cobalt(test_msa, cfg->idthresh2, &assignment, &nin, cfg->r)) != eslOK) goto ERROR;    
+
+
+    for (i=0; i < test_msa->nseq; i++){
+    if (assignment[i] == 1) {
+        esl_sq_FetchFromMSA(test_msa, i, &sq);
+        esl_stack_PPush(teststack, (void *) sq);
+      }
+    }
+
+    esl_msa_Destroy(test_msa);
+    free(useme);
+    free(nin);
+    free(assignment);
+  }
+    
+    
   else if (esl_opt_GetInteger(go, "-R")==1){
-
+      
+      
     /* separate sequences into training set and proto-test set*/
     if (esl_opt_GetBoolean(go, "--cobalt")){
       if ((status = esl_msa_bi_iset_Cobalt(msa, cfg->idthresh1, &assignment, &nin, &larger, cfg->r)) != eslOK) goto ERROR;
