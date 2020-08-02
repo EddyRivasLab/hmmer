@@ -260,6 +260,10 @@ main(int argc, char **argv)
       remove_fragments(&cfg, origmsa, &msa, &nfrags);
     /* don't bother with this MSA because there aren't enough sequences */
       if (msa->nseq< esl_opt_GetInteger(go,"--mintest")+esl_opt_GetInteger(go,"--mintrain")){
+          if (dev){
+          esl_dst_Connectivity(cfg.abc, msa->ax, msa->nseq, 10000, &avgid, cfg.idthresh1);
+      		fprintf(cfg.tblfp, "%-20s  %3.0f%% %6d %6d %6d %6d %6d %6d\n", msa->name, 100.*avgid, 0, msa->nseq, nfrags, 0, 0, 0);
+          }
         esl_msa_Destroy(origmsa);
         esl_msa_Destroy(msa);
         continue;
@@ -304,8 +308,8 @@ main(int argc, char **argv)
           esl_dst_Connectivity(cfg.abc, msa->ax, msa->nseq, 10000, &avgid, cfg.idthresh1);
       		fprintf(cfg.tblfp, "%-20s  %3.0f%% %6d %6d %6d %6d %6d %6d\n", msa->name, 100.*avgid, 0, msa->nseq, nfrags, 0, 0, 0);
       	}
-        /*in regular mode, print out when seperate sets failed*/
-        else if (esl_opt_GetBoolean(go, "--printout")){
+        /*in print out mode, print out when seperate sets failed*/
+        if (esl_opt_GetBoolean(go, "--printout")){
           printf("Algorithm failed to separate %-20s\n", msa->name);
         }
       }
