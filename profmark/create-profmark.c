@@ -70,13 +70,14 @@ static ESL_OPTIONS options[] = {
   { "--rna",    eslARG_NONE,  FALSE, NULL, NULL, NULL,NULL,"--amino,--dna",  "<msafile> contains RNA alignments",                       3 },
 
   /* Other options */
+  { "--cross",    eslARG_NONE, FALSE, NULL,NULL,NULL,NULL,NULL,         "add column to .tbl with ave pid between test and training",        4 },
   { "--single", eslARG_NONE,  FALSE, NULL, NULL, NULL, NULL, NULL,           "embed one, not two domains in each positive",                  4 },
   { "--minDPL", eslARG_INT,   "100", NULL, NULL, NULL, NULL, NULL,           "minimum segment length for DP shuffling",                      4 },
   { "--seed",   eslARG_INT,     "0", NULL, NULL, NULL, NULL, NULL,           "specify random number generator seed",                         4 },
   { "--pid",    eslARG_NONE,  FALSE, NULL, NULL, NULL, NULL, NULL,           "create optional .pid file, %id's for all train/test domain pairs", 4 },
   { "--dev",  eslARG_NONE,  FALSE, NULL, NULL, NULL, NULL, NULL,           "do not synthesize sequences, .tbl file is different", 4 },
   { "--printout",  eslARG_NONE,  FALSE, NULL, NULL, NULL, NULL, NULL,           "print out families that the algorithm failed to split", 4 },
-    { "--rp",    eslARG_REAL, "0.75", NULL,"0<x<=1.0",NULL,NULL,NULL,         "in random algorithm, select training seqs iid Bernoulli(x)",        4 },
+  { "--rp",    eslARG_REAL, "0.75", NULL,"0<x<=1.0",NULL,NULL,NULL,         "in random algorithm, select training seqs iid Bernoulli(x)",        4 },
 
 
   /* Options controlling method of splitting into testing and training sets  */
@@ -127,7 +128,7 @@ struct cfg_s {
 
 static int  process_dbfile      (struct cfg_s *cfg, char *dbfile, int dbfmt);
 static int  remove_fragments    (struct cfg_s *cfg, ESL_MSA *msa, ESL_MSA **ret_filteredmsa, int *ret_nfrags);
-static int  separate_sets(struct cfg_s *cfg, ESL_MSA *msa, ESL_MSA **ret_trainmsa, ESL_STACK **ret_teststack, ESL_GETOPTS  *go);
+static int  separate_sets(struct cfg_s *cfg, ESL_MSA *msa, ESL_MSA **ret_trainmsa, ESL_STACK **ret_teststack, ESL_MSA **ret_testmsa, ESL_GETOPTS  *go);
 static int  synthesize_positives(ESL_GETOPTS *go, struct cfg_s *cfg, char *testname, ESL_STACK *teststack, int *ret_ntest);
 static int  synthesize_negatives(ESL_GETOPTS *go, struct cfg_s *cfg, int nneg);
 static int  set_random_segment  (ESL_GETOPTS *go, struct cfg_s *cfg, FILE *logfp, ESL_DSQ *dsq, int L);
@@ -181,6 +182,7 @@ main(int argc, char **argv)
   ESL_MSA      *origmsa = NULL;	/* one multiple sequence alignment */
   ESL_MSA      *msa     = NULL;	/* MSA after frags are removed     */
   ESL_MSA      *trainmsa= NULL;	/* training set, aligned           */
+  ESL_MSA      *testmsa= NULL; /* test set, aligned; only used to compute average pid across sets          */
   ESL_STACK    *teststack=NULL; /* test set: stack of ESL_SQ ptrs  */
   int           status;		/* easel return code               */
   int           nfrags;		/* # of fragments removed          */
@@ -188,6 +190,7 @@ main(int argc, char **argv)
   int           ntest;		/* # of test sequences created     */
   int           nali;		/* number of alignments read       */
   double        avgid;
+  double  cross_avgid;
   int           dev=FALSE; /* if in dev mode, don't synthesize sequences and see below for changes to .tbl file */
 
 
@@ -271,7 +274,7 @@ main(int argc, char **argv)
 
 
 	    /* Apply the seperation algorithm */
-	   separate_sets(&cfg, msa, &trainmsa, &teststack, go);
+	   separate_sets(&cfg, msa, &trainmsa, &teststack, &testmsa, go);
 
 
   	  /* If training and test sets have minimum number, synthesize sequences and write to .tbl */
@@ -281,6 +284,10 @@ main(int argc, char **argv)
   		  if (cfg.max_ntest) pstack_select_topn(&teststack, cfg.max_ntest);
   		  ntestdom =  esl_stack_ObjectCount(teststack);
 
+
+        if (esl_opt_GetBoolean(go,"--cross")){
+          esl_dst_XAverageIdCross(cfg.abc,trainmsa->ax, trainmsa->nseq, testmsa->ax, testmsa->nseq, 10000, &cross_avgid); 
+        }
   		  /* randomize training set alignment order, and apply size limit if any */
   		  esl_msashuffle_PermuteSequenceOrder(cfg.r, trainmsa);
   		  if (cfg.max_ntrain) msa_select_topn(&trainmsa, cfg.max_ntrain);
@@ -297,16 +304,29 @@ main(int argc, char **argv)
   		      ntest=0;
         }
   		  else esl_dst_XAverageId(cfg.abc, trainmsa->ax, trainmsa->nseq, 10000, &avgid); /* 10000 is max_comparisons, before sampling kicks in */
-  		  fprintf(cfg.tblfp, "%-20s  %3.0f%% %6d %6d %6d %6d %6d %6d\n", msa->name, 100.*avgid, (int) trainmsa->alen, msa->nseq, nfrags, trainmsa->nseq, ntestdom, ntest);
-  			  nali++;
+  		 
+
+        if (esl_opt_GetBoolean(go,"--cross")){
+          fprintf(cfg.tblfp, "%-20s  %3.0f%% %6d %6d %6d %6d %6d %6d %3.0f%% \n", msa->name, 100.*avgid, (int) trainmsa->alen, msa->nseq, nfrags, trainmsa->nseq, ntestdom, ntest,100.*cross_avgid);
+        }
+
+        else{
+          fprintf(cfg.tblfp, "%-20s  %3.0f%% %6d %6d %6d %6d %6d %6d\n", msa->name, 100.*avgid, (int) trainmsa->alen, msa->nseq, nfrags, trainmsa->nseq, ntestdom, ntest); 
+        } 
+
+        nali++;
   	  }
  
   	
   	  else{ 
           /*in dev mode, print a line in .tbl even when seperate sets failed*/
         if (dev){
-          esl_dst_Connectivity(cfg.abc, msa->ax, msa->nseq, 10000, &avgid, cfg.idthresh1);
-      		fprintf(cfg.tblfp, "%-20s  %3.0f%% %6d %6d %6d %6d %6d %6d\n", msa->name, 100.*avgid, 0, msa->nseq, nfrags, 0, 0, 0);
+          if (esl_opt_GetBoolean(go,"--cross")){
+      		  fprintf(cfg.tblfp, "%-20s  %3.0f%% %6d %6d %6d %6d %6d %6d %3.0f%% \n", msa->name, 0.0, 0, msa->nseq, nfrags, 0, 0, 0, 0.0);
+          }
+          else{
+            fprintf(cfg.tblfp, "%-20s  %3.0f%% %6d %6d %6d %6d %6d %6d\n", msa->name, 0.0, 0, msa->nseq, nfrags, 0, 0, 0);
+          }
       	}
         /*in print out mode, print out when seperate sets failed*/
         if (esl_opt_GetBoolean(go, "--printout")){
@@ -318,6 +338,9 @@ main(int argc, char **argv)
       
       if(trainmsa){
           esl_msa_Destroy(trainmsa);
+      }
+      if(testmsa){
+          esl_msa_Destroy(testmsa);
       }
       esl_msa_Destroy(origmsa);
       esl_msa_Destroy(msa);
@@ -414,10 +437,11 @@ remove_fragments(struct cfg_s *cfg, ESL_MSA *msa, ESL_MSA **ret_filteredmsa, int
 
 /* Based on single linkage clustering algorithm*/
 static int
-separate_sets(struct cfg_s *cfg, ESL_MSA *msa, ESL_MSA **ret_trainmsa, ESL_STACK **ret_teststack, ESL_GETOPTS  *go)
+separate_sets(struct cfg_s *cfg, ESL_MSA *msa, ESL_MSA **ret_trainmsa, ESL_STACK **ret_teststack, ESL_MSA **ret_testmsa, ESL_GETOPTS  *go)
 {
   ESL_MSA   *trainmsa  = NULL;
   ESL_MSA   *test_msa  = NULL;
+  ESL_MSA   *final_testmsa  = NULL;
   ESL_STACK *teststack = NULL;
   ESL_SQ    *sq        = NULL;
   int *assignment = NULL;
@@ -461,6 +485,7 @@ separate_sets(struct cfg_s *cfg, ESL_MSA *msa, ESL_MSA **ret_trainmsa, ESL_STACK
       free(nin);
       *ret_trainmsa  = trainmsa;
       *ret_teststack = teststack;
+      *ret_testmsa = final_testmsa;
       return eslOK;
     }
       
@@ -476,6 +501,10 @@ separate_sets(struct cfg_s *cfg, ESL_MSA *msa, ESL_MSA **ret_trainmsa, ESL_STACK
     /* Cluster those test sequences. */
     free(nin);         nin        = NULL;
     free(assignment);  assignment = NULL;
+    if (esl_opt_GetBoolean(go, "--cross")){
+      for (i=0; i < test_msa->nseq; i++) useme[i]=0;
+    }
+
     if ((status = esl_msacluster_SingleLinkage(test_msa, cfg->idthresh2, &assignment, &nin, &nc)) != eslOK) goto ERROR;
     for (c = 0; c < nc; c++){
         nskip = esl_rnd_Roll(cfg->r, nin[c]); /* pick a random seq in this cluster to be the test. */
@@ -484,9 +513,14 @@ separate_sets(struct cfg_s *cfg, ESL_MSA *msa, ESL_MSA **ret_trainmsa, ESL_STACK
             if (nskip == 0) {
               esl_sq_FetchFromMSA(test_msa, i, &sq);
               esl_stack_PPush(teststack, (void *) sq);
+              if (esl_opt_GetBoolean(go, "--cross")) useme[i]=1;
               break;
             } else nskip--;
           }
+    }
+
+    if (esl_opt_GetBoolean(go, "--cross")){
+      if ((status = esl_msa_SequenceSubset(test_msa, useme, &final_testmsa))                             != eslOK) goto ERROR;
     }
 
   esl_msa_Destroy(test_msa);
@@ -523,6 +557,7 @@ separate_sets(struct cfg_s *cfg, ESL_MSA *msa, ESL_MSA **ret_trainmsa, ESL_STACK
       free(nin);
       *ret_trainmsa  = trainmsa;
       *ret_teststack = teststack;
+      *ret_testmsa = final_testmsa;
       return eslOK;
     }
     
@@ -549,6 +584,10 @@ separate_sets(struct cfg_s *cfg, ESL_MSA *msa, ESL_MSA **ret_trainmsa, ESL_STACK
         esl_sq_FetchFromMSA(test_msa, i, &sq);
         esl_stack_PPush(teststack, (void *) sq);
       }
+    }
+
+    if (esl_opt_GetBoolean(go, "--cross")){
+      if ((status = esl_msa_SequenceSubset(test_msa, assignment, &final_testmsa))!= eslOK) goto ERROR;
     }
 
     esl_msa_Destroy(test_msa);
@@ -587,6 +626,7 @@ separate_sets(struct cfg_s *cfg, ESL_MSA *msa, ESL_MSA **ret_trainmsa, ESL_STACK
       free(nin);
       *ret_trainmsa  = trainmsa;
       *ret_teststack = teststack;
+      *ret_testmsa = final_testmsa;
       return eslOK;
     }
     
@@ -618,6 +658,10 @@ separate_sets(struct cfg_s *cfg, ESL_MSA *msa, ESL_MSA **ret_trainmsa, ESL_STACK
         esl_sq_FetchFromMSA(test_msa, i, &sq);
         esl_stack_PPush(teststack, (void *) sq);
       }
+    }
+
+    if (esl_opt_GetBoolean(go, "--cross")){
+      if ((status = esl_msa_SequenceSubset(test_msa, assignment, &final_testmsa))                             != eslOK) goto ERROR;
     }
 
     esl_msa_Destroy(test_msa);
@@ -728,6 +772,7 @@ separate_sets(struct cfg_s *cfg, ESL_MSA *msa, ESL_MSA **ret_trainmsa, ESL_STACK
     if (b_train==0){
         trainmsa=NULL;
         teststack=NULL;
+        final_testmsa=NULL;
     }
     
        /* return trainmsa and teststack associated with best round*/
@@ -743,6 +788,10 @@ separate_sets(struct cfg_s *cfg, ESL_MSA *msa, ESL_MSA **ret_trainmsa, ESL_STACK
           }
         }
 
+        if (esl_opt_GetBoolean(go, "--cross")){
+          if ((status = esl_msa_SequenceSubset(b_test_msa, b_assignment_test, &final_testmsa))!= eslOK) goto ERROR;
+        }
+
         free(b_assignment_train);
         free(b_assignment_test);
         esl_msa_Destroy(b_test_msa);
@@ -753,6 +802,7 @@ separate_sets(struct cfg_s *cfg, ESL_MSA *msa, ESL_MSA **ret_trainmsa, ESL_STACK
   
 
   *ret_trainmsa  = trainmsa;
+  *ret_testmsa  = final_testmsa;
   *ret_teststack = teststack;
   return eslOK;
 
@@ -762,6 +812,9 @@ separate_sets(struct cfg_s *cfg, ESL_MSA *msa, ESL_MSA **ret_trainmsa, ESL_STACK
   if (nin        != NULL) free(nin);
   esl_msa_Destroy(trainmsa);
   esl_msa_Destroy(test_msa);
+  if (final_testmsa){
+    esl_msa_Destroy(final_testmsa);
+  }
   while (esl_stack_PPop(teststack, (void **) &sq) == eslOK) esl_sq_Destroy(sq);
   esl_stack_Destroy(teststack);
   *ret_trainmsa  = NULL;
