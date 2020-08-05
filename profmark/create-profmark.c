@@ -293,7 +293,7 @@ main(int argc, char **argv)
 
         if (esl_opt_GetBoolean(go,"--cross")){
           esl_dst_XAverageIdCross(cfg.abc, trainmsa->ax, trainmsa->nseq, testmsa->ax, testmsa->nseq, 10000, &cross_avgid);
-          esl_dst_PrintIdCross(cfg.abc, testmsa->ax, testmsa->nseq, trainmsa->ax, trainmsa->nseq, 10000, cross_file);
+          esl_dst_PrintIdCross(cfg.abc, testmsa->ax, testmsa->nseq, trainmsa->ax, trainmsa->nseq, 10000, cross_file, msa);
         }
   		  /* randomize training set alignment order, and apply size limit if any */
   		  esl_msashuffle_PermuteSequenceOrder(cfg.r, trainmsa);
