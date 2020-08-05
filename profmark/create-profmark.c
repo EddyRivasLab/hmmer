@@ -192,6 +192,7 @@ main(int argc, char **argv)
   double        avgid;
   double  cross_avgid;
   int           dev=FALSE; /* if in dev mode, don't synthesize sequences and see below for changes to .tbl file */
+  FILE *cross_file = NULL;
 
 
   /* Parse command line */
@@ -237,6 +238,11 @@ main(int argc, char **argv)
     if (snprintf(outfile, 256, "%s.pid", basename) >= 256)  esl_fatal("Failed to construct %%id table file name");
     if ((cfg.pidfp   = fopen(outfile, "w"))        == NULL) esl_fatal("Failed to open %%id table file %s\n", outfile);
   } else cfg.pidfp   = NULL;
+
+  if (esl_opt_GetBoolean(go,"--cross")){
+      if (snprintf(outfile, 256, "%s.cross", basename) >= 256)  esl_fatal("Failed to construct output cross file name");
+      if ((cross_file = fopen(outfile, "w"))      == NULL) esl_fatal("Failed to open cross output file %s\n", outfile);
+  }
 
   /* Open the MSA file, digital mode; determine alphabet */
   if      (esl_opt_GetBoolean(go, "--amino"))   cfg.abc = esl_alphabet_Create(eslAMINO);
@@ -286,7 +292,8 @@ main(int argc, char **argv)
 
 
         if (esl_opt_GetBoolean(go,"--cross")){
-          esl_dst_XAverageIdCross(cfg.abc,trainmsa->ax, trainmsa->nseq, testmsa->ax, testmsa->nseq, 10000, &cross_avgid); 
+          esl_dst_XAverageIdCross(cfg.abc, trainmsa->ax, trainmsa->nseq, testmsa->ax, testmsa->nseq, 10000, &cross_avgid);
+          esl_dst_PrintIdCross(cfg.abc, testmsa->ax, testmsa->nseq, trainmsa->ax, trainmsa->nseq, 10000, cross_file);
         }
   		  /* randomize training set alignment order, and apply size limit if any */
   		  esl_msashuffle_PermuteSequenceOrder(cfg.r, trainmsa);
@@ -356,6 +363,11 @@ main(int argc, char **argv)
 	  fclose(cfg.possummfp);
 	  fclose(cfg.negsummfp);
   }
+
+  if (esl_opt_GetBoolean(go,"--cross")){
+      fclose(cross_file);
+  }
+
   fclose(cfg.tblfp);
   if (cfg.pidfp) fclose(cfg.pidfp);
   esl_randomness_Destroy(cfg.r);
