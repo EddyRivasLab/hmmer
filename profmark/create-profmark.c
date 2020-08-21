@@ -259,7 +259,7 @@ main(int argc, char **argv)
   else                           esl_vec_DSet(cfg.fq, cfg.abc->K, 1.0 / (double) cfg.abc->K);
 
   /* Open and process the dbfile; make sure it's in the same alphabet */
-  process_dbfile(&cfg, dbfile, dbfmt);
+  if (!dev) process_dbfile(&cfg, dbfile, dbfmt);
 
   /* Read and process MSAs one at a time  */
   nali = 0;
