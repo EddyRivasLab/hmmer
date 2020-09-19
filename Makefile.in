@@ -81,7 +81,7 @@ ifndef V
 		        ${MAKE} -s -C $$subdir
 endif
 
-.PHONY: all dev check pdf install uninstall clean distclean TAGS
+.PHONY: all dev check pdf install install-strip uninstall clean distclean TAGS
 
 # all: Compile all documented executables.
 #      (Excludes test programs.)
@@ -133,6 +133,14 @@ install: all
 	${INSTALL} -d ${DESTDIR}${bindir}
 	${INSTALL} -d ${DESTDIR}${man1dir}
 	${MAKE} -C src install
+	${MAKE} -C documentation install
+
+# install-strip: same as install, but strip binaries
+#
+install-strip: all
+	${INSTALL} -d ${DESTDIR}${bindir}
+	${INSTALL} -d ${DESTDIR}${man1dir}
+	${MAKE} -C src install-strip
 	${MAKE} -C documentation install
 
 # uninstall: reverses the steps of "make install".

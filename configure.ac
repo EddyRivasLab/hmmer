@@ -238,6 +238,7 @@ AX_PROG_CC_MPI([test x"$enable_mpi" = xyes],
 AC_PROG_CC_STDC
 AC_PROG_CPP
 AC_PROG_INSTALL
+AC_CHECK_TOOL([STRIP],[strip])
 AC_PROG_RANLIB
 AC_PATH_PROG([AR], [ar], [:], [$PATH:/usr/ccs/bin:/usr/xpg4/bin])
 AC_PROG_LN_S
