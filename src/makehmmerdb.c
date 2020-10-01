@@ -537,36 +537,29 @@ main(int argc, char **argv)
 
   /* Allocate BWT, Text, SA, and FM-index data structures, allowing storage of maximally large sequence*/
   ESL_ALLOC(fm_data, sizeof(FM_DATA) );
-
-  if (fm_data == NULL) {
-    esl_fatal( "%s: Cannot allocate memory.\n", argv[0]);
-  }
+  fm_data->T          = NULL;
+  fm_data->BWT_mem    = NULL;
+  fm_data->BWT        = NULL;
+  fm_data->SA         = NULL;
+  fm_data->C          = NULL;
+  fm_data->occCnts_sb = NULL;
+  fm_data->occCnts_b  = NULL;
 
   ESL_ALLOC (fm_data->T, max_block_size * sizeof(uint8_t));
   ESL_ALLOC (fm_data->BWT_mem, max_block_size * sizeof(uint8_t));
-     fm_data->BWT = fm_data->BWT_mem;  // in SSE code, used to align memory. Here, doesn't matter
+  fm_data->BWT = fm_data->BWT_mem;  // in SSE code, used to align memory. Here, doesn't matter
   ESL_ALLOC (fm_data->SA, max_block_size * sizeof(int));
   ESL_ALLOC (SAsamp,     (floor((double)max_block_size/meta->freq_SA) ) * sizeof(uint32_t));
-
   ESL_ALLOC (fm_data->occCnts_sb, (1+ceil((double)max_block_size/meta->freq_cnt_sb)) *  meta->alph_size * sizeof(uint32_t)); // every freq_cnt_sb positions, store an array of ints
   ESL_ALLOC (fm_data->occCnts_b,  ( 1+ceil((double)max_block_size/meta->freq_cnt_b)) *  meta->alph_size * sizeof(uint16_t)); // every freq_cnt_b positions, store an array of 8-byte ints
   ESL_ALLOC (cnts_sb,    meta->alph_size * sizeof(uint32_t));
   ESL_ALLOC (cnts_b,     meta->alph_size * sizeof(uint16_t));
 
-  if((fm_data->T == NULL)  || (fm_data->BWT == NULL)  || (fm_data->SA==NULL) ||
-      (fm_data->occCnts_b==NULL)  || (fm_data->occCnts_sb==NULL) ||
-      (SAsamp==NULL) || (cnts_b==NULL) || (cnts_sb==NULL)  ) {
-    esl_fatal( "%s: Cannot allocate memory.\n", argv[0]);
-  }
-
-
   // Open a temporary file, to which FM-index data will be written
   if (esl_tmpfile(tmp_filename, &fptmp) != eslOK) esl_fatal("unable to open fm-index tmpfile");
 
-
   /* Main loop: */
   while (status == eslOK ) {
-
     //reset block as an empty vessel
     for (i=0; i<block->count; i++){
       esl_sq_Reuse(block->list + i);  
