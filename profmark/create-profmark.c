@@ -329,7 +329,7 @@ main(int argc, char **argv)
 	                esl_dst_Connectivity(cfg.abc, msa->ax, msa->nseq, 10000, &avgid, cfg.idthresh1);
             } 
 	  		
-            else if (esl_opt_GetBoolean(go,"--noavg") || !success){
+            else if (esl_opt_GetBoolean(go,"--noavg") ){
 	                  avgid=0;
             }
 	              
