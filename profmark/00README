@@ -73,23 +73,38 @@ construction protocol, the procedure is as follows:
      x=0.70; controlled by -F option.
 
    : Try to split into a training set and test set such that no test
-     sequence has >= x% identity to any training sequence.  Uses
-     efficient single-linkage-clustering at x threshold; defines
-     largest cluster as training set, all other clusters as test
-     set. Pairwise % identity as defined by <esl_dst_XPairId()> on the
-     given alignment. Default x=25% identity; controlled by -1 <x>
-     option.
-
-   : For the remaining test sequences, remove redundancy by performing
-     another single linkage clustering by percent identity, at another
-     threshold x. Default x=50%; controlled by -2 <x> option. For each
-     cluster, one test sequence is chosen at random as a
-     representative. 
+     sequence has >= x% identity to any training sequence (default 
+     x=25% identity; controlled by -1 <x>) and no pair of test sequences
+     is >=y% identical (default y=50%; controlled by -2 <y> option).
+     Pairwise % identity as defined by <esl_dst_XPairId()> on the
+     given alignment. There are 4 algorithm options:
+          : single linkage clustering (default; --cluster),
+            efficient single-linkage-clustering at x threshold; defines
+            largest cluster as training set; on sequences in remaining 
+            clusters perform another single linkage clustering at
+            threshold y. For each cluster, one sequence is chosen at random
+            and assigned to the test set
+          : multi-round election process (--blue)
+            randomized algorithm for producing a training and test set 
+            over multiple rounds (see esl_iset.c for pseudocode); this 
+            algorithm is empirically most successful on Pfam families
+          : greedy algorithm with random order (--cobalt)
+            simple greedy algorithm for producing a training and test set
+            (see esl_iset.c for pseudocode); faster than multi-round election
+            process
+          : independent selection (--random -rp <z>)
+            each sequences is placed in the training set independently with 
+            probability <z>; then remaining sequences that are <x% identical to 
+            to the training sequences are added to the proto-test set; greedy algorithm 
+            with random order used to find test set from proto-test set
 
    : If less than two test sequences have been identified that meet
      these criteria, fail and move on to the next MSA. (For instance,
      if all the sequences in the MSA are highly identical, don't
-     bother using this MSA for a benchmark; it's too easy.)
+     bother using this MSA for a benchmark; it's too easy.) The flags 
+     --mintrain <u> and --mintest <v> require than there be at least u 
+     sequences in the training set and v sequences in the test set in 
+     order to use the MSA in the benchmark. 
 
    : Permute the order of the training set alignment. (This allows
      single-sequence-query tests to start on a random but reproducible
@@ -129,21 +144,21 @@ construction protocol, the procedure is as follows:
      constructed (where all the sequence segments came from) are 
      written to the <benchmark_prefix>.pos file.
 
-   : Finally a set of <N> negative test sequences is constructed. 
-     Default N=200000; controlled by the -N option.
-     For each negative:
+ : Finally a set of <N> negative test sequences is constructed. 
+   Default N=200000; controlled by the -N option.
+   For each negative:
 
-        : choose one of the positive test seqs at random; we will use
-          the same set of segment lengths to construct a negative.
+      : choose one of the positive test seqs at random; we will use
+        the same set of segment lengths to construct a negative.
 
-        : for every segment, insert a nonhomologous sequence generated
-          by the same method we used for nonhomologous segments in
-	  the positive sequences.
+      : for every segment, insert a nonhomologous sequence generated
+        by the same method we used for nonhomologous segments in
+  the positive sequences.
 
-   : The test sequences are appended in FASTA format to the to the
-     <benchmark_prefix>.fa file. Details of how they were constructed
-     (where all the sequence segments came from) are written to the
-     <benchmark_prefix>.neg file.
+ : The test sequences are appended in FASTA format to the to the
+   <benchmark_prefix>.fa file. Details of how they were constructed
+   (where all the sequence segments came from) are written to the
+   <benchmark_prefix>.neg file.
      
 
 ================================================================

@@ -324,15 +324,16 @@ main(int argc, char **argv)
         if (success || dev){
             
             if (dev) ntest=0;
-	  	                
+	  	      
             if (esl_opt_GetBoolean(go,"--conn")){
 	                esl_dst_Connectivity(cfg.abc, msa->ax, msa->nseq, 10000, &avgid, cfg.idthresh1);
             } 
 	  		
-            else if (esl_opt_GetBoolean(go,"--noavg") ){
+            //avgid is average PID within training set; if no training set make this 0
+            else if (esl_opt_GetBoolean(go,"--noavg") || !success ){
 	                  avgid=0;
             }
-	              
+	          //average PID in training set  
             else esl_dst_XAverageId(cfg.abc, trainmsa->ax, trainmsa->nseq, 10000, &avgid); /* 10000 is max_comparisons, before sampling kicks in */
             
             if (!success){
@@ -562,7 +563,7 @@ separate_sets(struct cfg_s *cfg, ESL_MSA *msa, ESL_MSA **ret_trainmsa, ESL_STACK
     }
       
     if (esl_opt_GetInteger(go, "-T")!=1){
-      printf("Try multiple times is not supported for cluster algorithm. Running algorithm once.\n");
+      printf("Try multiple times is not supported for random algorithm. Running algorithm once.\n");
     }
 
     /* separate sequences into training set and proto-test set*/
