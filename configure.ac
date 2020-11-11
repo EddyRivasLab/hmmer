@@ -65,6 +65,7 @@ m4_include([easel/m4/ax_gcc_func_attribute.m4])
 
 m4_include([easel/m4/esl_sse.m4])
 m4_include([easel/m4/esl_vmx.m4])
+m4_include([easel/m4/esl_neon.m4])
 
 m4_include([easel/m4/ax_prog_cc_mpi.m4])
 m4_include([easel/m4/ax_pthread.m4])
@@ -212,11 +213,13 @@ AC_ARG_WITH(gsl,       [AS_HELP_STRING([--with-gsl],       [use the GSL, GNU Sci
 vecsel=0
 if test "$enable_sse"     = "yes"; then vecsel=$((vecsel+1)); fi
 if test "$enable_vmx"     = "yes"; then vecsel=$((vecsel+1)); fi
+if test "$enable_neon"    = "yes"; then vecsel=             ; fi
 if   [[ $vecsel -gt 1 ]]; then
-  AC_MSG_ERROR([Select only one implementation: sse or vmx])
+  AC_MSG_ERROR([Select only one implementation: sse, neon,  or vmx])
 elif [[ $vecsel -eq 1 ]]; then
   if test "$enable_sse"   = "check"; then enable_sse="no";   fi
   if test "$enable_vmx"   = "check"; then enable_vmx="no";   fi
+  if test "$enable_neon"   = "check"; then enable_neon="no";   fi
 fi
 
 
@@ -341,15 +344,32 @@ if test "$enable_sse" = "yes" || test "$enable_sse" = "check"; then
     ])
 fi
 
+if test "$enable_neon" = "yes" || test "$enable_neon" = "check"; then
+  ESL_NEON([
+    AC_DEFINE(eslENABLE_NEON,  1, [Enable ARM NEON vector implementation])
+    NEON_CFLAGS=$esl_neon_cflags
+    AC_SUBST(NEON_CFLAGS)
+    AC_SUBST([HMMERIMPLLIB], ["impl_sse/libhmmerimpl.a"])
+    enable_neon=yes
+    impl_choice=neon
+    ],[
+    if test "$enable_neon" = "yes"; then
+      AC_MSG_FAILURE([Unable to compile our NEON implementation. Try another compiler?])
+    fi
+    enable_neon=no
+    ])
+fi
 # If we didn't choose an implementation, die.
 case "$impl_choice" in 
 sse)  AC_MSG_NOTICE([Activating Intel/AMD SSE vector DP implementation]) 
       ;;
 vmx)  AC_MSG_NOTICE([Activating Altivec/VMX vector DP implementation])   
       ;;
+neon)  AC_MSG_NOTICE([Activating ARM NEON vector DP implementation])   
+      ;;   
 *)    AC_MSG_NOTICE([::::::::::--- no vector instruction set ---::::::::::])
-      AC_MSG_NOTICE([HMMER3 requires SSE or VMX vector instructions.])
-      AC_MSG_NOTICE([Supported platforms are x86 (Intel/AMD) and PowerPC.])
+      AC_MSG_NOTICE([HMMER3 requires SSE, NEON or VMX vector instructions.])
+      AC_MSG_NOTICE([Supported platforms are x86 (Intel/AMD), ARM,  and PowerPC.])
       AC_MSG_ERROR([No supported vectorization found for your machine.])
       ;;
 esac
@@ -363,7 +383,7 @@ AC_SUBST(IMPL_CHOICE)
 AC_SUBST(SSE4_CFLAGS)
 AC_SUBST(AVX_CFLAGS)
 AC_SUBST(AVX512_CFLAGS)
-AC_SUBST(NEON_CFLAGS)
+
 
 
 # For x86 processors check if the flush to zero macro is available
@@ -680,7 +700,7 @@ AC_OUTPUT
 echo "
 
 HMMER configuration:
-   compiler:             ${CC} ${CFLAGS} ${SSE_CFLAGS} ${VMX_CFLAGS} ${PTHREAD_CFLAGS} ${PIC_CFLAGS}
+   compiler:             ${CC} ${CFLAGS} ${SSE_CFLAGS} ${VMX_CFLAGS} ${NEON_CFLAGS} ${PTHREAD_CFLAGS} ${PIC_CFLAGS}
    host:                 $host
    linker:               ${LDFLAGS}
    libraries:            ${LIBS} ${LIBGSL} ${PTHREAD_LIBS}
