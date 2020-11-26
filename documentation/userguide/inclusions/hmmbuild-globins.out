@@ -1,5 +1,5 @@
 # hmmbuild :: profile HMM construction from multiple sequence alignments
-# HMMER 3.3.1 (Jul 2020); http://hmmer.org/
+# HMMER 3.3.2 (Nov 2020); http://hmmer.org/
 # Copyright (C) 2020 Howard Hughes Medical Institute.
 # Freely distributed under the BSD open source license.
 # - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
@@ -11,4 +11,4 @@
 #---- -------------------- ----- ----- ----- -------- ------ -----------
 1     globins4                 4   171   149     0.96  0.589 
 
-# CPU time: 0.06u 0.00s 00:00:00.06 Elapsed: 00:00:00.06
+# CPU time: 0.05u 0.00s 00:00:00.05 Elapsed: 00:00:00.05
