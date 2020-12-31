@@ -78,12 +78,6 @@ m4_include([easel/m4/esl_pic_flags.m4])
 AC_INIT(HMMER, 3.3.2, sean@eddylab.org, hmmer)
 AC_MSG_NOTICE([Configuring HMMER3 for your system.])
 
-# remember if the user is overriding CFLAGS
-esl_cflags_env_set=no
-if test x"$CFLAGS" != x; then 
-  esl_cflags_env_set=yes
-fi
-
 ################################################################
 # 3. Info on the package
 ################################################################
@@ -247,21 +241,15 @@ AC_PROG_LN_S
 #  --enable-gcov, --enable-gprof, and --enable-debugging are mutually exclusive.
 #
 if test "$enable_gcov" = "yes"; then
-   if test "$esl_cflags_env_set" = "yes"; then 
-     AC_MSG_ERROR([--enable-gcov overrides CFLAGS, so don't set CFLAGS])
-   fi
-   CFLAGS="-g -Wall -fprofile-arcs -ftest-coverage"
+   CFLAGS="${CLFAGS} -g -Wall -fprofile-arcs -ftest-coverage"
 elif test "$enable_gprof" = "yes"; then
-   if test "$esl_cflags_env_set" = "yes"; then 
-     AC_MSG_ERROR([--enable-gprof overrides CFLAGS, so don't set CFLAGS])
-   fi
-   CFLAGS="-O -g -pg"
+   CFLAGS="${CFLAGS} -O -g -pg"
 elif test "$enable_debugging" != "no"; then
    if test "$GCC" = "yes"; then
-      CFLAGS="-g -Wall"
+      CFLAGS="${CFLAGS} -g -Wall"
    fi
-elif test "$esl_cflags_env_set" != "yes"; then
-   CFLAGS="-O3"
+else
+   CFLAGS="${CFLAGS} -O3"
 fi
 
 
