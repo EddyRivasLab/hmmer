@@ -509,7 +509,7 @@ an msa format. For example, if the input is in aligned
 .BR stockholm
 format, the
 .BR \-\-qsingle_seqs
- flag will cause each sequence in that alignment to be used as a seperate query sequence.
+ flag will cause each sequence in that alignment to be used as a separate query sequence.
 
 .TP
 .BI \-\-tformat " <s>"
