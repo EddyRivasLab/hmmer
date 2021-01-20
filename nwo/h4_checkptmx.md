@@ -52,12 +52,16 @@ In the example:
    Rc = 4  Lc = 14
 ```
                                                             
-Given $L$, we can solve a quadratic equation for the minimum number of
-rows $R$ we would need if we checkpoint as much as possible:
+For a given $L$, the minimum number of rows $R_a+R_b+R_c$ (exclusive of
+the three $R_0$ rows) is, via solving a quadratic equation:
 
 $$ 
-  R = \left\lceil \frac{-3 + \sqrt{9-8L}}{2} \right\rceil
+  R_a + R_b + R_c \geq \left\lceil \frac{-3 + \sqrt{9+8L}}{2} \right\rceil
 $$
+
+For large $L$, the required number of rows is approximately
+$\sqrt{2L}$, so checkpointed DP algorithms are $O(M\sqrt{L})$ in
+memory.
 
 In checkpointed regions, we think of the rows in groups of one
 checkpointed row plus the run of preceding uncheckpointed rows.  We

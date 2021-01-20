@@ -87,7 +87,7 @@ h4_Build(const H4_BUILD_CONFIG *cfg, ESL_MSA *msa, H4_PROFILE **ret_hmm, char *e
   int            apos;
   int            status       = eslOK;
 
-  ESL_DASSERT1(( msa->flags && eslMSA_DIGITAL ));
+  ESL_DASSERT1(( msa->flags & eslMSA_DIGITAL ));
   ESL_DASSERT1(( !cfg || !cfg->abc || cfg->abc->type == msa->abc->type ));
   if (errbuf) errbuf[0] = '\0';
 

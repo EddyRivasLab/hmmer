@@ -279,7 +279,6 @@ h4_profile_Copy(const H4_PROFILE *src, H4_PROFILE *dst)
 }
 
 
-
 /* Function:  h4_profile_Sizeof()
  * Synopsis:  Returns allocated size of a profile, in bytes.
  */

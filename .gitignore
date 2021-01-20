@@ -28,3 +28,13 @@ src/utilities/hmmconvert
 src/utilities/hmmfetch
 src/utilities/hmmlogo
 src/utilities/hmmstat
+*_example
+*_example[2-9]
+*_utest
+*_benchmark
+*_stats
+*_experiment
+*_experiment[2-9]
+nwo/hmmer
+nwo/libhmmer.a
+documentation/release-notes/LICENSE.sh

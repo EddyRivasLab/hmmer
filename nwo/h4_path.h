@@ -12,7 +12,7 @@
 
 
 typedef struct {
-  int     Z;        // length of <st>, <r> (actual; i.e. inclusive of run length compression)
+  int     Z;        // length of <st>, <rle> (actual; i.e. inclusive of run length compression)
   int8_t *st;       // state codes
   int    *rle;      // run lengths of st[z];  or, for st[z] == L, k for L->Mk entry
 

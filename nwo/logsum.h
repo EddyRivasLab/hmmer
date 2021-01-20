@@ -9,5 +9,5 @@ extern float h4_logsum(float a, float b);
 extern int   h4_logsum_IsSlowExact(void);
 extern int   h4_logsum_InitMax(void);
 
-#endif /*p7LOGSUM_INCLUDED*/
+#endif /*h4LOGSUM_INCLUDED*/
 

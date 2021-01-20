@@ -1,34 +1,48 @@
 /* modelsample.c : sampling randomized profile HMMs
  * 
- * These routines are used primarily in model testing. Models are
- * often contrived and/or constrained in various ways that enable
- * particular tests.
+ * These routines are used primarily in testing. They include various
+ * ways to contrivee and constrain models that enable particular
+ * tests.
  * 
  * Contents:
- *    1. Model sampling routines.
- *    2. Internal support functions.
- *    3. Unit tests.
- *    4. Test driver.
+ *    1. Profile sampling routines
+ *    2. Profiles with a readily enumerable number of possible sequences
+ *    3. Profiles with only a single possible path
+ *    4. Profiles such that ASC paths = all possible paths
+ *    5. Internal (static) functions
+ *    6. Unit tests
+ *    7. Test driver
+ *    8. Example
  */
 #include "h4_config.h"
 
 #include "esl_dirichlet.h"
 #include "esl_matrixops.h"
 #include "esl_random.h"
+#include "esl_sq.h"
 #include "esl_vectorops.h"
 
+#include "h4_anchorset.h"
+#include "h4_mode.h"
+#include "h4_path.h"
 #include "h4_profile.h"
 
+#include "emit.h"
 #include "standardize.h"
 #include "vectorize.h"
 
 #include "modelsample.h"
 
-
 static void zeropeppered_probvector(ESL_RANDOMNESS *rng, float *p, int n);
+static int  single_path_seq_engine (ESL_RANDOMNESS *rng, const ESL_ALPHABET *abc, int M, int do_multi,
+                                    H4_PROFILE **ret_hmm, ESL_SQ **ret_sq,
+                                    H4_MODE **opt_mo, H4_PATH **opt_pi, H4_ANCHORSET **opt_anch, float *opt_sc);
+
+
+
 
 /*****************************************************************
- * 1. Model sampling
+ * 1. Profile sampling routines
  *****************************************************************/
 
 /* Function:  h4_modelsample()
@@ -126,6 +140,11 @@ h4_modelsample_zeropeppered(ESL_RANDOMNESS *rng, const ESL_ALPHABET *abc, int M,
   *ret_hmm = NULL;
   return status;
 }
+
+
+/*****************************************************************
+ * 2. Profiles with enumerable sequences
+ *****************************************************************/
 
 
 /* Function:  h4_modelsample_Enumerable()
@@ -271,6 +290,10 @@ h4_modelsample_Enumerable2(ESL_RANDOMNESS *rng, const ESL_ALPHABET *abc, int M, 
 }
 
 
+/*****************************************************************
+ * 3. Profiles with only a single possible path
+ *****************************************************************/
+
 /* Function:  h4_modelsample_SinglePath()
  * Synopsis:  Sample a random profile HMM with only one P=1.0 path possible.
  * Incept:    SRE, Sun 19 May 2019 [Nick Cave and Warren Ellis]
@@ -330,10 +353,99 @@ h4_modelsample_SinglePath(ESL_RANDOMNESS *rng, const ESL_ALPHABET *abc, int M, H
   return status;
 }
 
+/* Function:  h4_modelsample_SinglePathSeq()
+ * Synopsis:  Create a profile/seq pair with only a single valid path.
+ * Incept:    SRE, Mon 11 Jan 2021 [H9/133]
+ *
+ * Purpose:   Create a profile/sequence pair for which only a single
+ *            path is possible. $P(\pi | x, \theta) = 1$, so $P(x, \pi
+ *            | \theta) = P(x | \theta)$, so Fwd, Bck, Vit, ASC Fwd,
+ *            ASC Bck, and ASC Vit scores are all the same.
+ *
+ *            Alignment mode must be uniglocal, but target length
+ *            model is allowed to be L>0 as usual.
+ *
+ * Args:      input:
+ *            rng      - random number generator
+ *            abc      - digital alphabet 
+ *            M        - length of model to sample (>= 1)
+ *
+ *            output:
+ *            ret_hmm  - sampled profile \theta
+ *            ret_sq   - sampled seq x
+ *
+ *            optional output:
+ *            opt_mo   - comparison mode (uniglocal, with L=sq->n set)
+ *            opt_pi   - sampled path \pi
+ *            opt_anch - sampled anchorset A (for one domain D=1)
+ *            opt_sc   - raw bitscore of the single path
+ *
+ * Returns:   <eslOK> on success.
+ *
+ * Throws:    <eslEMEM> on allocation failure.
+ */
+int
+h4_modelsample_SinglePathSeq(ESL_RANDOMNESS *rng, const ESL_ALPHABET *abc, int M, 
+                             H4_PROFILE **ret_hmm, ESL_SQ **ret_sq,
+                             H4_MODE **opt_mo, H4_PATH **opt_pi, H4_ANCHORSET **opt_anch, float *opt_sc)
+{
+  return single_path_seq_engine(rng, abc, M, /*do_multi=*/FALSE,
+                                ret_hmm, ret_sq,
+                                opt_mo, opt_pi, opt_anch, opt_sc);
+}
+
+/* Function:  h4_modelsample_SinglePathASC()
+ * Synopsis:  Create a profile/seq/anchorset triplet with only a single valid path
+ * Incept:    SRE, Mon 11 Jan 2021 [H9/133]
+ *
+ * Purpose:   Create a profile/sequence/anchorset triplet for which only
+ *            a single path is possible. $P(\pi | x, A, \theta) = 1$,
+ *            so $P(x, A, \pi | \theta) = P(x, A | \theta)$, so ASC
+ *            Fwd, ASC Bck, and ASC Vit scores are all the same.
+ *
+ *            Alignment mode is multiglocal, and target length model
+ *            is the usual L.
+ *
+ * Args:      input:
+ *            rng      - random number generator
+ *            abc      - digital alphabet 
+ *            M        - length of model to sample (>= 1)
+ *
+ *            output:
+ *            ret_hmm  - sampled profile \theta
+ *            ret_sq   - sampled seq x
+ *            ret_anch - sampled anchorset A 
+ *
+ *            optional output:
+ *            opt_mo   - comparison mode (multiglocal, with L=sq->n set)
+ *            opt_pi   - sampled path \pi
+ *            opt_sc   - raw bitscore of the single path
+ *
+ * Returns:   <eslOK> on success.
+ *
+ * Throws:    <eslEMEM> on allocation failure.
+ */
+int
+h4_modelsample_SinglePathASC(ESL_RANDOMNESS *rng, const ESL_ALPHABET *abc, int M, 
+                             H4_PROFILE **ret_hmm, ESL_SQ **ret_sq, H4_ANCHORSET **ret_anch,
+                             H4_MODE **opt_mo, H4_PATH **opt_pi, float *opt_sc)
+{
+  return single_path_seq_engine(rng, abc, M, /*do_multi=*/TRUE,
+                                ret_hmm, ret_sq, 
+                                opt_mo, opt_pi, ret_anch, opt_sc);
+}
 
 
 /*****************************************************************
- * 2. internal support functions
+ * 4. Profiles such that ASC paths = all possible paths
+ *****************************************************************/
+
+/* TK */
+
+
+
+/*****************************************************************
+ * 5. Internal (static) functions
  *****************************************************************/
 
 static void
@@ -345,6 +457,217 @@ zeropeppered_probvector(ESL_RANDOMNESS *rng, float *p, int n)
       p[esl_rnd_Roll(rng, n)] = 0.0;
       esl_vec_FNorm(p, n);
     }
+}
+
+/* single_path_seq_engine()
+ * SRE, Sun 10 Jan 2021
+ *
+ * Guts of h4_modelsample_SinglePathSeq(), h4_modelsample_SinglePathASC()
+ * (controlled by <do_multi> FALSE or TRUE, respectively).
+ *
+ * With <do_multi=FALSE>:
+ * Create a profile/sequence pair for which only one path is possible:
+ * P(\pi | x, \theta) = 1, thus P(x, \pi | \theta) = P(x | \theta),
+ * thus Fwd = Bck = Vit = ASC Fwd = ASC Bck = ASC Vit score.
+ *
+ * With <do_multi=TRUE>:
+ * Create a profile/sequence/anchorset _triplet_ for which only one
+ * path is possible:
+ * P(\pi | x, A, \theta) = 1,
+ * thus P(x, A, \pi | \theta) = P(x, A | \theta);
+ * thus ASC Fwd = ASC Bck = ASC Vit score. 
+ *
+ * The idea of the first version is to force the model to visit a
+ * specific set of match states per domain, by setting transition
+ * probabilities such that we visit Mk with probability 1.0 or Dk with
+ * probability 1.0, for all k=1..M; to set all the match emission
+ * probabilities to have zero probability for a particular residue x;
+ * and to set all NCJI-emitted positions in the sequence to x.
+ *
+ * Additionally, we need to avoid I->D->I; inserted x's must be
+ * unambiguously associated with a particular Ik state. Thus, set all
+ * tDI = 0.0.
+ *
+ * So if a M=6 uniglocal profile has four visited match states M2 M3 M4 M6 that emit non-x 
+ * residues a,b,c,d, and the sequence looks like:
+ *     x x a b x x c x d x x x 
+ * there is an unambiguous assignment to a single path:
+ *     S N N N B G D1 M2 M3 I3 I3 M4 I4 D5 M6 E C C C C T
+ *     . . x x . .  -  a  b  x  x  c  x  -  d . . x x x .
+ *
+ * The model must use unihit glocal-only mode for this to work, but it
+ * can use any target length model L>0. With a multihit model, when
+ * the sequence contains two (or more) domains, other paths become
+ * possible that have fewer domains, using NCJI to account for the
+ * remaining ones.
+ *
+ * The idea can be extended to multihit glocal if we use an anchor set
+ * to constrain to the set of paths to include all domains, precluding
+ * these paths that use NCJI to account for one or more of
+ * them. That's what the <do_multi=TRUE> version does, by creating a
+ * profile/sequence/anchorset triple, instead of just a
+ * profile/sequence pair.
+ *
+ * input:
+ *    rng  - random number generator
+ *    abc  - digital alphabet
+ *    M    - length of model to sample (>=1)
+ * control options:
+ *    do_multi - TRUE to do multihit profile/seq/anchorset version
+ * output:
+ *    ret_hmm - sampled profile \theta
+ *    ret_sq  - sampled sequence x
+ * optional output:
+ *    opt_mo   - comparison mode (uniglocal or multiglocal, with target L set)
+ *    opt_pi   - sampled path \pi
+ *    opt_anch - sampled anchorset A (available in unihit version too, not just multihit)
+ *    opt_sc   - raw bitscore of the single path
+ */
+static int
+single_path_seq_engine(ESL_RANDOMNESS *rng, const ESL_ALPHABET *abc, int M, int do_multi,
+                       H4_PROFILE **ret_hmm, ESL_SQ **ret_sq,
+                       H4_MODE **opt_mo, H4_PATH **opt_pi, H4_ANCHORSET **opt_anch, float *opt_sc)
+{
+  H4_PROFILE   *hmm  = NULL;
+  ESL_SQ       *sq   = NULL;
+  H4_PATH      *pi   = NULL;
+  H4_MODE      *mo   = NULL;
+  H4_ANCHORSET *anch = NULL;
+  int           nm   = 0;       // counts how many match states we visit, so we can reject mute all-D paths
+  int           D;              // number of domains 
+  int           i,k,z,r,s,d;
+  int           xx;             // prohibited residue for Mk emissions (0..K-1)
+  float         sc;             // path score
+  float         tII_max = 0.99; // don't let tII be ~1, or we get huge insert lengths
+  int           status;
+
+  ESL_DASSERT1(( M >= 1 ));
+
+  if (( hmm = h4_profile_Create(abc, M)) == NULL) { status = eslEMEM; goto ERROR; }
+  if (( sq  = esl_sq_CreateDigital(abc)) == NULL) { status = eslEMEM; goto ERROR; }
+  if (( pi  = h4_path_Create())          == NULL) { status = eslEMEM; goto ERROR; }
+  if (( mo  = h4_mode_Create())          == NULL) { status = eslEMEM; goto ERROR; }
+
+  /* choose the residue that match states can't emit */
+  xx = esl_rnd_Roll(rng, abc->K);
+
+  /* sample the profile, with transitions and emissions constrained  
+   */
+  while (nm == 0) // path must visit at least one Mk state; reject until it does
+    {
+      /* reset emission/transition probability params to zero, then set edge conventions */
+      esl_mat_FSet(hmm->t, M+1, h4_NT,   0.0f);
+      esl_mat_FSet(hmm->e, M+1, abc->K,  0.0f);
+      h4_profile_SetConventions(hmm);
+
+      /* Match emissions */
+      for (k = 1; k <= M; k++)
+        {
+          esl_dirichlet_FSampleUniform(rng, abc->K-1, hmm->e[k]); // sample K-1 nonzero probs
+          ESL_SWAP(hmm->e[k][abc->K-1], hmm->e[k][xx], float);    // swap 0.0 prob onto xx residue
+        }
+
+      /* Initialize G->M1|D1 transition so 50% of the time we start 100% in M1, else we start 100% in D1 */
+      nm = 0;
+      if (esl_rnd_Roll(rng, 2)) { hmm->t[0][h4_TMM] = 1.0; nm++; }
+      else                      { hmm->t[0][h4_TMD] = 1.0;       }
+
+      for (k = 1; k < M; k++)
+        {
+          // code here ASSUMES TRANSITIONS IN THIS ORDER: MM | MI | MD | IM | II | ID | DM | DI | DD  (see h4_profile.h)
+          if (esl_rnd_Roll(rng, 2))                                     // 50% of the time, make all paths go to Mk+1
+            {                                                 
+              esl_dirichlet_FSampleUniform(rng, 2, hmm->t[k]);          // tmd=0
+              do {
+                esl_dirichlet_FSampleUniform(rng, 2, hmm->t[k]+h4_TIM); // tid = 0
+              } while (hmm->t[k][h4_TII] > tII_max);                    //  ... but keep tii away from ~1.0
+              hmm->t[k][h4_TDM] = 1.0;                                  //  ... and prohibit tdi to avoid alignment ambiguity
+              nm++;
+            }
+          else                                                          // or, make all paths go to Dk+1
+            {
+              esl_dirichlet_FSampleUniform(rng, 2, hmm->t[k]+h4_TMI);   // tmm = 0
+              do {
+                esl_dirichlet_FSampleUniform(rng, 2, hmm->t[k]+h4_TII); // tim = 0
+              } while (hmm->t[k][h4_TII] > tII_max);                    //  ... but keep tii away from ~1.0
+              hmm->t[k][h4_TDD] = 1.0;                                  //  ... and prohibit tdi to avoid alignment ambiguity
+            }
+        }
+    }      
+
+  /* configure alignment mode */
+  if (do_multi) { if (( status = h4_mode_SetGlocal(mo))    != eslOK) goto ERROR; }
+  else          { if (( status = h4_mode_SetUniglocal(mo)) != eslOK) goto ERROR; }
+  if (( status = h4_mode_SetLength(mo, 10)) != eslOK) goto ERROR;                  // set a small L=10 to avoid long NCJ stretches
+
+  /* emit a sequence and path from profile */
+  if (( status = h4_emit(rng, hmm, mo, sq, pi)) != eslOK) goto ERROR;
+
+  /* give seq a name */
+  if (( status = esl_sq_SetName(sq, "testseq")) != eslOK) goto ERROR;
+
+  /* Change all N/C/J/I emitted residues to xx (the residue M states can't emit).
+   * Also, while we're going through, count domains <D>, by counting G states. 
+   * (No L states occur, because we're either uniglocal or multiglocal.)
+   */
+  i = 1;
+  D = 0;
+  for (z = 0; z < pi->Z; z++)
+    if      (h4_path_IsX(pi->st[z])) for (r = 0; r < pi->rle[z]-1; r++) sq->dsq[i++] = xx;  // NJC: rle-1 because they emit on transition
+    else if (h4_path_IsI(pi->st[z])) for (r = 0; r < pi->rle[z];   r++) sq->dsq[i++] = xx;
+    else if (h4_path_IsM(pi->st[z])) i += pi->rle[z];
+    else if (pi->st[z] == h4P_G)     D++;
+  ESL_DASSERT1(( i == sq->n+1 ));
+  
+  /* Select an anchor set
+   * We know that each domain uses <nm> match states, and any of them
+   * is a suitable anchor; choose randomly for each domain.
+   */
+  if (( anch = h4_anchorset_Create(D, sq->n, hmm->M)) == NULL) { status = eslEMEM; goto ERROR; }
+  i = 1;
+  d = 0;
+  for (z = 0; z < pi->Z; z++)
+    {
+      if      (pi->st[z] == h4P_G)     { d++; k = 1; s = esl_rnd_Roll(rng, nm); } // use s'th match state as anchor for domain d (s=0..nm-1)
+      else if (h4_path_IsX(pi->st[z])) i += pi->rle[z]-1;
+      else if (h4_path_IsI(pi->st[z])) i += pi->rle[z];
+      else if (h4_path_IsD(pi->st[z])) k += pi->rle[z];
+      else if (h4_path_IsM(pi->st[z]))
+        for (r = 0; r < pi->rle[z]; r++)
+          {
+            if (s == 0) { anch->a[d].i0 = i; anch->a[d].k0 = k; }
+            s--; k++; i++;
+          }
+    }
+
+  /* We have a probability model; set standard and vectorized lod scores */
+  hmm->flags |= h4_HASPROBS;
+  if (( status = h4_standardize(hmm)) != eslOK) goto ERROR;
+  if (( status = h4_vectorize(hmm))   != eslOK) goto ERROR;
+ 
+  /* Configure length model before scoring the trace */
+  if (( status = h4_mode_SetLength(mo, sq->n)) != eslOK) goto ERROR;
+              
+  /* Calculate the score of the path.
+   * This has to come after length model config.
+   */
+  if (( status = h4_path_Score(pi, sq->dsq, hmm, mo, &sc)) != eslOK) goto ERROR;
+
+  if (opt_mo)   *opt_mo   = mo;   else h4_mode_Destroy(mo);
+  if (opt_pi)   *opt_pi   = pi;   else h4_path_Destroy(pi);
+  if (opt_anch) *opt_anch = anch; else h4_anchorset_Destroy(anch);
+  if (opt_sc)   *opt_sc   = sc;   
+  *ret_hmm = hmm;
+  *ret_sq  = sq;
+  return eslOK;
+
+ ERROR:
+  h4_mode_Destroy(mo);
+  h4_path_Destroy(pi);
+  h4_anchorset_Destroy(anch);
+  h4_profile_Destroy(hmm);
+  esl_sq_Destroy(sq);
+  return status;
 }
 
 
@@ -371,6 +694,11 @@ utest_sanity(ESL_RANDOMNESS *rng)
   H4_PROFILE   *hmm   = NULL;
   ESL_ALPHABET *abc   = esl_alphabet_Create(eslCOINS);
   int           M     = 1 + esl_rnd_Roll(rng, 10);  // 1..10
+  ESL_SQ       *sq    = NULL;
+  H4_MODE      *mo    = NULL;
+  H4_PATH      *pi    = NULL;
+  H4_ANCHORSET *anch  = NULL;
+  float         sc;
   char          errbuf[eslERRBUFSIZE];
   
   if ( h4_modelsample(rng, abc, M, &hmm)              != eslOK) esl_fatal(msg);
@@ -392,6 +720,27 @@ utest_sanity(ESL_RANDOMNESS *rng)
   if ( h4_modelsample_SinglePath(rng, abc, M, &hmm)   != eslOK) esl_fatal(msg);
   if ( h4_profile_Validate(hmm, errbuf)               != eslOK) esl_fatal("%s\n  %s", msg, errbuf);
   h4_profile_Destroy(hmm);
+
+  if ( h4_modelsample_SinglePathSeq(rng, abc, M, &hmm, &sq, &mo, &pi, &anch, &sc) != eslOK) esl_fatal(msg);
+  if ( h4_profile_Validate(hmm, errbuf)       != eslOK) esl_fatal("%s\n  %s", msg, errbuf);
+  if ( esl_sq_Validate(sq, errbuf)            != eslOK) esl_fatal("%s\n  %s", msg, errbuf);
+  if ( h4_path_Validate(pi, M, sq->n, errbuf) != eslOK) esl_fatal("%s\n  %s", msg, errbuf);
+  if ( h4_anchorset_Validate(anch, errbuf)    != eslOK) esl_fatal("%s\n  %s", msg, errbuf);
+  if ( anch->D != 1 )                                   esl_fatal("h4_modelsample_SinglePathSeq is supposed to be unihit");
+  h4_profile_Destroy(hmm);  esl_sq_Destroy(sq);  h4_mode_Destroy(mo);  h4_path_Destroy(pi);  h4_anchorset_Destroy(anch);
+
+  if ( h4_modelsample_SinglePathSeq(rng, abc, M, &hmm, &sq, NULL, NULL, NULL, NULL) != eslOK) esl_fatal(msg); // optional args
+  h4_profile_Destroy(hmm);  esl_sq_Destroy(sq);
+
+  if ( h4_modelsample_SinglePathASC(rng, abc, M, &hmm, &sq, &anch, &mo, &pi, &sc) != eslOK) esl_fatal(msg);
+  if ( h4_profile_Validate(hmm, errbuf)       != eslOK) esl_fatal("%s\n  %s", msg, errbuf);
+  if ( esl_sq_Validate(sq, errbuf)            != eslOK) esl_fatal("%s\n  %s", msg, errbuf);
+  if ( h4_path_Validate(pi, M, sq->n, errbuf) != eslOK) esl_fatal("%s\n  %s", msg, errbuf);
+  if ( h4_anchorset_Validate(anch, errbuf)    != eslOK) esl_fatal("%s\n  %s", msg, errbuf);
+  h4_profile_Destroy(hmm);  esl_sq_Destroy(sq);  h4_anchorset_Destroy(anch);  h4_mode_Destroy(mo);  h4_path_Destroy(pi);  
+
+  if ( h4_modelsample_SinglePathASC(rng, abc, M, &hmm, &sq, &anch, NULL, NULL, NULL) != eslOK) esl_fatal(msg);
+  h4_profile_Destroy(hmm);  esl_sq_Destroy(sq);  h4_anchorset_Destroy(anch);
 
   esl_alphabet_Destroy(abc);
 }
@@ -456,7 +805,7 @@ utest_enumerated_length(ESL_RANDOMNESS *rng)
   
 
 /*****************************************************************
- * 4. Test driver
+ * 7. Test driver
  *****************************************************************/
 #ifdef h4MODELSAMPLE_TESTDRIVE
 
@@ -492,3 +841,74 @@ main(int argc, char **argv)
   return 0;
 }  
 #endif // h4MODELSAMPLE_TESTDRIVE
+
+
+
+/*****************************************************************
+ * 8. Example
+ *****************************************************************/
+#ifdef h4MODELSAMPLE_EXAMPLE
+
+#include "easel.h"
+#include "esl_alphabet.h"
+#include "esl_getopts.h"
+#include "esl_random.h"
+#include "esl_sq.h"
+#include "esl_sqio.h"
+
+#include "h4_anchorset.h"
+#include "h4_mode.h"
+#include "h4_path.h"
+#include "h4_profile.h"
+
+#include "general.h"
+#include "modelsample.h"
+
+
+static ESL_OPTIONS options[] = {
+  /* name           type      default  env  range  toggles reqs incomp  help                        docgroup*/
+  { "-h",        eslARG_NONE,   FALSE, NULL, NULL,   NULL,  NULL, NULL, "show brief help",             0 },
+  { "--version", eslARG_NONE,   FALSE, NULL, NULL,   NULL,  NULL, NULL, "show HMMER version info",     0 },
+  {  0, 0, 0, 0, 0, 0, 0, 0, 0, 0 },
+};
+static char usage[]  = "[-options]";
+static char banner[] = "example of using model sampling routines";
+
+int
+main(int argc, char **argv)
+{
+  ESL_GETOPTS    *go   = h4_CreateDefaultApp(options, 0, argc, argv, banner, usage);
+  ESL_RANDOMNESS *rng  = esl_randomness_Create(0);
+  ESL_ALPHABET   *abc  = esl_alphabet_Create(eslAMINO);
+  int             M    = 10;
+  H4_PROFILE     *hmm  = NULL;
+  ESL_SQ         *sq   = NULL;
+  H4_MODE        *mo   = NULL;
+  H4_PATH        *pi   = NULL;
+  H4_ANCHORSET   *anch = NULL;
+  float           sc;
+
+  // put whichever routine you want to play with here:
+  h4_modelsample_SinglePathSeq(rng, abc, M, &hmm, &sq, &mo, &pi, &anch, &sc);
+ 
+  h4_profile_Dump(stdout, hmm);
+  esl_sqio_Write(stdout, sq, eslSQFILE_FASTA, FALSE);
+  h4_mode_Dump(stdout, mo);
+  h4_path_Dump(stdout, pi);
+  h4_anchorset_Dump(stdout, anch);
+  printf("path score = %.3f\n", sc);
+
+
+  h4_anchorset_Destroy(anch);
+  h4_path_Destroy(pi);
+  h4_mode_Destroy(mo);
+  h4_profile_Destroy(hmm);
+  esl_sq_Destroy(sq);
+  esl_alphabet_Destroy(abc);
+  esl_randomness_Destroy(rng);
+  esl_getopts_Destroy(go);
+  return 0;
+}
+
+
+#endif // h4MODELSAMPLE_EXAMPLE

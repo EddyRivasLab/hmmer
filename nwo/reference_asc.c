@@ -390,6 +390,13 @@ h4_reference_asc_Forward(const ESL_DSQ *dsq, int L, const H4_PROFILE *hmm, const
  *****************************************************************/
 
 
+static void
+utest_singlepath(FILE *diagfp, ESL_RANDOMNESS *rng, int M, const ESL_ALPHABET *abc)
+{
+
+
+}
+
 
 /*****************************************************************
  * x. Test driver

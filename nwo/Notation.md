@@ -78,19 +78,19 @@
 
 | symbol             | meaning |
 |--------------------|---------|
-| $\mathbf{\alpha}$  | Forward dynamic programming matrix |
-| $\mathbf{\beta}$   | Backward dynamic programming matrix |
-| $\mathbf{\gamma}$  | Viterbi dynamic programming matrix |
-| $\delta$           | Delta function for maximum gain estimation alignment |
-| $\epsilon$         | Loss parameter for ``well defined'' envelope definition; default = 0.005 |
-| $\mathbf{\eta}$    | Null (nonhomology) model and its parameters |
-| $\mathbf{\theta}$  | Profile and all its parameters |
-| $\lambda$          | Label on a residue |
-| \mathbf{\pi}$      | State path (traceback; alignment) |
-| $\mathbf{\rho}$    | Posterior decoding dynamic programming matrix |
-| $\sigma$           | Emission log-odds scores in the profile |
-| $\tau$             | Transition scores in the profile |
-| $\omega$           | Log-odds prior ratio for null2 vs. null hypothesis |
+| $\pmb{\alpha}$; $\alpha(i,k,s)$  | Forward dynamic programming matrix |
+| $\pmb{\beta}$;  $\beta(i,k,s)$   | Backward dynamic programming matrix |
+| $\pmb{\gamma}$; $\gamma(i,k,s)$  | Viterbi dynamic programming matrix |
+| $\delta$                         | Delta function for maximum gain estimation alignment |
+| $\epsilon$                       | Loss parameter for ``well defined'' envelope definition; default = 0.005 |
+| $\pmb{\eta}$                     | Null (nonhomology) model and its parameters |
+| $\pmb{\theta}$                   | Profile and all its parameters |
+| $\lambda$                        | Label on a residue |
+| $\pmb{\pi}$                      | State path (traceback; alignment) |
+| $\pmb{\rho}$;  $\rho(i,k,s)$     | Posterior decoding dynamic programming matrix |
+| $\sigma$                         | Emission log-odds scores in the profile |
+| $\tau$                           | Transition scores in the profile |
+| $\omega$                         | Log-odds prior ratio for null2 vs. null hypothesis |
 
 
 ### greek symbols, upper case

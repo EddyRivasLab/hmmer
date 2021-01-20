@@ -2,6 +2,7 @@ PROGS = hmmer
 
 OBJS   = \
 	cmd_build.o         \
+	h4_anchorset.o      \
 	h4_checkptmx.o      \
 	h4_counts.o         \
 	h4_filtermx.o       \
@@ -21,6 +22,7 @@ OBJS   = \
 	modelsample.o       \
 	modelstats.o        \
 	parameterize.o      \
+	reference_asc.o     \
 	reference_dp.o      \
 	simdvec.o           \
 	ssvfilter.o         \
@@ -38,6 +40,7 @@ VMX_OBJS    = fbfilter_vmx.o    ssvfilter_vmx.o    vitfilter_vmx.o
 HDRS = \
 	h4_config.h         \
 	cmd_build.h         \
+	h4_anchorset.h      \
 	h4_checkptmx.h      \
 	h4_counts.h         \
 	h4_filtermx.h       \
@@ -57,6 +60,7 @@ HDRS = \
 	modelsample.h       \
 	modelstats.h        \
 	parameterize.h      \
+	reference_asc.h     \
 	reference_dp.h      \
 	simdvec.h           \
 	ssvfilter.h         \
@@ -100,6 +104,8 @@ EXAMPLES = \
 	emit_example              \
 	fbfilter_example          \
 	logsum_example            \
+	modelsample_example       \
+	reference_asc_example     \
 	reference_dp_example      \
 	ssvfilter_example         \
 	vitfilter_example         \

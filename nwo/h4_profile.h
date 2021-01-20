@@ -120,7 +120,6 @@ typedef struct {
 #define h4_HASVECS    (1<<2)
 #define h4_SINGLE     (1<<3)
 
-
 extern H4_PROFILE *h4_profile_Create(const ESL_ALPHABET *abc, int M);
 extern H4_PROFILE *h4_profile_CreateShell(void);
 extern int         h4_profile_CreateBody(H4_PROFILE *hmm, const ESL_ALPHABET *abc, int M);

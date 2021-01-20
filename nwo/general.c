@@ -49,6 +49,10 @@ h4_Init(void)
  * 
  *            The <options> list is assumed to contain '-h' (help) and '--version' (version).
  *
+ *            If <nargs> is >=0, the number of command line arguments is checked. If you
+ *            don't want this checked (for example, if the program allows a variable number
+ *            of arguments), set <nargs> to -1.
+ *
  * Args:      options : Easel options structures
  *            nargs   : expected number of command line arguments, aside from options
  *            argc    : number of command line arguments in <argv>

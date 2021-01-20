@@ -2605,7 +2605,7 @@ static ESL_OPTIONS options[] = {
   {  0, 0, 0, 0, 0, 0, 0, 0, 0, 0 },
 };
 static char usage[]  = "[-options] <hmmfile> <seqfile>";
-static char banner[] = "example of using the Forward/Backward reference implementation";
+static char banner[] = "example of using the reference Vit/Fwd/Bck/Decoding implementations";
 
 int
 main(int argc, char **argv)
@@ -2674,6 +2674,7 @@ main(int argc, char **argv)
   h4_mode_Destroy(mo);
   esl_alphabet_Destroy(abc);
   esl_getopts_Destroy(go);
+  return 0;
 }  
 #endif //h4REFERENCE_DP_EXAMPLE
 /*-------------------- end, example ---------------------------- */
