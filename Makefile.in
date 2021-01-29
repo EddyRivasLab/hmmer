@@ -130,16 +130,16 @@ pdf:
 #
 #          Does not use quiet beautification magic; always verbose.
 install: all
-	${INSTALL} -d ${DESTDIR}${bindir}
-	${INSTALL} -d ${DESTDIR}${man1dir}
+	if [ ! -d ${DESTDIR}${bindir} ]; then ${INSTALL} -d ${DESTDIR}${bindir}; fi
+	if [ ! -d ${DESTDIR}${man1dir} ]; then ${INSTALL} -d ${DESTDIR}${man1dir}; fi
 	${MAKE} -C src install
 	${MAKE} -C documentation install
 
 # install-strip: same as install, but strip binaries
 #
 install-strip: all
-	${INSTALL} -d ${DESTDIR}${bindir}
-	${INSTALL} -d ${DESTDIR}${man1dir}
+	if [ ! -d ${DESTDIR}${bindir} ]; then ${INSTALL} -d ${DESTDIR}${bindir}; fi
+	if [ ! -d ${DESTDIR}${man1dir} ]; then ${INSTALL} -d ${DESTDIR}${man1dir}; fi
 	${MAKE} -C src install-strip
 	${MAKE} -C documentation install
 
