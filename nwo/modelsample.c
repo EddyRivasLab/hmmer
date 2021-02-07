@@ -1,8 +1,7 @@
 /* modelsample.c : sampling randomized profile HMMs
  * 
  * These routines are used primarily in testing. They include various
- * ways to contrivee and constrain models that enable particular
- * tests.
+ * ways to contrive constrained models for particular tests.
  * 
  * Contents:
  *    1. Profile sampling routines
@@ -37,7 +36,10 @@ static void zeropeppered_probvector(ESL_RANDOMNESS *rng, float *p, int n);
 static int  single_path_seq_engine (ESL_RANDOMNESS *rng, const ESL_ALPHABET *abc, int M, int do_multi,
                                     H4_PROFILE **ret_hmm, ESL_SQ **ret_sq,
                                     H4_MODE **opt_mo, H4_PATH **opt_pi, H4_ANCHORSET **opt_anch, float *opt_sc);
-
+static int  anchored_ensemble_engine(ESL_RANDOMNESS *rng, const ESL_ALPHABET *abc, int M,
+                                     H4_PROFILE **ret_hmm, ESL_SQ **ret_sq, H4_ANCHORSET **ret_anch,
+                                     H4_MODE **opt_mo, H4_PATH **opt_pi, float *opt_sc,
+                                     int do_uni, int do_local, int do_multi);
 
 
 
@@ -350,6 +352,7 @@ h4_modelsample_SinglePath(ESL_RANDOMNESS *rng, const ESL_ALPHABET *abc, int M, H
 
  ERROR:
   h4_profile_Destroy(hmm);
+  *ret_hmm = NULL;
   return status;
 }
 
@@ -440,8 +443,147 @@ h4_modelsample_SinglePathASC(ESL_RANDOMNESS *rng, const ESL_ALPHABET *abc, int M
  * 4. Profiles such that ASC paths = all possible paths
  *****************************************************************/
 
-/* TK */
+/* Function:  h4_modelsample_AnchoredUni()
+ * Synopsis:  Create profile/seq/anchorset triplet such that all paths use anchor
+ * Incept:    SRE, Sun 31 Jan 2021
+ *
+ * Purpose:   One of three ways to sample a model, a sequence, and a
+ *            single anchor, contrived such that all paths for the
+ *            model/sequence comparison must use the anchor even when
+ *            unconstrained by an ASC algorithm.
+ *
+ *            In this version (uni), we have a uniglocal profile, with
+ *            an anchor Mk0 state that must emit a particular residue
+ *            X with probability 1.0; all paths are forced to use Mk0 not
+ *            Dk0; and the target sequence has only one X in it.
+ *
+ *            Unlike the other versions (local, multi), paths can
+ *            contain inserts and N/C states, and the target length
+ *            model is L>0.
+ *
+ * Args:      input:
+ *            rng      - random number generator
+ *            abc      - digital alphabet 
+ *            M        - length of model to sample (>= 1)
+ *
+ *            output:
+ *            ret_hmm  - sampled profile \theta
+ *            ret_sq   - sampled seq x
+ *            ret_anch - sampled anchorset A 
+ *
+ *            optional output:
+ *            opt_mo   - comparison mode (uniglocal, with L=sq->n set)
+ *            opt_pi   - path that <sq> was obtained from
+ *            opt_tsc  - score of that path
+ *
+ * Returns:   <eslOK> on success.
+ *
+ * Throws:    <eslEMEM> on allocation failure.
+ * 
+ * Xref:      See anchored_ensemble_engine() for more details.
+ */
+int
+h4_modelsample_AnchoredUni(ESL_RANDOMNESS *rng, const ESL_ALPHABET *abc, int M, 
+                           H4_PROFILE **ret_hmm, ESL_SQ **ret_sq, H4_ANCHORSET **ret_anch,
+                           H4_MODE **opt_mo, H4_PATH **opt_pi, float *opt_tsc)
+{
+  return anchored_ensemble_engine(rng, abc, M, ret_hmm, ret_sq, ret_anch, opt_mo, opt_pi, opt_tsc, TRUE, FALSE, FALSE);
+}
 
+
+/* Function:  h4_modelsample_AnchoredLocal()
+ * Synopsis:  Make profile/seq/anchorset such that all paths use anchor, allowing local paths.
+ * Incept:    SRE, Mon 01 Feb 2021
+ *
+ * Purpose:   Another of three ways to sample a model, a sequence, and an
+ *            anchor set such that the ensemble of all valid paths must
+ *            use the anchor.
+ *
+ *            In this version (local), we make a unihit local/glocal
+ *            profile that only emits from match states (L=0 and
+ *            inserts prohibited), and only the anchor Mk0 state has
+ *            e_k0(X)>0; the sequence has only one X in it, at the
+ *            anchor.
+ *
+ *            This version differs from the others (uni, multi) in that
+ *            tests local paths.
+ *            
+ * Args:      input:
+ *            rng      - random number generator
+ *            abc      - digital alphabet 
+ *            M        - length of model to sample (>= 1)
+ *
+ *            output:
+ *            ret_hmm  - sampled profile \theta
+ *            ret_sq   - sampled seq x
+ *            ret_anch - sampled anchorset A 
+ *
+ *            optional output:
+ *            opt_mo   - comparison mode (unihit, L=0)
+ *            opt_pi   - path that <sq> was obtained from
+ *            opt_tsc  - score of that path
+ *
+ * Returns:   <eslOK> on success.
+ *
+ * Throws:    <eslEMEM> on allocation failure.
+ *
+ * Xref:      See anchored_ensemble_engine() for more details.
+ */
+int
+h4_modelsample_AnchoredLocal(ESL_RANDOMNESS *rng, const ESL_ALPHABET *abc, int M,
+                             H4_PROFILE **ret_hmm, ESL_SQ **ret_sq, H4_ANCHORSET **ret_anch,
+                             H4_MODE **opt_mo, H4_PATH **opt_pi, float *opt_tsc)
+{
+  return anchored_ensemble_engine(rng, abc, M, ret_hmm, ret_sq, ret_anch, opt_mo, opt_pi, opt_tsc, FALSE, TRUE, FALSE);
+}
+
+/* Function:  h4_modelsample_AnchoredMulti()
+ * Synopsis:  Make profile/seq/anchorset such that all paths use anchorset
+ * Incept:    SRE, Mon 01 Feb 2021
+ *
+ * Purpose:   Last of three ways to contrive a profile, sequence, and
+ *            anchor set so that all valid paths must use the anchor
+ *            set.
+ *
+ *            In this version (multi), we make a multiglocal profile that
+ *            only emits from match states (L=0, inserts prohibited), 
+ *            where the anchor Mk0 state must emit X and no other Mk can,
+ *            and where paths are forced to use Mk0 not Dk0. The sequence
+ *            contains D residues X, marking the anchors, one per domain.
+ *
+ *            (Forcing e_k0(X)=1 and transitions to use Mk0 not Dk0
+ *            are both necessary, to prevent path from including
+ *            additional domains that avoid an X.)
+ *
+ *            This version differs from the others by testing multiple
+ *            domains per path.
+ *
+ * Args:      input:
+ *            rng      - random number generator
+ *            abc      - digital alphabet 
+ *            M        - length of model to sample (>= 1)
+ *
+ *            output:
+ *            ret_hmm  - sampled profile \theta
+ *            ret_sq   - sampled seq x
+ *            ret_anch - sampled anchorset A 
+ *
+ *            optional output:
+ *            opt_mo   - comparison mode (multiglocal, L=0)
+ *            opt_pi   - path that <sq> was obtained from
+ *            opt_tsc  - score of that path
+ *
+ * Returns:   <eslOK> on success.
+ *
+ * Throws:    <eslEMEM> on allocation failure.
+ */
+int
+h4_modelsample_AnchoredMulti(ESL_RANDOMNESS *rng, const ESL_ALPHABET *abc, int M,
+                             H4_PROFILE **ret_hmm, ESL_SQ **ret_sq, H4_ANCHORSET **ret_anch,
+                             H4_MODE **opt_mo, H4_PATH **opt_pi, float *opt_tsc)
+{
+  return anchored_ensemble_engine(rng, abc, M, ret_hmm, ret_sq, ret_anch, opt_mo, opt_pi, opt_tsc, FALSE, FALSE, TRUE);
+}
 
 
 /*****************************************************************
@@ -486,7 +628,10 @@ zeropeppered_probvector(ESL_RANDOMNESS *rng, float *p, int n)
  *
  * Additionally, we need to avoid I->D->I; inserted x's must be
  * unambiguously associated with a particular Ik state. Thus, set all
- * tDI = 0.0.
+ * tDI = 0.0. We also need to prohibit I's before the first match
+ * state and after the last match state, to avoid ambiguity with N 
+ * and C assignment; tDI=0 suffices for the first, but we additionally
+ * set tMI=0 for the last occupied match state to achieve the second.
  *
  * So if a M=6 uniglocal profile has four visited match states M2 M3 M4 M6 that emit non-x 
  * residues a,b,c,d, and the sequence looks like:
@@ -533,10 +678,12 @@ single_path_seq_engine(ESL_RANDOMNESS *rng, const ESL_ALPHABET *abc, int M, int 
   H4_PATH      *pi   = NULL;
   H4_MODE      *mo   = NULL;
   H4_ANCHORSET *anch = NULL;
+  int          *mocc = NULL;    // (0) 1..M array of 0|1 flags for which nodes use Mk; at least one is up
   int           nm   = 0;       // counts how many match states we visit, so we can reject mute all-D paths
+  int           lastm;          // k index of the last M node
   int           D;              // number of domains 
   int           i,k,z,r,s,d;
-  int           xx;             // prohibited residue for Mk emissions (0..K-1)
+  ESL_DSQ       xx;             // prohibited residue for Mk emissions (0..K-1)
   float         sc;             // path score
   float         tII_max = 0.99; // don't let tII be ~1, or we get huge insert lengths
   int           status;
@@ -551,49 +698,56 @@ single_path_seq_engine(ESL_RANDOMNESS *rng, const ESL_ALPHABET *abc, int M, int 
   /* choose the residue that match states can't emit */
   xx = esl_rnd_Roll(rng, abc->K);
 
+  /* choose the pattern of M state occupancy */
+  ESL_ALLOC(mocc, sizeof(int) * (M+1));
+  mocc[0] = 0;
+  while (nm == 0)
+    {
+      nm = 0;
+      for (k = 1; k <= M; k++)
+        if (esl_rnd_Roll(rng, 2)) { mocc[k] = 1; nm++; lastm = k; }
+        else                      { mocc[k] = 0; }
+    }
+  
   /* sample the profile, with transitions and emissions constrained  
    */
-  while (nm == 0) // path must visit at least one Mk state; reject until it does
+  /* reset emission/transition probability params to zero, then set edge conventions */
+  esl_mat_FSet(hmm->t, M+1, h4_NT,   0.0f);
+  esl_mat_FSet(hmm->e, M+1, abc->K,  0.0f);
+  h4_profile_SetConventions(hmm);
+
+  /* Match emissions */
+  for (k = 1; k <= M; k++)
     {
-      /* reset emission/transition probability params to zero, then set edge conventions */
-      esl_mat_FSet(hmm->t, M+1, h4_NT,   0.0f);
-      esl_mat_FSet(hmm->e, M+1, abc->K,  0.0f);
-      h4_profile_SetConventions(hmm);
+      esl_dirichlet_FSampleUniform(rng, abc->K-1, hmm->e[k]); // sample K-1 nonzero probs
+      ESL_SWAP(hmm->e[k][abc->K-1], hmm->e[k][xx], float);    // swap 0.0 prob onto xx residue
+    }
 
-      /* Match emissions */
-      for (k = 1; k <= M; k++)
-        {
-          esl_dirichlet_FSampleUniform(rng, abc->K-1, hmm->e[k]); // sample K-1 nonzero probs
-          ESL_SWAP(hmm->e[k][abc->K-1], hmm->e[k][xx], float);    // swap 0.0 prob onto xx residue
+  /* Initialize G->M1|D1 transition so 50% of the time we start 100% in M1, else we start 100% in D1 */
+  if (mocc[1]) hmm->t[0][h4_TMM] = 1.0; 
+  else         hmm->t[0][h4_TMD] = 1.0;   
+
+  for (k = 1; k < M; k++)
+    {
+      // code here ASSUMES TRANSITIONS IN THIS ORDER: MM | MI | MD | IM | II | ID | DM | DI | DD  (see h4_profile.h)
+      if (mocc[k+1])                                                     // 50% of the time, make all paths go to Mk+1
+        {                                                 
+          esl_dirichlet_FSampleUniform(rng, 2, hmm->t[k]);               // tmd=0
+          do {
+            esl_dirichlet_FSampleUniform(rng, 2, hmm->t[k]+h4_TIM);      // tid = 0
+          } while (hmm->t[k][h4_TII] > tII_max);                         //  ... but keep tii away from ~1.0
+          hmm->t[k][h4_TDM] = 1.0;                                       //  ... and prohibit tdi to avoid alignment ambiguity
         }
-
-      /* Initialize G->M1|D1 transition so 50% of the time we start 100% in M1, else we start 100% in D1 */
-      nm = 0;
-      if (esl_rnd_Roll(rng, 2)) { hmm->t[0][h4_TMM] = 1.0; nm++; }
-      else                      { hmm->t[0][h4_TMD] = 1.0;       }
-
-      for (k = 1; k < M; k++)
+      else                                                               // or, make all paths go to Dk+1
         {
-          // code here ASSUMES TRANSITIONS IN THIS ORDER: MM | MI | MD | IM | II | ID | DM | DI | DD  (see h4_profile.h)
-          if (esl_rnd_Roll(rng, 2))                                     // 50% of the time, make all paths go to Mk+1
-            {                                                 
-              esl_dirichlet_FSampleUniform(rng, 2, hmm->t[k]);          // tmd=0
-              do {
-                esl_dirichlet_FSampleUniform(rng, 2, hmm->t[k]+h4_TIM); // tid = 0
-              } while (hmm->t[k][h4_TII] > tII_max);                    //  ... but keep tii away from ~1.0
-              hmm->t[k][h4_TDM] = 1.0;                                  //  ... and prohibit tdi to avoid alignment ambiguity
-              nm++;
-            }
-          else                                                          // or, make all paths go to Dk+1
-            {
-              esl_dirichlet_FSampleUniform(rng, 2, hmm->t[k]+h4_TMI);   // tmm = 0
-              do {
-                esl_dirichlet_FSampleUniform(rng, 2, hmm->t[k]+h4_TII); // tim = 0
-              } while (hmm->t[k][h4_TII] > tII_max);                    //  ... but keep tii away from ~1.0
-              hmm->t[k][h4_TDD] = 1.0;                                  //  ... and prohibit tdi to avoid alignment ambiguity
-            }
+          if (k < lastm) esl_dirichlet_FSampleUniform(rng, 2, hmm->t[k]+h4_TMI);  // tmm=0
+          else hmm->t[k][h4_TMD] = 1.0;                                  // ... prohibit tmi for last match state to avoid ali ambiguity
+          do {
+            esl_dirichlet_FSampleUniform(rng, 2, hmm->t[k]+h4_TII);      // tim = 0
+          } while (hmm->t[k][h4_TII] > tII_max);                         //  ... but keep tii away from ~1.0
+          hmm->t[k][h4_TDD] = 1.0;                                       //  ... and prohibit tdi to avoid alignment ambiguity
         }
-    }      
+    }
 
   /* configure alignment mode */
   if (do_multi) { if (( status = h4_mode_SetGlocal(mo))    != eslOK) goto ERROR; }
@@ -653,6 +807,7 @@ single_path_seq_engine(ESL_RANDOMNESS *rng, const ESL_ALPHABET *abc, int M, int 
    */
   if (( status = h4_path_Score(pi, sq->dsq, hmm, mo, &sc)) != eslOK) goto ERROR;
 
+  free(mocc);
   if (opt_mo)   *opt_mo   = mo;   else h4_mode_Destroy(mo);
   if (opt_pi)   *opt_pi   = pi;   else h4_path_Destroy(pi);
   if (opt_anch) *opt_anch = anch; else h4_anchorset_Destroy(anch);
@@ -662,6 +817,14 @@ single_path_seq_engine(ESL_RANDOMNESS *rng, const ESL_ALPHABET *abc, int M, int 
   return eslOK;
 
  ERROR:
+  if (opt_mo)   *opt_mo   = NULL;
+  if (opt_pi)   *opt_pi   = NULL;
+  if (opt_anch) *opt_anch = NULL;
+  if (opt_sc)   *opt_sc   = -eslINFINITY;
+  *ret_hmm = NULL;
+  *ret_sq  = NULL;
+
+  free(mocc);
   h4_mode_Destroy(mo);
   h4_path_Destroy(pi);
   h4_anchorset_Destroy(anch);
@@ -671,8 +834,256 @@ single_path_seq_engine(ESL_RANDOMNESS *rng, const ESL_ALPHABET *abc, int M, int 
 }
 
 
+/* anchored_ensemble_engine()
+ *
+ * Used by h4_modelsample_AnchoredUni()   (with do_uni   = TRUE)
+ * and     h4_modelsample_AnchoredLocal() (with do_local = TRUE)
+ * and     h4_modelsample_AnchoredMulti() (with do_multi = TRUE)
+ *
+ * The idea of all of three versions is to choose a particular residue
+ * in the alphabet, X, to put at the anchor(s), then force all
+ * paths to align Mk0 to that X.  Now the ensemble of all valid paths
+ * must pass through the anchor i0,k0, and:
+ *    - standard F/B score = ASC F/B score
+ *    - std and ASC Decoding matrices identical
+ *    - std and ASC F/B matrices identical to a well-defined extent
+ * 
+ * In uni mode: a unihit glocal profile with anchor Mk0 state that
+ * must emit X, transitions force use of Mk0 not Dk0, and a target
+ * sequence that has only one X in it.
+ *
+ * In local mode: a unihit local/glocal profile that only emits from
+ * match states (L=0, and inserts prohibited), only the anchor Mk0
+ * state has e_k0(X) > 0; and the sequence only has one X in it.
+ *
+ * In multi mode: a multiglocal profile that only emits from match
+ * states (L=0 and inserts prohibited), the anchor Mk0 state must emit
+ * X and no other Mk state can, and paths are forced to use Mk0 not
+ * Dk0. The sequence contains D residues X, marking the anchors for
+ * D domains.
+ *
+ * Summary table [H10/22]:
+ *                                                 uni         local       multi
+ *                                              ---------   ----------   ------------
+ * 1. Sample model of length M                  :::::::::::::: all ::::::::::::::::::
+ * 2. Select k0, anchX                          :::::::::::::: all ::::::::::::::::::
+ * 3. Prohibit insert use, tXI = 0                  no         YES          YES
+ * 4. Force Mk0 visit, t_{k0-1}(XD) = 0            YES          no          YES
+ * 5. All Mk k != k0 have e_k(X) = 0                -          YES          YES
+ *                 ... or e_k(X) < 1               YES          -            -
+ * 6. Mk0 has e_k0(X) = 1                          YES          -           YES
+ *     ... or e_k0(X) > 0                           -          YES           -
+ * 7. Alignment mode                             uni/glocal  uni/dual   multi/glocal
+ * 8. Target length                                L>0          0            0
+ * 9. Sampled path must include Mk0             (by const.)    YES       (by const.)
+ * 10. Alter seq so Mk0 emits X                 (by const.)    YES       (by const.)
+ * 11. Alter seq so no other Mk emits X            YES      (by const.)  (by const.)
+ * 12. Make anchor set                         :::::::::::::: all ::::::::::::::::::
+ */
+static int
+anchored_ensemble_engine(ESL_RANDOMNESS *rng, const ESL_ALPHABET *abc, int M,
+                         H4_PROFILE **ret_hmm, ESL_SQ **ret_sq, H4_ANCHORSET **ret_anch,
+                         H4_MODE **opt_mo, H4_PATH **opt_pi, float *opt_tsc,
+                         int do_uni, int do_local, int do_multi)
+{
+  H4_PROFILE   *hmm  = NULL;
+  ESL_SQ       *sq   = NULL;
+  H4_PATH      *pi   = NULL;
+  H4_MODE      *mo   = NULL;
+  H4_ANCHORSET *anch = NULL;
+  int           k0;
+  int           z,r,i,k,d;
+  int           nanch, D;
+  ESL_DSQ       anchX;
+  int           status;
+
+  ESL_DASSERT1(( M >= 1 ));
+  ESL_DASSERT1(( abc->K  >= 2   ));          // avoid a pathological case
+  ESL_DASSERT1(( do_uni   == TRUE || do_uni   == FALSE));
+  ESL_DASSERT1(( do_local == TRUE || do_local == FALSE));
+  ESL_DASSERT1(( do_multi == TRUE || do_multi == FALSE));
+  ESL_DASSERT1(( do_uni + do_local + do_multi == 1 ));
+    
+
+  /* 1. Start with a randomly sampled model, that we'll tweak */
+  if (( status = h4_modelsample(rng, abc, M, &hmm)) != eslOK) goto ERROR;
+
+  if (( sq  = esl_sq_CreateDigital(abc)) == NULL) { status = eslEMEM; goto ERROR; }
+  if (( pi  = h4_path_Create())          == NULL) { status = eslEMEM; goto ERROR; }
+  if (( mo  = h4_mode_Create())          == NULL) { status = eslEMEM; goto ERROR; }
+
+  /* 2. Select anchor position k0 in model (1..M), and
+   *    select residue that only the anchor Mk0 will be able to emit with e_k0>0.
+   */
+  k0    = 1 + esl_rnd_Roll(rng, M);
+  anchX = esl_rnd_Roll(rng, abc->K);
+
+  /* 3. Prohibit inserts, by making all tMI, tDI = 0  (local, multi; not uni)
+   *    In local, multi versions, only match states generate residues.
+   */
+  if (do_local || do_multi)
+    {
+      for (k = 1; k < M; k++)
+        {
+          hmm->t[k][h4_TMM] = esl_random(rng);
+          hmm->t[k][h4_TMI] = 0.0;
+          hmm->t[k][h4_TMD] = 1.0 - hmm->t[k][h4_TMM];
+
+          hmm->t[k][h4_TDM] = esl_random(rng);
+          hmm->t[k][h4_TDI] = 0.0;
+          hmm->t[k][h4_TDD] = 1.0 - hmm->t[k][h4_TDM];
+        }
+    }
+
+  /* 4. Force Mk0 to be visited, not Dk0 (uni, multi; not local)
+   */
+  if (do_uni || do_multi)
+    {
+      hmm->t[k0-1][h4_TMM] += hmm->t[k0-1][h4_TMD];
+      hmm->t[k0-1][h4_TMD]  = 0.0;
+      hmm->t[k0-1][h4_TIM] += hmm->t[k0-1][h4_TID];
+      hmm->t[k0-1][h4_TID]  = 0.0;
+      hmm->t[k0-1][h4_TDM] += hmm->t[k0-1][h4_TDD];
+      hmm->t[k0-1][h4_TDD]  = 0.0;
+    }
+  
+  /* 5. All Mk!=k0 have e_k(X) = 0 (local, multi) 
+   *                   or just < 1 (uni)
+   */
+  if (do_local || do_multi)
+    {
+      for (k = 1; k <= M; k++)
+        if (k != k0)
+          {
+            hmm->e[k][abc->K-1] = 0.0;
+            esl_dirichlet_FSampleUniform(rng, abc->K-1, hmm->e[k]);
+            ESL_SWAP(hmm->e[k][abc->K-1], hmm->e[k][anchX], float);
+          }
+    }
+  else 
+    {
+      for (k = 1; k <= M; k++)
+        if (k != k0)
+          while (hmm->e[k][anchX] > 0.5) // 0.5 is arbitrary; we need <1, and we also want to be able to sample y!=X efficiently below
+            esl_dirichlet_FSampleUniform(rng, abc->K, hmm->e[k]);
+    }
+
+  /* 6. Mk has e_k0(X) = 1 (uni, multi)
+   *           or just > 0 (local)
+   */
+  if (do_uni || do_multi)
+    {
+       esl_vec_FSet(hmm->e[k0], abc->K, 0.0);
+       hmm->e[k0][anchX] = 1.0;
+    }
+  else 
+    {
+      while (hmm->e[k0][anchX] == 0.0f)
+        esl_dirichlet_FSampleUniform(rng, abc->K, hmm->e[k0]);
+    }
+  
+  /* 7. Configure alignment mode */
+  if (do_uni)   { if ((status = h4_mode_SetUniglocal(mo)) != eslOK) goto ERROR; }
+  if (do_local) { if ((status = h4_mode_SetUnihit(mo))    != eslOK) goto ERROR; }
+  if (do_multi) { if ((status = h4_mode_SetGlocal(mo))    != eslOK) goto ERROR; }
+
+  /* 8. Configure target length model */
+  if (do_uni)   { if ((status = h4_mode_SetLength(mo, 10)) != eslOK) goto ERROR; }
+  if (do_local) { if ((status = h4_mode_SetLength(mo,  0)) != eslOK) goto ERROR; }
+  if (do_multi) { if ((status = h4_mode_SetLength(mo,  0)) != eslOK) goto ERROR; }
+
+  /* 9. Emit a path and a sequence.
+   *    In local mode, reject paths that don't use Mk0 at k0 anchor.
+   *    (In uni and multi mode, all paths always use Mk0 anchor anyway.)
+   */
+  do {
+    if (( status = h4_emit(rng, hmm, mo, sq, pi)) != eslOK) goto ERROR;
+
+    nanch = D = 0;
+    for (z = 0; z < pi->Z; z++)
+      if      (pi->st[z] == h4P_G)     { D++; k = 1; }
+      else if (pi->st[z] == h4P_L)     { D++; k = pi->rle[z]; }
+      else if (h4_path_IsD(pi->st[z])) k += pi->rle[z];
+      else if (h4_path_IsM(pi->st[z])) {
+        if (k0 >= k && k0 < k+pi->rle[z]) nanch++;
+        k += pi->rle[z];
+      }
+  } while (nanch != D);   // D is now the number of domains. We'll use it below.
+
+  ESL_DASSERT1(( (do_uni && D==1) || (do_local && D==1) || (do_multi && D>0) ));
+
+  if ((status = esl_sq_SetName(sq, "ensemble_test")) != eslOK) goto ERROR;
+
+  /* 10. Alter sequence so Mk0 emits X (local; true by construction for uni, multi)
+   *     and no other Mk emits X (uni; true by construction for local, multi)
+   * 11. Make anchor set at the same time.    
+   */
+  if ((anch = h4_anchorset_Create(D, sq->n, hmm->M)) == NULL) goto ERROR;
+  i = 1;
+  d = 0;
+  for (z = 0; z < pi->Z; z++) {  
+    if      (pi->st[z] == h4P_G)     { d++; k =  1; }
+    else if (pi->st[z] == h4P_L)     { d++; k =  pi->rle[z]; }
+    else if (h4_path_IsD(pi->st[z])) {      k += pi->rle[z]; }
+    else if (h4_path_IsX(pi->st[z]))
+      for (r = 1; r < pi->rle[z]; r++) { // note starting at 1 for NJC's emitting on transition
+        while (sq->dsq[i] == anchX) sq->dsq[i] = esl_rnd_FChoose(rng, hmm->f, abc->K);
+        i++;
+      }
+    else if (h4_path_IsI(pi->st[z]))
+      for (r = 0; r < pi->rle[z]; r++) {
+        while (sq->dsq[i] == anchX) sq->dsq[i] = esl_rnd_FChoose(rng, hmm->f, abc->K);
+        i++;
+      }
+    else if (h4_path_IsM(pi->st[z])) {
+      for (r = 0; r < pi->rle[z]; r++) {
+        if (k == k0) {
+          anch->a[d].i0 = i;
+          anch->a[d].k0 = k;
+          sq->dsq[i]    = anchX;
+        } else {
+          while (sq->dsq[i] == anchX)  // must terminate because we already made sure e_k(y != x) has good prob
+            sq->dsq[i] = esl_rnd_FChoose(rng, hmm->e[k], abc->K);
+        }
+        k++; i++;
+      }
+    }
+  }
+  ESL_DASSERT1(( d == D ));
+  
+  /* We've changed the probability model, so update lod scores */
+  if (( status = h4_standardize(hmm)) != eslOK) goto ERROR;
+  if (( status = h4_vectorize(hmm))   != eslOK) goto ERROR;
+
+  /* For uni, which has a nonzero length model, configure length model
+   * for actual seq length, before scoring path
+   */
+  if (do_uni) {
+    if (( status = h4_mode_SetLength(mo, sq->n)) != eslOK) goto ERROR;
+  }
+
+  /* Obtain the path score, if caller wants it */
+  if (opt_tsc && (status = h4_path_Score(pi, sq->dsq, hmm, mo, opt_tsc)) != eslOK) goto ERROR;
+
+  if (opt_mo)   *opt_mo   = mo;   else h4_mode_Destroy(mo);
+  if (opt_pi)   *opt_pi   = pi;   else h4_path_Destroy(pi);
+  *ret_hmm  = hmm;
+  *ret_sq   = sq;
+  *ret_anch = anch;
+  return eslOK;
+
+ ERROR:
+  if (opt_mo) *opt_mo = NULL;    h4_mode_Destroy(mo);
+  if (opt_pi) *opt_pi = NULL;    h4_path_Destroy(pi);
+  *ret_hmm  = NULL;              h4_profile_Destroy(hmm);
+  *ret_sq   = NULL;              esl_sq_Destroy(sq);
+  *ret_anch = NULL;              h4_anchorset_Destroy(anch);
+  return status;
+}
+
+
 /*****************************************************************
- * 3. Unit tests
+ * 6. Unit tests
  *****************************************************************/
 #ifdef h4MODELSAMPLE_TESTDRIVE
 
@@ -741,6 +1152,27 @@ utest_sanity(ESL_RANDOMNESS *rng)
 
   if ( h4_modelsample_SinglePathASC(rng, abc, M, &hmm, &sq, &anch, NULL, NULL, NULL) != eslOK) esl_fatal(msg);
   h4_profile_Destroy(hmm);  esl_sq_Destroy(sq);  h4_anchorset_Destroy(anch);
+
+  if ( h4_modelsample_AnchoredUni(rng, abc, M, &hmm, &sq, &anch, &mo, &pi, &sc) != eslOK) esl_fatal(msg);
+  if ( h4_profile_Validate(hmm, errbuf)       != eslOK) esl_fatal("%s\n  %s", msg, errbuf);
+  if ( esl_sq_Validate(sq, errbuf)            != eslOK) esl_fatal("%s\n  %s", msg, errbuf);
+  if ( h4_path_Validate(pi, M, sq->n, errbuf) != eslOK) esl_fatal("%s\n  %s", msg, errbuf);
+  if ( h4_anchorset_Validate(anch, errbuf)    != eslOK) esl_fatal("%s\n  %s", msg, errbuf);
+  h4_profile_Destroy(hmm);  esl_sq_Destroy(sq);  h4_anchorset_Destroy(anch);  h4_mode_Destroy(mo);  h4_path_Destroy(pi);  
+
+  if ( h4_modelsample_AnchoredLocal(rng, abc, M, &hmm, &sq, &anch, &mo, &pi, &sc) != eslOK) esl_fatal(msg);
+  if ( h4_profile_Validate(hmm, errbuf)       != eslOK) esl_fatal("%s\n  %s", msg, errbuf);
+  if ( esl_sq_Validate(sq, errbuf)            != eslOK) esl_fatal("%s\n  %s", msg, errbuf);
+  if ( h4_path_Validate(pi, M, sq->n, errbuf) != eslOK) esl_fatal("%s\n  %s", msg, errbuf);
+  if ( h4_anchorset_Validate(anch, errbuf)    != eslOK) esl_fatal("%s\n  %s", msg, errbuf);
+  h4_profile_Destroy(hmm);  esl_sq_Destroy(sq);  h4_anchorset_Destroy(anch);  h4_mode_Destroy(mo); h4_path_Destroy(pi); 
+
+  if ( h4_modelsample_AnchoredMulti(rng, abc, M, &hmm, &sq, &anch, &mo, &pi, &sc) != eslOK) esl_fatal(msg);
+  if ( h4_profile_Validate(hmm, errbuf)       != eslOK) esl_fatal("%s\n  %s", msg, errbuf);
+  if ( esl_sq_Validate(sq, errbuf)            != eslOK) esl_fatal("%s\n  %s", msg, errbuf);
+  if ( h4_path_Validate(pi, M, sq->n, errbuf) != eslOK) esl_fatal("%s\n  %s", msg, errbuf);
+  if ( h4_anchorset_Validate(anch, errbuf)    != eslOK) esl_fatal("%s\n  %s", msg, errbuf);
+  h4_profile_Destroy(hmm);  esl_sq_Destroy(sq);  h4_anchorset_Destroy(anch);  h4_mode_Destroy(mo); h4_path_Destroy(pi); 
 
   esl_alphabet_Destroy(abc);
 }
@@ -889,7 +1321,8 @@ main(int argc, char **argv)
   float           sc;
 
   // put whichever routine you want to play with here:
-  h4_modelsample_SinglePathSeq(rng, abc, M, &hmm, &sq, &mo, &pi, &anch, &sc);
+  //h4_modelsample_SinglePathSeq(rng, abc, M, &hmm, &sq, &mo, &pi, &anch, &sc);
+  h4_modelsample_AnchoredUni(rng, abc, M, &hmm, &sq, &anch, &mo, &pi, &sc);
  
   h4_profile_Dump(stdout, hmm);
   esl_sqio_Write(stdout, sq, eslSQFILE_FASTA, FALSE);
@@ -897,7 +1330,6 @@ main(int argc, char **argv)
   h4_path_Dump(stdout, pi);
   h4_anchorset_Dump(stdout, anch);
   printf("path score = %.3f\n", sc);
-
 
   h4_anchorset_Destroy(anch);
   h4_path_Destroy(pi);

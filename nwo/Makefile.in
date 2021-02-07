@@ -79,6 +79,7 @@ UTESTS = \
 	fbfilter_utest      \
 	logsum_utest        \
 	modelsample_utest   \
+	reference_asc_utest \
 	reference_dp_utest  \
 	ssvfilter_utest     \
 	vitfilter_utest     \

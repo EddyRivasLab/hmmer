@@ -825,7 +825,7 @@ validate_decoding(H4_REFMX *rx, char *errbuf)
   /* Rows 1..L */
   for (i = 1; i <= rx->L; i++)
     {
-      if ((status = validate_mainstate(rx, i,      1, h4R_DL, 0.0f, errbuf)) != eslOK) return status; /* DL1 doesn't exist. DG1 does, in decoding! */
+      if ((status = validate_mainstate(rx, i,     1, h4R_DL, 0.0f, errbuf)) != eslOK) return status; /* DL1 doesn't exist. DG1 does, in decoding! */
       if ((status = validate_mainstate(rx, i, rx->M, h4R_IL, 0.0f, errbuf)) != eslOK) return status;
       if ((status = validate_mainstate(rx, i, rx->M, h4R_IG, 0.0f, errbuf)) != eslOK) return status;
     }

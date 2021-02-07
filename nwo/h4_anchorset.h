@@ -1,8 +1,12 @@
-
 #ifndef h4ANCHORSET_INCLUDED
 #define h4ANCHORSET_INCLUDED
-
 #include "h4_config.h"
+
+#include <stdio.h>
+
+#include "esl_random.h"
+
+#include "h4_path.h"
 
 
 /* H4_ANCHOR
@@ -42,7 +46,8 @@ extern int           h4_anchorset_GrowFor(H4_ANCHORSET *anch, int D);
 extern int           h4_anchorset_Reuse  (H4_ANCHORSET *anch);
 extern void          h4_anchorset_Destroy(H4_ANCHORSET *anch);
 
-extern int           h4_anchorset_Dump(FILE *fp, H4_ANCHORSET *anch);
-extern int           h4_anchorset_Validate(H4_ANCHORSET *anch, char *errmsg);
+extern int h4_anchorset_SetFromPath(ESL_RANDOMNESS *rng, H4_PATH *pi, H4_ANCHORSET *anch);
+extern int h4_anchorset_Dump       (FILE *fp, H4_ANCHORSET *anch);
+extern int h4_anchorset_Validate   (H4_ANCHORSET *anch, char *errmsg);
 
 #endif // h4ANCHORSET_INCLUDED

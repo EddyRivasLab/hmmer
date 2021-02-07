@@ -2,7 +2,7 @@
  *
  * Contents:
  *   1. H4_ANCHORSET object
- *   2. Debugging and development tools
+ *   2. Debugging, development tools
  */
 #include "h4_config.h"
 
@@ -13,6 +13,8 @@
 #include "easel.h"
 
 #include "h4_anchorset.h"
+#include "h4_path.h"
+
 
 /*****************************************************************
  * 1. H4_ANCHORSET object.
@@ -218,10 +220,10 @@ h4_anchorset_Destroy(H4_ANCHORSET *anch)
   return;
 }
 
-/*****************************************************************
- * 2. Debugging and development tools
- *****************************************************************/
 
+/*****************************************************************
+ * 2. Debugging, development tools
+ *****************************************************************/
 
 
 /* Function:  h4_anchorset_Dump()
@@ -267,5 +269,63 @@ h4_anchorset_Validate(H4_ANCHORSET *anch, char *errmsg)
     }
   if (anch->nalloc   < anch->D+2) ESL_FAIL(eslFAIL, errmsg, "anchorset allocation is too small (D+2 sentinels)");
   if (anch->nredline <= 2)        ESL_FAIL(eslFAIL, errmsg, "anchorset redline needs to be at least 2, for sentinels");
+  return eslOK;
+}
+
+/* Function:  h4_anchorset_SetFromPath()
+ * Synopsis:  Make a random anchorset that includes a given path.
+ * Incept:    SRE, Wed 20 Jan 2021
+ *
+ * Purpose:   Using <rng>, sample a random anchorset that includes path
+ *            <pi>.  For each domain in <pi>, a random match state is
+ *            sampled uniformly as the anchor for that domain.
+ *
+ *            You provide a fresh <anch> structure to use, which
+ *            you've initialized to <D=0>, with <L> and <M>, so the
+ *            anchorset's sentinels are already set. For example,
+ *            <anch = h4_anchorset_Create(0, L, M)>.
+ *
+ *            If one or more domains in <pi> have no match states,
+ *            no anchorset that includes this path is possible.
+ *            Return <eslEINVAL> in this case. 
+ *
+ * Returns:   <eslOK> on success; the new anchorset is in <anch>.
+ *            
+ *            <eslEINVAL> if one or more domains in <pi> have no match
+ *            states; in this case <anch> is reset (with _Reuse())
+ *            before returning.
+ */
+int
+h4_anchorset_SetFromPath(ESL_RANDOMNESS *rng, H4_PATH *pi, H4_ANCHORSET *anch)
+{
+  int           i,k;
+  int           i0,k0;
+  int           nm;
+  int           z,r;
+
+  i = 1;
+  for (z = 0; z < pi->Z; z++)
+    {
+      if      (pi->st[z] == h4P_N) i += pi->rle[z]-1;
+      else if (pi->st[z] == h4P_G) { nm = 0; k = 1;          }
+      else if (pi->st[z] == h4P_L) { nm = 0; k = pi->rle[z]; }
+      else if (h4_path_IsM(pi->st[z]))
+        {
+          for (r = 0; r < pi->rle[z]; r++)
+            {
+              nm++;
+              if (esl_rnd_Roll(rng, nm) == 0) { i0 = i; k0 = k; } // this is a mini reservoir sampling algorithm, w/ reservoir of 1
+              i++; k++;
+            }
+        }
+      else if (h4_path_IsI(pi->st[z])) { i += pi->rle[z]; }
+      else if (h4_path_IsD(pi->st[z])) { k += pi->rle[z]; }
+      else if (pi->st[z] == h4P_J || pi->st[z] == h4P_C)
+        {
+          if (nm == 0) { h4_anchorset_Reuse(anch); return eslEINVAL; }
+          h4_anchorset_Add(anch, i0, k0);
+          i += pi->rle[z]-1;
+        }
+    }
   return eslOK;
 }
