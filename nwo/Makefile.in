@@ -1,5 +1,7 @@
 PROGS = hmmer
 
+SQCLEVEL = 2
+
 OBJS   = \
 	cmd_build.o         \
 	h4_anchorset.o      \
@@ -228,7 +230,7 @@ check:  ${PROGS} ${UTESTS}
 	@echo 
 	@echo Running HMMER NWO test suite...
 	@echo
-	@${top_srcdir}/lib/easel/devkit/sqc 1 nwo_tests.sqc .. ${srcdir}/..
+	@${top_srcdir}/lib/easel/devkit/sqc ${SQCLEVEL} nwo_tests.sqc .. ${srcdir}/..
 
 
 # Programs build from their .c's directly. They are not included in libhmmer.a.

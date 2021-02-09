@@ -1073,11 +1073,11 @@ anchored_ensemble_engine(ESL_RANDOMNESS *rng, const ESL_ALPHABET *abc, int M,
   return eslOK;
 
  ERROR:
-  if (opt_mo) *opt_mo = NULL;    h4_mode_Destroy(mo);
-  if (opt_pi) *opt_pi = NULL;    h4_path_Destroy(pi);
-  *ret_hmm  = NULL;              h4_profile_Destroy(hmm);
-  *ret_sq   = NULL;              esl_sq_Destroy(sq);
-  *ret_anch = NULL;              h4_anchorset_Destroy(anch);
+  if (opt_mo) *opt_mo = NULL; else h4_mode_Destroy(mo);
+  if (opt_pi) *opt_pi = NULL; else h4_path_Destroy(pi);
+  *ret_hmm  = NULL;                h4_profile_Destroy(hmm);
+  *ret_sq   = NULL;                esl_sq_Destroy(sq);
+  *ret_anch = NULL;                h4_anchorset_Destroy(anch);
   return status;
 }
 

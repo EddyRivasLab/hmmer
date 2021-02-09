@@ -1126,7 +1126,7 @@ utest_ensemble(FILE *diagfp, ESL_RANDOMNESS *rng, const ESL_ALPHABET *abc, int M
   if ( h4_reference_asc_Forward (sq->dsq, sq->n, hmm, mo, anch, afu, afd, &asc_f) != eslOK) esl_fatal(failmsg);
   if ( h4_reference_asc_Backward(sq->dsq, sq->n, hmm, mo, anch, abu, abd, &asc_b) != eslOK) esl_fatal(failmsg);
   
-  //#if 0
+#if 0
   esl_sqio_Write(stdout, sq, eslSQFILE_FASTA, FALSE);
   h4_profile_Dump(stdout, hmm);
   h4_mode_Dump(stdout, mo);
@@ -1148,7 +1148,7 @@ utest_ensemble(FILE *diagfp, ESL_RANDOMNESS *rng, const ESL_ALPHABET *abc, int M
   printf("bsc   = %.3f\n", bsc);
   printf("asc_f = %.3f\n", asc_f);
   printf("asc_b = %.3f\n", asc_b);
-  //#endif
+#endif
 
   if (esl_FCompareNew(fsc, bsc,   0.0, fwd_atol) != eslOK) esl_fatal(failmsg);
   if (esl_FCompareNew(fsc, asc_f, 0.0, fwd_atol) != eslOK) esl_fatal(failmsg);
