@@ -1,11 +1,18 @@
 /* Reference implementations of anchor-set-constrained (ASC) dynamic
  * programming.
  *
- * All reference implementation code is for testing. It is not used in
- * HMMER's main executables. The production code uses sparse ASC DP.
+ * The ASC technique sums over all paths consistent with a particular
+ * domain annotation. A domain annotation for D domains is defined by
+ * an "anchor set" of D anchors i0,k0; each homologous region in a
+ * valid path must align an Mk0 state (ML or MG) to residue x_i0.
+ *
+ * This is the reference implementation, used for testing. It is not
+ * used in HMMER's main executables. The production code uses sparse
+ * ASC DP.
  *
  * Contents:
  *   1. ASC Forward
+ *   2. ASC Backward
  *   x. Unit tests
  *   x. Test driver
  *   x. Example
@@ -26,7 +33,6 @@
  * 1. ASC Forward
  *****************************************************************/
 
-
 /* Function:  h4_reference_asc_Forward()
  * Synopsis:  Anchor-set-constrained (ASC) Forward algorithm.
  * Incept:    SRE, Fri 01 Jan 2021
@@ -45,16 +51,23 @@
  *            respectively. In domain analysis, they will be needed
  *            later for posterior decoding.
  *
- *            
+ * Args:      input:
+ *            dsq     - digital sequence, 1..L
+ *            L       - length of dsq
+ *            hmm     - profile HMM
+ *            mo      - comparison mode, with length set
+ *            anch    - anchorset
  *
+ *            output (allocated object provided):
+ *            mxu     - ASC UP matrix
+ *            mxd     - ASC DOWN matrix
  *
- * Args:      
+ *            output:
+ *            opt_sc  - ASC raw fwd score, in bits
  *
- * Returns:   
+ * Returns:   <eslOK> on success
  *
- * Throws:    (no abnormal error conditions)
- *
- * Xref:      
+ * Throws:    <eslEMEM> on re-allocation failure.
  */
 int
 h4_reference_asc_Forward(const ESL_DSQ *dsq, int L, const H4_PROFILE *hmm, const H4_MODE *mo,
@@ -88,6 +101,10 @@ h4_reference_asc_Forward(const ESL_DSQ *dsq, int L, const H4_PROFILE *hmm, const
   mxu->type = h4R_ASC_FWD_UP;
   mxd->type = h4R_ASC_FWD_DOWN;
 
+#if eslDEBUGLEVEL > 0
+  h4_refmx_SetValues(mxu, -eslINFINITY);
+  h4_refmx_SetValues(mxd, -eslINFINITY);
+#endif
 
   /* Initialize i=0..i0(1)-1 specials. 
    * All specials are kept in the <mxd> DOWN matrix. 
@@ -385,6 +402,290 @@ h4_reference_asc_Forward(const ESL_DSQ *dsq, int L, const H4_PROFILE *hmm, const
 /*-------------------- end, ASC Forward -------------------------*/
 
 
+
+/*****************************************************************
+ * 2. ASC Backward
+ *****************************************************************/
+
+/* Function:  h4_reference_asc_Backward()
+ * Synopsis:  Anchor-set-constrained (ASC) Forward algorithm.
+ * Incept:    SRE, Sun 07 Feb 2021
+ *
+ * Purpose:   The anchor-set-constrained (ASC) Backward
+ *            algorithm. Compare digital sequence <dsq> of length <L>
+ *            to profile <hmm> in mode <mo>, constrained to sum only
+ *            over those paths that have <D> domains that use the
+ *            anchor set <anch>. Return the ASC Backward raw score, in
+ *            bits, in <*opt_sc>.
+ *
+ *            Caller provides two reference DP matrices <mxu> and
+ *            <mxd>. They can be of any allocated size; they will be
+ *            reallocated here as needed. Upon return, <mxu> and <mxd>
+ *            contain the ASC Backward UP and DOWN matrices,
+ *            respectively. In domain analysis, they will be needed
+ *            later for posterior decoding.
+ *
+ * Args:      input:
+ *            dsq     - digital sequence, 1..L
+ *            L       - length of dsq
+ *            hmm     - profile HMM
+ *            mo      - comparison mode, with length set
+ *            anch    - anchorset
+ *
+ *            output (allocated object provided):
+ *            mxu     - ASC UP matrix
+ *            mxd     - ASC DOWN matrix
+ *
+ *            output:
+ *            opt_sc  - ASC raw bck score, in bits
+ *
+ * Returns:   <eslOK> on success
+ *
+ * Throws:    <eslEMEM> on re-allocation failure.
+ */
+int
+h4_reference_asc_Backward(const ESL_DSQ *dsq, int L, const H4_PROFILE *hmm, const H4_MODE *mo,
+                          const H4_ANCHORSET *anch, H4_REFMX *mxu, H4_REFMX *mxd, float *opt_sc)
+{
+ const float *tsc;		// ptr for stepping thru profile's transition parameters 
+ const float *rsc;		// ptr into emission scores for residue dsq[i] on current row i
+ const float *rsn;		// ptr into emission scores for residue dsq[i+1] on next row i+1 
+ float *dpc;                    // ptr into main states ({MID}{LG}) for current row i
+ float *dpn;			//   ... and next row i+1
+ float *xc;			// ptr into specials (ENJBLGC) for current row
+ float *xn = NULL;              //   ... and next row i+1
+ int    M  = hmm->M;	        // for a bit more clarity, less dereference clutter      
+ int    D  = anch->D;	        //   ... ditto
+ int    d;                      // counter over domains 1..D
+ int    i;			// counter over sequence positions (rows): 0,1..L
+ int    k;			// counter over model positions (columns): 0,1..M
+ int    s;			// counter over states                           
+ int    iend;                   // same as anch->a[d+1].i0-1, for clarity: last row in current sector
+ float  mgc, mlc;
+ float  mgn, mln;
+ float  dgn, dln;
+ float  ign, iln;
+ float  xE;			// tmp var for accumulating E score for a row    
+ float  xG, xL;
+ float  xJ, xN;
+ int    status;
+
+ /* contract checks / arg validation */
+ ESL_DASSERT1( ( mo->L == L || mo->L == 0) );   // length model in comparison mode is either L (usually) or 0 (some unit tests)
+
+ /* reallocation, if needed */
+ if ( (status = h4_refmx_GrowTo(mxu, M, L)) != eslOK) return status;
+ if ( (status = h4_refmx_GrowTo(mxd, M, L)) != eslOK) return status;
+ mxu->M    = mxd->M    = M;
+ mxu->L    = mxd->L    = L;
+ mxu->type = h4R_ASC_BCK_UP;
+ mxd->type = h4R_ASC_BCK_DOWN;
+
+#if eslDEBUGLEVEL > 0
+  h4_refmx_SetValues(mxu, -eslINFINITY);
+  h4_refmx_SetValues(mxd, -eslINFINITY);
+#endif
+
+ /* initialize i=L..i0(D) specials, backwards from L */
+ for (i = L; i >= anch->a[D].i0; i--)     // L=0,D=0 case: this would be 0..0 (thanks to i0(0)=0 sentinel)
+    {
+      xc = mxd->dp[i] + (M+1) * h4R_NSCELLS;
+      xc[h4R_CC] = -eslINFINITY;
+      xc[h4R_JJ] = -eslINFINITY;
+      xc[h4R_C]  = (i == L ? mo->xsc[h4_C][h4_MOVE] : xn[h4R_C] + mo->xsc[h4_C][h4_LOOP]);
+      xc[h4R_G]  = -eslINFINITY;
+      xc[h4R_L]  = -eslINFINITY;
+      xc[h4R_B]  = -eslINFINITY;
+      xc[h4R_J]  = -eslINFINITY;
+      xc[h4R_N]  = -eslINFINITY;
+      xc[h4R_E]  = xc[h4R_C] + mo->xsc[h4_E][h4_MOVE];
+      xn = xc;
+    }
+
+  /* The code below is designed to be easily convertible to one-row memory efficient DP, if needed */
+  for (d = D; d >= 1; d--)
+    {
+      /* DOWN matrix (d)
+       *   i = i0(d)..i0(d+1)-1
+       *   k = k0(d)..M
+       * calculated Backward. 
+       * In the DOWN matrix, paths can end from the model, but not start in it,
+       * so we evaluate {MD}->E transitions backward, but we don't evaluate 
+       * B->{LG}->Mk
+       */
+      iend = anch->a[d+1].i0-1;                                         // <i==iend> tests used below for boundary conditions on last DOWN row
+      for (i = iend; i >= anch->a[d].i0; i--)                           // at d=D, this is (L down to i0(D)), thanks to i0(D+1)=L+1 sentinel
+	{
+	  rsn  = (i == iend ? NULL : hmm->rsc[dsq[i+1]] + M);           // residue scores on next row; start at k=M
+	  tsc  = hmm->tsc[M];                                           // transition scores: start at M
+	  dpc  = mxd->dp[i] + M * h4R_NSCELLS;                          // current row of DP matrix: start at M
+	  xE   = dpc[h4R_NSCELLS+h4R_E];                                // pick up the xE score; specials start at M+1, hence the h4R_NSCELLS bump here
+	  dpn  = (i == iend ? NULL : mxd->dp[i+1] + M * h4R_NSCELLS);   // next row of DP matrix: start at M
+
+	  mgn = dgn = -eslINFINITY;
+	  mln = dln = -eslINFINITY;
+	  ign = iln = -eslINFINITY;
+	  xL  = -eslINFINITY;
+
+          for (k = M; k >= anch->a[d].k0; k--)
+	    {
+	      if (i != iend) {           // in one-row memory-efficient dp, dpc could be same as dpn, so:
+		ign = dpn[h4R_IG];       // pick up I scores, before storing anything in these cells
+		iln = dpn[h4R_IL];       // if insert scores were non-zero, we would add rsn[I] here
+	      }
+
+	      /* M calculations. Storage deferred for one-row reasons. */
+	      mgc = (k == M ? xE :                             // at k=M, MG->E is possible, and it happens to be the only transition that's possible
+		     h4_logsum( h4_logsum(mgn + tsc[h4_MM],    // mgn (+ *rsn) was picked up in last k loop, so now it's i+1,k+1
+                                          ign + tsc[h4_MI]),   // ign was just picked up, so it's i+1,k
+                                          dgn + tsc[h4_MD]));  // dgn is remembered from prev loop, so now it's i,k+1
+	      mlc =  h4_logsum( h4_logsum(mln + tsc[h4_MM],   
+                                          iln + tsc[h4_MI]),
+                                h4_logsum(dln + tsc[h4_MD],
+					  xE));
+
+              /* Must do IG|IL before DG|DL, to use dgn/dln values before we overwrite them */
+	      dpc[h4R_IG] = h4_logsum( h4_logsum(mgn + tsc[h4_IM],
+                                                 ign + tsc[h4_II]),
+                                                 dgn + tsc[h4_ID]);
+	      dpc[h4R_IL] = h4_logsum( h4_logsum(mln + tsc[h4_IM],
+                                                 iln + tsc[h4_II]),
+                                                 dln + tsc[h4_ID]);
+
+              dpc[h4R_DG] = dgn = (k == M ?  xE :
+                                  h4_logsum( h4_logsum(mgn + tsc[h4_DM],
+                                                       ign + tsc[h4_DI]),
+                                                       dgn + tsc[h4_DD]));
+	      dpc[h4R_DL] = dln = h4_logsum( h4_logsum(mln + tsc[h4_DM],
+                                                       iln + tsc[h4_DI]),
+                                             h4_logsum(dln + tsc[h4_DD],
+                                                       xE));
+	      
+	      if (i != iend) {              // pick up M[i+1][k] values, add residue emission to them;
+		mgn =  dpn[h4R_MG] + *rsn;  // when we loop around, these become M[i+1][k+1] values we need for DP
+		mln =  dpn[h4R_ML] + *rsn;
+		rsn--;
+		dpn -= h4R_NSCELLS;
+	      } 
+
+	      dpc[h4R_MG] = mgc;           // now that we've picked up mgn/mln, safe to store MG,ML
+	      dpc[h4R_ML] = mlc;
+	      
+	      tsc -= h4_NTSC;           
+	      dpc -= h4R_NSCELLS;
+	    }
+	} 
+      /* end of the DOWN sector.
+       * now mgc/mlc are the scores in the a[d].(i0,k0) anchor cell; tsc is on k0-1
+       */
+      rsc = hmm->rsc[ dsq[anch->a[d].i0]] + anch->a[d].k0;
+      mgn = mgc + *rsc;  
+      mln = mlc + *rsc;
+      xG  = mgn + tsc[h4_GM];
+      xL  = mln + tsc[h4_LM];
+      xJ = xN = -eslINFINITY;
+
+      /* UP sector */
+      iend = anch->a[d].i0-1;                           // <i == iend> tests for boundary condition on last UP row, shorthand for <i == anch[d].i0-1>
+      for (i = iend; i > anch->a[d-1].i0; i--)          // at d=1, this is i0(1)-1 down to 1, thanks to i0(0)=0 sentinel
+	{
+	  xc = mxd->dp[i] + (M+1) * h4R_NSCELLS;        // on specials, which are in DOWN matrix
+	  xc[h4R_CC] = -eslINFINITY;                    // CC,JJ are only used in decoding matrices
+	  xc[h4R_JJ] = -eslINFINITY;
+	  xc[h4R_C]  = -eslINFINITY;                    // C is now unreachable, when anchor set constrained.
+	  xc[h4R_G]  = xG;                              // xG was accumulated during prev row; G->Mk wing unfolded
+	  xc[h4R_L]  = xL;                              // xL accumulated on prev row
+	  xc[h4R_B]  = h4_logsum(xG + mo->xsc[h4_B][1],  xL + mo->xsc[h4_B][0]); 
+	  xc[h4R_J]  = xJ = h4_logsum(xJ + mo->xsc[h4_J][h4_LOOP], xc[h4R_B] + mo->xsc[h4_J][h4_MOVE]);
+	  xc[h4R_N]  = xN = h4_logsum(xN + mo->xsc[h4_N][h4_LOOP], xc[h4R_B] + mo->xsc[h4_N][h4_MOVE]);
+	  xc[h4R_E]  = xc[h4R_J] + mo->xsc[h4_E][h4_LOOP];  
+
+	  tsc = hmm->tsc[anch->a[d].k0-1];                                            // transition scores: start at anch[d].k0-1
+	  dpc = mxu->dp[i] + (anch->a[d].k0-1) * h4R_NSCELLS;                         // on anch[d].k0-1
+	  dpn = (i == iend ? NULL : mxu->dp[i+1] + (anch->a[d].k0-1) * h4R_NSCELLS);  // on anch[d].k0-1
+	  rsc = hmm->rsc[dsq[i]] + (anch->a[d].k0-1);
+	  rsn = (i == iend ? NULL : hmm->rsc[dsq[i+1]] + (anch->a[d].k0-1));
+
+	  xG  = xL  = -eslINFINITY; 
+	  dgn = dln = -eslINFINITY;
+	  ign = iln = -eslINFINITY;
+	  if (i < iend) mgn = mln = -eslINFINITY;       // not on iend, because there we allow mgn/mln to carry over from anchor cell 
+
+	  /* The recursion is the same as for the DOWN sector, so only differences are commented on: */
+	  for (k = anch->a[d].k0-1; k >= 1; k--)
+	    {
+	      if (i < iend) {           
+		ign = dpn[h4R_IG];       
+		iln = dpn[h4R_IL];       
+	      }
+
+	      /* M calculations include no E contributions: can't do M->E in UP matrix */
+	      mgc =  h4_logsum( h4_logsum(mgn + tsc[h4_MM],    
+                                          ign + tsc[h4_MI]),   
+				          dgn + tsc[h4_MD]);
+	      mlc =  h4_logsum( h4_logsum(mln + tsc[h4_MM],   
+                                          iln + tsc[h4_MI]),
+				          dln + tsc[h4_MD]);
+		     
+              /* must calc IG|IL before DG|DL to use dgn|dln before overwriting them */
+	      dpc[h4R_IG] = h4_logsum( h4_logsum(mgn + tsc[h4_IM],
+                                                 ign + tsc[h4_II]),
+                                                 dgn + tsc[h4_ID]);
+	      dpc[h4R_IL] = h4_logsum( h4_logsum(mln + tsc[h4_IM],
+                                                 iln + tsc[h4_II]),
+                                                 dln + tsc[h4_ID]);
+	      
+              /* pull back to xG, xL: UP sector specific  */
+	      xG = h4_logsum(xG, mgc + *rsc + tsc[h4_GM - h4_NTSC]);
+              xG = h4_logsum(xG, dpc[h4R_IG] + tsc[h4_GI]);          // this is the G->D1..Dk->Ik path in Plan9
+	      xL = h4_logsum(xL, mlc + *rsc + tsc[h4_LM - h4_NTSC]);
+	      rsc--;
+
+	      /* no D->E contributions from xE in UP matrix */
+	      dpc[h4R_DG] = dgn = h4_logsum( h4_logsum(mgn + tsc[h4_DM],
+                                                       ign + tsc[h4_DI]),
+                                                       dgn + tsc[h4_DD]);
+              dpc[h4R_DL] = dln = h4_logsum( h4_logsum(mln + tsc[h4_DM],
+                                                       iln + tsc[h4_DI]),
+                                                       dln + tsc[h4_DD]);
+	      
+	      if (i < iend) {       
+		mgn =  dpn[h4R_MG] + *rsn;  // when we loop around, these become M[i+1][k+1] values we need for DP
+		mln =  dpn[h4R_ML] + *rsn;
+		rsn--;
+		dpn -= h4R_NSCELLS;
+	      } else mgn = mln = -eslINFINITY;
+
+	      dpc[h4R_MG] = mgc;           // now that we've picked up mgn/mln, safe to store MG,ML
+	      dpc[h4R_ML] = mlc;
+	      
+	      tsc -= h4_NTSC;           
+	      dpc -= h4R_NSCELLS;
+	    }
+	} /* end backwards loop over i for UP matrix d */
+      /* i is now on anch[d-1].i, or 0 */
+
+      dpc = mxu->dp[i];
+      for (s = 0; s < h4R_NSCELLS * anch->a[d].k0; s++) *dpc++ = -eslINFINITY;   
+
+      xc = mxd->dp[i] + (M+1) * h4R_NSCELLS;   // on specials, which are in DOWN matrix
+      xc[h4R_CC] = -eslINFINITY;               // CC,JJ are only used in decoding matrices
+      xc[h4R_JJ] = -eslINFINITY;
+      xc[h4R_C]  = -eslINFINITY;               // C is now unreachable, when anchor set constrained.
+      xc[h4R_G]  = xG;                         // xG was accumulated during prev row; G->Mk wing unfolded
+      xc[h4R_L]  = xL;                         // xL accumulated on prev row
+      xc[h4R_B]  = h4_logsum(xG + mo->xsc[h4_B][1],  xL + mo->xsc[h4_B][0]); 
+      xc[h4R_J]  = xJ = h4_logsum(xJ + mo->xsc[h4_J][h4_LOOP], xc[h4R_B] + mo->xsc[h4_J][h4_MOVE]);
+      xc[h4R_N]  = xN = h4_logsum(xN + mo->xsc[h4_N][h4_LOOP], xc[h4R_B] + mo->xsc[h4_N][h4_MOVE]);
+      xc[h4R_E]  = xc[h4R_J] + mo->xsc[h4_E][h4_LOOP];  
+    } /* end loop over domains d */
+
+  if (opt_sc) *opt_sc = xN;
+  return eslOK;
+}
+
+
+
 /*****************************************************************
  * x. Unit tests
  *****************************************************************/
@@ -495,9 +796,12 @@ utest_singlepath(FILE *diagfp, ESL_RANDOMNESS *rng, const ESL_ALPHABET *abc, int
   H4_ANCHORSET *anch      = NULL;
   H4_REFMX     *rxv       = h4_refmx_Create(100,100);   // reference Viterbi DP matrix
   H4_REFMX     *rxf       = h4_refmx_Create(100,100);   // reference Forward DP matrix
+  H4_REFMX     *rxb       = h4_refmx_Create(100,100);   // reference Backward DP matrix
   H4_REFMX     *afu       = h4_refmx_Create(100,100);   // ASC Forward UP matrix
   H4_REFMX     *afd       = h4_refmx_Create(100,100);   // ASC Forward DOWN matrix
-  float         tsc, vsc, fsc, asc_f;
+  H4_REFMX     *abu       = h4_refmx_Create(100,100);   // ASC Backward UP matrix
+  H4_REFMX     *abd       = h4_refmx_Create(100,100);   // ASC Backward DOWN matrix
+  float         tsc, vsc, fsc, bsc, asc_f, asc_b;
   float         abstol    = 0.0001;
 
   if ( h4_modelsample_SinglePath(rng, abc, M, &hmm)   != eslOK) esl_fatal(failmsg);
@@ -510,28 +814,41 @@ utest_singlepath(FILE *diagfp, ESL_RANDOMNESS *rng, const ESL_ALPHABET *abc, int
   if (( anch = h4_anchorset_Create(0, sq->n, hmm->M)) == NULL)  esl_fatal(failmsg);
   if ( h4_anchorset_SetFromPath(rng, pi, anch)        != eslOK) esl_fatal(failmsg);
 
-  if ( h4_reference_Viterbi(sq->dsq, sq->n, hmm, mo, rxv, vpi, &vsc) != eslOK) esl_fatal(failmsg);
-  if ( h4_reference_Forward(sq->dsq, sq->n, hmm, mo, rxf,      &fsc) != eslOK) esl_fatal(failmsg);
+  if ( h4_reference_Viterbi (sq->dsq, sq->n, hmm, mo, rxv, vpi, &vsc) != eslOK) esl_fatal(failmsg);
+  if ( h4_reference_Forward (sq->dsq, sq->n, hmm, mo, rxf,      &fsc) != eslOK) esl_fatal(failmsg);
+  if ( h4_reference_Backward(sq->dsq, sq->n, hmm, mo, rxb,      &bsc) != eslOK) esl_fatal(failmsg);
 
-  if ( h4_reference_asc_Forward(sq->dsq, sq->n, hmm, mo, anch, afu, afd, &asc_f) != eslOK) esl_fatal(failmsg);
+  if ( h4_reference_asc_Forward (sq->dsq, sq->n, hmm, mo, anch, afu, afd, &asc_f) != eslOK) esl_fatal(failmsg);
+  if ( h4_reference_asc_Backward(sq->dsq, sq->n, hmm, mo, anch, abu, abd, &asc_b) != eslOK) esl_fatal(failmsg);
+
 
 #if 0
-  h4_refmx_Dump(stdout, rxf);
-  h4_refmx_Dump(stdout, afu);
-  h4_refmx_Dump(stdout, afd);
+  esl_sqio_Write(stdout, sq, eslSQFILE_FASTA, FALSE);
+  h4_profile_Dump(stdout, hmm);
+  h4_mode_Dump(stdout, mo);
+  //h4_refmx_Dump(stdout, rxf);
+  h4_refmx_Dump(stdout, rxb);
+  //h4_refmx_Dump(stdout, afu);
+  //h4_refmx_Dump(stdout, afd);
+  h4_refmx_Dump(stdout, abu);
+  h4_refmx_Dump(stdout, abd);
 
   h4_path_Dump(stdout, pi);
   h4_path_Dump(stdout, vpi);
   h4_anchorset_Dump(stdout, anch);
 
   printf("tsc   = %.3f\n", tsc);
+  printf("fsc   = %.3f\n", fsc);
+  printf("bsc   = %.3f\n", bsc);
   printf("asc_f = %.3f\n", asc_f);
-  printf("diff  = %.3f\n", tsc - asc_f);
+  printf("asc_b = %.3f\n", asc_b);
 #endif
 
   if ( h4_path_Compare(pi, vpi)                 != eslOK) esl_fatal(failmsg);
   if ( esl_FCompareNew(tsc, vsc,   0.0, abstol) != eslOK) esl_fatal(failmsg);
   if ( esl_FCompareNew(tsc, fsc,   0.0, abstol) != eslOK) esl_fatal(failmsg);
+  if ( esl_FCompareNew(tsc, bsc,   0.0, abstol) != eslOK) esl_fatal(failmsg);
+  if ( esl_FCompareNew(tsc, asc_f, 0.0, abstol) != eslOK) esl_fatal(failmsg);
   if ( esl_FCompareNew(tsc, asc_f, 0.0, abstol) != eslOK) esl_fatal(failmsg);
 
   /* to compare Viterbi to Fwd matrix, we have to hack around a safety check in the structures */
@@ -540,17 +857,15 @@ utest_singlepath(FILE *diagfp, ESL_RANDOMNESS *rng, const ESL_ALPHABET *abc, int
   rxv->type = h4R_VITERBI;
 
   if ( ascmatrix_compare(rxf, afu, afd, anch, abstol) != eslOK) esl_fatal(failmsg);
+  if ( ascmatrix_compare(rxb, abu, abd, anch, abstol) != eslOK) esl_fatal(failmsg);
 
-  h4_refmx_Destroy(afd);
-  h4_refmx_Destroy(afu);
-  h4_refmx_Destroy(rxf);
-  h4_refmx_Destroy(rxv);
+  h4_refmx_Destroy(afu); h4_refmx_Destroy(afd); 
+  h4_refmx_Destroy(abu); h4_refmx_Destroy(abd);
+  h4_refmx_Destroy(rxf); h4_refmx_Destroy(rxb);  h4_refmx_Destroy(rxv);
+  h4_path_Destroy(pi);   h4_path_Destroy(vpi);
   h4_anchorset_Destroy(anch);
-  h4_path_Destroy(pi);
-  h4_path_Destroy(vpi);
-  esl_sq_Destroy(sq);
-  h4_mode_Destroy(mo);
-  h4_profile_Destroy(hmm);
+  esl_sq_Destroy(sq); 
+  h4_profile_Destroy(hmm); h4_mode_Destroy(mo);
 }
 
 
@@ -581,47 +896,61 @@ utest_singlesingle(FILE *diagfp, ESL_RANDOMNESS *rng, const ESL_ALPHABET *abc, i
   H4_ANCHORSET *anch      = NULL;
   H4_REFMX     *rxv       = h4_refmx_Create(100,100);  
   H4_REFMX     *rxf       = h4_refmx_Create(100,100);  
+  H4_REFMX     *rxb       = h4_refmx_Create(100,100);  
   H4_REFMX     *afu       = h4_refmx_Create(100,100);  
   H4_REFMX     *afd       = h4_refmx_Create(100,100);  
-  float         tsc, vsc, fsc, asc_f;
+  H4_REFMX     *abu       = h4_refmx_Create(100,100);   // ASC Backward UP matrix
+  H4_REFMX     *abd       = h4_refmx_Create(100,100);   // ASC Backward DOWN matrix
+  float         tsc, vsc, fsc, bsc, asc_f, asc_b;
   float         abstol    = 0.0001;
 
   if ( h4_modelsample_SinglePathSeq(rng, abc, M, &hmm, &sq, &mo, &pi, &anch, &tsc)  != eslOK) esl_fatal(failmsg);
 
-  if ( h4_reference_Viterbi(sq->dsq, sq->n, hmm, mo, rxv, vpi, &vsc) != eslOK) esl_fatal(failmsg);
-  if ( h4_reference_Forward(sq->dsq, sq->n, hmm, mo, rxf,      &fsc) != eslOK) esl_fatal(failmsg);
+  if ( h4_reference_Viterbi (sq->dsq, sq->n, hmm, mo, rxv, vpi, &vsc) != eslOK) esl_fatal(failmsg);
+  if ( h4_reference_Forward (sq->dsq, sq->n, hmm, mo, rxf,      &fsc) != eslOK) esl_fatal(failmsg);
+  if ( h4_reference_Backward(sq->dsq, sq->n, hmm, mo, rxb,      &bsc) != eslOK) esl_fatal(failmsg);
 
-  if ( h4_reference_asc_Forward(sq->dsq, sq->n, hmm, mo, anch, afu, afd, &asc_f) != eslOK) esl_fatal(failmsg);
+  if ( h4_reference_asc_Forward (sq->dsq, sq->n, hmm, mo, anch, afu, afd, &asc_f) != eslOK) esl_fatal(failmsg);
+  if ( h4_reference_asc_Backward(sq->dsq, sq->n, hmm, mo, anch, abu, abd, &asc_b) != eslOK) esl_fatal(failmsg);
 
 #if 0
+  esl_sqio_Write(stdout, sq, eslSQFILE_FASTA, FALSE);
+  h4_profile_Dump(stdout, hmm);
+  h4_mode_Dump(stdout, mo);
+ 
   h4_refmx_Dump(stdout, rxf);
+  h4_refmx_Dump(stdout, rxb);
   h4_refmx_Dump(stdout, afu);
   h4_refmx_Dump(stdout, afd);
+  h4_refmx_Dump(stdout, abu);
+  h4_refmx_Dump(stdout, abd);
 
   h4_path_Dump(stdout, pi);
   h4_path_Dump(stdout, vpi);
   h4_anchorset_Dump(stdout, anch);
 
   printf("tsc   = %.3f\n", tsc);
+  printf("fsc   = %.3f\n", fsc);
+  printf("bsc   = %.3f\n", bsc);
   printf("asc_f = %.3f\n", asc_f);
-  printf("diff  = %.3f\n", tsc - asc_f);
+  printf("asc_b = %.3f\n", asc_b);
 #endif
 
   if ( h4_path_Compare(pi, vpi)                 != eslOK) esl_fatal(failmsg);
   if ( esl_FCompareNew(tsc, vsc,   0.0, abstol) != eslOK) esl_fatal(failmsg);
   if ( esl_FCompareNew(tsc, fsc,   0.0, abstol) != eslOK) esl_fatal(failmsg);
+  if ( esl_FCompareNew(tsc, bsc,   0.0, abstol) != eslOK) esl_fatal(failmsg);
   if ( esl_FCompareNew(tsc, asc_f, 0.0, abstol) != eslOK) esl_fatal(failmsg);
+  if ( esl_FCompareNew(tsc, asc_b, 0.0, abstol) != eslOK) esl_fatal(failmsg);
 
-  h4_refmx_Destroy(afd);
-  h4_refmx_Destroy(afu);
-  h4_refmx_Destroy(rxf);
-  h4_refmx_Destroy(rxv);
+
+  h4_refmx_Destroy(afu);   h4_refmx_Destroy(afd);
+  h4_refmx_Destroy(abu);   h4_refmx_Destroy(abd);
+  h4_refmx_Destroy(rxf);   h4_refmx_Destroy(rxb);  h4_refmx_Destroy(rxv);
+  h4_path_Destroy(pi);     h4_path_Destroy(vpi);
+  h4_profile_Destroy(hmm); h4_mode_Destroy(mo);
   h4_anchorset_Destroy(anch);
-  h4_path_Destroy(pi);
-  h4_path_Destroy(vpi);
   esl_sq_Destroy(sq);
-  h4_mode_Destroy(mo);
-  h4_profile_Destroy(hmm);
 }
 
 
@@ -632,8 +961,13 @@ utest_singlesingle(FILE *diagfp, ESL_RANDOMNESS *rng, const ESL_ALPHABET *abc, i
  *
  * Unlike the "singlesingle" test, now we can use multihit mode.
  *
- * See <h4_modelsample_SinglePathedASC()> for explanation of how the
- * case is constructed.
+ * With standard (not ASC) algorithms, more than one path may be
+ * possible.  Therefore reference Forward, Backward, and even Viterbi
+ * scores can exceed ASC F/B scores and the trace score.
+ *
+ * See <h4_modelsample_SinglePathedASC()> and its
+ * <single_path_seq_engine()> for explanation of how the case is
+ * constructed.
  * 
  * Now trace score = ASC Fwd = ASC Bck score.
  */
@@ -649,44 +983,57 @@ utest_singlemulti(FILE *diagfp, ESL_RANDOMNESS *rng, const ESL_ALPHABET *abc, in
   H4_ANCHORSET *anch      = NULL;
   H4_REFMX     *rxv       = h4_refmx_Create(100,100);  
   H4_REFMX     *rxf       = h4_refmx_Create(100,100);  
+  H4_REFMX     *rxb       = h4_refmx_Create(100,100);  
   H4_REFMX     *afu       = h4_refmx_Create(100,100);  
   H4_REFMX     *afd       = h4_refmx_Create(100,100);  
-  float         tsc, vsc, fsc, asc_f;
+  H4_REFMX     *abu       = h4_refmx_Create(100,100);  
+  H4_REFMX     *abd       = h4_refmx_Create(100,100);  
+  float         tsc, vsc, fsc, bsc, asc_f, asc_b;
   float         abstol    = 0.0001;
 
   if ( h4_modelsample_SinglePathASC(rng, abc, M, &hmm, &sq, &anch, &mo, &pi, &tsc)  != eslOK) esl_fatal(failmsg);
 
-  if ( h4_reference_Viterbi(sq->dsq, sq->n, hmm, mo, rxv, vpi, &vsc) != eslOK) esl_fatal(failmsg);
-  if ( h4_reference_Forward(sq->dsq, sq->n, hmm, mo, rxf,      &fsc) != eslOK) esl_fatal(failmsg);
+  if ( h4_reference_Viterbi (sq->dsq, sq->n, hmm, mo, rxv, vpi, &vsc) != eslOK) esl_fatal(failmsg);
+  if ( h4_reference_Forward (sq->dsq, sq->n, hmm, mo, rxf,      &fsc) != eslOK) esl_fatal(failmsg);
+  if ( h4_reference_Backward(sq->dsq, sq->n, hmm, mo, rxb,      &bsc) != eslOK) esl_fatal(failmsg);
 
-  if ( h4_reference_asc_Forward(sq->dsq, sq->n, hmm, mo, anch, afu, afd, &asc_f) != eslOK) esl_fatal(failmsg);
+  if ( h4_reference_asc_Forward (sq->dsq, sq->n, hmm, mo, anch, afu, afd, &asc_f) != eslOK) esl_fatal(failmsg);
+  if ( h4_reference_asc_Backward(sq->dsq, sq->n, hmm, mo, anch, abu, abd, &asc_b) != eslOK) esl_fatal(failmsg);
 
 #if 0
+  esl_sqio_Write(stdout, sq, eslSQFILE_FASTA, FALSE);
+  h4_profile_Dump(stdout, hmm);
+  h4_mode_Dump(stdout, mo);
+
   h4_refmx_Dump(stdout, rxf);
+  h4_refmx_Dump(stdout, rxb);
   h4_refmx_Dump(stdout, afu);
   h4_refmx_Dump(stdout, afd);
+  h4_refmx_Dump(stdout, abu);
+  h4_refmx_Dump(stdout, abd);
 
   h4_path_Dump(stdout, pi);
   h4_path_Dump(stdout, vpi);
   h4_anchorset_Dump(stdout, anch);
 
   printf("tsc   = %.3f\n", tsc);
+  printf("vsc   = %.3f\n", vsc);
+  printf("fsc   = %.3f\n", fsc);
+  printf("bsc   = %.3f\n", bsc);
   printf("asc_f = %.3f\n", asc_f);
-  printf("diff  = %.3f\n", tsc - asc_f);
+  printf("asc_b = %.3f\n", asc_b);
 #endif
 
   if ( esl_FCompareNew(tsc, asc_f, 0.0, abstol) != eslOK) esl_fatal(failmsg);
-
-  h4_refmx_Destroy(afd);
-  h4_refmx_Destroy(afu);
-  h4_refmx_Destroy(rxf);
-  h4_refmx_Destroy(rxv);
+  if ( esl_FCompareNew(tsc, asc_b, 0.0, abstol) != eslOK) esl_fatal(failmsg);
+ 
+  h4_refmx_Destroy(afu);   h4_refmx_Destroy(afd);
+  h4_refmx_Destroy(abu);   h4_refmx_Destroy(abd);
+  h4_refmx_Destroy(rxf);   h4_refmx_Destroy(rxb); h4_refmx_Destroy(rxv);
+  h4_path_Destroy(pi);     h4_path_Destroy(vpi);
+  h4_profile_Destroy(hmm); h4_mode_Destroy(mo);
   h4_anchorset_Destroy(anch);
-  h4_path_Destroy(pi);
-  h4_path_Destroy(vpi);
   esl_sq_Destroy(sq);
-  h4_mode_Destroy(mo);
-  h4_profile_Destroy(hmm);
 }
 
 
@@ -749,9 +1096,12 @@ utest_ensemble(FILE *diagfp, ESL_RANDOMNESS *rng, const ESL_ALPHABET *abc, int M
   H4_ANCHORSET *anch       = NULL;
   H4_REFMX     *rxv        = h4_refmx_Create(100,100);  
   H4_REFMX     *rxf        = h4_refmx_Create(100,100);  
+  H4_REFMX     *rxb        = h4_refmx_Create(100,100);  
   H4_REFMX     *afu        = h4_refmx_Create(100,100);  
   H4_REFMX     *afd        = h4_refmx_Create(100,100);  
-  float         tsc, vsc, fsc, asc_f;
+  H4_REFMX     *abu        = h4_refmx_Create(100,100);  
+  H4_REFMX     *abd        = h4_refmx_Create(100,100);  
+  float         tsc, vsc, fsc, bsc, asc_f, asc_b;
   float         fwd_atol;
   float         vit_atol;
 
@@ -769,20 +1119,24 @@ utest_ensemble(FILE *diagfp, ESL_RANDOMNESS *rng, const ESL_ALPHABET *abc, int M
   case 2: if ( h4_modelsample_AnchoredMulti(rng, abc, M, &hmm, &sq, &anch, &mo, &pi, &tsc)  != eslOK) esl_fatal(failmsg); break;
   }
 
-  if ( h4_reference_Viterbi(sq->dsq, sq->n, hmm, mo, rxv, vpi, &vsc) != eslOK) esl_fatal(failmsg);
-  if ( h4_reference_Forward(sq->dsq, sq->n, hmm, mo, rxf,      &fsc) != eslOK) esl_fatal(failmsg);
+  if ( h4_reference_Viterbi (sq->dsq, sq->n, hmm, mo, rxv, vpi, &vsc) != eslOK) esl_fatal(failmsg);
+  if ( h4_reference_Forward (sq->dsq, sq->n, hmm, mo, rxf,      &fsc) != eslOK) esl_fatal(failmsg);
+  if ( h4_reference_Backward(sq->dsq, sq->n, hmm, mo, rxb,      &bsc) != eslOK) esl_fatal(failmsg);
 
-  if ( h4_reference_asc_Forward(sq->dsq, sq->n, hmm, mo, anch, afu, afd, &asc_f) != eslOK) esl_fatal(failmsg);
+  if ( h4_reference_asc_Forward (sq->dsq, sq->n, hmm, mo, anch, afu, afd, &asc_f) != eslOK) esl_fatal(failmsg);
+  if ( h4_reference_asc_Backward(sq->dsq, sq->n, hmm, mo, anch, abu, abd, &asc_b) != eslOK) esl_fatal(failmsg);
   
-#if 0
+  //#if 0
+  esl_sqio_Write(stdout, sq, eslSQFILE_FASTA, FALSE);
   h4_profile_Dump(stdout, hmm);
   h4_mode_Dump(stdout, mo);
 
-  esl_sqio_Write(stdout, sq, eslSQFILE_FASTA, FALSE);
-
-  h4_refmx_Dump(stdout, rxf);
-  h4_refmx_Dump(stdout, afu);
-  h4_refmx_Dump(stdout, afd);
+  //h4_refmx_Dump(stdout, rxf);
+  h4_refmx_Dump(stdout, rxb);
+  //h4_refmx_Dump(stdout, afu);
+  //h4_refmx_Dump(stdout, afd);
+  h4_refmx_Dump(stdout, abu);
+  h4_refmx_Dump(stdout, abd);
 
   h4_path_Dump(stdout, pi);
   h4_path_Dump(stdout, vpi);
@@ -791,24 +1145,24 @@ utest_ensemble(FILE *diagfp, ESL_RANDOMNESS *rng, const ESL_ALPHABET *abc, int M
   printf("tsc   = %.3f\n", tsc);
   printf("vsc   = %.3f\n", vsc);
   printf("fsc   = %.3f\n", fsc);
+  printf("bsc   = %.3f\n", bsc);
   printf("asc_f = %.3f\n", asc_f);
-  printf("diff  = %.3f\n", fsc - asc_f);
-#endif
+  printf("asc_b = %.3f\n", asc_b);
+  //#endif
 
+  if (esl_FCompareNew(fsc, bsc,   0.0, fwd_atol) != eslOK) esl_fatal(failmsg);
   if (esl_FCompareNew(fsc, asc_f, 0.0, fwd_atol) != eslOK) esl_fatal(failmsg);
+  if (esl_FCompareNew(fsc, asc_b, 0.0, fwd_atol) != eslOK) esl_fatal(failmsg);
   if (tsc > vsc+vit_atol)                                  esl_fatal(failmsg);
   if (vsc > fsc)                                           esl_fatal(failmsg);
 
-  h4_refmx_Destroy(afu);
-  h4_refmx_Destroy(afd);
-  h4_refmx_Destroy(rxf);
-  h4_refmx_Destroy(rxv);
+  h4_refmx_Destroy(afu);    h4_refmx_Destroy(afd);
+  h4_refmx_Destroy(abu);    h4_refmx_Destroy(abd);
+  h4_refmx_Destroy(rxf);    h4_refmx_Destroy(rxb);  h4_refmx_Destroy(rxv);
+  h4_path_Destroy(vpi);     h4_path_Destroy(pi);
+  h4_profile_Destroy(hmm);  h4_mode_Destroy(mo);
   h4_anchorset_Destroy(anch);
-  h4_path_Destroy(vpi);
-  h4_path_Destroy(pi);
   esl_sq_Destroy(sq);
-  h4_mode_Destroy(mo);
-  h4_profile_Destroy(hmm);
 }
 #endif // h4REFERENCE_ASC_TESTDRIVE
 
