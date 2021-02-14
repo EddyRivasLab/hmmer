@@ -221,14 +221,27 @@ fi
 # Choose our compiler - which might be mpicc, if enable_mpi is "yes".
 #   AX_PROG_CC_MPI will call AC_PROG_CC if enable_mpi is "no".
 #
+# If CFLAGS hasn't been set by the user, set it to an empty string
+# in the environment. This prevents AC_PROG_CC from setting it to
+# "-g -O2" or "-g". Some of our --enable-* options will add to CFLAGS.
+#
+# The `: ${CFLAGS=""}` shell syntax uses the null operator `:` to
+# discard the output of `${CFLAGS=""}`, which returns the value of
+# CFLAGS if already set.
+#
+: ${CFLAGS=""}
 AX_PROG_CC_MPI([test x"$enable_mpi" = xyes],
-    [AC_DEFINE(HAVE_MPI,  1, [Use MPI parallelization])
-     AC_DEFINE(HMMER_MPI, 1, [Use MPI parallelization])
-     AC_SUBST([MPI_UTESTS],     ["mpi_utest"])
-     AC_SUBST([MPI_BENCHMARKS], ["mpi_benchmark"])],
-    [ if test x"$enable_mpi" = xyes; then
-        AC_MSG_ERROR([MPI library not found for --enable-mpi]);
-      fi])
+  [
+    AC_DEFINE(HAVE_MPI,  1, [Use MPI parallelization])
+    AC_DEFINE(HMMER_MPI, 1, [Use MPI parallelization])
+    AC_SUBST([MPI_UTESTS],     ["mpi_utest"])
+    AC_SUBST([MPI_BENCHMARKS], ["mpi_benchmark"])
+  ],
+  [
+    if test x"$enable_mpi" = xyes; then
+      AC_MSG_ERROR([MPI library not found for --enable-mpi]);
+    fi
+  ])
 AC_PROG_CC_STDC
 AC_PROG_CPP
 AC_PROG_INSTALL
@@ -241,15 +254,17 @@ AC_PROG_LN_S
 #  --enable-gcov, --enable-gprof, and --enable-debugging are mutually exclusive.
 #
 if test "$enable_gcov" = "yes"; then
-   CFLAGS="${CLFAGS} -g -Wall -fprofile-arcs -ftest-coverage"
+   CFLAGS="${CFLAGS} -g -Wall -fprofile-arcs -ftest-coverage"
 elif test "$enable_gprof" = "yes"; then
    CFLAGS="${CFLAGS} -O -g -pg"
 elif test "$enable_debugging" != "no"; then
    if test "$GCC" = "yes"; then
       CFLAGS="${CFLAGS} -g -Wall"
+   else
+      AC_MSG_ERROR([--enable-debugging only works for a gcc-like compiler])
    fi
-else
-   CFLAGS="${CFLAGS} -O3"
+elif test x"${CFLAGS}" = x; then
+   CFLAGS="-O3"
 fi
 
 
