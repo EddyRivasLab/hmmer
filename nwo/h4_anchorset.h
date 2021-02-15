@@ -25,12 +25,20 @@ typedef struct {
  *   concatenate anchorsets.
  *
  *   Anchors are indexed 1..D, with a[0] and a[D+1] used as sentinels.
- *     a[0].i0,k0   = (0,0)
- *     a[D+1].i0,k0 = (L+1,M+1)
+ *     a[0].i0,k0   = (0,M+1)
+ *     a[D+1].i0,k0 = (L+1,0)
  *
  *   Therefore, for D domains, anch->a[] is always allocated for at
  *   least D+2 <H4_ANCHOR> structures, (0) 1..D (D+1).
- */
+ *
+ *   These particular sentinel values are required for two access
+ *   patterns we use in ASC matrices. See h4_anchorset.md for
+ *   explication.
+ * 
+ *   In an empty anchorset (D=0), sentinels are allowed to be (0,0),
+ *   for cases where L,M are not yet known. Sentinels must be set
+ *   whenever D>0.
+ */ 
 typedef struct {
   H4_ANCHOR *a;         // array of anchor (i0,k0) coords: (0) 1..D (D+1)
   int32_t    D;         // number of domains in <a>, exclusive of 2 sentinels

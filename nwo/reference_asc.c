@@ -1,21 +1,26 @@
-/* Reference implementations of anchor-set-constrained (ASC) dynamic
+/* Reference implementation of anchor-set-constrained (ASC) dynamic
  * programming.
  *
  * The ASC technique sums over all paths consistent with a particular
  * domain annotation. A domain annotation for D domains is defined by
- * an "anchor set" of D anchors i0,k0; each homologous region in a
- * valid path must align an Mk0 state (ML or MG) to residue x_i0.
+ * an "anchor set" of D anchors i0,k0. Each domain in a valid path
+ * must align an Mk0 state (ML or MG) to residue x_i0.
  *
  * This is the reference implementation, used for testing. It is not
- * used in HMMER's main executables. The production code uses sparse
- * ASC DP.
+ * used in HMMER's main programs. The production code uses sparse ASC
+ * DP.
  *
+ * These routines use the table-driven log-sum-exp approximation;
+ * caller must have initialized with <h4_logsum_init()> before they
+ * will work.
+ * 
  * Contents:
  *   1. ASC Forward
  *   2. ASC Backward
- *   x. Unit tests
- *   x. Test driver
- *   x. Example
+ *   3. ASC Decoding
+ *   4. Unit tests
+ *   5. Test driver
+ *   6. Example
  */
 #include "h4_config.h"
 
@@ -685,9 +690,267 @@ h4_reference_asc_Backward(const ESL_DSQ *dsq, int L, const H4_PROFILE *hmm, cons
 }
 
 
+/*****************************************************************
+ * 3. ASC Decoding
+ *****************************************************************/
+
+/* Function:  h4_reference_asc_Decoding()
+ * Synopsis:  Anchor-set-constrained (ASC) Decoding algorithm.
+ * Incept:    SRE, Fri 12 Feb 2021
+ *
+ * Purpose:   The anchor-set-constrained ASC Decoding algorithm.
+ *            Given calculated Forward and Backward up/down matrices <afu>/<afd>
+ *            and <abu>/<abd>, for a comparison of profile <hmm> to sequence <dsq> of length <L>,
+ *            in comparison mode <mo>, constrained by anchor set <anch>: compute the
+ *            posterior decoding matrices <apu> and <apd>.
+ *
+ *            Caller provides preallocated matrices <apu>,<apd>. They
+ *            can be of any contents and any allocated size; they will
+ *            be reinitialized and reallocated here.
+ *
+ *            Alternatively, the caller can overwrite the ASC Backward matrices
+ *            by passing <abu>/<abd> for <apu>/apd>. That is, the call can look like
+ *            <(... afu, afd, abu, abd, abu, abd)>. 
+ *
+ * Args:      input:
+ *            dsq     - digital sequence, 1..L
+ *            L       - length of dsq
+ *            hmm     - profile HMM
+ *            mo      - comparison mode, with length set
+ *            anch    - anchorset
+ *            afu     - ASC Forward UP matrix
+ *            afd     - ASC Forward DOWN matrix
+ *            abu     - ASC Backward UP matrix
+ *            abd     - ASC Backward DOWN matrix
+ *
+ *            output (allocated object provided):
+ *            apu     - ASC UP matrix
+ *            apd     - ASC DOWN matrix
+ *
+ * Returns:   <eslOK> on success
+ *
+ * Throws:    <eslEMEM> on re-allocation failure.
+ *
+ * Xref:      H10/28: on <const H4_REFMX *abu, ... H4_REFMX *abu> being valid in C.
+ */
+int
+h4_reference_asc_Decoding(const ESL_DSQ *dsq, int L, const H4_PROFILE *hmm, const H4_MODE *mo, const H4_ANCHORSET *anch,
+                          const H4_REFMX *afu, const H4_REFMX *afd, const H4_REFMX *abu, const H4_REFMX *abd,
+                          H4_REFMX *apu, H4_REFMX *apd)
+{
+  const float *rsc;		// ptr to current row's residue emission scores in <hmm>
+  float       *fwdp;		// ptr into row of Forward DP matrix, UP or DOWN (<afu> or <afd>)
+  float       *bckp;		// ptr into row of Backward DP matrix (<abu> or <abd>)
+  float       *ppp;		// ptr into row of Decoding DP matrix (<apu> or <apd>)
+  const int    M = hmm->M;	// for clarity, pull out model's size
+  const int    D = anch->D;     //   ... similarly, # of domains
+  int          d, i, k, s;	// indices for D domains, L residues, M nodes, and 6 states (or a whole row of them)
+  int          iend;		// tmp var for start or end of a chunk in UP or DOWN matrices 
+  float        totsc;		// overall Backward (=Forward) score, our normalization factor  
+  float        denom;		// sum of pp for all emitting states for this residue, for renorm
+  float        delta;		// piece of probability alloted to Dj in G->D1..Dk-1->Mk and G->D1..Dk->Ik wings
+  float        xJ, xC;		// used to keep J,C fwd scores from prev row, for decoding JJ/CC
+  float        xG;		// for clarity, tmp var, G(i-1) pulled out for wing unfolding
+  int          status;
+
+  /* Contract checks / argument validation */
+  ESL_DASSERT1( (afu->type == h4R_ASC_FWD_UP)   );
+  ESL_DASSERT1( (afd->type == h4R_ASC_FWD_DOWN) );
+  ESL_DASSERT1( (abu->type == h4R_ASC_BCK_UP)   );
+  ESL_DASSERT1( (abd->type == h4R_ASC_BCK_DOWN) );
+  ESL_DASSERT1( (afu->L == L && afd->L == L && abu->L == L && abd->L == L) );
+  ESL_DASSERT1( (afu->M == M && afd->M == M && abu->M == M && abd->M == M) );
+ 
+  /* Reallocation, if needed. 
+   * Caller is allowed to overwrite abu -> apu, abd -> apd
+   */
+  if ( apu != abu && ( status = h4_refmx_GrowTo(apu, M, L)) != eslOK) return status;
+  if ( apd != abd && ( status = h4_refmx_GrowTo(apd, M, L)) != eslOK) return status;
+  apu->L = apd->L = L;
+  apu->M = apd->M = M;
+  apu->type = h4R_ASC_DECODE_UP;
+  apd->type = h4R_ASC_DECODE_DOWN;
+
+  /* Initialize specials on rows 1..i0[1]-1 
+   * We've above the first anchor, so only S->N->B->{LG} is possible in specials. 
+   * We pick up totsc from row 0 of backwards.
+   */
+  for (i = 0; i < anch->a[1].i0; i++)
+    {
+      fwdp  = afd->dp[i] + (M+1) * h4R_NSCELLS;
+      bckp  = abd->dp[i] + (M+1) * h4R_NSCELLS;
+      ppp   = apd->dp[i] + (M+1) * h4R_NSCELLS;
+
+      if (i == 0) totsc = bckp[h4R_N]; 
+
+      ppp[h4R_JJ] = 0.0;	
+      ppp[h4R_CC] = 0.0; 
+      ppp[h4R_E]  = 0.0; 
+      ppp[h4R_N]  = (i == 0 ? 1.0 : expf(fwdp[h4R_N] + bckp[h4R_N] - totsc));
+      ppp[h4R_J]  = 0.0;  
+      ppp[h4R_B]  = expf(fwdp[h4R_B] + bckp[h4R_B] - totsc);
+      ppp[h4R_L]  = expf(fwdp[h4R_L] + bckp[h4R_L] - totsc);
+      ppp[h4R_G]  = expf(fwdp[h4R_G] + bckp[h4R_G] - totsc); 
+      ppp[h4R_C]  = 0.0;
+
+      *(apu->dp[i]) = ppp[h4R_N];  // that's a hack. We'll need a rowwise sum over emitters for renormalizaion.
+                                   // stash partial sum in k=0,ML slot of UP, which is otherwise unused
+    }
+
+
+  for (d = 1; d <= D; d++)
+    {
+      /* UP sector */
+      /* Row iend-1 (0, for example, but also the top edge of each UP matrix) is a boundary case:
+       * only reachable by wing retraction. Initialize it all to zero.
+       */
+      iend = anch->a[d-1].i0+1;
+      for (s = 0; s < anch->a[d].k0*h4R_NSCELLS; s++) apu->dp[iend-1][s] = 0.;
+
+      for (i = iend; i < anch->a[d].i0; i++)
+	{
+	  /* Wing unfolding of G->D1..Dk-1->MGk and G->D1..Dk->IGk paths:
+           * increment PREVIOUS row i-1 with these.
+	   * 
+	   * In Forward/Backward we used G->{M,I}Gk entry directly, but in
+           * decoding we need the posterior probs of the D's. Each Dj in the
+           * PREVIOUS row gets an added correction <delta>, which is
+           * the sum of all G->Mk|Ik paths that run through it, j<k.
+           * This step is the only reason we need <rsc>, hence <dsq>,
+           * in posterior decoding.
+	   */
+	  bckp  = abu->dp[i]       + (anch->a[d].k0-1) * h4R_NSCELLS;  // bckp on i, k0-1
+	  ppp   = apu->dp[i-1]     + (anch->a[d].k0-1) * h4R_NSCELLS;  // ppp starts on i+1, k0-1 (PREVIOUS row)
+	  rsc   = hmm->rsc[dsq[i]] + (anch->a[d].k0-1);
+    	  xG    = *(afd->dp[i-1] + (M+1) * h4R_NSCELLS + h4R_G);       // ugh. I don't see any good way of avoiding this reach out into memory
+	  delta = 0.0;
+	  for (k = anch->a[d].k0-1; k >= 1; k--)
+	    {
+              delta       += expf(xG + hmm->tsc[k][h4_GI] + bckp[h4R_IG] - totsc);          // add G->D1..Dk->Ik
+	      ppp[h4R_DG] += delta;                                                         // store at k
+	      delta       += expf(xG + hmm->tsc[k-1][h4_GM] + *rsc + bckp[h4R_MG] - totsc); // add G->D1..Dk-1->Mk, delay store
+	      ppp  -= h4R_NSCELLS;
+	      bckp -= h4R_NSCELLS;
+              rsc--;
+	    }
+
+          fwdp  = afu->dp[i] + h4R_NSCELLS;  // e.g. [i][1]
+	  bckp  = abu->dp[i] + h4R_NSCELLS;  //  ... ditto
+	  ppp   = apu->dp[i];
+	  denom = *ppp;	 // pick up what we stashed earlier; we're now going to finish row i and renormalize if needed 
+	  for (s = 0; s < h4R_NSCELLS; s++) *ppp++ = 0.0;
+
+	  /* Main decoding recursion UP cells in row i
+	   */
+	  for (k = 1; k < anch->a[d].k0; k++)
+	    {
+	      ppp[h4R_ML] = expf(fwdp[h4R_ML] + bckp[h4R_ML] - totsc); denom += ppp[h4R_ML];
+	      ppp[h4R_MG] = expf(fwdp[h4R_MG] + bckp[h4R_MG] - totsc); denom += ppp[h4R_MG];
+	      ppp[h4R_IL] = expf(fwdp[h4R_IL] + bckp[h4R_IL] - totsc); denom += ppp[h4R_IL];
+	      ppp[h4R_IG] = expf(fwdp[h4R_IG] + bckp[h4R_IG] - totsc); denom += ppp[h4R_IG];
+	      ppp[h4R_DL] = expf(fwdp[h4R_DL] + bckp[h4R_DL] - totsc);
+	      ppp[h4R_DG] = expf(fwdp[h4R_DG] + bckp[h4R_DG] - totsc);
+
+	      fwdp += h4R_NSCELLS;
+	      bckp += h4R_NSCELLS;
+	      ppp  += h4R_NSCELLS;
+	    }
+
+          /* Because of numerical error, we force rowwise renormalization.
+           * The tricky bit here is that i could be emitted either in UP or DOWN sector.
+           * So to collect the sum for the denominator, we need the partial sum from DOWN (and its JJ/CC specials),
+           * which is why we have that denom-stashing hack;
+           * and when we renormalize row i here, we do UP, DOWN, and specials (in DOWN).
+           */
+      	  //#ifndef p7REFERENCE_ASC_DECODING_TESTDRIVE
+	  denom = 1.0 / denom;		                                                // multiplication may be faster than division
+	  ppp   = apu->dp[i] + h4R_NSCELLS;                                             // that's k=1 in UP
+	  for (s = 0; s < (anch->a[d].k0-1) * h4R_NSCELLS; s++) *ppp++ *= denom;        // UP matrix row i renormalized
+	  ppp   = apd->dp[i] + (anch->a[d].k0) * h4R_NSCELLS;                           // that's k0 in DOWN
+	  for (s = 0; s < (M - anch->a[d].k0 + 1) * h4R_NSCELLS; s++) *ppp++ *= denom;  // DOWN matrix row i renormalized
+	  for (s = 0; s < h4R_NXCELLS; s++) ppp[s] *= denom;
+	  //#endif
+        } // end loop over i's in UP sector for domain d
+
+      /* One last wing-retracted row:
+       * On last row of each UP chunk, the i0(d)-1 row, those DG's
+       * are reachable on a G(i)->D1...Dk0-1->MG(i0,k0) path 
+       * to the anchor cell itself that we need to unfold;
+       * and the bck value at the anchor is in the DOWN matrix.
+       * The G->D1..Dk->Ik path isn't relevant here because the anchor is ML|MG.
+       */
+      i     = anch->a[d].i0;	
+      k     = anch->a[d].k0;
+      xG    = *(afd->dp[i-1] + (M+1) * h4R_NSCELLS + h4R_G); // ugly, sorry. Reach out and get the xG value on row i0-1.
+      bckp  = abd->dp[i]      + k * h4R_NSCELLS;             // *bckp is the anchor cell i0,k0 (in DOWN)
+      rsc   = hmm->rsc[dsq[i]] + k;
+      delta = expf(xG + hmm->tsc[k-1][h4_GM] + *rsc + bckp[h4R_MG] - totsc);  // k-1 because GMk is stored off by one, in -1 slot
+      ppp   = apu->dp[i-1] + h4R_NSCELLS;                    // ppp starts on i-1,k=1 cells
+      for (k = 1; k < anch->a[d].k0; k++) 
+	{
+	  ppp[h4R_DG] += delta;   // unlike the main wing retraction above, there's only one path going through these 
+	  ppp += h4R_NSCELLS;     //   DGk's (the G->Mk0 entry into the anchor cell), so there's no retro-accumulation of delta
+	}
+
+      /* main recursion for the DOWN sector */
+      xJ = xC = -eslINFINITY;
+      for (i = anch->a[d].i0; i < anch->a[d+1].i0; i++)
+	{
+	  fwdp  = afd->dp[i] + anch->a[d].k0 * h4R_NSCELLS;
+	  bckp  = abd->dp[i] + anch->a[d].k0 * h4R_NSCELLS;
+	  ppp   = apd->dp[i] + anch->a[d].k0 * h4R_NSCELLS;
+	  denom = 0.0;
+	  
+	  for (k = anch->a[d].k0; k <= M; k++)
+	    {
+	      ppp[h4R_ML] = expf(fwdp[h4R_ML] + bckp[h4R_ML] - totsc); denom += ppp[h4R_ML];
+	      ppp[h4R_MG] = expf(fwdp[h4R_MG] + bckp[h4R_MG] - totsc); denom += ppp[h4R_MG];
+	      ppp[h4R_IL] = expf(fwdp[h4R_IL] + bckp[h4R_IL] - totsc); denom += ppp[h4R_IL];
+	      ppp[h4R_IG] = expf(fwdp[h4R_IG] + bckp[h4R_IG] - totsc); denom += ppp[h4R_IG];
+	      ppp[h4R_DL] = expf(fwdp[h4R_DL] + bckp[h4R_DL] - totsc);
+	      ppp[h4R_DG] = expf(fwdp[h4R_DG] + bckp[h4R_DG] - totsc);
+
+	      fwdp += h4R_NSCELLS;
+	      bckp += h4R_NSCELLS;
+	      ppp  += h4R_NSCELLS;
+	    }
+	  /* fwdp, bckp, ppp now all sit at M+1, start of specials */
+
+  	  ppp[h4R_JJ] = (d == D ? 0.0 : expf(xJ + mo->xsc[h4_J][h4_LOOP] + bckp[h4R_J] - totsc)); xJ = fwdp[h4R_J]; denom += ppp[h4R_JJ];
+	  ppp[h4R_CC] = (d  < D ? 0.0 : expf(xC + mo->xsc[h4_C][h4_LOOP] + bckp[h4R_C] - totsc)); xC = fwdp[h4R_C]; denom += ppp[h4R_CC];
+	  ppp[h4R_E]  = expf(fwdp[h4R_E] + bckp[h4R_E] - totsc); 
+	  ppp[h4R_N]  = 0.0;
+	  ppp[h4R_J]  = (d == D ? 0.0 : expf(fwdp[h4R_J] + bckp[h4R_J] - totsc));
+	  ppp[h4R_B]  = expf(fwdp[h4R_B] + bckp[h4R_B] - totsc); 
+	  ppp[h4R_L]  = expf(fwdp[h4R_L] + bckp[h4R_L] - totsc);
+	  ppp[h4R_G]  = expf(fwdp[h4R_G] + bckp[h4R_G] - totsc);  
+	  ppp[h4R_C]  = (d  < D ? 0.0 : expf(fwdp[h4R_C] + bckp[h4R_C] - totsc));
+
+          /* Even with forced renormalization, I don't think you can
+	   * do much better than the error inherent in the default
+	   * h4_logsum() calculation. For example, the calculation of
+	   * ppp[C] above can give a pp of > 1.0, even if the sum of
+	   * all emitters on the row is denom=1.0, because of logsum
+	   * table approximation error in fwdp[C].
+	   */
+	  if (d < D) *(apu->dp[i]) = denom;  // hack: stash denom, which we'll pick up again when we do the next UP matrix.
+	  //#ifndef p7REFERENCE_ASC_DECODING_TESTDRIVE
+	  if (d == D) 
+	    { // UP matrices only go through anch[D].i-1, so for last DOWN chunk, we need to renormalize.
+	      denom = 1.0 / denom;
+	      ppp = apd->dp[i] + (anch->a[d].k0) * h4R_NSCELLS;                           // that's k0 in DOWN
+	      for (s = 0; s < (M - anch->a[d].k0 + 1) * h4R_NSCELLS; s++) *ppp++ *= denom; 
+	      for (s = 0; s < h4R_NXCELLS; s++) ppp[s] *= denom;
+	    }
+	  //#endif
+	} /* end loop over i's in DOWN chunk for domain d*/
+    } /* end loop over domains d=0..D-1 */
+  return eslOK;
+}
+
 
 /*****************************************************************
- * x. Unit tests
+ * 4. Unit tests
  *****************************************************************/
 #ifdef h4REFERENCE_ASC_TESTDRIVE
 
@@ -695,78 +958,45 @@ h4_reference_asc_Backward(const ESL_DSQ *dsq, int L, const H4_PROFILE *hmm, cons
 #include "esl_sq.h"
 #include "esl_sqio.h"
 
+#include "ascmx.h"
 #include "emit.h"
 #include "general.h"
 #include "modelsample.h"
 #include "reference_dp.h"
 
-
-/* ascmatrix_compare()
+/* The unit tests create a variety of contrived comparisons where we
+ * can compare standard DP matrices and/or results to ASC matrices
+ * and/or results. Routines for creating these contrived comparisons
+ * are in modelsample.c.
  * 
- * Compare a standard DP matrix <std> to ASC UP and DOWN matrices
- * <ascu> and <ascd>, using anchor set <anch>.  Compare all valid
- * values in the ASC matrices to their counterparts in the standard
- * matrix. If any absolute difference exceeds <tolerance>, return
- * <eslFAIL>. Else return <eslOK>.
+ * Most of the tests (all but "singlemulti") create comparisons where
+ * the standard and the ASC calculations have identical path
+ * ensembles, by forcing the standard DP calculation to use the anchor
+ * cells even without constraint by the ASC algorithm. Forcing this
+ * requires unusual models, but there are various ways to do it, and
+ * different ways allows us to test different aspects of the model, as
+ * summarized below (also see SRE:J13/59):
+ *                                                                     same   
+ *                      multiple   N/C/J     I             multiple   std,ASC
+ *  Unit test            paths?    emits?  emits?  Local?  domains?   ensemble?
+ *  ---------------     --------  -------  ------  ------  --------   ---------
+ *  singlepath              -        -      1/0       -        -        YES
+ *  singlesingle            -       YES     YES       -        -        YES
+ *  singlemulti             -       YES     YES       -       YES         -
+ *  ensemble uni          YES       YES     YES       -        -        YES
+ *  ensemble local        YES        -       -       YES       -          -
+ *  ensemble multi        YES        -       -        -       YES         -  
  * 
- * Similar to h4_refmx_Compare(). See notes there for why we prefer
- * absolute, not relative difference (short version: error accumulates
- * more as an absolute # per term added; DP cells with values close to
- * zero may have large relative errors).
+ * The three single pathed tests verify that the decoding matrix has
+ * pp=1.0 along the trace, 0.0 elsewhere. (The singlemulti test is
+ * special: the ASC Decoding matrix has only one nonzero path, the
+ * trace, but standard DP has an ensemble.) Ensemble tests compare
+ * standard to ASC matrices.
+ * 
+ * When comparing ASC matrices to standard Decoding matrices
+ * cell-by-cell, if there is an ensemble, we have to marginalize
+ * UP+DOWN before doing the comparison.
  */
-static int
-ascmatrix_compare(H4_REFMX *std, H4_REFMX *ascu, H4_REFMX *ascd, H4_ANCHORSET *anch, float abstol)
-{
-  char  msg[] = "comparison of ASC DP F|B matrix to standard DP F|B matrix failed";
-  int   M     = std->M;
-  int   L     = std->L;
-  float val;
-  int   d,i,k,s;
-
-  /* Contract checks */
-  ESL_DASSERT1( (ascu->M == M && ascu->L == L));
-  ESL_DASSERT1( (ascd->M == M && ascd->L == L));
-  ESL_DASSERT1( ((std->type == h4R_FORWARD  && ascu->type == h4R_ASC_FWD_UP && ascd->type == h4R_ASC_FWD_DOWN) ||
-		 (std->type == h4R_BACKWARD && ascu->type == h4R_ASC_BCK_UP && ascd->type == h4R_ASC_BCK_DOWN)));
-
-  for (d = 1, i = 0; i <= L; i++)
-    {
-      if (i == anch->a[d].i0) d++;  // d = idx of current UP matrix; d-1 is current DOWN
-      for (k = 1; k <= M; k++)      //   ... alternatively, you can think d = idx of next anchor we'll reach (1..D; D+1 when we're past final anchor)
-	for (s = 0; s < h4R_NSCELLS; s++)
-	  {
-            // It's possible for an i,k to be valid in both DOWN and UP matrices, in which case
-            // some paths are in each; we have to sum to get what's in the unconstrained matrix.
-            // Thus we traverse the afu/afd matrices in an unusual pattern, sweeping out all i,k
-            // and testing which ones are valid in afu and afd.
-	    val = -eslINFINITY;
-	    if (d > 1        && k >= anch->a[d-1].k0) val = h4_logsum(val, H4R_MX(ascd,i,k,s)); // DOWN (valid rows start at a[1].i0. Start looking at DOWN at first anchor.)
-	    if (d <= anch->D && k <  anch->a[d].k0)   val = h4_logsum(val, H4R_MX(ascu,i,k,s)); // UP   (valid rows end at a[D].i0. Stop looking at UP when we're at last anchor.)
-	    
-	    if (val != -eslINFINITY && esl_FCompareNew(H4R_MX(std,i,k,s), val, 0.0, abstol) != eslOK)
-	      ESL_FAIL(eslFAIL, NULL, msg);
-	  }
-
-      for (s = 0; s < h4R_NXCELLS; s++)
-	{
-	  /* special exception: ignore L state in this test, for Backwards.
-	   * reference backward can have valid prob for {MI}(k<k0) on
-	   * the anchor row, and via M->I, reference can reach an Mk
-	   * on any row i that ASC can't reach, in addition to Mk that
-	   * ASC can reach; thus L can legitimately differ between ASC
-	   * and reference Backward. [H5/26]
-	   */
-	  if (std->type == h4R_BACKWARD && s == h4R_L) continue;
-
-	  val = H4R_XMX(ascd,i,s);
-	  if (val != -eslINFINITY && esl_FCompareNew(H4R_XMX(std,i,s), val, 0.0, abstol) != eslOK)
-	    ESL_FAIL(eslFAIL, NULL, msg);
-	}
-    }
-  return eslOK;
-}
-
-
 
 
 /* "singlepath" test
@@ -783,6 +1013,8 @@ ascmatrix_compare(H4_REFMX *std, H4_REFMX *ascu, H4_REFMX *ascd, H4_ANCHORSET *a
  *   3. Viterbi DP matrix cells = Forward cells
  *   4. ASC Forward U/D matrix cells = Fwd cells, within ASC regions
  *   5. (ditto for ASC Backward, Bck)
+ *   6. ASC Decoding matrix has 1.0 for all cells in trace
+ *   7. ASC Decoding matrix = std Decoding, all cells in ASC regions.
  */
 static void
 utest_singlepath(FILE *diagfp, ESL_RANDOMNESS *rng, const ESL_ALPHABET *abc, int M)
@@ -797,10 +1029,13 @@ utest_singlepath(FILE *diagfp, ESL_RANDOMNESS *rng, const ESL_ALPHABET *abc, int
   H4_REFMX     *rxv       = h4_refmx_Create(100,100);   // reference Viterbi DP matrix
   H4_REFMX     *rxf       = h4_refmx_Create(100,100);   // reference Forward DP matrix
   H4_REFMX     *rxb       = h4_refmx_Create(100,100);   // reference Backward DP matrix
+  H4_REFMX     *rxd       = h4_refmx_Create(100,100);   // reference Decoding DP matrix
   H4_REFMX     *afu       = h4_refmx_Create(100,100);   // ASC Forward UP matrix
   H4_REFMX     *afd       = h4_refmx_Create(100,100);   // ASC Forward DOWN matrix
   H4_REFMX     *abu       = h4_refmx_Create(100,100);   // ASC Backward UP matrix
   H4_REFMX     *abd       = h4_refmx_Create(100,100);   // ASC Backward DOWN matrix
+  H4_REFMX     *apu       = h4_refmx_Create(100,100);   // ASC Decoding UP matrix
+  H4_REFMX     *apd       = h4_refmx_Create(100,100);   // ASC Decoding DOWN matrix
   float         tsc, vsc, fsc, bsc, asc_f, asc_b;
   float         abstol    = 0.0001;
 
@@ -817,24 +1052,28 @@ utest_singlepath(FILE *diagfp, ESL_RANDOMNESS *rng, const ESL_ALPHABET *abc, int
   if ( h4_reference_Viterbi (sq->dsq, sq->n, hmm, mo, rxv, vpi, &vsc) != eslOK) esl_fatal(failmsg);
   if ( h4_reference_Forward (sq->dsq, sq->n, hmm, mo, rxf,      &fsc) != eslOK) esl_fatal(failmsg);
   if ( h4_reference_Backward(sq->dsq, sq->n, hmm, mo, rxb,      &bsc) != eslOK) esl_fatal(failmsg);
+  if ( h4_reference_Decoding(sq->dsq, sq->n, hmm, mo, rxf, rxb, rxd)  != eslOK) esl_fatal(failmsg);
 
   if ( h4_reference_asc_Forward (sq->dsq, sq->n, hmm, mo, anch, afu, afd, &asc_f) != eslOK) esl_fatal(failmsg);
   if ( h4_reference_asc_Backward(sq->dsq, sq->n, hmm, mo, anch, abu, abd, &asc_b) != eslOK) esl_fatal(failmsg);
+  if ( h4_reference_asc_Decoding(sq->dsq, sq->n, hmm, mo, anch, afu, afd, abu, abd, apu, apd) != eslOK) esl_fatal(failmsg);
 
-
-#if 0
+  //#if 0
   esl_sqio_Write(stdout, sq, eslSQFILE_FASTA, FALSE);
   h4_profile_Dump(stdout, hmm);
   h4_mode_Dump(stdout, mo);
   //h4_refmx_Dump(stdout, rxf);
-  h4_refmx_Dump(stdout, rxb);
+  //h4_refmx_Dump(stdout, rxb);
+  h4_refmx_Dump(stdout, rxd);
   //h4_refmx_Dump(stdout, afu);
   //h4_refmx_Dump(stdout, afd);
-  h4_refmx_Dump(stdout, abu);
-  h4_refmx_Dump(stdout, abd);
+  //h4_refmx_Dump(stdout, abu);
+  //h4_refmx_Dump(stdout, abd);
+  h4_refmx_Dump(stdout, apu);
+  h4_refmx_Dump(stdout, apd);
 
   h4_path_Dump(stdout, pi);
-  h4_path_Dump(stdout, vpi);
+  //h4_path_Dump(stdout, vpi);
   h4_anchorset_Dump(stdout, anch);
 
   printf("tsc   = %.3f\n", tsc);
@@ -842,7 +1081,7 @@ utest_singlepath(FILE *diagfp, ESL_RANDOMNESS *rng, const ESL_ALPHABET *abc, int
   printf("bsc   = %.3f\n", bsc);
   printf("asc_f = %.3f\n", asc_f);
   printf("asc_b = %.3f\n", asc_b);
-#endif
+  //#endif
 
   if ( h4_path_Compare(pi, vpi)                 != eslOK) esl_fatal(failmsg);
   if ( esl_FCompareNew(tsc, vsc,   0.0, abstol) != eslOK) esl_fatal(failmsg);
@@ -856,8 +1095,12 @@ utest_singlepath(FILE *diagfp, ESL_RANDOMNESS *rng, const ESL_ALPHABET *abc, int
   if (h4_refmx_Compare(rxf, rxv, abstol) != eslOK) esl_fatal(failmsg);
   rxv->type = h4R_VITERBI;
 
-  if ( ascmatrix_compare(rxf, afu, afd, anch, abstol) != eslOK) esl_fatal(failmsg);
-  if ( ascmatrix_compare(rxb, abu, abd, anch, abstol) != eslOK) esl_fatal(failmsg);
+  if ( h4_ascmx_fb_compare_std(rxf, afu, afd, anch, abstol) != eslOK) esl_fatal(failmsg);
+  if ( h4_ascmx_fb_compare_std(rxb, abu, abd, anch, abstol) != eslOK) esl_fatal(failmsg);
+
+  if ( h4_ascmx_pp_compare_path(pi,  apu, apd, anch, abstol)  != eslOK) esl_fatal(failmsg);
+  if ( h4_ascmx_pp_compare_std (rxd, apu, apd, anch, abstol)  != eslOK) esl_fatal(failmsg);
+  if ( h4_ascmx_pp_Validate    (apu, apd, anch, abstol, NULL) != eslOK) esl_fatal(failmsg);
 
   h4_refmx_Destroy(afu); h4_refmx_Destroy(afd); 
   h4_refmx_Destroy(abu); h4_refmx_Destroy(abd);

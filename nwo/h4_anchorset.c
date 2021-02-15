@@ -58,9 +58,9 @@ h4_anchorset_Create(int D, int L, int M)
 
   ESL_ALLOC(anch->a, sizeof(H4_ANCHOR) * (anch->nalloc));
   anch->a[0].i0   = 0;
-  anch->a[0].k0   = 0;
+  anch->a[0].k0   = (M == 0 ? 0 : M+1);
   anch->a[D+1].i0 = (L == 0 ? 0 : L+1);
-  anch->a[D+1].k0 = (M == 0 ? 0 : M+1);
+  anch->a[D+1].k0 = 0;
   return anch;
 
  ERROR:
@@ -96,7 +96,7 @@ h4_anchorset_Add(H4_ANCHORSET *anch, int i0, int k0)
     ESL_EXCEPTION(eslEINVAL, "anchors must be added in order, left to right across sequence");
 
   anch->D++;
-  anch->a[anch->D+1].i0 = anch->a[anch->D].i0;
+  anch->a[anch->D+1].i0 = anch->a[anch->D].i0;  // move the right sentinel over one
   anch->a[anch->D+1].k0 = anch->a[anch->D].k0;
   anch->a[anch->D].i0   = i0;
   anch->a[anch->D].k0   = k0;
@@ -254,18 +254,29 @@ h4_anchorset_Dump(FILE *fp, H4_ANCHORSET *anch)
 int
 h4_anchorset_Validate(H4_ANCHORSET *anch, char *errmsg)
 {
-  int L = anch->a[anch->D+1].i0 - 1;  // the D+1 sentinel is (L+1,M+1)
-  int M = anch->a[anch->D+1].k0 - 1;
+  int M = anch->a[0].k0 - 1;          // the 0 sentinel is (0, M+1);  or it can be 0,0 (not set yet) if D=0, so M=-1 can happen here
+  int L = anch->a[anch->D+1].i0 - 1;  // the D+1 sentinel is (L+1,0); or it can be 0,0 (not set yet) if D=0, so L=-1 can happen here
+  int D = anch->D;
   int d;
 
-  if (anch->D < 1)                               ESL_FAIL(eslFAIL, errmsg, "number of domains D must be >= 1");
-  if (anch->a[0].i0 != 0 || anch->a[0].k0 != 0)  ESL_FAIL(eslFAIL, errmsg, "anchorset [0] sentinel needs to be 0,0");
-  if (L < 0 || M < 0)                            ESL_FAIL(eslFAIL, errmsg, "anchorset [D+1] sentinel needs to be L+1,M+1");
-  for (d = 1; d <= anch->D; d++)
+  if (anch->a[0].i0   != 0) ESL_FAIL(eslFAIL, errmsg, "i0(0) sentinel not 0");
+  if (anch->a[D+1].k0 != 0) ESL_FAIL(eslFAIL, errmsg, "k0(D+1) sentinel not 0");
+
+  if (D == 0)  // the anchorset is still empty. Now sentinels can be (0,0),(0,0), or they can be (0,M+1),(L+1,0).
     {
-      if (anch->a[d].i0 < 1 || anch->a[d].i0 > L) ESL_FAIL(eslFAIL, errmsg, "bad i0. anchors are i0,k0 for i0=1..L, k0=1..M");
-      if (anch->a[d].k0 < 1 || anch->a[d].k0 > M) ESL_FAIL(eslFAIL, errmsg, "bad k0. anchors are i0,k0 for i0=1..L, k0=1..M");
-      if (anch->a[d].i0 <= anch->a[d-1].i0)       ESL_FAIL(eslFAIL, errmsg, "anchors need to be ordered in i; i0(d) > i0(d-1)");
+      if (L < -1 || L == 0) ESL_FAIL(eslFAIL, errmsg, "sentinels improperly set in empty anchorset"); 
+      if (M < -1 || M == 0) ESL_FAIL(eslFAIL, errmsg, "sentinels improperly set in empty anchorset"); 
+    }
+  else
+    {
+      if (anch->D < 1)     ESL_FAIL(eslFAIL, errmsg, "number of domains D must be >= 1");
+      if (L < 1 || M < 1)  ESL_FAIL(eslFAIL, errmsg, "sentinels improperly set in anchorset");
+      for (d = 1; d <= anch->D; d++)
+        {
+          if (anch->a[d].i0 < 1 || anch->a[d].i0 > L) ESL_FAIL(eslFAIL, errmsg, "bad i0. anchors are i0,k0 for i0=1..L, k0=1..M");
+          if (anch->a[d].k0 < 1 || anch->a[d].k0 > M) ESL_FAIL(eslFAIL, errmsg, "bad k0. anchors are i0,k0 for i0=1..L, k0=1..M");
+          if (anch->a[d].i0 <= anch->a[d-1].i0)       ESL_FAIL(eslFAIL, errmsg, "anchors need to be ordered in i; i0(d) > i0(d-1)");
+        }
     }
   if (anch->nalloc   < anch->D+2) ESL_FAIL(eslFAIL, errmsg, "anchorset allocation is too small (D+2 sentinels)");
   if (anch->nredline <= 2)        ESL_FAIL(eslFAIL, errmsg, "anchorset redline needs to be at least 2, for sentinels");
