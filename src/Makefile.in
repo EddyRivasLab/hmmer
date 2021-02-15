@@ -51,14 +51,14 @@ mandir      = @mandir@
 man1dir     = ${mandir}/man1
 man1ext     = .1
 
-CC        = @CC@
-CFLAGS    = @CFLAGS@ @PTHREAD_CFLAGS@
-PIC_CFLAGS     = @PIC_CFLAGS@
-SIMDFLAGS = @SIMD_CFLAGS@
-CPPFLAGS  = @CPPFLAGS@
-LDFLAGS   = @LDFLAGS@
-DEFS      = @DEFS@
-LIBS      = -lhmmer -leasel -ldivsufsort @LIBGSL@ @MPILIBS@ @PTHREAD_LIBS@ @LIBS@ -lm
+CC         = @CC@
+CFLAGS     = @CFLAGS@ @PTHREAD_CFLAGS@
+PIC_CFLAGS = @PIC_CFLAGS@
+SIMDFLAGS  = @SIMD_CFLAGS@
+CPPFLAGS   = @CPPFLAGS@
+LDFLAGS    = @LDFLAGS@
+DEFS       = @DEFS@
+LIBS       = -lhmmer -leasel -ldivsufsort @LIBGSL@ @PTHREAD_LIBS@ @LIBS@ -lm
 
 AR        = @AR@ 
 RANLIB    = @RANLIB@

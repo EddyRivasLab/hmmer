@@ -15,6 +15,7 @@ OBJS   = \
 	h4_profile.o        \
 	h4_refmx.o          \
 	h4_sparsemask.o     \
+	ascmx.o             \
 	build.o             \
 	emit.o              \
 	eweight.o           \
@@ -53,6 +54,7 @@ HDRS = \
 	h4_profile.h        \
 	h4_refmx.h          \
 	h4_sparsemask.h     \
+	ascmx.h             \
 	build.h             \
 	emit.h              \
 	eweight.h           \
@@ -141,7 +143,7 @@ VMX_CFLAGS     = @VMX_CFLAGS@
 CPPFLAGS       = @CPPFLAGS@
 LDFLAGS        = @LDFLAGS@
 DEFS           = @DEFS@
-LIBS           = -lhmmer -leasel -ldivsufsort @MPILIBS@ @LIBS@ -lm
+LIBS           = -lhmmer -leasel -ldivsufsort @LIBS@ -lm
 
 AR             = @AR@
 RANLIB         = @RANLIB@

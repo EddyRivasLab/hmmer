@@ -20,7 +20,7 @@ PIC_CFLAGS     = @PIC_CFLAGS@
 CPPFLAGS      = @CPPFLAGS@
 LDFLAGS       = @LDFLAGS@
 DEFS          = @DEFS@
-LIBS          = ${LIBTMP} -lhmmer -leasel -ldivsufsort @MPILIBS@ @LIBS@ -lm
+LIBS          = ${LIBTMP} -lhmmer -leasel -ldivsufsort @LIBS@ -lm
 
 AR            = @AR@ 
 RANLIB        = @RANLIB@

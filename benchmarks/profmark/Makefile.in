@@ -21,7 +21,6 @@ CPPFLAGS     = @CPPFLAGS@
 LDFLAGS      = @LDFLAGS@
 DEFS         = @DEFS@
 LIBS         = -lhmmer -leasel -ldivsufsort @LIBS@ @LIBGSL@ @PTHREAD_LIBS@ -lm
-MPILIBS      = @MPILIBS@
 
 AR           = @AR@ 
 RANLIB       = @RANLIB@
@@ -60,7 +59,7 @@ all:    ${PROGS}
 	${QUIET_CC}${CC} ${CFLAGS} ${SIMDFLAGS} ${CPPFLAGS} ${DEFS} ${PTHREAD_CFLAGS} ${MYINCDIRS} -o $@ -c $<		
 
 ${PROGS}: % : %.o  ${MYLIBDEPS}
-	${QUIET_GEN}${CC} ${CFLAGS} ${SIMDFLAGS} ${DEFS} ${LDFLAGS} ${MYLIBDIRS} -o $@ $@.o ${MPILIBS} ${LIBS}
+	${QUIET_GEN}${CC} ${CFLAGS} ${SIMDFLAGS} ${DEFS} ${LDFLAGS} ${MYLIBDIRS} -o $@ $@.o ${LIBS}
 
 distclean: clean
 	-rm -f Makefile
