@@ -771,6 +771,13 @@ h4_reference_asc_Decoding(const ESL_DSQ *dsq, int L, const H4_PROFILE *hmm, cons
   apu->type = h4R_ASC_DECODE_UP;
   apd->type = h4R_ASC_DECODE_DOWN;
 
+#if eslDEBUGLEVEL > 0
+  if (abu != apu && abd != apd) {           // easier to debug if non-ASC cells are -inf
+    h4_refmx_SetValues(apu, -eslINFINITY);  // but we can only do this if we're not overwriting the bck mx
+    h4_refmx_SetValues(apd, -eslINFINITY);
+  }
+#endif
+
   /* Initialize specials on rows 1..i0[1]-1 
    * We've above the first anchor, so only S->N->B->{LG} is possible in specials. 
    * We pick up totsc from row 0 of backwards.
@@ -786,11 +793,11 @@ h4_reference_asc_Decoding(const ESL_DSQ *dsq, int L, const H4_PROFILE *hmm, cons
       ppp[h4R_JJ] = 0.0;	
       ppp[h4R_CC] = 0.0; 
       ppp[h4R_E]  = 0.0; 
-      ppp[h4R_N]  = (i == 0 ? 1.0 : expf(fwdp[h4R_N] + bckp[h4R_N] - totsc));
+      ppp[h4R_N]  = (i == 0 ? 1.0 : exp2f(fwdp[h4R_N] + bckp[h4R_N] - totsc));
       ppp[h4R_J]  = 0.0;  
-      ppp[h4R_B]  = expf(fwdp[h4R_B] + bckp[h4R_B] - totsc);
-      ppp[h4R_L]  = expf(fwdp[h4R_L] + bckp[h4R_L] - totsc);
-      ppp[h4R_G]  = expf(fwdp[h4R_G] + bckp[h4R_G] - totsc); 
+      ppp[h4R_B]  = exp2f(fwdp[h4R_B] + bckp[h4R_B] - totsc);
+      ppp[h4R_L]  = exp2f(fwdp[h4R_L] + bckp[h4R_L] - totsc);
+      ppp[h4R_G]  = exp2f(fwdp[h4R_G] + bckp[h4R_G] - totsc); 
       ppp[h4R_C]  = 0.0;
 
       *(apu->dp[i]) = ppp[h4R_N];  // that's a hack. We'll need a rowwise sum over emitters for renormalizaion.
@@ -826,9 +833,9 @@ h4_reference_asc_Decoding(const ESL_DSQ *dsq, int L, const H4_PROFILE *hmm, cons
 	  delta = 0.0;
 	  for (k = anch->a[d].k0-1; k >= 1; k--)
 	    {
-              delta       += expf(xG + hmm->tsc[k][h4_GI] + bckp[h4R_IG] - totsc);          // add G->D1..Dk->Ik
+              delta       += exp2f(xG + hmm->tsc[k][h4_GI] + bckp[h4R_IG] - totsc);          // add G->D1..Dk->Ik
 	      ppp[h4R_DG] += delta;                                                         // store at k
-	      delta       += expf(xG + hmm->tsc[k-1][h4_GM] + *rsc + bckp[h4R_MG] - totsc); // add G->D1..Dk-1->Mk, delay store
+	      delta       += exp2f(xG + hmm->tsc[k-1][h4_GM] + *rsc + bckp[h4R_MG] - totsc); // add G->D1..Dk-1->Mk, delay store
 	      ppp  -= h4R_NSCELLS;
 	      bckp -= h4R_NSCELLS;
               rsc--;
@@ -844,12 +851,12 @@ h4_reference_asc_Decoding(const ESL_DSQ *dsq, int L, const H4_PROFILE *hmm, cons
 	   */
 	  for (k = 1; k < anch->a[d].k0; k++)
 	    {
-	      ppp[h4R_ML] = expf(fwdp[h4R_ML] + bckp[h4R_ML] - totsc); denom += ppp[h4R_ML];
-	      ppp[h4R_MG] = expf(fwdp[h4R_MG] + bckp[h4R_MG] - totsc); denom += ppp[h4R_MG];
-	      ppp[h4R_IL] = expf(fwdp[h4R_IL] + bckp[h4R_IL] - totsc); denom += ppp[h4R_IL];
-	      ppp[h4R_IG] = expf(fwdp[h4R_IG] + bckp[h4R_IG] - totsc); denom += ppp[h4R_IG];
-	      ppp[h4R_DL] = expf(fwdp[h4R_DL] + bckp[h4R_DL] - totsc);
-	      ppp[h4R_DG] = expf(fwdp[h4R_DG] + bckp[h4R_DG] - totsc);
+	      ppp[h4R_ML] = exp2f(fwdp[h4R_ML] + bckp[h4R_ML] - totsc); denom += ppp[h4R_ML];
+	      ppp[h4R_MG] = exp2f(fwdp[h4R_MG] + bckp[h4R_MG] - totsc); denom += ppp[h4R_MG];
+	      ppp[h4R_IL] = exp2f(fwdp[h4R_IL] + bckp[h4R_IL] - totsc); denom += ppp[h4R_IL];
+	      ppp[h4R_IG] = exp2f(fwdp[h4R_IG] + bckp[h4R_IG] - totsc); denom += ppp[h4R_IG];
+	      ppp[h4R_DL] = exp2f(fwdp[h4R_DL] + bckp[h4R_DL] - totsc);
+	      ppp[h4R_DG] = exp2f(fwdp[h4R_DG] + bckp[h4R_DG] - totsc);
 
 	      fwdp += h4R_NSCELLS;
 	      bckp += h4R_NSCELLS;
@@ -862,14 +869,14 @@ h4_reference_asc_Decoding(const ESL_DSQ *dsq, int L, const H4_PROFILE *hmm, cons
            * which is why we have that denom-stashing hack;
            * and when we renormalize row i here, we do UP, DOWN, and specials (in DOWN).
            */
-      	  //#ifndef p7REFERENCE_ASC_DECODING_TESTDRIVE
+#ifndef h4REFERENCE_ASC_TESTDRIVE  // don't renormalize when unit testing, in case it hides real problems
 	  denom = 1.0 / denom;		                                                // multiplication may be faster than division
 	  ppp   = apu->dp[i] + h4R_NSCELLS;                                             // that's k=1 in UP
 	  for (s = 0; s < (anch->a[d].k0-1) * h4R_NSCELLS; s++) *ppp++ *= denom;        // UP matrix row i renormalized
 	  ppp   = apd->dp[i] + (anch->a[d].k0) * h4R_NSCELLS;                           // that's k0 in DOWN
 	  for (s = 0; s < (M - anch->a[d].k0 + 1) * h4R_NSCELLS; s++) *ppp++ *= denom;  // DOWN matrix row i renormalized
 	  for (s = 0; s < h4R_NXCELLS; s++) ppp[s] *= denom;
-	  //#endif
+#endif
         } // end loop over i's in UP sector for domain d
 
       /* One last wing-retracted row:
@@ -884,7 +891,7 @@ h4_reference_asc_Decoding(const ESL_DSQ *dsq, int L, const H4_PROFILE *hmm, cons
       xG    = *(afd->dp[i-1] + (M+1) * h4R_NSCELLS + h4R_G); // ugly, sorry. Reach out and get the xG value on row i0-1.
       bckp  = abd->dp[i]      + k * h4R_NSCELLS;             // *bckp is the anchor cell i0,k0 (in DOWN)
       rsc   = hmm->rsc[dsq[i]] + k;
-      delta = expf(xG + hmm->tsc[k-1][h4_GM] + *rsc + bckp[h4R_MG] - totsc);  // k-1 because GMk is stored off by one, in -1 slot
+      delta = exp2f(xG + hmm->tsc[k-1][h4_GM] + *rsc + bckp[h4R_MG] - totsc);  // k-1 because tGM is stored off-by-one
       ppp   = apu->dp[i-1] + h4R_NSCELLS;                    // ppp starts on i-1,k=1 cells
       for (k = 1; k < anch->a[d].k0; k++) 
 	{
@@ -903,12 +910,12 @@ h4_reference_asc_Decoding(const ESL_DSQ *dsq, int L, const H4_PROFILE *hmm, cons
 	  
 	  for (k = anch->a[d].k0; k <= M; k++)
 	    {
-	      ppp[h4R_ML] = expf(fwdp[h4R_ML] + bckp[h4R_ML] - totsc); denom += ppp[h4R_ML];
-	      ppp[h4R_MG] = expf(fwdp[h4R_MG] + bckp[h4R_MG] - totsc); denom += ppp[h4R_MG];
-	      ppp[h4R_IL] = expf(fwdp[h4R_IL] + bckp[h4R_IL] - totsc); denom += ppp[h4R_IL];
-	      ppp[h4R_IG] = expf(fwdp[h4R_IG] + bckp[h4R_IG] - totsc); denom += ppp[h4R_IG];
-	      ppp[h4R_DL] = expf(fwdp[h4R_DL] + bckp[h4R_DL] - totsc);
-	      ppp[h4R_DG] = expf(fwdp[h4R_DG] + bckp[h4R_DG] - totsc);
+	      ppp[h4R_ML] = exp2f(fwdp[h4R_ML] + bckp[h4R_ML] - totsc); denom += ppp[h4R_ML];
+	      ppp[h4R_MG] = exp2f(fwdp[h4R_MG] + bckp[h4R_MG] - totsc); denom += ppp[h4R_MG];
+	      ppp[h4R_IL] = exp2f(fwdp[h4R_IL] + bckp[h4R_IL] - totsc); denom += ppp[h4R_IL];
+	      ppp[h4R_IG] = exp2f(fwdp[h4R_IG] + bckp[h4R_IG] - totsc); denom += ppp[h4R_IG];
+	      ppp[h4R_DL] = exp2f(fwdp[h4R_DL] + bckp[h4R_DL] - totsc);
+	      ppp[h4R_DG] = exp2f(fwdp[h4R_DG] + bckp[h4R_DG] - totsc);
 
 	      fwdp += h4R_NSCELLS;
 	      bckp += h4R_NSCELLS;
@@ -916,15 +923,15 @@ h4_reference_asc_Decoding(const ESL_DSQ *dsq, int L, const H4_PROFILE *hmm, cons
 	    }
 	  /* fwdp, bckp, ppp now all sit at M+1, start of specials */
 
-  	  ppp[h4R_JJ] = (d == D ? 0.0 : expf(xJ + mo->xsc[h4_J][h4_LOOP] + bckp[h4R_J] - totsc)); xJ = fwdp[h4R_J]; denom += ppp[h4R_JJ];
-	  ppp[h4R_CC] = (d  < D ? 0.0 : expf(xC + mo->xsc[h4_C][h4_LOOP] + bckp[h4R_C] - totsc)); xC = fwdp[h4R_C]; denom += ppp[h4R_CC];
-	  ppp[h4R_E]  = expf(fwdp[h4R_E] + bckp[h4R_E] - totsc); 
+  	  ppp[h4R_JJ] = (d == D ? 0.0 : exp2f(xJ + mo->xsc[h4_J][h4_LOOP] + bckp[h4R_J] - totsc)); xJ = fwdp[h4R_J]; denom += ppp[h4R_JJ];
+	  ppp[h4R_CC] = (d  < D ? 0.0 : exp2f(xC + mo->xsc[h4_C][h4_LOOP] + bckp[h4R_C] - totsc)); xC = fwdp[h4R_C]; denom += ppp[h4R_CC];
+	  ppp[h4R_E]  = exp2f(fwdp[h4R_E] + bckp[h4R_E] - totsc); 
 	  ppp[h4R_N]  = 0.0;
-	  ppp[h4R_J]  = (d == D ? 0.0 : expf(fwdp[h4R_J] + bckp[h4R_J] - totsc));
-	  ppp[h4R_B]  = expf(fwdp[h4R_B] + bckp[h4R_B] - totsc); 
-	  ppp[h4R_L]  = expf(fwdp[h4R_L] + bckp[h4R_L] - totsc);
-	  ppp[h4R_G]  = expf(fwdp[h4R_G] + bckp[h4R_G] - totsc);  
-	  ppp[h4R_C]  = (d  < D ? 0.0 : expf(fwdp[h4R_C] + bckp[h4R_C] - totsc));
+	  ppp[h4R_J]  = (d == D ? 0.0 : exp2f(fwdp[h4R_J] + bckp[h4R_J] - totsc));
+	  ppp[h4R_B]  = exp2f(fwdp[h4R_B] + bckp[h4R_B] - totsc); 
+	  ppp[h4R_L]  = exp2f(fwdp[h4R_L] + bckp[h4R_L] - totsc);
+	  ppp[h4R_G]  = exp2f(fwdp[h4R_G] + bckp[h4R_G] - totsc);  
+	  ppp[h4R_C]  = (d  < D ? 0.0 : exp2f(fwdp[h4R_C] + bckp[h4R_C] - totsc));
 
           /* Even with forced renormalization, I don't think you can
 	   * do much better than the error inherent in the default
@@ -964,17 +971,15 @@ h4_reference_asc_Decoding(const ESL_DSQ *dsq, int L, const H4_PROFILE *hmm, cons
 #include "modelsample.h"
 #include "reference_dp.h"
 
-/* The unit tests create a variety of contrived comparisons where we
- * can compare standard DP matrices and/or results to ASC matrices
- * and/or results. Routines for creating these contrived comparisons
- * are in modelsample.c.
+/* The unit tests create a variety of contrived comparisons where we can compare
+ * standard DP matrices and results to ASC counterparts. Routines for creating these
+ * contrived comparisons are in modelsample.c.
  * 
- * Most of the tests (all but "singlemulti") create comparisons where
- * the standard and the ASC calculations have identical path
- * ensembles, by forcing the standard DP calculation to use the anchor
- * cells even without constraint by the ASC algorithm. Forcing this
- * requires unusual models, but there are various ways to do it, and
- * different ways allows us to test different aspects of the model, as
+ * Most of the tests (all but "singlemulti") create comparisons where the standard
+ * and the ASC calculations have identical path ensembles, by forcing the standard DP
+ * calculation to use the anchor cells even without constraint by the ASC
+ * algorithm. Forcing this requires unusual models, but there are various ways to do
+ * it, and different ways allows us to test different aspects of the model, as
  * summarized below (also see SRE:J13/59):
  *                                                                     same   
  *                      multiple   N/C/J     I             multiple   std,ASC
@@ -987,15 +992,13 @@ h4_reference_asc_Decoding(const ESL_DSQ *dsq, int L, const H4_PROFILE *hmm, cons
  *  ensemble local        YES        -       -       YES       -          -
  *  ensemble multi        YES        -       -        -       YES         -  
  * 
- * The three single pathed tests verify that the decoding matrix has
- * pp=1.0 along the trace, 0.0 elsewhere. (The singlemulti test is
- * special: the ASC Decoding matrix has only one nonzero path, the
- * trace, but standard DP has an ensemble.) Ensemble tests compare
- * standard to ASC matrices.
+ * The three single pathed tests verify that the decoding matrix has pp=1.0 along the
+ * path, 0.0 elsewhere. (The singlemulti test is special: the ASC Decoding matrix
+ * has only one nonzero path, but standard DP has an ensemble.) Ensemble
+ * tests compare standard to ASC matrices.
  * 
- * When comparing ASC matrices to standard Decoding matrices
- * cell-by-cell, if there is an ensemble, we have to marginalize
- * UP+DOWN before doing the comparison.
+ * When comparing ASC matrices to standard Decoding matrices cell-by-cell, if there
+ * is an ensemble, we have to marginalize UP+DOWN before doing the comparison.
  */
 
 
@@ -1009,11 +1012,11 @@ h4_reference_asc_Decoding(const ESL_DSQ *dsq, int L, const H4_PROFILE *hmm, cons
  *
  * Now:
  *   1. Viterbi = Fwd = Bck = ASC Fwd = ASC Bck scores.
- *   2. Viterbi trace = emitted trace
+ *   2. Viterbi path = emitted path
  *   3. Viterbi DP matrix cells = Forward cells
  *   4. ASC Forward U/D matrix cells = Fwd cells, within ASC regions
  *   5. (ditto for ASC Backward, Bck)
- *   6. ASC Decoding matrix has 1.0 for all cells in trace
+ *   6. ASC Decoding matrix has 1.0 for all cells in path
  *   7. ASC Decoding matrix = std Decoding, all cells in ASC regions.
  */
 static void
@@ -1058,7 +1061,7 @@ utest_singlepath(FILE *diagfp, ESL_RANDOMNESS *rng, const ESL_ALPHABET *abc, int
   if ( h4_reference_asc_Backward(sq->dsq, sq->n, hmm, mo, anch, abu, abd, &asc_b) != eslOK) esl_fatal(failmsg);
   if ( h4_reference_asc_Decoding(sq->dsq, sq->n, hmm, mo, anch, afu, afd, abu, abd, apu, apd) != eslOK) esl_fatal(failmsg);
 
-  //#if 0
+#if 0
   esl_sqio_Write(stdout, sq, eslSQFILE_FASTA, FALSE);
   h4_profile_Dump(stdout, hmm);
   h4_mode_Dump(stdout, mo);
@@ -1081,7 +1084,7 @@ utest_singlepath(FILE *diagfp, ESL_RANDOMNESS *rng, const ESL_ALPHABET *abc, int
   printf("bsc   = %.3f\n", bsc);
   printf("asc_f = %.3f\n", asc_f);
   printf("asc_b = %.3f\n", asc_b);
-  //#endif
+#endif
 
   if ( h4_path_Compare(pi, vpi)                 != eslOK) esl_fatal(failmsg);
   if ( esl_FCompareNew(tsc, vsc,   0.0, abstol) != eslOK) esl_fatal(failmsg);
@@ -1104,7 +1107,9 @@ utest_singlepath(FILE *diagfp, ESL_RANDOMNESS *rng, const ESL_ALPHABET *abc, int
 
   h4_refmx_Destroy(afu); h4_refmx_Destroy(afd); 
   h4_refmx_Destroy(abu); h4_refmx_Destroy(abd);
-  h4_refmx_Destroy(rxf); h4_refmx_Destroy(rxb);  h4_refmx_Destroy(rxv);
+  h4_refmx_Destroy(apu); h4_refmx_Destroy(apd);
+  h4_refmx_Destroy(rxf); h4_refmx_Destroy(rxb);
+  h4_refmx_Destroy(rxd); h4_refmx_Destroy(rxv);
   h4_path_Destroy(pi);   h4_path_Destroy(vpi);
   h4_anchorset_Destroy(anch);
   esl_sq_Destroy(sq); 
@@ -1114,18 +1119,20 @@ utest_singlepath(FILE *diagfp, ESL_RANDOMNESS *rng, const ESL_ALPHABET *abc, int
 
 /* "singlesingle" test
  *
- * Create a profile/sequence pair that has only one possible path
- * with $P(\pi | x, \theta) = 1$, when using uniglocal mode.
+ * Create a profile/sequence pair that has only one possible path with $P(\pi | x,
+ * \theta) = 1$, when using uniglocal mode.
  *
- * Unlike the "singlepath" test, now we can use L>0 (N,C states)
- * and tII > 0 (inserts of length > 1).
+ * Unlike the "singlepath" test, now we can use L>0 (N,C states) and tII > 0 (inserts
+ * of length > 1).
  *
- * See h4_modelsample_SinglePathSeq() for explanation of how
- * the case is constructed.
+ * See modelsample.c::single_path_seq_engine() for explanation of how the case is
+ * constructed.
  * 
  * Now:
- *   1. trace score = Viterbi = Fwd = Bck = ASC Fwd = ASC Bck scores.
- *   2. Viterbi trace = emitted trace
+ *   1. path score = Viterbi = Fwd = Bck = ASC Fwd = ASC Bck scores.
+ *   2. Viterbi path = emitted path
+ *   3. ASC Decoding matrix has 1.0 for all cells in path
+ *   4. ASC Decoding matrix = standard Decoding mx, cell by cell
  */
 static void
 utest_singlesingle(FILE *diagfp, ESL_RANDOMNESS *rng, const ESL_ALPHABET *abc, int M)
@@ -1140,10 +1147,13 @@ utest_singlesingle(FILE *diagfp, ESL_RANDOMNESS *rng, const ESL_ALPHABET *abc, i
   H4_REFMX     *rxv       = h4_refmx_Create(100,100);  
   H4_REFMX     *rxf       = h4_refmx_Create(100,100);  
   H4_REFMX     *rxb       = h4_refmx_Create(100,100);  
+  H4_REFMX     *rxd       = h4_refmx_Create(100,100);  
   H4_REFMX     *afu       = h4_refmx_Create(100,100);  
   H4_REFMX     *afd       = h4_refmx_Create(100,100);  
-  H4_REFMX     *abu       = h4_refmx_Create(100,100);   // ASC Backward UP matrix
-  H4_REFMX     *abd       = h4_refmx_Create(100,100);   // ASC Backward DOWN matrix
+  H4_REFMX     *abu       = h4_refmx_Create(100,100);   
+  H4_REFMX     *abd       = h4_refmx_Create(100,100);   
+  H4_REFMX     *apu       = h4_refmx_Create(100,100);   
+  H4_REFMX     *apd       = h4_refmx_Create(100,100);   
   float         tsc, vsc, fsc, bsc, asc_f, asc_b;
   float         abstol    = 0.0001;
 
@@ -1152,9 +1162,11 @@ utest_singlesingle(FILE *diagfp, ESL_RANDOMNESS *rng, const ESL_ALPHABET *abc, i
   if ( h4_reference_Viterbi (sq->dsq, sq->n, hmm, mo, rxv, vpi, &vsc) != eslOK) esl_fatal(failmsg);
   if ( h4_reference_Forward (sq->dsq, sq->n, hmm, mo, rxf,      &fsc) != eslOK) esl_fatal(failmsg);
   if ( h4_reference_Backward(sq->dsq, sq->n, hmm, mo, rxb,      &bsc) != eslOK) esl_fatal(failmsg);
+  if ( h4_reference_Decoding(sq->dsq, sq->n, hmm, mo, rxf, rxb, rxd)  != eslOK) esl_fatal(failmsg);
 
   if ( h4_reference_asc_Forward (sq->dsq, sq->n, hmm, mo, anch, afu, afd, &asc_f) != eslOK) esl_fatal(failmsg);
   if ( h4_reference_asc_Backward(sq->dsq, sq->n, hmm, mo, anch, abu, abd, &asc_b) != eslOK) esl_fatal(failmsg);
+  if ( h4_reference_asc_Decoding(sq->dsq, sq->n, hmm, mo, anch, afu, afd, abu, abd, apu, apd) != eslOK) esl_fatal(failmsg);
 
 #if 0
   esl_sqio_Write(stdout, sq, eslSQFILE_FASTA, FALSE);
@@ -1162,14 +1174,17 @@ utest_singlesingle(FILE *diagfp, ESL_RANDOMNESS *rng, const ESL_ALPHABET *abc, i
   h4_mode_Dump(stdout, mo);
  
   h4_refmx_Dump(stdout, rxf);
-  h4_refmx_Dump(stdout, rxb);
+  //  h4_refmx_Dump(stdout, rxb);
+  //  h4_refmx_Dump(stdout, rxd);
   h4_refmx_Dump(stdout, afu);
   h4_refmx_Dump(stdout, afd);
-  h4_refmx_Dump(stdout, abu);
-  h4_refmx_Dump(stdout, abd);
+  //  h4_refmx_Dump(stdout, abu);
+  //  h4_refmx_Dump(stdout, abd);
+  //  h4_refmx_Dump(stdout, apu);
+  //  h4_refmx_Dump(stdout, apd);
 
   h4_path_Dump(stdout, pi);
-  h4_path_Dump(stdout, vpi);
+  //h4_path_Dump(stdout, vpi);
   h4_anchorset_Dump(stdout, anch);
 
   printf("tsc   = %.3f\n", tsc);
@@ -1186,10 +1201,15 @@ utest_singlesingle(FILE *diagfp, ESL_RANDOMNESS *rng, const ESL_ALPHABET *abc, i
   if ( esl_FCompareNew(tsc, asc_f, 0.0, abstol) != eslOK) esl_fatal(failmsg);
   if ( esl_FCompareNew(tsc, asc_b, 0.0, abstol) != eslOK) esl_fatal(failmsg);
 
+  if ( h4_ascmx_pp_Validate(apu, apd, anch, abstol, NULL)    != eslOK) esl_fatal(failmsg);
+  if ( h4_ascmx_pp_compare_path(pi,  apu, apd, anch, abstol) != eslOK) esl_fatal(failmsg);
+  if ( h4_ascmx_pp_compare_std (rxd, apu, apd, anch, abstol) != eslOK) esl_fatal(failmsg);
 
   h4_refmx_Destroy(afu);   h4_refmx_Destroy(afd);
   h4_refmx_Destroy(abu);   h4_refmx_Destroy(abd);
-  h4_refmx_Destroy(rxf);   h4_refmx_Destroy(rxb);  h4_refmx_Destroy(rxv);
+  h4_refmx_Destroy(apu);   h4_refmx_Destroy(apd);
+  h4_refmx_Destroy(rxf);   h4_refmx_Destroy(rxb);
+  h4_refmx_Destroy(rxd);   h4_refmx_Destroy(rxv);
   h4_path_Destroy(pi);     h4_path_Destroy(vpi);
   h4_profile_Destroy(hmm); h4_mode_Destroy(mo);
   h4_anchorset_Destroy(anch);
@@ -1206,13 +1226,15 @@ utest_singlesingle(FILE *diagfp, ESL_RANDOMNESS *rng, const ESL_ALPHABET *abc, i
  *
  * With standard (not ASC) algorithms, more than one path may be
  * possible.  Therefore reference Forward, Backward, and even Viterbi
- * scores can exceed ASC F/B scores and the trace score.
+ * scores can exceed ASC F/B scores and the path score.
  *
  * See <h4_modelsample_SinglePathedASC()> and its
  * <single_path_seq_engine()> for explanation of how the case is
  * constructed.
  * 
- * Now trace score = ASC Fwd = ASC Bck score.
+ * Now:
+ *   1. path score = ASC Fwd = ASC Bck score.
+ *   2. ASC Decoding matrix has 1.0 for all cells in path
  */
 static void
 utest_singlemulti(FILE *diagfp, ESL_RANDOMNESS *rng, const ESL_ALPHABET *abc, int M)
@@ -1227,10 +1249,13 @@ utest_singlemulti(FILE *diagfp, ESL_RANDOMNESS *rng, const ESL_ALPHABET *abc, in
   H4_REFMX     *rxv       = h4_refmx_Create(100,100);  
   H4_REFMX     *rxf       = h4_refmx_Create(100,100);  
   H4_REFMX     *rxb       = h4_refmx_Create(100,100);  
+  H4_REFMX     *rxd       = h4_refmx_Create(100,100);  
   H4_REFMX     *afu       = h4_refmx_Create(100,100);  
   H4_REFMX     *afd       = h4_refmx_Create(100,100);  
   H4_REFMX     *abu       = h4_refmx_Create(100,100);  
   H4_REFMX     *abd       = h4_refmx_Create(100,100);  
+  H4_REFMX     *apu       = h4_refmx_Create(100,100);  
+  H4_REFMX     *apd       = h4_refmx_Create(100,100);  
   float         tsc, vsc, fsc, bsc, asc_f, asc_b;
   float         abstol    = 0.0001;
 
@@ -1239,9 +1264,11 @@ utest_singlemulti(FILE *diagfp, ESL_RANDOMNESS *rng, const ESL_ALPHABET *abc, in
   if ( h4_reference_Viterbi (sq->dsq, sq->n, hmm, mo, rxv, vpi, &vsc) != eslOK) esl_fatal(failmsg);
   if ( h4_reference_Forward (sq->dsq, sq->n, hmm, mo, rxf,      &fsc) != eslOK) esl_fatal(failmsg);
   if ( h4_reference_Backward(sq->dsq, sq->n, hmm, mo, rxb,      &bsc) != eslOK) esl_fatal(failmsg);
+  if ( h4_reference_Decoding(sq->dsq, sq->n, hmm, mo, rxf, rxb, rxd)  != eslOK) esl_fatal(failmsg);
 
   if ( h4_reference_asc_Forward (sq->dsq, sq->n, hmm, mo, anch, afu, afd, &asc_f) != eslOK) esl_fatal(failmsg);
   if ( h4_reference_asc_Backward(sq->dsq, sq->n, hmm, mo, anch, abu, abd, &asc_b) != eslOK) esl_fatal(failmsg);
+  if ( h4_reference_asc_Decoding(sq->dsq, sq->n, hmm, mo, anch, afu, afd, abu, abd, apu, apd) != eslOK) esl_fatal(failmsg);
 
 #if 0
   esl_sqio_Write(stdout, sq, eslSQFILE_FASTA, FALSE);
@@ -1250,10 +1277,13 @@ utest_singlemulti(FILE *diagfp, ESL_RANDOMNESS *rng, const ESL_ALPHABET *abc, in
 
   h4_refmx_Dump(stdout, rxf);
   h4_refmx_Dump(stdout, rxb);
+  h4_refmx_Dump(stdout, rxd);
   h4_refmx_Dump(stdout, afu);
   h4_refmx_Dump(stdout, afd);
   h4_refmx_Dump(stdout, abu);
   h4_refmx_Dump(stdout, abd);
+  h4_refmx_Dump(stdout, apu);
+  h4_refmx_Dump(stdout, apd);
 
   h4_path_Dump(stdout, pi);
   h4_path_Dump(stdout, vpi);
@@ -1270,9 +1300,14 @@ utest_singlemulti(FILE *diagfp, ESL_RANDOMNESS *rng, const ESL_ALPHABET *abc, in
   if ( esl_FCompareNew(tsc, asc_f, 0.0, abstol) != eslOK) esl_fatal(failmsg);
   if ( esl_FCompareNew(tsc, asc_b, 0.0, abstol) != eslOK) esl_fatal(failmsg);
  
+  if ( h4_ascmx_pp_Validate(apu, apd, anch, abstol, NULL)    != eslOK) esl_fatal(failmsg);
+  if ( h4_ascmx_pp_compare_path(pi,  apu, apd, anch, abstol) != eslOK) esl_fatal(failmsg);
+
   h4_refmx_Destroy(afu);   h4_refmx_Destroy(afd);
   h4_refmx_Destroy(abu);   h4_refmx_Destroy(abd);
-  h4_refmx_Destroy(rxf);   h4_refmx_Destroy(rxb); h4_refmx_Destroy(rxv);
+  h4_refmx_Destroy(apu);   h4_refmx_Destroy(apd);
+  h4_refmx_Destroy(rxf);   h4_refmx_Destroy(rxb);
+  h4_refmx_Destroy(rxd);   h4_refmx_Destroy(rxv);
   h4_path_Destroy(pi);     h4_path_Destroy(vpi);
   h4_profile_Destroy(hmm); h4_mode_Destroy(mo);
   h4_anchorset_Destroy(anch);
@@ -1319,9 +1354,10 @@ utest_singlemulti(FILE *diagfp, ESL_RANDOMNESS *rng, const ESL_ALPHABET *abc, in
  *
  * Now:
  *     1. Fwd/Bck score = ASC Fwd/Bck score
+ *     2. ASC Decoding matrices = std Decoding matrix, cell by cell
  * 
  * And also, obviously:
- *     2. Viterbi score >= score of sampled trace that created sq
+ *     2. Viterbi score >= score of sampled path that created sq
  *     3. Fwd/Bck score >= Viterbi score
  */
 static void
@@ -1340,20 +1376,24 @@ utest_ensemble(FILE *diagfp, ESL_RANDOMNESS *rng, const ESL_ALPHABET *abc, int M
   H4_REFMX     *rxv        = h4_refmx_Create(100,100);  
   H4_REFMX     *rxf        = h4_refmx_Create(100,100);  
   H4_REFMX     *rxb        = h4_refmx_Create(100,100);  
+  H4_REFMX     *rxd        = h4_refmx_Create(100,100);  
   H4_REFMX     *afu        = h4_refmx_Create(100,100);  
   H4_REFMX     *afd        = h4_refmx_Create(100,100);  
   H4_REFMX     *abu        = h4_refmx_Create(100,100);  
   H4_REFMX     *abd        = h4_refmx_Create(100,100);  
+  H4_REFMX     *apu        = h4_refmx_Create(100,100);  
+  H4_REFMX     *apd        = h4_refmx_Create(100,100);  
   float         tsc, vsc, fsc, bsc, asc_f, asc_b;
   float         fwd_atol;
   float         vit_atol;
+  float         dec_atol;
 
   ESL_DASSERT1(( which >= 0 && which <= 2 ));
 
   switch (which) {
-  case 0:  failmsg = failmsg0;  fwd_atol = (h4_logsum_IsSlowExact() ? 0.001  : 0.002);  vit_atol = 1e-5;  break;
-  case 1:  failmsg = failmsg1;  fwd_atol = (h4_logsum_IsSlowExact() ? 0.001  : 0.002);  vit_atol = 1e-5;  break;
-  case 2:  failmsg = failmsg2;  fwd_atol = (h4_logsum_IsSlowExact() ? 0.0001 : 0.01);   vit_atol = 1e-5;  break;
+  case 0:  failmsg = failmsg0;  fwd_atol = (h4_logsum_IsSlowExact() ? 0.001  : 0.002);  vit_atol = 1e-5;  dec_atol = 1e-5; break;
+  case 1:  failmsg = failmsg1;  fwd_atol = (h4_logsum_IsSlowExact() ? 0.001  : 0.002);  vit_atol = 1e-5;  dec_atol = 1e-6; break;
+  case 2:  failmsg = failmsg2;  fwd_atol = (h4_logsum_IsSlowExact() ? 0.0001 : 0.01);   vit_atol = 1e-5;  dec_atol = (h4_logsum_IsSlowExact() ? 0.001 : 0.01); break;
   }
   
   switch (which) {
@@ -1365,21 +1405,26 @@ utest_ensemble(FILE *diagfp, ESL_RANDOMNESS *rng, const ESL_ALPHABET *abc, int M
   if ( h4_reference_Viterbi (sq->dsq, sq->n, hmm, mo, rxv, vpi, &vsc) != eslOK) esl_fatal(failmsg);
   if ( h4_reference_Forward (sq->dsq, sq->n, hmm, mo, rxf,      &fsc) != eslOK) esl_fatal(failmsg);
   if ( h4_reference_Backward(sq->dsq, sq->n, hmm, mo, rxb,      &bsc) != eslOK) esl_fatal(failmsg);
+  if ( h4_reference_Decoding(sq->dsq, sq->n, hmm, mo, rxf, rxb, rxd)  != eslOK) esl_fatal(failmsg);
 
   if ( h4_reference_asc_Forward (sq->dsq, sq->n, hmm, mo, anch, afu, afd, &asc_f) != eslOK) esl_fatal(failmsg);
   if ( h4_reference_asc_Backward(sq->dsq, sq->n, hmm, mo, anch, abu, abd, &asc_b) != eslOK) esl_fatal(failmsg);
+  if ( h4_reference_asc_Decoding(sq->dsq, sq->n, hmm, mo, anch, afu, afd, abu, abd, apu, apd) != eslOK) esl_fatal(failmsg);
   
 #if 0
   esl_sqio_Write(stdout, sq, eslSQFILE_FASTA, FALSE);
   h4_profile_Dump(stdout, hmm);
   h4_mode_Dump(stdout, mo);
 
-  //h4_refmx_Dump(stdout, rxf);
+  h4_refmx_Dump(stdout, rxf);
   h4_refmx_Dump(stdout, rxb);
-  //h4_refmx_Dump(stdout, afu);
-  //h4_refmx_Dump(stdout, afd);
+  h4_refmx_Dump(stdout, rxd);
+  h4_refmx_Dump(stdout, afu);
+  h4_refmx_Dump(stdout, afd);
   h4_refmx_Dump(stdout, abu);
   h4_refmx_Dump(stdout, abd);
+  h4_refmx_Dump(stdout, apu);
+  h4_refmx_Dump(stdout, apd);
 
   h4_path_Dump(stdout, pi);
   h4_path_Dump(stdout, vpi);
@@ -1399,9 +1444,14 @@ utest_ensemble(FILE *diagfp, ESL_RANDOMNESS *rng, const ESL_ALPHABET *abc, int M
   if (tsc > vsc+vit_atol)                                  esl_fatal(failmsg);
   if (vsc > fsc)                                           esl_fatal(failmsg);
 
+  if ( h4_ascmx_pp_Validate(apu, apd, anch, dec_atol, NULL)     != eslOK) esl_fatal(failmsg);
+  if ( h4_ascmx_pp_compare_std (rxd, apu, apd, anch, dec_atol)  != eslOK) esl_fatal(failmsg);
+
   h4_refmx_Destroy(afu);    h4_refmx_Destroy(afd);
   h4_refmx_Destroy(abu);    h4_refmx_Destroy(abd);
-  h4_refmx_Destroy(rxf);    h4_refmx_Destroy(rxb);  h4_refmx_Destroy(rxv);
+  h4_refmx_Destroy(apu);    h4_refmx_Destroy(apd);
+  h4_refmx_Destroy(rxf);    h4_refmx_Destroy(rxb);
+  h4_refmx_Destroy(rxd);    h4_refmx_Destroy(rxv);
   h4_path_Destroy(vpi);     h4_path_Destroy(pi);
   h4_profile_Destroy(hmm);  h4_mode_Destroy(mo);
   h4_anchorset_Destroy(anch);
