@@ -676,11 +676,11 @@ utest_optacc(ESL_GETOPTS *go, ESL_RANDOMNESS *r, ESL_ALPHABET *abc, P7_BG *bg, i
       printf("%f %f %f %f\n", accscore, accscore_g, accscore_g2, accscore_o);
 #endif
 
-      if (esl_FCompare(fsc,        bsc,         sctol)    != eslOK) esl_fatal(msg);
-      if (esl_FCompare(fsc_g,      bsc_g,       gtol)     != eslOK) esl_fatal(msg);
-      if (esl_FCompare(fsc,        fsc_g,       gtol)     != eslOK) esl_fatal(msg);
-      if (esl_FCompare(accscore,   accscore_g,  gtol)     != eslOK) esl_fatal(msg);
-      if (esl_FCompare(accscore_g, accscore_g2, gtol)     != eslOK) esl_fatal(msg);
+      if (esl_FCompare_old(fsc,        bsc,         sctol)    != eslOK) esl_fatal(msg);
+      if (esl_FCompare_old(fsc_g,      bsc_g,       gtol)     != eslOK) esl_fatal(msg);
+      if (esl_FCompare_old(fsc,        fsc_g,       gtol)     != eslOK) esl_fatal(msg);
+      if (esl_FCompare_old(accscore,   accscore_g,  gtol)     != eslOK) esl_fatal(msg);
+      if (esl_FCompare_old(accscore_g, accscore_g2, gtol)     != eslOK) esl_fatal(msg);
       if (accscore_g2 < accscore_o)                                 esl_fatal(msg);
       /* the above deserves explanation:
        *  - accscore_o is the accuracy of the originally emitted trace, according

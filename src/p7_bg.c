@@ -293,7 +293,7 @@ p7_bg_Read(char *bgfile, P7_BG *bg, char *errbuf)
 
   if ( n != bg->abc->K) 
     ESL_XFAIL(eslEFORMAT, errbuf, "expected %d residue frequencies, but found %d in bgfile %s", bg->abc->K, n, bgfile);
-  if ( esl_FCompare(esl_vec_FSum(fq, bg->abc->K), 1.0, 0.001) != eslOK) 
+  if ( esl_FCompare_old(esl_vec_FSum(fq, bg->abc->K), 1.0, 0.001) != eslOK) 
     ESL_XFAIL(eslEFORMAT, errbuf, "residue frequencies do not sum to 1.0 in bgfile %s", bgfile);
   
   /* all checking complete. no more error cases. overwrite bg with the new frequencies */
