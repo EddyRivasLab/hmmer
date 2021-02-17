@@ -374,11 +374,11 @@ ascmatrix_compare_std(P7_REFMX *rxd, P7_REFMX *apu, P7_REFMX *apd, P7_ANCHOR *an
 	    if (k >= anch[d-1].k0) ascval += P7R_MX(apd,i,k,s);   // sentinel k0(0)   = M+1, so no k gets evaluated for DOWN(d-1=0) 
 	    if (k <  anch[d].k0)   ascval += P7R_MX(apu,i,k,s);   // sentinel k0(D+1) = 0,   so no k gets evaluated for UP(d=D+1)
 	    
-	    if (esl_FCompareAbs( ascval, P7R_MX(rxd,i,k,s), epsilon) != eslOK)
+	    if (esl_FCompare( ascval, P7R_MX(rxd,i,k,s), /*rtol=*/0.0, epsilon) != eslOK)
 	      ESL_FAIL(eslFAIL, NULL, msg);
 	  }
       for (s = 0; s < p7R_NXCELLS; s++)
-	if (esl_FCompareAbs( P7R_XMX(apd,i,s), P7R_XMX(rxd,i,s), epsilon) != eslOK)
+	if (esl_FCompare( P7R_XMX(apd,i,s), P7R_XMX(rxd,i,s), /*rtol=*/0.0, epsilon) != eslOK)
 	  ESL_FAIL(eslFAIL, NULL, msg);
     }
   return eslOK;
@@ -447,19 +447,19 @@ ascmatrix_compare_asc(P7_REFMX *apu1, P7_REFMX *apd1, P7_REFMX *apu2, P7_REFMX *
       /* DOWN row, if one exists for this i */
       for (k = anch[d-1].k0; k <= M; k++)   // sentinel k0(0) = M+1, so no k gets evaluated at d=1 for nonexistent DOWN(0)
 	for (s = 0; s < p7R_NSCELLS; s++)   //   ... i.e., first leg has only an UP(1) matrix.
-	  if (esl_FCompareAbs( P7R_MX(apd1,i,k,s), P7R_MX(apd2,i,k,s), epsilon) != eslOK)
+	  if (esl_FCompare( P7R_MX(apd1,i,k,s), P7R_MX(apd2,i,k,s), /*rtol=*/0.0, epsilon) != eslOK)
 	    ESL_FAIL(eslFAIL, NULL, msg);
 
       /* specials exist for all rows. */
       for (s = 0; s < p7R_NXCELLS; s++)
-	if (esl_FCompareAbs( P7R_XMX(apd1,i,s), P7R_XMX(apd2,i,s), epsilon) != eslOK)
+	if (esl_FCompare( P7R_XMX(apd1,i,s), P7R_XMX(apd2,i,s), /*rtol=*/0.0, epsilon) != eslOK)
 	  ESL_FAIL(eslFAIL, NULL, msg);
 
 
       /* UP row, if one exists for this i */
       for (k = 1; k < anch[d].k0; k++)   // sentinel k0(D+1) = 0, so no k gets evaluated at d=D+1 for nonexistent UP(D+1)
 	for (s = 0; s < p7R_NSCELLS; s++)
-	  if (esl_FCompareAbs( P7R_MX(apu1,i,k,s), P7R_MX(apu2,i,k,s), epsilon) != eslOK)
+	  if (esl_FCompare( P7R_MX(apu1,i,k,s), P7R_MX(apu2,i,k,s), /*rtol=*/0.0, epsilon) != eslOK)
 	    ESL_FAIL(eslFAIL, NULL, msg);
     }
   return eslOK;
@@ -859,12 +859,12 @@ utest_singlepath(FILE *diagfp, ESL_RANDOMNESS *rng, int M, const ESL_ALPHABET *a
    */
   if (!diagfp)
     {
-      if (esl_FCompareAbs(sc, vsc,   fbtol) != eslOK) esl_fatal(failmsg);  // generated trace score = Viterbi score
-      if (esl_FCompareAbs(sc, fsc,   fbtol) != eslOK) esl_fatal(failmsg);  //  ... = Forward score
-      if (esl_FCompareAbs(sc, bsc,   fbtol) != eslOK) esl_fatal(failmsg);  //  ... = Backward score
-      if (esl_FCompareAbs(sc, asc_f, fbtol) != eslOK) esl_fatal(failmsg);  //  ... = ASC Forward score
-      if (esl_FCompareAbs(sc, asc_b, fbtol) != eslOK) esl_fatal(failmsg);  //  ... = ASC Backward score
-      if (p7_trace_Compare(tr, vtr, 0)      != eslOK) esl_fatal(failmsg);  // generated trace = Viterbi trace
+      if (esl_FCompare(sc, vsc,   /*rtol=*/0.0, fbtol) != eslOK) esl_fatal(failmsg);  // generated trace score = Viterbi score
+      if (esl_FCompare(sc, fsc,   /*rtol=*/0.0, fbtol) != eslOK) esl_fatal(failmsg);  //  ... = Forward score
+      if (esl_FCompare(sc, bsc,   /*rtol=*/0.0, fbtol) != eslOK) esl_fatal(failmsg);  //  ... = Backward score
+      if (esl_FCompare(sc, asc_f, /*rtol=*/0.0, fbtol) != eslOK) esl_fatal(failmsg);  //  ... = ASC Forward score
+      if (esl_FCompare(sc, asc_b, /*rtol=*/0.0, fbtol) != eslOK) esl_fatal(failmsg);  //  ... = ASC Backward score
+      if (p7_trace_Compare(tr, vtr, 0)                 != eslOK) esl_fatal(failmsg);  // generated trace = Viterbi trace
 
       if (ascmatrix_validate(apu, apd, anch, D, dectol, errbuf)  != eslOK) esl_fatal("%s:\n%s", failmsg, errbuf);
       if (ascmatrix_trace_compare(tr, apu, apd, anch, D, dectol) != eslOK) esl_fatal(failmsg);
@@ -982,12 +982,12 @@ utest_singlesingle(FILE *diagfp, ESL_RANDOMNESS *rng, int M, const ESL_ALPHABET 
 
   if (!diagfp) 
     {
-      if (esl_FCompareAbs(sc, vsc,   fbtol) != eslOK) esl_fatal(failmsg);
-      if (esl_FCompareAbs(sc, fsc,   fbtol) != eslOK) esl_fatal(failmsg);
-      if (esl_FCompareAbs(sc, bsc,   fbtol) != eslOK) esl_fatal(failmsg);
-      if (esl_FCompareAbs(sc, asc_f, fbtol) != eslOK) esl_fatal(failmsg);
-      if (esl_FCompareAbs(sc, asc_b, fbtol) != eslOK) esl_fatal(failmsg);
-      if (p7_trace_Compare(tr, vtr, 0)      != eslOK) esl_fatal(failmsg);
+      if (esl_FCompare(sc, vsc,   /*rtol=*/0.0, fbtol) != eslOK) esl_fatal(failmsg);
+      if (esl_FCompare(sc, fsc,   /*rtol=*/0.0, fbtol) != eslOK) esl_fatal(failmsg);
+      if (esl_FCompare(sc, bsc,   /*rtol=*/0.0, fbtol) != eslOK) esl_fatal(failmsg);
+      if (esl_FCompare(sc, asc_f, /*rtol=*/0.0, fbtol) != eslOK) esl_fatal(failmsg);
+      if (esl_FCompare(sc, asc_b, /*rtol=*/0.0, fbtol) != eslOK) esl_fatal(failmsg);
+      if (p7_trace_Compare(tr, vtr, 0)                 != eslOK) esl_fatal(failmsg);
 
       if (ascmatrix_validate(apu, apd, anch, D, dectol, errbuf)  != eslOK) esl_fatal("%s:\n%s", failmsg, errbuf);
       if (ascmatrix_trace_compare(tr, apu, apd, anch, D, dectol) != eslOK) esl_fatal(failmsg);
@@ -1078,8 +1078,8 @@ utest_singlemulti(FILE *diagfp, ESL_RANDOMNESS *rng, int M, const ESL_ALPHABET *
 
   if (!diagfp)
     {
-      if (esl_FCompareAbs(sc, asc_f, fbtol) != eslOK) esl_fatal(failmsg);
-      if (esl_FCompareAbs(sc, asc_b, fbtol) != eslOK) esl_fatal(failmsg);
+      if (esl_FCompare(sc, asc_f, /*rtol=*/0.0, fbtol) != eslOK) esl_fatal(failmsg);
+      if (esl_FCompare(sc, asc_b, /*rtol=*/0.0, fbtol) != eslOK) esl_fatal(failmsg);
 
       if (ascmatrix_validate(apu, apd, anch, D, dectol, errbuf)  != eslOK) esl_fatal("%s:\n%s", failmsg, errbuf);
       if (ascmatrix_trace_compare(tr, apu, apd, anch, D, dectol) != eslOK) esl_fatal(failmsg);
@@ -1178,9 +1178,9 @@ utest_multisingle(FILE *diagfp, ESL_RANDOMNESS *rng, int M, const ESL_ALPHABET *
 
   if (!diagfp) 
     {
-      if (esl_FCompareAbs(fsc, bsc,   fbtol) != eslOK) esl_fatal(failmsg);
-      if (esl_FCompareAbs(fsc, asc_f, fbtol) != eslOK) esl_fatal(failmsg);
-      if (esl_FCompareAbs(bsc, asc_b, fbtol) != eslOK) esl_fatal(failmsg);
+      if (esl_FCompare(fsc, bsc,   /*rtol=*/0.0, fbtol) != eslOK) esl_fatal(failmsg);
+      if (esl_FCompare(fsc, asc_f, /*rtol=*/0.0, fbtol) != eslOK) esl_fatal(failmsg);
+      if (esl_FCompare(bsc, asc_b, /*rtol=*/0.0, fbtol) != eslOK) esl_fatal(failmsg);
 
       if (ascmatrix_validate(apu, apd, anch, D, onetol, errbuf) != eslOK) esl_fatal("%s:\n%s", failmsg, errbuf);
       if (ascmatrix_compare_std(rxd, apu, apd, anch, D, dectol) != eslOK) esl_fatal(failmsg);
@@ -1286,9 +1286,9 @@ utest_multipath_local(FILE *diagfp, ESL_RANDOMNESS *rng, int M, const ESL_ALPHAB
 
   if (!diagfp)
     {
-      if (esl_FCompareAbs(fsc, bsc,   fbtol) != eslOK) esl_fatal(failmsg);
-      if (esl_FCompareAbs(fsc, asc_f, fbtol) != eslOK) esl_fatal(failmsg);
-      if (esl_FCompareAbs(bsc, asc_b, fbtol) != eslOK) esl_fatal(failmsg);
+      if (esl_FCompare(fsc, bsc,   /*rtol=*/0.0, fbtol) != eslOK) esl_fatal(failmsg);
+      if (esl_FCompare(fsc, asc_f, /*rtol=*/0.0, fbtol) != eslOK) esl_fatal(failmsg);
+      if (esl_FCompare(bsc, asc_b, /*rtol=*/0.0, fbtol) != eslOK) esl_fatal(failmsg);
 
       if (ascmatrix_validate(apu, apd, anch, D, onetol, errbuf) != eslOK) esl_fatal("%s:\n%s", failmsg, errbuf);
       if (ascmatrix_compare_std(rxd, apu, apd, anch, D, dectol) != eslOK) esl_fatal(failmsg);
@@ -1383,9 +1383,9 @@ utest_multimulti(FILE *diagfp, ESL_RANDOMNESS *rng, int M, const ESL_ALPHABET *a
 
   if (!diagfp)
     {
-      if (esl_FCompareAbs(fsc, bsc,   fbtol) != eslOK) esl_fatal(failmsg);
-      if (esl_FCompareAbs(fsc, asc_f, fbtol) != eslOK) esl_fatal(failmsg);
-      if (esl_FCompareAbs(bsc, asc_b, fbtol) != eslOK) esl_fatal(failmsg);
+      if (esl_FCompare(fsc, bsc,   /*rtol=*/0.0, fbtol) != eslOK) esl_fatal(failmsg);
+      if (esl_FCompare(fsc, asc_f, /*rtol=*/0.0, fbtol) != eslOK) esl_fatal(failmsg);
+      if (esl_FCompare(bsc, asc_b, /*rtol=*/0.0, fbtol) != eslOK) esl_fatal(failmsg);
 
       if (ascmatrix_validate(apu, apd, anch, D, dectol, errbuf) != eslOK) esl_fatal("%s:\n%s", failmsg, errbuf);
       if (ascmatrix_compare_std(rxd, apu, apd, anch, D, dectol) != eslOK) esl_fatal(failmsg);

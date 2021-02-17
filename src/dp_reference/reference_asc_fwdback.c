@@ -683,7 +683,7 @@ ascmatrix_compare(P7_REFMX *std, P7_REFMX *ascu, P7_REFMX *ascd, P7_ANCHOR *anch
 	    if (k >= anch[d-1].k0) val = p7_FLogsum(val, P7R_MX(ascd,i,k,s)); // DOWN
 	    if (k <  anch[d].k0)   val = p7_FLogsum(val, P7R_MX(ascu,i,k,s)); // UP
 	    
-	    if (val != -eslINFINITY && esl_FCompareAbs(val, P7R_MX(std,i,k,s), tolerance) != eslOK)
+	    if (val != -eslINFINITY && esl_FCompare(val, P7R_MX(std,i,k,s), /*rtol=*/0.0, tolerance) != eslOK)
 	      ESL_FAIL(eslFAIL, NULL, msg);
 	  }
 
@@ -699,7 +699,7 @@ ascmatrix_compare(P7_REFMX *std, P7_REFMX *ascu, P7_REFMX *ascd, P7_ANCHOR *anch
 	  if (std->type == p7R_BACKWARD && s == p7R_L) continue;
 
 	  val = P7R_XMX(ascd,i,s);
-	  if (val != -eslINFINITY && esl_FCompareAbs(val, P7R_XMX(std,i,s), tolerance) != eslOK)
+	  if (val != -eslINFINITY && esl_FCompare(val, P7R_XMX(std,i,s), /*rtol=*/0.0, tolerance) != eslOK)
 	    ESL_FAIL(eslFAIL, NULL, msg);
 	}
     }
@@ -834,11 +834,11 @@ utest_singlepath(FILE *diagfp, ESL_RANDOMNESS *rng, int M, const ESL_ALPHABET *a
 
   if (! diagfp) 
     {
-      if (esl_FCompareAbs(sc, vsc,   tolerance) != eslOK) esl_fatal(failmsg);  // generated trace score = Viterbi score
-      if (esl_FCompareAbs(sc, fsc,   tolerance) != eslOK) esl_fatal(failmsg);  //  ... = Forward score
-      if (esl_FCompareAbs(sc, bsc,   tolerance) != eslOK) esl_fatal(failmsg);  //  ... = Backward score
-      if (esl_FCompareAbs(sc, asc_f, tolerance) != eslOK) esl_fatal(failmsg);  //  ... = ASC Forward score
-      if (esl_FCompareAbs(sc, asc_b, tolerance) != eslOK) esl_fatal(failmsg);  //  ... = ASC Backward score
+      if (esl_FCompare(sc, vsc,   /*rtol=*/0.0, tolerance) != eslOK) esl_fatal(failmsg);  // generated trace score = Viterbi score
+      if (esl_FCompare(sc, fsc,   /*rtol=*/0.0, tolerance) != eslOK) esl_fatal(failmsg);  //  ... = Forward score
+      if (esl_FCompare(sc, bsc,   /*rtol=*/0.0, tolerance) != eslOK) esl_fatal(failmsg);  //  ... = Backward score
+      if (esl_FCompare(sc, asc_f, /*rtol=*/0.0, tolerance) != eslOK) esl_fatal(failmsg);  //  ... = ASC Forward score
+      if (esl_FCompare(sc, asc_b, /*rtol=*/0.0, tolerance) != eslOK) esl_fatal(failmsg);  //  ... = ASC Backward score
 
       /* to compare Viterbi to Fwd matrix, we have to hack around a safety check in the structures */
       rxv->type = p7R_FORWARD;
@@ -954,11 +954,11 @@ utest_singlesingle(FILE *diagfp, ESL_RANDOMNESS *rng, int M, const ESL_ALPHABET 
 
   if (! diagfp)
     {
-      if (esl_FCompareAbs(sc, vsc,   tolerance) != eslOK) esl_fatal(failmsg);
-      if (esl_FCompareAbs(sc, fsc,   tolerance) != eslOK) esl_fatal(failmsg);
-      if (esl_FCompareAbs(sc, bsc,   tolerance) != eslOK) esl_fatal(failmsg);
-      if (esl_FCompareAbs(sc, asc_f, tolerance) != eslOK) esl_fatal(failmsg);
-      if (esl_FCompareAbs(sc, asc_b, tolerance) != eslOK) esl_fatal(failmsg);
+      if (esl_FCompare(sc, vsc,   /*rtol=*/0.0, tolerance) != eslOK) esl_fatal(failmsg);
+      if (esl_FCompare(sc, fsc,   /*rtol=*/0.0, tolerance) != eslOK) esl_fatal(failmsg);
+      if (esl_FCompare(sc, bsc,   /*rtol=*/0.0, tolerance) != eslOK) esl_fatal(failmsg);
+      if (esl_FCompare(sc, asc_f, /*rtol=*/0.0, tolerance) != eslOK) esl_fatal(failmsg);
+      if (esl_FCompare(sc, asc_b, /*rtol=*/0.0, tolerance) != eslOK) esl_fatal(failmsg);
     }
   else
     fprintf(diagfp, "%20g %20g %20g %20g %20g\n", sc-vsc, sc-fsc, sc-bsc, sc-asc_f, sc-asc_b);
@@ -1044,8 +1044,8 @@ utest_singlemulti(FILE *diagfp, ESL_RANDOMNESS *rng, int M, const ESL_ALPHABET *
 
   if (!diagfp)
     {
-      if (esl_FCompareAbs(sc, asc_f, tolerance) != eslOK) esl_fatal(failmsg);
-      if (esl_FCompareAbs(sc, asc_b, tolerance) != eslOK) esl_fatal(failmsg);
+      if (esl_FCompare(sc, asc_f, /*rtol=*/0.0, tolerance) != eslOK) esl_fatal(failmsg);
+      if (esl_FCompare(sc, asc_b, /*rtol=*/0.0, tolerance) != eslOK) esl_fatal(failmsg);
     }
   else
     fprintf(diagfp, "%20g %20g\n", sc-asc_f, sc-asc_b);
@@ -1157,11 +1157,11 @@ utest_multisingle(FILE *diagfp, ESL_RANDOMNESS *rng, int M, const ESL_ALPHABET *
 
   if (!diagfp) 
     {
-      if (esl_FCompareAbs(fsc, bsc,   ftol) != eslOK) esl_fatal(failmsg);
-      if (esl_FCompareAbs(fsc, asc_f, ftol) != eslOK) esl_fatal(failmsg);
-      if (esl_FCompareAbs(bsc, asc_b, ftol) != eslOK) esl_fatal(failmsg);
-      if (sc  > vsc+vtol)                             esl_fatal(failmsg);
-      if (vsc > fsc)                                  esl_fatal(failmsg);
+      if (esl_FCompare(fsc, bsc,   /*rtol=*/0.0, ftol) != eslOK) esl_fatal(failmsg);
+      if (esl_FCompare(fsc, asc_f, /*rtol=*/0.0, ftol) != eslOK) esl_fatal(failmsg);
+      if (esl_FCompare(bsc, asc_b, /*rtol=*/0.0, ftol) != eslOK) esl_fatal(failmsg);
+      if (sc  > vsc+vtol)                                        esl_fatal(failmsg);
+      if (vsc > fsc)                                             esl_fatal(failmsg);
     }
   else
     fprintf(diagfp, "%20g %20g %20g %20g %20g\n", fsc-bsc, fsc-asc_f, bsc-asc_b, vsc-sc, fsc-vsc);
@@ -1267,11 +1267,11 @@ utest_multipath_local(FILE *diagfp, ESL_RANDOMNESS *rng, int M, const ESL_ALPHAB
 
   if (!diagfp) 
     {
-      if (esl_FCompareAbs(fsc, bsc,   ftol) != eslOK) esl_fatal(failmsg);
-      if (esl_FCompareAbs(fsc, asc_f, ftol) != eslOK) esl_fatal(failmsg);
-      if (esl_FCompareAbs(bsc, asc_b, ftol) != eslOK) esl_fatal(failmsg);
-      if (sc  > vsc+vtol)                             esl_fatal(failmsg);
-      if (vsc > fsc)                                  esl_fatal(failmsg);
+      if (esl_FCompare(fsc, bsc,   /*rtol=*/0.0, ftol) != eslOK) esl_fatal(failmsg);
+      if (esl_FCompare(fsc, asc_f, /*rtol=*/0.0, ftol) != eslOK) esl_fatal(failmsg);
+      if (esl_FCompare(bsc, asc_b, /*rtol=*/0.0, ftol) != eslOK) esl_fatal(failmsg);
+      if (sc  > vsc+vtol)                                        esl_fatal(failmsg);
+      if (vsc > fsc)                                             esl_fatal(failmsg);
     }
   else
     fprintf(diagfp, "%20g %20g %20g %20g %20g\n", fsc-bsc, fsc-asc_f, bsc-asc_b, vsc-sc, fsc-vsc);
@@ -1377,11 +1377,11 @@ utest_multimulti(FILE *diagfp, ESL_RANDOMNESS *rng, int M, const ESL_ALPHABET *a
 
   if (!diagfp) 
     {
-      if (esl_FCompareAbs(fsc, bsc,   ftol) != eslOK) esl_fatal(failmsg);
-      if (esl_FCompareAbs(fsc, asc_f, ftol) != eslOK) esl_fatal(failmsg);
-      if (esl_FCompareAbs(bsc, asc_b, ftol) != eslOK) esl_fatal(failmsg);
-      if (sc  > vsc+vtol)                             esl_fatal(failmsg);
-      if (vsc > fsc)                                  esl_fatal(failmsg);
+      if (esl_FCompare(fsc, bsc,   /*rtol=*/0.0, ftol) != eslOK) esl_fatal(failmsg);
+      if (esl_FCompare(fsc, asc_f, /*rtol=*/0.0, ftol) != eslOK) esl_fatal(failmsg);
+      if (esl_FCompare(bsc, asc_b, /*rtol=*/0.0, ftol) != eslOK) esl_fatal(failmsg);
+      if (sc  > vsc+vtol)                                        esl_fatal(failmsg);
+      if (vsc > fsc)                                             esl_fatal(failmsg);
     }
   else
     fprintf(diagfp, "%20g %20g %20g %20g %20g\n", fsc-bsc, fsc-asc_f, bsc-asc_b, vsc-sc, fsc-vsc);

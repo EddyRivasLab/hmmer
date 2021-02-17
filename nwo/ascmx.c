@@ -76,7 +76,7 @@ h4_ascmx_fb_compare_std(const H4_REFMX *std, const H4_REFMX *ascu, const H4_REFM
              * So as a special case, ignore Backward cells where ASC val is -inf.
              */
             if (std->type != h4R_BACKWARD || val != -eslINFINITY) {
-              if (esl_FCompareNew(H4R_MX(std,i,k,s), val, rtol, abstol) != eslOK) ESL_FAIL(eslFAIL, NULL, msg);
+              if (esl_FCompare(H4R_MX(std,i,k,s), val, rtol, abstol) != eslOK) ESL_FAIL(eslFAIL, NULL, msg);
             }
 	  }
 
@@ -90,7 +90,7 @@ h4_ascmx_fb_compare_std(const H4_REFMX *std, const H4_REFMX *ascu, const H4_REFM
 	   */
 	  if (std->type == h4R_BACKWARD && s == h4R_L) continue;
 
-	  if (esl_FCompareNew(H4R_XMX(std,i,s), H4R_XMX(ascd,i,s), rtol, abstol) != eslOK) ESL_FAIL(eslFAIL, NULL, msg);
+	  if (esl_FCompare(H4R_XMX(std,i,s), H4R_XMX(ascd,i,s), rtol, abstol) != eslOK) ESL_FAIL(eslFAIL, NULL, msg);
 	}
     }
   return eslOK;
@@ -134,10 +134,10 @@ h4_ascmx_pp_compare_std(const H4_REFMX *rxd, const H4_REFMX *apu, const H4_REFMX
 	    if (k >= anch->a[d-1].k0) ascval += H4R_MX(apd,i,k,s);   // sentinel k0(0)   = M+1, so no k gets evaluated for DOWN(d-1=0) 
 	    if (k <  anch->a[d].k0)   ascval += H4R_MX(apu,i,k,s);   // sentinel k0(D+1) = 0,   so no k gets evaluated for UP(d=D+1)
 	    
-	    if (esl_FCompareNew(H4R_MX(rxd,i,k,s), ascval, rtol, abstol) != eslOK) ESL_FAIL(eslFAIL, NULL, msg);
+	    if (esl_FCompare(H4R_MX(rxd,i,k,s), ascval, rtol, abstol) != eslOK) ESL_FAIL(eslFAIL, NULL, msg);
 	  }
       for (s = 0; s < h4R_NXCELLS; s++)
-	if (esl_FCompareNew(H4R_XMX(rxd,i,s), H4R_XMX(apd,i,s), rtol, abstol) != eslOK)  ESL_FAIL(eslFAIL, NULL, msg);
+	if (esl_FCompare(H4R_XMX(rxd,i,s), H4R_XMX(apd,i,s), rtol, abstol) != eslOK)  ESL_FAIL(eslFAIL, NULL, msg);
     }
   return eslOK;
 }
@@ -208,16 +208,16 @@ h4_ascmx_compare_asc(const H4_REFMX *au1, const H4_REFMX *ad1, const H4_REFMX *a
       /* DOWN row, if one exists for this i */
       for (k = anch->a[d-1].k0; k <= M; k++)   // sentinel k0(0) = M+1, so no k gets evaluated at d=1 for nonexistent DOWN(0)
 	for (s = 0; s < h4R_NSCELLS; s++)   //   ... i.e., first leg has only an UP(1) matrix.
-	  if (esl_FCompareNew(H4R_MX(ad1,i,k,s), H4R_MX(ad2,i,k,s), rtol, abstol) != eslOK) ESL_FAIL(eslFAIL, NULL, msg);
+	  if (esl_FCompare(H4R_MX(ad1,i,k,s), H4R_MX(ad2,i,k,s), rtol, abstol) != eslOK) ESL_FAIL(eslFAIL, NULL, msg);
 
       /* specials exist for all rows, stored in DOWN matrix */
       for (s = 0; s < h4R_NXCELLS; s++)
-	if (esl_FCompareNew( H4R_XMX(ad1,i,s), H4R_XMX(ad2,i,s), rtol, abstol) != eslOK) ESL_FAIL(eslFAIL, NULL, msg);
+	if (esl_FCompare( H4R_XMX(ad1,i,s), H4R_XMX(ad2,i,s), rtol, abstol) != eslOK) ESL_FAIL(eslFAIL, NULL, msg);
       
       /* UP row, if one exists for this i */
       for (k = 1; k < anch->a[d].k0; k++)   // sentinel k0(D+1) = 0, so no k gets evaluated at d=D+1 for nonexistent UP(D+1)
 	for (s = 0; s < h4R_NSCELLS; s++)
-	  if (esl_FCompareNew( H4R_MX(au1,i,k,s), H4R_MX(au2,i,k,s), rtol, abstol) != eslOK) ESL_FAIL(eslFAIL, NULL, msg);
+	  if (esl_FCompare( H4R_MX(au1,i,k,s), H4R_MX(au2,i,k,s), rtol, abstol) != eslOK) ESL_FAIL(eslFAIL, NULL, msg);
     }
   return eslOK;
 }

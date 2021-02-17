@@ -1087,11 +1087,11 @@ utest_singlepath(FILE *diagfp, ESL_RANDOMNESS *rng, const ESL_ALPHABET *abc, int
 #endif
 
   if ( h4_path_Compare(pi, vpi)                 != eslOK) esl_fatal(failmsg);
-  if ( esl_FCompareNew(tsc, vsc,   0.0, abstol) != eslOK) esl_fatal(failmsg);
-  if ( esl_FCompareNew(tsc, fsc,   0.0, abstol) != eslOK) esl_fatal(failmsg);
-  if ( esl_FCompareNew(tsc, bsc,   0.0, abstol) != eslOK) esl_fatal(failmsg);
-  if ( esl_FCompareNew(tsc, asc_f, 0.0, abstol) != eslOK) esl_fatal(failmsg);
-  if ( esl_FCompareNew(tsc, asc_f, 0.0, abstol) != eslOK) esl_fatal(failmsg);
+  if ( esl_FCompare(tsc, vsc,   0.0, abstol) != eslOK) esl_fatal(failmsg);
+  if ( esl_FCompare(tsc, fsc,   0.0, abstol) != eslOK) esl_fatal(failmsg);
+  if ( esl_FCompare(tsc, bsc,   0.0, abstol) != eslOK) esl_fatal(failmsg);
+  if ( esl_FCompare(tsc, asc_f, 0.0, abstol) != eslOK) esl_fatal(failmsg);
+  if ( esl_FCompare(tsc, asc_f, 0.0, abstol) != eslOK) esl_fatal(failmsg);
 
   /* to compare Viterbi to Fwd matrix, we have to hack around a safety check in the structures */
   rxv->type = h4R_FORWARD;
@@ -1195,11 +1195,11 @@ utest_singlesingle(FILE *diagfp, ESL_RANDOMNESS *rng, const ESL_ALPHABET *abc, i
 #endif
 
   if ( h4_path_Compare(pi, vpi)                 != eslOK) esl_fatal(failmsg);
-  if ( esl_FCompareNew(tsc, vsc,   0.0, abstol) != eslOK) esl_fatal(failmsg);
-  if ( esl_FCompareNew(tsc, fsc,   0.0, abstol) != eslOK) esl_fatal(failmsg);
-  if ( esl_FCompareNew(tsc, bsc,   0.0, abstol) != eslOK) esl_fatal(failmsg);
-  if ( esl_FCompareNew(tsc, asc_f, 0.0, abstol) != eslOK) esl_fatal(failmsg);
-  if ( esl_FCompareNew(tsc, asc_b, 0.0, abstol) != eslOK) esl_fatal(failmsg);
+  if ( esl_FCompare(tsc, vsc,   0.0, abstol) != eslOK) esl_fatal(failmsg);
+  if ( esl_FCompare(tsc, fsc,   0.0, abstol) != eslOK) esl_fatal(failmsg);
+  if ( esl_FCompare(tsc, bsc,   0.0, abstol) != eslOK) esl_fatal(failmsg);
+  if ( esl_FCompare(tsc, asc_f, 0.0, abstol) != eslOK) esl_fatal(failmsg);
+  if ( esl_FCompare(tsc, asc_b, 0.0, abstol) != eslOK) esl_fatal(failmsg);
 
   if ( h4_ascmx_pp_Validate(apu, apd, anch, abstol, NULL)    != eslOK) esl_fatal(failmsg);
   if ( h4_ascmx_pp_compare_path(pi,  apu, apd, anch, abstol) != eslOK) esl_fatal(failmsg);
@@ -1297,8 +1297,8 @@ utest_singlemulti(FILE *diagfp, ESL_RANDOMNESS *rng, const ESL_ALPHABET *abc, in
   printf("asc_b = %.3f\n", asc_b);
 #endif
 
-  if ( esl_FCompareNew(tsc, asc_f, 0.0, abstol) != eslOK) esl_fatal(failmsg);
-  if ( esl_FCompareNew(tsc, asc_b, 0.0, abstol) != eslOK) esl_fatal(failmsg);
+  if ( esl_FCompare(tsc, asc_f, 0.0, abstol) != eslOK) esl_fatal(failmsg);
+  if ( esl_FCompare(tsc, asc_b, 0.0, abstol) != eslOK) esl_fatal(failmsg);
  
   if ( h4_ascmx_pp_Validate(apu, apd, anch, abstol, NULL)    != eslOK) esl_fatal(failmsg);
   if ( h4_ascmx_pp_compare_path(pi,  apu, apd, anch, abstol) != eslOK) esl_fatal(failmsg);
@@ -1391,8 +1391,8 @@ utest_ensemble(FILE *diagfp, ESL_RANDOMNESS *rng, const ESL_ALPHABET *abc, int M
   ESL_DASSERT1(( which >= 0 && which <= 2 ));
 
   switch (which) {
-  case 0:  failmsg = failmsg0;  fwd_atol = (h4_logsum_IsSlowExact() ? 0.001  : 0.002);  vit_atol = 1e-5;  dec_atol = 1e-5; break;
-  case 1:  failmsg = failmsg1;  fwd_atol = (h4_logsum_IsSlowExact() ? 0.001  : 0.002);  vit_atol = 1e-5;  dec_atol = 1e-6; break;
+  case 0:  failmsg = failmsg0;  fwd_atol = (h4_logsum_IsSlowExact() ? 0.001  : 0.002);  vit_atol = 1e-5;  dec_atol = 0.001; break;
+  case 1:  failmsg = failmsg1;  fwd_atol = (h4_logsum_IsSlowExact() ? 0.001  : 0.002);  vit_atol = 1e-5;  dec_atol = 0.001;  break;
   case 2:  failmsg = failmsg2;  fwd_atol = (h4_logsum_IsSlowExact() ? 0.0001 : 0.01);   vit_atol = 1e-5;  dec_atol = (h4_logsum_IsSlowExact() ? 0.001 : 0.01); break;
   }
   
@@ -1438,9 +1438,9 @@ utest_ensemble(FILE *diagfp, ESL_RANDOMNESS *rng, const ESL_ALPHABET *abc, int M
   printf("asc_b = %.3f\n", asc_b);
 #endif
 
-  if (esl_FCompareNew(fsc, bsc,   0.0, fwd_atol) != eslOK) esl_fatal(failmsg);
-  if (esl_FCompareNew(fsc, asc_f, 0.0, fwd_atol) != eslOK) esl_fatal(failmsg);
-  if (esl_FCompareNew(fsc, asc_b, 0.0, fwd_atol) != eslOK) esl_fatal(failmsg);
+  if (esl_FCompare(fsc, bsc,   0.0, fwd_atol) != eslOK) esl_fatal(failmsg);
+  if (esl_FCompare(fsc, asc_f, 0.0, fwd_atol) != eslOK) esl_fatal(failmsg);
+  if (esl_FCompare(fsc, asc_b, 0.0, fwd_atol) != eslOK) esl_fatal(failmsg);
   if (tsc > vsc+vit_atol)                                  esl_fatal(failmsg);
   if (vsc > fsc)                                           esl_fatal(failmsg);
 

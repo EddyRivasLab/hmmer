@@ -1383,7 +1383,7 @@ p7_sparsemx_Compare(const P7_SPARSEMX *sx1, const P7_SPARSEMX *sx2, float tol)
  * Purpose:   Compare all the values in sparse DP matrix <sx> to the
  *            corresponding values in reference DP matrix <rx> for
  *            equality within the absolute epsilon <tol>, using
- *            <esl_FCompareAbs()> calls. Return <eslOK> if comparison
+ *            <esl_FCompare()> calls. Return <eslOK> if comparison
  *            succeeds; return <eslFAIL> otherwise.
  *            
  *            In general, this is only going to succeed if <sx> was
@@ -1446,19 +1446,19 @@ p7_sparsemx_CompareReference(const P7_SPARSEMX *sx, const P7_REFMX *rx, float to
       if (sm->n[i] && !sm->n[i-1])         /* ia-1 specials at a segment start */
         {
           for (s = 0; s < p7S_NXCELLS; xc++, s++) 
-            if (esl_FCompareAbs(*xc, P7R_XMX(rx,i-1,s), tol) == eslFAIL) ESL_FAIL(eslFAIL, NULL, msg);
+            if (esl_FCompare(*xc, P7R_XMX(rx,i-1,s), /*rtol=*/0.0, tol) == eslFAIL) ESL_FAIL(eslFAIL, NULL, msg);
         }
 
       for (z = 0; z < sm->n[i]; z++)       /* sparse cells */
         {
           for (s = 0; s < p7S_NSCELLS; dpc++, s++) 
-            if (esl_FCompareAbs(*dpc, P7R_MX(rx,i,sm->k[i][z],s), tol) == eslFAIL) ESL_FAIL(eslFAIL, NULL, msg);
+            if (esl_FCompare(*dpc, P7R_MX(rx,i,sm->k[i][z],s), /*rtol=*/0.0, tol) == eslFAIL) ESL_FAIL(eslFAIL, NULL, msg);
         }
   
       if (sm->n[i])       /* specials */
         {
           for (s = 0; s < p7S_NXCELLS; xc++, s++) 
-            if (esl_FCompareAbs(*xc, P7R_XMX(rx,i,s), tol) == eslFAIL) ESL_FAIL(eslFAIL, NULL, msg);
+            if (esl_FCompare(*xc, P7R_XMX(rx,i,s), /*rtol=*/0.0, tol) == eslFAIL) ESL_FAIL(eslFAIL, NULL, msg);
         }
     }
 
@@ -1472,17 +1472,17 @@ p7_sparsemx_CompareReference(const P7_SPARSEMX *sx, const P7_REFMX *rx, float to
       ib = sm->seg[g].ib;
 
       for (s = 0; s < p7S_NXCELLS; xc2++, s++)        /* ia-1 specials at segment start */
-        if (esl_FCompareAbs(*xc2, P7R_XMX(rx,ia-1,s), tol) == eslFAIL) ESL_FAIL(eslFAIL, NULL, msg);
+        if (esl_FCompare(*xc2, P7R_XMX(rx,ia-1,s), /*rtol=*/0.0, tol) == eslFAIL) ESL_FAIL(eslFAIL, NULL, msg);
 
       for (i = ia; i <= ib; i++) 
         {
           for (z = 0; z < sm->n[i]; z++)          /* sparse main cells */
             {
               for (s = 0; s < p7S_NSCELLS; dpc2++, s++) 
-                if (esl_FCompareAbs(*dpc2, P7R_MX(rx,i,sm->k[i][z],s), tol) == eslFAIL)  ESL_FAIL(eslFAIL, NULL, msg);
+                if (esl_FCompare(*dpc2, P7R_MX(rx,i,sm->k[i][z],s), /*rtol=*/0.0, tol) == eslFAIL)  ESL_FAIL(eslFAIL, NULL, msg);
             }
           for (s = 0; s < p7S_NXCELLS; xc2++, s++)        /* specials */
-            if (esl_FCompareAbs(*xc2, P7R_XMX(rx,i,s), tol) == eslFAIL) ESL_FAIL(eslFAIL, NULL, msg);
+            if (esl_FCompare(*xc2, P7R_XMX(rx,i,s), /*rtol=*/0.0, tol) == eslFAIL) ESL_FAIL(eslFAIL, NULL, msg);
         }
     }
   
@@ -1903,26 +1903,26 @@ validate_decoding(const P7_SPARSEMX *sx, char *errbuf)
 
   /* Check special cases prohibited in the first ia-1 presegment specials: */
   /* Note that the N on the first ia-1 row is *not* necessarily 1, because ia-1 is not necessarily row 0 */
-  if ( esl_FCompareAbs(xc[p7S_J],  0.0, tol) != eslOK) ESL_FAIL(eslFAIL, errbuf, "first J not 0");
-  if ( esl_FCompareAbs(xc[p7S_C],  0.0, tol) != eslOK) ESL_FAIL(eslFAIL, errbuf, "first C not 0");
-  if ( esl_FCompareAbs(xc[p7S_JJ], 0.0, tol) != eslOK) ESL_FAIL(eslFAIL, errbuf, "first JJ not 0");
-  if ( esl_FCompareAbs(xc[p7S_CC], 0.0, tol) != eslOK) ESL_FAIL(eslFAIL, errbuf, "first CC not 0");
+  if ( esl_FCompare(xc[p7S_J],  0.0, /*rtol=*/0.0, tol) != eslOK) ESL_FAIL(eslFAIL, errbuf, "first J not 0");
+  if ( esl_FCompare(xc[p7S_C],  0.0, /*rtol=*/0.0, tol) != eslOK) ESL_FAIL(eslFAIL, errbuf, "first C not 0");
+  if ( esl_FCompare(xc[p7S_JJ], 0.0, /*rtol=*/0.0, tol) != eslOK) ESL_FAIL(eslFAIL, errbuf, "first JJ not 0");
+  if ( esl_FCompare(xc[p7S_CC], 0.0, /*rtol=*/0.0, tol) != eslOK) ESL_FAIL(eslFAIL, errbuf, "first CC not 0");
 
   /* Sweep, checking for (the most easily spotchecked) prohibited values (must be 0.0's) */
   for (i = 1; i <= sm->L; i++)
     {
       if (sm->n[i] && !sm->n[i-1]) {       /* ia-1 specials at a segment start */
-        if ( esl_FCompareAbs(xc[p7S_E], 0.0, tol) != eslOK) ESL_FAIL(eslFAIL, errbuf, "E seg start for ia=%d not 0", i);
-        if ( xc[p7S_J]+tol < xc[p7S_JJ])                    ESL_FAIL(eslFAIL, errbuf, "JJ>J at seg start for ia=%d ", i);
-        if ( xc[p7S_C]+tol < xc[p7S_CC])                    ESL_FAIL(eslFAIL, errbuf, "CC>C at seg start for ia=%d ", i);
+        if ( esl_FCompare(xc[p7S_E], 0.0, /*rtol=*/0.0, tol) != eslOK) ESL_FAIL(eslFAIL, errbuf, "E seg start for ia=%d not 0", i);
+        if ( xc[p7S_J]+tol < xc[p7S_JJ])                               ESL_FAIL(eslFAIL, errbuf, "JJ>J at seg start for ia=%d ", i);
+        if ( xc[p7S_C]+tol < xc[p7S_CC])                               ESL_FAIL(eslFAIL, errbuf, "CC>C at seg start for ia=%d ", i);
         xc += p7S_NXCELLS;
       }
       for (z = 0; z < sm->n[i]; z++)       /* sparse main cells */
         {
           /* if k-1 supercell doesn't exist, can't reach DL. But all DGk are reachable, because of wing-retracted entry/exit */
-          if ((z == 0 || sm->k[i][z] != sm->k[i][z-1]+1) && esl_FCompareAbs(dpc[p7S_DL], 0.0, tol) != eslOK) ESL_FAIL(eslFAIL, errbuf, "first DL on i=%d not 0", i);
-          if (   sm->k[i][z] == sm->M                    && esl_FCompareAbs(dpc[p7S_IL], 0.0, tol) != eslOK) ESL_FAIL(eslFAIL, errbuf, "IL on i=%d,M not 0", i);
-          if (   sm->k[i][z] == sm->M                    && esl_FCompareAbs(dpc[p7S_IG], 0.0, tol) != eslOK) ESL_FAIL(eslFAIL, errbuf, "IG on i=%d,M not 0", i);
+          if ((z == 0 || sm->k[i][z] != sm->k[i][z-1]+1) && esl_FCompare(dpc[p7S_DL], 0.0, /*rtol=*/0.0, tol) != eslOK) ESL_FAIL(eslFAIL, errbuf, "first DL on i=%d not 0", i);
+          if (   sm->k[i][z] == sm->M                    && esl_FCompare(dpc[p7S_IL], 0.0, /*rtol=*/0.0, tol) != eslOK) ESL_FAIL(eslFAIL, errbuf, "IL on i=%d,M not 0", i);
+          if (   sm->k[i][z] == sm->M                    && esl_FCompare(dpc[p7S_IG], 0.0, /*rtol=*/0.0, tol) != eslOK) ESL_FAIL(eslFAIL, errbuf, "IG on i=%d,M not 0", i);
           dpc += p7S_NSCELLS;
           /* there are other conditions where I(i,k) values must be zero but this is more tedious to check */
         }
@@ -1938,11 +1938,11 @@ validate_decoding(const P7_SPARSEMX *sx, char *errbuf)
   xc     = sx->xmx + (sm->nrow + sm->S - 1)*p7S_NXCELLS; // last supercell in xmx 
   last_n = 0;
   /* special cases on absolute final stored row ib: */
-  if (esl_FCompareAbs(xc[p7S_N], 0.0, tol) != eslOK) ESL_FAIL(eslFAIL, errbuf, "N on last row not 0");
-  if (esl_FCompareAbs(xc[p7S_J], 0.0, tol) != eslOK) ESL_FAIL(eslFAIL, errbuf, "J on last row not 0");
-  if (esl_FCompareAbs(xc[p7S_B], 0.0, tol) != eslOK) ESL_FAIL(eslFAIL, errbuf, "B on last row not 0");
-  if (esl_FCompareAbs(xc[p7S_L], 0.0, tol) != eslOK) ESL_FAIL(eslFAIL, errbuf, "L on last row not 0");
-  if (esl_FCompareAbs(xc[p7S_G], 0.0, tol) != eslOK) ESL_FAIL(eslFAIL, errbuf, "G on last row not 0");
+  if (esl_FCompare(xc[p7S_N], 0.0, /*rtol=*/0.0, tol) != eslOK) ESL_FAIL(eslFAIL, errbuf, "N on last row not 0");
+  if (esl_FCompare(xc[p7S_J], 0.0, /*rtol=*/0.0, tol) != eslOK) ESL_FAIL(eslFAIL, errbuf, "J on last row not 0");
+  if (esl_FCompare(xc[p7S_B], 0.0, /*rtol=*/0.0, tol) != eslOK) ESL_FAIL(eslFAIL, errbuf, "B on last row not 0");
+  if (esl_FCompare(xc[p7S_L], 0.0, /*rtol=*/0.0, tol) != eslOK) ESL_FAIL(eslFAIL, errbuf, "L on last row not 0");
+  if (esl_FCompare(xc[p7S_G], 0.0, /*rtol=*/0.0, tol) != eslOK) ESL_FAIL(eslFAIL, errbuf, "G on last row not 0");
   /* sweep: */
   for (i = sm->L; i >= 1; i--)
     {
@@ -1950,8 +1950,8 @@ validate_decoding(const P7_SPARSEMX *sx, char *errbuf)
 
       for (z = sm->n[i]-1; z >= 0; z--)
         { // last_n == 0 checks if we're on an end-segment row ib
-          if (last_n == 0 && esl_FCompareAbs(dpc[p7S_IL], 0.0, tol) != eslOK) ESL_FAIL(eslFAIL, errbuf, "IL on end-seg row ib=%d not 0", i);
-          if (last_n == 0 && esl_FCompareAbs(dpc[p7S_IG], 0.0, tol) != eslOK) ESL_FAIL(eslFAIL, errbuf, "IG on end-seg row ib=%d not 0", i);
+          if (last_n == 0 && esl_FCompare(dpc[p7S_IL], 0.0, /*rtol=*/0.0, tol) != eslOK) ESL_FAIL(eslFAIL, errbuf, "IL on end-seg row ib=%d not 0", i);
+          if (last_n == 0 && esl_FCompare(dpc[p7S_IG], 0.0, /*rtol=*/0.0, tol) != eslOK) ESL_FAIL(eslFAIL, errbuf, "IG on end-seg row ib=%d not 0", i);
           dpc -= p7S_NSCELLS;
         }
 

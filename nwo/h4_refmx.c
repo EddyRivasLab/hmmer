@@ -531,9 +531,9 @@ h4_refmx_Compare(const H4_REFMX *rx1, const H4_REFMX *rx2, float a_tol)
     {
       for (k = 0; k <= rx1->M; k++)   
 	for (y = 0; y < h4R_NSCELLS; y++)
-	  if ( esl_FCompareNew(H4R_MX(rx1,i,k,y), H4R_MX(rx2,i,k,y), 0.0, a_tol) == eslFAIL) ESL_FAIL(eslFAIL, NULL, msg);
+	  if ( esl_FCompare(H4R_MX(rx1,i,k,y), H4R_MX(rx2,i,k,y), 0.0, a_tol) == eslFAIL) ESL_FAIL(eslFAIL, NULL, msg);
       for (y = 0; y < h4R_NXCELLS; y++)
-	if ( esl_FCompareNew(H4R_XMX(rx1,i,y), H4R_XMX(rx2,i,y), 0.0, a_tol)     == eslFAIL) ESL_FAIL(eslFAIL, NULL, msg);
+	if ( esl_FCompare(H4R_XMX(rx1,i,y), H4R_XMX(rx2,i,y), 0.0, a_tol)     == eslFAIL) ESL_FAIL(eslFAIL, NULL, msg);
     }
   return eslOK;	
 }
@@ -569,18 +569,18 @@ h4_refmx_CompareLocal(const H4_REFMX *rx1, const H4_REFMX *rx2, float a_tol)
     {
       for (k = 0; k <= rx1->M; k++)   
 	{
-	  if ( esl_FCompareNew(H4R_MX(rx1,i,k,h4R_ML), H4R_MX(rx2,i,k,h4R_ML), 0.0, a_tol) == eslFAIL) ESL_FAIL(eslFAIL, NULL, msg);
-	  if ( esl_FCompareNew(H4R_MX(rx1,i,k,h4R_IL), H4R_MX(rx2,i,k,h4R_IL), 0.0, a_tol) == eslFAIL) ESL_FAIL(eslFAIL, NULL, msg);
-	  if ( esl_FCompareNew(H4R_MX(rx1,i,k,h4R_DL), H4R_MX(rx2,i,k,h4R_DL), 0.0, a_tol) == eslFAIL) ESL_FAIL(eslFAIL, NULL, msg);
+	  if ( esl_FCompare(H4R_MX(rx1,i,k,h4R_ML), H4R_MX(rx2,i,k,h4R_ML), 0.0, a_tol) == eslFAIL) ESL_FAIL(eslFAIL, NULL, msg);
+	  if ( esl_FCompare(H4R_MX(rx1,i,k,h4R_IL), H4R_MX(rx2,i,k,h4R_IL), 0.0, a_tol) == eslFAIL) ESL_FAIL(eslFAIL, NULL, msg);
+	  if ( esl_FCompare(H4R_MX(rx1,i,k,h4R_DL), H4R_MX(rx2,i,k,h4R_DL), 0.0, a_tol) == eslFAIL) ESL_FAIL(eslFAIL, NULL, msg);
 	}
-      if ( esl_FCompareNew(H4R_XMX(rx1,i,h4R_E),  H4R_XMX(rx2,i,h4R_E),  0.0, a_tol) == eslFAIL)   ESL_FAIL(eslFAIL, NULL, msg);
-      if ( esl_FCompareNew(H4R_XMX(rx1,i,h4R_N),  H4R_XMX(rx2,i,h4R_N),  0.0, a_tol) == eslFAIL)   ESL_FAIL(eslFAIL, NULL, msg);
-      if ( esl_FCompareNew(H4R_XMX(rx1,i,h4R_J),  H4R_XMX(rx2,i,h4R_J),  0.0, a_tol) == eslFAIL)   ESL_FAIL(eslFAIL, NULL, msg);
-      if ( esl_FCompareNew(H4R_XMX(rx1,i,h4R_B),  H4R_XMX(rx2,i,h4R_B),  0.0, a_tol) == eslFAIL)   ESL_FAIL(eslFAIL, NULL, msg);
-      if ( esl_FCompareNew(H4R_XMX(rx1,i,h4R_L),  H4R_XMX(rx2,i,h4R_L),  0.0, a_tol) == eslFAIL)   ESL_FAIL(eslFAIL, NULL, msg);
-      if ( esl_FCompareNew(H4R_XMX(rx1,i,h4R_C),  H4R_XMX(rx2,i,h4R_C),  0.0, a_tol) == eslFAIL)   ESL_FAIL(eslFAIL, NULL, msg);
-      if ( esl_FCompareNew(H4R_XMX(rx1,i,h4R_JJ), H4R_XMX(rx2,i,h4R_JJ), 0.0, a_tol) == eslFAIL)   ESL_FAIL(eslFAIL, NULL, msg);
-      if ( esl_FCompareNew(H4R_XMX(rx1,i,h4R_CC), H4R_XMX(rx2,i,h4R_CC), 0.0, a_tol) == eslFAIL)   ESL_FAIL(eslFAIL, NULL, msg);
+      if ( esl_FCompare(H4R_XMX(rx1,i,h4R_E),  H4R_XMX(rx2,i,h4R_E),  0.0, a_tol) == eslFAIL)   ESL_FAIL(eslFAIL, NULL, msg);
+      if ( esl_FCompare(H4R_XMX(rx1,i,h4R_N),  H4R_XMX(rx2,i,h4R_N),  0.0, a_tol) == eslFAIL)   ESL_FAIL(eslFAIL, NULL, msg);
+      if ( esl_FCompare(H4R_XMX(rx1,i,h4R_J),  H4R_XMX(rx2,i,h4R_J),  0.0, a_tol) == eslFAIL)   ESL_FAIL(eslFAIL, NULL, msg);
+      if ( esl_FCompare(H4R_XMX(rx1,i,h4R_B),  H4R_XMX(rx2,i,h4R_B),  0.0, a_tol) == eslFAIL)   ESL_FAIL(eslFAIL, NULL, msg);
+      if ( esl_FCompare(H4R_XMX(rx1,i,h4R_L),  H4R_XMX(rx2,i,h4R_L),  0.0, a_tol) == eslFAIL)   ESL_FAIL(eslFAIL, NULL, msg);
+      if ( esl_FCompare(H4R_XMX(rx1,i,h4R_C),  H4R_XMX(rx2,i,h4R_C),  0.0, a_tol) == eslFAIL)   ESL_FAIL(eslFAIL, NULL, msg);
+      if ( esl_FCompare(H4R_XMX(rx1,i,h4R_JJ), H4R_XMX(rx2,i,h4R_JJ), 0.0, a_tol) == eslFAIL)   ESL_FAIL(eslFAIL, NULL, msg);
+      if ( esl_FCompare(H4R_XMX(rx1,i,h4R_CC), H4R_XMX(rx2,i,h4R_CC), 0.0, a_tol) == eslFAIL)   ESL_FAIL(eslFAIL, NULL, msg);
     }
   return eslOK;	
 }
@@ -626,11 +626,11 @@ h4_refmx_CompareDecoding(const H4_REFMX *ppe, const H4_REFMX *ppa, float a_tol)
     {
       for (dpe = ppe->dp[i], dpa = ppa->dp[i], k = 0; k <= ppe->M; k++)  // k=0 is ok to include; ok to check that -inf=-inf on k=0 boundary
 	for (y = 0; y < h4R_NSCELLS; y++, dpe++, dpa++)
-	  if ( (*dpe == 0. && *dpa != 0.0) || esl_FCompareNew(*dpe, *dpa, 0.0, a_tol) != eslOK) 
+	  if ( (*dpe == 0. && *dpa != 0.0) || esl_FCompare(*dpe, *dpa, 0.0, a_tol) != eslOK) 
 	    ESL_FAIL(eslFAIL, NULL, msg);
 
       for (y = 0; y < h4R_NXCELLS; y++, dpe++, dpa++)
-	if ( (*dpe == 0. && *dpa != 0.0) || esl_FCompareNew(*dpe, *dpa, 0.0, a_tol) != eslOK) 
+	if ( (*dpe == 0. && *dpa != 0.0) || esl_FCompare(*dpe, *dpa, 0.0, a_tol) != eslOK) 
 	  ESL_FAIL(eslFAIL, NULL, msg);
     }
   return eslOK;

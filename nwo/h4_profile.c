@@ -895,9 +895,9 @@ utest_occupancy(FILE *diagfp, ESL_RANDOMNESS *rng, int alphatype, int M, int N)
 		exp_len, sim_len,     (sim_len     > 0  ? 0.0 : (exp_len-sim_len)/sim_len));
     }
 
-  if (esl_DCompareNew(sim_len, exp_len, 0.01, 0.0) != eslOK) esl_fatal(msg);
-  for (k = 1; k <= M; k++) if (esl_DCompareNew(sim_mocc[k], mocc[k], 0.05, 0.0) != eslOK) esl_fatal(msg);
-  for (k = 1; k <  M; k++) if (esl_DCompareNew(sim_iocc[k], iocc[k], 0.10, 0.0) != eslOK) esl_fatal(msg);
+  if (esl_DCompare(sim_len, exp_len, 0.01, 0.0) != eslOK) esl_fatal(msg);
+  for (k = 1; k <= M; k++) if (esl_DCompare(sim_mocc[k], mocc[k], 0.05, 0.0) != eslOK) esl_fatal(msg);
+  for (k = 1; k <  M; k++) if (esl_DCompare(sim_iocc[k], iocc[k], 0.10, 0.0) != eslOK) esl_fatal(msg);
 
   free(sim_iocc);
   free(sim_mocc);

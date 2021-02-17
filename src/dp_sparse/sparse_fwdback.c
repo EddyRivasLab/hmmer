@@ -752,19 +752,19 @@ utest_compare_reference(ESL_RANDOMNESS *rng, ESL_ALPHABET *abc, P7_BG *bg, int M
       //p7_refmx_Dump(stdout, rxd);
 
       /* Tests */
-      if ( esl_FCompareAbs(vsc_s, vsc_r, tol)          != eslOK) esl_fatal(msg); /* (1): reference and sparse scores (V,F,B) identical within tolerance */
-      if ( esl_FCompareAbs(fsc_s, fsc_r, tol)          != eslOK) esl_fatal(msg);
-      if ( esl_FCompareAbs(bsc_s, bsc_r, tol)          != eslOK) esl_fatal(msg);
-      if ( p7_trace_CompareLoosely(rtr, str, sq->dsq)  != eslOK) esl_fatal(msg); /* (2): reference, sparse Viterbi tracebacks identical; see notes on p7_trace_CompareLoosely */
-      if ( p7_sparsemx_Validate(sxv, NULL)             != eslOK) esl_fatal(msg); /* (3): All sparse DP matrices Validate() (V,F,B,D) */
-      if ( p7_sparsemx_Validate(sxf, NULL)             != eslOK) esl_fatal(msg); /*      (the <NULL> arg is an optional <errbuf>)    */
-      if ( p7_sparsemx_Validate(sxb, NULL)             != eslOK) esl_fatal(msg);       
-      if ( p7_sparsemx_Validate(sxd, errbuf)           != eslOK) esl_fatal(errbuf);
-      if ( p7_trace_Validate(str, abc, sq->dsq, NULL)  != eslOK) esl_fatal(msg); /* (4): Sparse DP Viterbi trace must Validate() */
-      if ( p7_sparsemx_CompareReference(sxv, rxv, tol) != eslOK) esl_fatal(msg); /* (5): Sparse and reference DP matrices all identical within tolerance */
-      if ( p7_sparsemx_CompareReference(sxf, rxf, tol) != eslOK) esl_fatal(msg); /* (5): Sparse and reference DP matrices all identical within tolerance */
-      if ( p7_sparsemx_CompareReference(sxb, rxb, tol) != eslOK) esl_fatal(msg); /* (5): Sparse and reference DP matrices all identical within tolerance */
-      if ( p7_sparsemx_CompareReference(sxd, rxd, tol) != eslOK) esl_fatal(msg); /* (5): Sparse and reference DP matrices all identical within tolerance */
+      if ( esl_FCompare(vsc_s, vsc_r, /*rtol=*/0.0, tol) != eslOK) esl_fatal(msg); /* (1): reference and sparse scores (V,F,B) identical within tolerance */
+      if ( esl_FCompare(fsc_s, fsc_r, /*rtol=*/0.0, tol) != eslOK) esl_fatal(msg);
+      if ( esl_FCompare(bsc_s, bsc_r, /*rtol=*/0.0, tol) != eslOK) esl_fatal(msg);
+      if ( p7_trace_CompareLoosely(rtr, str, sq->dsq)    != eslOK) esl_fatal(msg); /* (2): reference, sparse Viterbi tracebacks identical; see notes on p7_trace_CompareLoosely */
+      if ( p7_sparsemx_Validate(sxv, NULL)               != eslOK) esl_fatal(msg); /* (3): All sparse DP matrices Validate() (V,F,B,D) */
+      if ( p7_sparsemx_Validate(sxf, NULL)               != eslOK) esl_fatal(msg); /*      (the <NULL> arg is an optional <errbuf>)    */
+      if ( p7_sparsemx_Validate(sxb, NULL)               != eslOK) esl_fatal(msg);       
+      if ( p7_sparsemx_Validate(sxd, errbuf)             != eslOK) esl_fatal(errbuf);
+      if ( p7_trace_Validate(str, abc, sq->dsq, NULL)    != eslOK) esl_fatal(msg); /* (4): Sparse DP Viterbi trace must Validate() */
+      if ( p7_sparsemx_CompareReference(sxv, rxv, tol)   != eslOK) esl_fatal(msg); /* (5): Sparse and reference DP matrices all identical within tolerance */
+      if ( p7_sparsemx_CompareReference(sxf, rxf, tol)   != eslOK) esl_fatal(msg); /* (5): Sparse and reference DP matrices all identical within tolerance */
+      if ( p7_sparsemx_CompareReference(sxb, rxb, tol)   != eslOK) esl_fatal(msg); /* (5): Sparse and reference DP matrices all identical within tolerance */
+      if ( p7_sparsemx_CompareReference(sxd, rxd, tol)   != eslOK) esl_fatal(msg); /* (5): Sparse and reference DP matrices all identical within tolerance */
       
       if ( p7_trace_Reuse(str)     != eslOK) esl_fatal(msg);
       if ( p7_trace_Reuse(rtr)     != eslOK) esl_fatal(msg);
@@ -886,10 +886,10 @@ utest_reference_constrained(ESL_RANDOMNESS *rng, ESL_ALPHABET *abc, P7_BG *bg, i
       //p7_refmx_Dump(stdout, rxv);
 
       /* Tests */
-      if ( esl_FCompare(vsc_s, vsc_r, tol)                    != eslOK) esl_fatal(msg); /* (1) sparse, reference V scores equal */
+      if ( esl_FCompare_old(vsc_s, vsc_r, tol)                    != eslOK) esl_fatal(msg); /* (1) sparse, reference V scores equal */
       if ( p7_trace_CompareLoosely(str, rtr, sq->dsq)         != eslOK) esl_fatal(msg); /* (2) sparse, reference V traces identical; see notes on p7_trace_CompareLoosely */
       if ( ! (fsc_s - vsc_r + tol > 0.0f))                              esl_fatal(msg); /* (3) sparse F,B scores >= reference V score. */
-      if ( esl_FCompare(fsc_s, bsc_s, tol)                    != eslOK) esl_fatal(msg); /* (4) sparse F score = B score */
+      if ( esl_FCompare_old(fsc_s, bsc_s, tol)                    != eslOK) esl_fatal(msg); /* (4) sparse F score = B score */
       if ( p7_sparsemx_CompareReferenceAsBound(sxv, rxv, tol) != eslOK) esl_fatal(msg); /* (5) All V,F,B matrix values satisfy v_ref >= v_sparse */
       if ( p7_sparsemx_CompareReferenceAsBound(sxf, rxf, tol) != eslOK) esl_fatal(msg);
       if ( p7_sparsemx_CompareReferenceAsBound(sxb, rxb, tol) != eslOK) esl_fatal(msg);
@@ -997,10 +997,10 @@ utest_singlepath(ESL_RANDOMNESS *rng, ESL_ALPHABET *abc, P7_BG *bg, int M, int N
       //p7_trace_DumpAnnotated(stdout, vtr, gm, sq->dsq);
 
       /* Since only a single path is possible, trace score and Fwd score match */
-      if ( esl_FCompareAbs(tsc, fsc, tol)   != eslOK) esl_fatal(msg); 
-      if ( esl_FCompareAbs(tsc, bsc, tol)   != eslOK) esl_fatal(msg);
-      if ( esl_FCompareAbs(tsc, vsc, tol)   != eslOK) esl_fatal(msg);
-      if ( p7_trace_Compare(gtr, vtr, 0.0f) != eslOK) esl_fatal(msg); // 0.0 is <pptol> arg, unused, because neither trace has PP annotation
+      if ( esl_FCompare(tsc, fsc, /*rtol=*/0.0, tol)   != eslOK) esl_fatal(msg); 
+      if ( esl_FCompare(tsc, bsc, /*rtol=*/0.0, tol)   != eslOK) esl_fatal(msg);
+      if ( esl_FCompare(tsc, vsc, /*rtol=*/0.0, tol)   != eslOK) esl_fatal(msg);
+      if ( p7_trace_Compare(gtr, vtr, 0.0f)            != eslOK) esl_fatal(msg); // 0.0 is <pptol> arg, unused, because neither trace has PP annotation
   
       esl_sq_Reuse(sq);
       p7_trace_Reuse(vtr);
@@ -1116,10 +1116,10 @@ utest_internal_glocal_exit(void)
   if ( p7_trace_Score(rtr, tsq, gm, &tsc_r) != eslOK) esl_fatal(msg);
 
   /* Tests */
-  if ( esl_FCompareAbs(vsc_s, vsc_r, tol) != eslOK) esl_fatal(msg); 
-  if ( esl_FCompareAbs(fsc_s, bsc_s, tol) != eslOK) esl_fatal(msg);
-  if ( esl_FCompareAbs(fsc_r, bsc_r, tol) != eslOK) esl_fatal(msg);
-  if ( p7_trace_Compare(str, rtr, 0.0f)   != eslOK) esl_fatal(msg); // 0.0 is <pptol> arg, unused, because neither trace has PP annotation
+  if ( esl_FCompare(vsc_s, vsc_r, /*rtol=*/0.0, tol) != eslOK) esl_fatal(msg); 
+  if ( esl_FCompare(fsc_s, bsc_s, /*rtol=*/0.0, tol) != eslOK) esl_fatal(msg);
+  if ( esl_FCompare(fsc_r, bsc_r, /*rtol=*/0.0, tol) != eslOK) esl_fatal(msg);
+  if ( p7_trace_Compare(str, rtr, 0.0f)              != eslOK) esl_fatal(msg); // 0.0 is <pptol> arg, unused, because neither trace has PP annotation
 
   p7_trace_Destroy(rtr);
   p7_trace_Destroy(str);

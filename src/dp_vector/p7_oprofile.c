@@ -1157,7 +1157,7 @@ p7_oprofile_Dump(FILE *fp, const P7_OPROFILE *om)
  *            or <eslFAIL> if not.
  * 
  *            Floating point comparisons are done to a tolerance
- *            of <tol> using <esl_FCompare()>.
+ *            of <tol> using <esl_FCompare_old()>.
  *            
  *            Both profiles must have the same striping (the same
  *            vector width V).
@@ -1171,7 +1171,7 @@ p7_oprofile_Dump(FILE *fp, const P7_OPROFILE *om)
  *            
  * Args:      om1    - one optimized profile to compare
  *            om2    - the other
- *            tol    - floating point comparison tolerance; see <esl_FCompare()>
+ *            tol    - floating point comparison tolerance; see <esl_FCompare_old()>
  *            errmsg - ptr to array of at least <eslERRBUFSIZE> characters, or NULL.
  *            
  * Returns:   <eslOK> on effective equality;  <eslFAIL> on difference.
@@ -1231,7 +1231,7 @@ p7_oprofile_Compare(const P7_OPROFILE *om1, const P7_OPROFILE *om2, float tol, c
   /* Forward/Backward part */
   for (x = 0; x < om1->abc->Kp; x++)
     for (y = 0; y < Qf * Vf; y++)
-      if (esl_FCompare(om1->rfv[x][y], om2->rfv[x][y], tol) != eslOK)
+      if (esl_FCompare_old(om1->rfv[x][y], om2->rfv[x][y], tol) != eslOK)
         ESL_FAIL(eslFAIL, errmsg, "comparison failed: FB rfv[%c][%d][%d] (k=%d)",
                  om1->abc->sym[x], P7_Q_FROM_Y(y,Vf), P7_Z_FROM_Y(y,Vf), P7_K_FROM_Y(y,Qf,Vf));
 

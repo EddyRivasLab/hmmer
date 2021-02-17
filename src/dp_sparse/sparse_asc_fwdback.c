@@ -1427,7 +1427,7 @@ utest_generation(FILE *diagfp, ESL_RANDOMNESS *rng, const ESL_ALPHABET *abc, int
 	  if ( p7_spascmx_Validate(asb, anch->a, anch->D, errbuf) != eslOK) esl_fatal("%s\n   %s\n", msg, errbuf);
 	  if ( p7_spascmx_Validate(asd, anch->a, anch->D, errbuf) != eslOK) esl_fatal("%s\n   %s\n", msg, errbuf);
 
-	  if ( esl_FCompareAbs(asc_f, asc_b, tol) != eslOK) esl_fatal(msg);
+	  if ( esl_FCompare(asc_f, asc_b, /*rtol=*/0.0, tol) != eslOK) esl_fatal(msg);
 	}
       else
 	fprintf(diagfp, "%20g\n", asc_f - asc_b);
@@ -1562,9 +1562,9 @@ utest_compare_reference(FILE *diagfp, ESL_RANDOMNESS *rng, const ESL_ALPHABET *a
 	  if ( p7_spascmx_Validate(asb, anch->a, anch->D, errbuf) != eslOK) esl_fatal("%s\n   %s\n", msg, errbuf);
 	  if ( p7_spascmx_Validate(asd, anch->a, anch->D, errbuf) != eslOK) esl_fatal("%s\n   %s\n", msg, errbuf);
 
-	  if ( esl_FCompareAbs(fsc, fsc_r, tol) != eslOK) esl_fatal(msg);
-	  if ( esl_FCompareAbs(bsc, bsc_r, tol) != eslOK) esl_fatal(msg);
-	  if ( esl_FCompareAbs(fsc, bsc,   tol) != eslOK) esl_fatal(msg);
+	  if ( esl_FCompare(fsc, fsc_r, /*rtol=*/0.0, tol) != eslOK) esl_fatal(msg);
+	  if ( esl_FCompare(bsc, bsc_r, /*rtol=*/0.0, tol) != eslOK) esl_fatal(msg);
+	  if ( esl_FCompare(fsc, bsc,   /*rtol=*/0.0, tol) != eslOK) esl_fatal(msg);
 	}
       else
 	fprintf(diagfp, "%20g %20g %20g\n", fsc_r-fsc, bsc_r-bsc, fsc-bsc);
@@ -1689,8 +1689,8 @@ utest_singlesingle(FILE *diagfp, ESL_RANDOMNESS *rng, const ESL_ALPHABET *abc, i
 	  if ( p7_spascmx_Validate(asb, anch, D, errbuf) != eslOK) esl_fatal("%s\n  %s\n", msg, errbuf); 
 	  if ( p7_spascmx_Validate(asd, anch, D, errbuf) != eslOK) esl_fatal("%s\n  %s\n", msg, errbuf); 
 
-	  if (esl_FCompareAbs(tsc, fsc, tol) != eslOK) esl_fatal(msg);
-	  if (esl_FCompareAbs(tsc, bsc, tol) != eslOK) esl_fatal(msg);
+	  if (esl_FCompare(tsc, fsc, /*rtol=*/0.0, tol) != eslOK) esl_fatal(msg);
+	  if (esl_FCompare(tsc, bsc, /*rtol=*/0.0, tol) != eslOK) esl_fatal(msg);
 	}
       else
 	fprintf(diagfp, "%20g %20g\n", tsc-fsc, tsc-bsc);
@@ -1809,10 +1809,10 @@ utest_multisingle(FILE *diagfp, ESL_RANDOMNESS *rng, const ESL_ALPHABET *abc, in
 	  if ( p7_spascmx_Validate(asb, anch, D, errbuf) != eslOK) esl_fatal("%s\n  %s\n", msg, errbuf); 
 	  if ( p7_spascmx_Validate(asd, anch, D, errbuf) != eslOK) esl_fatal("%s\n  %s\n", msg, errbuf); 
 
-	  if (esl_FCompareAbs( fsc, asc_f, tol) != eslOK) esl_fatal(msg);
-	  if (esl_FCompareAbs( fsc, asc_b, tol) != eslOK) esl_fatal(msg);
-	  if (gsc > vsc+tol)                              esl_fatal(msg);
-	  if (vsc > fsc)                                  esl_fatal(msg);
+	  if (esl_FCompare( fsc, asc_f, /*rtol=*/0.0, tol) != eslOK) esl_fatal(msg);
+	  if (esl_FCompare( fsc, asc_b, /*rtol=*/0.0, tol) != eslOK) esl_fatal(msg);
+	  if (gsc > vsc+tol)                                         esl_fatal(msg);
+	  if (vsc > fsc)                                             esl_fatal(msg);
 	}
       else
 	fprintf(diagfp, "%20g %20g %20g %20g %20g\n", fsc-asc_f, fsc-asc_b, bsc-asc_b, vsc-gsc, fsc-vsc);
@@ -1931,10 +1931,10 @@ utest_multipath_local(FILE *diagfp, ESL_RANDOMNESS *rng, const ESL_ALPHABET *abc
 	  if ( p7_spascmx_Validate(asb, anch, D, errbuf) != eslOK) esl_fatal("%s\n  %s\n", msg, errbuf); 
 	  if ( p7_spascmx_Validate(asd, anch, D, errbuf) != eslOK) esl_fatal("%s\n  %s\n", msg, errbuf); 
 
-	  if (esl_FCompareAbs( fsc, asc_f, tol) != eslOK) esl_fatal(msg);
-	  if (esl_FCompareAbs( bsc, asc_b, tol) != eslOK) esl_fatal(msg);
-	  if (gsc > vsc+tol)                              esl_fatal(msg);
-	  if (vsc > fsc)                                  esl_fatal(msg);
+	  if (esl_FCompare( fsc, asc_f, /*rtol=*/0.0, tol) != eslOK) esl_fatal(msg);
+	  if (esl_FCompare( bsc, asc_b, /*rtol=*/0.0, tol) != eslOK) esl_fatal(msg);
+	  if (gsc > vsc+tol)                                         esl_fatal(msg);
+	  if (vsc > fsc)                                             esl_fatal(msg);
 	}
       else
 	fprintf(diagfp, "%20g %20g %20g %20g %20g\n", fsc-asc_f, bsc-asc_b, asc_f-asc_b, vsc-gsc, fsc-vsc);
@@ -2051,11 +2051,11 @@ utest_multimulti(FILE *diagfp, ESL_RANDOMNESS *rng, const ESL_ALPHABET *abc, int
 	  if ( p7_spascmx_Validate(asb, anch, D, errbuf) != eslOK) esl_fatal("%s\n  %s\n", msg, errbuf); 
 	  if ( p7_spascmx_Validate(asd, anch, D, errbuf) != eslOK) esl_fatal("%s\n  %s\n", msg, errbuf); 
 
-	  if (esl_FCompareAbs( fsc,   asc_f, tol) != eslOK) esl_fatal(msg);
-	  if (esl_FCompareAbs( bsc,   asc_b, tol) != eslOK) esl_fatal(msg);
-	  if (esl_FCompareAbs( asc_f, asc_b, tol) != eslOK) esl_fatal(msg);
-	  if (gsc > vsc+tol)                                esl_fatal(msg);
-	  if (vsc > fsc)                                    esl_fatal(msg);
+	  if (esl_FCompare( fsc,   asc_f, /*rtol=*/0.0, tol) != eslOK) esl_fatal(msg);
+	  if (esl_FCompare( bsc,   asc_b, /*rtol=*/0.0, tol) != eslOK) esl_fatal(msg);
+	  if (esl_FCompare( asc_f, asc_b, /*rtol=*/0.0, tol) != eslOK) esl_fatal(msg);
+	  if (gsc > vsc+tol)                                           esl_fatal(msg);
+	  if (vsc > fsc)                                               esl_fatal(msg);
 	}
       else
 	fprintf(diagfp, "%20g %20g %20g %20g %20g\n", fsc-asc_f, bsc-asc_b, asc_f-asc_b, vsc-gsc, fsc-vsc);
@@ -2162,9 +2162,9 @@ utest_emulated_viterbi(FILE *diagfp, ESL_RANDOMNESS *rng, const ESL_ALPHABET *ab
 	  if ( p7_spascmx_Validate(asf, anch->a, anch->D, errbuf) != eslOK) esl_fatal("%s\n  %s\n", msg, errbuf);
 	  if ( p7_spascmx_Validate(asb, anch->a, anch->D, errbuf) != eslOK) esl_fatal("%s\n  %s\n", msg, errbuf); 
 
-	  if (esl_FCompareAbs( vsc, fsc,   tol) != eslOK) esl_fatal(msg);
-	  if (esl_FCompareAbs( fsc, asc,   tol) != eslOK) esl_fatal(msg);
-	  if (esl_FCompareAbs( fsc, asc_b, tol) != eslOK) esl_fatal(msg);
+	  if (esl_FCompare( vsc, fsc,   /*rtol=*/0.0, tol) != eslOK) esl_fatal(msg);
+	  if (esl_FCompare( fsc, asc,   /*rtol=*/0.0, tol) != eslOK) esl_fatal(msg);
+	  if (esl_FCompare( fsc, asc_b, /*rtol=*/0.0, tol) != eslOK) esl_fatal(msg);
 	}
       else
 	fprintf(diagfp, "%4d %4d %20g %20g %20g %20g\n", (int) sq->n, anch->D, vsc, vsc-fsc, fsc-asc, fsc-asc_b);

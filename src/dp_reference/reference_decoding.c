@@ -381,7 +381,7 @@ utest_rowsum(ESL_RANDOMNESS *rng, ESL_ALPHABET *abc, P7_BG *bg, int M, int L, in
 	    rowsum += dpc[p7R_ML] + dpc[p7R_MG] + dpc[p7R_IL] + dpc[p7R_IG];
 	  rowsum += dpc[p7R_N] + dpc[p7R_JJ] + dpc[p7R_CC];
 
-	  if (esl_FCompareAbs(rowsum, 1.0, tol) != eslOK) esl_fatal(msg);
+	  if (esl_FCompare(rowsum, 1.0, /*rtol=*/0.0, tol) != eslOK) esl_fatal(msg);
 	}
     }
 
@@ -457,10 +457,10 @@ utest_colsum(ESL_RANDOMNESS *rng, ESL_ALPHABET *abc, P7_BG *bg, int M, int L, in
 
       /* Tests */
       for (k = 1; k <= M; k++) 
-	if (esl_FCompareAbs(colsum[k], 1.0, tol) != eslOK) esl_fatal(msg);
-      if (esl_FCompareAbs(xsum[p7R_E], 1.0, tol) != eslOK) esl_fatal(msg);
-      if (esl_FCompareAbs(xsum[p7R_B], 1.0, tol) != eslOK) esl_fatal(msg);
-      if (esl_FCompareAbs(xsum[p7R_G], 1.0, tol) != eslOK) esl_fatal(msg);
+	if (esl_FCompare(colsum[k], 1.0, /*rtol=*/0.0, tol) != eslOK) esl_fatal(msg);
+      if (esl_FCompare(xsum[p7R_E], 1.0, /*rtol=*/0.0, tol) != eslOK) esl_fatal(msg);
+      if (esl_FCompare(xsum[p7R_B], 1.0, /*rtol=*/0.0, tol) != eslOK) esl_fatal(msg);
+      if (esl_FCompare(xsum[p7R_G], 1.0, /*rtol=*/0.0, tol) != eslOK) esl_fatal(msg);
 
       if (xsum[p7R_L]  != 0.0f)  esl_fatal(msg);
       if (xsum[p7R_J]  != 0.0f)  esl_fatal(msg);

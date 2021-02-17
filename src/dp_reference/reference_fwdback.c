@@ -672,8 +672,8 @@ utest_randomseq(FILE *diagfp, ESL_RANDOMNESS *rng, int alphatype, int M, int L, 
 
       if (!diagfp)
 	{ // Tests that can fail by chance
-	  if (vsc > fsc)                                esl_fatal(msg); // fwd >= vit score
-	  if (esl_FCompareAbs(fsc, bsc, tol1) != eslOK) esl_fatal(msg); // fwd = bck score
+	  if (vsc > fsc)                                           esl_fatal(msg); // fwd >= vit score
+	  if (esl_FCompare(fsc, bsc, /*rtol=*/0.0, tol1) != eslOK) esl_fatal(msg); // fwd = bck score
 	}
       else // non-NULL diagfp dumps data we can use to estimate chance failure rates
 	fprintf(diagfp, "%20g %20g %20g %20g %20g\n", vsc, fsc, bsc, fsc-vsc, fsc-bsc);
@@ -779,9 +779,9 @@ utest_generation(FILE *diagfp, ESL_RANDOMNESS *rng, int alphatype, int M, int L,
 
       if (! diagfp) 
 	{
-	  if (tsc > fsc)                                esl_fatal(msg); // fwd >= emitted trace score
-	  if (vsc > fsc)                                esl_fatal(msg); // fwd >= vit score
-	  if (esl_FCompareAbs(fsc, bsc, tol1) != eslOK) esl_fatal(msg); // fwd = bck score
+	  if (tsc > fsc)                                           esl_fatal(msg); // fwd >= emitted trace score
+	  if (vsc > fsc)                                           esl_fatal(msg); // fwd >= vit score
+	  if (esl_FCompare(fsc, bsc, /*rtol=*/0.0, tol1) != eslOK) esl_fatal(msg); // fwd = bck score
 	}
       else
 	{
@@ -1120,9 +1120,9 @@ utest_singlepath(FILE *diagfp, ESL_RANDOMNESS *rng, int alphatype, int M)
 
   if (! diagfp)
     {
-      if (esl_FCompareAbs(tsc, vsc, tol)   != eslOK) esl_fatal(msg);
-      if (esl_FCompareAbs(fsc, bsc, tol)   != eslOK) esl_fatal(msg);
-      if (esl_FCompareAbs(fsc, tsc, tol)   != eslOK) esl_fatal(msg);
+      if (esl_FCompare(tsc, vsc, /*rtol=*/0.0, tol)   != eslOK) esl_fatal(msg);
+      if (esl_FCompare(fsc, bsc, /*rtol=*/0.0, tol)   != eslOK) esl_fatal(msg);
+      if (esl_FCompare(fsc, tsc, /*rtol=*/0.0, tol)   != eslOK) esl_fatal(msg);
     }
   else
     fprintf(diagfp, "%20g %20g %20g\n", tsc-vsc, fsc-bsc, fsc-tsc);
@@ -1628,14 +1628,14 @@ utest_brute(FILE *diagfp, ESL_RANDOMNESS *rng, int N)
            *  and     DG1->DG2=0,DG2->DG3=0;
            * now both L=1 and L=2 target seqs are impossible and -inf.
            * 
-           * esl_FCompareAbs() considers -inf and -inf to be identical
+           * esl_FCompare() considers -inf and -inf to be identical
            * and returns eslOK; however, (-inf) - (-inf) = nan.
 	   */
 	  if (!diagfp)
 	    {
-	      if (esl_FCompareAbs(vsc[L], brute_vit[L], vtol) != eslOK) esl_fatal(msg);
-	      if (esl_FCompareAbs(fsc[L], brute_fwd[L], ftol) != eslOK) esl_fatal(msg);
-	      if (esl_FCompareAbs(bsc[L], brute_fwd[L], ftol) != eslOK) esl_fatal(msg);
+	      if (esl_FCompare(vsc[L], brute_vit[L], /*rtol=*/0.0, vtol) != eslOK) esl_fatal(msg);
+	      if (esl_FCompare(fsc[L], brute_fwd[L], /*rtol=*/0.0, ftol) != eslOK) esl_fatal(msg);
+	      if (esl_FCompare(bsc[L], brute_fwd[L], /*rtol=*/0.0, ftol) != eslOK) esl_fatal(msg);
 	    }
 	  else
 	    fprintf(diagfp, "%20g %20g %20g%c", vsc[L]-brute_vit[L], fsc[L]-brute_fwd[L], bsc[L]-brute_fwd[L], L==4 ? '\n' : ' ');

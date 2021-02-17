@@ -393,7 +393,7 @@ utest_rowsum(ESL_RANDOMNESS *rng, ESL_ALPHABET *abc, P7_BG *bg, int M, int L, in
 	    {
 	      rowsum = xc[p7S_N] + xc[p7S_JJ] + xc[p7S_CC]; /* this even works for nonemitting row ia-1=0, because there xc[N]=1 and JJ/CC=0 */
 	      max    = ESL_MAX(rowsum-1.0, max);
-	      if (esl_FCompareAbs(rowsum, 1.0, tol) != eslOK) esl_fatal(msg);
+	      if (esl_FCompare(rowsum, 1.0, /*rtol=*/0.0, tol) != eslOK) esl_fatal(msg);
 	      xc += p7S_NXCELLS;
 	    }
 
@@ -403,7 +403,7 @@ utest_rowsum(ESL_RANDOMNESS *rng, ESL_ALPHABET *abc, P7_BG *bg, int M, int L, in
 	  if (sm->n[i]) {
 	    rowsum += xc[p7S_N] + xc[p7S_JJ] + xc[p7S_CC];
 	    max    = ESL_MAX(rowsum-1.0, max);
-	    if (esl_FCompareAbs(rowsum, 1.0, tol) != eslOK) esl_fatal(msg);
+	    if (esl_FCompare(rowsum, 1.0, /*rtol=*/0.0, tol) != eslOK) esl_fatal(msg);
 	    xc += p7S_NXCELLS;
 	  }
 	}

@@ -818,17 +818,17 @@ utest_engine(int do_intersected_mask, char *msg, ESL_RANDOMNESS *rng, ESL_ALPHAB
 	  
 	  if (do_unihit) 
 	    {
-	      if (esl_FCompareAbs(e1_sc, f2_sc, tol)                              != eslOK) esl_fatal("%s\n e1 (%f) should equal f2 (%f)",             msg, e1_sc, f2_sc);
-	      if (esl_FCompareAbs(e1_sc, e2_sc, tol)                              != eslOK) esl_fatal("%s\n e1 (%f) should equal e2 (%f)",             msg, e1_sc, e2_sc);
-	      if (esl_FCompareAbs(e1_sc, a2_sc, (a2_status == eslOK? tol : tol2)) != eslOK) esl_fatal("%s\n e1 (%f) should equal a2 (%f)",             msg, e1_sc, a2_sc);
-	      if ( e1_sc > a1_sc + (a1_status == eslOK? tol: tol2))                         esl_fatal("%s\n  (e1,f2,e2,a2) (%f) should be <= a1 (%f)", msg, e1_sc, a1_sc);
+	      if (esl_FCompare(e1_sc, f2_sc, /*rtol=*/0.0, tol)                              != eslOK) esl_fatal("%s\n e1 (%f) should equal f2 (%f)",             msg, e1_sc, f2_sc);
+	      if (esl_FCompare(e1_sc, e2_sc, /*rtol=*/0.0, tol)                              != eslOK) esl_fatal("%s\n e1 (%f) should equal e2 (%f)",             msg, e1_sc, e2_sc);
+	      if (esl_FCompare(e1_sc, a2_sc, /*rtol=*/0.0, (a2_status == eslOK? tol : tol2)) != eslOK) esl_fatal("%s\n e1 (%f) should equal a2 (%f)",             msg, e1_sc, a2_sc);
+	      if ( e1_sc > a1_sc + (a1_status == eslOK? tol: tol2))                                    esl_fatal("%s\n  (e1,f2,e2,a2) (%f) should be <= a1 (%f)", msg, e1_sc, a1_sc);
 	    }
 	  else           
 	    {
-	      if ( esl_FCompareAbs(e1_sc, e2_sc, tol)                              != eslOK) esl_fatal("%s\n  e1 (%f) should equal e2 (%f)\n",         msg, e1_sc, e2_sc);
-	      if ( esl_FCompareAbs(f2_sc, a2_sc, (a2_status == eslOK? tol : tol2)) != eslOK) esl_fatal("%s\n  f2 (%f) should equal a2 (%f)\n",         msg, f2_sc, a2_sc);
-	      if ( e2_sc > f2_sc + tol)                                                      esl_fatal("%s\n  (e1,e2) (%f) should be <= (f2,a2) (%f)", msg, e2_sc, f2_sc);
-	      if ( f2_sc > a1_sc + (a1_status == eslOK? tol : tol2))                         esl_fatal("%s\n  (f2,a2) (%f) should be <= a1 (%f)",      msg, f2_sc, a1_sc);
+	      if ( esl_FCompare(e1_sc, e2_sc, /*rtol=*/0.0, tol)                              != eslOK) esl_fatal("%s\n  e1 (%f) should equal e2 (%f)\n",         msg, e1_sc, e2_sc);
+	      if ( esl_FCompare(f2_sc, a2_sc, /*rtol=*/0.0, (a2_status == eslOK? tol : tol2)) != eslOK) esl_fatal("%s\n  f2 (%f) should equal a2 (%f)\n",         msg, f2_sc, a2_sc);
+	      if ( e2_sc > f2_sc + tol)                                                                 esl_fatal("%s\n  (e1,e2) (%f) should be <= (f2,a2) (%f)", msg, e2_sc, f2_sc);
+	      if ( f2_sc > a1_sc + (a1_status == eslOK? tol : tol2))                                    esl_fatal("%s\n  (f2,a2) (%f) should be <= a1 (%f)",      msg, f2_sc, a1_sc);
 	    }
 
 	  if (do_intersected_mask) 

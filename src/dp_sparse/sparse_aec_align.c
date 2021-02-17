@@ -950,7 +950,7 @@ utest_singlemulti(ESL_RANDOMNESS *rng, int M, const ESL_ALPHABET *abc, int N, in
 	}
       
       /* Test 4. If D == 1, envelope score == trace score. */
-      if (D == 1 &&  esl_FCompare(env->arr[1].env_sc, gsc, tol) != eslOK) esl_fatal(msg);
+      if (D == 1 &&  esl_FCompare_old(env->arr[1].env_sc, gsc, tol) != eslOK) esl_fatal(msg);
 
       p7_envelopes_Reuse(env);
       p7_sparsemx_Reuse(asf);

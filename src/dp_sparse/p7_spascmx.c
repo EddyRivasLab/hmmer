@@ -631,7 +631,7 @@ p7_spascmx_CompareReference(const P7_SPARSEMX *asx, const P7_ANCHOR *anch, int D
 	    {
 	      k = sm->k[i][z];
 	      for (s = 0; s < p7R_NSCELLS; s++, dpc++)
-		if (esl_FCompareAbs(*dpc, P7R_MX(rxd,i,k,s), tol) == eslFAIL) 
+		if (esl_FCompare(*dpc, P7R_MX(rxd,i,k,s), /*rtol=*/0.0, tol) == eslFAIL) 
 		  ESL_FAIL(eslFAIL, NULL, msg);
 	    }
 	}
@@ -639,7 +639,7 @@ p7_spascmx_CompareReference(const P7_SPARSEMX *asx, const P7_ANCHOR *anch, int D
       if ( (i >= sm->seg[g].ia-1 && anch[d].i0 <= sm->seg[g].ib) || ndown)
 	{
 	  for (s = 0; s < p7R_NXCELLS; s++, xc++)
-	    if (esl_FCompareAbs(*xc, P7R_XMX(rxd,i,s), tol) == eslFAIL)
+	    if (esl_FCompare(*xc, P7R_XMX(rxd,i,s), /*rtol=*/0.0, tol) == eslFAIL)
 	      ESL_FAIL(eslFAIL, NULL, msg);
 	}
 	   
@@ -652,7 +652,7 @@ p7_spascmx_CompareReference(const P7_SPARSEMX *asx, const P7_ANCHOR *anch, int D
 	      if (k >= anch[d].k0) break;
 
 	      for (s = 0; s < p7R_NSCELLS; s++, dpc++)
-		if (esl_FCompareAbs(*dpc, P7R_MX(rxu,i,k,s), tol) == eslFAIL) 
+		if (esl_FCompare(*dpc, P7R_MX(rxu,i,k,s), /*rtol=*/0.0, tol) == eslFAIL) 
 		  ESL_FAIL(eslFAIL, NULL, msg);
 	    }
 	}
@@ -741,7 +741,7 @@ decoding_rowsums(const P7_SPARSEMX *asx, const P7_ANCHOR *anch, int D)
 
       /* Row ia-1, just before a segment. */
       rowsum = xc[p7S_N] + xc[p7S_JJ] + xc[p7S_CC];
-      if (esl_FCompare(rowsum, 1.0, tol) != eslOK) ESL_FAIL(eslFAIL, NULL, NULL);
+      if (esl_FCompare_old(rowsum, 1.0, tol) != eslOK) ESL_FAIL(eslFAIL, NULL, NULL);
       xc += p7S_NXCELLS;
 
       for (i = sm->seg[g].ia; i <= sm->seg[g].ib; i++)
@@ -770,7 +770,7 @@ decoding_rowsums(const P7_SPARSEMX *asx, const P7_ANCHOR *anch, int D)
 		}
 	    }
 
-	  if (esl_FCompare(rowsum, 1.0, tol) != eslOK) ESL_FAIL(eslFAIL, NULL, NULL);
+	  if (esl_FCompare_old(rowsum, 1.0, tol) != eslOK) ESL_FAIL(eslFAIL, NULL, NULL);
 	}
     }
   return eslOK;
@@ -847,10 +847,10 @@ decoding_colsums(const P7_SPARSEMX *asx, const P7_ANCHOR *anch, int D)
 
   if (colsum[0]   != 0.) ESL_XFAIL(eslFAIL, NULL, NULL);
   for (k = 1; k <= M; k++)
-    if (colsum[k] < 0.0 || colsum[k] > (float) D + tol)                    ESL_XFAIL(eslFAIL, NULL, NULL);
-  if (esl_FCompareAbs(xsum[p7S_E],               (float) D, tol) != eslOK) ESL_XFAIL(eslFAIL, NULL, NULL);
-  if (esl_FCompareAbs(xsum[p7S_B],               (float) D, tol) != eslOK) ESL_XFAIL(eslFAIL, NULL, NULL);
-  if (esl_FCompareAbs(xsum[p7S_G] + xsum[p7S_L], (float) D, tol) != eslOK) ESL_XFAIL(eslFAIL, NULL, NULL);
+    if (colsum[k] < 0.0 || colsum[k] > (float) D + tol)                               ESL_XFAIL(eslFAIL, NULL, NULL);
+  if (esl_FCompare(xsum[p7S_E],               (float) D, /*rtol=*/0.0, tol) != eslOK) ESL_XFAIL(eslFAIL, NULL, NULL);
+  if (esl_FCompare(xsum[p7S_B],               (float) D, /*rtol=*/0.0, tol) != eslOK) ESL_XFAIL(eslFAIL, NULL, NULL);
+  if (esl_FCompare(xsum[p7S_G] + xsum[p7S_L], (float) D, /*rtol=*/0.0, tol) != eslOK) ESL_XFAIL(eslFAIL, NULL, NULL);
 
   free(colsum);
   return eslOK;

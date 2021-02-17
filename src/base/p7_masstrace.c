@@ -345,14 +345,14 @@ p7_masstrace_Compare(const P7_MASSTRACE *mte, const P7_MASSTRACE *mta, float tol
     {
       for (i = 1; i <= mte->L; i++)
 	{
-	  if (mte->imass[i] == 0.0 && mta->imass[i] > 0.0)                  ESL_FAIL(eslFAIL, NULL, msg);
-	  if (esl_FCompareAbs(mte->imass[i], mta->imass[i], tol) != eslOK)  ESL_FAIL(eslFAIL, NULL, msg);
+	  if (mte->imass[i] == 0.0 && mta->imass[i] > 0.0)                             ESL_FAIL(eslFAIL, NULL, msg);
+	  if (esl_FCompare(mte->imass[i], mta->imass[i], /*rtol=*/0.0, tol) != eslOK)  ESL_FAIL(eslFAIL, NULL, msg);
 	}
     }
   for (k = 1; k <= mte->M; k++)
     {
-      if (mte->kmass[k] == 0.0 && mta->kmass[k] > 0.0)                  ESL_FAIL(eslFAIL, NULL, msg);
-      if (esl_FCompareAbs(mte->kmass[k], mta->kmass[k], tol) != eslOK)  ESL_FAIL(eslFAIL, NULL, msg);
+      if (mte->kmass[k] == 0.0 && mta->kmass[k] > 0.0)                             ESL_FAIL(eslFAIL, NULL, msg);
+      if (esl_FCompare(mte->kmass[k], mta->kmass[k], /*rtol=*/0.0, tol) != eslOK)  ESL_FAIL(eslFAIL, NULL, msg);
     }
   return eslOK;
 }

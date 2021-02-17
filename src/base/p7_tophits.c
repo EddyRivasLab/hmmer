@@ -856,14 +856,14 @@ p7_hit_Compare(const P7_HIT *h1, const P7_HIT *h2, float tol)
   if ( h1->subseq_start  != h2->subseq_start)  return eslFAIL;
   if ( h1->offset        != h2->offset)        return eslFAIL;
   
-  if ( esl_DCompare( h1->sortkey,   h2->sortkey,   tol ) != eslOK) return eslFAIL;
-  if ( esl_FCompare( h1->score,     h2->score,     tol ) != eslOK) return eslFAIL;
-  if ( esl_FCompare( h1->pre_score, h2->pre_score, tol ) != eslOK) return eslFAIL;
-  if ( esl_FCompare( h1->sum_score, h2->sum_score, tol ) != eslOK) return eslFAIL;
-  if ( esl_DCompare( h1->lnP,       h2->lnP,       tol ) != eslOK) return eslFAIL;
-  if ( esl_DCompare( h1->pre_lnP,   h2->pre_lnP,   tol ) != eslOK) return eslFAIL;
-  if ( esl_DCompare( h1->sum_lnP,   h2->sum_lnP,   tol ) != eslOK) return eslFAIL;
-  if ( esl_DCompare( h1->nexpected, h2->nexpected, tol ) != eslOK) return eslFAIL;
+  if ( esl_DCompare_old( h1->sortkey,   h2->sortkey,   tol ) != eslOK) return eslFAIL;
+  if ( esl_FCompare_old( h1->score,     h2->score,     tol ) != eslOK) return eslFAIL;
+  if ( esl_FCompare_old( h1->pre_score, h2->pre_score, tol ) != eslOK) return eslFAIL;
+  if ( esl_FCompare_old( h1->sum_score, h2->sum_score, tol ) != eslOK) return eslFAIL;
+  if ( esl_DCompare_old( h1->lnP,       h2->lnP,       tol ) != eslOK) return eslFAIL;
+  if ( esl_DCompare_old( h1->pre_lnP,   h2->pre_lnP,   tol ) != eslOK) return eslFAIL;
+  if ( esl_DCompare_old( h1->sum_lnP,   h2->sum_lnP,   tol ) != eslOK) return eslFAIL;
+  if ( esl_DCompare_old( h1->nexpected, h2->nexpected, tol ) != eslOK) return eslFAIL;
 
   for (d = 0; d < h1->ndom; d++)
     if (( status = p7_domain_Compare(&(h1->dcl[d]), &(h2->dcl[d]), tol)) != eslOK) return status;

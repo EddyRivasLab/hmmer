@@ -1964,7 +1964,7 @@ utest_generation(FILE *diagfp, ESL_RANDOMNESS *rng, int alphatype, int M, int L,
 	{ 
 	  if (! isfinite(vsc) || ! isfinite(fsc) || ! isfinite(bsc))        esl_fatal(msg);
 	  if (psc > vsc || vsc > fsc)                                       esl_fatal(msg); // Viterbi >= emitted path, and fwd >= vit
-	  if (esl_FCompareNew(fsc, bsc, 0., a_tol) != eslOK)                esl_fatal(msg); // fwd = bck 
+	  if (esl_FCompare(fsc, bsc, 0., a_tol) != eslOK)                esl_fatal(msg); // fwd = bck 
 	  if (do_colsum && ( ! isfinite(max_colerr) || max_colerr > a_tol)) esl_fatal(msg); // colsum test
 	  if (max_rowerr > a_tol)                                           esl_fatal(msg); // rowsum test
 	}
@@ -2052,7 +2052,7 @@ utest_duality(FILE *diagfp, ESL_RANDOMNESS *rng, int alphatype, int M, int L, in
 	fprintf(diagfp, "%12.6f %12.6f %12.6f %12.6f %20g\n",
 		dual_sc, local_sc, glocal_sc, combined_sc, dual_sc - combined_sc);
       else
-	{ if (esl_FCompareAbs(dual_sc, combined_sc, tol) != eslOK) esl_fatal(msg);  }
+	{ if (esl_FCompare(dual_sc, combined_sc, /*rtol=*/0.0, tol) != eslOK) esl_fatal(msg);  }
     }
   
   h4_refmx_Destroy(rxf);
@@ -2261,7 +2261,7 @@ utest_singlepath(FILE *diagfp, ESL_RANDOMNESS *rng, int alphatype, int M)
   if (h4_path_Compare(pi0, vpi)                 != eslOK) esl_fatal(msg); 
   if (psc != vsc)                                         esl_fatal(msg);  
   if (psc != fsc)                                         esl_fatal(msg);
-  if (esl_FCompareNew(fsc, bsc, 0., a_tol)      != eslOK) esl_fatal(msg);
+  if (esl_FCompare(fsc, bsc, 0., a_tol)      != eslOK) esl_fatal(msg);
   if (h4_refmx_CompareDecoding(rxd, rxa, a_tol) != eslOK) esl_fatal(msg);
   if (h4_refmx_Validate(rxv, errbuf)            != eslOK) esl_fatal("%s:\n%s", msg, errbuf);
   if (h4_refmx_Validate(rxf, errbuf)            != eslOK) esl_fatal("%s:\n%s", msg, errbuf);
@@ -2480,9 +2480,9 @@ utest_mute_partial_cycle(void)
   if ( h4_reference_Decoding(dsq, L, hmm, mo, rxf, rxd, rxd) != eslOK) esl_fatal(msg);
 
   if ( h4_refmx_Validate(rxd, errbuf) != eslOK) esl_fatal(msg);                                  // Validate() knows DG's can be >1.
-  if ( esl_FCompareNew( 1.3289, H4R_MX(rxd, 3, 4, h4R_DG), 0., 0.0001) != eslOK) esl_fatal(msg); // Individually check the ones that are.
-  if ( esl_FCompareNew( 1.3289, H4R_MX(rxd, 3, 5, h4R_DG), 0., 0.0001) != eslOK) esl_fatal(msg);
-  if ( esl_FCompareNew( 1.3289, H4R_MX(rxd, 3, 6, h4R_DG), 0., 0.0001) != eslOK) esl_fatal(msg);
+  if ( esl_FCompare( 1.3289, H4R_MX(rxd, 3, 4, h4R_DG), 0., 0.0001) != eslOK) esl_fatal(msg); // Individually check the ones that are.
+  if ( esl_FCompare( 1.3289, H4R_MX(rxd, 3, 5, h4R_DG), 0., 0.0001) != eslOK) esl_fatal(msg);
+  if ( esl_FCompare( 1.3289, H4R_MX(rxd, 3, 6, h4R_DG), 0., 0.0001) != eslOK) esl_fatal(msg);
 
   //h4_refmx_Dump(stdout, rxd);
 

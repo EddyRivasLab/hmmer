@@ -761,7 +761,7 @@ p7_trace_DumpAnnotated(FILE *fp, const P7_TRACE *tr, const P7_PROFILE *gm, const
  *            are identical, throw <eslFAIL> if not.
  *            
  *            If posterior probability annotation is present in 
- *            both traces, they are compared using <esl_FCompare()>
+ *            both traces, they are compared using <esl_FCompare_old()>
  *            and a relative tolerance of <pptol>.
  *            
  *            If domain indices are present in both traces,
@@ -783,7 +783,7 @@ p7_trace_Compare(P7_TRACE *tr1, P7_TRACE *tr2, float pptol)
       if (tr1->k[z]  != tr2->k[z])  ESL_EXCEPTION(eslFAIL, "traces' k indices differ at %d", z);
       if (tr1->i[z]  != tr2->i[z])  ESL_EXCEPTION(eslFAIL, "traces' i indices differ at %d", z);
       if (tr1->pp != NULL && tr2->pp != NULL)
-	if (esl_FCompare(tr1->pp[z], tr2->pp[z], pptol) != eslOK)  /* comparison of 0.0 for positions without pp will succeed */
+	if (esl_FCompare_old(tr1->pp[z], tr2->pp[z], pptol) != eslOK)  /* comparison of 0.0 for positions without pp will succeed */
 	  ESL_EXCEPTION(eslFAIL, "traces' posterior probs differ at %d", z);
     }
 

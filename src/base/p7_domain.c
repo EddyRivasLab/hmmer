@@ -118,12 +118,12 @@ p7_domain_Compare(const P7_DOMAIN *dcl1, const P7_DOMAIN *dcl2, float tol)
   if ( dcl1->ia  != dcl2->ia  ||  dcl1->ib  != dcl2->ib  ) return eslFAIL;
   if ( dcl1->ka  != dcl2->ka  ||  dcl1->kb  != dcl2->kb  ) return eslFAIL;
 
-  if (esl_FCompare(dcl1->envsc,         dcl2->envsc,         tol) != eslOK) return eslFAIL;
-  if (esl_FCompare(dcl1->domcorrection, dcl2->domcorrection, tol) != eslOK) return eslFAIL;
-  if (esl_FCompare(dcl1->dombias,       dcl2->dombias,       tol) != eslOK) return eslFAIL;
-  if (esl_FCompare(dcl1->oasc,          dcl2->oasc,          tol) != eslOK) return eslFAIL;
-  if (esl_FCompare(dcl1->bitscore,      dcl2->bitscore,      tol) != eslOK) return eslFAIL;
-  if (esl_DCompare(dcl1->lnP,           dcl2->lnP,           tol) != eslOK) return eslFAIL;
+  if (esl_FCompare_old(dcl1->envsc,         dcl2->envsc,         tol) != eslOK) return eslFAIL;
+  if (esl_FCompare_old(dcl1->domcorrection, dcl2->domcorrection, tol) != eslOK) return eslFAIL;
+  if (esl_FCompare_old(dcl1->dombias,       dcl2->dombias,       tol) != eslOK) return eslFAIL;
+  if (esl_FCompare_old(dcl1->oasc,          dcl2->oasc,          tol) != eslOK) return eslFAIL;
+  if (esl_FCompare_old(dcl1->bitscore,      dcl2->bitscore,      tol) != eslOK) return eslFAIL;
+  if (esl_DCompare_old(dcl1->lnP,           dcl2->lnP,           tol) != eslOK) return eslFAIL;
 
   if (dcl1->is_reported != dcl2->is_reported) return eslFAIL;
   if (dcl1->is_included != dcl2->is_included) return eslFAIL;
