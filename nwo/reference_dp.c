@@ -821,7 +821,7 @@ h4_reference_Decoding(const ESL_DSQ *dsq, int L, const H4_PROFILE *hmm, const H4
 
 /* Traceback routines for Viterbi, MEG alignment, and stochastic
  * sampling, for the reference implementation. All tracebacks use the
- * same machinery (the reference_traceback_engine()), using different
+ * same machinery (the reference_trace_engine()), using different
  * select*() functions.
  */
 

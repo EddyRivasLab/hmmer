@@ -50,12 +50,19 @@ typedef struct {
 
 extern H4_ANCHORSET *h4_anchorset_Create (int D, int L, int M);
 extern int           h4_anchorset_Add    (H4_ANCHORSET *anch, int i0, int k0);
+extern int           h4_anchorset_GetSentinels(const H4_ANCHORSET *anch, int *ret_L, int *ret_M);
+extern int           h4_anchorset_SetSentinels(H4_ANCHORSET *anch, int L, int M);
 extern int           h4_anchorset_GrowFor(H4_ANCHORSET *anch, int D);
+extern int           h4_anchorset_Copy(const H4_ANCHORSET *src, H4_ANCHORSET *dst);
 extern int           h4_anchorset_Reuse  (H4_ANCHORSET *anch);
 extern void          h4_anchorset_Destroy(H4_ANCHORSET *anch);
 
-extern int h4_anchorset_SetFromPath(ESL_RANDOMNESS *rng, H4_PATH *pi, H4_ANCHORSET *anch);
-extern int h4_anchorset_Dump       (FILE *fp, H4_ANCHORSET *anch);
-extern int h4_anchorset_Validate   (H4_ANCHORSET *anch, char *errmsg);
+
+extern int h4_anchorset_Dump          (FILE *fp, const H4_ANCHORSET *anch);
+extern int h4_anchorset_DumpOneLine   (FILE *fp, const H4_ANCHORSET *anch);
+extern int h4_anchorset_Validate      (const H4_ANCHORSET *anch, char *errmsg);
+extern int h4_anchorset_Compare       (const H4_ANCHORSET *anch1, const H4_ANCHORSET *anch2);
+extern int h4_anchorset_Sample        (ESL_RANDOMNESS *rng, int L, int M, int maxD, H4_ANCHORSET *anch);
+extern int h4_anchorset_SampleFromPath(ESL_RANDOMNESS *rng, const H4_PATH *pi, H4_ANCHORSET *anch);
 
 #endif // h4ANCHORSET_INCLUDED

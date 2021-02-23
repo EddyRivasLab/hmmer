@@ -1,18 +1,15 @@
-/* Reference implementation of anchor-set-constrained (ASC) dynamic
- * programming.
+/* Reference implementation of anchor-set-constrained (ASC) dynamic programming.
  *
- * The ASC technique sums over all paths consistent with a particular
- * domain annotation. A domain annotation for D domains is defined by
- * an "anchor set" of D anchors i0,k0. Each domain in a valid path
- * must align an Mk0 state (ML or MG) to residue x_i0.
+ * The ASC technique sums over all paths consistent with a particular domain
+ * annotation. A domain annotation for D domains is defined by an "anchor set" of D
+ * anchors i0,k0. Each domain in a valid path must align an Mk0 state (ML or MG) to
+ * residue x_i0.
  *
- * This is the reference implementation, used for testing. It is not
- * used in HMMER's main programs. The production code uses sparse ASC
- * DP.
+ * This is the reference implementation, used for testing. It is not used in HMMER's
+ * main programs. The production code uses sparse ASC DP.
  *
- * These routines use the table-driven log-sum-exp approximation;
- * caller must have initialized with <h4_logsum_init()> before they
- * will work.
+ * These routines use the table-driven log-sum-exp approximation; caller must have
+ * initialized with <h4_logsum_init()> before they will work.
  * 
  * Contents:
  *   1. ASC Forward
@@ -1050,7 +1047,7 @@ utest_singlepath(FILE *diagfp, ESL_RANDOMNESS *rng, const ESL_ALPHABET *abc, int
   if ( h4_path_Score(pi, sq->dsq, hmm, mo, &tsc)      != eslOK) esl_fatal(failmsg);
 
   if (( anch = h4_anchorset_Create(0, sq->n, hmm->M)) == NULL)  esl_fatal(failmsg);
-  if ( h4_anchorset_SetFromPath(rng, pi, anch)        != eslOK) esl_fatal(failmsg);
+  if ( h4_anchorset_SampleFromPath(rng, pi, anch)        != eslOK) esl_fatal(failmsg);
 
   if ( h4_reference_Viterbi (sq->dsq, sq->n, hmm, mo, rxv, vpi, &vsc) != eslOK) esl_fatal(failmsg);
   if ( h4_reference_Forward (sq->dsq, sq->n, hmm, mo, rxf,      &fsc) != eslOK) esl_fatal(failmsg);

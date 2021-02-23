@@ -4,12 +4,14 @@ SQCLEVEL = 2
 
 OBJS   = \
 	cmd_build.o         \
+	h4_anchorhash.o     \
 	h4_anchorset.o      \
 	h4_checkptmx.o      \
 	h4_counts.o         \
 	h4_filtermx.o       \
 	h4_hmmfile.o        \
 	h4_mode.o           \
+	h4_mpas.o           \
 	h4_path.o           \
 	h4_prior.o          \
 	h4_profile.o        \
@@ -27,6 +29,7 @@ OBJS   = \
 	parameterize.o      \
 	reference_asc.o     \
 	reference_dp.o      \
+	reference_mpas.o    \
 	simdvec.o           \
 	ssvfilter.o         \
 	standardize.o       \
@@ -43,12 +46,14 @@ VMX_OBJS    = fbfilter_vmx.o    ssvfilter_vmx.o    vitfilter_vmx.o
 HDRS = \
 	h4_config.h         \
 	cmd_build.h         \
+	h4_anchorhash.h     \
 	h4_anchorset.h      \
 	h4_checkptmx.h      \
 	h4_counts.h         \
 	h4_filtermx.h       \
 	h4_hmmfile.h        \
 	h4_mode.h           \
+	h4_mpas.h           \
 	h4_path.h           \
 	h4_prior.h          \
 	h4_profile.h        \
@@ -66,6 +71,7 @@ HDRS = \
 	parameterize.h      \
 	reference_asc.h     \
 	reference_dp.h      \
+	reference_mpas.h    \
 	simdvec.h           \
 	ssvfilter.h         \
 	standardize.h       \
@@ -75,6 +81,7 @@ HDRS = \
 
 
 UTESTS = \
+	h4_anchorhash_utest \
 	h4_hmmfile_utest    \
 	h4_mode_utest       \
 	h4_path_utest       \
@@ -103,6 +110,7 @@ BENCHMARKS = \
 	vitfilter_benchmark     \
 
 EXAMPLES = \
+	h4_anchorhash_example     \
 	h4_hmmfile_example        \
 	h4_path_example           \
 	h4_sparsemask_example     \
@@ -112,6 +120,7 @@ EXAMPLES = \
 	modelsample_example       \
 	reference_asc_example     \
 	reference_dp_example      \
+	reference_mpas_example    \
 	ssvfilter_example         \
 	vitfilter_example         \
 	zigar_example

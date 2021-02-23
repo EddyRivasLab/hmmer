@@ -21,4 +21,14 @@
 
 #define h4SPARSIFY_THRESH 0.01
 
+/* Configurable parameters for the most probable anchor set (MPAS) 
+ * algorithm for identifying domains.
+ */
+#define h4_MPAS_LOSS_THRESHOLD  0.001  // Controls main convergence criterion
+#define h4_MPAS_MAX_ITERATIONS   1000  // Limits to maximum # iterations when unconverged
+#define h4_MPAS_NMAX_SAMPLING   FALSE  // TRUE turns off conv. criteria, always samples to max #
+#define h4_MPAS_BE_VERBOSE      FALSE  // TRUE turns on internal printf info dumping
+
+
+
 #endif /*H4_CONFIGH_INCLUDED*/

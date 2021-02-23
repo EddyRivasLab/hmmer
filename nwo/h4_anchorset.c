@@ -11,6 +11,8 @@
 #include <stdint.h>
 
 #include "easel.h"
+#include "esl_random.h"
+#include "esl_vectorops.h"
 
 #include "h4_anchorset.h"
 #include "h4_path.h"
@@ -104,6 +106,47 @@ h4_anchorset_Add(H4_ANCHORSET *anch, int i0, int k0)
 }
 
 
+/* Function:  h4_anchorset_GetSentinels()
+ * Synopsis:  Get L,M from existing sentinels
+ *
+ * Purpose:   Use the existing sentinels at <0,D+1> to retrieve
+ *            sequence length <L> and profile length <M>. This gets
+ *            used when we need to change the anchor set length
+ *            and set new sentinels.
+ */
+int
+h4_anchorset_GetSentinels(const H4_ANCHORSET *anch, int *ret_L, int *ret_M)
+{
+  *ret_L = anch->a[anch->D+1].i0 - 1;
+  *ret_M = anch->a[0].k0 - 1;
+  return eslOK;
+}
+
+/* Function:  h4_anchorset_SetSentinels()
+ * Synopsis:  Initialize sentinel values in an H4_ANCHORSET
+ *
+ * Purpose:   Initialize sentinels <0> and <D+1> in a <H4_ANCHORSET>
+ *            array <anch> defining <1..D> domains, for a (sub)sequence
+ *            of length <L> and a profile of length <M>.
+ *
+ *            <anch> must have <anch->D> already set.
+ *            
+ *            <anch->a[0]> is set to <(i0,k0) = (0, M+1)>.
+ *            <anch->a[D+1] is set to <(i0,k0) = (L+1, 0)>.
+ *
+ * Returns:   <eslOK> on success.
+ */
+int
+h4_anchorset_SetSentinels(H4_ANCHORSET *anch, int L, int M)
+{
+  anch->a[0].i0   = 0;         // UP(d) sector runs i0(d-1)..i0(d)-1: so for UP(1), i0(0) must evaluate to exactly 0
+  anch->a[anch->D+1].i0 = L+1; // DOWN(d) sector runs i0(d)..i0(d+1)-1; so for DOWN(D), i0(D+1) must evaluate to exactly L+1
+
+  anch->a[0].k0   = M+1;       // DOWN(d) sector runs k0(d)..M. For access patterns that do DOWN(d-1),UP(d) on row i, must have k0(0) > M so DOWN(0) isn't evaluated;    M+1 suffices
+  anch->a[anch->D+1].k0 = 0;   // UP(d) secor runs 1..k0(d)-1.  For access patterns that do DOWN(d-1),UP(d) on row i, must have k0(D+1) <= 1 so UP(D+1) isn't evaluated; 0 suffices
+  return eslOK;
+}
+
 
 /* Function:  h4_anchorset_GrowFor()
  * Synopsis:  Reallocate H4_ANCHORSET object, if necessary
@@ -159,6 +202,39 @@ h4_anchorset_GrowFor(H4_ANCHORSET *anch, int D)
  ERROR:
   return status;
 }
+
+
+/* Function:  h4_anchorset_Copy()
+ * Synopsis:  Copy one H4_ANCHORS object to another.
+ *
+ * Purpose:   Copy <src> to <dst>. <dst> is reallocated
+ *            if necessary. 
+ *            
+ * Returns:   <eslOK> on success.
+ *
+ * Throws:    <eslEMEM> on allocation failure.
+ */
+int
+h4_anchorset_Copy(const H4_ANCHORSET *src, H4_ANCHORSET *dst)
+{
+  int32_t d;
+  int     status;
+
+  if (( status = h4_anchorset_GrowFor(dst, src->D) ) != eslOK) goto ERROR;
+  
+  for (d = 0; d <= src->D+1; d++)       // inclusive of sentinels!
+    {
+      dst->a[d].i0 = src->a[d].i0;
+      dst->a[d].k0 = src->a[d].k0;
+    }
+  dst->D    = src->D;
+  return eslOK;
+
+ ERROR:
+  return status;
+}
+
+
 
 
 /* Function:  h4_anchorset_Reuse()
@@ -231,7 +307,7 @@ h4_anchorset_Destroy(H4_ANCHORSET *anch)
  * Incept:    SRE, Mon 11 Jan 2021 [H9/133]
  */
 int
-h4_anchorset_Dump(FILE *fp, H4_ANCHORSET *anch)
+h4_anchorset_Dump(FILE *fp, const H4_ANCHORSET *anch)
 {
   int d;
 
@@ -247,12 +323,26 @@ h4_anchorset_Dump(FILE *fp, H4_ANCHORSET *anch)
   return eslOK;
 }
 
+int
+h4_anchorset_DumpOneLine(FILE *ofp, const H4_ANCHORSET *anch)
+{
+  int d;
+  
+  fprintf(ofp, "%2d ", anch->D);
+  for (d = 1; d <= anch->D; d++)
+    fprintf(ofp, "| %4d %4d ", anch->a[d].i0, anch->a[d].k0);
+  fprintf(ofp, "\n");
+  return eslOK;
+}
+
+
+
 /* Function:  h4_anchorset_Validate()
  * Synopsis:  Validate an H4_ANCHORSET
  * Incept:    SRE, Tue 12 Jan 2021 [H9/136]
  */
 int
-h4_anchorset_Validate(H4_ANCHORSET *anch, char *errmsg)
+h4_anchorset_Validate(const H4_ANCHORSET *anch, char *errmsg)
 {
   int M = anch->a[0].k0 - 1;          // the 0 sentinel is (0, M+1);  or it can be 0,0 (not set yet) if D=0, so M=-1 can happen here
   int L = anch->a[anch->D+1].i0 - 1;  // the D+1 sentinel is (L+1,0); or it can be 0,0 (not set yet) if D=0, so L=-1 can happen here
@@ -283,7 +373,81 @@ h4_anchorset_Validate(H4_ANCHORSET *anch, char *errmsg)
   return eslOK;
 }
 
-/* Function:  h4_anchorset_SetFromPath()
+/* Function:  h4_anchorset_Compare()
+ * Synopsis:  Compare two H4_ANCHORSET's
+ * Incept:    SRE, Fri 19 Feb 2021
+ */
+int
+h4_anchorset_Compare(const H4_ANCHORSET *anch1, const H4_ANCHORSET *anch2)
+{
+  char msg[] = "H4_ANCHORSET comparison failed";
+  int D = anch1->D;
+  int d;
+
+  if (anch1->D != anch2->D) ESL_FAIL(eslFAIL, NULL, msg);
+  for (d = 0; d <= D+1; d++)  // inclusive of sentinels
+    {
+      if (anch1->a[d].i0 != anch2->a[d].i0) ESL_FAIL(eslFAIL, NULL, msg);
+      if (anch1->a[d].k0 != anch2->a[d].k0) ESL_FAIL(eslFAIL, NULL, msg);
+    }
+  return eslOK;
+}
+
+
+
+/* Function:  h4_anchorset_Sample()
+ * Synopsis:  Sample a randomized anchor set, for testing.
+ *
+ * Purpose:   Randomly generate an anchor set for a profile of 
+ *            length <M> compared to a sequence of length <L>, 
+ *            with a random number of up to <maxD> anchors.
+ *            Caller provides an allocated but perhaps empty
+ *            <anch>, which will be reallocated and reinitialized
+ *            here as needed.
+ */
+int
+h4_anchorset_Sample(ESL_RANDOMNESS *rng, int L, int M, int maxD, H4_ANCHORSET *anch)
+{
+  int      D   = 1 + esl_rnd_Roll(rng, maxD);
+  int32_t *tmp = NULL;
+  int      i,d,r;
+  int      status;
+
+  if ((status = h4_anchorset_GrowFor(anch, D)) != eslOK) goto ERROR;
+
+  /* A reservoir sampling algorithm samples <D> i0 anchors w/o replacement; then sorts them */
+  ESL_ALLOC(tmp, sizeof(int32_t) * D);
+  for (i = 0; i < L; i++)
+    {
+      if (i < D) tmp[i] = i+1;   
+      else {
+	r = esl_rnd_Roll(rng, L);
+	if (r < D) tmp[r] = i+1;
+      }
+    }
+  esl_vec_ISortIncreasing(tmp, D);
+  
+  // then we sample random k0 anchors 1..M
+  for (d = 1; d <= D; d++) {
+    anch->a[d].i0 = tmp[d-1];                   // the <D> i0's are sorted
+    anch->a[d].k0 = 1 + esl_rnd_Roll(rng, M);   // k0's are independent, uniform on 1..M
+  } 
+
+  anch->D = D;
+  h4_anchorset_SetSentinels(anch, L, M);
+
+  free(tmp);
+  return eslOK;
+
+ ERROR:
+  free(tmp);
+  return status;
+}
+
+
+
+
+/* Function:  h4_anchorset_SampleFromPath()
  * Synopsis:  Make a random anchorset that includes a given path.
  * Incept:    SRE, Wed 20 Jan 2021
  *
@@ -307,7 +471,7 @@ h4_anchorset_Validate(H4_ANCHORSET *anch, char *errmsg)
  *            before returning.
  */
 int
-h4_anchorset_SetFromPath(ESL_RANDOMNESS *rng, H4_PATH *pi, H4_ANCHORSET *anch)
+h4_anchorset_SampleFromPath(ESL_RANDOMNESS *rng, const H4_PATH *pi, H4_ANCHORSET *anch)
 {
   int           i,k;
   int           i0,k0;

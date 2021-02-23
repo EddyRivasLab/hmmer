@@ -70,27 +70,60 @@ h4_path_Clone(const H4_PATH *pi)
   H4_PATH *np = NULL;
   int      status;
 
-  if ((np = h4_path_Create())    == NULL)  goto ERROR;
-
-  /* This could become _GrowTo() if we ever want to break it out */
-  if (pi->Z > np->Zalloc)
-    {
-      while (np->Zalloc < pi->Z) np->Zalloc *= 2;
-      ESL_REALLOC(np->st,  sizeof(int8_t) * np->Zalloc);
-      ESL_REALLOC(np->rle, sizeof(int)    * np->Zalloc);
-    }
-
-  /* and this could become _Copy() */
-  memcpy( (void *) np->st,  (void *) pi->st,  sizeof(int8_t) * pi->Z);
-  memcpy( (void *) np->rle, (void *) pi->rle, sizeof(int)    * pi->Z);
-  np->Z = pi->Z;
-
+  if (( np     = h4_path_Create())          == NULL)  goto ERROR;
+  if (( status = h4_path_Resize(np, pi->Z)) != eslOK) goto ERROR;
+  if (( status = h4_path_Copy(pi, np))      != eslOK) goto ERROR;
   return np;
 
  ERROR:
   h4_path_Destroy(np);
   return NULL;
 }
+
+
+/* Function:  h4_path_Copy()
+ * Synopsis:  Copy an H4_PATH to another allocated structure.
+ * Incept:    SRE, Sun 21 Feb 2021
+ *
+ * Purpose:   Copy <src> to <dst>, where <dst> is an <H4_PATH> structure that is
+ *            already allocated for sufficient space to hold <src>.
+ */
+int
+h4_path_Copy(const H4_PATH *src, H4_PATH *dst)
+{
+  ESL_DASSERT1(( dst->Zalloc >= src->Z ));
+  
+  memcpy( (void *) dst->st,  (void *) src->st,  sizeof(int8_t) * src->Z);
+  memcpy( (void *) dst->rle, (void *) src->rle, sizeof(int)    * src->Z);
+  dst->Z = src->Z;
+  return eslOK;
+}
+
+
+/* Function:  h4_path_Resize()
+ * Synopsis:  Resize an H4_PATH to hold at least Z elements
+ * Incept:    SRE, Sat 20 Feb 2021
+ *
+ * Purpose:   Reallocate <pi> if necessary to hold at least <Z>
+ *            elements. Data contents of <pi> are unaffected.
+ */
+int
+h4_path_Resize(H4_PATH *pi, int Z)
+{
+  int new_Zalloc = esl_resize(Z, pi->Zalloc, pi->Zredline);
+  int status;
+
+  if (new_Zalloc > pi->Zalloc) {
+    ESL_REALLOC(pi->st,  sizeof(int8_t) * new_Zalloc);
+    ESL_REALLOC(pi->rle, sizeof(int)    * new_Zalloc);
+    pi->Zalloc = new_Zalloc;
+  }
+  return eslOK;
+
+ ERROR:
+  return status;
+}
+
 
 
 
