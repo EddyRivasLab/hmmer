@@ -63,6 +63,7 @@ AC_PREREQ(2.63)
 #
 m4_include([easel/m4/ax_gcc_func_attribute.m4])
 
+m4_include([easel/m4/esl_neon.m4])
 m4_include([easel/m4/esl_sse.m4])
 m4_include([easel/m4/esl_vmx.m4])
 m4_include([easel/m4/esl_neon.m4])
@@ -189,6 +190,7 @@ esac
 AC_ARG_ENABLE(gcov,    [AS_HELP_STRING([--enable-gcov],    [compile for code coverage testing])],        enable_gcov=$enableval,    enable_gcov=no)
 AC_ARG_ENABLE(gprof,   [AS_HELP_STRING([--enable-gprof],   [compile for gcc code profiling])],           enable_gprof=$enableval,   enable_gprof=no)
 
+AC_ARG_ENABLE(neon,    [AS_HELP_STRING([--enable-neon],    [enable our ARM Neon vector code])],          enable_neon=$enableval,    enable_neon=check)
 AC_ARG_ENABLE(sse,     [AS_HELP_STRING([--enable-sse],     [enable our SSE vector code])],               enable_sse=$enableval,     enable_sse=check)
 AC_ARG_ENABLE(vmx,     [AS_HELP_STRING([--enable-vmx],     [enable our Altivec/VMX vector code])],       enable_vmx=$enableval,     enable_vmx=check)
 
@@ -205,12 +207,14 @@ AC_ARG_WITH(gsl,       [AS_HELP_STRING([--with-gsl],       [use the GSL, GNU Sci
 # If a vector implementation is force-selected, make sure only one is,
 # and turn off checking for the others.
 vecsel=0
+if test "$enable_neon"    = "yes"; then vecsel=$((vecsel+1)); fi
 if test "$enable_sse"     = "yes"; then vecsel=$((vecsel+1)); fi
 if test "$enable_vmx"     = "yes"; then vecsel=$((vecsel+1)); fi
 if test "$enable_neon"    = "yes"; then vecsel=             ; fi
 if   [[ $vecsel -gt 1 ]]; then
   AC_MSG_ERROR([Select only one implementation: sse, neon,  or vmx])
 elif [[ $vecsel -eq 1 ]]; then
+  if test "$enable_neon"  = "check"; then enable_neon="no";  fi
   if test "$enable_sse"   = "check"; then enable_sse="no";   fi
   if test "$enable_vmx"   = "check"; then enable_vmx="no";   fi
   if test "$enable_neon"   = "check"; then enable_neon="no";   fi
@@ -300,6 +304,22 @@ fi
 #    - set shell variable $esl_have_foo to "yes"
 #    - set shell var $esl_foo_cflags to any necessary compiler flags
 #
+if test "$enable_neon" = "yes" || test "$enable_neon" = "check"; then
+  ESL_NEON([
+    AC_DEFINE(eslENABLE_NEON, 1, [Enable ARM Neon vector implementation])
+    AC_SUBST([HMMERIMPLLIB], ["impl_neon/libhmmerimpl.a"])
+    VMX_CFLAGS=$esl_neon_cflags
+    AC_SUBST(NEON_CFLAGS)
+    enable_neon=yes
+    impl_choice=neon
+    ],[
+    if test "$enable_neon" = "yes"; then
+      AC_MSG_FAILURE([Unable to compile our ARM Neon implementations. Try another compiler?])
+    fi
+    enable_neon=no
+    ])
+fi
+
 if test "$enable_vmx" = "yes" || test "$enable_vmx" = "check"; then
   ESL_VMX([
     AC_DEFINE(eslENABLE_VMX, 1, [Enable Altivec/VMX vector implementation])
@@ -349,6 +369,8 @@ if test "$enable_neon" = "yes" || test "$enable_neon" = "check"; then
 fi
 # If we didn't choose an implementation, die.
 case "$impl_choice" in 
+neon) AC_MSG_NOTICE([Activating ARM Neon vector DP implementation])   
+      ;;
 sse)  AC_MSG_NOTICE([Activating Intel/AMD SSE vector DP implementation]) 
       ;;
 vmx)  AC_MSG_NOTICE([Activating Altivec/VMX vector DP implementation])   
@@ -371,7 +393,6 @@ AC_SUBST(IMPL_CHOICE)
 AC_SUBST(SSE4_CFLAGS)
 AC_SUBST(AVX_CFLAGS)
 AC_SUBST(AVX512_CFLAGS)
-
 
 
 # For x86 processors check if the flush to zero macro is available
