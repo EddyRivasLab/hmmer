@@ -19,7 +19,7 @@
  *   16. P7_PIPELINE:    H3's accelerated seq/profile comparison pipeline
  *   17. P7_BUILDER:     configuration options for new HMM construction.
  *   18. Declaration of functions in HMMER's exposed API.
- *   
+ *
  * Also, see impl_{sse,vmx}/impl_{sse,vmx}.h for additional API
  * specific to the acceleration layer; in particular, the P7_OPROFILE
  * structure for an optimized profile.
@@ -28,8 +28,8 @@
 #define P7_HMMERH_INCLUDED
 #include "p7_config.h"
 
-#include <stdio.h>		
-#include <stddef.h>             // ptrdiff_t 
+#include <stdio.h>
+#include <stddef.h>             // ptrdiff_t
 
 #ifdef HMMER_MPI
 #include "mpi.h"
@@ -94,11 +94,11 @@ enum p7_strands_e {    p7_STRAND_TOPONLY  = 0, p7_STRAND_BOTTOMONLY = 1,  p7_STR
  *****************************************************************/
 
 /* Bit flags used in <hmm->flags>: optional annotation in an HMM
- * 
+ *
  * Flags marked with ! may not be changed nor used for other meanings,
  * because they're codes used by HMMER2 (and earlier) that must be
  * preserved for reverse compatibility with old HMMER files.
- * 
+ *
  * Why use flags? (So I don't ask this question of myself again:)
  *   1. The way we allocate an HMM, we need to know if we're allocating
  *      M-width annotation fields (RF, CS, CA, MAP) before we read the
@@ -133,7 +133,7 @@ enum p7h_transitions_e {
   p7H_IM = 3,
   p7H_II = 4,
   p7H_DM = 5,
-  p7H_DD = 6 
+  p7H_DD = 6
 };
 #define p7H_NTRANSITIONS 7
 
@@ -161,7 +161,7 @@ typedef struct p7_hmm_s {
   /*::cexcerpt::plan7_core::begin::*/
   int     M;                    /* length of the model (# nodes)                           */
   float **t;                    /* transition prob's. t[(0),1..M][0..p7H_NTRANSITIONS-1]   */
-  float **mat;                  /* match emissions.  mat[1..M][0..K-1]                     */ 
+  float **mat;                  /* match emissions.  mat[1..M][0..K-1]                     */
   float **ins;                  /* insert emissions. ins[1..M][0..K-1]                     */
   /*::cexcerpt::plan7_core::end::*/
 
@@ -201,7 +201,7 @@ typedef struct p7_hmm_s {
 
 /* Indices for special state types in the length model, gm->xsc[x][]
  */
-enum p7p_xstates_e { 
+enum p7p_xstates_e {
   p7P_E = 0,
   p7P_N = 1,
   p7P_J = 2,
@@ -220,21 +220,21 @@ enum p7p_xtransitions_e {
 /* Indices for transition scores gm->tsc[k][] */
 /* order is optimized for dynamic programming */
 enum p7p_tsc_e {
-  p7P_MM = 0, 
-  p7P_IM = 1, 
-  p7P_DM = 2, 
-  p7P_BM = 3, 
-  p7P_MD = 4, 
-  p7P_DD = 5, 
-  p7P_MI = 6, 
-  p7P_II = 7, 
+  p7P_MM = 0,
+  p7P_IM = 1,
+  p7P_DM = 2,
+  p7P_BM = 3,
+  p7P_MD = 4,
+  p7P_DD = 5,
+  p7P_MI = 6,
+  p7P_II = 7,
 };
 #define p7P_NTRANS 8
 
 /* Indices for residue emission score vectors
  */
 enum p7p_rsc_e {
-  p7P_MSC = 0, 
+  p7P_MSC = 0,
   p7P_ISC = 1
 };
 #define p7P_NR 2
@@ -251,7 +251,7 @@ typedef struct p7_profile_s {
   float **rsc;          /* emissions [0..Kp-1][0.1..M][p7P_NR], hand-indexed       */
   float   xsc[p7P_NXSTATES][p7P_NXTRANS]; /* special transitions [NECJ][LOOP,MOVE] */
 
-  int     mode;        	/* configured algorithm mode (e.g. p7_LOCAL)               */ 
+  int     mode;        	/* configured algorithm mode (e.g. p7_LOCAL)               */
   int     L;		/* current configured target seq length                    */
   int     allocM;	/* max # of nodes allocated in this structure              */
   int     M;		/* number of nodes in the model                            */
@@ -285,17 +285,17 @@ typedef struct p7_profile_s {
  * 3. P7_BG: a null (background) model.
  *****************************************************************/
 
-/* This really contains three different things: 
- *     
+/* This really contains three different things:
+ *
  *   - the "null1" model, a one-state HMM consisting of background
  *     frequencies <f> and a parameter <p1> for a target-length
  *     dependent geometric;
- *     
+ *
  *   - the "bias filter" <fhmm> a two-state HMM composed from null1's
  *     background <f> and the model's mean composition <compo>. This
- *     model is constructed dynamically, every time a new profile is 
+ *     model is constructed dynamically, every time a new profile is
  *     considered;
- *     
+ *
  *   - a single term <omega> that's needed by the "null2" model to set
  *     a balance between the null1 and null2 scoring terms.  The null2
  *     model is otherwise defined by construction, in p7_domaindef.c.
@@ -323,13 +323,13 @@ typedef struct p7_bg_s {
  * A traceback only makes sense in a triplet (tr, gm, dsq), for a
  * given profile or HMM (with nodes 1..M) and a given digital sequence
  * (with positions 1..L).
- * 
+ *
  * A traceback may be relative to a profile (usually) or to a core
  * model (as a special case in model construction; see build.c). You
  * can tell the difference by looking at the first statetype,
  * tr->st[0]; if it's a p7T_S, it's for a profile, and if it's p7T_B,
  * it's for a core model.
- * 
+ *
  * A "profile" trace uniquely has S,N,C,T,J states and their
  * transitions; it also can have B->Mk and Mk->E internal entry/exit
  * transitions for local alignments. It may not contain X states.
@@ -341,7 +341,7 @@ typedef struct p7_bg_s {
  * input alignment, which is "impossible" for a core model.
  * X "states" only appear in core traces, and only at these
  * entry/exit places; some code depends on this.
- *   
+ *
  * A profile's N,C,J states emit on transition, not on state, so a
  * path of N emits 0 residues, NN emits 1 residue, NNN emits 2
  * residues, and so on. By convention, the trace always associates an
@@ -362,10 +362,10 @@ enum p7t_statetype_e {
   p7T_I     =  3,
   p7T_S     =  4,
   p7T_N     =  5,
-  p7T_B     =  6, 
+  p7T_B     =  6,
   p7T_E     =  7,
-  p7T_C     =  8, 
-  p7T_T     =  9, 
+  p7T_C     =  8,
+  p7T_T     =  9,
   p7T_J     = 10,
   p7T_X     = 11, 	/* missing data: used esp. for local entry/exits */
 };
@@ -414,13 +414,13 @@ typedef struct p7_hmmfile_s {
   char         *fname;	         /* (fully qualified) name of the HMM file; [STDIN] if - */
   ESL_SSI      *ssi;		 /* open SSI index for model file <f>; NULL if none.     */
 
-  int           do_gzip;	/* TRUE if f is "gzip -dc |" (will pclose(f))           */ 
+  int           do_gzip;	/* TRUE if f is "gzip -dc |" (will pclose(f))           */
   int           do_stdin;       /* TRUE if f is stdin (won't close f)                   */
   int           newly_opened;	/* TRUE if we just opened the stream (and parsed magic) */
   int           is_pressed;	/* TRUE if a pressed HMM database file (Pfam or equiv)  */
 
   int            format;	/* HMM file format code */
-  int           (*parser)(struct p7_hmmfile_s *, ESL_ALPHABET **, P7_HMM **);  
+  int           (*parser)(struct p7_hmmfile_s *, ESL_ALPHABET **, P7_HMM **);
   ESL_FILEPARSER *efp;
 
   /* If <is_pressed>, we can read optimized profiles directly, via:  */
@@ -437,7 +437,7 @@ typedef struct p7_hmmfile_s {
 
 /* note on <fname>, above:
  * this is the actual name of the HMM file being read.
- * 
+ *
  * The way p7_hmmfile_Open() works, it will preferentially look for
  * hmmpress'ed binary files. If you open "foo", it will first try to
  * open "foo.h3m" and <fname> will be "foo.h3m". "foo" does not even
@@ -471,7 +471,7 @@ enum p7g_xcells_e {
 typedef struct p7_gmx_s {
   int  M;		/* actual model dimension (model 1..M)    */
   int  L;		/* actual sequence dimension (seq 1..L)   */
-  
+
   int      allocR;      /* current allocated # of rows : L+1 <= validR <= allocR                */
   int      validR;	/* # of rows actually pointing at DP memory                             */
   int      allocW;	/* current set row width :  M+1 <= allocW                               */
@@ -525,9 +525,9 @@ typedef struct p7_prior_s {
  *****************************************************************/
 
 /* struct p7_spcoord_s:
- *    a coord quad defining a segment pair. 
+ *    a coord quad defining a segment pair.
  */
-struct p7_spcoord_s { 
+struct p7_spcoord_s {
   int idx; 	/* backreference index: which trace a seg came from, or which cluster a domain came from */
   int i, j;	/* start,end in a target sequence (1..L)  */
   int k, m;     /* start,end in a query model (1..M)      */
@@ -555,7 +555,7 @@ typedef struct p7_spensemble_s {
   /* Section 3: then endpoint distribution is examined within each large cluster            */
   int *epc;	                    /* array counting frequency of each endpoint            */
   int  epc_alloc;	            /* allocated width of <epc>                             */
-  
+
   /* Section 4: finally each large cluster is resolved into domain coords                   */
   struct p7_spcoord_s *sigc;	    /* array of coords for each domain, [0..nsigc-1]        */
   int                  nsigc;	    /* number of "significant" clusters, domains            */
@@ -569,9 +569,9 @@ typedef struct p7_spensemble_s {
  *****************************************************************/
 
 /* Structure: P7_ALIDISPLAY
- * 
+ *
  * Alignment of a sequence domain to an HMM, formatted for printing.
- * 
+ *
  * For an alignment of L residues and names C chars long, requires
  * 6L + 2C + 30 bytes; for typical case of L=100,C=10, that's
  * <0.7 Kb.
@@ -610,7 +610,7 @@ typedef struct p7_alidisplay_s {
  * 10. P7_DOMAINDEF: reusably managing workflow in defining domains
  *****************************************************************/
 
-typedef struct p7_dom_s { 
+typedef struct p7_dom_s {
   int64_t        ienv, jenv;
   int64_t        iali, jali;
   int64_t        iorf, jorf;     /* Used in translated search to capture the range in the DNA sequence of the ORF containing the match to a protein query */
@@ -623,11 +623,11 @@ typedef struct p7_dom_s {
   int            is_reported;	 /* TRUE if domain meets reporting thresholds                                  */
   int            is_included;	 /* TRUE if domain meets inclusion thresholds                                  */
   float         *scores_per_pos; /* only used by `nhmmer --aliscoresout`; score in BITS that each pos in ali contributes to viterbi score */
-  P7_ALIDISPLAY *ad; 
+  P7_ALIDISPLAY *ad;
 } P7_DOMAIN;
 
 /* Structure: P7_DOMAINDEF
- * 
+ *
  * This is a container for all the necessary information for domain
  * definition procedures in <p7_domaindef.c>, including a bunch of
  * heuristic thresholds. The structure is reusable to minimize the
@@ -662,7 +662,7 @@ typedef struct p7_domaindef_s {
   float  rt1;   	/* controls when regions are called. mocc[i] post prob >= dt1 : triggers a region around i */
   float  rt2;		/* controls extent of regions. regions extended until mocc[i]-{b,e}occ[i] < dt2            */
   float  rt3;		/* controls when regions are flagged for split: if expected # of E preceding B is >= dt3   */
-  
+
   /* Heuristic thresholds that control the stochastic traceback/clustering process */
   int    nsamples;	/* collect ensemble of this many stochastic traces */
   float  min_overlap;	/* 0.8 means >= 80% overlap of (smaller/larger) segment to link, both in seq and hmm            */
@@ -699,7 +699,7 @@ typedef struct p7_domaindef_s {
 
 
 /* Structure: P7_HIT
- * 
+ *
  * Info about a high-scoring database hit, kept so we can output a
  * sorted list of high hits at the end.
  *
@@ -744,7 +744,7 @@ typedef struct p7_hit_s {
 
 /* Structure: P7_TOPHITS
  * merging when we prepare to output results. "hit" list is NULL and
- * unavailable until after we do a sort.  
+ * unavailable until after we do a sort.
  */
 typedef struct p7_tophits_s {
   P7_HIT **hit;         /* sorted pointer array                     */
@@ -821,7 +821,9 @@ typedef struct p7_hmm_window_list_s {
 /*****************************************************************
  * 14. Choice of vector implementation.
  *****************************************************************/
-#if   defined (eslENABLE_SSE)
+#if   defined (eslENABLE_NEON)
+#include "impl_neon/impl_neon.h"
+#elif defined (eslENABLE_SSE)
 #include "impl_sse/impl_sse.h"
 #elif defined (eslENABLE_VMX)
 #include "impl_vmx/impl_vmx.h"
@@ -1209,7 +1211,7 @@ typedef struct p7_pipeline_s {
   double  domZ;			/* eff # signific targs (per-domain E-val)  */
   enum p7_zsetby_e Z_setby;   	/* how Z was set                            */
   enum p7_zsetby_e domZ_setby;	/* how domZ was set                         */
-  
+
   /* Threshold settings for pipeline                                        */
   int     do_max;	        /* TRUE to run in slow/max mode             */
   double  F1;		        /* MSV filter threshold                     */
@@ -1509,7 +1511,7 @@ extern int         p7_builder_SetScoreSystem (P7_BUILDER *bld, const char *mxfil
 extern void        p7_builder_Destroy(P7_BUILDER *bld);
 
 extern int p7_Builder      (P7_BUILDER *bld, ESL_MSA *msa, P7_BG *bg, P7_HMM **opt_hmm, P7_TRACE ***opt_trarr, P7_PROFILE **opt_gm, P7_OPROFILE **opt_om, ESL_MSA **opt_postmsa);
-extern int p7_SingleBuilder(P7_BUILDER *bld, ESL_SQ *sq,   P7_BG *bg, P7_HMM **opt_hmm, P7_TRACE  **opt_tr,    P7_PROFILE **opt_gm, P7_OPROFILE **opt_om); 
+extern int p7_SingleBuilder(P7_BUILDER *bld, ESL_SQ *sq,   P7_BG *bg, P7_HMM **opt_hmm, P7_TRACE  **opt_tr,    P7_PROFILE **opt_gm, P7_OPROFILE **opt_om);
 extern int p7_Builder_MaxLength      (P7_HMM *hmm, double emit_thresh);
 
 /* p7_domain.c */
@@ -1580,7 +1582,7 @@ extern int     p7_hmm_Dump(FILE *fp, P7_HMM *hmm);
 extern int     p7_hmm_Sample          (ESL_RANDOMNESS *r, int M, const ESL_ALPHABET *abc, P7_HMM **ret_hmm);
 extern int     p7_hmm_SampleUngapped  (ESL_RANDOMNESS *r, int M, const ESL_ALPHABET *abc, P7_HMM **ret_hmm);
 extern int     p7_hmm_SampleEnumerable(ESL_RANDOMNESS *r, int M, const ESL_ALPHABET *abc, P7_HMM **ret_hmm);
-extern int     p7_hmm_SampleUniform   (ESL_RANDOMNESS *r, int M, const ESL_ALPHABET *abc, 
+extern int     p7_hmm_SampleUniform   (ESL_RANDOMNESS *r, int M, const ESL_ALPHABET *abc,
 				     float tmi, float tii, float tmd, float tdd,  P7_HMM **ret_hmm);
 extern int     p7_hmm_Compare(P7_HMM *h1, P7_HMM *h2, float tol);
 extern int     p7_hmm_Validate(P7_HMM *hmm, char *errbuf, float tol);
@@ -1672,7 +1674,7 @@ extern size_t      p7_profile_Sizeof(P7_PROFILE *gm);
 extern void        p7_profile_Destroy(P7_PROFILE *gm);
 extern int         p7_profile_IsLocal(const P7_PROFILE *gm);
 extern int         p7_profile_IsMultihit(const P7_PROFILE *gm);
-extern int         p7_profile_GetT(const P7_PROFILE *gm, char st1, int k1, 
+extern int         p7_profile_GetT(const P7_PROFILE *gm, char st1, int k1,
 				   char st2, int k2, float *ret_tsc);
 extern int         p7_profile_Validate(const P7_PROFILE *gm, char *errbuf, float tol);
 extern int         p7_profile_Compare(P7_PROFILE *gm1, P7_PROFILE *gm2, float tol);
@@ -1681,8 +1683,8 @@ extern int         p7_profile_Compare(P7_PROFILE *gm1, P7_PROFILE *gm2, float to
 P7_SPENSEMBLE *p7_spensemble_Create(int init_n, int init_epc, int init_sigc);
 extern int     p7_spensemble_Reuse(P7_SPENSEMBLE *sp);
 extern int     p7_spensemble_Add(P7_SPENSEMBLE *sp, int sampleidx, int i, int j, int k, int m);
-extern int     p7_spensemble_Cluster(P7_SPENSEMBLE *sp, 
-				     float min_overlap, int of_smaller, int max_diagdiff, 
+extern int     p7_spensemble_Cluster(P7_SPENSEMBLE *sp,
+				     float min_overlap, int of_smaller, int max_diagdiff,
 				     float min_posterior, float min_endpointp,
 				     int *ret_nclusters);
 extern int     p7_spensemble_GetClusterCoords(P7_SPENSEMBLE *sp, int which,
@@ -1694,12 +1696,12 @@ extern P7_TOPHITS *p7_tophits_Create(void);
 extern int         p7_tophits_Grow(P7_TOPHITS *h);
 extern int         p7_tophits_CreateNextHit(P7_TOPHITS *h, P7_HIT **ret_hit);
 extern int         p7_tophits_Add(P7_TOPHITS *h,
-				  char *name, char *acc, char *desc, 
-				  double sortkey, 
-				  float score,    double lnP, 
+				  char *name, char *acc, char *desc,
+				  double sortkey,
+				  float score,    double lnP,
 				  float mothersc, double mother_lnP,
 				  int sqfrom, int sqto, int sqlen,
-				  int hmmfrom, int hmmto, int hmmlen, 
+				  int hmmfrom, int hmmto, int hmmlen,
 				  int domidx, int ndom,
 				  P7_ALIDISPLAY *ali);
 extern int         p7_tophits_SortBySortkey(P7_TOPHITS *h);
@@ -1721,13 +1723,13 @@ extern int p7_tophits_Targets(FILE *ofp, P7_TOPHITS *th, P7_PIPELINE *pli, int t
 extern int p7_tophits_Domains(FILE *ofp, P7_TOPHITS *th, P7_PIPELINE *pli, int textw);
 
 
-extern int p7_tophits_Alignment(const P7_TOPHITS *th, const ESL_ALPHABET *abc, 
+extern int p7_tophits_Alignment(const P7_TOPHITS *th, const ESL_ALPHABET *abc,
 				ESL_SQ **inc_sqarr, P7_TRACE **inc_trarr, int inc_n, int optflags,
 				ESL_MSA **ret_msa);
 extern int p7_tophits_TabularTargets(FILE *ofp, char *qname, char *qacc, P7_TOPHITS *th, P7_PIPELINE *pli, int show_header);
 extern int p7_tophits_TabularDomains(FILE *ofp, char *qname, char *qacc, P7_TOPHITS *th, P7_PIPELINE *pli, int show_header);
 extern int p7_tophits_TabularXfam(FILE *ofp, char *qname, char *qacc, P7_TOPHITS *th, P7_PIPELINE *pli);
-extern int p7_tophits_TabularTail(FILE *ofp, const char *progname, enum p7_pipemodes_e pipemode, 
+extern int p7_tophits_TabularTail(FILE *ofp, const char *progname, enum p7_pipemodes_e pipemode,
 				  const char *qfile, const char *tfile, const ESL_GETOPTS *go);
 extern int p7_tophits_AliScores(FILE *ofp, char *qname, P7_TOPHITS *th );
 
@@ -1811,5 +1813,3 @@ extern int fm_getOccCount     (const FM_DATA *fm, const FM_CFG *cfg, int pos, ui
 extern int fm_getOccCountLT   (const FM_DATA *fm, const FM_CFG *cfg, int pos, uint8_t c, uint32_t *cnteq, uint32_t *cntlt);
 
 #endif /*P7_HMMERH_INCLUDED*/
-
-
