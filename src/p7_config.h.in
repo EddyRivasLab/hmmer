@@ -113,6 +113,7 @@
 /* Choice of optimized implementation (one and only one must be set)
  * These are also identically defined in Easel esl_config.h.in
  */
+#undef eslENABLE_NEON
 #undef eslENABLE_SSE
 #undef eslENABLE_VMX
 

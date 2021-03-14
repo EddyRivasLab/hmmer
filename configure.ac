@@ -61,6 +61,7 @@ AC_PREREQ(2.63)
 # It's sort of standard to expect them in m4/, don't
 # be confused that they're down in easel.
 #
+m4_include([easel/m4/ax_check_compile_flag.m4])
 m4_include([easel/m4/ax_gcc_func_attribute.m4])
 
 m4_include([easel/m4/esl_neon.m4])
@@ -319,8 +320,9 @@ fi
 if test "$enable_neon" = "yes" || test "$enable_neon" = "check"; then
   ESL_NEON([
     AC_DEFINE(eslENABLE_NEON, 1, [Enable ARM Neon vector implementation])
+    AS_VAR_IF([esl_have_neon_aarch64],[yes],[AC_DEFINE(eslHAVE_NEON_AARCH64, 1, [Set to enable the ARM AARCH64 version of NEON])])
     AC_SUBST([HMMERIMPLLIB], ["impl_neon/libhmmerimpl.a"])
-    NEON_CFLAGS="$esl_neon_cflags -mlittle-endian"
+    NEON_CFLAGS="$esl_neon_cflags"
     AC_SUBST(NEON_CFLAGS)
     enable_neon=yes
     impl_choice=neon
@@ -391,7 +393,7 @@ neon)  AC_MSG_NOTICE([Activating ARM NEON vector DP implementation])
       ;;   
 *)    AC_MSG_NOTICE([::::::::::--- no vector instruction set ---::::::::::])
       AC_MSG_NOTICE([HMMER3 requires SSE, NEON or VMX vector instructions.])
-      AC_MSG_NOTICE([Supported platforms are x86 (Intel/AMD), ARM,  and PowerPC.])
+      AC_MSG_NOTICE([Supported platforms are x86 (Intel/AMD), ARM (v7 or later) and PowerPC.])
       AC_MSG_ERROR([No supported vectorization found for your machine.])
       ;;
 esac
@@ -546,13 +548,15 @@ AC_C_BIGENDIAN([
   ],[
   if test "$enable_vmx" = "yes"; then
     AC_MSG_NOTICE([::::::::::--- no vector instruction set ---::::::::::])
-    AC_MSG_NOTICE([HMMER3 Altivec/VMX only supports bigendian platforms: e.g. ppc64 not ppc64le])
+    AC_MSG_NOTICE([HMMER3 Altivec/VMX only supports big-endian platforms: e.g. ppc64 not ppc64le])
     AC_MSG_ERROR([No supported vectorization found for your machine.])
+  elif test "$enable_neon" = "yes"; then
+    AX_CHECK_COMPILE_FLAG([-mlittle-endian], [NEON_CFLAGS="$NEON_CFLAGS -mlittle-endian"], [], [$NEON_CFLAGS])
   fi
   ],[
   if test "$enable_neon" = "yes"; then
     AC_MSG_NOTICE([::::::::::--- no vector instruction set ---::::::::::])
-    AC_MSG_NOTICE([HMMER3 NEON only supports littleendian platforms: e.g. aarch64 not aarch64be])
+    AC_MSG_NOTICE([HMMER3 NEON only supports little-endian platforms: e.g. aarch64 not aarch64be])
     AC_MSG_ERROR([No supported vectorization found for your machine.])
   else
     AC_MSG_NOTICE([::::::::::--- no vector instruction set ---::::::::::])
