@@ -269,22 +269,24 @@ forward_engine(int do_full, const ESL_DSQ *dsq, int L, const P7_OPROFILE *om, P7
   register float32x4_t dcv;		         /* delayed storage of D(i,q+1)                               */
   register float32x4_t xEv;		         /* E state: keeps max for Mk->E as we go                     */
   register float32x4_t xBv;		         /* B state: splatted vector of B[i-1] for B->Mk calculations */
-  float    xN, xE, xB, xC, xJ;	           /* special states' scores                                    */
-  int i;			   /* counter over sequence positions 1..L                      */
-  int q;			   /* counter over quads 0..nq-1                                */
-  int j;			   /* counter over DD iterations (4 is full serialization)      */
-  int Q       = p7O_NQF(om->M);	   /* segment length: # of vectors                              */
-  float32x4_t *dpc = ox->dpf[0];        /* current row, for use in {MDI}MO(dpp,q) access macro       */
-  float32x4_t *dpp;                     /* previous row, for use in {MDI}MO(dpp,q) access macro      */
-  float32x4_t *rp;			   /* will point at om->rfv[x] for residue x[i]                 */
-  float32x4_t *tp;			   /* will point into (and step thru) om->tfv                   */
+  register float32x4_t zerov;          /* zero vector: used for emulating logical shifts with VEXT  */
+  float    xN, xE, xB, xC, xJ;	       /* special states' scores                                    */
+  int i;			                         /* counter over sequence positions 1..L                      */
+  int q;			                         /* counter over quads 0..nq-1                                */
+  int j;			                         /* counter over DD iterations (4 is full serialization)      */
+  int Q       = p7O_NQF(om->M);	       /* segment length: # of vectors                              */
+  float32x4_t *dpc = ox->dpf[0];       /* current row, for use in {MDI}MO(dpp,q) access macro       */
+  float32x4_t *dpp;                    /* previous row, for use in {MDI}MO(dpp,q) access macro      */
+  float32x4_t *rp;			               /* will point at om->rfv[x] for residue x[i]                 */
+  float32x4_t *tp;			               /* will point into (and step thru) om->tfv                   */
 
   /* Initialization. */
+  zerov = vmovq_n_f32(0.0);
   ox->M  = om->M;
   ox->L  = L;
   ox->has_own_scales = TRUE; 	/* all forward matrices control their own scalefactors */
   for (q = 0; q < Q; q++)
-    MMO(dpc,q) = IMO(dpc,q) = DMO(dpc,q) = vmovq_n_f32(0.0);
+    MMO(dpc,q) = IMO(dpc,q) = DMO(dpc,q) = zerov;
   xE    = ox->xmx[p7X_E] = 0.;
   xN    = ox->xmx[p7X_N] = 1.;
   xJ    = ox->xmx[p7X_J] = 0.;
@@ -309,9 +311,9 @@ forward_engine(int do_full, const ESL_DSQ *dsq, int L, const P7_OPROFILE *om, P7
       xBv = vmovq_n_f32(xB);
 
       /* Right shifts by 4 bytes. 4,8,12,x becomes x,4,8,12.  Shift zeros on. */
-      mpv = vsetq_lane_f32(0.0, vextq_f32(MMO(dpp,Q-1), MMO(dpp,Q-1), 3), 0);
-      dpv = vsetq_lane_f32(0.0, vextq_f32(DMO(dpp,Q-1), DMO(dpp,Q-1), 3), 0);
-      ipv = vsetq_lane_f32(0.0, vextq_f32(IMO(dpp,Q-1), IMO(dpp,Q-1), 3), 0);
+      mpv = vextq_f32(zerov, MMO(dpp,Q-1), 3);
+      dpv = vextq_f32(zerov, DMO(dpp,Q-1), 3);
+      ipv = vextq_f32(zerov, IMO(dpp,Q-1), 3);
 
       for (q = 0; q < Q; q++)
 	{
@@ -353,7 +355,7 @@ forward_engine(int do_full, const ESL_DSQ *dsq, int L, const P7_OPROFILE *om, P7
       /* We're almost certainly're obligated to do at least one complete
        * DD path to be sure:
        */
-      dcv        = vsetq_lane_f32(0.0, vextq_f32(dcv, dcv, 3), 0);
+      dcv        = vextq_f32(zerov, dcv, 3);
       DMO(dpc,0) = vmovq_n_f32(0.0);
       tp         = om->tfv + 7*Q;	/* set tp to start of the DD's */
       for (q = 0; q < Q; q++)
@@ -374,7 +376,7 @@ forward_engine(int do_full, const ESL_DSQ *dsq, int L, const P7_OPROFILE *om, P7
 	{			/* Fully serialized version */
 	  for (j = 1; j < 4; j++)
 	    {
-        dcv = vsetq_lane_f32(0.0, vextq_f32(dcv, dcv, 3), 0);
+        dcv = vextq_f32(zerov, dcv, 3);
 	      tp        = om->tfv + 7*Q;	/* set tp to start of the DD's */
 	      for (q = 0; q < Q; q++)
 		{ /* note, extend dcv, not DMO(q); only adding DD paths now */
@@ -389,7 +391,7 @@ forward_engine(int do_full, const ESL_DSQ *dsq, int L, const P7_OPROFILE *om, P7
 	    {
 	      register uint32x4_t cv;	/* keeps track of whether any DD's change DMO(q) */
 
-        dcv = vsetq_lane_f32(0.0, vextq_f32(dcv, dcv, 3), 0);
+        dcv = vextq_f32(zerov, dcv, 3);
 	      tp  = om->tfv + 7*Q;	/* set tp to start of the DD's */
 	      cv  = vmovq_n_u32(0);
 	      for (q = 0; q < Q; q++)
@@ -476,6 +478,7 @@ backward_engine(int do_full, const ESL_DSQ *dsq, int L, const P7_OPROFILE *om, c
   register float32x4_t tmmv, timv, tdmv;   /* tmp vars for accessing rotated transition scores          */
   register float32x4_t xBv;		      /* collects B->Mk components of B(i)                         */
   register float32x4_t xEv;	              /* splatted E(i)                                             */
+  register float32x4_t zerov;          /* zero vector: used for emulating logical shifts with VEXT  */
   float         xN, xE, xB, xC, xJ;	      /* special states' scores                                    */
   int           i;			      /* counter over sequence positions 0,1..L                    */
   int           q;			      /* counter over quads 0..Q-1                                 */
@@ -487,6 +490,7 @@ backward_engine(int do_full, const ESL_DSQ *dsq, int L, const P7_OPROFILE *om, c
   float32x4_t  *tp;		              /* will point into (and step thru) om->tfv transition scores */
 
   /* initialize the L row. */
+  zerov = vmovq_n_f32(0.0);
   bck->M = om->M;
   bck->L = L;
   bck->has_own_scales = FALSE;	/* backwards scale factors are *usually* given by <fwd> */
@@ -499,12 +503,11 @@ backward_engine(int do_full, const ESL_DSQ *dsq, int L, const P7_OPROFILE *om, c
   xEv = vmovq_n_f32(xE);
   dcv = vmovq_n_f32(0.0);		/* solely to silence a compiler warning */
   for (q = 0; q < Q; q++) MMO(dpc,q) = DMO(dpc,q) = xEv;
-  for (q = 0; q < Q; q++) IMO(dpc,q) = vmovq_n_f32(0.0);
+  for (q = 0; q < Q; q++) IMO(dpc,q) = zerov;
 
   /* init row L's DD paths, 1) first segment includes xE, from DMO(q) */
   tp  = om->tfv + 8*Q - 1;	                        /* <*tp> now the [4 8 12 x] TDD quad         */
-  dpv = vextq_f32(DMO(dpc,Q-1), DMO(dpc,Q-1), 1);   /* start leftshift: [1 5 9 13] -> [5 9 13 1] */
-  dpv = vsetq_lane_f32(0.0, dpv, 3);                /* finish leftshift:[5 9 13 1] -> [5 9 13 x] */
+  dpv = vextq_f32(DMO(dpc,Q-1), zerov, 1);          /* leftshift:[x 5 9 13] -> [5 9 13 x] */
   for (q = Q-1; q >= 0; q--)
     {
       dcv        = vmulq_f32(dpv, *tp); tp--;
@@ -514,9 +517,8 @@ backward_engine(int do_full, const ESL_DSQ *dsq, int L, const P7_OPROFILE *om, c
   /* 2) three more passes, only extending DD component (dcv only; no xE contrib from DMO(q)) */
   for (j = 1; j < 4; j++)
     {
-      tp  = om->tfv + 8*Q - 1;	                      /* <*tp> now the [4 8 12 x] TDD quad         */
-      dcv = vextq_f32(dcv, dcv, 1);       /* start leftshift: [1 5 9 13] -> [5 9 13 1] */
-      dcv = vsetq_lane_f32(0.0, dcv, 3);  /* finish leftshift:[5 9 13 1] -> [5 9 13 x] */
+      tp  = om->tfv + 8*Q - 1;	          /* <*tp> now the [4 8 12 x] TDD quad         */
+      dcv = vextq_f32(dcv, zerov, 1);     /* leftshift:[x 5 9 13] -> [5 9 13 x] */
       for (q = Q-1; q >= 0; q--)
 	{
 	  dcv        = vmulq_f32(dcv, *tp); tp--;
@@ -524,9 +526,8 @@ backward_engine(int do_full, const ESL_DSQ *dsq, int L, const P7_OPROFILE *om, c
 	}
     }
   /* now MD init */
-  tp        = om->tfv + 7*Q - 3;	                  /* <*tp> now the [4 8 12 x] Mk->Dk+1 quad    */
-  dcv = vextq_f32(DMO(dpc, 0),  DMO(dpc, 0), 1);   /* start leftshift: [1 5 9 13] -> [5 9 13 1] */
-  dcv = vsetq_lane_f32(0.0, dcv, 3);               /* finish leftshift:[5 9 13 1] -> [5 9 13 x] */
+  tp  = om->tfv + 7*Q - 3;	                  /* <*tp> now the [4 8 12 x] Mk->Dk+1 quad    */
+  dcv = vextq_f32(DMO(dpc, 0), zerov, 1);     /* leftshift:[x 5 9 13] -> [5 9 13 x] */
   for (q = Q-1; q >= 0; q--)
     {
       MMO(dpc,q) = vaddq_f32(MMO(dpc,q), vmulq_f32(dcv, *tp)); tp -= 7;
@@ -574,13 +575,12 @@ backward_engine(int do_full, const ESL_DSQ *dsq, int L, const P7_OPROFILE *om, c
       tp  = om->tfv + 7*Q - 1;	     /* <*tp> is now the [4 8 12 x] TII transition quad  */
 
       /* leftshift the first transition quads */
-      tmmv = vsetq_lane_f32(0.0, om->tfv[1], 0); tmmv = vextq_f32(tmmv, tmmv, 1);
-      timv = vsetq_lane_f32(0.0, om->tfv[2], 0); timv = vextq_f32(timv, timv, 1);
-      tdmv = vsetq_lane_f32(0.0, om->tfv[3], 0); tdmv = vextq_f32(tdmv, tdmv, 1);
+      tmmv = vextq_f32(om->tfv[1], zerov, 1);
+      timv = vextq_f32(om->tfv[2], zerov, 1);
+      tdmv = vextq_f32(om->tfv[3], zerov, 1);
 
       mpv = vmulq_f32(MMO(dpp,0), om->rfv[dsq[i+1]][0]); /* precalc M(i+1,k+1) * e(M_k+1, x_{i+1}) */
-      mpv = vsetq_lane_f32(0.0, mpv, 0);
-      mpv = vextq_f32(mpv, mpv, 1);
+      mpv = vextq_f32(mpv, zerov, 1);
 
       xBv = vmovq_n_f32(0.0);
       for (q = Q-1; q >= 0; q--)     /* backwards stride */
@@ -615,8 +615,7 @@ backward_engine(int do_full, const ESL_DSQ *dsq, int L, const P7_OPROFILE *om, c
       /* phase 3: {MD}->E paths and one step of the D->D paths */
       tp  = om->tfv + 8*Q - 1;	/* <*tp> now the [4 8 12 x] TDD quad */
       dpv = vaddq_f32(DMO(dpc,0), xEv);
-      dpv = vsetq_lane_f32(0.0, dpv, 0);
-      dpv = vextq_f32(dpv, dpv, 1);
+      dpv = vextq_f32(dpv, zerov, 1);
       for (q = Q-1; q >= 0; q--)
 	{
 	  dcv        = vmulq_f32(dpv, *tp); tp--;
@@ -629,8 +628,7 @@ backward_engine(int do_full, const ESL_DSQ *dsq, int L, const P7_OPROFILE *om, c
       /* fully serialized for now */
       for (j = 1; j < 4; j++)	/* three passes: we've already done 1 segment, we need 4 total */
 	{
-	  dcv = vsetq_lane_f32(0.0, dcv, 0);
-	  dcv = vextq_f32(dcv, dcv, 1);
+    dcv = vextq_f32(dcv, zerov, 1);
 	  tp  = om->tfv + 8*Q - 1;	/* <*tp> now the [4 8 12 x] TDD quad */
 	  for (q = Q-1; q >= 0; q--)
 	    {
@@ -640,8 +638,7 @@ backward_engine(int do_full, const ESL_DSQ *dsq, int L, const P7_OPROFILE *om, c
 	}
 
       /* phase 5: add M->D paths */
-      dcv = vsetq_lane_f32(0.0, DMO(dpc,0), 0);
-      dcv = vextq_f32(dcv, dcv, 1);
+      dcv = vextq_f32(DMO(dpc,0), zerov, 1);
       tp  = om->tfv + 7*Q - 3;	/* <*tp> is now the [4 8 12 x] Mk->Dk+1 quad */
       for (q = Q-1; q >= 0; q--)
 	{
