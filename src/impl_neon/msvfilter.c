@@ -20,7 +20,7 @@
 #include <stdio.h>
 #include <math.h>
 
-#include <arm_neon.h>		/* SSE  */
+#include <arm_neon.h>		/* NEON  */
 
 #include "easel.h"
 #include "esl_neon.h"
@@ -72,11 +72,12 @@
 int
 p7_MSVFilter(const ESL_DSQ *dsq, int L, const P7_OPROFILE *om, P7_OMX *ox, float *ret_sc)
 {
-  register uint8x16_t mpv;            /* previous row values                                       */
-  register uint8x16_t xEv;		   /* E state: keeps max for Mk->E as we go                     */
-  register uint8x16_t xBv;		   /* B state: splatted vector of B[i-1] for B->Mk calculations */
-  register uint8x16_t sv;		   /* temp storage of 1 curr row value in progress              */
-  register uint8x16_t biasv;	   /* emission bias in a vector                                 */
+  register uint8x16_t mpv;         /* previous row values                                       */
+  register uint8x16_t xEv;		     /* E state: keeps max for Mk->E as we go                     */
+  register uint8x16_t xBv;		     /* B state: splatted vector of B[i-1] for B->Mk calculations */
+  register uint8x16_t sv;		       /* temp storage of 1 curr row value in progress              */
+  register uint8x16_t biasv;	     /* emission bias in a vector                                 */
+  register uint8x16_t zerov;       /* zero vector                                               */
   uint8_t  xJ;                     /* special states' scores                                    */
   int i;			   /* counter over sequence positions 1..L                      */
   int q;			   /* counter over vectors 0..nq-1                              */
@@ -93,6 +94,9 @@ p7_MSVFilter(const ESL_DSQ *dsq, int L, const P7_OPROFILE *om, P7_OMX *ox, float
 
   int cmp;
   int status = eslOK;
+
+  /* Keep a null vector in a register to emulate _mm_slli_si128 efficiently */
+  zerov = vmovq_n_u8(0);
 
   /* Check that the DP matrix is ok for us. */
   if (Q > ox->allocQ16)  ESL_EXCEPTION(eslEINVAL, "DP matrix allocated too small");
@@ -137,7 +141,7 @@ p7_MSVFilter(const ESL_DSQ *dsq, int L, const P7_OPROFILE *om, P7_OMX *ox, float
        * Because ia32 is littlendian, this means a left bit shift.
        * Zeros shift on automatically, which is our -infinity.
        */
-      mpv = vsetq_lane_u8(0, vextq_u8(dp[Q-1], dp[Q-1], 15), 0);
+      mpv = vextq_u8(zerov, dp[Q-1], 15);
       for (q = 0; q < Q; q++)
       {
         /* Calculate new MMXo(i,q); don't store it yet, hold it in sv. */
@@ -262,6 +266,7 @@ p7_SSVFilter_longtarget(const ESL_DSQ *dsq, int L, P7_OPROFILE *om, P7_OMX *ox, 
   uint8x16_t basev;              /* offset for scores                                         */
   uint8x16_t ceilingv;           /* saturated simd value used to test for overflow           */
   uint8x16_t tempv;              /* work vector                                               */
+  uint8x16_t zerov;              /* zero vector */
   int cmp;
   int k;
   int n;
@@ -277,6 +282,8 @@ p7_SSVFilter_longtarget(const ESL_DSQ *dsq, int L, P7_OPROFILE *om, P7_OMX *ox, 
   float ret_sc;
 
   union { uint8x16_t v; uint8_t b[16]; } u;
+
+  zerov = vmovq_n_u8(0);
 
   /*
    * Computing the score required to let P meet the F1 prob threshold
@@ -335,7 +342,7 @@ p7_SSVFilter_longtarget(const ESL_DSQ *dsq, int L, P7_OPROFILE *om, P7_OMX *ox, 
        * Because vext actually rotates instead of shifting,
        * a zero is manually added in lane 0 to emulate a right shift.
        */
-      mpv = vsetq_lane_u8(0, vextq_u8(dp[Q-1], dp[Q-1], 15), 0);
+      mpv = vextq_u8(zerov, dp[Q-1], 15);
       for (q = 0; q < Q; q++) {
         /* Calculate new MMXo(i,q); don't store it yet, hold it in sv. */
         sv   = vmaxq_u8(mpv, xBv);

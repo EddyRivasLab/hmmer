@@ -104,7 +104,7 @@ p7_ViterbiFilter(const ESL_DSQ *dsq, int L, const P7_OPROFILE *om, P7_OMX *ox, f
   ox->M   = om->M;
 
   /* -infinity is -32768 */
-  negInfv = vsetq_lane_s16(-32768, vmovq_n_s16(0), 0);  /* negInfv = 16-byte vector, 14 0 bytes + 2-byte value=-32768, for an OR operation. */
+  negInfv = vmovq_n_s16(-32768);  /* negInfv = 16-byte vector, with -32768 in all lanes, for a VEXT operation. */
 
   /* Initialization. In unsigned arithmetic, -infinity is -32768
    */
@@ -133,9 +133,9 @@ p7_ViterbiFilter(const ESL_DSQ *dsq, int L, const P7_OPROFILE *om, P7_OMX *ox, f
        * Because ia32 is littlendian, this means a left bit shift.
        * Zeros shift on automatically; replace it with -32768.
        */
-      mpv = MMXo(Q-1);  mpv = vsetq_lane_s16(-32768, vextq_s16(mpv, mpv, 7), 0);
-      dpv = DMXo(Q-1);  dpv = vsetq_lane_s16(-32768, vextq_s16(dpv, dpv, 7), 0);
-      ipv = IMXo(Q-1);  ipv = vsetq_lane_s16(-32768, vextq_s16(ipv, ipv, 7), 0);
+      mpv = MMXo(Q-1);  mpv = vextq_s16(negInfv, mpv, 7);
+      dpv = DMXo(Q-1);  dpv = vextq_s16(negInfv, dpv, 7);
+      ipv = IMXo(Q-1);  ipv = vextq_s16(negInfv, ipv, 7);
 
       for (q = 0; q < Q; q++)
       {
@@ -197,7 +197,7 @@ p7_ViterbiFilter(const ESL_DSQ *dsq, int L, const P7_OPROFILE *om, P7_OMX *ox, f
 	{
 	  /* Now we're obligated to do at least one complete DD path to be sure. */
 	  /* dcv has carried through from end of q loop above */
-    dcv = vsetq_lane_s16(-32768, vextq_s16(dcv, dcv, 7), 0);
+    dcv = vextq_s16(negInfv, dcv, 7);
 	  tsc = om->twv + 7*Q;	/* set tsc to start of the DD's */
 	  for (q = 0; q < Q; q++)
 	    {
@@ -210,7 +210,7 @@ p7_ViterbiFilter(const ESL_DSQ *dsq, int L, const P7_OPROFILE *om, P7_OMX *ox, f
 	   * our score.
 	   */
 	  do {
-      dcv = vsetq_lane_s16(-32768, vextq_s16(dcv, dcv, 7), 0);
+      dcv = vextq_s16(negInfv, dcv, 7);
 	    tsc = om->twv + 7*Q;	/* set tsc to start of the DD's */
 	    for (q = 0; q < Q; q++)
 	      {
@@ -222,7 +222,7 @@ p7_ViterbiFilter(const ESL_DSQ *dsq, int L, const P7_OPROFILE *om, P7_OMX *ox, f
 	}
       else  /* not calculating DD? then just store the last M->D vector calc'ed.*/
 	{
-	  DMXo(0) = vsetq_lane_s16(-32768, vextq_s16(dcv, dcv, 7), 0);
+	  DMXo(0) = vextq_s16(negInfv, dcv, 7);
 	}
 
 #if eslDEBUGLEVEL > 0
@@ -288,21 +288,20 @@ p7_ViterbiFilter_longtarget(const ESL_DSQ *dsq, int L, const P7_OPROFILE *om, P7
                             float filtersc, double P, P7_HMM_WINDOWLIST *windowlist)
 {
   register int16x8_t mpv, dpv, ipv;  /* previous row values                                       */
-  register int16x8_t sv;       /* temp storage of 1 curr row value in progress              */
-  register int16x8_t dcv;      /* delayed storage of D(i,q+1)                               */
-  register int16x8_t xEv;      /* E state: keeps max for Mk->E as we go                     */
-  register int16x8_t xBv;      /* B state: splatted vector of B[i-1] for B->Mk calculations */
+  register int16x8_t sv;             /* temp storage of 1 curr row value in progress              */
+  register int16x8_t dcv;            /* delayed storage of D(i,q+1)                               */
+  register int16x8_t xEv;            /* E state: keeps max for Mk->E as we go                     */
+  register int16x8_t xBv;            /* B state: splatted vector of B[i-1] for B->Mk calculations */
   register int16x8_t Dmaxv;          /* keeps track of maximum D cell on row                      */
-  int16_t  xE, xB, xC, xJ, xN;     /* special states' scores                                    */
-  int16_t  Dmax;       /* maximum D cell score on row                               */
-  int i;         /* counter over sequence positions 1..L                      */
-  int q;         /* counter over vectors 0..nq-1                              */
+  register int16x8_t negInfv;        /* constant negative infinity, -32768                        */
+  int16_t  xE, xB, xC, xJ, xN;       /* special states' scores                                    */
+  int16_t  Dmax;                     /* maximum D cell score on row                               */
+  int i;                             /* counter over sequence positions 1..L                      */
+  int q;                             /* counter over vectors 0..nq-1                              */
   int Q          = p7O_NQW(om->M);   /* segment length: # of vectors                              */
-  int16x8_t *dp  = ox->dpw[0];     /* using {MDI}MX(q) macro requires initialization of <dp>    */
-  int16x8_t *rsc;        /* will point at om->ru[x] for residue x[i]                  */
-  int16x8_t *tsc;        /* will point into (and step thru) om->tu                    */
-
-  int16x8_t negInfv;
+  int16x8_t *dp  = ox->dpw[0];       /* using {MDI}MX(q) macro requires initialization of <dp>    */
+  int16x8_t *rsc;                    /* will point at om->ru[x] for residue x[i]                  */
+  int16x8_t *tsc;                    /* will point into (and step thru) om->tu                    */
 
   int16_t sc_thresh;
   float invP;
@@ -336,7 +335,7 @@ p7_ViterbiFilter_longtarget(const ESL_DSQ *dsq, int L, const P7_OPROFILE *om, P7
   ox->M   = om->M;
 
   /* -infinity is -32768 */
-  negInfv = vsetq_lane_s16(-32768, vmovq_n_s16(0), 0);  /* negInfv = 16-byte vector, 14 0 bytes + 2-byte value=-32768, for an OR operation. */
+  negInfv = vmovq_n_s16(-32768);  /* negInfv = 16-byte vector, with -32768 in all lanes, for a VEXT operation. */
 
   /* Initialization. In unsigned arithmetic, -infinity is -32768
    */
@@ -366,9 +365,9 @@ p7_ViterbiFilter_longtarget(const ESL_DSQ *dsq, int L, const P7_OPROFILE *om, P7
        * Because ia32 is littlendian, this means a left bit shift.
        * Zeros shift on automatically; replace it with -32768.
        */
-      mpv = MMXo(Q-1);  mpv = vsetq_lane_s16(-32768, vextq_s16(mpv, mpv, 7), 0);
-      dpv = DMXo(Q-1);  dpv = vsetq_lane_s16(-32768, vextq_s16(dpv, dpv, 7), 0);
-      ipv = IMXo(Q-1);  ipv = vsetq_lane_s16(-32768, vextq_s16(ipv, ipv, 7), 0);
+      mpv = MMXo(Q-1);  mpv = vextq_s16(negInfv, mpv, 7);
+      dpv = DMXo(Q-1);  dpv = vextq_s16(negInfv, dpv, 7);
+      ipv = IMXo(Q-1);  ipv = vextq_s16(negInfv, ipv, 7);
 
       for (q = 0; q < Q; q++)
       {
@@ -448,7 +447,7 @@ p7_ViterbiFilter_longtarget(const ESL_DSQ *dsq, int L, const P7_OPROFILE *om, P7
         {
           /* Now we're obligated to do at least one complete DD path to be sure. */
           /* dcv has carried through from end of q loop above */
-          dcv = vsetq_lane_s16(-32768, vextq_s16(dcv, dcv, 7), 0);
+          dcv = vextq_s16(negInfv, dcv, 7);
           tsc = om->twv + 7*Q;  /* set tsc to start of the DD's */
           for (q = 0; q < Q; q++)
           {
@@ -461,7 +460,7 @@ p7_ViterbiFilter_longtarget(const ESL_DSQ *dsq, int L, const P7_OPROFILE *om, P7
            * our score.
            */
           do {
-            dcv = vsetq_lane_s16(-32768, vextq_s16(dcv, dcv, 7), 0);
+            dcv = vextq_s16(negInfv, dcv, 7);
             tsc = om->twv + 7*Q;  /* set tsc to start of the DD's */
             for (q = 0; q < Q; q++)
             {
@@ -473,7 +472,7 @@ p7_ViterbiFilter_longtarget(const ESL_DSQ *dsq, int L, const P7_OPROFILE *om, P7
         }
         else  /* not calculating DD? then just store the last M->D vector calc'ed.*/
         {
-          DMXo(0) = vsetq_lane_s16(-32768, vextq_s16(dcv, dcv, 7), 0);
+          DMXo(0) = vextq_s16(negInfv, dcv, 7);
         }
       }
 #if eslDEBUGLEVEL > 0
