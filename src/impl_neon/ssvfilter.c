@@ -415,22 +415,11 @@
 #include "hmmer.h"
 #include "impl_neon.h"
 
-/* Note that some ifdefs below has to be changed if these values are
-   changed. These values are chosen based on some simple speed
-   tests. Apparently, two registers are generally used for something
-   else, leaving 14 registers on 64 bit versions and 6 registers on 32
-   bit versions. */
-#ifdef __x86_64__ /* 64 bit version */
-#define  MAX_BANDS 14
-#else
 #define  MAX_BANDS 6
-#endif
 
-
-#define STEP_SINGLE(sv)                         \
-  sv  = vsubq_s8(sv, vreinterpretq_s8_u8(*rsc)); rsc++;   \
-  xEv = vreinterpretq_s8_u8(vmaxq_u8(vreinterpretq_u8_s8(xEv), vreinterpretq_u8_s8(sv)));
-
+#define STEP_SINGLE(sv)                     \
+  sv   = vqsubq_s8(sv, vreinterpretq_s8_u8(*rsc)); rsc++;        \
+  xEv  = vmaxq_s8(xEv, sv);
 
 #define LENGTH_CHECK(label)                     \
   if (i >= L) goto label;
@@ -511,12 +500,11 @@
   STEP_SINGLE(sv17)
 
 
-#define CONVERT_STEP(step, length_check, label, sv, pos)            \
-  length_check(label)                                               \
-  rsc = om->sbv[dsq[i]] + pos;                   \
-  step()                                                            \
-  sv = vsetq_lane_s8(0, vextq_s8(sv, sv, 1), 15); \
-  sv = vorrq_s8(sv, beginv);                      \
+#define CONVERT_STEP(step, length_check, label, sv, pos)   \
+  length_check(label)                                      \
+  rsc = om->sbv[dsq[i]] + pos;                             \
+  step()                                                   \
+  sv = vextq_s8(beginv, sv, 15);                           \
   i++;
 
 
@@ -664,164 +652,148 @@
   register int8x16_t sv17 = beginv;
 
 
-#define CALC(reset, step, convert, width)       \
-  int         i2;                               \
-  int         i;                                \
-  int         Q        = p7O_NQB(om->M);        \
-  uint8x16_t *rsc;                              \
-                                                \
-  int w = width;                                \
-                                                \
-  dsq++;                                        \
-                                                \
-  reset()                                       \
-                                                \
-  for (i = 0; i < L && i < Q - q - w; i++)      \
-    {                                           \
-      rsc = om->sbv[dsq[i]] + i + q;            \
-      step()                                    \
-    }                                           \
-                                                \
-  i = Q - q - w;                                \
-  convert(step, LENGTH_CHECK, done1)            \
-done1:                                          \
-                                                \
- for (i2 = Q - q; i2 < L - Q; i2 += Q)          \
-   {                                            \
-     for (i = 0; i < Q - w; i++)                \
-       {                                        \
-         rsc = om->sbv[dsq[i2 + i]] + i;        \
-         step()                                 \
-       }                                        \
-                                                \
-     i += i2;                                   \
-     convert(step, NO_CHECK, )                  \
-   }                                            \
-                                                \
- for (i = 0; i2 + i < L && i < Q - w; i++)      \
-   {                                            \
-     rsc = om->sbv[dsq[i2 + i]] + i;            \
-     step()                                     \
-   }                                            \
-                                                \
- i+=i2;                                         \
- convert(step, LENGTH_CHECK, done2)             \
-done2:                                          \
-                                                \
+#define CALC(reset, step, convert, width)             \
+  int i;                                              \
+  int i2;                                             \
+  int Q        = p7O_NQB(om->M);                      \
+  uint8x16_t *rsc;                                    \
+                                                      \
+  int w = width;                                      \
+                                                      \
+  dsq++;                                              \
+                                                      \
+  reset()                                             \
+                                                      \
+  for (i = 0; i < L && i < Q - q - w; i++)            \
+    {                                                 \
+      rsc = om->sbv[dsq[i]] + i + q;                  \
+      step()                                          \
+    }                                                 \
+                                                      \
+  i = Q - q - w;                                      \
+  convert(step, LENGTH_CHECK, done1)                  \
+done1:                                                \
+                                                      \
+ for (i2 = Q - q; i2 < L - Q; i2 += Q)                \
+   {                                                  \
+     for (i = 0; i < Q - w; i++)                      \
+       {                                              \
+         rsc = om->sbv[dsq[i2 + i]] + i;              \
+         step()                                       \
+       }                                              \
+                                                      \
+     i += i2;                                         \
+     convert(step, NO_CHECK, )                        \
+   }                                                  \
+                                                      \
+ for (i = 0; i2 + i < L && i < Q - w; i++)            \
+   {                                                  \
+     rsc = om->sbv[dsq[i2 + i]] + i;                  \
+     step()                                           \
+   }                                                  \
+                                                      \
+ i+=i2;                                               \
+ convert(step, LENGTH_CHECK, done2)                   \
+done2:                                                \
+                                                      \
  return xEv;
 
 
-int8x16_t
-calc_band_1(const ESL_DSQ *dsq, int L, const P7_OPROFILE *om, int q, register int8x16_t beginv, register int8x16_t xEv)
-{
-  CALC(RESET_1, STEP_BANDS_1, CONVERT_1, 1)
-}
+ int8x16_t
+ calc_band_1(const ESL_DSQ *dsq, int L, const P7_OPROFILE *om, int q, int8x16_t beginv, register int8x16_t xEv)
+ {
+   CALC(RESET_1, STEP_BANDS_1, CONVERT_1, 1)
+ }
 
-int8x16_t
-calc_band_2(const ESL_DSQ *dsq, int L, const P7_OPROFILE *om, int q, register int8x16_t beginv, register int8x16_t xEv)
-{
-  CALC(RESET_2, STEP_BANDS_2, CONVERT_2, 2)
-}
+ int8x16_t
+ calc_band_2(const ESL_DSQ *dsq, int L, const P7_OPROFILE *om, int q, int8x16_t beginv, register int8x16_t xEv)
+ {
+   CALC(RESET_2, STEP_BANDS_2, CONVERT_2, 2)
+ }
 
-int8x16_t
-calc_band_3(const ESL_DSQ *dsq, int L, const P7_OPROFILE *om, int q, register int8x16_t beginv, register int8x16_t xEv)
-{
-  CALC(RESET_3, STEP_BANDS_3, CONVERT_3, 3)
-}
+ int8x16_t
+ calc_band_3(const ESL_DSQ *dsq, int L, const P7_OPROFILE *om, int q, int8x16_t beginv, register int8x16_t xEv)
+ {
+   CALC(RESET_3, STEP_BANDS_3, CONVERT_3, 3)
+ }
 
-int8x16_t
-calc_band_4(const ESL_DSQ *dsq, int L, const P7_OPROFILE *om, int q, register int8x16_t beginv, register int8x16_t xEv)
-{
-  CALC(RESET_4, STEP_BANDS_4, CONVERT_4, 4)
-}
+ int8x16_t
+ calc_band_4(const ESL_DSQ *dsq, int L, const P7_OPROFILE *om, int q, int8x16_t beginv, register int8x16_t xEv)
+ {
+   CALC(RESET_4, STEP_BANDS_4, CONVERT_4, 4)
+ }
 
-int8x16_t
-calc_band_5(const ESL_DSQ *dsq, int L, const P7_OPROFILE *om, int q, register int8x16_t beginv, register int8x16_t xEv)
-{
-  CALC(RESET_5, STEP_BANDS_5, CONVERT_5, 5)
-}
+ int8x16_t
+ calc_band_5(const ESL_DSQ *dsq, int L, const P7_OPROFILE *om, int q, int8x16_t beginv, register int8x16_t xEv)
+ {
+   CALC(RESET_5, STEP_BANDS_5, CONVERT_5, 5)
+ }
 
-int8x16_t
-calc_band_6(const ESL_DSQ *dsq, int L, const P7_OPROFILE *om, int q, register int8x16_t beginv, register int8x16_t xEv)
-{
-  CALC(RESET_6, STEP_BANDS_6, CONVERT_6, 6)
-}
+ int8x16_t
+ calc_band_6(const ESL_DSQ *dsq, int L, const P7_OPROFILE *om, int q, int8x16_t beginv, register int8x16_t xEv)
+ {
+   CALC(RESET_6, STEP_BANDS_6, CONVERT_6, 6)
+ }
 
-#if MAX_BANDS > 6 /* Only include needed functions to limit object file size */
-int8x16_t
-calc_band_7(const ESL_DSQ *dsq, int L, const P7_OPROFILE *om, int q, register int8x16_t beginv, register int8x16_t xEv)
-{
-  CALC(RESET_7, STEP_BANDS_7, CONVERT_7, 7)
-}
+ int8x16_t
+ calc_band_7(const ESL_DSQ *dsq, int L, const P7_OPROFILE *om, int q, int8x16_t beginv, register int8x16_t xEv)
+ {
+   CALC(RESET_7, STEP_BANDS_7, CONVERT_7, 7)
+ }
 
-int8x16_t
-calc_band_8(const ESL_DSQ *dsq, int L, const P7_OPROFILE *om, int q, register int8x16_t beginv, register int8x16_t xEv)
-{
-  CALC(RESET_8, STEP_BANDS_8, CONVERT_8, 8)
-}
+ int8x16_t
+ calc_band_8(const ESL_DSQ *dsq, int L, const P7_OPROFILE *om, int q, int8x16_t beginv, register int8x16_t xEv)
+ {
+   CALC(RESET_8, STEP_BANDS_8, CONVERT_8, 8)
+ }
 
-int8x16_t
-calc_band_9(const ESL_DSQ *dsq, int L, const P7_OPROFILE *om, int q, register int8x16_t beginv, register int8x16_t xEv)
-{
-  CALC(RESET_9, STEP_BANDS_9, CONVERT_9, 9)
-}
+ int8x16_t
+ calc_band_9(const ESL_DSQ *dsq, int L, const P7_OPROFILE *om, int q, int8x16_t beginv, register int8x16_t xEv)
+ {
+   CALC(RESET_9, STEP_BANDS_9, CONVERT_9, 9)
+ }
 
-int8x16_t
-calc_band_10(const ESL_DSQ *dsq, int L, const P7_OPROFILE *om, int q, register int8x16_t beginv, register int8x16_t xEv)
-{
-  CALC(RESET_10, STEP_BANDS_10, CONVERT_10, 10)
-}
+ int8x16_t
+ calc_band_10(const ESL_DSQ *dsq, int L, const P7_OPROFILE *om, int q, int8x16_t beginv, register int8x16_t xEv)
+ {
+   CALC(RESET_10, STEP_BANDS_10, CONVERT_10, 10)
+ }
 
-int8x16_t
-calc_band_11(const ESL_DSQ *dsq, int L, const P7_OPROFILE *om, int q, register int8x16_t beginv, register int8x16_t xEv)
-{
-  CALC(RESET_11, STEP_BANDS_11, CONVERT_11, 11)
-}
+ int8x16_t
+ calc_band_11(const ESL_DSQ *dsq, int L, const P7_OPROFILE *om, int q, int8x16_t beginv, register int8x16_t xEv)
+ {
+   CALC(RESET_11, STEP_BANDS_11, CONVERT_11, 11)
+ }
 
-int8x16_t
-calc_band_12(const ESL_DSQ *dsq, int L, const P7_OPROFILE *om, int q, registersint8x16_t beginv, register int8x16_t xEv)
-{
-  CALC(RESET_12, STEP_BANDS_12, CONVERT_12, 12)
-}
+ int8x16_t
+ calc_band_12(const ESL_DSQ *dsq, int L, const P7_OPROFILE *om, int q, int8x16_t beginv, register int8x16_t xEv)
+ {
+   CALC(RESET_12, STEP_BANDS_12, CONVERT_12, 12)
+ }
 
-int8x16_t
-calc_band_13(const ESL_DSQ *dsq, int L, const P7_OPROFILE *om, int q, register int8x16_t beginv, register int8x16_t xEv)
-{
-  CALC(RESET_13, STEP_BANDS_13, CONVERT_13, 13)
-}
+ int8x16_t
+ calc_band_13(const ESL_DSQ *dsq, int L, const P7_OPROFILE *om, int q, int8x16_t beginv, register int8x16_t xEv)
+ {
+   CALC(RESET_13, STEP_BANDS_13, CONVERT_13, 13)
+ }
 
-int8x16_t
-calc_band_14(const ESL_DSQ *dsq, int L, const P7_OPROFILE *om, int q, register int8x16_t beginv, register int8x16_t xEv)
-{
-  CALC(RESET_14, STEP_BANDS_14, CONVERT_14, 14)
-}
-#endif /* MAX_BANDS > 6 */
-#if MAX_BANDS > 14
-int8x16_t
-calc_band_15(const ESL_DSQ *dsq, int L, const P7_OPROFILE *om, int q, register int8x16_t beginv, register int8x16_t xEv)
-{
-  CALC(RESET_15, STEP_BANDS_15, CONVERT_15, 15)
-}
+ int8x16_t
+ calc_band_14(const ESL_DSQ *dsq, int L, const P7_OPROFILE *om, int q, int8x16_t beginv, register int8x16_t xEv)
+ {
+   CALC(RESET_14, STEP_BANDS_14, CONVERT_14, 14)
+ }
 
-int8x16_t
-calc_band_16(const ESL_DSQ *dsq, int L, const P7_OPROFILE *om, int q, register int8x16_t beginv, register int8x16_t xEv)
-{
-  CALC(RESET_16, STEP_BANDS_16, CONVERT_16, 16)
-}
+ int8x16_t
+ calc_band_15(const ESL_DSQ *dsq, int L, const P7_OPROFILE *om, int q, int8x16_t beginv, register int8x16_t xEv)
+ {
+   CALC(RESET_15, STEP_BANDS_15, CONVERT_15, 15)
+ }
 
-int8x16_t
-calc_band_17(const ESL_DSQ *dsq, int L, const P7_OPROFILE *om, int q, register int8x16_t beginv, register int8x16_t xEv)
-{
-  CALC(RESET_17, STEP_BANDS_17, CONVERT_17, 17)
-}
-
-int8x16_t
-calc_band_18(const ESL_DSQ *dsq, int L, const P7_OPROFILE *om, int q, register int8x16_t beginv, register int8x16_t xEv)
-{
-  CALC(RESET_18, STEP_BANDS_18, CONVERT_18, 18)
-}
-#endif /* MAX_BANDS > 14 */
-
+ int8x16_t
+ calc_band_16(const ESL_DSQ *dsq, int L, const P7_OPROFILE *om, int q, int8x16_t beginv, register int8x16_t xEv)
+ {
+   CALC(RESET_16, STEP_BANDS_16, CONVERT_16, 16)
+ }
 
 /*****************************************************************
  * 2. p7_SSVFilter() implementation
@@ -830,8 +802,8 @@ calc_band_18(const ESL_DSQ *dsq, int L, const P7_OPROFILE *om, int q, register i
 uint8_t
 get_xE(const ESL_DSQ *dsq, int L, const P7_OPROFILE *om)
 {
-  register int8x16_t xEv;		           /* E state: keeps max for Mk->E as we go                     */
-  register int8x16_t beginv;            /* begin scores                                              */
+  register int8x16_t xEv;		  /* E state: keeps max for Mk->E as we go                     */
+  register int8x16_t beginv;  /* begin scores                                              */
 
   int q;			   /* counter over vectors 0..nq-1                              */
   int Q        = p7O_NQB(om->M);   /* segment length: # of vectors                              */
@@ -842,14 +814,53 @@ get_xE(const ESL_DSQ *dsq, int L, const P7_OPROFILE *om)
   int i;                           /* counter for bands                                         */
 
   /* function pointers for the various number of vectors to use */
-  int8x16_t (*fs[MAX_BANDS + 1]) (const ESL_DSQ *, int, const P7_OPROFILE *, int, register int8x16_t, register int8x16_t)
-    = {NULL
-       , calc_band_1,  calc_band_2,  calc_band_3,  calc_band_4,  calc_band_5,  calc_band_6
+  int8x16_t (*fs[MAX_BANDS + 1]) (const ESL_DSQ *, int, const P7_OPROFILE *, int, int8x16_t, register int8x16_t) = {
+      NULL,
+      calc_band_1,
+#if MAX_BANDS > 1
+      calc_band_2,
+#endif
+#if MAX_BANDS > 2
+      calc_band_3,
+#endif
+#if MAX_BANDS > 3
+      calc_band_4,
+#endif
+#if MAX_BANDS > 4
+      calc_band_5,
+#endif
+#if MAX_BANDS > 5
+      calc_band_6,
+#endif
 #if MAX_BANDS > 6
-       , calc_band_7,  calc_band_8,  calc_band_9,  calc_band_10, calc_band_11, calc_band_12, calc_band_13, calc_band_14
+      calc_band_7,
+#endif
+#if MAX_BANDS > 7
+      calc_band_8,
+#endif
+#if MAX_BANDS > 8
+      calc_band_9,
+#endif
+#if MAX_BANDS > 9
+      calc_band_10,
+#endif
+#if MAX_BANDS > 10
+      calc_band_11,
+#endif
+#if MAX_BANDS > 11
+      calc_band_12,
+#endif
+#if MAX_BANDS > 12
+      calc_band_13,
+#endif
+#if MAX_BANDS > 13
+      calc_band_14,
 #endif
 #if MAX_BANDS > 14
-       , calc_band_15, calc_band_16, calc_band_17, calc_band_18
+      calc_band_15,
+#endif
+#if MAX_BANDS > 15
+      calc_band_16
 #endif
   };
 
@@ -861,13 +872,11 @@ get_xE(const ESL_DSQ *dsq, int L, const P7_OPROFILE *om)
 
   for (i = 0; i < bands; i++) {
     q = (Q * (i + 1)) / bands;
-
     xEv = fs[q-last_q](dsq, L, om, last_q, beginv, xEv);
-
     last_q = q;
   }
 
-  return esl_neon_hmax_u8((esl_neon_128i_t) xEv);
+  return esl_neon_hmax_s8((esl_neon_128i_t) xEv);
 }
 
 
@@ -915,7 +924,7 @@ p7_SSVFilter(const ESL_DSQ *dsq, int L, const P7_OPROFILE *om, float *ret_sc)
   if (xJ > om->base_b)  return eslENORESULT; /* The J state could have been used, so doubt about score */
 
   /* finally C->T, and add our missing precision on the NN,CC,JJ back */
-  *ret_sc = ((float) (xJ - om->tjb_b) - (float) om->base_b);
+  *ret_sc = (((float) xJ) - ((float) om->tjb_b) - ((float) om->base_b));
   *ret_sc /= om->scale_b;
   *ret_sc -= 3.0; /* that's ~ L \log \frac{L}{L+3}, for our NN,CC,JJ */
 
