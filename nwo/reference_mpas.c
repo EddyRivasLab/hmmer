@@ -356,6 +356,7 @@ anchorset_from_path(const H4_PATH *pi, const H4_REFMX *rxd, H4_ANCHORSET *anch)
  * 4. Example
  *****************************************************************/
 #ifdef h4REFERENCE_MPAS_EXAMPLE
+#include "h4_config.h"
 
 #include "easel.h"
 #include "esl_alphabet.h"
@@ -438,7 +439,7 @@ main(int argc, char **argv)
   /* Set target length model */
   h4_mode_SetLength(mo, sq->n);
 
-  /* Allocate DP matrices and tracebacks */
+  /* Allocate DP matrices */
   rxf = h4_refmx_Create(hmm->M, sq->n);
   rxd = h4_refmx_Create(hmm->M, sq->n);
   afu = h4_refmx_Create(hmm->M, sq->n);

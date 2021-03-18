@@ -1457,7 +1457,7 @@ utest_ensemble(FILE *diagfp, ESL_RANDOMNESS *rng, const ESL_ALPHABET *abc, int M
 #endif // h4REFERENCE_ASC_TESTDRIVE
 
 /*****************************************************************
- * x. Test driver
+ * 5. Test driver
  *****************************************************************/
 #ifdef h4REFERENCE_ASC_TESTDRIVE
 
@@ -1505,9 +1505,8 @@ main(int argc, char **argv)
 #endif // h4REFERENCE_ASC_TESTDRIVE
 
 /***************************************************************** 
- * x. Example
+ * 6. Example
  *****************************************************************/
-
 #ifdef h4REFERENCE_ASC_EXAMPLE
 
 #include "h4_config.h"
@@ -1534,7 +1533,7 @@ static ESL_OPTIONS options[] = {
   {  0, 0, 0, 0, 0, 0, 0, 0, 0, 0 },
 };
 static char usage[]  = "[-options] <hmmfile> <seqfile> <ndom> [<i0> <k0>]...";
-static char banner[] = "example of ASC Forward reference implementation";
+static char banner[] = "example of ASC reference implementation";
 
 int
 main(int argc, char **argv)
