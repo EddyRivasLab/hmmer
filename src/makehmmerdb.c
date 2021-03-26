@@ -650,6 +650,7 @@ main(int argc, char **argv)
       if (block->list[i].desc == NULL) meta->seq_data[numseqs].desc[0] = '\0';
           else  strcpy(meta->seq_data[numseqs].desc, block->list[i].desc );
 
+      meta->seq_data[numseqs].length = 0;
       for (j=1; j<=block->list[i].n; j++) {
         c = abc->sym[block->list[i].dsq[j]];
         if ( meta->alph_type == fm_DNA) {

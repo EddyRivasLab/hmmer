@@ -76,14 +76,8 @@ m4_include([easel/m4/esl_pic_flags.m4])
 # 2. AC_INIT
 ################################################################
 
-AC_INIT(HMMER, 3.3.1, sean@eddylab.org, hmmer)
+AC_INIT(HMMER, 3.3.2, sean@eddylab.org, hmmer)
 AC_MSG_NOTICE([Configuring HMMER3 for your system.])
-
-# remember if the user is overriding CFLAGS
-esl_cflags_env_set=no
-if test x"$CFLAGS" != x; then 
-  esl_cflags_env_set=yes
-fi
 
 ################################################################
 # 3. Info on the package
@@ -108,7 +102,7 @@ fi
 # to use HMMER as a library inside other packages, with no name clashes.
 ################################################################
 
-HMMER_DATE="Jul 2020"
+HMMER_DATE="Nov 2020"
 HMMER_COPYRIGHT="Copyright (C) 2020 Howard Hughes Medical Institute."
 HMMER_LICENSE="Freely distributed under the BSD open source license."
 HMMER_VERSION=$PACKAGE_VERSION
@@ -117,10 +111,10 @@ HMMER_URL="http://hmmer.org/"
 HMMER_ESLDIR="easel"
 HMMER_SADIR="libdivsufsort"
 
-EASEL_DATE="Jul 2020"
+EASEL_DATE="Nov 2020"
 EASEL_COPYRIGHT="Copyright (C) 2020 Howard Hughes Medical Institute."
 EASEL_LICENSE="Freely distributed under the BSD open source license."
-EASEL_VERSION="0.47"
+EASEL_VERSION="0.48"
 EASEL_URL="http://bioeasel.org/"
 
 AC_SUBST(HMMER_DATE)
@@ -250,21 +244,15 @@ AC_PROG_LN_S
 #  --enable-gcov, --enable-gprof, and --enable-debugging are mutually exclusive.
 #
 if test "$enable_gcov" = "yes"; then
-   if test "$esl_cflags_env_set" = "yes"; then 
-     AC_MSG_ERROR([--enable-gcov overrides CFLAGS, so don't set CFLAGS])
-   fi
-   CFLAGS="-g -Wall -fprofile-arcs -ftest-coverage"
+   CFLAGS="${CLFAGS} -g -Wall -fprofile-arcs -ftest-coverage"
 elif test "$enable_gprof" = "yes"; then
-   if test "$esl_cflags_env_set" = "yes"; then 
-     AC_MSG_ERROR([--enable-gprof overrides CFLAGS, so don't set CFLAGS])
-   fi
-   CFLAGS="-O -g -pg"
+   CFLAGS="${CFLAGS} -O -g -pg"
 elif test "$enable_debugging" != "no"; then
    if test "$GCC" = "yes"; then
-      CFLAGS="-g -Wall"
+      CFLAGS="${CFLAGS} -g -Wall"
    fi
-elif test "$esl_cflags_env_set" != "yes"; then
-   CFLAGS="-O3"
+else
+   CFLAGS="${CFLAGS} -O3"
 fi
 
 

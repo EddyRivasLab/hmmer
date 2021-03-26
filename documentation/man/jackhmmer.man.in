@@ -492,7 +492,7 @@ al, J. Mol. Biol. 235:1067, 1994].
 .TP 
 .B \-\-wblosum
 Use the same clustering scheme that was used to weight data in
-calculating BLOSUM subsitution matrices [Henikoff and Henikoff,
+calculating BLOSUM substitution matrices [Henikoff and Henikoff,
 Proc. Natl. Acad. Sci 89:10915, 1992]. Sequences are single-linkage
 clustered at an identity threshold (default 0.62; see
 .BR \-\-wid )

@@ -1,10 +1,10 @@
 Brief installation instructions 
-HMMER 3.3.1 (Jul 2020)
+HMMER 3.3.2 (Nov 2020)
 
-Starting from a source distribution, hmmer-3.3.1.tar.gz:
-   uncompress hmmer-3.3.1.tar.gz  
-   tar xf hmmer-3.3.1.tar
-   cd hmmer-3.3.1
+Starting from a source distribution, hmmer-3.3.2.tar.gz:
+   uncompress hmmer-3.3.2.tar.gz  
+   tar xf hmmer-3.3.2.tar
+   cd hmmer-3.3.2
    ./configure
    make
    make check                        # optional: automated tests
