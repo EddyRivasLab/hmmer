@@ -9,6 +9,7 @@
 #include "p7_config.h"
 
 #include "esl_alphabet.h"
+#include "esl_neon.h"
 #include "esl_random.h"
 
 #include <arm_neon.h>   /* NEON */
@@ -23,6 +24,20 @@
 
 #define p7O_EXTRA_SB 17    /* see ssvfilter.c for explanation */
 
+/* Utility NEON function - remove when merged upstream in easel
+ */
+static inline float
+esl_neon_hmax_f32(esl_neon_128f_t a)
+{
+  #ifdef eslHAVE_NEON_AARCH64
+    return vmaxvq_f32(a.f32x4);
+  #else
+    float32x2_t tmp;
+    tmp = vpmax_f32(vget_low_f32(a.f32x4), vget_high_f32(a.f32x4));
+    tmp = vpmax_f32(tmp, tmp);
+    return vget_lane_f32(tmp, 1);
+  #endif
+}
 
 /*****************************************************************
  * 1. P7_OPROFILE: an optimized score profile
