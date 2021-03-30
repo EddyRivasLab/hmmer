@@ -821,7 +821,9 @@ typedef struct p7_hmm_window_list_s {
 /*****************************************************************
  * 14. Choice of vector implementation.
  *****************************************************************/
-#if   defined (eslENABLE_SSE)
+#if   defined (eslENABLE_NEON)
+#include "impl_neon/impl_neon.h"
+#elif defined (eslENABLE_SSE)
 #include "impl_sse/impl_sse.h"
 #elif defined (eslENABLE_VMX)
 #include "impl_vmx/impl_vmx.h"
