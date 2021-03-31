@@ -50,8 +50,8 @@
  *            The model must be in a local alignment mode; other modes
  *            cannot provide the necessary guarantee of no underflow.
  *
- *            This is a striped SIMD Viterbi implementation using Intel
- *            SSE/SSE2 integer intrinsics \citep{Farrar07}, in reduced
+ *            This is a striped SIMD Viterbi implementation using AMD NEON
+ *            integer intrinsics \citep{Farrar07}, in reduced
  *            precision (signed words, 16 bits).
  *
  * Args:      dsq     - digital target sequence, 1..L
@@ -262,8 +262,8 @@ p7_ViterbiFilter(const ESL_DSQ *dsq, int L, const P7_OPROFILE *om, P7_OMX *ox, f
  *            The model must be in a local alignment mode; other modes
  *            cannot provide the necessary guarantee of no underflow.
  *
- *            This is a striped SIMD Viterbi implementation using Intel
- *            SSE/SSE2 integer intrinsics \citep{Farrar07}, in reduced
+ *            This is a striped SIMD Viterbi implementation using AMD NEON
+ *            integer intrinsics \citep{Farrar07}, in reduced
  *            precision (signed words, 16 bits).
  *
  * Args:      dsq     - digital target sequence, 1..L
@@ -495,10 +495,7 @@ p7_ViterbiFilter_longtarget(const ESL_DSQ *dsq, int L, const P7_OPROFILE *om, P7
 /* -c, -x are used for debugging, testing; see msvfilter.c for explanation */
 
 /*
-   gcc -o vitfilter_benchmark -std=gnu99 -g -Wall -msse2 -I.. -L.. -I../../easel -L../../easel -Dp7VITFILTER_BENCHMARK vitfilter.c -lhmmer -leasel -lm
-   icc -o vitfilter_benchmark -O3 -static -I.. -L.. -I../../easel -L../../easel -Dp7VITFILTER_BENCHMARK vitfilter.c -lhmmer -leasel -lm
-
-   ./benchmark-vitfilter <hmmfile>          runs benchmark
+  ./benchmark-vitfilter <hmmfile>          runs benchmark
    ./benchmark-vitfilter -N100 -c <hmmfile> compare scores to generic impl
    ./benchmark-vitfilter -N100 -x <hmmfile> compare scores to exact emulation
  */
@@ -690,10 +687,6 @@ utest_viterbi_filter(ESL_RANDOMNESS *r, ESL_ALPHABET *abc, P7_BG *bg, int M, int
  * 4. Test driver
  *****************************************************************/
 #ifdef p7VITFILTER_TESTDRIVE
-/*
-   gcc -g -Wall -msse2 -std=gnu99 -I.. -L.. -I../../easel -L../../easel -o vitfilter_utest -Dp7VITFILTER_TESTDRIVE vitfilter.c -lhmmer -leasel -lm
-   ./vitfilter_utest
- */
 #include "p7_config.h"
 
 #include "easel.h"
@@ -716,7 +709,7 @@ static ESL_OPTIONS options[] = {
   {  0, 0, 0, 0, 0, 0, 0, 0, 0, 0 },
 };
 static char usage[]  = "[-options]";
-static char banner[] = "test driver for the SSE implementation";
+static char banner[] = "test driver for the NEON implementation";
 
 int
 main(int argc, char **argv)
@@ -768,8 +761,6 @@ main(int argc, char **argv)
 #ifdef p7VITFILTER_EXAMPLE
 /* A minimal example.
    Also useful for debugging on small HMMs and sequences.
-
-   gcc -g -Wall -msse2 -std=gnu99 -I.. -L.. -I../../easel -L../../easel -o vitfilter_example -Dp7VITFILTER_EXAMPLE vitfilter.c -lhmmer -leasel -lm
    ./vitfilter_example <hmmfile> <seqfile>
  */
 #include "p7_config.h"

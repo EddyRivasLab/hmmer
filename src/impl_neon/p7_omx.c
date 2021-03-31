@@ -17,7 +17,7 @@
 #include "easel.h"
 #include "esl_alphabet.h"
 #include "esl_vectorops.h"
-#include "esl_sse.h"
+#include "esl_neon.h"
 
 #include "hmmer.h"
 #include "impl_neon.h"

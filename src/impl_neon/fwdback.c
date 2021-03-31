@@ -34,7 +34,7 @@
 #include <stdio.h>
 #include <math.h>
 
-#include <arm_neon.h>		/* SSE  */
+#include <arm_neon.h>		/* NEON  */
 
 #include "easel.h"
 #include "esl_neon.h"
@@ -601,7 +601,6 @@ backward_engine(int do_full, const ESL_DSQ *dsq, int L, const P7_OPROFILE *om, c
 	}
 
       /* phase 2: now that we have accumulated the B->Mk transitions in xBv, we can do the specials */
-      /* this incantation is a horiz sum of xBv elements: (_mm_hadd_ps() would require SSE3) */
       esl_neon_hsum_float((esl_neon_128f_t) xBv, &xB);
       xBv = vmovq_n_f32(xB);
 
@@ -742,7 +741,7 @@ backward_engine(int do_full, const ESL_DSQ *dsq, int L, const P7_OPROFILE *om, c
    icc  -O3 -static -o fwdback_benchmark -I.. -L.. -I../../easel -L../../easel -Dp7FWDBACK_BENCHMARK fwdback.c -lhmmer -leasel -lm
 
    ./fwdback_benchmark <hmmfile>           runs benchmark on both Forward and Backward parser
-   ./fwdback_benchmark -c -N100 <hmmfile>  compare scores of SSE to generic impl
+   ./fwdback_benchmark -c -N100 <hmmfile>  compare scores of NEON to generic impl
    ./fwdback_benchmark -x -N100 <hmmfile>  test that scores match trusted implementation.
  */
 #include "p7_config.h"
@@ -951,7 +950,6 @@ utest_fwdback(ESL_RANDOMNESS *r, ESL_ALPHABET *abc, P7_BG *bg, int M, int L, int
  *****************************************************************/
 #ifdef p7FWDBACK_TESTDRIVE
 /*
-   gcc -g -Wall -msse2 -std=gnu99 -o fwdback_utest -I.. -L.. -I../../easel -L../../easel -Dp7FWDBACK_TESTDRIVE fwdback.c -lhmmer -leasel -lm
    ./fwdback_utest
  */
 #include "p7_config.h"
@@ -974,7 +972,7 @@ static ESL_OPTIONS options[] = {
   {  0, 0, 0, 0, 0, 0, 0, 0, 0, 0 },
 };
 static char usage[]  = "[-options]";
-static char banner[] = "test driver for SSE Forward, Backward implementations";
+static char banner[] = "test driver for NEON Forward, Backward implementations";
 
 int
 main(int argc, char **argv)
@@ -1026,7 +1024,6 @@ main(int argc, char **argv)
  *
  * Compares to GForward().
  *
-   gcc -g -Wall -msse2 -std=gnu99 -o fwdback_example -I.. -L.. -I../../easel -L../../easel -Dp7FWDBACK_EXAMPLE fwdback.c -lhmmer -leasel -lm
    ./fwdback_example <hmmfile> <seqfile>
  */
 #include "p7_config.h"
@@ -1055,7 +1052,7 @@ static ESL_OPTIONS options[] = {
   {  0, 0, 0, 0, 0, 0, 0, 0, 0, 0 },
 };
 static char usage[]  = "[-options] <hmmfile> <seqfile>";
-static char banner[] = "example of Forward/Backward (SSE versions)";
+static char banner[] = "example of Forward/Backward (NEON versions)";
 
 int
 main(int argc, char **argv)

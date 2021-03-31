@@ -42,23 +42,23 @@
 #include "hmmer.h"
 #include "impl_neon.h"
 
-static uint32_t  v3f_fmagic = 0xb3e6e6f3; /* 3/f binary MSV file, SSE:     "3ffs" = 0x 33 66 66 73  + 0x80808080 */
-static uint32_t  v3f_pmagic = 0xb3e6f0f3; /* 3/f binary profile file, SSE: "3fps" = 0x 33 66 70 73  + 0x80808080 */
+static uint32_t  v3f_fmagic = 0xb3e6e6f3; /* 3/f binary MSV file, NEON:     "3ffs" = 0x 33 66 66 73  + 0x80808080 */
+static uint32_t  v3f_pmagic = 0xb3e6f0f3; /* 3/f binary profile file, NEON: "3fps" = 0x 33 66 70 73  + 0x80808080 */
 
-static uint32_t  v3e_fmagic = 0xb3e5e6f3; /* 3/e binary MSV file, SSE:     "3efs" = 0x 33 65 66 73  + 0x80808080 */
-static uint32_t  v3e_pmagic = 0xb3e5f0f3; /* 3/e binary profile file, SSE: "3eps" = 0x 33 65 70 73  + 0x80808080 */
+static uint32_t  v3e_fmagic = 0xb3e5e6f3; /* 3/e binary MSV file, NEON:     "3efs" = 0x 33 65 66 73  + 0x80808080 */
+static uint32_t  v3e_pmagic = 0xb3e5f0f3; /* 3/e binary profile file, NEON: "3eps" = 0x 33 65 70 73  + 0x80808080 */
 
-static uint32_t  v3d_fmagic = 0xb3e4e6f3; /* 3/d binary MSV file, SSE:     "3dfs" = 0x 33 64 66 73  + 0x80808080 */
-static uint32_t  v3d_pmagic = 0xb3e4f0f3; /* 3/d binary profile file, SSE: "3dps" = 0x 33 64 70 73  + 0x80808080 */
+static uint32_t  v3d_fmagic = 0xb3e4e6f3; /* 3/d binary MSV file, NEON:     "3dfs" = 0x 33 64 66 73  + 0x80808080 */
+static uint32_t  v3d_pmagic = 0xb3e4f0f3; /* 3/d binary profile file, NEON: "3dps" = 0x 33 64 70 73  + 0x80808080 */
 
-static uint32_t  v3c_fmagic = 0xb3e3e6f3; /* 3/c binary MSV file, SSE:     "3cfs" = 0x 33 63 66 73  + 0x80808080 */
-static uint32_t  v3c_pmagic = 0xb3e3f0f3; /* 3/c binary profile file, SSE: "3cps" = 0x 33 63 70 73  + 0x80808080 */
+static uint32_t  v3c_fmagic = 0xb3e3e6f3; /* 3/c binary MSV file, NEON:     "3cfs" = 0x 33 63 66 73  + 0x80808080 */
+static uint32_t  v3c_pmagic = 0xb3e3f0f3; /* 3/c binary profile file, NEON: "3cps" = 0x 33 63 70 73  + 0x80808080 */
 
-static uint32_t  v3b_fmagic = 0xb3e2e6f3; /* 3/b binary MSV file, SSE:     "3bfs" = 0x 33 62 66 73  + 0x80808080 */
-static uint32_t  v3b_pmagic = 0xb3e2f0f3; /* 3/b binary profile file, SSE: "3bps" = 0x 33 62 70 73  + 0x80808080 */
+static uint32_t  v3b_fmagic = 0xb3e2e6f3; /* 3/b binary MSV file, NEON:     "3bfs" = 0x 33 62 66 73  + 0x80808080 */
+static uint32_t  v3b_pmagic = 0xb3e2f0f3; /* 3/b binary profile file, NEON: "3bps" = 0x 33 62 70 73  + 0x80808080 */
 
-static uint32_t  v3a_fmagic = 0xe8b3e6f3; /* 3/a binary MSV file, SSE:     "h3fs" = 0x 68 33 66 73  + 0x80808080 */
-static uint32_t  v3a_pmagic = 0xe8b3f0f3; /* 3/a binary profile file, SSE: "h3ps" = 0x 68 33 70 73  + 0x80808080 */
+static uint32_t  v3a_fmagic = 0xe8b3e6f3; /* 3/a binary MSV file, NEON:     "h3fs" = 0x 68 33 66 73  + 0x80808080 */
+static uint32_t  v3a_pmagic = 0xe8b3f0f3; /* 3/a binary profile file, NEON: "h3ps" = 0x 68 33 70 73  + 0x80808080 */
 
 
 /*****************************************************************
@@ -867,7 +867,6 @@ utest_ReadWrite(P7_HMM *hmm, P7_OPROFILE *om)
  *****************************************************************/
 #ifdef p7IO_TESTDRIVE
 /*
-   gcc -g -Wall -msse2 -std=gnu99 -o io_utest -I.. -L.. -I../../easel -L../../easel -Dp7IO_TESTDRIVE io.c -lhmmer -leasel -lm
    ./io_utest
  */
 #include "p7_config.h"
@@ -888,7 +887,7 @@ static ESL_OPTIONS options[] = {
   {  0, 0, 0, 0, 0, 0, 0, 0, 0, 0 },
 };
 static char usage[]  = "[-options]";
-static char banner[] = "test driver for SSE Forward, Backward implementations";
+static char banner[] = "test driver for NEON Forward, Backward implementations";
 
 int
 main(int argc, char **argv)

@@ -67,7 +67,6 @@ m4_include([easel/m4/ax_gcc_func_attribute.m4])
 m4_include([easel/m4/esl_neon.m4])
 m4_include([easel/m4/esl_sse.m4])
 m4_include([easel/m4/esl_vmx.m4])
-m4_include([easel/m4/esl_neon.m4])
 
 m4_include([easel/m4/ax_prog_cc_mpi.m4])
 m4_include([easel/m4/ax_pthread.m4])

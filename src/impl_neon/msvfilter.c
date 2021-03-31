@@ -103,8 +103,8 @@ p7_MSVFilter(const ESL_DSQ *dsq, int L, const P7_OPROFILE *om, P7_OMX *ox, float
   ox->M   = om->M;
 
   /* Try highly optimized ssv filter first */
-  // status = p7_SSVFilter(dsq, L, om, ret_sc);
-  // if (status != eslENORESULT) return status;
+   status = p7_SSVFilter(dsq, L, om, ret_sc);
+  if (status != eslENORESULT) return status;
 
   /* Initialization. In offset unsigned arithmetic, -infinity is 0, and 0 is om->base.
    */
@@ -448,7 +448,7 @@ p7_SSVFilter_longtarget(const ESL_DSQ *dsq, int L, P7_OPROFILE *om, P7_OMX *ox, 
  * other implementations, for debugging purposes.
  *
  * The -c option compares against p7_GMSV() scores. This allows
- * measuring the error inherent in the SSE implementation's reduced
+ * measuring the error inherent in the NEON implementation's reduced
  * precision (p7_MSVFilter() runs in uint8_t; p7_GMSV() uses floats).
  *
  * The -x option compares against an emulation that should give
@@ -466,9 +466,6 @@ p7_SSVFilter_longtarget(const ESL_DSQ *dsq, int L, P7_OPROFILE *om, P7_OMX *ox, 
  */
 #ifdef p7MSVFILTER_BENCHMARK
 /*
-   gcc -o msvfilter-benchmark -std=gnu99 -g -Wall -msse2 -I.. -L.. -I../../easel -L../../easel -Dp7MSVFILTER_BENCHMARK msvfilter.c -lhmmer -leasel -lm
-   icc -o msvfilter-benchmark -O3 -static -I.. -L.. -I../../easel -L../../easel -Dp7MSVFILTER_BENCHMARK msvfilter.c -lhmmer -leasel -lm
-
    ./benchmark-msvfilter <hmmfile>            runs benchmark
    ./benchmark-msvfilter -N100 -c <hmmfile>   compare scores to generic impl
    ./benchmark-msvfilter -N100 -x <hmmfile>   compare scores to exact emulation
@@ -657,7 +654,6 @@ utest_msv_filter(ESL_RANDOMNESS *r, ESL_ALPHABET *abc, P7_BG *bg, int M, int L, 
  *****************************************************************/
 #ifdef p7MSVFILTER_TESTDRIVE
 /*
-   gcc -g -Wall -msse2 -std=gnu99 -I.. -L.. -I../../easel -L../../easel -o msvfilter_utest -Dp7MSVFILTER_TESTDRIVE msvfilter.c -lhmmer -leasel -lm
    ./msvfilter_utest
  */
 #include "p7_config.h"
@@ -680,7 +676,7 @@ static ESL_OPTIONS options[] = {
   {  0, 0, 0, 0, 0, 0, 0, 0, 0, 0 },
 };
 static char usage[]  = "[-options]";
-static char banner[] = "test driver for the SSE MSVFilter() implementation";
+static char banner[] = "test driver for the NEON MSVFilter() implementation";
 
 int
 main(int argc, char **argv)
@@ -732,7 +728,6 @@ main(int argc, char **argv)
 /* A minimal example.
    Also useful for debugging on small HMMs and sequences.
 
-   gcc -g -Wall -msse2 -std=gnu99 -I.. -L.. -I../../easel -L../../easel -o msvfilter_example -Dp7MSVFILTER_EXAMPLE msvfilter.c -lhmmer -leasel -lm
    ./msvfilter_example <hmmfile> <seqfile>
  */
 #include "p7_config.h"

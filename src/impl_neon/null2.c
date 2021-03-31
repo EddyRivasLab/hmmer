@@ -13,7 +13,7 @@
 #include <stdlib.h>
 #include <string.h>
 
-#include <arm_neon.h>		/* SSE  */
+#include <arm_neon.h>		
 
 #include "easel.h"
 #include "esl_neon.h"
@@ -31,7 +31,7 @@
  * Incept:    SRE, Mon Aug 18 08:32:55 2008 [Janelia]
  *
  * Purpose:   Identical to <p7_GNull2_ByExpectation()> except that
- *            <om>, <pp> are SSE optimized versions of the profile
+ *            <om>, <pp> are NEON optimized versions of the profile
  *            and the residue posterior probability matrix. See
  *            <p7_GNull2_ByExpectation()>  documentation.
  *
@@ -122,7 +122,7 @@ p7_Null2_ByExpectation(const P7_OPROFILE *om, const P7_OMX *pp, float *null2)
  * Incept:    SRE, Mon Aug 18 10:22:49 2008 [Janelia]
  *
  * Purpose:   Identical to <p7_GNull2_ByTrace()> except that
- *            <om>, <wrk> are SSE optimized versions of the profile
+ *            <om>, <wrk> are NEON optimized versions of the profile
  *            and the residue posterior probability matrix. See
  *            <p7_GNull2_ByTrace()>  documentation.
  */
@@ -257,7 +257,7 @@ static ESL_OPTIONS options[] = {
   {  0, 0, 0, 0, 0, 0, 0, 0, 0, 0 },
 };
 static char usage[]  = "[-options] <hmmfile>";
-static char banner[] = "benchmark driver for null2 estimation, SSE version";
+static char banner[] = "benchmark driver for null2 estimation, NEON version";
 
 int
 main(int argc, char **argv)
@@ -436,7 +436,6 @@ utest_null2_expectation(ESL_RANDOMNESS *r, ESL_ALPHABET *abc, P7_BG *bg, int M, 
  *****************************************************************/
 #ifdef p7NULL2_TESTDRIVE
 /*
-   gcc -g -Wall -msse2 -std=gnu99 -o null2_utest -I.. -L.. -I../../easel -L../../easel -Dp7NULL2_TESTDRIVE null2.c -lhmmer -leasel -lm
    ./null2_utest
  */
 #include "p7_config.h"
@@ -460,7 +459,7 @@ static ESL_OPTIONS options[] = {
   {  0, 0, 0, 0, 0, 0, 0, 0, 0, 0 },
 };
 static char usage[]  = "[-options]";
-static char banner[] = "test driver for SSE implementation of null2 model";
+static char banner[] = "test driver for NEON implementation of null2 model";
 
 int
 main(int argc, char **argv)

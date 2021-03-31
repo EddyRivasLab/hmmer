@@ -1,4 +1,4 @@
-/* The SSV filter implementation; SSE version.
+/* The SSV filter implementation; NEON version.
  *
  * Contents:
  *   1. Introduction
@@ -123,6 +123,7 @@
  *      instead of an unsigned addition followed by an unsigned
  *      subtraction.
  *
+ * (This comment from the original implementation, doesn't apply to NEON)
  * It is a challenge that SSE2 does not have a signed byte max
  * operation, yet we need to subtract a signed byte in idea B. First
  * the new code, then the explanation:
@@ -415,20 +416,14 @@
 #include "hmmer.h"
 #include "impl_neon.h"
 
-/* Note that some ifdefs below has to be changed if these values are
-   changed. These values are chosen based on some simple speed
-   tests. Apparently, two registers are generally used for something
-   else, leaving 14 registers on 64 bit versions and 6 registers on 32
-   bit versions. */
-#ifdef __x86_64__ /* 64 bit version */
-#define  MAX_BANDS 14
-#else
-#define  MAX_BANDS 6
-#endif
+/* NEON defines 32 vector registers, so in theory could handle up to 30-width bands before hitting register
+pressure.  Worry about that optimization later */
+#define  MAX_BANDS 18
+
 
 
 #define STEP_SINGLE(sv)                         \
-  sv  = vsubq_s8(sv, vreinterpretq_s8_u8(*rsc)); rsc++;   \
+  sv  = vqsubq_s8(sv, vreinterpretq_s8_u8(*rsc)); rsc++;   \
   xEv = vreinterpretq_s8_u8(vmaxq_u8(vreinterpretq_u8_s8(xEv), vreinterpretq_u8_s8(sv)));
 
 
@@ -510,15 +505,12 @@
   STEP_BANDS_17()                               \
   STEP_SINGLE(sv17)
 
-
-#define CONVERT_STEP(step, length_check, label, sv, pos)            \
-  length_check(label)                                               \
-  rsc = om->sbv[dsq[i]] + pos;                   \
-  step()                                                            \
-  sv = vsetq_lane_s8(0, vextq_s8(sv, sv, 1), 15); \
-  sv = vorrq_s8(sv, beginv);                      \
+#define CONVERT_STEP(step, length_check, label, sv, pos) \
+  length_check(label)                                    \
+  rsc = om->sbv[dsq[i]] + pos;                       \
+  step()                                                 \
+  sv = vextq_s8(beginv, sv, 15);   \
   i++;
-
 
 #define CONVERT_1(step, LENGTH_CHECK, label)            \
   CONVERT_STEP(step, LENGTH_CHECK, label, sv00, Q - 1)
@@ -779,7 +771,7 @@ calc_band_11(const ESL_DSQ *dsq, int L, const P7_OPROFILE *om, int q, register i
 }
 
 int8x16_t
-calc_band_12(const ESL_DSQ *dsq, int L, const P7_OPROFILE *om, int q, registersint8x16_t beginv, register int8x16_t xEv)
+calc_band_12(const ESL_DSQ *dsq, int L, const P7_OPROFILE *om, int q, register int8x16_t beginv, register int8x16_t xEv)
 {
   CALC(RESET_12, STEP_BANDS_12, CONVERT_12, 12)
 }

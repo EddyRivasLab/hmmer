@@ -26,7 +26,7 @@
 
 /* Utility NEON function - remove when merged upstream in easel
  */
-static inline float
+/*static inline float
 esl_neon_hmax_f32(esl_neon_128f_t a)
 {
   #ifdef eslHAVE_NEON_AARCH64
@@ -38,7 +38,7 @@ esl_neon_hmax_f32(esl_neon_128f_t a)
     return vget_lane_f32(tmp, 1);
   #endif
 }
-
+*/
 /*****************************************************************
  * 1. P7_OPROFILE: an optimized score profile
  *****************************************************************/

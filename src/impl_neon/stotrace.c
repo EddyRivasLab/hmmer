@@ -320,7 +320,7 @@ static ESL_OPTIONS options[] = {
   {  0, 0, 0, 0, 0, 0, 0, 0, 0, 0 },
 };
 static char usage[]  = "[-options] <hmmfile>";
-static char banner[] = "benchmark driver for stochastic traceback, SSE version";
+static char banner[] = "benchmark driver for stochastic traceback, NEON version";
 
 int
 main(int argc, char **argv)
@@ -442,7 +442,7 @@ utest_stotrace(ESL_GETOPTS *go, ESL_RANDOMNESS *rng, ESL_ALPHABET *abc, P7_PROFI
       }
       p7_trace_Reuse(tr);
     }
-  if (esl_FCompare(maxsc, vsc, 0.1) != eslOK) esl_fatal("stochastic trace failed to sample the Viterbi path");
+  if (esl_FCompare_old(maxsc, vsc, 0.1) != eslOK) esl_fatal("stochastic trace failed to sample the Viterbi path");
 
   p7_trace_Destroy(tr);
   p7_trace_Destroy(vtr);
@@ -458,8 +458,7 @@ utest_stotrace(ESL_GETOPTS *go, ESL_RANDOMNESS *rng, ESL_ALPHABET *abc, P7_PROFI
  * 5. Test driver
  *****************************************************************/
 #ifdef p7STOTRACE_TESTDRIVE
-/* gcc -std=gnu99 -msse2 -g -Wall -o stotrace_utest -Dp7STOTRACE_TESTDRIVE -I.. -L.. -I../../easel -L../../easel stotrace.c -lhmmer -leasel -lm
- */
+
 #include "easel.h"
 #include "esl_getopts.h"
 #include "esl_randomseq.h"
@@ -531,10 +530,7 @@ main(int argc, char **argv)
  * 6. Example.
  *****************************************************************/
 #ifdef p7STOTRACE_EXAMPLE
-/*
-   gcc -g -Wall -msse2 -std=gnu99 -o stotrace_example -I.. -L.. -I../../easel -L../../easel -Dp7STOTRACE_EXAMPLE stotrace.c -lhmmer -leasel -lm
-   ./example <hmmfile> <seqfile>
- */
+
 
 #include "p7_config.h"
 
@@ -558,7 +554,7 @@ static ESL_OPTIONS options[] = {
   {  0, 0, 0, 0, 0, 0, 0, 0, 0, 0 },
 };
 static char usage[]  = "[-options] <hmmfile> <seqfile>";
-static char banner[] = "example of stochastic backtrace (SSE version)";
+static char banner[] = "example of stochastic backtrace (NEON version)";
 
 int
 main(int argc, char **argv)

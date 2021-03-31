@@ -431,7 +431,7 @@ select_b(const P7_OPROFILE *om, const P7_OMX *ox, int i)
    icc  -O3 -static -o optacc_benchmark -I.. -L.. -I../../easel -L../../easel -Dp7OPTACC_BENCHMARK optacc.c -lhmmer -leasel -lm
 
    ./optacc_benchmark <hmmfile>         runs benchmark on optimal accuracy fill and trace
-   ./optacc_benchmark -c -N1 <hmmfile>  compare scores of SSE version to generic impl
+   ./optacc_benchmark -c -N1 <hmmfile>  compare scores of NEON version to generic impl
    ./optacc_benchmark -x -N1 <hmmfile>  test that scores match trusted implementation.
 
                     RRM_1 (M=72)       Caudal_act (M=136)     SMC_N (M=1151)
@@ -463,7 +463,7 @@ static ESL_OPTIONS options[] = {
   {  0, 0, 0, 0, 0, 0, 0, 0, 0, 0 },
 };
 static char usage[]  = "[-options] <hmmfile>";
-static char banner[] = "benchmark driver for optimal accuracy alignment, SSE version";
+static char banner[] = "benchmark driver for optimal accuracy alignment, NEON version";
 
 int
 main(int argc, char **argv)
@@ -542,7 +542,7 @@ main(int argc, char **argv)
       p7_GOptimalAccuracy(gm, gx2, gx1, &accscore_g);
 
       printf("generic:  fwd=%8.4f  bck=%8.4f  acc=%8.4f\n", fsc_g, bsc_g, accscore_g);
-      printf("SSE:      fwd=%8.4f  bck=%8.4f  acc=%8.4f\n", fsc,   bsc,   accscore);
+      printf("NEON:      fwd=%8.4f  bck=%8.4f  acc=%8.4f\n", fsc,   bsc,   accscore);
 
       p7_gmx_Destroy(gx1);
       p7_gmx_Destroy(gx2);
@@ -675,11 +675,11 @@ utest_optacc(ESL_GETOPTS *go, ESL_RANDOMNESS *r, ESL_ALPHABET *abc, P7_BG *bg, i
       printf("%f %f %f %f\n", accscore, accscore_g, accscore_g2, accscore_o);
 #endif
 
-      if (esl_FCompare(fsc,        bsc,         sctol)    != eslOK) esl_fatal(msg);
-      if (esl_FCompare(fsc_g,      bsc_g,       gtol)     != eslOK) esl_fatal(msg);
-      if (esl_FCompare(fsc,        fsc_g,       gtol)     != eslOK) esl_fatal(msg);
-      if (esl_FCompare(accscore,   accscore_g,  gtol)     != eslOK) esl_fatal(msg);
-      if (esl_FCompare(accscore_g, accscore_g2, gtol)     != eslOK) esl_fatal(msg);
+      if (esl_FCompare_old(fsc,        bsc,         sctol)    != eslOK) esl_fatal(msg);
+      if (esl_FCompare_old(fsc_g,      bsc_g,       gtol)     != eslOK) esl_fatal(msg);
+      if (esl_FCompare_old(fsc,        fsc_g,       gtol)     != eslOK) esl_fatal(msg);
+      if (esl_FCompare_old(accscore,   accscore_g,  gtol)     != eslOK) esl_fatal(msg);
+      if (esl_FCompare_old(accscore_g, accscore_g2, gtol)     != eslOK) esl_fatal(msg);
       if (accscore_g2 < accscore_o)                                 esl_fatal(msg);
       /* the above deserves explanation:
        *  - accscore_o is the accuracy of the originally emitted trace, according
@@ -755,8 +755,7 @@ utest_optacc(ESL_GETOPTS *go, ESL_RANDOMNESS *r, ESL_ALPHABET *abc, P7_BG *bg, i
  */
 
 /*
-   gcc -g -Wall -msse2 -std=gnu99 -o optacc_utest -I.. -L.. -I../../easel -L../../easel -Dp7OPTACC_TESTDRIVE optacc.c -lhmmer -leasel -lm
-   ./optacc_utest
+     ./optacc_utest
  */
 #include "p7_config.h"
 
@@ -778,7 +777,7 @@ static ESL_OPTIONS options[] = {
   {  0, 0, 0, 0, 0, 0, 0, 0, 0, 0 },
 };
 static char usage[]  = "[-options]";
-static char banner[] = "test driver for SSE Forward, Backward implementations";
+static char banner[] = "test driver for NEON Forward, Backward implementations";
 
 int
 main(int argc, char **argv)
@@ -850,7 +849,7 @@ static ESL_OPTIONS options[] = {
   {  0, 0, 0, 0, 0, 0, 0, 0, 0, 0 },
 };
 static char usage[]  = "[-options] <hmmfile> <seqfile>";
-static char banner[] = "example of optimal accuracy alignment, SSE implementation";
+static char banner[] = "example of optimal accuracy alignment, NEON implementation";
 
 int
 main(int argc, char **argv)

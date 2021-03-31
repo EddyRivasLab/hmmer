@@ -1,4 +1,4 @@
-/* Viterbi score implementation; SSE version.
+/* Viterbi score implementation; NEON version.
  *
  * This is a SIMD vectorized, striped, interleaved, one-row O(M)
  * memory implementation of the Viterbi algorithm, for calculating an
@@ -25,11 +25,9 @@
 #include <stdio.h>
 #include <math.h>
 
-#include <xmmintrin.h>		/* SSE  */
-#include <emmintrin.h>		/* SSE2 */
 
 #include "easel.h"
-#include "esl_sse.h"
+#include "esl_neon.h"
 
 #include "hmmer.h"
 #include "impl_neon.h"
@@ -121,7 +119,7 @@ p7_ViterbiScore(const ESL_DSQ *dsq, int L, const P7_OPROFILE *om, P7_OMX *ox, fl
 	  sv   = vmaxq_f32(sv, vaddq_f32(mpv, *tsc)); tsc++;
 	  sv   = vmaxq_f32(sv, vaddq_f32(ipv, *tsc)); tsc++;
 	  sv   = vmaxq_f32(sv, vaddq_f32(dpv, *tsc)); tsc++;
-	  sv   = vmaxq_f32(sv, *rsc);                 rsc++;
+	  sv   = vaddq_f32(sv, *rsc);                 rsc++;
 	  xEv  = vmaxq_f32(xEv, sv);
 
 	  /* Load {MDI}(i-1,q) into mpv, dpv, ipv;
@@ -225,9 +223,6 @@ p7_ViterbiScore(const ESL_DSQ *dsq, int L, const P7_OPROFILE *om, P7_OMX *ox, fl
  * to p7_GViterbi() scores.
  */
 /*
-  gcc -o benchmark-vitscore -std=gnu99 -g -Wall -msse2 -I.. -L.. -I../../easel -L../../easel -Dp7VITSCORE_BENCHMARK vitscore.c -lhmmer -leasel -lm
-  icc -o benchmark-vitscore -O3 -static -I.. -L.. -I../../easel -L../../easel -Dp7VITSCORE_BENCHMARK vitscore.c -lhmmer -leasel -lm
-
   ./benchmark-vitscore <hmmfile>            runs benchmark
   ./benchmark-vitscore -N100 -c <hmmfile>   compare scores to generic impl
   ./benchmark-vitscore -N100 -x <hmmfile>   equate scores to exact emulation
@@ -255,7 +250,7 @@ static ESL_OPTIONS options[] = {
   {  0, 0, 0, 0, 0, 0, 0, 0, 0, 0 },
 };
 static char usage[]  = "[-options] <hmmfile>";
-static char banner[] = "benchmark driver for SSE ViterbiScore()";
+static char banner[] = "benchmark driver for NEON ViterbiScore()";
 
 int
 main(int argc, char **argv)
@@ -390,10 +385,7 @@ utest_viterbi_score(ESL_RANDOMNESS *r, ESL_ALPHABET *abc, P7_BG *bg, int M, int 
  * 4. Test driver
  *****************************************************************/
 #ifdef p7VITSCORE_TESTDRIVE
-/*
-   gcc -g -Wall -msse2 -std=gnu99 -I.. -L.. -I../../easel -L../../easel -o vitscore_utest -Dp7VITSCORE_TESTDRIVE vitscore.c -lhmmer -leasel -lm
-   ./vitscore_utest
- */
+
 #include "p7_config.h"
 
 #include "easel.h"
@@ -413,7 +405,7 @@ static ESL_OPTIONS options[] = {
   {  0, 0, 0, 0, 0, 0, 0, 0, 0, 0 },
 };
 static char usage[]  = "[-options]";
-static char banner[] = "test driver for the SSE implementation";
+static char banner[] = "test driver for the NEON implementation";
 
 int
 main(int argc, char **argv)
@@ -463,7 +455,7 @@ main(int argc, char **argv)
 /* A minimal example.
    Also useful for debugging on small HMMs and sequences.
 
-   gcc -g -Wall -msse2 -std=gnu99 -I.. -L.. -I../../easel -L../../easel -o example -Dp7VITSCORE_EXAMPLE vitscore.c -lhmmer -leasel -lm
+   
    ./example <hmmfile> <seqfile>
  */
 #include "p7_config.h"
@@ -527,7 +519,7 @@ main(int argc, char **argv)
      p7_gmx_Dump(stdout, gx, p7_DEFAULT);  dumps a generic DP matrix
   */
 
-  p7_ViterbiScore(sq->dsq, sq->n, om, ox, &sc);  printf("viterbi score (SSE):  %.2f nats\n", sc);
+  p7_ViterbiScore(sq->dsq, sq->n, om, ox, &sc);  printf("viterbi score (NEON):  %.2f nats\n", sc);
   p7_GViterbi    (sq->dsq, sq->n, gm, gx, &sc);  printf("viterbi (generic):    %.2f nats\n", sc);
 
   /* now in a real app, you'd need to convert raw nat scores to final bit

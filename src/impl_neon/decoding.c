@@ -29,7 +29,7 @@
  * Incept:    SRE, Fri Aug  8 14:29:42 2008 [UA217 to SFO]
  *
  * Purpose:   Identical to <p7_GDecoding()> except that <om>, <oxf>,
- *            <oxb> are SSE optimized versions. See <p7_GDecoding()>
+ *            <oxb> are NEON optimized versions. See <p7_GDecoding()>
  *            documentation for more info.
  *
  * Args:      om   - profile (must be the same that was used to fill <oxf>, <oxb>).
@@ -141,7 +141,7 @@ p7_Decoding(const P7_OPROFILE *om, const P7_OMX *oxf, P7_OMX *oxb, P7_OMX *pp)
  * Incept:    SRE, Tue Aug  5 08:39:07 2008 [Janelia]
  *
  * Purpose:   Identical to <p7_GDomainDecoding()> except that <om>, <oxf>,
- *            <oxb> are SSE optimized versions. See <p7_GDomainDecoding()>
+ *            <oxb> are NEON optimized versions. See <p7_GDomainDecoding()>
  *            documentation for more info.
  *
  * Args:      gm   - profile
@@ -227,7 +227,7 @@ static ESL_OPTIONS options[] = {
   {  0, 0, 0, 0, 0, 0, 0, 0, 0, 0 },
 };
 static char usage[]  = "[-options] <hmmfile>";
-static char banner[] = "benchmark driver for posterior residue decoding, SSE version";
+static char banner[] = "benchmark driver for posterior residue decoding, NEON version";
 
 int
 main(int argc, char **argv)
@@ -368,7 +368,6 @@ utest_decoding(ESL_RANDOMNESS *r, ESL_ALPHABET *abc, P7_BG *bg, int M, int L, in
 #ifdef p7DECODING_TESTDRIVE
 
 /*
-  gcc -o decoding_utest -msse2 -g -Wall -I.. -L.. -I../../easel -L../../easel -Dp7DECODING_TESTDRIVE decoding.c -lhmmer -leasel -lm
   ./decoding_utest
  */
 #include "p7_config.h"
@@ -395,7 +394,7 @@ static ESL_OPTIONS options[] = {
   { 0,0,0,0,0,0,0,0,0,0},
 };
 static char usage[]  = "[-options]";
-static char banner[] = "test driver for SSE posterior decoding";
+static char banner[] = "test driver for NEON posterior decoding";
 
 int
 main(int argc, char **argv)
