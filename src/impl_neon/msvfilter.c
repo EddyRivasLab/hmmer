@@ -126,8 +126,8 @@ p7_MSVFilter(const ESL_DSQ *dsq, int L, const P7_OPROFILE *om, P7_OMX *ox, float
   if (ox->debugging)
   {
       uint8_t xB;
-      xB = _mm_extract_epi16(xBv, 0);
-      xJ = _mm_extract_epi16(xJv, 0);
+      xB = (uint8_t)vgetq_lane_s16(vreinterpretq_s16_u8(xBv), 0);
+      xJ = (uint8_t)vgetq_lane_s16(vreinterpretq_s16_u8(xJv), 0);
       p7_omx_DumpMFRow(ox, 0, 0, 0, xJ, xB, xJ);
   }
 #endif
@@ -184,9 +184,9 @@ p7_MSVFilter(const ESL_DSQ *dsq, int L, const P7_OPROFILE *om, P7_OMX *ox, float
       if (ox->debugging)
       {
         uint8_t xB, xE;
-        xB = _mm_extract_epi16(xBv, 0);
-        xE = _mm_extract_epi16(xEv, 0);
-        xJ = _mm_extract_epi16(xJv, 0);
+        xB = (uint8_t)vgetq_lane_s16(vreinterpretq_s16_u8(xBv), 0);
+        xE = (uint8_t)vgetq_lane_s16(vreinterpretq_s16_u8(xEv), 0);
+        xJ = (uint8_t)vgetq_lane_s16(vreinterpretq_s16_u8(xJv), 0);
         p7_omx_DumpMFRow(ox, i, xE, 0, xJ, xB, xJ);
       }
 #endif

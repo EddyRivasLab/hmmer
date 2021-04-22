@@ -406,7 +406,6 @@ p7_oprofile_Clone(const P7_OPROFILE *om1)
   memcpy(om2, om1, sizeof(P7_OPROFILE));
 
   om2->clone  = 1;
-
   return om2;
 
  ERROR:
@@ -943,13 +942,20 @@ fb_conversion(const P7_PROFILE *gm, P7_OPROFILE *om)
   if (nq > om->allocQ4) ESL_EXCEPTION(eslEINVAL, "optimized profile is too small to hold conversion");
 
   /* striped match scores: start at k=1 */
-  for (x = 0; x < gm->abc->Kp; x++)
+  for (x = 0; x < gm->abc->Kp; x++){
     for (k = 1, q = 0; q < nq; q++, k++)
       {
-	for (z = 0; z < 4; z++) tmp.x[z] = (k+ z*nq <= M) ? p7P_MSC(gm, k+z*nq, x) : -eslINFINITY;
-	om->rfv[x][q] = esl_neon_expf((esl_neon_128f_t) tmp.v).f32x4;
+    //    printf("\n");
+        for (z = 0; z < 4; z++)
+        {
+          tmp.x[z] = (k + z * nq <= M) ? p7P_MSC(gm, k + z * nq, x) : -eslINFINITY;
+        }
+ //       esl_neon_dump_float(stdout, (esl_neon_128f_t) tmp.v);
+        om->rfv[x][q] = esl_neon_expf((esl_neon_128f_t)tmp.v).f32x4;
+ //       esl_neon_dump_float(stdout, (esl_neon_128f_t) om->rfv[x][q]);
+    //    printf("\n");
       }
-
+  }
 
   /* Transition scores, all but the DD's. */
   for (j = 0, k = 1, q = 0; q < nq; q++, k++)
@@ -1707,7 +1713,7 @@ p7_oprofile_Dump(FILE *fp, const P7_OPROFILE *om)
   fprintf(fp, "Dump of a <P7_OPROFILE> ::\n");
 
   fprintf(fp, "\n  -- float part, odds ratios for Forward/Backward:\n");
-  if ((status = oprofile_dump_fb(fp, om, 8, 5)) != eslOK) return status;
+  if ((status = oprofile_dump_fb(fp, om, 8, 8)) != eslOK) return status;
 
   fprintf(fp, "\n  -- sword part, log odds for ViterbiFilter(): \n");
   if ((status = oprofile_dump_vf(fp, om))       != eslOK) return status;
