@@ -421,12 +421,10 @@
 pressure.  Worry about that optimization later */
 #define  MAX_BANDS 18
 
-
-
-#define STEP_SINGLE(sv)                         \
-  sv  = vqsubq_s8(sv, vreinterpretq_s8_u8(*rsc)); rsc++;   \
-  xEv = vreinterpretq_s8_u8(vmaxq_u8(vreinterpretq_u8_s8(xEv), vreinterpretq_u8_s8(sv)));
-
+#define STEP_SINGLE(sv, xEv)                                                                    \
+  sv = vqsubq_s8(sv, vreinterpretq_s8_u8(*rsc));                                           \
+  rsc++;                                                                                    \
+  xEv = vreinterpretq_s8_u8(vmaxq_u8(vreinterpretq_u8_s8(xEv), vreinterpretq_u8_s8(sv))); 
 
 #define LENGTH_CHECK(label)                     \
   if (i >= L) goto label;
@@ -436,75 +434,75 @@ pressure.  Worry about that optimization later */
 
 
 #define STEP_BANDS_1()                          \
-  STEP_SINGLE(sv00)
+  STEP_SINGLE(sv00, xEv0)
 
 #define STEP_BANDS_2()                          \
   STEP_BANDS_1()                                \
-  STEP_SINGLE(sv01)
+  STEP_SINGLE(sv01, xEv1)
 
 #define STEP_BANDS_3()                          \
   STEP_BANDS_2()                                \
-  STEP_SINGLE(sv02)
+  STEP_SINGLE(sv02, xEv2)
 
 #define STEP_BANDS_4()                          \
   STEP_BANDS_3()                                \
-  STEP_SINGLE(sv03)
+  STEP_SINGLE(sv03, xEv3)
 
 #define STEP_BANDS_5()                          \
   STEP_BANDS_4()                                \
-  STEP_SINGLE(sv04)
+  STEP_SINGLE(sv04, xEv4)
 
 #define STEP_BANDS_6()                          \
   STEP_BANDS_5()                                \
-  STEP_SINGLE(sv05)
+  STEP_SINGLE(sv05, xEv5)
 
 #define STEP_BANDS_7()                          \
   STEP_BANDS_6()                                \
-  STEP_SINGLE(sv06)
+  STEP_SINGLE(sv06, xEv0)
 
 #define STEP_BANDS_8()                          \
   STEP_BANDS_7()                                \
-  STEP_SINGLE(sv07)
+  STEP_SINGLE(sv07, xEv1)
 
 #define STEP_BANDS_9()                          \
   STEP_BANDS_8()                                \
-  STEP_SINGLE(sv08)
+  STEP_SINGLE(sv08, xEv2)
 
 #define STEP_BANDS_10()                         \
   STEP_BANDS_9()                                \
-  STEP_SINGLE(sv09)
+  STEP_SINGLE(sv09, xEv3)
 
 #define STEP_BANDS_11()                         \
   STEP_BANDS_10()                               \
-  STEP_SINGLE(sv10)
+  STEP_SINGLE(sv10, xEv4)
 
 #define STEP_BANDS_12()                         \
   STEP_BANDS_11()                               \
-  STEP_SINGLE(sv11)
+  STEP_SINGLE(sv11, xEv5)
 
 #define STEP_BANDS_13()                         \
   STEP_BANDS_12()                               \
-  STEP_SINGLE(sv12)
+  STEP_SINGLE(sv12, xEv0)
 
 #define STEP_BANDS_14()                         \
   STEP_BANDS_13()                               \
-  STEP_SINGLE(sv13)
+  STEP_SINGLE(sv13, xEv1)
 
 #define STEP_BANDS_15()                         \
   STEP_BANDS_14()                               \
-  STEP_SINGLE(sv14)
+  STEP_SINGLE(sv14, xEv2)
 
 #define STEP_BANDS_16()                         \
   STEP_BANDS_15()                               \
-  STEP_SINGLE(sv15)
+  STEP_SINGLE(sv15, xEv3)
 
 #define STEP_BANDS_17()                         \
   STEP_BANDS_16()                               \
-  STEP_SINGLE(sv16)
+  STEP_SINGLE(sv16, xEv4)
 
 #define STEP_BANDS_18()                         \
   STEP_BANDS_17()                               \
-  STEP_SINGLE(sv17)
+  STEP_SINGLE(sv17, xEv5)
 
 #define CONVERT_STEP(step, length_check, label, sv, pos) \
   length_check(label)                                    \
@@ -656,160 +654,133 @@ pressure.  Worry about that optimization later */
   RESET_17()                                    \
   register int8x16_t sv17 = beginv;
 
-
-#define CALC(reset, step, convert, width)       \
-  int         i2;                               \
-  int         i;                                \
-  int         Q        = p7O_NQB(om->M);        \
-  uint8x16_t *rsc;                              \
-                                                \
-  int w = width;                                \
-                                                \
-  dsq++;                                        \
-                                                \
-  reset()                                       \
-                                                \
-  for (i = 0; i < L && i < Q - q - w; i++)      \
-    {                                           \
-      rsc = om->sbv[dsq[i]] + i + q;            \
-      step()                                    \
-    }                                           \
-                                                \
-  i = Q - q - w;                                \
-  convert(step, LENGTH_CHECK, done1)            \
-done1:                                          \
-                                                \
- for (i2 = Q - q; i2 < L - Q; i2 += Q)          \
-   {                                            \
-     for (i = 0; i < Q - w; i++)                \
-       {                                        \
-         rsc = om->sbv[dsq[i2 + i]] + i;        \
-         step()                                 \
-       }                                        \
-                                                \
-     i += i2;                                   \
-     convert(step, NO_CHECK, )                  \
-   }                                            \
-                                                \
- for (i = 0; i2 + i < L && i < Q - w; i++)      \
-   {                                            \
-     rsc = om->sbv[dsq[i2 + i]] + i;            \
-     step()                                     \
-   }                                            \
-                                                \
- i+=i2;                                         \
- convert(step, LENGTH_CHECK, done2)             \
-done2:                                          \
-                                                \
- return xEv;
-
-
-int8x16_t
-calc_band_1(const ESL_DSQ *dsq, int L, const P7_OPROFILE *om, int q, register int8x16_t beginv, register int8x16_t xEv)
-{
-  CALC(RESET_1, STEP_BANDS_1, CONVERT_1, 1)
-}
+#define CALC(reset, step, convert, width)      \
+  int i2;                                      \
+  int i;                                       \
+  int Q = p7O_NQB(om->M);                      \
+  uint8x16_t *rsc;                             \
+                                               \
+  int w = width;                               \
+                                               \
+  dsq++;                                       \
+                                               \
+  reset()                                      \
+                                               \
+      for (i = 0; i < L && i < Q - q - w; i++) \
+  {                                            \
+    rsc = om->sbv[dsq[i]] + i + q;             \
+    step()                                     \
+  }                                            \
+                                               \
+  i = Q - q - w;                               \
+  convert(step, LENGTH_CHECK, done1)           \
+      done1 :                                  \
+                                               \
+      for (i2 = Q - q; i2 < L - Q; i2 += Q)    \
+  {                                            \
+    for (i = 0; i < Q - w; i++)                \
+    {                                          \
+      rsc = om->sbv[dsq[i2 + i]] + i;          \
+      step()                                   \
+    }                                          \
+                                               \
+    i += i2;                                   \
+    convert(step, NO_CHECK, )                  \
+  }                                            \
+                                               \
+  for (i = 0; i2 + i < L && i < Q - w; i++)    \
+  {                                            \
+    rsc = om->sbv[dsq[i2 + i]] + i;            \
+    step()                                     \
+  }                                            \
+                                               \
+  i += i2;                                     \
+  convert(step, LENGTH_CHECK, done2)           \
+      done2 :                                  \
+                                               \
+      xEv0 = vreinterpretq_s8_u8(vmaxq_u8(vreinterpretq_u8_s8(xEv0), vreinterpretq_u8_s8(xEv1)));\
+xEv2 = vreinterpretq_s8_u8(vmaxq_u8(vreinterpretq_u8_s8(xEv2), vreinterpretq_u8_s8(xEv3)));\
+xEv4 = vreinterpretq_s8_u8(vmaxq_u8(vreinterpretq_u8_s8(xEv4), vreinterpretq_u8_s8(xEv5)));\
+xEv0 = vreinterpretq_s8_u8(vmaxq_u8(vreinterpretq_u8_s8(xEv0), vreinterpretq_u8_s8(xEv2)));\
+xEv0 = vreinterpretq_s8_u8(vmaxq_u8(vreinterpretq_u8_s8(xEv0), vreinterpretq_u8_s8(xEv4)));\
+return xEv0;
 
 int8x16_t
-calc_band_2(const ESL_DSQ *dsq, int L, const P7_OPROFILE *om, int q, register int8x16_t beginv, register int8x16_t xEv)
-{
-  CALC(RESET_2, STEP_BANDS_2, CONVERT_2, 2)
-}
+calc_band_1(const ESL_DSQ *dsq, int L, const P7_OPROFILE *om, int q, register int8x16_t beginv, register int8x16_t xEv0, register int8x16_t xEv1, register int8x16_t xEv2, register int8x16_t xEv3, register int8x16_t xEv4, register int8x16_t xEv5){
+    CALC(RESET_1, STEP_BANDS_1, CONVERT_1, 1)}
 
 int8x16_t
-calc_band_3(const ESL_DSQ *dsq, int L, const P7_OPROFILE *om, int q, register int8x16_t beginv, register int8x16_t xEv)
-{
-  CALC(RESET_3, STEP_BANDS_3, CONVERT_3, 3)
-}
+    calc_band_2(const ESL_DSQ *dsq, int L, const P7_OPROFILE *om, int q, register int8x16_t beginv, register int8x16_t xEv0, register int8x16_t xEv1, register int8x16_t xEv2, register int8x16_t xEv3, register int8x16_t xEv4, register int8x16_t xEv5){
+        CALC(RESET_2, STEP_BANDS_2, CONVERT_2, 2)}
 
 int8x16_t
-calc_band_4(const ESL_DSQ *dsq, int L, const P7_OPROFILE *om, int q, register int8x16_t beginv, register int8x16_t xEv)
-{
-  CALC(RESET_4, STEP_BANDS_4, CONVERT_4, 4)
-}
+    calc_band_3(const ESL_DSQ *dsq, int L, const P7_OPROFILE *om, int q, register int8x16_t beginv, register int8x16_t xEv0, register int8x16_t xEv1, register int8x16_t xEv2, register int8x16_t xEv3, register int8x16_t xEv4, register int8x16_t xEv5){
+        CALC(RESET_3, STEP_BANDS_3, CONVERT_3, 3)}
 
 int8x16_t
-calc_band_5(const ESL_DSQ *dsq, int L, const P7_OPROFILE *om, int q, register int8x16_t beginv, register int8x16_t xEv)
-{
-  CALC(RESET_5, STEP_BANDS_5, CONVERT_5, 5)
-}
+    calc_band_4(const ESL_DSQ *dsq, int L, const P7_OPROFILE *om, int q, register int8x16_t beginv, register int8x16_t xEv0, register int8x16_t xEv1, register int8x16_t xEv2, register int8x16_t xEv3, register int8x16_t xEv4, register int8x16_t xEv5){
+        CALC(RESET_4, STEP_BANDS_4, CONVERT_4, 4)}
 
 int8x16_t
-calc_band_6(const ESL_DSQ *dsq, int L, const P7_OPROFILE *om, int q, register int8x16_t beginv, register int8x16_t xEv)
+    calc_band_5(const ESL_DSQ *dsq, int L, const P7_OPROFILE *om, int q, register int8x16_t beginv, register int8x16_t xEv0, register int8x16_t xEv1, register int8x16_t xEv2, register int8x16_t xEv3, register int8x16_t xEv4, register int8x16_t xEv5){
+        CALC(RESET_5, STEP_BANDS_5, CONVERT_5, 5)}
+
+int8x16_t
+    calc_band_6(const ESL_DSQ *dsq, int L, const P7_OPROFILE *om, int q, register int8x16_t beginv, register int8x16_t xEv0, register int8x16_t xEv1, register int8x16_t xEv2, register int8x16_t xEv3, register int8x16_t xEv4, register int8x16_t xEv5)
 {
   CALC(RESET_6, STEP_BANDS_6, CONVERT_6, 6)
 }
 
 #if MAX_BANDS > 6 /* Only include needed functions to limit object file size */
 int8x16_t
-calc_band_7(const ESL_DSQ *dsq, int L, const P7_OPROFILE *om, int q, register int8x16_t beginv, register int8x16_t xEv)
-{
-  CALC(RESET_7, STEP_BANDS_7, CONVERT_7, 7)
-}
+calc_band_7(const ESL_DSQ *dsq, int L, const P7_OPROFILE *om, int q, register int8x16_t beginv, register int8x16_t xEv0, register int8x16_t xEv1, register int8x16_t xEv2, register int8x16_t xEv3, register int8x16_t xEv4, register int8x16_t xEv5){
+    CALC(RESET_7, STEP_BANDS_7, CONVERT_7, 7)}
 
 int8x16_t
-calc_band_8(const ESL_DSQ *dsq, int L, const P7_OPROFILE *om, int q, register int8x16_t beginv, register int8x16_t xEv)
-{
-  CALC(RESET_8, STEP_BANDS_8, CONVERT_8, 8)
-}
+    calc_band_8(const ESL_DSQ *dsq, int L, const P7_OPROFILE *om, int q, register int8x16_t beginv, register int8x16_t xEv0, register int8x16_t xEv1, register int8x16_t xEv2, register int8x16_t xEv3, register int8x16_t xEv4, register int8x16_t xEv5){
+        CALC(RESET_8, STEP_BANDS_8, CONVERT_8, 8)}
 
 int8x16_t
-calc_band_9(const ESL_DSQ *dsq, int L, const P7_OPROFILE *om, int q, register int8x16_t beginv, register int8x16_t xEv)
-{
-  CALC(RESET_9, STEP_BANDS_9, CONVERT_9, 9)
-}
+    calc_band_9(const ESL_DSQ *dsq, int L, const P7_OPROFILE *om, int q, register int8x16_t beginv, register int8x16_t xEv0, register int8x16_t xEv1, register int8x16_t xEv2, register int8x16_t xEv3, register int8x16_t xEv4, register int8x16_t xEv5){
+        CALC(RESET_9, STEP_BANDS_9, CONVERT_9, 9)}
 
 int8x16_t
-calc_band_10(const ESL_DSQ *dsq, int L, const P7_OPROFILE *om, int q, register int8x16_t beginv, register int8x16_t xEv)
-{
-  CALC(RESET_10, STEP_BANDS_10, CONVERT_10, 10)
-}
+    calc_band_10(const ESL_DSQ *dsq, int L, const P7_OPROFILE *om, int q, register int8x16_t beginv, register int8x16_t xEv0, register int8x16_t xEv1, register int8x16_t xEv2, register int8x16_t xEv3, register int8x16_t xEv4, register int8x16_t xEv5){
+        CALC(RESET_10, STEP_BANDS_10, CONVERT_10, 10)}
 
 int8x16_t
-calc_band_11(const ESL_DSQ *dsq, int L, const P7_OPROFILE *om, int q, register int8x16_t beginv, register int8x16_t xEv)
-{
-  CALC(RESET_11, STEP_BANDS_11, CONVERT_11, 11)
-}
+    calc_band_11(const ESL_DSQ *dsq, int L, const P7_OPROFILE *om, int q, register int8x16_t beginv, register int8x16_t xEv0, register int8x16_t xEv1, register int8x16_t xEv2, register int8x16_t xEv3, register int8x16_t xEv4, register int8x16_t xEv5){
+        CALC(RESET_11, STEP_BANDS_11, CONVERT_11, 11)}
 
 int8x16_t
-calc_band_12(const ESL_DSQ *dsq, int L, const P7_OPROFILE *om, int q, register int8x16_t beginv, register int8x16_t xEv)
-{
-  CALC(RESET_12, STEP_BANDS_12, CONVERT_12, 12)
-}
+    calc_band_12(const ESL_DSQ *dsq, int L, const P7_OPROFILE *om, int q, register int8x16_t beginv, register int8x16_t xEv0, register int8x16_t xEv1, register int8x16_t xEv2, register int8x16_t xEv3, register int8x16_t xEv4, register int8x16_t xEv5){
+        CALC(RESET_12, STEP_BANDS_12, CONVERT_12, 12)}
 
 int8x16_t
-calc_band_13(const ESL_DSQ *dsq, int L, const P7_OPROFILE *om, int q, register int8x16_t beginv, register int8x16_t xEv)
-{
-  CALC(RESET_13, STEP_BANDS_13, CONVERT_13, 13)
-}
+    calc_band_13(const ESL_DSQ *dsq, int L, const P7_OPROFILE *om, int q, register int8x16_t beginv, register int8x16_t xEv0, register int8x16_t xEv1, register int8x16_t xEv2, register int8x16_t xEv3, register int8x16_t xEv4, register int8x16_t xEv5){
+        CALC(RESET_13, STEP_BANDS_13, CONVERT_13, 13)}
 
 int8x16_t
-calc_band_14(const ESL_DSQ *dsq, int L, const P7_OPROFILE *om, int q, register int8x16_t beginv, register int8x16_t xEv)
+    calc_band_14(const ESL_DSQ *dsq, int L, const P7_OPROFILE *om, int q, register int8x16_t beginv, register int8x16_t xEv0, register int8x16_t xEv1, register int8x16_t xEv2, register int8x16_t xEv3, register int8x16_t xEv4, register int8x16_t xEv5)
 {
   CALC(RESET_14, STEP_BANDS_14, CONVERT_14, 14)
 }
 #endif /* MAX_BANDS > 6 */
 #if MAX_BANDS > 14
 int8x16_t
-calc_band_15(const ESL_DSQ *dsq, int L, const P7_OPROFILE *om, int q, register int8x16_t beginv, register int8x16_t xEv)
-{
-  CALC(RESET_15, STEP_BANDS_15, CONVERT_15, 15)
-}
+calc_band_15(const ESL_DSQ *dsq, int L, const P7_OPROFILE *om, int q, register int8x16_t beginv, register int8x16_t xEv0, register int8x16_t xEv1, register int8x16_t xEv2, register int8x16_t xEv3, register int8x16_t xEv4, register int8x16_t xEv5){
+    CALC(RESET_15, STEP_BANDS_15, CONVERT_15, 15)}
 
 int8x16_t
-calc_band_16(const ESL_DSQ *dsq, int L, const P7_OPROFILE *om, int q, register int8x16_t beginv, register int8x16_t xEv)
-{
-  CALC(RESET_16, STEP_BANDS_16, CONVERT_16, 16)
-}
+    calc_band_16(const ESL_DSQ *dsq, int L, const P7_OPROFILE *om, int q, register int8x16_t beginv, register int8x16_t xEv0, register int8x16_t xEv1, register int8x16_t xEv2, register int8x16_t xEv3, register int8x16_t xEv4, register int8x16_t xEv5){
+        CALC(RESET_16, STEP_BANDS_16, CONVERT_16, 16)}
 
 int8x16_t
-calc_band_17(const ESL_DSQ *dsq, int L, const P7_OPROFILE *om, int q, register int8x16_t beginv, register int8x16_t xEv)
-{
-  CALC(RESET_17, STEP_BANDS_17, CONVERT_17, 17)
-}
+    calc_band_17(const ESL_DSQ *dsq, int L, const P7_OPROFILE *om, int q, register int8x16_t beginv, register int8x16_t xEv0, register int8x16_t xEv1, register int8x16_t xEv2, register int8x16_t xEv3, register int8x16_t xEv4, register int8x16_t xEv5){
+        CALC(RESET_17, STEP_BANDS_17, CONVERT_17, 17)}
 
 int8x16_t
-calc_band_18(const ESL_DSQ *dsq, int L, const P7_OPROFILE *om, int q, register int8x16_t beginv, register int8x16_t xEv)
+    calc_band_18(const ESL_DSQ *dsq, int L, const P7_OPROFILE *om, int q, register int8x16_t beginv, register int8x16_t xEv0, register int8x16_t xEv1, register int8x16_t xEv2, register int8x16_t xEv3, register int8x16_t xEv4, register int8x16_t xEv5)
 {
   CALC(RESET_18, STEP_BANDS_18, CONVERT_18, 18)
 }
@@ -823,7 +794,7 @@ calc_band_18(const ESL_DSQ *dsq, int L, const P7_OPROFILE *om, int q, register i
 uint8_t
 get_xE(const ESL_DSQ *dsq, int L, const P7_OPROFILE *om)
 {
-  register int8x16_t xEv;		           /* E state: keeps max for Mk->E as we go                     */
+  register int8x16_t xEv0, xEv1, xEv2, xEv3, xEv4, xEv5;		           /* E state: keeps max for Mk->E as we go                     */
   register int8x16_t beginv;            /* begin scores                                              */
 
   int q;			   /* counter over vectors 0..nq-1                              */
@@ -835,32 +806,51 @@ get_xE(const ESL_DSQ *dsq, int L, const P7_OPROFILE *om)
   int i;                           /* counter for bands                                         */
 
   /* function pointers for the various number of vectors to use */
-  int8x16_t (*fs[MAX_BANDS + 1]) (const ESL_DSQ *, int, const P7_OPROFILE *, int, register int8x16_t, register int8x16_t)
-    = {NULL
-       , calc_band_1,  calc_band_2,  calc_band_3,  calc_band_4,  calc_band_5,  calc_band_6
+  int8x16_t (*fs[MAX_BANDS + 1])(const ESL_DSQ *, int, const P7_OPROFILE *, int, register int8x16_t, register int8x16_t, register int8x16_t, register int8x16_t, register int8x16_t, register int8x16_t, register int8x16_t) = { NULL,
+                                                                                                                                                                                                                                 calc_band_1,
+                                                                                                                                                                                                                                 calc_band_2,
+                                                                                                                                                                                                                                 calc_band_3,
+                                                                                                                                                                                                                                 calc_band_4,
+                                                                                                                                                                                                                                 calc_band_5,
+                                                                                                                                                                                                                                 calc_band_6
 #if MAX_BANDS > 6
-       , calc_band_7,  calc_band_8,  calc_band_9,  calc_band_10, calc_band_11, calc_band_12, calc_band_13, calc_band_14
+                                                                                                                                                                                                                                 ,
+                                                                                                                                                                                                                                 calc_band_7,
+                                                                                                                                                                                                                                 calc_band_8,
+                                                                                                                                                                                                                                 calc_band_9,
+                                                                                                                                                                                                                                 calc_band_10,
+                                                                                                                                                                                                                                 calc_band_11,
+                                                                                                                                                                                                                                 calc_band_12,
+                                                                                                                                                                                                                                 calc_band_13,
+                                                                                                                                                                                                                                 calc_band_14
 #endif
 #if MAX_BANDS > 14
-       , calc_band_15, calc_band_16, calc_band_17, calc_band_18
+                                                                                                                                                                                                                                 ,
+                                                                                                                                                                                                                                 calc_band_15,
+                                                                                                                                                                                                                                 calc_band_16,
+                                                                                                                                                                                                                                 calc_band_17,
+                                                                                                                                                                                                                                 calc_band_18
 #endif
   };
 
   beginv =  vmovq_n_s8(-128);
-  xEv    =  beginv;
-
+  xEv0    =  beginv;
+  xEv1 = beginv;
+  xEv2 = beginv;
+  xEv3 = beginv;
+  xEv4 = beginv;
+  xEv5 = beginv;
   /* Use the highest number of bands but no more than MAX_BANDS */
   bands = (Q + MAX_BANDS - 1) / MAX_BANDS;
 
   for (i = 0; i < bands; i++) {
     q = (Q * (i + 1)) / bands;
 
-    xEv = fs[q-last_q](dsq, L, om, last_q, beginv, xEv);
+    xEv0 = fs[q - last_q](dsq, L, om, last_q, beginv, xEv0, xEv1, xEv2, xEv3, xEv4, xEv5);
 
     last_q = q;
   }
-
-  return esl_neon_hmax_u8((esl_neon_128i_t) xEv);
+  return esl_neon_hmax_u8((esl_neon_128i_t) xEv0);
 }
 
 
@@ -884,7 +874,7 @@ p7_SSVFilter(const ESL_DSQ *dsq, int L, const P7_OPROFILE *om, float *ret_sc)
       /* We have an overflow. */
       *ret_sc = eslINFINITY;
 #ifdef ARMDEBUG
-      printf(" SSV=%f", *ret_sc);
+      printf(" SSV1=%f\n", *ret_sc);
 #endif
       if (om->base_b - om->tjb_b - om->tbm_b < 128)
         {
@@ -904,7 +894,7 @@ p7_SSVFilter(const ESL_DSQ *dsq, int L, const P7_OPROFILE *om, float *ret_sc)
       /* We know that the result will overflow in the original MSV filter */
       *ret_sc = eslINFINITY;
 #ifdef ARMDEBUG
-      printf(" SSV=%f", *ret_sc);
+      printf(" SSV2=%f\n", *ret_sc);
 #endif
       return eslERANGE;
     }
@@ -918,7 +908,105 @@ p7_SSVFilter(const ESL_DSQ *dsq, int L, const P7_OPROFILE *om, float *ret_sc)
   *ret_sc /= om->scale_b;
   *ret_sc -= 3.0; /* that's ~ L \log \frac{L}{L+3}, for our NN,CC,JJ */
 #ifdef ARMDEBUG
-  printf(" SSV=%f", *ret_sc);
+  printf(" SSV3=%f\n", *ret_sc);
 #endif
   return eslOK;
 }
+/*****************************************************************
+ * 2. Benchmark driver.
+ *****************************************************************/
+
+#ifdef p7SSVFILTER_BENCHMARK
+
+#include "p7_config.h"
+
+#include "easel.h"
+#include "esl_alphabet.h"
+#include "esl_getopts.h"
+#include "esl_random.h"
+#include "esl_randomseq.h"
+#include "esl_stopwatch.h"
+
+#include "hmmer.h"
+#include "impl_neon.h"
+
+static ESL_OPTIONS options[] = {
+    /* name           type      default  env  range toggles reqs incomp  help                                       docgroup*/
+    {"-h", eslARG_NONE, FALSE, NULL, NULL, NULL, NULL, NULL, "show brief help on version and usage", 0},
+    {"-s", eslARG_INT, "42", NULL, NULL, NULL, NULL, NULL, "set random number seed to <n>", 0},
+    {"-L", eslARG_INT, "400", NULL, "n>0", NULL, NULL, NULL, "length of random target seqs", 0},
+    {"-N", eslARG_INT, "50000", NULL, "n>0", NULL, NULL, NULL, "number of random target seqs", 0},
+    {0, 0, 0, 0, 0, 0, 0, 0, 0, 0},
+};
+static char usage[] = "[-options] <hmmfile>";
+static char banner[] = "benchmark driver for MSVFilter() implementation";
+
+int main(int argc, char **argv)
+{
+  ESL_GETOPTS *go = p7_CreateDefaultApp(options, 1, argc, argv, banner, usage);
+  char *hmmfile = esl_opt_GetArg(go, 1);
+  ESL_STOPWATCH *w = esl_stopwatch_Create();
+  ESL_RANDOMNESS *r = esl_randomness_CreateFast(esl_opt_GetInteger(go, "-s"));
+  ESL_ALPHABET *abc = NULL;
+  P7_HMMFILE *hfp = NULL;
+  P7_HMM *hmm = NULL;
+  P7_BG *bg = NULL;
+  P7_PROFILE *gm = NULL;
+  P7_OPROFILE *om = NULL;
+  P7_OMX *ox = NULL;
+  P7_GMX *gx = NULL;
+  int L = esl_opt_GetInteger(go, "-L");
+  int N = esl_opt_GetInteger(go, "-N");
+  ESL_DSQ *dsq = malloc(sizeof(ESL_DSQ) * (L + 2));
+  int i;
+  float sc1, sc2, total_sc;
+  double base_time, bench_time, Mcs;
+
+  if (p7_hmmfile_OpenE(hmmfile, NULL, &hfp, NULL) != eslOK)
+    p7_Fail("Failed to open HMM file %s", hmmfile);
+  if (p7_hmmfile_Read(hfp, &abc, &hmm) != eslOK)
+    p7_Fail("Failed to read HMM");
+  total_sc = 0.0;
+  bg = p7_bg_Create(abc);
+  p7_bg_SetLength(bg, L);
+  gm = p7_profile_Create(hmm->M, abc);
+  p7_ProfileConfig(hmm, bg, gm, L, p7_LOCAL);
+  om = p7_oprofile_Create(gm->M, abc);
+  p7_oprofile_Convert(gm, om);
+  p7_oprofile_ReconfigLength(om, L);
+
+  gx = p7_gmx_Create(gm->M, L);
+
+  /* Get a baseline time: how long it takes just to generate the sequences */
+
+  base_time = w->user;
+  esl_rsq_xfIID(r, bg->f, abc->K, L, dsq); // Only need one sequence because SSV time independent of sequence data
+  esl_stopwatch_Start(w);
+  for (i = 0; i < N; i++)
+  {
+    p7_SSVFilter(dsq, L, om, &sc1);
+    total_sc += sc1; //keep from optimizing out call to ssvfilter
+  }
+  esl_stopwatch_Stop(w);
+  bench_time = w->user;
+  Mcs = (double)N * (double)L * (double)gm->M * 1e-6 / (double)bench_time;
+  printf("%lf, %lf, %lf, %lf\n", (double)N, (double)L, (double)gm->M, bench_time);
+  esl_stopwatch_Display(stdout, w, "# CPU time: ");
+  printf("# M    = %d\n", gm->M);
+  printf("# %.1f Mc/s\n", Mcs);
+  printf("Ignore this: %f", total_sc);
+  free(dsq);
+  p7_gmx_Destroy(gx);
+  p7_oprofile_Destroy(om);
+  p7_profile_Destroy(gm);
+  p7_bg_Destroy(bg);
+  p7_hmm_Destroy(hmm);
+  p7_hmmfile_Close(hfp);
+  esl_alphabet_Destroy(abc);
+  esl_stopwatch_Destroy(w);
+  esl_randomness_Destroy(r);
+  esl_getopts_Destroy(go);
+  return 0;
+}
+#endif /*p7SSVFILTER_BENCHMARK*/
+       /*------------------ end, benchmark driver ----------------------*/
