@@ -40,11 +40,15 @@ The query
 may be '\-' (a dash character), in which case
 the query sequences are read from a stdin pipe instead of from a
 file.
+
 The
 .I seqdb 
-cannot be read from a stdin stream, because
+needs to be a 'normal' sequence file. It cannot be read from a stdin stream, because
 .B jackhmmer
-needs to do multiple passes over the database.
+needs to do multiple passes over the database. It cannot be a
+compressed (gzipped) file either, because we treat gzipped files
+essentially as stdin streams, calling an external decompression
+program. 
 
 
 .PP
