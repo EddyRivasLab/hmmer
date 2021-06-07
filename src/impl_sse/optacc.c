@@ -289,7 +289,6 @@ select_m(const P7_OPROFILE *om, const P7_OMX *ox, int i, int k)
   int     r     = (k-1) / Q;
   __m128 *tp    = om->tfv + 7*q;       	/* *tp now at start of transitions to cur cell M(i,k) */
   __m128  xBv   = _mm_set1_ps(ox->xmx[(i-1)*p7X_NXCELLS+p7X_B]);
-  __m128  zerov = _mm_setzero_ps();
   __m128  mpv, dpv, ipv;
   union { __m128 v; float p[4]; } u, tv;
   float   path[4];
@@ -300,9 +299,9 @@ select_m(const P7_OPROFILE *om, const P7_OMX *ox, int i, int k)
     dpv = ox->dpf[i-1][(q-1)*3 + p7X_D];
     ipv = ox->dpf[i-1][(q-1)*3 + p7X_I];
   } else {
-    mpv = esl_sse_rightshift_ps(ox->dpf[i-1][(Q-1)*3 + p7X_M], zerov);
-    dpv = esl_sse_rightshift_ps(ox->dpf[i-1][(Q-1)*3 + p7X_D], zerov);
-    ipv = esl_sse_rightshift_ps(ox->dpf[i-1][(Q-1)*3 + p7X_I], zerov);
+    mpv = esl_sse_rightshiftz_float(ox->dpf[i-1][(Q-1)*3 + p7X_M]);
+    dpv = esl_sse_rightshiftz_float(ox->dpf[i-1][(Q-1)*3 + p7X_D]);
+    ipv = esl_sse_rightshiftz_float(ox->dpf[i-1][(Q-1)*3 + p7X_I]);
   }	  
 
   /* paths are numbered so that most desirable choice in case of tie is first. */
@@ -321,7 +320,6 @@ select_d(const P7_OPROFILE *om, const P7_OMX *ox, int i, int k)
   int     Q     = p7O_NQF(ox->M);
   int     q     = (k-1) % Q;		/* (q,r) is position of the current DP cell D(i,k) */
   int     r     = (k-1) / Q;
-  __m128  zerov = _mm_setzero_ps();
   union { __m128 v; float p[4]; } mpv, dpv, tmdv, tddv;
   float   path[2];
 
@@ -331,10 +329,10 @@ select_d(const P7_OPROFILE *om, const P7_OMX *ox, int i, int k)
     tmdv.v = om->tfv[7*(q-1) + p7O_MD];
     tddv.v = om->tfv[7*Q + (q-1)];
   } else {
-    mpv.v  = esl_sse_rightshift_ps(ox->dpf[i][(Q-1)*3 + p7X_M], zerov);
-    dpv.v  = esl_sse_rightshift_ps(ox->dpf[i][(Q-1)*3 + p7X_D], zerov);
-    tmdv.v = esl_sse_rightshift_ps(om->tfv[7*(Q-1) + p7O_MD],   zerov);
-    tddv.v = esl_sse_rightshift_ps(om->tfv[8*Q-1],              zerov);
+    mpv.v  = esl_sse_rightshiftz_float(ox->dpf[i][(Q-1)*3 + p7X_M]);
+    dpv.v  = esl_sse_rightshiftz_float(ox->dpf[i][(Q-1)*3 + p7X_D]);
+    tmdv.v = esl_sse_rightshiftz_float(om->tfv[7*(Q-1) + p7O_MD]);
+    tddv.v = esl_sse_rightshiftz_float(om->tfv[8*Q-1]);
   }	  
 
   path[0] = ((tmdv.p[r] == 0.0) ? -eslINFINITY : mpv.p[r]);
