@@ -40,11 +40,15 @@ The query
 may be '\-' (a dash character), in which case
 the query sequences are read from a stdin pipe instead of from a
 file.
+
 The
 .I seqdb 
-cannot be read from a stdin stream, because
+needs to be a 'normal' sequence file. It cannot be read from a stdin stream, because
 .B jackhmmer
-needs to do multiple passes over the database.
+needs to do multiple passes over the database. It cannot be a
+compressed (gzipped) file either, because we treat gzipped files
+essentially as stdin streams, calling an external decompression
+program. 
 
 
 .PP
@@ -281,7 +285,7 @@ domain per significant sequence hit. The default is 10.0.
 .BI \-\-domT " <x>"
 Use a bit score threshold for per-domain output instead of an
 E-value threshold (any setting of
-.B \-\-domT
+.B \-\-domE
 is ignored). Report domains with a bit score of >=
 .I <x>
 in per-domain output, in addition to the top-scoring domain per
@@ -349,7 +353,7 @@ The default is 0.001.
 .BI \-\-incdomT " <x>"
 Use a bit score threshold for per-domain inclusion instead of an
 E-value threshold (any setting of
-.B \-\-incT
+.B \-\-incdomE
 is ignored). Include domains with a bit score of >=
 .IR <x> .
 By default this option is unset.
