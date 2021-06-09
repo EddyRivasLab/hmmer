@@ -302,9 +302,9 @@ forward_engine(int do_full, const ESL_DSQ *dsq, int L, const P7_OPROFILE *om, P7
       xBv   = _mm_set1_ps(xB);
 
       /* Right shifts by 4 bytes. 4,8,12,x becomes x,4,8,12.  Shift zeros on. */
-      mpv   = esl_sse_rightshift_ps(MMO(dpp,Q-1), zerov);
-      dpv   = esl_sse_rightshift_ps(DMO(dpp,Q-1), zerov);
-      ipv   = esl_sse_rightshift_ps(IMO(dpp,Q-1), zerov);
+      mpv   = esl_sse_rightshiftz_float(MMO(dpp,Q-1));
+      dpv   = esl_sse_rightshiftz_float(DMO(dpp,Q-1));
+      ipv   = esl_sse_rightshiftz_float(IMO(dpp,Q-1));
       
       for (q = 0; q < Q; q++)
 	{
@@ -346,7 +346,7 @@ forward_engine(int do_full, const ESL_DSQ *dsq, int L, const P7_OPROFILE *om, P7
       /* We're almost certainly're obligated to do at least one complete 
        * DD path to be sure: 
        */
-      dcv        = esl_sse_rightshift_ps(dcv, zerov);
+      dcv        = esl_sse_rightshiftz_float(dcv);
       DMO(dpc,0) = zerov;
       tp         = om->tfv + 7*Q;	/* set tp to start of the DD's */
       for (q = 0; q < Q; q++) 
@@ -367,7 +367,7 @@ forward_engine(int do_full, const ESL_DSQ *dsq, int L, const P7_OPROFILE *om, P7
 	{			/* Fully serialized version */
 	  for (j = 1; j < 4; j++)
 	    {
-	      dcv = esl_sse_rightshift_ps(dcv, zerov);
+	      dcv = esl_sse_rightshiftz_float(dcv);
 	      tp  = om->tfv + 7*Q;	/* set tp to start of the DD's */
 	      for (q = 0; q < Q; q++) 
 		{ /* note, extend dcv, not DMO(q); only adding DD paths now */
@@ -382,7 +382,7 @@ forward_engine(int do_full, const ESL_DSQ *dsq, int L, const P7_OPROFILE *om, P7
 	    {
 	      register __m128 cv;	/* keeps track of whether any DD's change DMO(q) */
 
-	      dcv = esl_sse_rightshift_ps(dcv, zerov);
+	      dcv = esl_sse_rightshiftz_float(dcv);
 	      tp  = om->tfv + 7*Q;	/* set tp to start of the DD's */
 	      cv  = zerov;
 	      for (q = 0; q < Q; q++) 
