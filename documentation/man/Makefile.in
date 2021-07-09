@@ -23,7 +23,7 @@ INSTALL     = @INSTALL@
 MANS =  hmmer\
 	hmmalign\
 	hmmbuild\
-	hmmc2\
+#	hmmc2\        # we don't install the hmmc2 executable or manpage automatically.
 	hmmconvert\
 	hmmemit\
 	hmmfetch\
