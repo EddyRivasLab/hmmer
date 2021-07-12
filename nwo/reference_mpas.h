@@ -14,13 +14,10 @@
 #include "h4_profile.h"
 #include "h4_refmx.h"
 
-
-
 extern int h4_reference_MPAS(ESL_RANDOMNESS *rng, const ESL_DSQ *dsq, int L, const H4_PROFILE *hmm, const H4_MODE *mo,
                              const H4_REFMX *rxf, const H4_REFMX *rxd, H4_PATH *pi,
                              float **byp_wrk,  H4_ANCHORHASH *ah,
                              H4_REFMX *afu, H4_REFMX *afd, H4_ANCHORSET *anch, float *ret_asc,
                              const H4_MPAS_PARAMS *prm, H4_MPAS_STATS *stats);
 
-
-#endif // h4REFERENCE_MPAS_INCLUDED
+#endif //h4REFERENCE_MPAS_INCLUDED

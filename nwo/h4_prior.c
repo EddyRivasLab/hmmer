@@ -124,11 +124,11 @@ create_amino(void)
   pri->ti->q[0]        = 1.0;
   pri->ti->alpha[0][0] = 0.1551; /* TIM */
   pri->ti->alpha[0][1] = 0.1331; /* TII */
-  pri->ti->alpha[0][2] = 0.05;   /* TID */  // SRE: FIXME. I made this up for Plan9.
+  pri->ti->alpha[0][2] = 0.0001; /* TID */  // SRE: FIXME. I made this up for Plan9.
 
   pri->td->q[0]        = 1.0;
   pri->td->alpha[0][0] = 0.9002; /* TDM */
-  pri->td->alpha[0][1] = 0.05;   /* TDI */  // SRE: FIXME. Made this up for Plan9.
+  pri->td->alpha[0][1] = 0.0001; /* TDI */  // SRE: FIXME. Made this up for Plan9.
   pri->td->alpha[0][2] = 0.5630; /* TDD */
 
   /* Match emission priors are from Kimmen Sjolander, trained

@@ -45,8 +45,8 @@ static int sample_endpoints(ESL_RANDOMNESS *rng, const H4_PROFILE *hmm, int *ret
  * Args:      rng - random number generator
  *            hmm - profile to sample from
  *            mo  - algorithm-dependent profile configuration "mode"
- *            sq  - optRETURN: sampled digital sequence; or NULL
- *            pi  - optRETURN: sampled path
+ *            sq  - optRETURN: sampled digital sequence; or NULL     [caller-provided space; reused/resized as needed]
+ *            pi  - optRETURN: sampled path; or NULL                 [caller-provided space; reused/resized as needed]
  *
  * Returns:   <eslOK> on success, and <sq> and <pi>, if provided, 
  *            contain the sampled sequence and path.

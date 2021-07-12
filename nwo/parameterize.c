@@ -61,7 +61,7 @@ h4_parameterize(const H4_COUNTS *ctm, const H4_PRIOR *pri, H4_PROFILE *hmm)
 	  esl_mixdchlet_MPParameters(pri->em, ctm->e[k],   p);   esl_vec_D2F(p, K, hmm->e[k]);
 	  esl_mixdchlet_MPParameters(pri->tm, ctm->t[k],   p);   esl_vec_D2F(p, 3, hmm->t[k]);   // M
 	  esl_mixdchlet_MPParameters(pri->ti, ctm->t[k]+3, p);   esl_vec_D2F(p, 3, hmm->t[k]+3); // I
-	  esl_mixdchlet_MPParameters(pri->ti, ctm->t[k]+6, p);   esl_vec_D2F(p, 3, hmm->t[k]+6); // D
+	  esl_mixdchlet_MPParameters(pri->td, ctm->t[k]+6, p);   esl_vec_D2F(p, 3, hmm->t[k]+6); // D
 	}
       esl_mixdchlet_MPParameters(pri->em, ctm->e[M], p);         esl_vec_D2F(p, K, hmm->e[k]);
     }

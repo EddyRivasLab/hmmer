@@ -64,7 +64,7 @@ typedef struct h4_refmx_s {
 
 /* The same data structure gets used in several DP contexts.
  * The <type> field gets set by each algorithm implementation,
- * so p7_refmx_Validate() knows what type of DP matrix it is.
+ * so h4_refmx_Validate() knows what type of DP matrix it is.
  * 
  * Some of these codes must be sync'ed with h4_sparsemx.h. Some unit
  * tests compare reference, sparse matrices, including their

@@ -330,10 +330,7 @@ reference_aec_trace(const P7_PROFILE *gm, P7_ENVELOPES *env, const P7_REFMX *mx,
  * 4. Footnotes
  *****************************************************************/
 
-/* If we were using Plan9, we could do this as a "1-state" model,
- * 1 DP cell per i,k. But since we need to prohibit D->I,I->D, we
- * can't.
- * 
+/* 
  * Because we fit the calculation into one matrix, we can't 
  * initialize an ia-1 top row for the up matrices, because 
  * we may be adjacent to an ib row of an immediately preceding

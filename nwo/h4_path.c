@@ -1,14 +1,15 @@
 /* H4_PATH: a state path (alignment) of a profile to a sequence.
  * 
  * Contents:
- *    1. The H4_PATH structure
- *    2. Inferring paths from existing alignments
- *    3. Counting paths into new HMMs
- *    4. Calculating lod scores for paths
- *    5. Debugging and development tools
- *    6. Unit tests
- *    7. Test driver
- *    8. Example
+ *    1. H4_PATH structure
+ *    2. Getting info from H4_PATH
+ *    3. Inferring paths from existing alignments
+ *    4. Counting paths into new HMMs
+ *    5. Calculating lod scores for paths
+ *    6. Debugging and development tools
+ *    7. Unit tests
+ *    8. Test driver
+ *    9. Example
  */
 
 #include "h4_config.h"
@@ -27,7 +28,7 @@
 
 
 /*****************************************************************
- * 1. The H4_PATH structure
+ * 1. H4_PATH structure
  *****************************************************************/
 
 /* Function:  h4_path_Create()
@@ -270,24 +271,6 @@ h4_path_Reverse(H4_PATH *pi)
 }
       
   
-/* Function:  h4_path_GetSeqlen()
- * Synopsis:  Returns length of sequence emitted by path
- * Incept:    SRE, Wed 22 May 2019
- */
-int
-h4_path_GetSeqlen(const H4_PATH *pi)
-{
-  int L = 0;
-  int z;
-
-  for (z = 0; z < pi->Z; z++)
-    switch (pi->st[z]) {
-    case h4P_N:   case h4P_J:  case h4P_C: L += pi->rle[z] - 1; break;
-    case h4P_MG:  case h4P_IG:             L += pi->rle[z];     break;
-    case h4P_ML:  case h4P_IL:             L += pi->rle[z];     break;
-    }
-  return L;
-}
 
 /* Function:  h4_path_Reuse()
  * Synopsis:  Reinitialize and reuse an existing path
@@ -339,11 +322,110 @@ h4_path_Destroy(H4_PATH *pi)
 /*----------------- end, H4_PATH structure ----------------------*/
 
 
+/*****************************************************************
+ * 2. Getting info from H4_PATH
+ *****************************************************************/
 
+/* Function:  h4_path_GetSeqlen()
+ * Synopsis:  Returns length of sequence emitted by path
+ * Incept:    SRE, Wed 22 May 2019
+ */
+int
+h4_path_GetSeqlen(const H4_PATH *pi)
+{
+  int L = 0;
+  int z;
+
+  for (z = 0; z < pi->Z; z++)
+    switch (pi->st[z]) {
+    case h4P_N:   case h4P_J:  case h4P_C: L += pi->rle[z] - 1; break;
+    case h4P_MG:  case h4P_IG:             L += pi->rle[z];     break;
+    case h4P_ML:  case h4P_IL:             L += pi->rle[z];     break;
+    }
+  return L;
+}
+
+
+/* Function:  h4_path_GetDomainCount()
+ * Synopsis:  Returns number of domains in a path
+ * Incept:    SRE, Tue 06 Jul 2021 [H11/16]
+ */
+int
+h4_path_GetDomainCount(const H4_PATH *pi)
+{
+  int d = 0;
+  int z;
+
+  for (z = 0; z < pi->Z; z++)
+    if (h4_path_IsB(pi->st[z])) d++;
+  return d;
+}
+
+
+/* Function:  h4_path_FetchDomainBounds()
+ * Synopsis:  Get seq/profile bounds of a desired domain 1..D from a path
+ * Incept:    SRE, Tue 06 Jul 2021 [H11/16] [The Weakerthans, Reconstruction Site]
+ *
+ * Purpose:   Get bounds <ia>..<ib> (on the sequence) and <ka>..<kb> (on
+ *            the profile) for domain <whichd> from path <pi>.
+ *
+ * Args:      pi     - path to get domain coords from
+ *            whichd - which domain to get coords for (1..D)
+ *            opt_ia - optRETURN: start coord on seq (1..L)
+ *            opt_ib - optRETURN: end "  
+ *            opt_ka - optRETURN: start coord on profile (1..M)
+ *            opt_kb - optRETURN: end "
+ *
+ * Returns:   <eslOK> on success.
+ *
+ * Throws:    <eslEINVAL> if <whichd> isn't 1..D.
+ */
+int
+h4_path_FetchDomainBounds(const H4_PATH *pi, int whichd, int *opt_ia, int *opt_ib, int *opt_ka, int *opt_kb)
+{
+  int d = 0;
+  int i = 0;
+  int k, z, ia, ib, ka, kb;
+  int status;
+  
+  ESL_DASSERT1(( whichd > 0 ));
+
+  for (z = 0; z < pi->Z; z++)
+    {
+      if (h4_path_IsX(pi->st[z]))
+        {
+          if (d == whichd) { ib = i; kb = k-1; break; }
+          i += pi->rle[z]-1;
+        }
+      else if (h4_path_IsB(pi->st[z]))
+        {
+          k = pi->rle[z];  // k=1 for G
+          if (++d == whichd) { ka = k; ia = i+1; }
+        }
+      else if (h4_path_IsM(pi->st[z])) { i += pi->rle[z]; k += pi->rle[z]; }
+      else if (h4_path_IsI(pi->st[z])) { i += pi->rle[z];                  }
+      else if (h4_path_IsD(pi->st[z])) {                  k += pi->rle[z]; }
+    }
+  if (d != whichd) ESL_XEXCEPTION(eslEINVAL, "no such domain");
+
+  if (opt_ia) *opt_ia = ia;
+  if (opt_ib) *opt_ib = ib;
+  if (opt_ka) *opt_ka = ka;
+  if (opt_kb) *opt_kb = kb;
+  return eslOK;
+  
+ ERROR:
+  if (opt_ia) *opt_ia = -1;
+  if (opt_ib) *opt_ib = -1;
+  if (opt_ka) *opt_ka = -1;
+  if (opt_kb) *opt_kb = -1;
+  return status;
+}
+/*-------------------- end, info getting ------------------------*/
 
 
 /*****************************************************************
- * 2. Inferring paths from existing alignments
+ * 3. Inferring paths from existing alignments
  *****************************************************************/
 
 
@@ -552,7 +634,7 @@ h4_path_InferGlocal(const ESL_ALPHABET *abc, const ESL_DSQ *ax, int alen, const 
 
 
 /*****************************************************************
- * 3. Counting paths into new HMMs
+ * 4. Counting paths into new HMMs
  *****************************************************************/
 
 /* Function:  h4_path_Count()
@@ -701,7 +783,7 @@ h4_path_Count(const H4_PATH *pi, const ESL_DSQ *dsq, float wgt, H4_COUNTS *ctm)
 
 
 /*****************************************************************
- * 4. Calculating lod scores for paths
+ * 5. Calculating lod scores for paths
  *****************************************************************/
 
 /* Function:  h4_path_Score()
@@ -813,7 +895,7 @@ h4_path_Score(const H4_PATH *pi, const ESL_DSQ *dsq, const H4_PROFILE *hmm, cons
 
 
 /*****************************************************************
- * 5. Debugging and development tools
+ * 6. Debugging and development tools
  *****************************************************************/
 
 
@@ -1134,7 +1216,7 @@ h4_path_DumpCigar(FILE *fp, const H4_PATH *pi)
 
 
 /*****************************************************************
- * 6. Unit tests
+ * 7. Unit tests
  *****************************************************************/
 #ifdef h4PATH_TESTDRIVE
 
@@ -1342,7 +1424,7 @@ utest_counting(void)
 
 
 /*****************************************************************
- * 7. Test driver
+ * 8. Test driver
  *****************************************************************/
 #ifdef h4PATH_TESTDRIVE
 
@@ -1393,7 +1475,7 @@ main(int argc, char **argv)
 
 
 /*****************************************************************
- * 8. Example
+ * 9. Example
  *****************************************************************/
 #ifdef h4PATH_EXAMPLE
 

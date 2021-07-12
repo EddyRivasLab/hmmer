@@ -58,8 +58,8 @@
  *            L       - length of <dsq> in residues
  *            hmm     - query profile
  *            mo      - profile's mode (algorithm-dependent parameters)
- *            rmx     - DP matrix
- *            opt_pi  - optRETURN: path structure for Viterbi alignment, or NULL
+ *            rmx     - RETURN: DP matrix                                        [caller-provided space; reused/resized as needed]
+ *            opt_pi  - optRETURN: path structure for Viterbi alignment, or NULL [caller-provided space; reused/resized as needed]
  *            opt_sc  - optRETURN: Viterbi raw score in bits, or NULL
  *
  * Returns:   <eslOK> on success. <rmx> contains the Viterbi matrix.
@@ -85,6 +85,10 @@ h4_reference_Viterbi(const ESL_DSQ *dsq, int L, const H4_PROFILE *hmm, const H4_
   /* reallocation, if needed */
   if (( status = h4_refmx_GrowTo (rmx, M, L))              != eslOK) goto ERROR;
   if (( status = h4_refmx_SetType(rmx, M, L, h4R_VITERBI)) != eslOK) goto ERROR;
+
+  if (opt_pi) {
+    if (( status = h4_path_Reuse(opt_pi)) != eslOK) goto ERROR;
+  }
 
   /* Initialization of the zero row. */
   dpc = rmx->dp[0];
@@ -239,7 +243,7 @@ h4_reference_Viterbi(const ESL_DSQ *dsq, int L, const H4_PROFILE *hmm, const H4_
  *            L      : length of the target sequence
  *            hmm    : query profile
  *            mo     : algorithm-dependent parameters, the alignment "mode"
- *            rmx    : RESULT: DP matrix
+ *            rmx    : RESULT: DP matrix                                      [caller-provided space; reused/resized as needed]
  *            opt_sc : optRETURN: raw Forward score in bits
  *
  * Returns:   <eslOK> on success. <rmx> contains the Forward matrix;
@@ -406,7 +410,7 @@ h4_reference_Forward(const ESL_DSQ *dsq, int L, const H4_PROFILE *hmm, const H4_
  *
  * Purpose:   The Backward algorithm, comparing profile <hmm> in mode
  *            <mo> to target sequence <dsq> of length <L>. Caller
- *            provides an allocated <P7_REFMX> DP matrix <rmx>; this
+ *            provides an allocated <H4_REFMX> DP matrix <rmx>; this
  *            matrix will be reallocated if needed, so it can be
  *            reused from a previous calculation, including a smaller
  *            one.
@@ -422,7 +426,7 @@ h4_reference_Forward(const ESL_DSQ *dsq, int L, const H4_PROFILE *hmm, const H4_
  *            L      : length of the target sequence
  *            hmm    : query profile 
  *            mo     : algorithm-dependent parameters, the alignment "mode"
- *            rmx    : allocated DP matrix
+ *            rmx    : RETURN: allocated DP matrix                            [caller-provided space; reused/resized as needed]
  *            opt_sc : optRETURN: raw Backward score in bits
  *
  * Returns:   <eslOK> on success. <rmx> contains the Backward matrix;

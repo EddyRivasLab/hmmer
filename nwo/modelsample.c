@@ -50,6 +50,21 @@ static int  anchored_ensemble_engine(ESL_RANDOMNESS *rng, const ESL_ALPHABET *ab
 /* Function:  h4_modelsample()
  * Synopsis:  Sample a random profile HMM.
  * Incept:    SRE, Mon 06 Aug 2018
+ *
+ * Purpose:   Construct a profile HMM of <M> consensus positions, for alphabet <abc>,
+ *            with randomly sampled parameters (using <rng>).
+ *
+ *            The profile is allocated here, and returned thru <ret_hmm>. Caller is
+ *            responsible for free'ing, with <h4_profile_Destroy()>
+ *
+ * Args:      rng     - random number generator    [internal state changed]
+ *            abc     - alphabet to use
+ *            M       - model length in consensus positions
+ *            ret_hmm - RETURN: new profile        [allocated here; caller frees]
+ *
+ * Returns:   <eslOK> on success.
+ *
+ * Throws:    <eslEMEM> on allocation failure.
  */
 int
 h4_modelsample(ESL_RANDOMNESS *rng, const ESL_ALPHABET *abc, int M, H4_PROFILE **ret_hmm)
@@ -415,9 +430,9 @@ h4_modelsample_SinglePathSeq(ESL_RANDOMNESS *rng, const ESL_ALPHABET *abc, int M
  *            M        - length of model to sample (>= 1)
  *
  *            output:
- *            ret_hmm  - sampled profile \theta
- *            ret_sq   - sampled seq x
- *            ret_anch - sampled anchorset A 
+ *            ret_hmm  - sampled profile \theta (new obj created here)
+ *            ret_sq   - sampled seq x          (new obj created here)
+ *            ret_anch - sampled anchorset A    (new obj created here)
  *
  *            optional output:
  *            opt_mo   - comparison mode (multiglocal, with L=sq->n set)

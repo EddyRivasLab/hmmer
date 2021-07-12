@@ -1,9 +1,9 @@
-/* H4_ENVSET 
- * 
- */
 #ifndef h4ENVSET_INCLUDED
 #define h4ENVSET_INCLUDED
+
 #include "h4_config.h"
+
+#include "h4_anchorset.h"
 
 /* H4_ENVELOPE
  *    Contains information about a domain's "envelope".
@@ -30,10 +30,12 @@ typedef struct {
  *    Envelopes are indexed 1..D, with sentinels at 0 and D+1.
  *
  *    Sentinels are set the same as in an H4_ANCHORSET:
- *         e[0]   (i0,k0) = (0, M+1)
- *         e[D+1] (i0,k0) = (L+1, 0)
- *    Or, as a special case when L=M=0, both sentinels are (0,0).  Other than
- *    (i0,k0), the other fields in the sentinels are unused and set to 0.
+ *         e[0]   (i',k') = (0, M+1)  
+ *         e[D+1] (i',k') = (L+1, 0)
+ *    for all coords i' = {oa,ia,i0,ib,ob} on the sequence and
+ *    k' = {ka,k0,kb} on the profile.
+ *
+ *    AEC traceback depends in the ia[D+1] sentinel.
  */
 typedef struct {
   H4_ENVELOPE *e;	// array of envelope structures       

@@ -120,6 +120,10 @@ typedef struct {
 #define h4_HASVECS    (1<<2)
 #define h4_SINGLE     (1<<3)
 
+/* MEG traceback routines have to check consistency, all path transitions must be nonzero */
+#define H4_DELTAT(val, tsc) ( ((tsc) == -eslINFINITY) ? -eslINFINITY : (val))
+
+
 extern H4_PROFILE *h4_profile_Create(const ESL_ALPHABET *abc, int M);
 extern H4_PROFILE *h4_profile_CreateShell(void);
 extern int         h4_profile_CreateBody(H4_PROFILE *hmm, const ESL_ALPHABET *abc, int M);

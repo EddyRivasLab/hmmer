@@ -73,7 +73,7 @@ static int exactsc  (H4_ENVSET *env, const ESL_DSQ *dsq, const H4_PROFILE *hmm, 
  *            afd  : ASC Forward DOWN matrix
  *            apu  : ASC posterior decoding UP matrix
  *            apd  : ASC posterior decoding DOWN matrix
- *            env  : RETURN : envelope data for all <D> domains
+ *            env  : RETURN : envelope data for all <D> domains [caller-provided space; reused/resized as needed]
  *
  * Returns:   <eslOK> on success. <env> may have been reallocated,
  *            and now contains the envelope data. <afu> and <afd> 
@@ -355,15 +355,173 @@ exactsc(H4_ENVSET *env, const ESL_DSQ *dsq, const H4_PROFILE *hmm, const H4_MODE
 /*****************************************************************
  * 3. Unit tests
  *****************************************************************/
+#ifdef h4REFERENCE_ENVELOPES_TESTDRIVE
 
-// TK
+#include "esl_alphabet.h"
+#include "esl_random.h"
+#include "esl_sq.h"
 
+#include "h4_path.h"
+#include "h4_anchorset.h"
+#include "h4_anchorhash.h"
+
+#include "emit.h"
+#include "modelsample.h"
+#include "reference_asc.h"
+#include "reference_dp.h"
+#include "reference_mpas.h"
+
+static void
+utest_generation(ESL_RANDOMNESS *rng, int M, const ESL_ALPHABET *abc, int N)
+{
+  char             msg[] = "reference_envelopes:: generation unit test failed";
+  H4_PROFILE      *hmm   = NULL;
+  H4_MODE         *mo    = h4_mode_Create();
+  ESL_SQ          *sq    = esl_sq_CreateDigital(abc);
+  H4_PATH         *gpi   = h4_path_Create();              // generated path
+  H4_PATH         *pi    = h4_path_Create();              
+  H4_REFMX        *rxf   = h4_refmx_Create(M, 20);        // Vit, Fwd ... then ASC Decode UP
+  H4_REFMX        *rxd   = h4_refmx_Create(M, 20);        // Bck, Decode ... then ASC Decode DOWN
+  H4_REFMX        *afu   = h4_refmx_Create(M, 20);        // ASC Forward UP
+  H4_REFMX        *afd   = h4_refmx_Create(M, 20);        // ASC Forward DOWN
+  H4_REFMX        *apu   = rxf;                           // for "clarity", we use two names for one shared matrix
+  H4_REFMX        *apd   = rxd;                           //  ... this one too
+  H4_ANCHORSET    *anch  = h4_anchorset_Create(0,0,0);
+  H4_ANCHORHASH   *ah    = h4_anchorhash_Create();
+  H4_ENVSET       *env   = h4_envset_Create(0,0,0); 
+  float           *wrk   = NULL;                          // workspace needed (and managed) by MPAS
+  float            tol   = 0.001;
+  int              idx;
+  float            gsc, vsc, fsc, asc;
+  int              ia,ib;
+  int              d;
+
+  if ( h4_modelsample(rng, abc, M, &hmm) != eslOK) esl_fatal(msg);
+
+  for (idx = 1; idx <= N; idx++)
+    {
+      /* Emit sequence from model, using an arbitrary length model of <M>,
+       * and restrict the emitted sequence length to 6M, arbitrarily, to 
+       * keep it down to something reasonable. Then reset length model
+       * to the actual length.
+       */
+      if ( h4_mode_SetLength(mo, M)                   != eslOK) esl_fatal(msg);
+      do {
+        if ( h4_emit(rng, hmm, mo, sq, gpi)           != eslOK) esl_fatal(msg);
+      } while (sq->n > M * 6); 
+      if ( h4_path_Score(gpi, sq->dsq, hmm, mo, &gsc) != eslOK) esl_fatal(msg);
+      if ( h4_mode_SetLength(mo, sq->n)               != eslOK) esl_fatal(msg);
+
+      /* First pass analysis */
+      if ( h4_reference_Viterbi (sq->dsq, sq->n, hmm, mo, rxf, pi,  &vsc) != eslOK) esl_fatal(msg);   // use <rxf> matrix temporarily
+      if ( h4_reference_Forward (sq->dsq, sq->n, hmm, mo, rxf,      &fsc) != eslOK) esl_fatal(msg);   // overwrites Viterbi matrix with Forward in <rxf>
+      if ( h4_reference_Backward(sq->dsq, sq->n, hmm, mo, rxd,      NULL) != eslOK) esl_fatal(msg);   // use <rxd> matrix temporarily
+      if ( h4_reference_Decoding(sq->dsq, sq->n, hmm, mo, rxf, rxd, rxd)  != eslOK) esl_fatal(msg);   // overwrites Backward with Decoding in <rxd>
+
+      /* Determine most probable anchor set, followed by ASC decoding */
+      if ( h4_reference_MPAS(rng, sq->dsq, sq->n, hmm, mo, rxf, rxd, pi, &wrk, ah, afu, afd, anch, &asc, NULL, NULL) != eslOK) esl_fatal(msg);
+      if ( h4_reference_asc_Backward(sq->dsq, sq->n, hmm, mo, anch, apu, apd, NULL)               != eslOK) esl_fatal(msg);
+      if ( h4_reference_asc_Decoding(sq->dsq, sq->n, hmm, mo, anch, afu, afd, apu, apd, apu, apd) != eslOK) esl_fatal(msg);
+
+      /* Envelope inference */
+      if ( h4_reference_Envelopes(sq->dsq, sq->n, hmm, mo, anch, apu, apd, afu, afd, env) != eslOK) esl_fatal(msg);
+
+      /* Test 1. Coords for each domain are coherent. */
+      if (anch->D != env->D) esl_fatal(msg);
+      for (d = 1; d <= anch->D; d++)
+        {
+          if (! (            1 <= env->e[d].oa &&
+                  env->e[d].oa <= env->e[d].ia &&
+                  env->e[d].ia <= env->e[d].i0 &&
+                  env->e[d].i0 <= env->e[d].ib &&
+                  env->e[d].ib <= env->e[d].ob &&
+                  env->e[d].ob <= sq->n))
+            esl_fatal(msg);
+        }
+
+      /* Test 2. Envelopes do not overlap (in ia/ib coords. Outer oa/ob coords can.) */
+      for (d = 1; d <= env->D; d++)
+        if (! (env->e[d].ia > env->e[d-1].ib)) esl_fatal(msg);  // boundary condition e[0].ib = 0
+
+      /* Test 3. envsc(d) <= asc_sc <= fwdsc */
+      for (d = 1; d <= env->D; d++)
+        if (! (env->e[d].env_sc <= asc+tol && asc <= fsc+tol)) esl_fatal(msg);
+
+      /* Test 4. For D=1 case (only), if outer envelope encompasses
+       *         generated trace's domain, env_sc > trace score.
+       */
+      if (h4_path_GetDomainCount(gpi) == 1 && anch->D == 1)
+        {
+          h4_path_FetchDomainBounds(gpi, 1, &ia, &ib, /*ka=*/NULL, /*kb=*/NULL);
+          if (env->e[1].oa <= ia && env->e[1].ob >= ib)
+            {
+              if (! (env->e[1].env_sc >= gsc)) esl_fatal(msg);
+            }
+        }
+
+      // sq, gpi are reuse'd in h4_emit
+      // pi, rxf, rxd are reuse'd in h4_reference_* DP routines
+      // ah, afu, afd, anch reuse'd in MPAS
+      // apu, apd reuse'd in asc_Backward
+      // env reuse'd in Envelopes
+    } 
+
+  free(wrk);
+  h4_envset_Destroy(env);
+  h4_anchorhash_Destroy(ah);
+  h4_anchorset_Destroy(anch);
+  h4_refmx_Destroy(afu);  h4_refmx_Destroy(afd);    
+  h4_refmx_Destroy(rxf);  h4_refmx_Destroy(rxd);    // apu,apd point at these and reuse them.
+  h4_path_Destroy(pi);    h4_path_Destroy(gpi);
+  esl_sq_Destroy(sq);
+  h4_mode_Destroy(mo);
+  h4_profile_Destroy(hmm);
+}
+#endif // h4REFERENCE_ENVELOPES_TESTDRIVE
 
 /*****************************************************************
  * 4. Test driver
  *****************************************************************/
 
-// TK
+#ifdef h4REFERENCE_ENVELOPES_TESTDRIVE
+
+#include "easel.h"
+#include "esl_getopts.h"
+
+#include "general.h"
+
+static ESL_OPTIONS options[] = {
+  /* name           type      default  env  range toggles reqs incomp  help                                   docgroup*/
+  { "-h",         eslARG_NONE,   NULL, NULL, NULL,  NULL,   NULL,  NULL, "show brief help summary",                   0 },
+  { "-s",         eslARG_INT,     "0", NULL, NULL,  NULL,   NULL,  NULL, "set random number generator seed",          0 },
+  { "-M",         eslARG_INT,    "10", NULL, NULL,  NULL,   NULL,  NULL, "set test profile length",                   0 },
+  { "-N",         eslARG_INT,   "100", NULL, NULL,  NULL,   NULL,  NULL, "number of profile/seq comparisons to test", 0 },
+  { "--version",  eslARG_NONE,   NULL, NULL, NULL,  NULL,   NULL,  NULL, "show HMMER version number",                 0 },
+  {  0, 0, 0, 0, 0, 0, 0, 0, 0, 0 },
+};
+
+int
+main(int argc, char **argv)
+{
+  ESL_GETOPTS    *go  = h4_CreateDefaultApp(options, 0, argc, argv, "test driver for reference_envelopes", "[-options]");
+  ESL_RANDOMNESS *rng = esl_randomness_Create(esl_opt_GetInteger(go, "-s"));
+  ESL_ALPHABET   *abc = esl_alphabet_Create(eslAMINO);
+  int             M   = esl_opt_GetInteger(go, "-M");
+  int             N   = esl_opt_GetInteger(go, "-N");
+
+  fprintf(stderr, "## %s\n", argv[0]);
+  fprintf(stderr, "#  rng seed = %" PRIu32 "\n", esl_randomness_GetSeed(rng)); 
+
+  utest_generation(rng, M, abc, N);
+
+  fprintf(stderr, "#  status   = ok\n");
+
+  esl_alphabet_Destroy(abc);
+  esl_randomness_Destroy(rng);
+  esl_getopts_Destroy(go);
+  return eslOK;
+}
+#endif // h4REFERENCE_ENVELOPES_TESTDRIVE
 
 
 /*****************************************************************
@@ -403,7 +561,7 @@ static char banner[] = "example of reference envelope determination";
 int
 main(int argc, char **argv)
 {
-  ESL_GETOPTS    *go      = h4_CreateDefaultApp(options, -1, argc, argv, banner, usage);  // -1 means allow any number of cmdline args
+  ESL_GETOPTS    *go      = h4_CreateDefaultApp(options, 2, argc, argv, banner, usage);
   ESL_RANDOMNESS *rng     = esl_randomness_Create(esl_opt_GetInteger(go, "-s"));
   char           *hmmfile = esl_opt_GetArg(go, 1);
   char           *seqfile = esl_opt_GetArg(go, 2);

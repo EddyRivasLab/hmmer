@@ -80,6 +80,30 @@ h4_envset_Resize(H4_ENVSET *env, int D)
 }
 
 
+/* Function:  h4_envset_SetSentinels()
+ * Synopsis:  Set the sentinels in an envelope set
+ * Incept:    SRE, Sun 11 Jul 2021 [Josh Ritter, Another New World]
+ */
+int
+h4_envset_SetSentinels(H4_ENVSET *env, int D, int L, int M)
+{
+  env->e[0].oa = env->e[0].ia = env->e[0].i0 = env->e[0].ib = env->e[0].ob = 0;
+  env->e[0].ka = env->e[0].k0 = env->e[0].kb = M+1;
+
+  env->e[D+1].oa = env->e[D+1].ia = env->e[D+1].i0 = env->e[D+1].ib = env->e[D+1].ob = L+1;
+  env->e[D+1].ka = env->e[D+1].k0 = env->e[D+1].kb = 0;
+
+  env->e[0].env_sc   = env->e[D+1].env_sc   = 0.;
+  env->e[0].null2_sc = env->e[D+1].null2_sc = 0.;  
+  env->e[0].flags    = env->e[D+1].flags    = 0;
+
+  env->D = D;
+  env->L = L;
+  env->M = M;
+  return eslOK;
+}
+
+
 /* Function:  h4_envset_CopyFromAnchorset()
  * Synopsis:  Use an anchor set to initialize an H4_ENVSET
  * Incept:    SRE, Wed 17 Mar 2021
@@ -94,7 +118,9 @@ h4_envset_CopyFromAnchorset(const H4_ANCHORSET *anch, H4_ENVSET *env)
   int d;
   int status;
 
-  for (d = 0; d <= anch->D+1; d++)  // inclusive of sentinels, which are same in anchorset/envset
+  if ((status = h4_anchorset_GetSentinels(anch, &(env->L), &(env->M))) != eslOK) return status;
+
+  for (d = 1; d <= anch->D; d++)  
     {
       env->e[d].i0 = anch->a[d].i0;
       env->e[d].k0 = anch->a[d].k0;
@@ -107,8 +133,7 @@ h4_envset_CopyFromAnchorset(const H4_ANCHORSET *anch, H4_ENVSET *env)
       env->e[d].null2_sc = 0.;
       env->e[d].flags    = 0;
     }
-  if ((status = h4_anchorset_GetSentinels(anch, &(env->L), &(env->M))) != eslOK) return status;
-  env->D = anch->D;
+  h4_envset_SetSentinels(env, anch->D, env->L, env->M);
   return eslOK;
 }
 

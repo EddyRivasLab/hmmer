@@ -3,6 +3,7 @@
 #include "h4_config.h"
 
 #include "easel.h"
+#include "esl_random.h"
 
 #include "h4_mode.h"
 #include "h4_path.h"
@@ -19,5 +20,5 @@ extern int h4_reference_ViterbiTrace   (                                      co
 extern int h4_reference_StochasticTrace(ESL_RANDOMNESS *rng, float **wrk_byp, const H4_PROFILE *hmm, const H4_MODE *mo, const H4_REFMX *rxf, H4_PATH *pi);
 
 
-#endif /* h4REFERENCE_DP_INCLUDED */
+#endif //h4REFERENCE_DP_INCLUDED
 

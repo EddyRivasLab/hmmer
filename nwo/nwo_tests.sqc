@@ -1,4 +1,5 @@
 # ........ ....................
+1 exercise h4_anchorhash         @nwo/h4_anchorhash_utest@ -s0
 1 exercise h4_hmmfile            @nwo/h4_hmmfile_utest@ -s0
 1 exercise h4_mode               @nwo/h4_mode_utest@
 1 exercise h4_path               @nwo/h4_path_utest@ -s0
@@ -7,8 +8,10 @@
 1 exercise fbfilter              @nwo/fbfilter_utest@ -s0
 1 exercise logsum                @nwo/logsum_utest@ -s0
 1 exercise modelsample           @nwo/modelsample_utest@ -s0
+1 exercise reference_aec         @nwo/reference_aec_utest@ -s0
 1 exercise reference_asc         @nwo/reference_asc_utest@ -s0
 1 exercise reference_dp          @nwo/reference_dp_utest@ -s0
+1 exercise reference_envelopes   @nwo/reference_envelopes_utest@ -s0
 1 exercise ssvfilter             @nwo/ssvfilter_utest@ -s0
 1 exercise vitfilter             @nwo/vitfilter_utest@ -s0
 1 exercise zigar                 @nwo/zigar_utest@ -s0
@@ -17,6 +20,7 @@
 # valgrind tests (optional: `make SQCLEVEL=3 SQC_VALGRIND=1 check`)
 # Some of these have their size throttled down from default, to keep times down.
 #
+1 valgrind h4_anchorhash         @nwo/h4_anchorhash_utest@ -s0
 1 valgrind h4_hmmfile            @nwo/h4_hmmfile_utest@ -s0
 1 valgrind h4_mode               @nwo/h4_mode_utest@
 1 valgrind h4_path               @nwo/h4_path_utest@ -s0
@@ -25,8 +29,10 @@
 1 valgrind fbfilter              @nwo/fbfilter_utest@ -s0 -L10 -M10 -N10
 1 valgrind logsum                @nwo/logsum_utest@ -s0
 1 valgrind modelsample           @nwo/modelsample_utest@ -s0
+1 valgrind reference_aec         @nwo/reference_aec_utest@ -s0
 1 valgrind reference_asc         @nwo/reference_asc_utest@ -s0
 1 valgrind reference_dp          @nwo/reference_dp_utest@ -s0 -L10 -M10 -N10 --bruteL 3 --bruteN 2
+1 exercise reference_envelopes   @nwo/reference_envelopes_utest@ -s0
 1 valgrind ssvfilter             @nwo/ssvfilter_utest@ -s0 -L20 -M20 -N10
 1 valgrind vitfilter             @nwo/vitfilter_utest@ -s0 -L20 -M20 -N10
 1 valgrind zigar                 @nwo/zigar_utest@ -s0

@@ -103,21 +103,21 @@ static int anchorset_from_path(const H4_PATH *pi, const H4_REFMX *rxd, H4_ANCHOR
  *            in production code (of course, the reference implementation isn't
  *            supposed to be in production code in the first place).
  *
- * Args:      rng       : random number generator
+ * Args:      rng       : random number generator                [internal state changed]
  *            dsq       : target sequence, digital (1..L) 
  *            L         : length of <dsq>
  *            hmm       : query profile, dual-mode, (1..M)
  *            mo        : comparison mode, with length set
  *            rxf       : Forward matrix for <hmm> x <dsq> comparison
  *            rxd       : Decoding matrix for <hmm> x <dsq> comparison
- *            pi        : Viterbi trace for <hmm> x <dsq>, then used as space for sampled paths  
+ *            pi        : Viterbi trace for <hmm> x <dsq>, then used as space for sampled paths   [caller-provided space; reused/resized as needed here]
  *            byp_wrk   : BYPASS: workspace array for stochastic tracebacks
- *            ah        : empty hash table for alternative <anch> solutions
- *            afu       : empty matrix to be used for ASC UP calculations
- *            afd       : empty matrix to be used for ASC DOWN calculations
- *            anch      : empty anchor data structure to hold result
+ *            ah        : empty hash table for alternative <anch> solutions   [caller-provided space; reused/resized as needed here]
+ *            afu       : empty matrix to be used for ASC UP calculations     [caller-provided space; reused/resized as needed here]
+ *            afd       : empty matrix to be used for ASC DOWN calculations   [caller-provided space; reused/resized as needed here]
+ *            anch      : empty anchor data structure to hold result          [caller-provided space; reused/resized as needed here]
  *            ret_asc   : score of the most probable anchor set (raw, nats)
- *            prm       : OPTIONAL : non-default control parameters
+ *            prm       : OPTIONAL : non-default control parameters (or NULL)
  *            stats     : OPTIONAL : detailed data collection for development, debugging (or NULL)
  *
  * Returns:   <eslOK> on success, and:
@@ -165,6 +165,12 @@ h4_reference_MPAS(ESL_RANDOMNESS *rng, const ESL_DSQ *dsq, int L, const H4_PROFI
     stats->fsc = fwdsc;
   }
 
+  /* Prepare caller-provided empty/reused allocations 
+   *   <anch> Reuse()'d in anchorset_from_path()
+   *   <afu>,<afd> Reuse()'d in DP algorithms
+   */
+  h4_anchorhash_Reuse(ah);
+  
   if (be_verbose) printf("# Forward score: %6.2f nats\n", fwdsc);
 
   /* MPAS algorithm main loop */
@@ -290,6 +296,10 @@ h4_reference_MPAS(ESL_RANDOMNESS *rng, const ESL_DSQ *dsq, int L, const H4_PROFI
  * choose the best anchor i,k by choosing the match state (ML+MG, marginalized) with
  * highest posterior probability. Put the anchor coordinates and count into <anch>,
  * an allocated, possible empty structure provided by the caller.
+ *
+ * It's possible for a glocal domain to have no MG state at all, and only use {DI}
+ * states. Such a domain is "unanchorable" and skipped. If all domains in the path
+ * are unanchorable, the resulting anchorset is empty (D=0).
  *            
  * <anch> will be reinitialized here and may be reallocated if needed.
  *            
@@ -306,8 +316,6 @@ anchorset_from_path(const H4_PATH *pi, const H4_REFMX *rxd, H4_ANCHORSET *anch)
   float        ppv;
   float        best_ppv = -1.;
   int          status;
-
-  ESL_DASSERT1(( anch->D == 0 ));
 
   if ((status = h4_anchorset_Reuse(anch))                        != eslOK) return status;
   if ((status = h4_anchorset_SetSentinels(anch, rxd->L, rxd->M)) != eslOK) return status;
@@ -332,7 +340,9 @@ anchorset_from_path(const H4_PATH *pi, const H4_REFMX *rxd, H4_ANCHORSET *anch)
       else if (h4_path_IsD(pi->st[z])) { k += pi->rle[z]; }
       else if (pi->st[z] == h4P_J || pi->st[z] == h4P_C)
         {
-          if ((status = h4_anchorset_Add(anch, i0, k0)) != eslOK) return status;
+          if (best_ppv != -1.) {  // if it's still -1, this domain is unanchorable
+            if ((status = h4_anchorset_Add(anch, i0, k0)) != eslOK) return status;
+          }
           best_ppv = -1.;
           i += pi->rle[z]-1;
         }

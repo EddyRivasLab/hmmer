@@ -28,6 +28,7 @@ OBJS   = \
 	modelsample.o         \
 	modelstats.o          \
 	parameterize.o        \
+	reference_aec.o       \
 	reference_asc.o       \
 	reference_dp.o        \
 	reference_envelopes.o \
@@ -72,6 +73,7 @@ HDRS = \
 	modelsample.h         \
 	modelstats.h          \
 	parameterize.h        \
+	reference_aec.h       \
 	reference_asc.h       \
 	reference_dp.h        \
 	reference_envelopes.h \
@@ -85,19 +87,21 @@ HDRS = \
 
 
 UTESTS = \
-	h4_anchorhash_utest \
-	h4_hmmfile_utest    \
-	h4_mode_utest       \
-	h4_path_utest       \
-	h4_profile_utest    \
-	h4_sparsemask_utest \
-	fbfilter_utest      \
-	logsum_utest        \
-	modelsample_utest   \
-	reference_asc_utest \
-	reference_dp_utest  \
-	ssvfilter_utest     \
-	vitfilter_utest     \
+	h4_anchorhash_utest       \
+	h4_hmmfile_utest          \
+	h4_mode_utest             \
+	h4_path_utest             \
+	h4_profile_utest          \
+	h4_sparsemask_utest       \
+	fbfilter_utest            \
+	logsum_utest              \
+	modelsample_utest         \
+	reference_aec_utest       \
+	reference_asc_utest       \
+	reference_dp_utest        \
+	reference_envelopes_utest \
+	ssvfilter_utest           \
+	vitfilter_utest           \
 	zigar_utest
 
 STATS  =
@@ -122,6 +126,7 @@ EXAMPLES = \
 	fbfilter_example            \
 	logsum_example              \
 	modelsample_example         \
+	reference_aec_example       \
 	reference_asc_example       \
 	reference_dp_example        \
 	reference_envelopes_example \
