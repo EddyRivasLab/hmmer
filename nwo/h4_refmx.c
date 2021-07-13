@@ -1,7 +1,7 @@
 /* H4_REFMX: DP matrix for reference implementations
  *
  * Contents:
- *   1. The <H4_REFMX> object
+ *   1. H4_REFMX object
  *   2. Debugging and development tools
  *   3. Validation 
  *

@@ -18,6 +18,7 @@ OBJS   = \
 	h4_profile.o          \
 	h4_refmx.o            \
 	h4_sparsemask.o       \
+	h4_sparsemx.o         \
 	ascmx.o               \
 	build.o               \
 	emit.o                \
@@ -34,6 +35,7 @@ OBJS   = \
 	reference_envelopes.o \
 	reference_mpas.o      \
 	simdvec.o             \
+	sparse_dp.o           \
 	ssvfilter.o           \
 	standardize.o         \
 	vectorize.o           \
@@ -63,6 +65,7 @@ HDRS = \
 	h4_profile.h          \
 	h4_refmx.h            \
 	h4_sparsemask.h       \
+	h4_sparsemx.h         \
 	ascmx.h               \
 	build.h               \
 	emit.h                \
@@ -79,6 +82,7 @@ HDRS = \
 	reference_envelopes.h \
 	reference_mpas.h      \
 	simdvec.h             \
+	sparse_dp.h           \
 	ssvfilter.h           \
 	standardize.h         \
 	vectorize.h           \
