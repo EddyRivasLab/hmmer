@@ -135,11 +135,10 @@ EXAMPLES = \
 	reference_dp_example        \
 	reference_envelopes_example \
 	reference_mpas_example      \
+	sparse_dp_example           \
 	ssvfilter_example           \
 	vitfilter_example           \
 	zigar_example
-
-
 
 
 top_srcdir     = @top_srcdir@

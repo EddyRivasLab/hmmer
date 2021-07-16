@@ -823,8 +823,8 @@ h4_reference_Decoding(const ESL_DSQ *dsq, int L, const H4_PROFILE *hmm, const H4
  * 5. Tracebacks (Viterbi and stochastic)
  *****************************************************************/
 
-/* Traceback routines for Viterbi, MEG alignment, and stochastic
- * sampling, for the reference implementation. All tracebacks use the
+/* Traceback routines for Viterbi and stochastic
+ * sampling, for the reference implementation. Tracebacks use the
  * same machinery (the reference_trace_engine()), using different
  * select*() functions.
  */
@@ -864,13 +864,12 @@ static inline int8_t
 v_select_il(ESL_RANDOMNESS *r, const H4_PROFILE *hmm, const H4_REFMX *rxv, int i, int k)
 {
   ESL_UNUSED(r);
-  int8_t state[3] = { h4P_ML, h4P_IL, h4P_DL };
   float  path[3];
 
   path[0] = H4R_MX(rxv, i-1, k, h4R_ML) + hmm->tsc[k][h4_MI];
   path[1] = H4R_MX(rxv, i-1, k, h4R_IL) + hmm->tsc[k][h4_II];
   path[2] = H4R_MX(rxv, i-1, k, h4R_DL) + hmm->tsc[k][h4_DI];
-  return state[esl_vec_FArgMax(path, 3)];
+  return (h4P_ML + esl_vec_FArgMax(path, 3));  // assumes ML-IL-DL order in h4P_*
 }
 
 static inline int8_t
@@ -891,26 +890,24 @@ static inline int8_t
 v_select_dl(ESL_RANDOMNESS *r, const H4_PROFILE *hmm, const H4_REFMX *rxv, int i, int k)
 {
   ESL_UNUSED(r);
-  int8_t state[3] = { h4P_ML, h4P_IL, h4P_DL };
   float  path[3];
 
   path[0] = H4R_MX(rxv, i, k-1, h4R_ML) + hmm->tsc[k-1][h4_MD];
   path[1] = H4R_MX(rxv, i, k-1, h4R_IL) + hmm->tsc[k-1][h4_ID];
   path[2] = H4R_MX(rxv, i, k-1, h4R_DL) + hmm->tsc[k-1][h4_DD];
-  return state[esl_vec_FArgMax(path, 3)];
+  return (h4P_ML + esl_vec_FArgMax(path, 3));  // assumes ML-IL-DL order in h4P_*
 }
 
 static inline int8_t
 v_select_dg(ESL_RANDOMNESS *r, const H4_PROFILE *hmm, const H4_REFMX *rxv, int i, int k)
 {
   ESL_UNUSED(r);
-  int8_t state[3] = { h4P_MG, h4P_IG, h4P_DG };
   float  path[3];
 
   path[0] = H4R_MX(rxv, i, k-1, h4R_MG) + hmm->tsc[k-1][h4_MD];
   path[1] = H4R_MX(rxv, i, k-1, h4R_IG) + hmm->tsc[k-1][h4_ID];
   path[2] = H4R_MX(rxv, i, k-1, h4R_DG) + hmm->tsc[k-1][h4_DD];
-  return state[esl_vec_FArgMax(path, 3)];
+  return (h4P_MG + esl_vec_FArgMax(path, 3)); // assumes MG-IG-DG order in h4P_*
 }
 
 static inline int8_t
@@ -1164,14 +1161,11 @@ reference_trace_engine(ESL_RANDOMNESS *rng, float *wrk, const H4_PROFILE *hmm, c
       default: ESL_EXCEPTION(eslEINCONCEIVABLE, "lost in traceback");
       }
 
-      /* A glocal B->G->{M|I}k wing-retraction entry: unfold it 
-       */
-      if (scur == h4P_G) {
-	while (k--) { if ( (status = h4_path_Append(pi, h4P_DG)) != eslOK) return status; }
-      }
+      // glocal B->G->D1..Dk-1->{M|I}k wing-retraction entry, unfold the DG's
+      if (scur == h4P_G && k && (status = h4_path_AppendElement(pi, h4P_DG, k)) != eslOK) return status;
 
-      if (scur == h4P_L) status = h4_path_AppendElement(pi, scur, k+1); // if we just backed into an L state, record the k of L->Mk in its rle[].
-      else               status = h4_path_Append       (pi, scur);
+      if (scur == h4P_L) status = h4_path_AppendElement(pi, h4P_L, k+1); // if we just backed into an L state, record the k of L->Mk in its rle[].
+      else               status = h4_path_Append       (pi, scur);        // note that this appends G if that's our scur
       if (status != eslOK) return status;
 
       if ( (scur == h4P_N || scur == h4P_J || scur == h4P_C) && scur == sprv) i--;
@@ -2603,13 +2597,17 @@ main(int argc, char **argv)
 
 
 static ESL_OPTIONS options[] = {
-  /* name           type      default  env  range  toggles reqs incomp  help                        docgroup*/
-  { "-h",        eslARG_NONE,   FALSE, NULL, NULL,   NULL,  NULL, NULL, "show brief help",             0 },
-  { "--version", eslARG_NONE,   FALSE, NULL, NULL,   NULL,  NULL, NULL, "show HMMER version info",     0 },
+  /* name           type      default  env  range  toggles reqs incomp  help                                           docgroup*/
+  { "-h",         eslARG_NONE,   FALSE, NULL, NULL,   NULL,  NULL, NULL, "show brief help",                                   0 },
+  { "-B",         eslARG_NONE,   FALSE, NULL, NULL,   NULL,  NULL, NULL, "dump Backward DP matrix for examination",           0 },
+  { "-D",         eslARG_NONE,   FALSE, NULL, NULL,   NULL,  NULL, NULL, "dump posterior decoding matrix for examination",    0 },
+  { "-F",         eslARG_NONE,   FALSE, NULL, NULL,   NULL,  NULL, NULL, "dump Forward DP matrix for examination",            0 },
+  { "-V",         eslARG_NONE,   FALSE, NULL, NULL,   NULL,  NULL, NULL, "dump Viterbi DP matrix for examination",            0 },
+   { "--version", eslARG_NONE,   FALSE, NULL, NULL,   NULL,  NULL, NULL, "show HMMER version info",                           0 },
   {  0, 0, 0, 0, 0, 0, 0, 0, 0, 0 },
 };
 static char usage[]  = "[-options] <hmmfile> <seqfile>";
-static char banner[] = "example of using the reference Vit/Fwd/Bck/Decoding implementations";
+static char banner[] = "example of using the reference Vit/Fwd/Bck/Decoding DP implementations";
 
 int
 main(int argc, char **argv)
@@ -2643,25 +2641,25 @@ main(int argc, char **argv)
     {
       h4_mode_SetLength(mo, sq->n);
 
-      h4_reference_Viterbi(sq->dsq, sq->n, hmm, mo, vit, vpi, &vsc);
-      h4_reference_Forward(sq->dsq, sq->n, hmm, mo, fwd, &fsc);
-      //h4_refmx_Dump(stdout, fwd);
+      h4_reference_Viterbi (sq->dsq, sq->n, hmm, mo, vit, vpi, &vsc);
+      h4_reference_Forward (sq->dsq, sq->n, hmm, mo, fwd, &fsc);
+      h4_reference_Backward(sq->dsq, sq->n, hmm, mo, bck, &bsc);
+      h4_reference_Decoding(sq->dsq, sq->n, hmm, mo, fwd, bck, pp);
+
       printf("%s vit %.6f\n", sq->name, vsc);
       printf("%s fwd %.6f\n", sq->name, fsc);
-
-      h4_reference_Backward(sq->dsq, sq->n, hmm, mo, bck, &bsc);
-      //h4_refmx_Dump(stdout, bck);
       printf("%s bck %.6f\n", sq->name, bsc);
 
-      h4_reference_Decoding(sq->dsq, sq->n, hmm, mo, fwd, bck, pp);
-      h4_refmx_Dump(stdout, pp);
-      if (h4_refmx_Validate(pp, errbuf) != eslOK) esl_fatal(errbuf);
+      if (esl_opt_GetBoolean(go, "-V")) h4_refmx_Dump(stdout, vit);
+      if (esl_opt_GetBoolean(go, "-F")) h4_refmx_Dump(stdout, fwd);
+      if (esl_opt_GetBoolean(go, "-B")) h4_refmx_Dump(stdout, bck);
+      if (esl_opt_GetBoolean(go, "-D")) h4_refmx_Dump(stdout, pp);
 
-      h4_refmx_Reuse(vit);
-      h4_refmx_Reuse(fwd);
-      h4_refmx_Reuse(bck);
-      h4_refmx_Reuse(pp);
-      h4_path_Reuse(vpi);
+      if (h4_refmx_Validate(vit, errbuf) != eslOK) esl_fatal(errbuf);
+      if (h4_refmx_Validate(fwd, errbuf) != eslOK) esl_fatal(errbuf);
+      if (h4_refmx_Validate(bck, errbuf) != eslOK) esl_fatal(errbuf);
+      if (h4_refmx_Validate(pp,  errbuf) != eslOK) esl_fatal(errbuf);
+
       esl_sq_Reuse(sq);
     }
   if      (status == eslEFORMAT) esl_fatal("Parse failed\n  %s", esl_sqfile_GetErrorBuf(sqfp));

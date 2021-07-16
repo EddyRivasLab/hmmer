@@ -117,7 +117,7 @@ model node, the transition scores also include:
   * `LM`: `L -> Mk` local entry log probabilities
   * `GM`: left wing retracted `G->D1..Dk-1->Mk` glocal entry
   * `GI`: left wing retracted `G->D1..Dk->Ik` glocal entry
-  * `DGE`: right wing retracted 'Dk->...->E` glocal exit
+  * `DGE`: right wing retracted 'Dk+1->...->E` glocal exit
   
 
 ## Striped vector parameters

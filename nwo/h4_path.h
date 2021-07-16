@@ -23,8 +23,8 @@ typedef struct {
 /* Codes for states, esp. states used in H4_PATH pi->st[] */
 /* Do not change order. Some routines make assumptions about it: for
  * example, h4_path_TestSample() and h4_emit() assume that MG-IG-DG
- * and ML-IL-DL are contiguous; AEC traceback does too, and assumes
- * MID order as well.
+ * and ML-IL-DL are contiguous; tracebacks can
+ * assume G-MG-IG-DG, L-ML-IL-DL contiguity and order.
  */
 #define h4P_NONE  0
 #define h4P_S     1   // unused in paths

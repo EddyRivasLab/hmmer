@@ -2,6 +2,7 @@
  *
  * Contents:
  *   1. H4_SPARSEMX object
+ *   2. Debugging tools for H4_SPARSEMX
  */
 #include "h4_config.h"
 
@@ -142,3 +143,150 @@ h4_sparsemx_Destroy(H4_SPARSEMX *sx)
 }
 /*----------- end, H4_SPARSEMX implementation -------------------*/
 
+
+
+/*****************************************************************
+ * 2. Debugging tools
+ *****************************************************************/
+
+char *
+h4_sparsemx_DecodeState(int type)
+{
+  switch (type) {
+  case h4S_ML: return "ML";
+  case h4S_MG: return "MG";
+  case h4S_IL: return "IL";
+  case h4S_IG: return "IG";
+  case h4S_DL: return "DL";
+  case h4S_DG: return "DG";
+  }
+  esl_exception(eslEINVAL, FALSE, __FILE__, __LINE__, "no such H4_SPARSEMX main state code %d\n", type);
+  return NULL;
+}
+
+char *
+h4_sparsemx_DecodeSpecial(int type)
+{
+  switch (type) {
+  case h4S_E:  return "E";
+  case h4S_N:  return "N";
+  case h4S_J:  return "J";
+  case h4S_B:  return "B";
+  case h4S_L:  return "L";
+  case h4S_G:  return "G";
+  case h4S_C:  return "C";
+  case h4S_JJ: return "JJ";
+  case h4S_CC: return "CC";
+  default:     break;
+  }
+  esl_exception(eslEINVAL, FALSE, __FILE__, __LINE__, "no such H4_SPARSEMX special state type code %d\n", type);
+  return NULL;
+}
+
+
+int
+h4_sparsemx_Dump(FILE *ofp, H4_SPARSEMX *sx)
+{
+  return h4_sparsemx_DumpWindow(ofp, sx, 0, sx->sm->L, 0, sx->sm->M);
+}
+
+int
+h4_sparsemx_DumpWindow(FILE *ofp, const H4_SPARSEMX *sx, int ia, int ib, int ka, int kb)
+{
+  const H4_SPARSEMASK *sm  = sx->sm;
+  float         *dpc = sx->dp;
+  float         *xc  = sx->xmx;
+  int width          = 9;
+  int precision      = 4;
+  int i,k,x,z;
+
+  /* Header */
+  fprintf(ofp, "       ");
+  for (k = ka; k <= kb;         k++) fprintf(ofp, "%*d ", width, k);
+  for (x = 0;  x < h4S_NXCELLS; x++) fprintf(ofp, "%*s ", width, h4_sparsemx_DecodeSpecial(x));
+  fprintf(ofp, "\n");
+
+  fprintf(ofp, "       ");
+  for (k = ka; k <= kb;        k++) fprintf(ofp, "%*.*s ", width, width, "----------");
+  for (x = 0; x < h4S_NXCELLS; x++) fprintf(ofp, "%*.*s ", width, width, "----------");
+  fprintf(ofp, "\n");
+
+  /* Skipping ahead in matrix, over rows we're not dumping: */
+  for (i = 1; i < ia; i++) 
+    if (sm->n[i]) {
+      if (sm->n[i-1] == 0) xc += h4S_NXCELLS; // skip an extra chunk of specials (ia-1) before each segment start on ia
+      dpc += sm->n[i] * h4S_NSCELLS;          // skip over rows we're not dumping
+      xc  += h4S_NXCELLS;                     // skip specials on sparsified rows
+    }
+
+  for (i = ia; i <= ib; i++)
+    {
+      /* If current row has no cells...  */
+      if (sm->n[i] == 0) {
+        if (i > 1     && sm->n[i-1] > 0) fputs("...\n\n", ofp);  // ... if last row did, then we ended a segment. Print an ellipsis.
+        if (i < sm->L && sm->n[i+1] > 0)                         // if next row does, then we're about to start a segment; print specials on an ia-1 row 
+          {
+            fprintf(ofp, "%3d -- ", i);
+            for (k = ka; k <= kb;         k++) fprintf(ofp, "%*s ", width, ".....");
+            for (x = 0;  x < h4S_NXCELLS; x++) fprintf(ofp, "%*.*f ", width, precision, xc[x]);
+            fputs("\n\n", ofp);
+            xc += h4S_NXCELLS;    
+          }
+        continue;                       
+      }
+
+      fprintf(ofp, "%3d ML ", i);
+      for (z = 0, k = ka; k <= kb; k++) { 
+        while (z < sm->n[i] && sm->k[i][z] < k)  z++; 
+        if    (z < sm->n[i] && sm->k[i][z] == k) fprintf(ofp, "%*.*f ", width, precision,  *(dpc + z*h4S_NSCELLS + h4S_ML));
+        else                                     fprintf(ofp, "%*s ",   width, ".....");
+      }
+      for (x = 0; x < h4S_NXCELLS; x++) fprintf(ofp, "%*.*f ", width, precision, xc[x]);
+      fputc('\n', ofp);
+
+      fprintf(ofp, "%3d MG ", i);
+      for (z = 0, k = ka; k <= kb; k++) { 
+        while (z < sm->n[i] && sm->k[i][z] < k)  z++; 
+        if    (z < sm->n[i] && sm->k[i][z] == k) fprintf(ofp, "%*.*f ", width, precision,  *(dpc + z*h4S_NSCELLS + h4S_MG));
+        else                                     fprintf(ofp, "%*s ",   width, ".....");
+      }
+      fputc('\n', ofp);
+
+      fprintf(ofp, "%3d IL ", i);
+      for (z = 0, k = ka; k <= kb; k++) { 
+        while (z < sm->n[i] && sm->k[i][z] < k)  z++;
+        if    (z < sm->n[i] && sm->k[i][z] == k) fprintf(ofp, "%*.*f ", width, precision,  *(dpc + z*h4S_NSCELLS + h4S_IL));
+        else                                     fprintf(ofp, "%*s ",   width, ".....");
+      }
+      fputc('\n', ofp);
+
+      fprintf(ofp, "%3d IG ", i);
+      for (z = 0, k = ka; k <= kb; k++) { 
+        while (z < sm->n[i] && sm->k[i][z] < k)  z++; 
+        if    (z < sm->n[i] && sm->k[i][z] == k) fprintf(ofp, "%*.*f ", width, precision,  *(dpc + z*h4S_NSCELLS + h4S_IG));
+        else                                     fprintf(ofp, "%*s ",   width, ".....");
+      }
+      fputc('\n', ofp);
+
+      fprintf(ofp, "%3d DL ", i);
+      for (z = 0, k = ka; k <= kb; k++) { 
+        while (z < sm->n[i] && sm->k[i][z] < k)  z++; 
+        if    (z < sm->n[i] && sm->k[i][z] == k) fprintf(ofp, "%*.*f ", width, precision,  *(dpc + z*h4S_NSCELLS + h4S_DL));
+        else                                     fprintf(ofp, "%*s ",   width, ".....");
+      }
+      fputc('\n', ofp);
+
+      fprintf(ofp, "%3d DG ", i);
+      for (z = 0, k = ka; k <= kb; k++) { 
+        while (z < sm->n[i] && sm->k[i][z] < k)  z++; 
+        if    (z < sm->n[i] && sm->k[i][z] == k) fprintf(ofp, "%*.*f ", width, precision,  *(dpc + z*h4S_NSCELLS + h4S_DG));
+        else                                     fprintf(ofp, "%*s ",   width, ".....");
+      }
+      fputs("\n\n", ofp);
+
+      dpc += sm->n[i] * h4S_NSCELLS;
+      xc  += h4S_NXCELLS;
+    }
+  return eslOK;
+}
+/*------------------ end, debugging tools -----------------------*/

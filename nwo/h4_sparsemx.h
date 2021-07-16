@@ -63,10 +63,18 @@ typedef struct {
 #define h4S_VITERBI       4  // = h4R_VITERBI
 
 
+/* H4_SPARSEMX */
 extern H4_SPARSEMX *h4_sparsemx_Create(const H4_SPARSEMASK *sm);
 extern int          h4_sparsemx_Reinit(H4_SPARSEMX *sx, const H4_SPARSEMASK *sm);
 extern size_t       h4_sparsemx_Sizeof(const H4_SPARSEMX *sx);
 extern size_t       h4_sparsemx_MinSizeof(const H4_SPARSEMASK *sm);
 extern void         h4_sparsemx_Destroy(H4_SPARSEMX *sx);
+
+/* debugging tools */
+extern char *h4_sparsemx_DecodeState(int type);
+extern char *h4_sparsemx_DecodeSpecial(int type);
+extern int   h4_sparsemx_Dump(FILE *ofp, H4_SPARSEMX *sx);
+extern int   h4_sparsemx_DumpWindow(FILE *ofp, const H4_SPARSEMX *sx, int ia, int ib, int ka, int kb);
+
 
 #endif //h4SPARSEMX_INCLUDED

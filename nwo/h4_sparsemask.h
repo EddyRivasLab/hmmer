@@ -12,7 +12,7 @@
 
 struct h4_sparsemask_seg_s {
     int ia;                // <seg[s]> = ia,ib pairs for each segment <s>, s=1..nseg. 
-    int ib;                //    also, seg[0] and seg[nseg+1] contain sentinel values. 
+    int ib;                //    also, seg[0] and seg[S+1] contain sentinel values. 
 };
 
 typedef struct {
@@ -23,7 +23,7 @@ typedef struct {
   int      V;             // width of a SIMD vector in floats (4 for SSE, for example); # of "slots"
   int      Q;		  // number of striped vectors in fwdfilter; width of each striped segment; size of "slots"
 
-  struct h4_sparsemask_seg_s *seg;         
+  struct h4_sparsemask_seg_s *seg;  // seg[1..S] segment locations
   int    **k;		  // k[0,1..L] = ptrs into kmem, rows of sparse k indices; k[0]=NULL; k[i]=NULL if n[i]=0 
   int     *n;		  // number of cells included on each row; n[0]=0; n[i] <= M 
   int     *kmem;	  // memory that k[] are pointing into, storing k indices of included cells, kmem[0..ncells-1]
@@ -32,7 +32,7 @@ typedef struct {
   int64_t  ncells;        // number of included supercells; \sum_{i=1}^{L} n[i]        
   int      ralloc;        // k[] is allocated for ralloc rows; L+1 <= ralloc 
   int64_t  kalloc;        // kmem[] is allocated for kalloc cells; ncells <= kalloc 
-  int      salloc;        // seg[] is allocated for salloc ia,ib pairs; nseg+2 <= salloc, +2 because of sentinels at 0,nseg+1
+  int      salloc;        // seg[] is allocated for salloc ia,ib pairs; S+2 <= salloc, +2 because of sentinels at 0,S+1
 
   /* "Slots" are used to convert striped vectors in f/b filter into correct M..1 cell index order in <kmem>; see note [3] */
   /* These array sizes (and last_k, below) must be able to hold up to the maximum vector width in floats: AVX-512, 16 floats. */

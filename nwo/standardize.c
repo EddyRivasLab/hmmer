@@ -179,16 +179,17 @@ set_glocal_entry(H4_PROFILE *hmm)
 /* set_glocal_exit()
  * 
  * Right wing retraction, DGE
- *   tsc[k][DGE] = t(Dk+1->...Dm->E) 
- *               = [\prod_j=k+1..m-1 t(Dj->Dj+1)] * Dm->E
- *               = \prod_j=k+1..m-1 t(Dj->Dj+1)              | because Dm->E=1.0
+ *   t[k][DGE] = t(Dk+1->...Dm->E) 
+ *             = [\prod_j=k+1..m-1 t(Dj->Dj+1)] * Dm->E
+ *             = \prod_j=k+1..m-1 t(Dj->Dj+1)              | because Dm->E=1.0
  *  valid for k=0..M, but k=0 is unused (mute path), so here k=1..M is stored
  *  boundaries: tsc[M][DGE]   = 0     (i.e. probability 1)
  *              tsc[M-1][DGE] = 0  
  *              tsc[0][DGE]   = -inf  (i.e. probability 0)
  * note off by one storage.  
  * to get the glocal exit path from a Mk: tsc[k][MD] + tsc[k][DGE]
- * to get the glocal exit path from a Dk: tsc[k][DD] + tsc[k][DGE]
+ *                                ... Ik: tsc[k][ID] + tsc[k][DGE]
+ *                                ... Dk: tsc[k][DD] + tsc[k][DGE]
  */
 static int
 set_glocal_exit(H4_PROFILE *hmm)
