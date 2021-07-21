@@ -59,6 +59,7 @@ extern int      h4_path_Resize (H4_PATH *pi, int Z);
 extern int      h4_path_Grow   (H4_PATH *pi);
 extern int      h4_path_Append (H4_PATH *pi, int8_t st);
 extern int      h4_path_AppendElement(H4_PATH *pi, int8_t st, int r);
+extern int      h4_path_AppendSeveral(H4_PATH *pi, int8_t st, int n);
 extern int      h4_path_Reverse(H4_PATH *pi);
 extern int      h4_path_Reuse  (H4_PATH *pi);
 extern void     h4_path_Destroy(H4_PATH *pi);

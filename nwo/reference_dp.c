@@ -1865,7 +1865,7 @@ utest_brute(FILE *diagfp, ESL_RANDOMNESS *rng, int M, int L, int ntrials)
 static void
 utest_generation(FILE *diagfp, ESL_RANDOMNESS *rng, int alphatype, int M, int L, int nseq, int do_colsum)
 {
-  char            msg[]    = "reference dp generation unit test failed";
+  char            msg[]    = "reference_dp:: generation unit test failed";
   ESL_ALPHABET   *abc      = esl_alphabet_Create(alphatype);
   ESL_SQ         *sq       = esl_sq_CreateDigital(abc);
   H4_PROFILE     *hmm      = NULL;
@@ -2597,13 +2597,14 @@ main(int argc, char **argv)
 
 
 static ESL_OPTIONS options[] = {
-  /* name           type      default  env  range  toggles reqs incomp  help                                           docgroup*/
-  { "-h",         eslARG_NONE,   FALSE, NULL, NULL,   NULL,  NULL, NULL, "show brief help",                                   0 },
-  { "-B",         eslARG_NONE,   FALSE, NULL, NULL,   NULL,  NULL, NULL, "dump Backward DP matrix for examination",           0 },
-  { "-D",         eslARG_NONE,   FALSE, NULL, NULL,   NULL,  NULL, NULL, "dump posterior decoding matrix for examination",    0 },
-  { "-F",         eslARG_NONE,   FALSE, NULL, NULL,   NULL,  NULL, NULL, "dump Forward DP matrix for examination",            0 },
-  { "-V",         eslARG_NONE,   FALSE, NULL, NULL,   NULL,  NULL, NULL, "dump Viterbi DP matrix for examination",            0 },
-   { "--version", eslARG_NONE,   FALSE, NULL, NULL,   NULL,  NULL, NULL, "show HMMER version info",                           0 },
+  /* name           type      default  env  range  toggles reqs incomp  help                                     docgroup*/
+  { "-h",         eslARG_NONE,   FALSE, NULL, NULL,   NULL,  NULL, NULL, "show brief help",                           0 },
+  { "-B",         eslARG_NONE,   FALSE, NULL, NULL,   NULL,  NULL, NULL, "dump Backward DP matrix for examination",   0 },
+  { "-D",         eslARG_NONE,   FALSE, NULL, NULL,   NULL,  NULL, NULL, "dump Decoding matrix for examination",      0 },
+  { "-F",         eslARG_NONE,   FALSE, NULL, NULL,   NULL,  NULL, NULL, "dump Forward DP matrix for examination",    0 },
+  { "-P",         eslARG_NONE,   FALSE, NULL, NULL,   NULL,  NULL, NULL, "dump Viterbi path for examination",         0 },
+  { "-V",         eslARG_NONE,   FALSE, NULL, NULL,   NULL,  NULL, NULL, "dump Viterbi DP matrix for examination",    0 },
+  { "--version",  eslARG_NONE,   FALSE, NULL, NULL,   NULL,  NULL, NULL, "show HMMER version info",                   0 },
   {  0, 0, 0, 0, 0, 0, 0, 0, 0, 0 },
 };
 static char usage[]  = "[-options] <hmmfile> <seqfile>";
@@ -2642,23 +2643,26 @@ main(int argc, char **argv)
       h4_mode_SetLength(mo, sq->n);
 
       h4_reference_Viterbi (sq->dsq, sq->n, hmm, mo, vit, vpi, &vsc);
-      h4_reference_Forward (sq->dsq, sq->n, hmm, mo, fwd, &fsc);
-      h4_reference_Backward(sq->dsq, sq->n, hmm, mo, bck, &bsc);
+      h4_reference_Forward (sq->dsq, sq->n, hmm, mo, fwd,      &fsc);
+      h4_reference_Backward(sq->dsq, sq->n, hmm, mo, bck,      &bsc);
       h4_reference_Decoding(sq->dsq, sq->n, hmm, mo, fwd, bck, pp);
-
-      printf("%s vit %.6f\n", sq->name, vsc);
-      printf("%s fwd %.6f\n", sq->name, fsc);
-      printf("%s bck %.6f\n", sq->name, bsc);
 
       if (esl_opt_GetBoolean(go, "-V")) h4_refmx_Dump(stdout, vit);
       if (esl_opt_GetBoolean(go, "-F")) h4_refmx_Dump(stdout, fwd);
       if (esl_opt_GetBoolean(go, "-B")) h4_refmx_Dump(stdout, bck);
       if (esl_opt_GetBoolean(go, "-D")) h4_refmx_Dump(stdout, pp);
+      if (esl_opt_GetBoolean(go, "-P")) h4_path_Dump(stdout, vpi);
+
+      printf("%s vit %.6f\n", sq->name, vsc);
+      printf("%s fwd %.6f\n", sq->name, fsc);
+      printf("%s bck %.6f\n", sq->name, bsc);
 
       if (h4_refmx_Validate(vit, errbuf) != eslOK) esl_fatal(errbuf);
       if (h4_refmx_Validate(fwd, errbuf) != eslOK) esl_fatal(errbuf);
       if (h4_refmx_Validate(bck, errbuf) != eslOK) esl_fatal(errbuf);
       if (h4_refmx_Validate(pp,  errbuf) != eslOK) esl_fatal(errbuf);
+
+      if (h4_path_Validate(vpi, hmm->M, sq->n, errbuf) != eslOK) esl_fatal(errbuf);
 
       esl_sq_Reuse(sq);
     }

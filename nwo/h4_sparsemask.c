@@ -532,7 +532,7 @@ h4_sparsemask_AddAll(H4_SPARSEMASK *sm)
 int
 h4_sparsemask_Dump(FILE *ofp, H4_SPARSEMASK *sm)
 {
-  int i,k,z;
+  int i,k,g,z;
 
   fprintf(ofp, "# sparse mask: M=%d L=%d Q=%d V=%d\n", sm->M, sm->L, sm->Q, sm->V);
   fputs("     ", ofp);  for (k = 1; k <= sm->M; k++) fprintf(ofp, "%3d ", k);  fputs(" n \n", ofp);
@@ -549,6 +549,9 @@ h4_sparsemask_Dump(FILE *ofp, H4_SPARSEMASK *sm)
         }
       fprintf(ofp, "%3d\n", sm->n[i]);
     }
+  fprintf(ofp, "in %d segments:\n", sm->S);
+  for (g = 0; g <= sm->S+1; g++)
+    fprintf(ofp, "%3d %5d .. %5d\n", g, sm->seg[g].ia, sm->seg[g].ib);
   return eslOK;
 }
 

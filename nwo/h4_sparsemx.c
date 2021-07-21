@@ -3,11 +3,13 @@
  * Contents:
  *   1. H4_SPARSEMX object
  *   2. Debugging tools for H4_SPARSEMX
+ *   3. Validation of H4_SPARSEMX
  */
 #include "h4_config.h"
 
 #include "easel.h"
 
+#include "h4_refmx.h"
 #include "h4_sparsemask.h"
 #include "h4_sparsemx.h"
 
@@ -289,4 +291,438 @@ h4_sparsemx_DumpWindow(FILE *ofp, const H4_SPARSEMX *sx, int ia, int ib, int ka,
     }
   return eslOK;
 }
+
+/* Function:  h4_sparsemx_CompareReference()
+ * Synopsis:  Test sparse DP matrix for tolerable equality to reference
+ *
+ * Purpose:   Compare all the values in sparse DP matrix <sx> to the
+ *            corresponding values in reference DP matrix <rx> for
+ *            equality within the absolute epsilon <tol>, using
+ *            <esl_FCompare()> calls. Return <eslOK> if comparison
+ *            succeeds; return <eslFAIL> otherwise.
+ *            
+ *            In general, this is only going to succeed if <sx> was
+ *            calculated as a 'full' sparse matrix, with all cells
+ *            marked, as in <h4_sparsemask_AddAll()>. For truly sparse
+ *            calculations, you will more likely want to use
+ *            <h4_sparsemx_CompareReferenceAsBound()>, which treats
+ *            the reference calculation's matrix values as an upper
+ *            bound on the corresponding sparse cell values.
+ *            
+ *            The comparison tests two different traversal mechanisms
+ *            for sparse main cells.  Should be completely redundant,
+ *            unless we've corrupted the structure.  The routine is
+ *            intended for debugging, not speed.
+ *            
+ *            As also noted in <h4_refmx_Compare()>, absolute
+ *            difference comparison is preferred over relative
+ *            differences. Numerical error accumulation in DP scales
+ *            more with the number of terms than their magnitude. DP
+ *            cells with values close to zero (and hence small
+ *            absolute differences) may reasonably have large relative
+ *            differences.
+ *            
+ *            When debugging, you can set a breakpoint at <esl_fail()> 
+ *            to stop the debugger where a comparison failed.
+ *            
+ *            We assume that <h4S_NSCELLS> and <h4S_NXCELLS> main and
+ *            special elements are in the same order and number in
+ *            <h4R_NSCELLS> and <h4R_NXCELLS>.
+ *
+ * Args:      sx  - sparse DP matrix
+ *            rx  - reference DP matrix
+ *            tol - absolute floating point comparison tolerance
+ *                 
+ * Returns:   <eslOK> on success.
+ *            <eslFAIL> if comparison fails.
+ */
+int
+h4_sparsemx_CompareReference(const H4_SPARSEMX *sx, const H4_REFMX *rx, float tol)
+{
+  char                 msg[] = "comparison of H4_SPARSEMX to H4_REFMX failed";
+  const H4_SPARSEMASK *sm    = sx->sm;
+  const float   *dpc, *dpc2;
+  const float   *xc,  *xc2;
+  int            g,i,s,z;
+  int            ia,ib;
+  
+  if (sx->type != rx->type) ESL_FAIL(eslFAIL, NULL, msg);
+  if (sm->M    != rx->M)    ESL_FAIL(eslFAIL, NULL, msg);
+  if (sm->L    != rx->L)    ESL_FAIL(eslFAIL, NULL, msg);
+
+  /* First traversal way: sm->dp[] is just one big array */
+  dpc = sx->dp;
+  xc  = sx->xmx;
+  for (i = 1; i <= sm->L; i++)
+    {
+      if (sm->n[i] && !sm->n[i-1])         /* ia-1 specials at a segment start */
+        {
+          for (s = 0; s < h4S_NXCELLS; xc++, s++) 
+            if (esl_FCompare(*xc, H4R_XMX(rx,i-1,s), /*rtol=*/0.0, tol) == eslFAIL) ESL_FAIL(eslFAIL, NULL, msg);
+        }
+      for (z = 0; z < sm->n[i]; z++)       /* sparse cells */
+        {
+          for (s = 0; s < h4S_NSCELLS; dpc++, s++) 
+            if (esl_FCompare(*dpc, H4R_MX(rx,i,sm->k[i][z],s), /*rtol=*/0.0, tol) == eslFAIL) ESL_FAIL(eslFAIL, NULL, msg);
+        }
+      if (sm->n[i])       /* specials */
+        {
+          for (s = 0; s < h4S_NXCELLS; xc++, s++) 
+            if (esl_FCompare(*xc, H4R_XMX(rx,i,s), /*rtol=*/0.0, tol) == eslFAIL) ESL_FAIL(eslFAIL, NULL, msg);
+        }
+    }
+
+  /* Second way: "segments" */
+  dpc2 = sx->dp;
+  xc2  = sx->xmx;
+  for (g = 1; g <= sm->S; g++)
+    {
+      ia = sm->seg[g].ia;
+      ib = sm->seg[g].ib;
+
+      for (s = 0; s < h4S_NXCELLS; xc2++, s++)        /* ia-1 specials at segment start */
+        if (esl_FCompare(*xc2, H4R_XMX(rx,ia-1,s), /*rtol=*/0.0, tol) == eslFAIL) ESL_FAIL(eslFAIL, NULL, msg);
+
+      for (i = ia; i <= ib; i++) 
+        {
+          for (z = 0; z < sm->n[i]; z++)          /* sparse main cells */
+            {
+              for (s = 0; s < h4S_NSCELLS; dpc2++, s++) 
+                if (esl_FCompare(*dpc2, H4R_MX(rx,i,sm->k[i][z],s), /*rtol=*/0.0, tol) == eslFAIL)  ESL_FAIL(eslFAIL, NULL, msg);
+            }
+          for (s = 0; s < h4S_NXCELLS; xc2++, s++)        /* specials */
+            if (esl_FCompare(*xc2, H4R_XMX(rx,i,s), /*rtol=*/0.0, tol) == eslFAIL) ESL_FAIL(eslFAIL, NULL, msg);
+        }
+    }
+  
+  /* Both ways must reach the same end */
+  if (dpc != dpc2) ESL_FAIL(eslFAIL, NULL, msg);
+  if (xc  != xc2)  ESL_FAIL(eslFAIL, NULL, msg);
+  return eslOK;
+}
+
+/* Function:  h4_sparsemx_CompareReferenceAsBound()
+ * Synopsis:  Test sparse DP matrix cell values are upper-bounded by reference
+ *
+ * Purpose:   Check that all values in sparse matrix <sx> are bounded
+ *            (less than or equal to) the corresponding values in reference
+ *            matrix <rx>, allowing for a small amount <tol> of floating-point
+ *            roundoff error accumulation. That is, <v_s <= v_r+tol> for all
+ *            matrix cell values <v>. Return <eslOK> if comparison succeeds;
+ *            return <eslFAIL> otherwise.
+ *            
+ *            This is a variant of <p7_sparsemx_CompareReference()>;
+ *            see additional documentation there, with the exception
+ *            that this routine only uses one traversal mechanism in
+ *            the sparse matrix.
+ *
+ * Args:      sx  - sparse DP matrix
+ *            rx  - reference DP matrix
+ *            tol - absolute floating point comparison tolerance
+ *                 
+ * Returns:   <eslOK> on success.
+ *            <eslFAIL> if comparison fails.
+ */
+int
+h4_sparsemx_CompareReferenceAsBound(const H4_SPARSEMX *sx, const H4_REFMX *rx, float tol)
+{
+  char                 msg[] = "failed comparison of H4_SPARSEMX to upper bound in H4_REFMX"; 
+  const H4_SPARSEMASK *sm    = sx->sm;
+  const float         *dpc   = sx->dp;
+  const float         *xc    = sx->xmx;
+  int   i,s,z;
+
+  if (sx->type != rx->type) ESL_FAIL(eslFAIL, NULL, msg);
+  if (sm->M    != rx->M)    ESL_FAIL(eslFAIL, NULL, msg);
+  if (sm->L    != rx->L)    ESL_FAIL(eslFAIL, NULL, msg);
+  for (i = 1; i <= sm->L; i++)
+    {
+      if (sm->n[i] && !sm->n[i-1]) {    /* ia-1 specials at a segment start */
+        for (s = 0; s < h4S_NXCELLS; xc++, s++) 
+          if (*xc > H4R_XMX(rx,i-1,s)+tol) 
+            ESL_FAIL(eslFAIL, NULL, msg);
+      }
+      for (z = 0; z < sm->n[i]; z++)    /* sparse cells */
+        for (s = 0; s < h4S_NSCELLS; dpc++, s++) 
+          if (*dpc > H4R_MX(rx,i,sm->k[i][z],s)+tol) 
+            ESL_FAIL(eslFAIL, NULL, msg);
+  
+      if (sm->n[i]) {    /* specials */
+        for (s = 0; s < h4S_NXCELLS; xc++, s++) 
+          if (*xc > H4R_XMX(rx,i,s)+tol) 
+            ESL_FAIL(eslFAIL, NULL, msg);
+      }
+    }
+  return eslOK;
+}
 /*------------------ end, debugging tools -----------------------*/
+
+
+
+/*****************************************************************
+ * 7. Validation of a H4_SPARSEMX
+ *****************************************************************/
+/* also a debugging tool, but in its own section because it's
+ * fiddly and complicated
+ */
+
+static int
+validate_dimensions(const H4_SPARSEMX *sx, char *errbuf)
+{
+  const H4_SPARSEMASK *sm  = sx->sm;
+  int   g      = 0;
+  int   r      = 0;
+  int   ncells = 0;
+  int   i;
+
+  if ( sm->M <= 0)                  ESL_FAIL(eslFAIL, errbuf, "nonpositive M");
+  if ( sm->L <= 0)                  ESL_FAIL(eslFAIL, errbuf, "nonpositive L");
+  if ( sm->V <= 0)                  ESL_FAIL(eslFAIL, errbuf, "nonpositive V");
+  if ( sm->Q != H4_Q(sm->M,sm->V))  ESL_FAIL(eslFAIL, errbuf, "bad Q");          
+
+  for (r=0, g=0, i = 1; i <= sm->L; i++) {
+    if (sm->n[i] && !sm->n[i-1]) g++; /* segment count */
+    if (sm->n[i])                r++; /* sparse row count */
+    ncells += sm->n[i];
+  }
+  if (g      != sm->S)          ESL_FAIL(eslFAIL, errbuf, "S (nseg) is wrong");
+  if (r      != sm->nrow)       ESL_FAIL(eslFAIL, errbuf, "nrow is wrong");
+  if (ncells != sm->ncells)     ESL_FAIL(eslFAIL, errbuf, "ncells is wrong");
+
+  if (sm->L+1    > sm->ralloc)  ESL_FAIL(eslFAIL, errbuf, "k[] row allocation too small");
+  if (sm->ncells > sm->kalloc)  ESL_FAIL(eslFAIL, errbuf, "kmem[] cell allocation too small");
+  if (sm->S+2    > sm->salloc)  ESL_FAIL(eslFAIL, errbuf, "seg[] segment allocation too small");
+  return eslOK;
+}
+
+static int
+validate_no_nan(const H4_SPARSEMX *sx, char *errbuf)
+{
+  const H4_SPARSEMASK *sm  = sx->sm;
+  float         *dpc = sx->dp;
+  float         *xc  = sx->xmx;
+  int            i,k,z,s;
+
+  for (i = 1; i <= sm->L; i++)
+    {
+      if (sm->n[i] && !sm->n[i-1])          /* ia-1 specials at a segment start */
+        {
+          for (s = 0; s < h4S_NXCELLS; s++) {
+            if (isnan(*xc)) ESL_FAIL(eslFAIL, errbuf, "nan at i=%d, %s", i, h4_sparsemx_DecodeSpecial(s));
+            xc++;
+          }
+        }
+      for (z = 0; z < sm->n[i]; z++)       /* sparse main cells */
+        {
+          k = sm->k[i][z];
+          for (s = 0; s < h4S_NSCELLS; s++) {
+            if (isnan(*dpc)) ESL_FAIL(eslFAIL, errbuf, "nan at i=%d, k=%d, %s", i, k, h4_sparsemx_DecodeState(s));
+            dpc++;
+          }
+        }
+
+      if (sm->n[i])                       /* specials on sparse row */
+        {
+          for (s = 0; s < h4S_NXCELLS; s++) {
+            if (isnan(*xc)) ESL_FAIL(eslFAIL, errbuf, "nan at i=%d, %s", i, h4_sparsemx_DecodeSpecial(s));
+            xc++;
+          }
+        }
+    }
+  return eslOK;
+}
+
+static int
+validate_fwdvit(const H4_SPARSEMX *sx, char *errbuf)
+{
+  const H4_SPARSEMASK *sm  = sx->sm;
+  float         *dpc = sx->dp;
+  float         *xc  = sx->xmx;
+  int            i,z;
+
+  /* Check special cases prohibited in the first ia-1 presegment specials: */
+  if ( xc[h4S_J] !=  -eslINFINITY) ESL_FAIL(eslFAIL, errbuf, "first J not -inf");
+  if ( xc[h4S_C] !=  -eslINFINITY) ESL_FAIL(eslFAIL, errbuf, "first C not -inf");
+  
+  /* Sweep, checking for (the most easily spotchecked) prohibited values (must be -inf) */
+  for (i = 1; i <= sm->L; i++)
+    {
+      if (sm->n[i] && !sm->n[i-1]) {       /* ia-1 specials at a segment start */
+        if ( xc[h4S_E]  != -eslINFINITY) ESL_FAIL(eslFAIL, errbuf, "E seg start for ia=%d not -inf", i);
+        if ( xc[h4S_JJ] != -eslINFINITY) ESL_FAIL(eslFAIL, errbuf, "JJ seg start for ia=%d not -inf", i);
+        if ( xc[h4S_CC] != -eslINFINITY) ESL_FAIL(eslFAIL, errbuf, "CC seg start for ia=%d not -inf", i);
+        xc += h4S_NXCELLS;
+      }
+      for (z = 0; z < sm->n[i]; z++)       /* sparse main cells */
+        {
+          /* if k-1 supercell doesn't exist, can't reach D's */
+          if ((z == 0 || sm->k[i][z] != sm->k[i][z-1]+1) && dpc[h4S_DL] != -eslINFINITY) ESL_FAIL(eslFAIL, errbuf, "first DL on i=%d not -inf", i);
+          if ((z == 0 || sm->k[i][z] != sm->k[i][z-1]+1) && dpc[h4S_DG] != -eslINFINITY) ESL_FAIL(eslFAIL, errbuf, "first DG on i=%d not -inf", i);
+          if (   sm->k[i][z] == sm->M                    && dpc[h4S_IL] != -eslINFINITY) ESL_FAIL(eslFAIL, errbuf, "IL on i=%d,k=M not -inf", i);
+          if (   sm->k[i][z] == sm->M                    && dpc[h4S_IG] != -eslINFINITY) ESL_FAIL(eslFAIL, errbuf, "IG on i=%d,k=M not -inf", i);
+          dpc += h4S_NSCELLS;
+          /* there are other conditions where I(i,k) values must be zero but this is more tedious to check */
+        }
+      if (sm->n[i]) {                     
+        if ( xc[h4S_JJ] != -eslINFINITY) ESL_FAIL(eslFAIL, errbuf, "JJ at i=%d not -inf", i);
+        if ( xc[h4S_CC] != -eslINFINITY) ESL_FAIL(eslFAIL, errbuf, "CC at i=%d not -inf", i);
+        xc += h4S_NXCELLS;
+      }
+    }
+  return eslOK;
+}
+
+static int
+validate_backward(const H4_SPARSEMX *sx, char *errbuf)
+{
+  const H4_SPARSEMASK *sm = sx->sm;
+  float         *dpc    = sx->dp  + (sm->ncells-1)*h4S_NSCELLS;         // last supercell in dp  
+  float         *xc     = sx->xmx + (sm->nrow + sm->S - 1)*h4S_NXCELLS; // last supercell in xmx 
+  int            last_n = 0;
+  int            i,z;
+
+  /* Backward sweep; many of our prohibits are on ib segment-end rows */
+  /* first: some special cases on absolute final stored row ib */
+  if (xc[h4S_N] != -eslINFINITY) ESL_FAIL(eslFAIL, errbuf, "N on last row not 0");
+  if (xc[h4S_J] != -eslINFINITY) ESL_FAIL(eslFAIL, errbuf, "J on last row not 0");
+  /* sweep: */
+  for (i = sm->L; i >= 1; i--)
+    {
+      if (sm->n[i]) {                   /* specials on stored row i */
+        if (               xc[h4S_JJ] != -eslINFINITY) ESL_FAIL(eslFAIL, errbuf, "JJ on row i=%d not -inf", i);
+        if (               xc[h4S_CC] != -eslINFINITY) ESL_FAIL(eslFAIL, errbuf, "CC on row i=%d not -inf", i);
+        if (last_n == 0 && xc[h4S_B]  != -eslINFINITY) ESL_FAIL(eslFAIL, errbuf, "B on end-seg row ib=%d not -inf", i);
+        if (last_n == 0 && xc[h4S_L]  != -eslINFINITY) ESL_FAIL(eslFAIL, errbuf, "L on end-seg row ib=%d not -inf", i);
+        if (last_n == 0 && xc[h4S_G]  != -eslINFINITY) ESL_FAIL(eslFAIL, errbuf, "G on end-seg row ib=%d not -inf", i);
+        xc -= h4S_NXCELLS;
+      }
+      for (z = sm->n[i]-1; z >= 0; z--) /* sparse main cells */
+        {
+          if (sm->k[i][z] == sm->M && dpc[h4S_IL] != -eslINFINITY) ESL_FAIL(eslFAIL, errbuf, "IL on i=%d,k=M not -inf", i);
+          if (sm->k[i][z] == sm->M && dpc[h4S_IG] != -eslINFINITY) ESL_FAIL(eslFAIL, errbuf, "IG on i=%d,k=M not -inf", i);
+          dpc -= h4S_NSCELLS;
+        }
+      if (sm->n[i] && sm->n[i-1] == 0) xc -= h4S_NXCELLS; /* specials on ia-1 row before a start-segment */
+      last_n = sm->n[i];
+    }
+  return eslOK;
+}
+
+static int
+is_prob(float val, float tol)
+{
+  if (val < 0. || val > 1.+tol) return FALSE; 
+  return TRUE;
+}
+
+static int
+validate_decoding(const H4_SPARSEMX *sx, char *errbuf)
+{
+  const H4_SPARSEMASK *sm  = sx->sm;
+  float         *dpc = sx->dp;
+  float         *xc;
+  int            i,z,s;
+  float          tol = 0.001;
+
+  /* Check special cases prohibited in the first ia-1 presegment specials: */
+  /* Note that the N on the first ia-1 row is *not* necessarily 1, because ia-1 is not necessarily row 0 */
+  xc = sx->xmx; // first supercell in xmx
+  if ( esl_FCompare(xc[h4S_J],  0.0, /*rtol=*/0.0, tol) != eslOK) ESL_FAIL(eslFAIL, errbuf, "first J not 0");
+  if ( esl_FCompare(xc[h4S_C],  0.0, /*rtol=*/0.0, tol) != eslOK) ESL_FAIL(eslFAIL, errbuf, "first C not 0");
+  if ( esl_FCompare(xc[h4S_JJ], 0.0, /*rtol=*/0.0, tol) != eslOK) ESL_FAIL(eslFAIL, errbuf, "first JJ not 0");
+  if ( esl_FCompare(xc[h4S_CC], 0.0, /*rtol=*/0.0, tol) != eslOK) ESL_FAIL(eslFAIL, errbuf, "first CC not 0");
+
+  /* Check special cases in very last ib row specials */
+  xc = sx->xmx + (sm->nrow + sm->S - 1)*h4S_NXCELLS; // last supercell in xmx 
+  if (esl_FCompare(xc[h4S_N], 0.0, /*rtol=*/0.0, tol) != eslOK) ESL_FAIL(eslFAIL, errbuf, "N on last row not 0");
+  if (esl_FCompare(xc[h4S_J], 0.0, /*rtol=*/0.0, tol) != eslOK) ESL_FAIL(eslFAIL, errbuf, "J on last row not 0");
+  if (esl_FCompare(xc[h4S_B], 0.0, /*rtol=*/0.0, tol) != eslOK) ESL_FAIL(eslFAIL, errbuf, "B on last row not 0");
+  if (esl_FCompare(xc[h4S_L], 0.0, /*rtol=*/0.0, tol) != eslOK) ESL_FAIL(eslFAIL, errbuf, "L on last row not 0");
+  if (esl_FCompare(xc[h4S_G], 0.0, /*rtol=*/0.0, tol) != eslOK) ESL_FAIL(eslFAIL, errbuf, "G on last row not 0");
+
+  /* Sweep, checking for (the most easily spotchecked) prohibited values (must be 0.0's) */
+  xc = sx->xmx;
+  for (i = 1; i <= sm->L; i++)
+    {
+      if (sm->n[i] && !sm->n[i-1]) {       /* ia-1 specials at a segment start */
+        if ( esl_FCompare(xc[h4S_E], 0.0, /*rtol=*/0.0, tol) != eslOK) ESL_FAIL(eslFAIL, errbuf, "E seg start for ia=%d not 0", i);
+        if ( xc[h4S_J]+tol < xc[h4S_JJ])                               ESL_FAIL(eslFAIL, errbuf, "JJ>J at seg start for ia=%d ", i);
+        if ( xc[h4S_C]+tol < xc[h4S_CC])                               ESL_FAIL(eslFAIL, errbuf, "CC>C at seg start for ia=%d ", i);
+        xc += h4S_NXCELLS;
+      }
+      for (z = 0; z < sm->n[i]; z++)       /* sparse main cells */
+        {
+          /* if k-1 supercell doesn't exist, can't reach DL. But all DGk are reachable, because of wing-retracted entry/exit */
+          if ((z == 0 || sm->k[i][z] != sm->k[i][z-1]+1) && esl_FCompare(dpc[h4S_DL], 0.0, /*rtol=*/0.0, tol) != eslOK) ESL_FAIL(eslFAIL, errbuf, "first DL on i=%d not 0", i);
+          if (   sm->k[i][z] == sm->M                    && esl_FCompare(dpc[h4S_IL], 0.0, /*rtol=*/0.0, tol) != eslOK) ESL_FAIL(eslFAIL, errbuf, "IL on i=%d,M not 0", i);
+          if (   sm->k[i][z] == sm->M                    && esl_FCompare(dpc[h4S_IG], 0.0, /*rtol=*/0.0, tol) != eslOK) ESL_FAIL(eslFAIL, errbuf, "IG on i=%d,M not 0", i);
+          dpc += h4S_NSCELLS;
+          /* there are other conditions where I(i,k) values must be zero but this is more tedious to check */
+        }
+      if (sm->n[i]) {
+        if ( xc[h4S_J]+tol < xc[h4S_JJ]) ESL_FAIL(eslFAIL, errbuf, "JJ>J at i=%d ", i);
+        if ( xc[h4S_C]+tol < xc[h4S_CC]) ESL_FAIL(eslFAIL, errbuf, "CC>C at i=%d ", i);
+        xc += h4S_NXCELLS;
+      }
+    }
+
+  /* Sweep again; check all values are probabilities, 0<=x<=1, allowing a bit of numerical slop. */
+  dpc = sx->dp;
+  xc  = sx->xmx;
+  for (i = 1; i <= sm->L; i++)
+    {
+      if (sm->n[i] && !sm->n[i-1]) {       /* ia-1 specials at a segment start */
+        for (s = 0; s < h4S_NXCELLS; xc++, s++) 
+          if (! is_prob(*xc, tol)) ESL_FAIL(eslFAIL, errbuf, "bad decode prob %f for %s, seg start, ia=%d\n", *xc, h4_sparsemx_DecodeSpecial(s), i); 
+      }
+      for (z = 0; z < sm->n[i]; z++)       /* sparse main cells */
+        for (s = 0; s < h4S_NSCELLS; dpc++, s++) 
+          if (! is_prob(*dpc, tol)) ESL_FAIL(eslFAIL, errbuf, "bad decode prob %f at i=%d,k=%d,%s", *dpc, i,sm->k[i][z], h4_sparsemx_DecodeState(s));
+      if (sm->n[i]) {                      /* specials on sparse row */
+        for (s = 0; s < h4S_NXCELLS; xc++, s++) 
+          if (! is_prob(*xc, tol))  ESL_FAIL(eslFAIL, errbuf, "bad decode prob %f at i=%d,%s", *xc, i, h4_sparsemx_DecodeSpecial(s)); 
+      }
+    }
+  return eslOK;
+}
+
+/* Function:  h4_sparsemx_Validate()
+ * Synopsis:  Validate a sparse DP matrix.
+ *
+ * Purpose:   Validate the contents of sparse DP matrix <sx>.
+ *            Return <eslOK> if it passes. Return <eslFAIL> if
+ *            it fails, and set <errbuf> to contain an 
+ *            explanation, if caller provides a non-<NULL>
+ *            <errbuf>.
+ *
+ * Args:      sx      - sparse DP matrix to validate
+ *            errbuf  - char[eslERRBUFSIZE] space for error msg, or NULL.
+ *
+ * Returns:   <eslOK> on success.
+ *            <eslFAIL> on failure, with an error message in <errbuf>
+ *            if <errbuf> was provided.
+ */
+int
+h4_sparsemx_Validate(const H4_SPARSEMX *sx, char *errbuf)
+{
+  int status;
+
+  if (errbuf) errbuf[0] = '\0';
+
+  if ( (status = validate_dimensions(sx, errbuf)) != eslOK) return status;
+  if ( (status = validate_no_nan    (sx, errbuf)) != eslOK) return status;
+
+  switch (sx->type) {
+  case h4S_UNSET:      ESL_FAIL(eslFAIL, errbuf, "validating an unset sparse DP matrix? probably not what you meant");
+  case h4S_FORWARD:    if ( (status = validate_fwdvit  (sx, errbuf)) != eslOK) return status; break;
+  case h4S_BACKWARD:   if ( (status = validate_backward(sx, errbuf)) != eslOK) return status; break;
+  case h4S_DECODING:   if ( (status = validate_decoding(sx, errbuf)) != eslOK) return status; break;
+  case h4S_VITERBI:    if ( (status = validate_fwdvit  (sx, errbuf)) != eslOK) return status; break;
+  default:             ESL_FAIL(eslFAIL, errbuf, "no such sparse DP matrix type %d", sx->type);
+  }
+  return eslOK;
+}
+/*----------------- end, H4_SPARSEMX validation -----------------*/
+
+
+

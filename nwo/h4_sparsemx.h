@@ -4,6 +4,7 @@
 #define h4SPARSEMX_INCLUDED
 #include "h4_config.h"
 
+#include "h4_refmx.h"
 #include "h4_sparsemask.h"
 
 
@@ -75,6 +76,9 @@ extern char *h4_sparsemx_DecodeState(int type);
 extern char *h4_sparsemx_DecodeSpecial(int type);
 extern int   h4_sparsemx_Dump(FILE *ofp, H4_SPARSEMX *sx);
 extern int   h4_sparsemx_DumpWindow(FILE *ofp, const H4_SPARSEMX *sx, int ia, int ib, int ka, int kb);
+extern int   h4_sparsemx_CompareReference(const H4_SPARSEMX *sx, const H4_REFMX *rx, float tol);
+extern int   h4_sparsemx_CompareReferenceAsBound(const H4_SPARSEMX *sx, const H4_REFMX *rx, float tol);
 
+extern int   h4_sparsemx_Validate(const H4_SPARSEMX *sx, char *errbuf);
 
 #endif //h4SPARSEMX_INCLUDED

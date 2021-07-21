@@ -243,6 +243,38 @@ h4_path_AppendElement(H4_PATH *pi, int8_t st, int r)
   return eslOK;
 }
 
+/* Function:  h4_path_AppendSeveral()
+ * Synopsis:  Append several states at once.
+ * Incept:    SRE, Fri 16 Jul 2021
+ *
+ * Purpose:   A mix of <_Append()> and <_AppendElement()> that gets used
+ *            in a special case in sparse tracebacks, where we want to
+ *            append <n> states <st> at once, but it's not a complete
+ *            element; we might already have one or more <st> at the tail
+ *            end of the growing path <pi>, and might keep adding more.
+ */
+int
+h4_path_AppendSeveral(H4_PATH *pi, int8_t st, int n)
+{
+  int status;
+  
+  if (pi->Z > 0 && st == pi->st[pi->Z-1]) 
+    { // run length encoding:
+      pi->rle[pi->Z-1] += n;
+    }
+  else
+    {
+      if (pi->Z == pi->Zalloc)
+	{
+	  if ((status = h4_path_Grow(pi)) != eslOK) return status;
+	}
+      pi->st[pi->Z]  = st;
+      pi->rle[pi->Z] = n;
+      pi->Z++;
+    }
+  return eslOK;
+}
+
 
 
 /* Function:  h4_path_Reverse()

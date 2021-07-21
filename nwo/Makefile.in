@@ -104,6 +104,7 @@ UTESTS = \
 	reference_asc_utest       \
 	reference_dp_utest        \
 	reference_envelopes_utest \
+	sparse_dp_utest           \
 	ssvfilter_utest           \
 	vitfilter_utest           \
 	zigar_utest

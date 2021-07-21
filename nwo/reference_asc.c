@@ -1254,7 +1254,7 @@ utest_singlemulti(FILE *diagfp, ESL_RANDOMNESS *rng, const ESL_ALPHABET *abc, in
   H4_REFMX     *apu       = h4_refmx_Create(100,100);  
   H4_REFMX     *apd       = h4_refmx_Create(100,100);  
   float         tsc, vsc, fsc, bsc, asc_f, asc_b;
-  float         abstol    = 0.0001;
+  float         abstol    = 0.001;
 
   if ( h4_modelsample_SinglePathASC(rng, abc, M, &hmm, &sq, &anch, &mo, &pi, &tsc)  != eslOK) esl_fatal(failmsg);
 

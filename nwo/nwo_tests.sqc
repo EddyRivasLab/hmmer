@@ -12,6 +12,7 @@
 1 exercise reference_asc         @nwo/reference_asc_utest@ -s0
 1 exercise reference_dp          @nwo/reference_dp_utest@ -s0
 1 exercise reference_envelopes   @nwo/reference_envelopes_utest@ -s0
+1 exercise sparse_dp             @nwo/sparse_dp_utest@ -s0
 1 exercise ssvfilter             @nwo/ssvfilter_utest@ -s0
 1 exercise vitfilter             @nwo/vitfilter_utest@ -s0
 1 exercise zigar                 @nwo/zigar_utest@ -s0
@@ -32,7 +33,8 @@
 1 valgrind reference_aec         @nwo/reference_aec_utest@ -s0
 1 valgrind reference_asc         @nwo/reference_asc_utest@ -s0
 1 valgrind reference_dp          @nwo/reference_dp_utest@ -s0 -L10 -M10 -N10 --bruteL 3 --bruteN 2
-1 exercise reference_envelopes   @nwo/reference_envelopes_utest@ -s0
+1 valgrind reference_envelopes   @nwo/reference_envelopes_utest@ -s0
+1 valgrind sparse_dp             @nwo/sparse_dp_utest@ -s0
 1 valgrind ssvfilter             @nwo/ssvfilter_utest@ -s0 -L20 -M20 -N10
 1 valgrind vitfilter             @nwo/vitfilter_utest@ -s0 -L20 -M20 -N10
 1 valgrind zigar                 @nwo/zigar_utest@ -s0
