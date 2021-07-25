@@ -1110,6 +1110,8 @@ reference_trace_engine(ESL_RANDOMNESS *rng, float *wrk, const H4_PROFILE *hmm, c
   int8_t scur;
   int    status;
 
+  if ((status = h4_path_Reuse(pi)) != eslOK) return status;
+
   int8_t (*select_ml)(ESL_RANDOMNESS *,          const H4_PROFILE *, const H4_REFMX *, int, int);
   int8_t (*select_mg)(ESL_RANDOMNESS *,          const H4_PROFILE *, const H4_REFMX *, int, int);
   int8_t (*select_il)(ESL_RANDOMNESS *,          const H4_PROFILE *, const H4_REFMX *, int, int);
@@ -1232,7 +1234,6 @@ h4_reference_StochasticTrace(ESL_RANDOMNESS *rng, float **wrk_byp, const H4_PROF
   float *wrk = NULL;
   int    status;
 
-  ESL_DASSERT1(( pi->Z == 0 ));   // caller has create'd or reuse'd the path
   ESL_DASSERT1(( hmm->M == rxf->M ));
   ESL_DASSERT1(( rxf->type == h4R_FORWARD ));
 
@@ -2009,7 +2010,7 @@ utest_generation(FILE *diagfp, ESL_RANDOMNESS *rng, int alphatype, int M, int L,
 static void
 utest_duality(FILE *diagfp, ESL_RANDOMNESS *rng, int alphatype, int M, int L, int nseq)
 {
-  char          msg[]  = "reference_dp duality unit test failed";
+  char          msg[]  = "reference_dp:: duality unit test failed";
   ESL_DSQ      *dsq    = malloc(sizeof(ESL_DSQ) * (L+2));
   ESL_ALPHABET *abc    = esl_alphabet_Create(alphatype);
   H4_PROFILE   *hmm    = NULL;
@@ -2090,7 +2091,7 @@ utest_duality(FILE *diagfp, ESL_RANDOMNESS *rng, int alphatype, int M, int L, in
 static void
 utest_enumeration(FILE *diagfp, ESL_RANDOMNESS *rng, int M)
 {
-  char          msg[] = "reference_dp enumeration unit test failed";
+  char          msg[] = "reference_dp:: enumeration unit test failed";
   ESL_ALPHABET *abc   = esl_alphabet_Create(eslCOINS); // using the eslCOINS alphabet helps keep the enumeration's size down.
   H4_PROFILE   *hmm   = NULL;
   H4_MODE      *mo    = h4_mode_Create();
@@ -2202,7 +2203,7 @@ utest_enumeration(FILE *diagfp, ESL_RANDOMNESS *rng, int M)
 static void
 utest_singlepath(FILE *diagfp, ESL_RANDOMNESS *rng, int alphatype, int M)
 {
-  char          msg[] = "reference_dp singlepath unit test failed";
+  char          msg[] = "reference_dp:: singlepath unit test failed";
   ESL_ALPHABET *abc   = esl_alphabet_Create(alphatype);
   H4_PROFILE   *hmm   = NULL;
   H4_MODE      *mo    = h4_mode_Create();
@@ -2308,7 +2309,7 @@ utest_singlepath(FILE *diagfp, ESL_RANDOMNESS *rng, int alphatype, int M)
 static void
 utest_approx_decoding(FILE *diagfp, ESL_RANDOMNESS *rng, int alphatype, int M, int L)
 {
-  char          msg[] = "reference_dp approx_decoding unit test failed";
+  char          msg[] = "reference_dp:: approx_decoding unit test failed";
   ESL_ALPHABET *abc   = esl_alphabet_Create(alphatype);
   H4_PROFILE   *hmm   = NULL;
   H4_MODE      *mo    = h4_mode_Create();
@@ -2446,7 +2447,7 @@ utest_approx_decoding(FILE *diagfp, ESL_RANDOMNESS *rng, int alphatype, int M, i
 static void
 utest_mute_partial_cycle(void)
 {
-  char          msg[] = "reference_dp mute partial cycle unit test failed";
+  char          msg[] = "reference_dp:: mute partial cycle unit test failed";
   ESL_ALPHABET *abc   = esl_alphabet_Create(eslAMINO);
   ESL_DSQ       dsq[] = { eslDSQ_SENTINEL, 1, 2, 3, 7, 8, 9, eslDSQ_SENTINEL }; // e.g. "ACDHIK", digitized
   int           L     = 6;

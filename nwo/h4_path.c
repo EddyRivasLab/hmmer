@@ -1207,6 +1207,79 @@ h4_path_Compare(const H4_PATH *pi1, const H4_PATH *pi2)
   return eslOK;
 }
 
+/* Function:  h4_path_CompareLoosely()
+ * Synopsis:  Weaker version of h4_path_Compare().
+ *
+ * Purpose:   When I say "reference and sparse paths must be identical"
+ *            in some of the sparse DP unit tests, I don't really mean
+ *            it.  It is possible to have two (or more) possible paths
+ *            with exactly the same score, such that any of them are
+ *            valid Viterbi paths. It is possible for sparse traceback
+ *            to find one, and reference traceback to find another.
+ * 
+ *            The most common example is on a single-residue
+ *            alignment. Suppose the reference trace has state ML31
+ *            aligned to residue Y64, and that's the only aligned
+ *            residue, with all other residues explained by N/C. That
+ *            is, SN...NB->ML31->EC...CT. Now any and all other Y
+ *            residues in the target sequence can also be aligned to
+ *            ML31, necessarily receiving the same emission score, and
+ *            the path necessarily receives the same overall score.
+ * 
+ *            Of course, this is an edge case. I didn't expect
+ *            alternative traces with identical scores, for
+ *            position-specific floating-point scores, but an example
+ *            like that above showed up in a unit test failure. If
+ *            <h4_path_Compare()> is used in sparse DP unit tests
+ *            that are subject to this issue, they will sometimes
+ *            fail.
+ * 
+ *            Thus the <h4_path_CompareLoosely() variant, which
+ *            allows emitting M/I states to emit exactly the same
+ *            subsequence in the target: that is, it checks that the
+ *            residue identities match (as opposed to more stringently
+ *            requiring the i indices to match), for all M/I states.
+ */
+int
+h4_path_CompareLoosely(const H4_PATH *pi1, const H4_PATH *pi2, const ESL_DSQ *dsq)
+{
+  int z1 = 0;
+  int z2 = 0;
+  int i1 = 0;
+  int i2 = 0;
+  int k1, k2;
+
+  for (z1 = 0; z1 < pi1->Z; z1++)
+    {
+      if      (h4_path_IsX(pi1->st[z1])) { i1 += pi1->rle[z1]-1; }
+      else if (h4_path_IsB(pi1->st[z1])) { k1 =  pi1->rle[z1];   }
+      else if (h4_path_IsD(pi1->st[z1])) { k1 += pi1->rle[z1];   }
+      else if (h4_path_IsM(pi1->st[z1]) || h4_path_IsI(pi1->st[z1]))
+        {
+          for (; z2 < pi2->Z && pi2->st[z2] != pi1->st[z1]; z2++) // catch z2 up to current z1 M/I state, while tracking i/k
+            {
+              if      (h4_path_IsX(pi2->st[z2])) { i2 += pi1->rle[z2]-1; }
+              else if (h4_path_IsB(pi2->st[z2])) { k2 =  pi1->rle[z2];   }
+              else if (h4_path_IsD(pi2->st[z2])) { k2 += pi1->rle[z2];   }
+              else return eslFAIL;  // M/I states must match exactly
+            }
+          if (z2 == pi2->Z)                 return eslFAIL;
+          if (pi1->rle[z1] != pi2->rle[z2]) return eslFAIL;  // don't have to check the entire runlength; checking start and length is sufficient
+          if (k1 != k2)                     return eslFAIL;
+          if (i1 != i2)                     return eslFAIL;
+
+          i1 += pi1->rle[z1];  // we know rle's match
+          i2 += pi1->rle[z2];
+          if (h4_path_IsM(pi1->st[z1])) {  // we know that states match
+            k1 += pi1->rle[z1]; 
+            k2 += pi2->rle[z2];
+          }
+	  z2++;
+        }
+    }
+  return eslOK;
+}
+
 
 /* Function:  h4_path_Dump()
  * Synopsis:  Dump internals of H4_PATH to a stream.

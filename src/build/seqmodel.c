@@ -33,7 +33,7 @@
  *            residues in alphabet <abc>, named <name>. 
  *            
  *            The scoring system is given by <Q>, <f>, <popen>, and
- *            <pextend>. <Q> is a $K \times K$ matrix giving
+ *            <pextend>. <Q> is a $Kp \times Kp$ matrix giving
  *            conditional residue probabilities $P(a \mid b)}$; these
  *            are typically obtained by reverse engineering a score
  *            matrix like BLOSUM62. <f> is a vector of $K$ background

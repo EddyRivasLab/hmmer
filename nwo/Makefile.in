@@ -34,6 +34,7 @@ OBJS   = \
 	reference_dp.o        \
 	reference_envelopes.o \
 	reference_mpas.o      \
+	seqmodel.o            \
 	simdvec.o             \
 	sparse_dp.o           \
 	ssvfilter.o           \
@@ -81,6 +82,7 @@ HDRS = \
 	reference_dp.h        \
 	reference_envelopes.h \
 	reference_mpas.h      \
+	seqmodel.h            \
 	simdvec.h             \
 	sparse_dp.h           \
 	ssvfilter.h           \
@@ -136,6 +138,7 @@ EXAMPLES = \
 	reference_dp_example        \
 	reference_envelopes_example \
 	reference_mpas_example      \
+	seqmodel_example            \
 	sparse_dp_example           \
 	ssvfilter_example           \
 	vitfilter_example           \

@@ -26,7 +26,7 @@ typedef struct {
  * and ML-IL-DL are contiguous; tracebacks can
  * assume G-MG-IG-DG, L-ML-IL-DL contiguity and order.
  */
-#define h4P_NONE  0
+#define h4P_NONE  0   // dummy, unused
 #define h4P_S     1   // unused in paths
 #define h4P_N     2   
 #define h4P_B     3   // unused
@@ -42,7 +42,7 @@ typedef struct {
 #define h4P_J     13
 #define h4P_C     14  
 #define h4P_T     15  // unused
-#define h4P_NST   16  
+#define h4P_NST   16  // of which 11 are actually used.
 
 #define h4_path_IsB(s)     ( (s) == h4P_G  || (s) == h4P_L  )
 #define h4_path_IsMain(s)  ( (s) >= h4P_MG || (s) <= h4P_DL )
@@ -85,6 +85,7 @@ extern int   h4_path_TestSample(ESL_RANDOMNESS *rng, H4_PATH **ret_pi);
 extern char *h4_path_DecodeStatetype(int8_t st);
 extern int   h4_path_Validate(const H4_PATH *pi, int M, int L, char *errbuf);
 extern int   h4_path_Compare(const H4_PATH *pi1, const H4_PATH *pi2);
+extern int   h4_path_CompareLoosely(const H4_PATH *pi1, const H4_PATH *pi2, const ESL_DSQ *dsq);
 extern int   h4_path_Dump     (FILE *fp, const H4_PATH *pi);
 extern int   h4_path_DumpCigar(FILE *fp, const H4_PATH *pi);
 

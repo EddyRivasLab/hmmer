@@ -39,9 +39,8 @@
  *            sparse dynamic programming constrained by the sparse
  *            mask <sm>.  Fill in the sparse Viterbi matrix <sx>;
  *            (optionally) trace back the optimal path and return it
- *            in the trace structure <opt_pi> if the caller provides
- *            one; and (optionally) return the Viterbi raw score in
- *            bits in <*opt_vsc>.
+ *            in <opt_pi> if the caller provides it; and (optionally)
+ *            return the Viterbi raw score in bits in <*opt_vsc>.
  *            
  *            <sx> and <opt_pi> are provided as existing space;
  *            reused/reallocated as needed.
@@ -674,8 +673,8 @@ h4_sparse_Decoding(const ESL_DSQ *dsq, int L, const H4_PROFILE *hmm, const H4_MO
 	  xd[h4S_L]  = exp2f(xf[h4S_L] + xb[h4S_L] - totsc);
 	  xd[h4S_G]  = exp2f(xf[h4S_G] + xb[h4S_G] - totsc);  xG = xf[h4S_G];
 	  xd[h4S_C]  = exp2f(xf[h4S_C] + xb[h4S_C] - totsc);
-	  xd[h4S_JJ] = xd[h4S_J];                            xJ = xf[h4S_J]; norm += xd[h4S_JJ];
-	  xd[h4S_CC] = xd[h4S_C];                            xC = xf[h4S_C]; norm += xd[h4S_CC];
+	  xd[h4S_JJ] = xd[h4S_J];                             xJ = xf[h4S_J]; norm += xd[h4S_JJ];
+	  xd[h4S_CC] = xd[h4S_C];                             xC = xf[h4S_C]; norm += xd[h4S_CC];
 	  
 #ifndef h4SPARSE_DECODING_TESTDRIVE /* see note on renormalization further below. */
 	  norm = 1.0f/norm;
@@ -943,7 +942,169 @@ v_select_b(ESL_RANDOMNESS *r, const H4_MODE *mo, const float *xc)
  * 6. Selection functions for stochastic traceback
  *****************************************************************/
 
-/* TK TK */
+/* These are essentially copies of the Viterbi choice functions,
+ * except that instead of simply choosing the maximum path, we
+ * renormalize the log probs in path[] (with <esl_vec_FLog2Norm()>)
+ * to create a probability vector, and sample from that (with
+ * <esl_rnd_FChoose()>.
+ */
+static inline int
+sto_select_ml(ESL_RANDOMNESS *rng, const H4_PROFILE *hmm, int k, const float *dpp, const int *kp, int np, const float *xp, int *ret_z)
+{
+  int   y = 0;
+  while (y < np && kp[y]  < k-1) { y++; dpp += h4S_NSCELLS; } 
+  if    (y < np && kp[y] == k-1) 
+    {
+      float path[4];
+
+      path[0] =   xp[h4S_L] + hmm->tsc[k-1][h4_LM];
+      path[1] = dpp[h4S_ML] + hmm->tsc[k-1][h4_MM];
+      path[2] = dpp[h4S_IL] + hmm->tsc[k-1][h4_IM];
+      path[3] = dpp[h4S_DL] + hmm->tsc[k-1][h4_DM];
+      esl_vec_FLog2Norm(path, 4);
+      *ret_z = y;
+      return (h4P_L + esl_rnd_FChoose(rng, path, 4));  // assumes L-ML-IL-DL order in h4P_*
+    }
+  else { *ret_z = 0; return h4P_L; }
+}
+static inline int
+sto_select_mg(ESL_RANDOMNESS *rng, const H4_PROFILE *hmm, int k, const float *dpp, const int *kp, int np, const float *xp, int *ret_z)
+{
+  int   y = 0;
+  while (y < np && kp[y]  < k-1) { y++; dpp += h4S_NSCELLS; } 
+  if    (y < np && kp[y] == k-1) 
+    {
+      float path[4];
+
+      path[0] =   xp[h4S_G] + hmm->tsc[k-1][h4_GM];
+      path[1] = dpp[h4S_MG] + hmm->tsc[k-1][h4_MM];
+      path[2] = dpp[h4S_IG] + hmm->tsc[k-1][h4_IM];
+      path[3] = dpp[h4S_DG] + hmm->tsc[k-1][h4_DM];
+      esl_vec_FLog2Norm(path, 4);
+      *ret_z = y;
+      return (h4P_G + esl_rnd_FChoose(rng, path, 4));  // assumes G-MG-IG-DG order in h4P_*
+    }
+  else { *ret_z = 0; return h4P_G; }
+}
+static inline int
+sto_select_il(ESL_RANDOMNESS *rng, const H4_PROFILE *hmm, int k, const float *dpp, const int *kp, int np, int *ret_z)
+{
+  float path[3];
+  int   y = 0;
+  while (kp[y] != k) { y++; dpp += h4S_NSCELLS; } // a little brave; we know an appropriate sparse cell exists on prv row, else we couldn't reach I on cur 
+  path[0] = dpp[h4S_ML] + hmm->tsc[k][h4_MI];
+  path[1] = dpp[h4S_IL] + hmm->tsc[k][h4_II];
+  path[2] = dpp[h4S_DL] + hmm->tsc[k][h4_DI];
+  esl_vec_FLog2Norm(path, 3);
+  *ret_z = y;
+  return (h4P_ML + esl_rnd_FChoose(rng, path, 3));  // assumes ML-IL-DL order in h4P_*
+}
+static inline int
+sto_select_ig(ESL_RANDOMNESS *rng, const H4_PROFILE *hmm, int k, const float *dpp, const int *kp, int np, const float *xp, int *ret_z)
+{
+  int   y = 0;
+  while (y < np && kp[y]  < k) { y++; dpp += h4S_NSCELLS; } 
+  if    (y < np && kp[y] == k)  // because of G->Ik wing-retracted entry, we need to check whether sparse cell k exists above us, unlike plan7
+    {
+      float path[4];
+
+      path[0] =  xp[h4S_G]  + hmm->tsc[k][h4_GI];
+      path[1] = dpp[h4S_MG] + hmm->tsc[k][h4_MI];
+      path[2] = dpp[h4S_IG] + hmm->tsc[k][h4_II];
+      path[3] = dpp[h4S_DG] + hmm->tsc[k][h4_DI];
+      esl_vec_FLog2Norm(path, 4);
+      *ret_z = y;
+      return (h4P_G + esl_rnd_FChoose(rng, path, 4));  // assumes G-MG-IG-DG order in h4P_*
+    }
+  else { *ret_z = 0; return h4P_G; }
+}
+static inline int
+sto_select_dl(ESL_RANDOMNESS *rng, const H4_PROFILE *hmm, int k, const float *dpp)
+{
+  float path[3];
+  path[0] = dpp[h4S_ML] + hmm->tsc[k-1][h4_MD]; // more bravery. fact that we're tracing back from DL means that sparse cell k-1 must exist in z-1 
+  path[1] = dpp[h4S_IL] + hmm->tsc[k-1][h4_ID];
+  path[2] = dpp[h4S_DL] + hmm->tsc[k-1][h4_DD];
+  esl_vec_FLog2Norm(path, 3);
+  return (h4P_ML + esl_rnd_FChoose(rng, path, 3));   // assumes ML-IL-DL order in h4P_*
+}
+static inline int
+sto_select_dg(ESL_RANDOMNESS *rng, const H4_PROFILE *hmm, int k, const float *dpp)
+{
+  float path[3];
+  path[0] = dpp[h4S_MG] + hmm->tsc[k-1][h4_MD]; // more bravery. fact that we're tracing back from DL means that sparse cell k-1 must exist in z-1 
+  path[1] = dpp[h4S_IG] + hmm->tsc[k-1][h4_ID];
+  path[2] = dpp[h4S_DG] + hmm->tsc[k-1][h4_DD];
+  esl_vec_FLog2Norm(path, 3);
+  return (h4P_MG + esl_rnd_FChoose(rng, path, 3));   // assumes MG-IG-DG order in h4P_*
+}
+static inline int
+sto_select_j(ESL_RANDOMNESS *rng, const H4_MODE *mo, const float *xc)
+{
+  float path[2];
+  path[0] = *(xc-h4S_NXCELLS+h4S_J) + mo->xsc[h4_J][h4_LOOP];
+  path[1] = xc[h4S_E] + mo->xsc[h4_E][h4_LOOP];
+  esl_vec_FLog2Norm(path, 2);
+  return ( (esl_rnd_FChoose(rng,path,2) == 0) ? h4P_J : h4P_E);
+}
+static inline int
+sto_select_c(ESL_RANDOMNESS *rng, const H4_MODE *mo, const float *xc)
+{
+  float path[2];
+  path[0] = *(xc-h4S_NXCELLS+h4S_C) + mo->xsc[h4_C][h4_LOOP];
+  path[1] = xc[h4S_E] + mo->xsc[h4_E][h4_MOVE];
+  esl_vec_FLog2Norm(path, 2);
+  return ( (esl_rnd_FChoose(rng,path,2) == 0) ? h4P_C : h4P_E);
+}
+static inline int
+sto_select_e(ESL_RANDOMNESS *rng, float *wrk, const H4_PROFILE *hmm, const float *dpp, const int *kp, int np, int *ret_z)
+{
+  // The <wrk> vector is a scratch space with room for at least h4S_NSCELLS*np floats
+  int   state[6] = { h4P_ML, h4P_MG, h4P_IL, h4P_IG, h4P_DL, h4P_DG }; // w%6 in profile states mapped to path statetypes 
+  int   k, w,z;
+
+  for (z = 0; z < np; z++)
+    { 
+      k = kp[z];
+      wrk[z*h4S_NSCELLS + h4S_ML] = dpp[h4S_ML];
+      wrk[z*h4S_NSCELLS + h4S_IL] = -eslINFINITY;
+      wrk[z*h4S_NSCELLS + h4S_DL] = dpp[h4S_DL];
+
+      if (k == hmm->M) // final M cell doesn't use DGE wing folding, and it has no I.
+        {
+          wrk[z*h4S_NSCELLS + h4S_MG] = dpp[h4S_MG];
+          wrk[z*h4S_NSCELLS + h4S_IG] = -eslINFINITY;
+          wrk[z*h4S_NSCELLS + h4S_DG] = dpp[h4S_DG];
+        }
+      else if (z == np-1 || kp[z+1] != k+1) // sparse cell k with no following cell k+1: check glocal exit Mk->...->E across unmarked cells
+	{ 
+          wrk[z*h4S_NSCELLS + h4S_MG] = dpp[h4S_MG] + hmm->tsc[k][h4_MD] + hmm->tsc[k][h4_DGE];
+          wrk[z*h4S_NSCELLS + h4S_IG] = dpp[h4S_IG] + hmm->tsc[k][h4_ID] + hmm->tsc[k][h4_DGE];
+          wrk[z*h4S_NSCELLS + h4S_DG] = dpp[h4S_DG] + hmm->tsc[k][h4_DD] + hmm->tsc[k][h4_DGE]; 
+        }
+      else // sparse cell with a following cell k+1; no glocal exit, instead prob flows along {MD}k->Dk+1 path 
+        {
+          wrk[z*h4S_NSCELLS + h4S_MG] = -eslINFINITY;
+          wrk[z*h4S_NSCELLS + h4S_IG] = -eslINFINITY;
+          wrk[z*h4S_NSCELLS + h4S_DG] = -eslINFINITY;
+	}
+      dpp += h4S_NSCELLS;
+    }
+  /* wrk has h4S_NSCELLS*np values, some of which are -inf; normalize and choose one; then sort out z,s components of its index */
+  esl_vec_FLog2Norm(wrk, np*h4S_NSCELLS);
+  w = esl_rnd_FChoose(rng,wrk,np*h4S_NSCELLS);
+  *ret_z = w / h4S_NSCELLS;
+  return state[w%h4S_NSCELLS];
+}
+static inline int
+sto_select_b(ESL_RANDOMNESS *rng, const H4_MODE *mo, const float *xc)
+{
+  float path[2];
+  path[0] = xc[h4S_J] + mo->xsc[h4_J][h4_MOVE];
+  path[1] = xc[h4S_N] + mo->xsc[h4_N][h4_MOVE];
+  esl_vec_FLog2Norm(path, 2);
+  return ( (esl_rnd_FChoose(rng,path,2) == 0) ? h4P_J : h4P_N);
+}
 /*---------- end, stochastic traceback selections ---------------*/
 
 
@@ -989,7 +1150,6 @@ sparse_traceback_engine(ESL_RANDOMNESS *rng, float *wrk, const H4_PROFILE *hmm, 
       select_j  = &v_select_j;       select_c  = &v_select_c;
       select_e  = &v_select_e;       select_b  = &v_select_b;
     }
-#if 0 // TK TK
   else if (sx->type == h4S_FORWARD) // configure for stochastic traceback 
     {
       select_ml = &sto_select_ml;      select_mg = &sto_select_mg;
@@ -998,7 +1158,6 @@ sparse_traceback_engine(ESL_RANDOMNESS *rng, float *wrk, const H4_PROFILE *hmm, 
       select_j  = &sto_select_j;       select_c  = &sto_select_c;
       select_e  = &sto_select_e;       select_b  = &sto_select_b;
     }
-#endif
   else ESL_EXCEPTION(eslEINCONCEIVABLE, "neither Forward or Viterbi?");
 
 
@@ -1094,7 +1253,7 @@ sparse_traceback_engine(ESL_RANDOMNESS *rng, float *wrk, const H4_PROFILE *hmm, 
  * Returns:   <eslOK> on success, and <pi> contains the optimal path.
  *
  * Throws:    <eslEMEM> on allocation failure; <pi> may need to grow to
- *            accommodate the trace.
+ *            accommodate the path.
  * 
  *            <eslEINVAL> on various coding, validation failures. 
  */
@@ -1102,6 +1261,70 @@ int
 h4_sparse_ViterbiTrace(const H4_PROFILE *hmm, const H4_MODE *mo, const H4_SPARSEMX *sx, H4_PATH *pi)
 {
   return sparse_traceback_engine(NULL, NULL, hmm, mo, sx, pi);
+}
+
+
+/* Function:  h4_sparse_StochasticTrace()
+ * Synopsis:  Stochastic traceback of a sparse Forward DP matrix.
+ *
+ * Purpose:   Caller has filled sparse Forward matrix <sx> with
+ *            <h4_sparse_Forward()>, in a comparison involving profile
+ *            <hmm> in comparison mode <mo>. Using random number
+ *            generator <rng>, perform a stochastic traceback, storing
+ *            the sampled trace in <pi>, space which the caller provides.
+ *            
+ *            The calculation requires a temporary scratch space of up
+ *            to <M*h4S_NSCELLS> floats. In order to minimize
+ *            alloc/free cycles, caller can provide an existing
+ *            scratch space of any size, to be reallocated if needed,
+ *            using Easel's "bypass" idiom. That is: if you pass
+ *            <NULL> for <wrk_byp>, then workspace is allocated and
+ *            free'd internally; this is a little slower, but saves
+ *            you having to declare (and free) a variable. If you
+ *            already have an allocated space <wrk>, you can pass it
+ *            as <&wrk>. If <wrk==NULL> and you pass <&wrk>, then it
+ *            will be allocated here; this provides a clean
+ *            initialization mechanism for loops (i.e. init <wrk=NULL>
+ *            and pass <&wrk> to the routine inside a loop, and it
+ *            will be allocated by the first call, and reused by
+ *            subsequent ones.).
+ *
+ * Args:      rng     - random number generator
+ *            wrk_byp - ptr to workspace to reuse, or <NULL> to alloc internally instead.
+ *                      <M*h4S_NSCELLS> floats are needed in this workspace; if <*wrk_byp>
+ *                      is smaller, it will be reallocated; if <*wrk_byp> is <NULL> it
+ *                      will be allocated.
+ *            hmm     - profile
+ *            mo      - comparison mode
+ *            sxf     - filled sparse Forward DP matrix
+ *            pi      - trace structure to store the result in (reused/reallocated here)
+ *
+ * Returns:   <eslOK> on success.
+ *            <pi> contains the sampled trace, and may have been internally reallocated.
+ *            If <wrk_byp> was non-<NULL>, <*wrk_byp> workspace may have been reallocated.
+ *
+ * Throws:    <eslEMEM> on allocation failure.
+ *            <eslEINVAL> on argument validation failures. 
+ */
+int
+h4_sparse_StochasticTrace(ESL_RANDOMNESS *rng, float **wrk_byp, const H4_PROFILE *hmm, const H4_MODE *mo, const H4_SPARSEMX *sxf, H4_PATH *pi)
+{
+  float *wrk = NULL;
+  int    status;
+
+  ESL_DASSERT1( (sxf->type == h4S_FORWARD)  );
+
+  if      (esl_byp_IsInternal(wrk_byp)) { ESL_ALLOC  (wrk,      sxf->sm->M * h4S_NSCELLS * sizeof(float));                 }
+  else if (esl_byp_IsReturned(wrk_byp)) { ESL_ALLOC  (*wrk_byp, sxf->sm->M * h4S_NSCELLS * sizeof(float)); wrk = *wrk_byp; }
+  else if (esl_byp_IsProvided(wrk_byp)) { ESL_REALLOC(*wrk_byp, sxf->sm->M * h4S_NSCELLS * sizeof(float)); wrk = *wrk_byp; }
+
+  status = sparse_traceback_engine(rng, wrk, hmm, mo, sxf, pi);
+
+  if  (esl_byp_IsInternal(wrk_byp)) { free(wrk); }
+  return status;
+
+ ERROR:
+  return status;
 }
 
 /*------------- end, traceback engine and API -------------------*/
@@ -1112,6 +1335,8 @@ h4_sparse_ViterbiTrace(const H4_PROFILE *hmm, const H4_MODE *mo, const H4_SPARSE
  *****************************************************************/
 #ifdef h4SPARSE_DP_TESTDRIVE
 
+#include <string.h>
+
 #include "esl_sq.h"
 
 #include "h4_checkptmx.h"
@@ -1121,7 +1346,7 @@ h4_sparse_ViterbiTrace(const H4_PROFILE *hmm, const H4_MODE *mo, const H4_SPARSE
 #include "fbfilter.h"
 #include "modelsample.h"
 #include "reference_dp.h"
-
+#include "seqmodel.h"
 
 /* utest_generation()
  *
@@ -1141,22 +1366,22 @@ h4_sparse_ViterbiTrace(const H4_PROFILE *hmm, const H4_MODE *mo, const H4_SPARSE
  *     satisfy v_ref >= v_sparse
  */
 static void
-utest_generation(ESL_RANDOMNESS *rng, ESL_ALPHABET *abc, int M, int L, int N)
+utest_generation(ESL_RANDOMNESS *rng, ESL_ALPHABET *abc, int M, int N)
 {
   char           msg[]  = "sparse_dp:: generation unit test failed";
   H4_PROFILE    *hmm    = NULL;
   H4_MODE       *mo     = h4_mode_Create();
   ESL_SQ        *sq     = esl_sq_CreateDigital(abc);
-  H4_CHECKPTMX  *cpx    = h4_checkptmx_Create(M, L, ESL_MBYTES(32));
-  H4_SPARSEMASK *sm     = h4_sparsemask_Create(M, L);
+  H4_CHECKPTMX  *cpx    = h4_checkptmx_Create(M, M, ESL_MBYTES(32));
+  H4_SPARSEMASK *sm     = h4_sparsemask_Create(M, M);
   H4_SPARSEMX   *sxv    = h4_sparsemx_Create(NULL);
   H4_SPARSEMX   *sxf    = h4_sparsemx_Create(NULL);
   H4_SPARSEMX   *sxb    = h4_sparsemx_Create(NULL);
   H4_SPARSEMX   *sxd    = h4_sparsemx_Create(NULL);
-  H4_REFMX      *rxv    = h4_refmx_Create(M, L);
-  H4_REFMX      *rxf    = h4_refmx_Create(M, L);
-  H4_REFMX      *rxb    = h4_refmx_Create(M, L);
-  H4_REFMX      *rxd    = h4_refmx_Create(M, L);
+  H4_REFMX      *rxv    = h4_refmx_Create(M, M);
+  H4_REFMX      *rxf    = h4_refmx_Create(M, M);
+  H4_REFMX      *rxb    = h4_refmx_Create(M, M);
+  H4_REFMX      *rxd    = h4_refmx_Create(M, M);
   H4_PATH       *epi    = h4_path_Create();
   H4_PATH       *vpi    = h4_path_Create();
   float          esc;                 // score of emitted seq path
@@ -1181,8 +1406,8 @@ utest_generation(ESL_RANDOMNESS *rng, ESL_ALPHABET *abc, int M, int L, int N)
   for (idx = 0; idx < N; idx++)
     {
       /* Generate a sequence */
-      if ( h4_mode_SetLength(mo, L)                   != eslOK) esl_fatal(msg);                              // set length model to L for emission
-      do { if ( h4_emit(rng, hmm, mo, sq, epi)        != eslOK) esl_fatal(msg); } while (sq->n > (M+L)*3);   // keep seq length reasonable
+      if ( h4_mode_SetLength(mo, M)                   != eslOK) esl_fatal(msg);                          // set length model to M for emission
+      do { if ( h4_emit(rng, hmm, mo, sq, epi)        != eslOK) esl_fatal(msg); } while (sq->n > M*6);   // keep seq length reasonable
       if ( h4_mode_SetLength(mo, sq->n)               != eslOK) esl_fatal(msg);   // reset length model to this sampled seq's length before scoring or DP 
       if ( h4_path_Score(epi, sq->dsq, hmm, mo, &esc) != eslOK) esl_fatal(msg);   // emitted path score. Viterbi can improve on this.
 
@@ -1247,27 +1472,27 @@ utest_generation(ESL_RANDOMNESS *rng, ESL_ALPHABET *abc, int M, int L, int N)
  *  
  * 1. Reference and sparse scores must be identical (V,F,B), 
  *    within a tolerance;
- * 2. Reference and sparse viterbi traces must be identical;
+ * 2. Reference and sparse viterbi paths must be identical;
  * 3. All sparse V,F,B,D DP matrix structures must Validate();
- * 4. Sparse Viterbi trace structure must Validate();
+ * 4. Sparse Viterbi path structure must Validate();
  * 5. Reference and sparse matrices are identical within tolerance. 
  */
 static void
-utest_compare_reference(ESL_RANDOMNESS *rng, ESL_ALPHABET *abc, int M, int L, int N)
+utest_compare_reference(ESL_RANDOMNESS *rng, ESL_ALPHABET *abc, int M, int N)
 {
   char           msg[]  = "sparse_dp:: compare_reference unit test failed";
   H4_PROFILE    *hmm    = NULL;
   H4_MODE       *mo     = h4_mode_Create();
   ESL_SQ        *sq     = esl_sq_CreateDigital(abc);       /* space for generated (homologous) target seqs              */
-  H4_SPARSEMASK *sm     = h4_sparsemask_Create(M, L);
+  H4_SPARSEMASK *sm     = h4_sparsemask_Create(M, M);
   H4_SPARSEMX   *sxv    = h4_sparsemx_Create(sm);
   H4_SPARSEMX   *sxf    = h4_sparsemx_Create(sm);
   H4_SPARSEMX   *sxb    = h4_sparsemx_Create(sm);
   H4_SPARSEMX   *sxd    = h4_sparsemx_Create(sm);
-  H4_REFMX      *rxv    = h4_refmx_Create(M, L);
-  H4_REFMX      *rxf    = h4_refmx_Create(M, L);
-  H4_REFMX      *rxb    = h4_refmx_Create(M, L);
-  H4_REFMX      *rxd    = h4_refmx_Create(M, L);
+  H4_REFMX      *rxv    = h4_refmx_Create(M, M);
+  H4_REFMX      *rxf    = h4_refmx_Create(M, M);
+  H4_REFMX      *rxb    = h4_refmx_Create(M, M);
+  H4_REFMX      *rxd    = h4_refmx_Create(M, M);
   H4_PATH       *rpi    = h4_path_Create();
   H4_PATH       *spi    = h4_path_Create();
   int            idx;
@@ -1290,8 +1515,8 @@ utest_compare_reference(ESL_RANDOMNESS *rng, ESL_ALPHABET *abc, int M, int L, in
   for (idx = 0; idx < N; idx++)
     {
       /* Generate a sequence */
-      if ( h4_mode_SetLength(mo, L)                   != eslOK) esl_fatal(msg);                              // set length model to L for emission
-      do { if ( h4_emit(rng, hmm, mo, sq, NULL)       != eslOK) esl_fatal(msg); } while (sq->n > (M+L)*3);   // keep seq length reasonable
+      if ( h4_mode_SetLength(mo, M)                   != eslOK) esl_fatal(msg);                              // set length model to M for emission
+      do { if ( h4_emit(rng, hmm, mo, sq, NULL)       != eslOK) esl_fatal(msg); } while (sq->n > M*6);   // keep seq length reasonable
       if ( h4_mode_SetLength(mo, sq->n)               != eslOK) esl_fatal(msg);   // reset length model to this sampled seq's length before scoring or DP 
 
       /* Mark all cells in sparse mask */
@@ -1314,12 +1539,12 @@ utest_compare_reference(ESL_RANDOMNESS *rng, ESL_ALPHABET *abc, int M, int L, in
       if ( esl_FCompare(vsc_s, vsc_r, /*rtol=*/0.0, tol) != eslOK) esl_fatal(msg);                      // (1): reference and sparse scores (V,F,B) identical within tolerance
       if ( esl_FCompare(fsc_s, fsc_r, /*rtol=*/0.0, tol) != eslOK) esl_fatal(msg);
       if ( esl_FCompare(bsc_s, bsc_r, /*rtol=*/0.0, tol) != eslOK) esl_fatal(msg);
-      if ( h4_path_Compare(rpi, spi)                     != eslOK) esl_fatal(msg);                      // (2): reference, sparse Viterbi tracebacks identical; see notes on p7_trace_CompareLoosely
+      if ( h4_path_CompareLoosely(rpi, spi, sq->dsq)     != eslOK) esl_fatal(msg);                      // (2): reference, sparse Viterbi tracebacks nigh-identical; see notes on h4_path_CompareLoosely
       if ( h4_sparsemx_Validate(sxv, errbuf)             != eslOK) esl_fatal("%s:\n  %s", msg, errbuf); // (3): All sparse DP matrices Validate() (V,F,B,D)
       if ( h4_sparsemx_Validate(sxf, errbuf)             != eslOK) esl_fatal("%s:\n  %s", msg, errbuf);
       if ( h4_sparsemx_Validate(sxb, errbuf)             != eslOK) esl_fatal("%s:\n  %s", msg, errbuf);
       if ( h4_sparsemx_Validate(sxd, errbuf)             != eslOK) esl_fatal("%s:\n  %s", msg, errbuf);
-      if ( h4_path_Validate(spi, hmm->M, sq->n, errbuf)  != eslOK) esl_fatal("%s:\n  %s", msg, errbuf); // (4): Sparse DP Viterbi trace must Validate() 
+      if ( h4_path_Validate(spi, hmm->M, sq->n, errbuf)  != eslOK) esl_fatal("%s:\n  %s", msg, errbuf); // (4): Sparse DP Viterbi path must Validate() 
       if ( h4_path_Validate(rpi, hmm->M, sq->n, errbuf)  != eslOK) esl_fatal("%s:\n  %s", msg, errbuf); 
       if ( h4_sparsemx_CompareReference(sxv, rxv, tol)   != eslOK) esl_fatal(msg);                      // (5): Sparse and reference DP matrices all identical within tolerance
       if ( h4_sparsemx_CompareReference(sxf, rxf, tol)   != eslOK) esl_fatal(msg); 
@@ -1337,6 +1562,423 @@ utest_compare_reference(ESL_RANDOMNESS *rng, ESL_ALPHABET *abc, int M, int L, in
   h4_mode_Destroy(mo);
   h4_profile_Destroy(hmm);
 }
+
+/* utest_reference_constrained()
+ *
+ * The "reference-constrained" utest compares a randomly sampled
+ * profile against homologous sequences (i.e. sampled from the same
+ * profile) by sparse DP, using a sparse mask that includes all the
+ * cells in the reference Viterbi trace plus a sprinkling of
+ * additional random sparse supercells. Thus we know that the sparse
+ * Viterbi score must equal the reference, and the sparse Forward and
+ * Backward scores must be >= the reference Viterbi score.
+ *
+ * This test bounds the sparse DP scores from *below*, which is
+ * nontrivial. If sparse DP missed a high scoring path, it could elude
+ * other unit tests like 'generation' where we only have the sparse DP
+ * score bounded from above by the reference DP.
+ * 
+ * Tests:
+ * 1. Reference and sparse Viterbi scores are equal (within tolerance)
+ * 2. Reference and sparse Viterbi traces are identical 
+ * 3. Sparse F,B scores are >= reference Viterbi score, because we
+ *    know the reference V path is included in the sparse mask.
+ *
+ * Also, more general test criteria apply, shared with 'generation' for 
+ * example:
+ * 
+ * 4. Sparse F score == B
+ * 5. All values v in reference, sparse V,F,B matrices satisfy v_r >= v_s
+ * 6. Sparse V,F,B matrices pass Validate()
+ */
+static void
+utest_reference_constrained(ESL_RANDOMNESS *rng, ESL_ALPHABET *abc, int M, int N)
+{
+  char           msg[]  = "sparse_dp:: reference_constrained unit test failed";
+  H4_PROFILE    *hmm    = NULL;
+  H4_MODE       *mo     = h4_mode_Create();
+  ESL_SQ        *sq     = esl_sq_CreateDigital(abc);       /* space for generated (homologous) target seqs              */
+  H4_REFMX      *rxv    = h4_refmx_Create(M, M);
+  H4_REFMX      *rxf    = h4_refmx_Create(M, M);
+  H4_REFMX      *rxb    = h4_refmx_Create(M, M);
+  H4_PATH       *rpi    = h4_path_Create();
+  H4_PATH       *spi    = h4_path_Create();
+  H4_SPARSEMASK *sm     = h4_sparsemask_Create(M, M);
+  H4_SPARSEMX   *sxv    = h4_sparsemx_Create(sm);
+  H4_SPARSEMX   *sxf    = h4_sparsemx_Create(sm);
+  H4_SPARSEMX   *sxb    = h4_sparsemx_Create(sm);
+  int            idx;
+  float          vsc_s, fsc_s, bsc_s;
+  float          vsc_r, fsc_r, bsc_r;
+  float          tol = ( h4_logsum_IsSlowExact() ? 0.001 : 0.01 ); /* numerical error on V scores is a little higher in this test */
+  char           errbuf[eslERRBUFSIZE];
+
+  /* Sample a profile. 
+   * Config default: multihit dual-mode local/glocal, so all paths in it are valid.
+   */
+  if ( h4_modelsample(rng, abc, M, &hmm) != eslOK) esl_fatal(msg);
+
+  for (idx = 0; idx < N; idx++)
+    {
+      /* Generate a sequence */
+      if ( h4_mode_SetLength(mo, M)                   != eslOK) esl_fatal(msg);                          // set length model to M for emission
+      do { if ( h4_emit(rng, hmm, mo, sq, NULL)       != eslOK) esl_fatal(msg); } while (sq->n > M*6);   // keep seq length reasonable
+      if ( h4_mode_SetLength(mo, sq->n)               != eslOK) esl_fatal(msg);   // reset length model to this sampled seq's length before scoring or DP 
+
+      /* Reference DP calculations, including a reference Viterbi traceback */
+      if ( h4_reference_Viterbi (sq->dsq, sq->n, hmm, mo, rxv, rpi, &vsc_r) != eslOK) esl_fatal(msg);
+      if ( h4_reference_Forward (sq->dsq, sq->n, hmm, mo, rxf,      &fsc_r) != eslOK) esl_fatal(msg);
+      if ( h4_reference_Backward(sq->dsq, sq->n, hmm, mo, rxb,      &bsc_r) != eslOK) esl_fatal(msg);
+
+      /* Use the reference Viterbi trace to create a dirtied sparse mask */
+      if ( h4_sparsemask_Reinit(sm, hmm->M, sq->n)  != eslOK) esl_fatal(msg);
+      if ( h4_sparsemask_SetFromPath(sm, rng, rpi)  != eslOK) esl_fatal(msg);
+
+      /* Sparse DP calculations, in which we know the reference Viterbi trace will be scored */
+      if ( h4_sparse_Viterbi (sq->dsq, sq->n, hmm, mo, sm, sxv, spi, &vsc_s) != eslOK) esl_fatal(msg);
+      if ( h4_sparse_Forward (sq->dsq, sq->n, hmm, mo, sm, sxf,      &fsc_s) != eslOK) esl_fatal(msg);
+      if ( h4_sparse_Backward(sq->dsq, sq->n, hmm, mo, sm, sxb,      &bsc_s) != eslOK) esl_fatal(msg);
+
+      /* Tests */
+      if ( esl_FCompare(vsc_s, vsc_r, 0.0, tol)               != eslOK) esl_fatal(msg); // (1) sparse, reference V scores equal
+      if ( h4_path_CompareLoosely(rpi, spi, sq->dsq)          != eslOK) esl_fatal(msg); // (2) sparse, reference V traces (nigh-)identical
+      if ( fsc_s + tol < vsc_r)                                         esl_fatal(msg); // (3) sparse Fwd score >= reference V score
+      if ( esl_FCompare(fsc_s, bsc_s, 0.0, tol)               != eslOK) esl_fatal(msg); // (4) sparse F score = B score
+      if ( h4_sparsemx_CompareReferenceAsBound(sxv, rxv, tol) != eslOK) esl_fatal(msg); // (5) All V,F,B matrix values satisfy v_ref >= v_sparse
+      if ( h4_sparsemx_CompareReferenceAsBound(sxf, rxf, tol) != eslOK) esl_fatal(msg);
+      if ( h4_sparsemx_CompareReferenceAsBound(sxb, rxb, tol) != eslOK) esl_fatal(msg);
+      if ( h4_sparsemx_Validate(sxv, errbuf)                  != eslOK) esl_fatal("%s:\n  %s", msg, errbuf); // (6): All sparse DP matrices Validate() (V,F,B,D)
+      if ( h4_sparsemx_Validate(sxf, errbuf)                  != eslOK) esl_fatal("%s:\n  %s", msg, errbuf);
+      if ( h4_sparsemx_Validate(sxb, errbuf)                  != eslOK) esl_fatal("%s:\n  %s", msg, errbuf);
+
+      esl_sq_Reuse(sq);
+    }
+
+  h4_path_Destroy(rpi);      h4_path_Destroy(spi);
+  h4_refmx_Destroy(rxv);     h4_refmx_Destroy(rxf);     h4_refmx_Destroy(rxb);     
+  h4_sparsemx_Destroy(sxv);  h4_sparsemx_Destroy(sxf);  h4_sparsemx_Destroy(sxb);  
+  h4_sparsemask_Destroy(sm);
+  esl_sq_Destroy(sq);
+  h4_mode_Destroy(mo);
+  h4_profile_Destroy(hmm);
+}
+
+
+
+/* utest_singlepath()
+ *
+ * The 'singlepath' utest uses two different methods to create
+ * model/sequence comparisons that only allow one possible statepath
+ * (h4_modelsample_SinglePath() and h4_modelsample_SinglePathSeq()).
+ * The first version uses global alignment (uniglocal L=0) to a model
+ * with one t=1.0 transition possible at each state, and any sequence
+ * emitted from the model. The second uses uniglocal (L>0) alignment
+ * to a model with transitions contrived to visit a fixed number of M
+ * states, where those M states are unable to generate some random
+ * residue x, combined with a sequence with x's for all flanking and
+ * insert positions, thus forcing a single alignment.
+ *
+ * The key observation in this utest is that V=F=B scores, because we
+ * know there is only a single possible path.
+ * 
+ * 1. Sparse V score = sparse F score = sparse B score
+ * 2. Sparse V score = trace score of the generated seq
+ * 3. Sparse Viterbi trace = generated trace
+ */
+static void
+utest_singlepath(ESL_RANDOMNESS *rng, ESL_ALPHABET *abc, int M, int N)
+{
+  char           msg[] = "sparse_dp: singlepath unit test failed";
+  H4_PROFILE    *hmm   = NULL;
+  H4_MODE       *mo    = NULL;
+  ESL_SQ        *sq    = NULL;
+  H4_PATH       *gpi   = NULL;                        // generated path
+  H4_PATH       *vpi   = h4_path_Create();	      // viterbi trace 
+  H4_PATH       *spi   = h4_path_Create();            // sparse stochastic trace
+  H4_SPARSEMASK *sm    = h4_sparsemask_Create(M, M);  /* exact initial alloc size doesn't matter */
+  H4_SPARSEMX   *sxv   = h4_sparsemx_Create(NULL);
+  H4_SPARSEMX   *sxf   = h4_sparsemx_Create(NULL);
+  H4_SPARSEMX   *sxb   = h4_sparsemx_Create(NULL);
+  H4_SPARSEMX   *sxd   = h4_sparsemx_Create(NULL);
+  float         *wrk   = NULL;
+  float          esc, fsc, vsc, bsc;
+  float          tol   = 1e-3;
+  char           errbuf[eslERRBUFSIZE];
+  int            idx;
+
+  for (idx = 0; idx < N; idx++)
+    {
+      /* Sample a profile/seq comparison with only one path */
+      if (esl_rnd_Roll(rng, 2))
+        {
+          if ( (mo = h4_mode_Create())          == NULL) esl_fatal(msg);
+          if ( (sq = esl_sq_CreateDigital(abc)) == NULL) esl_fatal(msg);
+          if ( (gpi = h4_path_Create())         == NULL) esl_fatal(msg);
+
+          if ( h4_modelsample_SinglePath(rng, abc, M, &hmm) != eslOK) esl_fatal(msg);
+          if ( h4_mode_SetUniglocal(mo)                     != eslOK) esl_fatal(msg);
+          if ( h4_mode_SetLength(mo, 0)                     != eslOK) esl_fatal(msg);
+          if ( h4_emit(rng, hmm, mo, sq, gpi)               != eslOK) esl_fatal(msg);
+          if ( h4_path_Score(gpi, sq->dsq, hmm, mo, &esc)   != eslOK) esl_fatal(msg);
+        }
+      else
+        {
+          if ( h4_modelsample_SinglePathSeq(rng, abc, M, &hmm, &sq, &mo, &gpi, NULL, &esc) != eslOK) esl_fatal(msg);
+        }
+      
+      /* Build a randomized sparse mask around that path */
+      if ( h4_sparsemask_Reinit(sm, hmm->M, sq->n)  != eslOK) esl_fatal(msg);
+      if ( h4_sparsemask_SetFromPath(sm, rng, gpi)  != eslOK) esl_fatal(msg);
+
+      /* Run DP routines, collect scores that should all match path score */
+      if ( h4_sparse_Viterbi (sq->dsq, sq->n, hmm, mo, sm, sxv, vpi, &vsc) != eslOK) esl_fatal(msg);
+      if ( h4_sparse_Forward (sq->dsq, sq->n, hmm, mo, sm, sxf,      &fsc) != eslOK) esl_fatal(msg);
+      if ( h4_sparse_Backward(sq->dsq, sq->n, hmm, mo, sm, sxb,      &bsc) != eslOK) esl_fatal(msg);
+      if ( h4_sparse_Decoding(sq->dsq, sq->n, hmm, mo, sxf, sxb, sxd)      != eslOK) esl_fatal(msg);
+      if ( h4_sparse_StochasticTrace(rng, &wrk, hmm, mo, sxf, spi)         != eslOK) esl_fatal(msg);
+
+      /* Since only a single path is possible, path score and Fwd score match */
+      if ( esl_FCompare(esc, vsc, /*rtol=*/0.0, tol)   != eslOK) esl_fatal(msg);
+      if ( esl_FCompare(esc, fsc, /*rtol=*/0.0, tol)   != eslOK) esl_fatal(msg); 
+      if ( esl_FCompare(esc, bsc, /*rtol=*/0.0, tol)   != eslOK) esl_fatal(msg);
+
+      if ( h4_path_Compare(gpi, vpi) != eslOK) esl_fatal(msg); 
+      if ( h4_path_Compare(gpi, spi) != eslOK) esl_fatal(msg);
+
+      if ( h4_sparsemask_Validate(sm, errbuf) != eslOK) esl_fatal("%s:\n  %s", msg, errbuf);
+
+      if ( h4_sparsemx_Validate(sxv, errbuf)  != eslOK) esl_fatal("%s:\n  %s", msg, errbuf);
+      if ( h4_sparsemx_Validate(sxf, errbuf)  != eslOK) esl_fatal("%s:\n  %s", msg, errbuf);
+      if ( h4_sparsemx_Validate(sxb, errbuf)  != eslOK) esl_fatal("%s:\n  %s", msg, errbuf);
+      if ( h4_sparsemx_Validate(sxd, errbuf)  != eslOK) esl_fatal("%s:\n  %s", msg, errbuf);
+
+      if ( h4_path_Validate(gpi, hmm->M, sq->n, errbuf) != eslOK) esl_fatal("%s:\n  %s", msg, errbuf);
+      if ( h4_path_Validate(vpi, hmm->M, sq->n, errbuf) != eslOK) esl_fatal("%s:\n  %s", msg, errbuf);
+      if ( h4_path_Validate(spi, hmm->M, sq->n, errbuf) != eslOK) esl_fatal("%s:\n  %s", msg, errbuf);
+      
+      h4_profile_Destroy(hmm);
+      h4_mode_Destroy(mo);
+      h4_path_Destroy(gpi);
+      esl_sq_Destroy(sq);
+    }
+  
+  free(wrk);
+  h4_sparsemx_Destroy(sxv);
+  h4_sparsemx_Destroy(sxf);
+  h4_sparsemx_Destroy(sxb);
+  h4_sparsemx_Destroy(sxd);
+  h4_sparsemask_Destroy(sm);
+  h4_path_Destroy(vpi);
+  h4_path_Destroy(spi);
+}
+
+
+/* utest_internal_glocal_exit()
+ *
+ * The 'internal-glocal-exit' utest tests a quirk of sparse DP: that
+ * MGk->...->E glocal exits may cross unmarked Dk+1.Dm supercells, so
+ * any time we have an {DM}Gk sparse cell that does not have DGk+1
+ * marked, DP routines must allow an internal wing-retracted {DM}Gk->E
+ * exit.
+ * 
+ * The utest creates a handcrafted example of comparing a 40aa
+ * model to a 38aa truncated target, where the final transition needs
+ * to cross an unmarked cell. It then tests the usual sort of stuff
+ * against the reference:
+ *
+ *   1. Viterbi score for sparse, reference are identical within tolerance
+ *   2. Sparse F score = B
+ *   3. Reference F score = B 
+ *   4. Viterbi traces for sparse, reference are identical
+ */
+static void
+utest_internal_glocal_exit(void)
+{
+  char           msg[]  = "sparse_dp:: internal_glocal_exit unit test failed";
+  ESL_ALPHABET  *abc    = esl_alphabet_Create(eslAMINO);
+  char           qseq[] = "ACDEFGHIKLMNPQRSTVWYACDEFGHIKLMNPQRSTVWY";
+  char           tseq[] = "ACDEFGHIKLMNPQRSTVWYACDEFGHIKLMNPQRSTV";
+  int            M      = strlen(qseq);
+  int            L      = strlen(tseq);
+  ESL_DSQ       *qsq    = NULL;
+  ESL_DSQ       *tsq    = NULL;
+  H4_PROFILE    *hmm    = NULL;
+  H4_MODE       *mo     = h4_mode_Create();
+  H4_SPARSEMASK *sm     = h4_sparsemask_Create(M,L);
+  H4_SPARSEMX   *sxv    = h4_sparsemx_Create(NULL);
+  H4_SPARSEMX   *sxf    = h4_sparsemx_Create(NULL);
+  H4_SPARSEMX   *sxb    = h4_sparsemx_Create(NULL);
+  H4_SPARSEMX   *sxd    = h4_sparsemx_Create(NULL);
+  H4_REFMX      *rxv    = h4_refmx_Create(M, L);
+  H4_REFMX      *rxf    = h4_refmx_Create(M, L);
+  H4_REFMX      *rxb    = h4_refmx_Create(M, L);
+  H4_REFMX      *rxd    = h4_refmx_Create(M, L);
+  H4_PATH       *rpi    = h4_path_Create();
+  H4_PATH       *spi    = h4_path_Create();
+  float          vsc_s, fsc_s, bsc_s, psc_s;
+  float          vsc_r, fsc_r, bsc_r, psc_r;
+  int            i;
+  float          tol = ( h4_logsum_IsSlowExact() ? 0.0001 : 0.01 );
+  int            Q   = sm->Q; 
+
+  /* Create the 40aa A-YA-Y test model */
+  if ( esl_abc_CreateDsq(abc, qseq, &qsq)   != eslOK) esl_fatal(msg);
+  if ( h4_seqmodel(qsq, M, abc, &hmm, NULL) != eslOK) esl_fatal(msg);
+  if ( h4_mode_SetLength(mo, L)             != eslOK) esl_fatal(msg);
+
+  /* Create the 38aa truncated test target seq */
+  if ( esl_abc_CreateDsq(abc, tseq, &tsq)   != eslOK) esl_fatal(msg);
+  
+  /* Create a sparse mask that includes the main diagonal and the last column. 
+   * This mask exercises the potential bug.
+   */
+  for (i = L; i >= 1; i--)  // remember, sparsemask construction is constrained by backwards pass of the backwards filter
+    {
+      /* Add cells k=M (last column), k=i (diagonal) to each row.
+       * API requires that they're added in backwards order (M, then i).
+       * API also requires that they're added not as <k> coord but as <q,r> slot coords (see sparsemask.c docs)
+       */
+      if ( h4_sparsemask_StartRow(sm, i)           != eslOK) esl_fatal(msg);
+      if ( h4_sparsemask_Add(sm, (M-1)%Q, (M-1)/Q) != eslOK) esl_fatal(msg);
+      if ( h4_sparsemask_Add(sm, (i-1)%Q, (i-1)/Q) != eslOK) esl_fatal(msg);
+      if ( h4_sparsemask_FinishRow(sm)             != eslOK) esl_fatal(msg);
+    }
+  if ( h4_sparsemask_Finish(sm) != eslOK) esl_fatal(msg);
+  
+  /* Reference DP calculations */
+  if ( h4_reference_Viterbi (tsq, L, hmm, mo, rxv, rpi, &vsc_r) != eslOK) esl_fatal(msg);
+  if ( h4_reference_Forward (tsq, L, hmm, mo, rxf,      &fsc_r) != eslOK) esl_fatal(msg);
+  if ( h4_reference_Backward(tsq, L, hmm, mo, rxb,      &bsc_r) != eslOK) esl_fatal(msg);
+  if ( h4_reference_Decoding(tsq, L, hmm, mo, rxf, rxb, rxd)    != eslOK) esl_fatal(msg);
+
+  /* Sparse DP calculations */
+  if ( h4_sparse_Viterbi (tsq, L, hmm, mo, sm, sxv, spi, &vsc_s) != eslOK) esl_fatal(msg);
+  if ( h4_sparse_Forward (tsq, L, hmm, mo, sm, sxf,      &fsc_s) != eslOK) esl_fatal(msg);
+  if ( h4_sparse_Backward(tsq, L, hmm, mo, sm, sxb,      &bsc_s) != eslOK) esl_fatal(msg);
+  if ( h4_sparse_Decoding(tsq, L, hmm, mo, sxf, sxb, sxd)        != eslOK) esl_fatal(msg);
+
+  if ( h4_path_Score(spi, tsq, hmm, mo, &psc_s) != eslOK) esl_fatal(msg);
+  if ( h4_path_Score(rpi, tsq, hmm, mo, &psc_r) != eslOK) esl_fatal(msg);
+
+  /* Tests */
+  if ( esl_FCompare(vsc_s, vsc_r, /*rtol=*/0.0, tol) != eslOK) esl_fatal(msg); 
+  if ( esl_FCompare(fsc_s, bsc_s, /*rtol=*/0.0, tol) != eslOK) esl_fatal(msg);
+  if ( esl_FCompare(fsc_r, bsc_r, /*rtol=*/0.0, tol) != eslOK) esl_fatal(msg);
+  if ( h4_path_Compare(spi, rpi)                     != eslOK) esl_fatal(msg); 
+
+  h4_path_Destroy(rpi);     h4_path_Destroy(spi);
+  h4_sparsemx_Destroy(sxv); h4_sparsemx_Destroy(sxf); 
+  h4_sparsemx_Destroy(sxb); h4_sparsemx_Destroy(sxd);
+  h4_refmx_Destroy(rxv);    h4_refmx_Destroy(rxf);
+  h4_refmx_Destroy(rxb);    h4_refmx_Destroy(rxd);
+  h4_sparsemask_Destroy(sm);
+  h4_mode_Destroy(mo); 
+  h4_profile_Destroy(hmm);
+  esl_alphabet_Destroy(abc);  
+  free(qsq);
+  free(tsq);
+}
+
+/* utest_approx_decoding()
+ *
+ * The 'approx-decoding' utest compares exact posterior decoding (via
+ * h4_sparse_Decoding()) to stochastic approximation (by a large
+ * ensemble of <npath> stochastic tracebacks). It does this for a randomly
+ * sampled profile of length <M>, in a randomly chosen alignment mode
+ * with either L=M or L=0 length config, compared against one
+ * homologous (generated) sequence. (Only one of them, not <N>,
+ * because the stochastic tracebacks are computationally expensive.)
+ * 
+ * Tests:
+ * 1. The two decoding approaches give identical matrices, within 
+ *    a given sampling error tolerance. (Additionally, cells that
+ *    are exactly zero in exact posterior decoding must not be
+ *    visited in any stochastic trace.) All this is checked by 
+ *    <h4_sparsemx_CompareDecoding()>.
+ * 2. The two decoding matrices both Validate().
+ * 
+ */
+static void
+utest_approx_decoding(ESL_RANDOMNESS *rng, const ESL_ALPHABET *abc, int M, int npath)
+{
+  char           msg[]  = "sparse_dp:: approx_decoding unit test failed";
+  H4_PROFILE    *hmm    = NULL;
+  H4_MODE       *mo     = h4_mode_Create();
+  ESL_SQ        *sq     = esl_sq_CreateDigital(abc);
+  H4_CHECKPTMX  *cpx    = h4_checkptmx_Create(100, 100, ESL_MBYTES(32));
+  H4_SPARSEMASK *sm     = h4_sparsemask_Create(0,0);
+  H4_SPARSEMX   *sxf    = h4_sparsemx_Create(NULL);
+  H4_SPARSEMX   *sxd    = h4_sparsemx_Create(NULL);  // also used for Backward. This tests overwriting API too.
+  H4_SPARSEMX   *sxs    = NULL;                      // sparse stochastic Decoding matrix
+  H4_PATH       *pi     = h4_path_Create();
+  float         *wrk    = NULL;	                     // reusable scratch workspace needed by stochastic trace 
+  float          tol    = 0.02;	                     // with utest's defaults, max diff will be ~0.004 or so; exact v. approx logsum seems to make no difference
+  int            idx;
+
+  /* Sample a random profile HMM */
+  if ( h4_modelsample(rng, abc, M, &hmm) != eslOK) esl_fatal(msg);
+
+  /* Select a random alignment mode */
+  switch (esl_rnd_Roll(rng, 6)) {
+  case 0: h4_mode_SetDefault(mo);   break;
+  case 1: h4_mode_SetLocal(mo);     break;
+  case 2: h4_mode_SetGlocal(mo);    break;
+  case 3: h4_mode_SetUnihit(mo);    break;
+  case 4: h4_mode_SetUnilocal(mo);  break;
+  case 5: h4_mode_SetUniglocal(mo); break;
+  }
+
+  /* Randomly set mode's length to M or 0 for generating a sequence */
+  switch (esl_rnd_Roll(rng, 2)) {
+  case 0: h4_mode_SetLength(mo, 0); break;
+  case 1: h4_mode_SetLength(mo, M); break;
+  }
+
+  /* generate (sample) a sequence from the profile */
+  do {   
+    esl_sq_Reuse(sq);
+    h4_emit(rng, hmm, mo, sq, NULL);
+  } while (sq->n > M*3); // keep sequence length from getting ridiculous; long seqs do have higher abs error per cell 
+
+  /* for DP, length model has to be sq->n or 0 -- original L=M doesn't work. */
+  if (mo->L != 0) h4_mode_SetLength(mo, sq->n);
+
+  /* Fwd/Bck local filter to calculate the sparse mask */
+  if ( h4_fwdfilter(sq->dsq, sq->n, hmm, mo, cpx, NULL)                  != eslOK) esl_fatal(msg);
+  if ( h4_bckfilter(sq->dsq, sq->n, hmm, mo, cpx, sm, h4SPARSIFY_THRESH) != eslOK) esl_fatal(msg);
+
+  /* Sparse DP calculations, and exact posterior decoding */
+  if ( h4_sparse_Forward (sq->dsq, sq->n, hmm, mo, sm, sxf, NULL) != eslOK) esl_fatal(msg);
+  if ( h4_sparse_Backward(sq->dsq, sq->n, hmm, mo, sm, sxd, NULL) != eslOK) esl_fatal(msg);
+  if ( h4_sparse_Decoding(sq->dsq, sq->n, hmm, mo, sxf, sxd, sxd) != eslOK) esl_fatal(msg);
+
+  /* Approximate decoding by stochastic traceback  */
+  if ( (sxs = h4_sparsemx_Create(sm))   == NULL) esl_fatal(msg);
+  if ( h4_sparsemx_SetValues(sxs, 0.0) != eslOK) esl_fatal(msg);
+  sxs->type = h4S_DECODING;
+
+  for (idx = 0; idx < npath; idx++)
+    {
+      if ( h4_sparse_StochasticTrace(rng, &wrk, hmm, mo, sxf, pi) != eslOK) esl_fatal(msg);
+      if ( h4_sparsemx_CountPath(pi, sxs)                         != eslOK) esl_fatal(msg);
+    }
+  esl_vec_FScale(sxs->dp,   sxs->sm->ncells*h4S_NSCELLS,           1./(float)npath);
+  esl_vec_FScale(sxs->xmx, (sxs->sm->nrow+sxs->sm->S)*h4S_NXCELLS, 1./(float)npath);
+
+  /* Tests */
+  if ( h4_sparsemx_CompareDecoding(sxd, sxs, tol) != eslOK) esl_fatal(msg);
+  if ( h4_sparsemx_Validate(sxd, NULL)            != eslOK) esl_fatal(msg);
+  if ( h4_sparsemx_Validate(sxs, NULL)            != eslOK) esl_fatal(msg);
+  
+  free(wrk);
+  h4_sparsemx_Destroy(sxf);  h4_sparsemx_Destroy(sxd);   h4_sparsemx_Destroy(sxs);
+  h4_sparsemask_Destroy(sm);
+  h4_path_Destroy(pi);
+  h4_checkptmx_Destroy(cpx);
+  h4_mode_Destroy(mo);
+  h4_profile_Destroy(hmm);
+  esl_sq_Destroy(sq);
+}
 #endif //h4SPARSE_DP_TESTDRIVE
 /*------------------- end, unit tests ---------------------------*/
 
@@ -1353,31 +1995,35 @@ utest_compare_reference(ESL_RANDOMNESS *rng, ESL_ALPHABET *abc, int M, int L, in
 #include "general.h"
 
 static ESL_OPTIONS options[] = {
-  /* name           type      default  env  range toggles reqs incomp  help                                   docgroup*/
-  { "-h",         eslARG_NONE,   NULL, NULL, NULL,  NULL,   NULL,  NULL, "show brief help summary",                   0 },
-  { "-s",         eslARG_INT,     "0", NULL, NULL,  NULL,   NULL,  NULL, "set random number generator seed",          0 },
-  { "-L",         eslARG_INT,    "10", NULL, NULL,  NULL,   NULL,  NULL, "set length model for sampled seqs",         0 },
-  { "-M",         eslARG_INT,    "10", NULL, NULL,  NULL,   NULL,  NULL, "set test profile length",                   0 },
-  { "-N",         eslARG_INT,   "100", NULL, NULL,  NULL,   NULL,  NULL, "number of profile/seq comparisons to test", 0 },
-  { "--version",  eslARG_NONE,   NULL, NULL, NULL,  NULL,   NULL,  NULL, "show HMMER version number",                 0 },
+  /* name           type      default  env  range toggles reqs incomp  help                                         docgroup*/
+  { "-h",         eslARG_NONE,   NULL, NULL, NULL,  NULL,   NULL,  NULL, "show brief help summary",                       0 },
+  { "-p",         eslARG_INT,"100000", NULL, NULL,  NULL,   NULL,  NULL, "number of stochastic paths in approx_decoding", 0 },
+  { "-s",         eslARG_INT,     "0", NULL, NULL,  NULL,   NULL,  NULL, "set random number generator seed",              0 },
+  { "-M",         eslARG_INT,    "10", NULL, NULL,  NULL,   NULL,  NULL, "set test profile length",                       0 },
+  { "-N",         eslARG_INT,   "100", NULL, NULL,  NULL,   NULL,  NULL, "number of profile/seq comparisons to test",     0 },
+  { "--version",  eslARG_NONE,   NULL, NULL, NULL,  NULL,   NULL,  NULL, "show HMMER version number",                     0 },
   {  0, 0, 0, 0, 0, 0, 0, 0, 0, 0 },
 };
 
 int
 main(int argc, char **argv)
 {
-  ESL_GETOPTS    *go  = h4_CreateDefaultApp(options, 0, argc, argv, "test driver for reference_aec", "[-options]");
-  ESL_RANDOMNESS *rng = esl_randomness_Create(esl_opt_GetInteger(go, "-s"));
-  ESL_ALPHABET   *abc = esl_alphabet_Create(eslAMINO);
-  int             L   = esl_opt_GetInteger(go, "-L");
-  int             M   = esl_opt_GetInteger(go, "-M");
-  int             N   = esl_opt_GetInteger(go, "-N");
+  ESL_GETOPTS    *go    = h4_CreateDefaultApp(options, 0, argc, argv, "test driver for reference_aec", "[-options]");
+  ESL_RANDOMNESS *rng   = esl_randomness_Create(esl_opt_GetInteger(go, "-s"));
+  ESL_ALPHABET   *abc   = esl_alphabet_Create(eslAMINO);
+  int             M     = esl_opt_GetInteger(go, "-M");
+  int             N     = esl_opt_GetInteger(go, "-N");
+  int             npath = esl_opt_GetInteger(go, "-p");
 
   fprintf(stderr, "## %s\n", argv[0]);
   fprintf(stderr, "#  rng seed = %" PRIu32 "\n", esl_randomness_GetSeed(rng)); 
 
-  utest_generation       (rng, abc, M, L, N);
-  utest_compare_reference(rng, abc, M, L, N);
+  utest_generation           (rng, abc, M, N);
+  utest_compare_reference    (rng, abc, M, N);
+  utest_reference_constrained(rng, abc, M, N);
+  utest_singlepath           (rng, abc, M, N);
+  utest_internal_glocal_exit ();
+  utest_approx_decoding      (rng, abc, M, npath);
 
   fprintf(stderr, "#  status   = ok\n");
 
@@ -1418,11 +2064,13 @@ static ESL_OPTIONS options[] = {
   /* name           type      default  env  range  toggles reqs incomp  help                                  docgroup*/
   { "-a",        eslARG_NONE,   FALSE, NULL, NULL,   NULL,  NULL, NULL, "include all cells in sparse mx",          0 },
   { "-h",        eslARG_NONE,   FALSE, NULL, NULL,   NULL,  NULL, NULL, "show brief help",                         0 },
+  { "-s",         eslARG_INT,     "0", NULL, NULL,   NULL,  NULL, NULL, "set random number generator seed",        0 },
   { "-B",        eslARG_NONE,   FALSE, NULL, NULL,   NULL,  NULL, NULL, "dump Backward DP matrix for examination", 0 },
   { "-D",        eslARG_NONE,   FALSE, NULL, NULL,   NULL,  NULL, NULL, "dump Decoding DP matrix for examination", 0 },
   { "-F",        eslARG_NONE,   FALSE, NULL, NULL,   NULL,  NULL, NULL, "dump Forward DP matrix for examination",  0 },
   { "-M",        eslARG_NONE,   FALSE, NULL, NULL,   NULL,  NULL, NULL, "dump sparse mask for examination",        0 },
   { "-P",        eslARG_NONE,   FALSE, NULL, NULL,   NULL,  NULL, NULL, "dump Viterbi path for examination",       0 }, 
+  { "-S",        eslARG_NONE,   FALSE, NULL, NULL,   NULL,  NULL, NULL, "dump stochastic path for examination",    0 }, 
   { "-V",        eslARG_NONE,   FALSE, NULL, NULL,   NULL,  NULL, NULL, "dump Viterbi DP matrix for examination",  0 },
   { "--version", eslARG_NONE,   FALSE, NULL, NULL,   NULL,  NULL, NULL, "show HMMER version info",                 0 },
   {  0, 0, 0, 0, 0, 0, 0, 0, 0, 0 },
@@ -1434,6 +2082,7 @@ int
 main(int argc, char **argv)
 {
   ESL_GETOPTS    *go      = h4_CreateDefaultApp(options, 2, argc, argv, banner, usage);
+  ESL_RANDOMNESS *rng     = esl_randomness_Create(esl_opt_GetInteger(go, "-s"));
   char           *hmmfile = esl_opt_GetArg(go, 1);
   char           *seqfile = esl_opt_GetArg(go, 2);
   ESL_ALPHABET   *abc     = NULL;
@@ -1449,7 +2098,9 @@ main(int argc, char **argv)
   H4_SPARSEMX    *sxb     = h4_sparsemx_Create(NULL);
   H4_SPARSEMX    *sxd     = h4_sparsemx_Create(NULL);
   H4_PATH        *vpi     = h4_path_Create();
-  float           ffsc, vsc, fsc, bsc, pisc;
+  H4_PATH        *spi     = h4_path_Create();
+  float          *wrk     = NULL;
+  float           ffsc, vsc, fsc, bsc, vpisc, spisc;
   int             status;
 
   if ( h4_hmmfile_Open(hmmfile, NULL, &hfp) != eslOK) esl_fatal("couldn't open profile file %s", hmmfile);
@@ -1481,37 +2132,44 @@ main(int argc, char **argv)
       if ( h4_sparse_Forward (sq->dsq, sq->n, hmm, mo, sm, sxf,      &fsc) != eslOK) esl_fatal("sparse Forward failed");
       if ( h4_sparse_Backward(sq->dsq, sq->n, hmm, mo, sm, sxb,      &bsc) != eslOK) esl_fatal("sparse Backward failed");
       if ( h4_sparse_Decoding(sq->dsq, sq->n, hmm, mo, sxf, sxb, sxd)      != eslOK) esl_fatal("sparse Decoding failed");
-      if ( h4_path_Score(vpi, sq->dsq, hmm, mo, &pisc)                     != eslOK) esl_fatal("path score failed");
+      if ( h4_sparse_StochasticTrace(rng, &wrk, hmm, mo, sxf, spi)         != eslOK) esl_fatal("stochastic traceback failed");
+      if ( h4_path_Score(vpi, sq->dsq, hmm, mo, &vpisc)                    != eslOK) esl_fatal("path score failed");
+      if ( h4_path_Score(spi, sq->dsq, hmm, mo, &spisc)                    != eslOK) esl_fatal("path score failed");
 
       if (esl_opt_GetBoolean(go, "-V")) h4_sparsemx_Dump(stdout, sxv);
       if (esl_opt_GetBoolean(go, "-F")) h4_sparsemx_Dump(stdout, sxf);
       if (esl_opt_GetBoolean(go, "-B")) h4_sparsemx_Dump(stdout, sxb);
       if (esl_opt_GetBoolean(go, "-D")) h4_sparsemx_Dump(stdout, sxd);
       if (esl_opt_GetBoolean(go, "-P")) h4_path_Dump(stdout, vpi);
+      if (esl_opt_GetBoolean(go, "-S")) h4_path_Dump(stdout, spi);
 
-      printf("%12s  fwd filter raw score: %.4f bits\n", sq->name, ffsc);
-      printf("%12s  sparse Vit raw score: %.4f bits\n", sq->name, vsc);
-      printf("%12s  sparse Fwd raw score: %.4f bits\n", sq->name, fsc);
-      printf("%12s  sparse Bck raw score: %.4f bits\n", sq->name, bsc);
-      printf("%12s  Vit path raw score:   %.4f bits\n", sq->name, pisc);
+      printf("%12s  fwd filter raw score: %9.4f bits\n", sq->name, ffsc);
+      printf("%12s  sparse Vit raw score: %9.4f bits\n", sq->name, vsc);
+      printf("%12s  sparse Fwd raw score: %9.4f bits\n", sq->name, fsc);
+      printf("%12s  sparse Bck raw score: %9.4f bits\n", sq->name, bsc);
+      printf("%12s  Vit path raw score:   %9.4f bits\n", sq->name, vpisc);
+      printf("%12s  sto path raw score:   %9.4f bits\n", sq->name, spisc);
       
       esl_sq_Reuse(sq);
     }
   if      (status == eslEFORMAT) esl_fatal("Parse failed\n  %s", esl_sqfile_GetErrorBuf(sqfp));
   else if (status != eslEOF)     esl_fatal("Unexpected error %d in reading", status);
 
+  free(wrk);
   h4_sparsemask_Destroy(sm);
   h4_sparsemx_Destroy(sxv);
   h4_sparsemx_Destroy(sxf);
   h4_sparsemx_Destroy(sxb);
   h4_sparsemx_Destroy(sxd);
   h4_path_Destroy(vpi);
+  h4_path_Destroy(spi);
   h4_checkptmx_Destroy(cpx);
   h4_mode_Destroy(mo);
   h4_profile_Destroy(hmm);
   esl_sqfile_Close(sqfp);
   esl_sq_Destroy(sq);
   esl_alphabet_Destroy(abc);
+  esl_randomness_Destroy(rng);
   esl_getopts_Destroy(go);
   return 0;
 }

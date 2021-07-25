@@ -67,6 +67,7 @@ typedef struct {
 /* H4_SPARSEMX */
 extern H4_SPARSEMX *h4_sparsemx_Create(const H4_SPARSEMASK *sm);
 extern int          h4_sparsemx_Reinit(H4_SPARSEMX *sx, const H4_SPARSEMASK *sm);
+extern int          h4_sparsemx_SetValues(H4_SPARSEMX *sx, float val);
 extern size_t       h4_sparsemx_Sizeof(const H4_SPARSEMX *sx);
 extern size_t       h4_sparsemx_MinSizeof(const H4_SPARSEMASK *sm);
 extern void         h4_sparsemx_Destroy(H4_SPARSEMX *sx);
@@ -78,6 +79,8 @@ extern int   h4_sparsemx_Dump(FILE *ofp, H4_SPARSEMX *sx);
 extern int   h4_sparsemx_DumpWindow(FILE *ofp, const H4_SPARSEMX *sx, int ia, int ib, int ka, int kb);
 extern int   h4_sparsemx_CompareReference(const H4_SPARSEMX *sx, const H4_REFMX *rx, float tol);
 extern int   h4_sparsemx_CompareReferenceAsBound(const H4_SPARSEMX *sx, const H4_REFMX *rx, float tol);
+extern int   h4_sparsemx_CompareDecoding(const H4_SPARSEMX *sxe, const H4_SPARSEMX *sxa, float tol);
+extern int   h4_sparsemx_CountPath(const H4_PATH *pi, H4_SPARSEMX *sxd);
 
 extern int   h4_sparsemx_Validate(const H4_SPARSEMX *sx, char *errbuf);
 

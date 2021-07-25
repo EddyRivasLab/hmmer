@@ -8,7 +8,9 @@
 #include "h4_config.h"
 
 #include "easel.h"
+#include "esl_vectorops.h"
 
+#include "h4_path.h"
 #include "h4_refmx.h"
 #include "h4_sparsemask.h"
 #include "h4_sparsemx.h"
@@ -93,6 +95,18 @@ h4_sparsemx_Reinit(H4_SPARSEMX *sx, const H4_SPARSEMASK *sm)
  ERROR:
   return status;
 }
+
+/* Function:  h4_sparsemx_SetValues()
+ * Synopsis:  Sets all cells in sparse matrix to zero.
+ */
+int
+h4_sparsemx_SetValues(H4_SPARSEMX *sx, float val)
+{
+  esl_vec_FSet(sx->dp,   sx->sm->ncells*h4S_NSCELLS,          val);
+  esl_vec_FSet(sx->xmx, (sx->sm->nrow+sx->sm->S)*h4S_NXCELLS, val);
+  return eslOK;
+}
+
 
 /* Function:  h4_sparsemx_Sizeof()
  * Synopsis:  Returns current allocated size of a H4_SPARSEMX, in bytes.
@@ -455,6 +469,152 @@ h4_sparsemx_CompareReferenceAsBound(const H4_SPARSEMX *sx, const H4_REFMX *rx, f
     }
   return eslOK;
 }
+
+
+/* Function:  h4_sparsemx_CompareDecoding()
+ * Synopsis:  Compare exact and approximate posterior decoding matrices.
+ *
+ * Purpose:   Compare exact sparse decoding matrix <sxe> (calculated by 
+ *            <h4_sparse_Decoding()> to an approximate one <sxa> 
+ *            (calculated by sampling lots of stochastic traces).
+ *            Make sure that no nonzero value in <sxe> differs by
+ *            more than absolute difference <tol> in <sxa>, and make
+ *            sure that an exact zero value in <sxe> is also zero
+ *            in <sxa>. Return <eslOK> if these tests succeed; <eslFAIL>
+ *            if they do not.
+ *            
+ *            This comparison is used in the main unit test of
+ *            posterior decoding. See
+ *            <sparse_dp.c::utest_approx_decoding()>.
+ *            
+ * Args:      sxe  - exact posterior decoding matrix, from h4_sparse_Decoding
+ *            sxa  - approximate decoding mx, from stochastic trace ensemble
+ *            tol  - absolute difference to tolerate per cell value
+ *
+ * Returns:   <eslOK> if all comparisons pass. <eslFAIL> if not.
+ */
+int
+h4_sparsemx_CompareDecoding(const H4_SPARSEMX *sxe, const H4_SPARSEMX *sxa, float tol)
+{
+  char                 msg[] = "failed comparison of exact and sampled sparse decoding matrices";
+  const H4_SPARSEMASK *sm  = sxe->sm;
+  const float         *dpe = sxe->dp;
+  const float         *dpa = sxa->dp;
+  const float         *xce = sxe->xmx;
+  const float         *xca = sxa->xmx;
+  int   g,i,s,z;
+
+  if (sxe->type != h4S_DECODING) ESL_FAIL(eslFAIL, NULL, msg);
+  if (sxa->type != h4S_DECODING) ESL_FAIL(eslFAIL, NULL, msg);
+  if (sm->M     != sxa->sm->M)   ESL_FAIL(eslFAIL, NULL, msg);
+  if (sm->L     != sxa->sm->L)   ESL_FAIL(eslFAIL, NULL, msg);
+
+  /* main sparse cells */
+  for (g = 1; g <= sm->S; g++)
+    for (i = sm->seg[g].ia; i <= sm->seg[g].ib; i++)    // main rows from ia..ib
+      for (z = 0; z < sm->n[i]; z++) 
+        for (s = 0; s < h4S_NSCELLS; dpe++, dpa++, s++)
+          {
+            if (*dpe == 0.0) { if (*dpa != 0.0) ESL_FAIL(eslFAIL, NULL, msg); }
+            else             { if (esl_FCompare(*dpe, *dpa, 0., tol) != eslOK) ESL_FAIL(eslFAIL, NULL, msg); }
+          }
+
+  /* specials */
+  for (g = 1; g <= sm->S; g++)
+    for (i = sm->seg[g].ia-1; i <= sm->seg[g].ib; i++)  // specials run ia-1..ib
+      for (s = 0; s < h4S_NXCELLS; xce++, xca++, s++)
+        {
+          if (*xce == 0.0) { if (*xca != 0.0) ESL_FAIL(eslFAIL, NULL, msg); }
+          else             { if (esl_FCompare(*xce, *xca, 0., tol) != eslOK) ESL_FAIL(eslFAIL, NULL, msg); }
+        }         
+  return eslOK;
+}
+
+
+/* Function:  h4_sparsemx_CountPath()
+ * Synopsis:  Count one (stochastic) path into accumulating decoding matrix.
+ *
+ * Purpose:   Used when we're approximating posterior decoding by path
+ *            sampling.
+ */
+int
+h4_sparsemx_CountPath(const H4_PATH *pi, H4_SPARSEMX *sxd)
+{
+  static int sttype[h4P_NST] = { -1, -1, h4S_N, h4S_B, h4S_G, h4S_MG, h4S_IG, h4S_DG, h4S_L, h4S_ML, h4S_IL, h4S_DL, h4S_E, h4S_J, h4S_C, -1 }; /* sttype[] translates trace idx to DP matrix idx*/
+  const H4_SPARSEMASK *sm  = sxd->sm;
+  float               *dpc = sxd->dp;   // ptr that steps thru stored main supercells i,k
+  float               *xc  = sxd->xmx;  // ptr that steps thru stored special rows, including ia-1 seg edges
+  int   i = 0;                          // current position in sequence
+  int   k = 0;                          // current position in profile
+  int   y = 0;                          // index in sparse cell list on a row
+  int   z;                              // index in trace positions
+  int   r;                              // index in path runs
+
+  if (sxd->type == h4S_UNSET) sxd->type = h4S_DECODING; // first time 
+  ESL_DASSERT1(( sxd->type == h4S_DECODING ));
+  
+  for (z = 0; z < pi->Z; z++)
+    {
+      if (h4_path_IsX(pi->st[z])) // N|J|C
+        {
+          if (pi->st[z] == h4P_J || pi->st[z] == h4P_C) xc[h4S_E] += 1.0;  // X->E->{JC}. We know i is stored, for first J|C
+          if (sm->n[i] || (i < sm->L && sm->n[i+1]))    xc[sttype[(int) pi->st[z]]] += 1.0;  //  ... but not necessarily for first N at i=0.
+
+          //          printf("trying to count a %s at i=%d\n", h4_path_DecodeStatetype(pi->st[z]), i);
+
+          for (r = 1; r < pi->rle[z]; r++)   // any remainder from r=1 are NN|CC|JJ emissions that advance i
+            {
+              while (y < sm->n[i]) { y++; dpc += h4S_NSCELLS; } // skip remainder of prv sparse row
+              if (sm->n[i] || sm->n[i+1])  xc += h4S_NXCELLS;   // advance specials to new row i
+              i++;                                              // advance i
+              y = 0;                                            
+
+              //printf("trying to count a %s at i=%d\n", h4_path_DecodeStatetype(pi->st[z]), i);
+
+              if (sm->n[i] || (i < sm->L && sm->n[i+1])) {
+                xc[sttype[(int) pi->st[z]]] += 1.0;
+                if      (pi->st[z] == h4P_J) xc[h4S_JJ] += 1.0;
+                else if (pi->st[z] == h4P_C) xc[h4S_CC] += 1.0;
+              }
+            }
+        }
+      else if (h4_path_IsB(pi->st[z])) // G|L
+        {
+          if (sm->n[i] || sm->n[i+1]) { xc[h4S_B] += 1.0; xc[sttype[(int) pi->st[z]]] += 1.0; }
+          else ESL_EXCEPTION(eslEINCONCEIVABLE, "in sparse_CountPath, a G|L state must be a stored row");
+
+          //          printf("trying to count a %s at i=%d\n", h4_path_DecodeStatetype(pi->st[z]), i);
+
+          k    = pi->rle[z]-1;  // k=0 for G, or local entry-1 for L
+          dpc -= h4S_NSCELLS*y; // back up to start of current row i, in case of G->D1..Dk-> entry
+          y    = 0;
+        }
+      else // MG|IG|DG|ML|IL|DL
+        {
+          for (r = 0; r < pi->rle[z]; r++)
+            {
+              if (h4_path_IsM(pi->st[z]) || h4_path_IsI(pi->st[z]))  // do we need to advance i?
+                {
+                  while (y < sm->n[i]) { y++; dpc += h4S_NSCELLS; }  // skip remainder of prev sparse row 
+                  if (sm->n[i] || sm->n[i+1])  xc += h4S_NXCELLS;    // increment specials. note, i+1 is safe here; i<L at this point, because tr->i[z] <= L and i < tr->i[z] 
+                  i++;
+                  y = 0;
+                }
+
+              if (h4_path_IsM(pi->st[z]) || h4_path_IsD(pi->st[z])) k++; // do we need to advance k?
+
+              //              printf("trying to count a %s at i=%d k=%d\n", h4_path_DecodeStatetype(pi->st[z]), i,k);
+
+              while (y < sm->n[i] && sm->k[i][y]  < k) { y++; dpc += h4S_NSCELLS; }           // try to find sparse cell for i,k
+              if    (y < sm->n[i] && sm->k[i][y] == k) dpc[sttype[(int) pi->st[z]]] += 1.0;   // did we find it? then increment +1
+              else if (pi->st[z] != h4P_DG)
+                ESL_EXCEPTION(eslEINCONCEIVABLE, "in sparse_CountPath, M|I|D states (except wing-retracted DG's) must be stored");
+            }
+        }
+    } // end loop over states z in path
+
+  return eslOK;
+}
 /*------------------ end, debugging tools -----------------------*/
 
 
@@ -619,9 +779,10 @@ static int
 validate_decoding(const H4_SPARSEMX *sx, char *errbuf)
 {
   const H4_SPARSEMASK *sm  = sx->sm;
-  float         *dpc = sx->dp;
-  float         *xc;
+  const float         *dpc = sx->dp;
+  const float         *xc;
   int            i,z,s;
+  float          rowsum;
   float          tol = 0.001;
 
   /* Check special cases prohibited in the first ia-1 presegment specials: */
@@ -666,7 +827,8 @@ validate_decoding(const H4_SPARSEMX *sx, char *errbuf)
       }
     }
 
-  /* Sweep again; check all values are probabilities, 0<=x<=1, allowing a bit of numerical slop. */
+  /* Sweep again; check all values are probabilities, 0<=x<=1.
+   */
   dpc = sx->dp;
   xc  = sx->xmx;
   for (i = 1; i <= sm->L; i++)
@@ -683,8 +845,34 @@ validate_decoding(const H4_SPARSEMX *sx, char *errbuf)
           if (! is_prob(*xc, tol))  ESL_FAIL(eslFAIL, errbuf, "bad decode prob %f at i=%d,%s", *xc, i, h4_sparsemx_DecodeSpecial(s)); 
       }
     }
+
+  /* Sweep again; each residue i must be emitted by something,
+   * so the sum of all emitting states across a row is 1.0.
+   */
+  dpc = sx->dp;
+  xc  = sx->xmx;
+  for (i = 1; i <= sm->L; i++)
+    {
+      if (sm->n[i] && !sm->n[i-1]) /* ia-1 specials at a segment start: check xc only (on row ia-1) before doing row i. */
+        {
+          rowsum = xc[h4S_N] + xc[h4S_JJ] + xc[h4S_CC]; /* this'd even work for nonemitting row ia-1=0, because there xc[N]=1 and JJ/CC=0 */
+          if (esl_FCompare(rowsum, 1.0, /*rtol=*/0.0, tol) != eslOK) ESL_FAIL(eslFAIL, errbuf, "sparse decode mx init-seg row %d sums to %.4f not 1", i, rowsum);
+          xc += h4S_NXCELLS;
+        }
+
+      if (sm->n[i])
+        {
+          for (rowsum = 0., z = 0; z < sm->n[i]; z++, dpc += h4S_NSCELLS) // sparse main cells 
+            rowsum += dpc[h4S_ML] + dpc[h4S_MG] + dpc[h4S_IL] + dpc[h4S_IG];
+          rowsum += xc[h4S_N] + xc[h4S_JJ] + xc[h4S_CC];
+          if (esl_FCompare(rowsum, 1.0, /*rtol=*/0.0, tol) != eslOK)  ESL_FAIL(eslFAIL, errbuf, "sparse decode mx row %d sums to %.4f not 1", i, rowsum);
+          xc += h4S_NXCELLS;
+        }
+    }
+
   return eslOK;
 }
+
 
 /* Function:  h4_sparsemx_Validate()
  * Synopsis:  Validate a sparse DP matrix.

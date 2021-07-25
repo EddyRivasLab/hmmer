@@ -648,26 +648,26 @@ h4_sparsemask_Validate(const H4_SPARSEMASK *sm, char *errbuf)
   return eslOK;
 }
 
-/* Function:  h4_sparsemask_SetFromTrace()
- * Synopsis:  Set a sparse mask to contain cells in given trace, plus random scatter of others.
+/* Function:  h4_sparsemask_SetFromPath()
+ * Synopsis:  Set a sparse mask to contain cells in given path, plus random scatter of others.
  *
- * Purpose:   Add every supercell <i,k> in trace <tr> to the sparse mask <sm>.
+ * Purpose:   Add every supercell <i,k> in path <pi> to the sparse mask <sm>.
  *            
  *            Dirty option: if <rng> is provided (i.e. non-<NULL>), on
  *            rows <i> with at least one such cell, and on 20% of
  *            empty rows, also mark random sparse supercells with 50%
  *            probability each. This creates a sparse mask in which
- *            the path defined by <tr> is marked and can be scored by
+ *            the path defined by <pi> is marked and can be scored by
  *            sparse DP routines; plus additional random cells, to try
  *            to exercise possible failure modes.
  */
 int
-h4_sparsemask_SetFromTrace(H4_SPARSEMASK *sm, ESL_RANDOMNESS *rng, const H4_PATH *pi)
+h4_sparsemask_SetFromPath(H4_SPARSEMASK *sm, ESL_RANDOMNESS *rng, const H4_PATH *pi)
 {
   int  *kend     = NULL;
   float cellprob = 0.3;
   float rowprob  = 0.2;
-  int   i,k,kx,z,r;
+  int   i,k,kx,z,r,rx;
   int   status;
 
   /* The API for building a sparse mask works backwards from i=L..1,
@@ -710,51 +710,52 @@ h4_sparsemask_SetFromTrace(H4_SPARSEMASK *sm, ESL_RANDOMNESS *rng, const H4_PATH
 	}
       else if (h4_path_IsM(pi->st[z]) || h4_path_IsI(pi->st[z]))    // if i was emitted by M|I, we add that (i,k) cell plus random cells.
 	{
-	  for (r = 0; r < pi->rle[z]; r++, i--)
-	    {
-	      if ( (status = h4_sparsemask_StartRow(sm, i)) != eslOK) return status;
+	  for (r = pi->rle[z]-1; r >= 0; r--, i--)
+            {
+              if ( (status = h4_sparsemask_StartRow(sm, i)) != eslOK) return status;
 
-	      // initialize k at start of run and handle any following D's, as follows:
-	      if (r == 0) {                         // we also need to add (i,k) cells for D, when D's follow M|I. (G->D is handled below)
-		if (h4_path_IsD(pi->st[z+1])) z++;  // only the last M|I in a run can be followed by D's. bump z to the D run.
-		k = kend[z];                        // k initializes here at start of a run - either the M|I run, or the D run if there is one.
-	      }
+              if (r == pi->rle[z]-1)
+                {
+                  if (h4_path_IsD(pi->st[z+1])) z++;  // only the last M|I in a run can be followed by D's. bump z to the D run
+                  k = kend[z];                        // k initializes here at start of a run - either the M|I run, or the D run if there is one.
 
-	      // random cells at end of row i, down to k+1
-	      for (kx = sm->M; kx > k; kx--)
-		if (rng && esl_random(rng) < cellprob)
-		  if ((status = h4_sparsemask_Add(sm, (kx-1)%sm->Q, (kx-1)/sm->Q)) != eslOK) return status;
+                  // random cells at end of row i, down to k+1
+                  for (kx = sm->M; kx > k; kx--)
+                    if (rng && esl_random(rng) < cellprob)
+                      if ((status = h4_sparsemask_Add(sm, (kx-1)%sm->Q, (kx-1)/sm->Q)) != eslOK) return status;
 
-	      // run of k's for a DDD path (r=0 only, where we bumped z up to the D's)
-	      if (h4_path_IsD(pi->st[z]))
-		{
-		  for (r = 0; r < pi->rle[z]; r++, k--)
-		    if ((status = h4_sparsemask_Add(sm, (k-1)%sm->Q, (k-1)/sm->Q)) != eslOK) return status;
-		  z--; // go back to the M|I state. k is now k for that state.
-		}
+                  // run of k's for a DDD path (r=0 only, where we bumped z up to the D's)
+                  if (h4_path_IsD(pi->st[z]))
+                    {
+                      for (rx = pi->rle[z]-1; rx >= 0; rx--, k--)
+                        if ((status = h4_sparsemask_Add(sm, (k-1)%sm->Q, (k-1)/sm->Q)) != eslOK) return status;
+                      z--; // go back to the M|I state. k is now k for that state.
+                    }
+                }
 
-	      // k is now k for M|I state in profile 1..M coords; z is now back on that M|I state even if we detoured over to D's.
-	      if ((status = h4_sparsemask_Add(sm, (k-1)%sm->Q, (k-1)/sm->Q)) != eslOK) return status;
-	  
-	      // remainder of row at start. On  G->DDD->{MI}, add *all* Dk; else, add random cells as we did on the end of the row.
-	      if (pi->st[z-1] == h4P_DG && pi->st[z-2] == h4P_G)  // if z is M|I, we know z-1 and z-2 must always exist in path. (worst case: N-{GL}-{MI})
-		{
-		  for (kx = k-1; kx >= 1; kx--)
-		    if ((status = h4_sparsemask_Add(sm, (kx-1)%sm->Q, (kx-1)/sm->Q)) != eslOK) return status;
-		}
-	      else
-		{
-		  for (kx = k-1; kx >= 1; kx--)
-		    if (rng && esl_random(rng) < cellprob)
-		      if ((status = h4_sparsemask_Add(sm, (kx-1)%sm->Q, (kx-1)/sm->Q)) != eslOK) return status;
-		}
+              if ((status = h4_sparsemask_Add(sm, (k-1)%sm->Q, (k-1)/sm->Q)) != eslOK) return status;
 
-	      if ((status = h4_sparsemask_FinishRow(sm)) != eslOK) return status;
-	      if (h4_path_IsM(pi->st[z])) k--;
-	    }
-	}
+              if (r == 0)
+                {
+                  // remainder of row at start. On  G->DDD->{MI}, add *all* Dk; else, add random cells as we did on the end of the row.
+                  if (pi->st[z-1] == h4P_DG && pi->st[z-2] == h4P_G)  // if z is M|I, we know z-1 and z-2 must always exist in path. (worst case: N-{GL}-{MI})
+                    {
+                      for (kx = k-1; kx >= 1; kx--)
+                        if ((status = h4_sparsemask_Add(sm, (kx-1)%sm->Q, (kx-1)/sm->Q)) != eslOK) return status;
+                    }
+                  else
+                    {
+                      for (kx = k-1; kx >= 1; kx--)
+                        if (rng && esl_random(rng) < cellprob)
+                          if ((status = h4_sparsemask_Add(sm, (kx-1)%sm->Q, (kx-1)/sm->Q)) != eslOK) return status;
+                    }
+                }
+
+              if ((status = h4_sparsemask_FinishRow(sm)) != eslOK) return status;
+              if (h4_path_IsM(pi->st[z])) k--;
+            }
+        }
     }
-
   if ( (status = h4_sparsemask_Finish(sm)) != eslOK) return status;
   free(kend);
   return eslOK;
@@ -804,7 +805,7 @@ utest_sanity(ESL_RANDOMNESS *rng)
     {
       if ( h4_emit(rng, hmm, mo, sq, pi)           != eslOK) esl_fatal(msg);
       if ( h4_sparsemask_Reinit(sm, hmm->M, sq->n) != eslOK) esl_fatal(msg);
-      if ( h4_sparsemask_SetFromTrace(sm, rng, pi) != eslOK) esl_fatal(msg);
+      if ( h4_sparsemask_SetFromPath(sm, rng, pi)  != eslOK) esl_fatal(msg);
 
       if ( h4_sparsemask_Validate(sm, errbuf)      != eslOK) esl_fatal("%s\n  %s", msg, errbuf);
 
@@ -914,7 +915,7 @@ main(int argc, char **argv)
   h4_emit(rng, hmm, mo, sq, pi);
 
   sm = h4_sparsemask_Create(hmm->M, sq->n);
-  h4_sparsemask_SetFromTrace(sm, rng, pi);
+  h4_sparsemask_SetFromPath(sm, rng, pi);
 
   if ( h4_sparsemask_Validate(sm, errbuf) != eslOK)
     esl_fatal("sparsemask validation failed:\n%s\n", errbuf);

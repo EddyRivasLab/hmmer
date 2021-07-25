@@ -65,7 +65,7 @@ extern int            h4_sparsemask_AddAll   (H4_SPARSEMASK *sm);
 extern int            h4_sparsemask_Dump(FILE *ofp, H4_SPARSEMASK *sm);
 extern int            h4_sparsemask_Compare(const H4_SPARSEMASK *sm1, const H4_SPARSEMASK *sm2);
 extern int            h4_sparsemask_Validate(const H4_SPARSEMASK *sm, char *errbuf);
-extern int            h4_sparsemask_SetFromTrace(H4_SPARSEMASK *sm, ESL_RANDOMNESS *rng, const H4_PATH *pi);
+extern int            h4_sparsemask_SetFromPath(H4_SPARSEMASK *sm, ESL_RANDOMNESS *rng, const H4_PATH *pi);
 
 
 #endif // h4SPARSEMASK_INCLUDED
