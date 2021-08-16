@@ -701,9 +701,12 @@ serial_master(ESL_GETOPTS *go, struct cfg_s *cfg)
     else if (status != eslOK)        p7_Fail("Unexpected error %d opening target sequence database file %s\n", status, cfg->dbfile);
     else {
       int q_type = eslUNKNOWN;
-      status = esl_sqfile_GuessAlphabet(dbfp, &q_type);
-      if (! (q_type == eslDNA || q_type == eslRNA))
-          p7_Fail("Invalid alphabet type in target for nhmmer. Expect DNA or RNA.\n");
+      esl_sqfile_GuessAlphabet(dbfp, &q_type);
+      /* We assume the query is the guide for alphabet type, allowing it to override
+       * guesser uncertainty;  but if the guesser is certain that the target sequence
+       * is a protein (or something else non-nucleotide), we fail with an error. */
+      if (! (q_type == eslDNA || q_type == eslRNA || q_type == eslUNKNOWN))
+        p7_Fail("Invalid alphabet type in target for nhmmer. Expect DNA or RNA.\n");
 
       /*success; move forward with other necessary steps*/
       if (esl_opt_IsUsed(go, "--restrictdb_stkey") || esl_opt_IsUsed(go, "--restrictdb_n")) {
