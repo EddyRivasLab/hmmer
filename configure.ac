@@ -242,7 +242,7 @@ AX_PROG_CC_MPI([test x"$enable_mpi" = xyes],
       AC_MSG_ERROR([MPI library not found for --enable-mpi]);
     fi
   ])
-AC_PROG_CC_STDC
+AC_PROG_CC
 AC_PROG_CPP
 AC_PROG_INSTALL
 AC_CHECK_TOOL([STRIP],[strip])
