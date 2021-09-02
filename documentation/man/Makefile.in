@@ -23,7 +23,6 @@ INSTALL     = @INSTALL@
 MANS =  hmmer\
 	hmmalign\
 	hmmbuild\
-#	hmmc2\        # we don't install the hmmc2 executable or manpage automatically.
 	hmmconvert\
 	hmmemit\
 	hmmfetch\
@@ -41,6 +40,7 @@ MANS =  hmmer\
 	nhmmer\
 	nhmmscan\
 	alimask
+#	hmmc2\        # we don't install the hmmc2 executable or manpage automatically.
 
 .PHONY:  install uninstall clean distclean
 
