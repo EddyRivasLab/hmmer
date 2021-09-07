@@ -138,7 +138,11 @@ FM_backtrackSeed(const FM_DATA *fmf, const FM_CFG *fm_cfg, int i) {
     len++;
   }
 
-  return len + (j==fmf->term_loc ? 0 : fmf->SA[ j / fm_cfg->meta->freq_SA ]) ; // len is how many backward steps we had to take to find a sampled SA position
+  /* len is how many backward steps we had to take to find a sampled SA position.
+   * If, during backtracking, we bumped into the sentinel '$', we need to add the
+   * value in the final entry of the SA table
+   */
+  return len + (j==fmf->term_loc ? 0 : fmf->SA[ (j / fm_cfg->meta->freq_SA) - 1 ]) ;
 }
 
 /* Function:  FM_getPassingDiags()
