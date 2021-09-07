@@ -174,7 +174,7 @@ typedef struct p7_hmm_s {
   char    *desc;                 /* brief (1-line) description of model   (optional: NULL) */ /* String, \0-terminated   */
   char    *rf;                   /* reference line from alignment 1..M    (p7H_RF)         */ /* String; 0=' ', M+1='\0' */
   char    *mm;                   /* model mask line from alignment 1..M   (p7H_MM)         */ /* String; 0=' ', M+1='\0' */
-  char    *consensus;		         /* consensus residue line        1..M    (p7H_CONS)       */ /* String; 0=' ', M+1='\0' */
+  char    *consensus;		 /* consensus residue line        1..M    (p7H_CONS)       */ /* String; 0=' ', M+1='\0' */
   char    *cs;                   /* consensus structure line      1..M    (p7H_CS)         */ /* String; 0=' ', M+1='\0' */
   char    *ca;	                 /* consensus accessibility line  1..M    (p7H_CA)         */ /* String; 0=' ', M+1='\0' */
 

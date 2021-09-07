@@ -1,8 +1,8 @@
-\newcommand{\UNIrelease}{2019\_02}
-\newcommand{\UNInseq}{559,228}
+\newcommand{\UNIrelease}{2020\_05}
+\newcommand{\UNInseq}{563,552}
 
-\newcommand{\HMMERversion}{3.3.1}
-\newcommand{\HMMERdate}{Jul 2020}
+\newcommand{\HMMERversion}{3.3.2}
+\newcommand{\HMMERdate}{Nov 2020}
 
 \newcommand{\BGLnseq}{4}
 \newcommand{\BGLalen}{171}
@@ -12,19 +12,19 @@
 \newcommand{\BGLre}{0.589}
 
 \newcommand{\HMMERfmtversion}{f}
-\newcommand{\HMMERsavestamp}{[3.3.1 | Jul 2020]}
+\newcommand{\HMMERsavestamp}{[3.3.2 | Nov 2020]}
 
-\newcommand{\SGUevalue}{4.8e-65}
+\newcommand{\SGUevalue}{4.9e-65}
 \newcommand{\SGUbitscore}{223.2}
 \newcommand{\SGUbias}{0.1}
 \newcommand{\SGUorigscore}{223.3}
 \newcommand{\SGUdombitscore}{223.0}
 \newcommand{\SGUseqname}{HBB\_GORGO}
 \newcommand{\SGUmsvpass}{3.7}
-\newcommand{\SGUbiaspass}{16888}
-\newcommand{\SGUvitpass}{2315}
-\newcommand{\SGUfwdpass}{1128}
-\newcommand{\SGUelapsed}{1.0}
+\newcommand{\SGUbiaspass}{17002}
+\newcommand{\SGUvitpass}{2323}
+\newcommand{\SGUfwdpass}{1129}
+\newcommand{\SGUelapsed}{0.9}
 
 \newcommand{\SFSevalue}{5.6e-57}
 \newcommand{\SFSbitscore}{176.4}
@@ -38,23 +38,23 @@
 \newcommand{\SFSmaxsc}{46.2}
 \newcommand{\SFSievalue}{2.3e-16}
 \newcommand{\SFSuievalue}{1.3e-10}
-\newcommand{\SFSdomZ}{790}
-\newcommand{\SFSucevalue}{1.8e-13}
+\newcommand{\SFSdomZ}{794}
+\newcommand{\SFSucevalue}{1.9e-13}
 \newcommand{\SFSaidx}{1}
 \newcommand{\SFSascore}{-1.9}
 \newcommand{\SFSaevalue}{0.24}
-\newcommand{\SFSauevalue}{190}
+\newcommand{\SFSauevalue}{191}
 \newcommand{\SFSacoords}{395-410}
 \newcommand{\SFSbidx}{6}
 \newcommand{\SFSbscore}{0.4}
 \newcommand{\SFSbevalue}{0.045}
-\newcommand{\SFSbuevalue}{35.5}
+\newcommand{\SFSbuevalue}{35.7}
 \newcommand{\SFSbcoords}{1742-1769}
 \newcommand{\SFSainsig}{4.6}
 \newcommand{\SFSbinsig}{8.9}
 
-\newcommand{\JHUninc}{954}
-\newcommand{\JHUnsig}{954}
+\newcommand{\JHUninc}{955}
+\newcommand{\JHUnsig}{955}
 
 \newcommand{\NMHafrom}{302390}
 \newcommand{\NMHato}{302466}

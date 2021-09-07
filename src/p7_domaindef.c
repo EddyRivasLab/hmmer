@@ -845,9 +845,10 @@ rescore_isolated_domain(P7_DOMAINDEF *ddef, P7_OPROFILE *om, const ESL_SQ *sq, c
 
   status = p7_Decoding(om, ox1, ox2, ox2);      /* <ox2> is now overwritten with post probabilities     */
   if (status == eslERANGE) { /* rare: numeric overflow; domain is assumed to be repetitive garbage [J3/119-121] */
+    if (long_target && scores_arr) 
       reparameterize_model(bg, om, NULL, 0, 0, fwd_emissions_arr, bg_tmp->f, scores_arr); /* revert to original bg model */
-      status = eslFAIL;
-      goto ERROR;
+    status = eslFAIL;
+    goto ERROR;
   }
 
   /* Find an optimal accuracy alignment */

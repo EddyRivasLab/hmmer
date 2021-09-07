@@ -647,10 +647,13 @@ p7_hmmfile_WriteASCII(FILE *fp, int format, P7_HMM *hmm)
     else                      { if (fprintf(fp, " %6s", "-")         < 0) ESL_EXCEPTION_SYS(eslEWRITE, "hmm write failed"); }
 
     if (format >= p7_HMMFILE_3e) {
-      x = hmm->consensus[k];
       if (format >= p7_HMMFILE_3f && (hmm->flags & p7H_MMASK) && hmm->mm[k] == 'm' )
         x = tolower(hmm->abc->sym[hmm->abc->Kp-3]);
-      if (fprintf(fp, " %c",   (hmm->flags & p7H_CONS) ? x : '-') < 0) ESL_EXCEPTION_SYS(eslEWRITE, "hmm write failed");
+      else if (hmm->flags & p7H_CONS)
+        x = hmm->consensus[k];
+      else
+        x = '-';
+      if (fprintf(fp, " %c", x) < 0) ESL_EXCEPTION_SYS(eslEWRITE, "hmm write failed");
     }
 
 

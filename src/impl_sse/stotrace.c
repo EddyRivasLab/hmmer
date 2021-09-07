@@ -140,9 +140,9 @@ select_m(ESL_RANDOMNESS *rng, const P7_OPROFILE *om, const P7_OMX *ox, int i, in
     dpv = ox->dpf[i-1][(q-1)*3 + p7X_D];
     ipv = ox->dpf[i-1][(q-1)*3 + p7X_I];
   } else {
-    mpv = esl_sse_rightshift_ps(ox->dpf[i-1][(Q-1)*3 + p7X_M], zerov);
-    dpv = esl_sse_rightshift_ps(ox->dpf[i-1][(Q-1)*3 + p7X_D], zerov);
-    ipv = esl_sse_rightshift_ps(ox->dpf[i-1][(Q-1)*3 + p7X_I], zerov);
+    mpv = esl_sse_rightshiftz_float(ox->dpf[i-1][(Q-1)*3 + p7X_M]);
+    dpv = esl_sse_rightshiftz_float(ox->dpf[i-1][(Q-1)*3 + p7X_D]);
+    ipv = esl_sse_rightshiftz_float(ox->dpf[i-1][(Q-1)*3 + p7X_I]);
   }	  
   
   u.v = _mm_mul_ps(xBv, *tp); tp++;  path[0] = u.p[r];
@@ -173,10 +173,10 @@ select_d(ESL_RANDOMNESS *rng, const P7_OPROFILE *om, const P7_OMX *ox, int i, in
     tmdv = om->tfv[7*(q-1) + p7O_MD];
     tddv = om->tfv[7*Q + (q-1)];
   } else {
-    mpv  = esl_sse_rightshift_ps(ox->dpf[i][(Q-1)*3 + p7X_M], zerov);
-    dpv  = esl_sse_rightshift_ps(ox->dpf[i][(Q-1)*3 + p7X_D], zerov);
-    tmdv = esl_sse_rightshift_ps(om->tfv[7*(Q-1) + p7O_MD],   zerov);
-    tddv = esl_sse_rightshift_ps(om->tfv[8*Q-1],              zerov);
+    mpv  = esl_sse_rightshiftz_float(ox->dpf[i][(Q-1)*3 + p7X_M]);
+    dpv  = esl_sse_rightshiftz_float(ox->dpf[i][(Q-1)*3 + p7X_D]);
+    tmdv = esl_sse_rightshiftz_float(om->tfv[7*(Q-1) + p7O_MD]);
+    tddv = esl_sse_rightshiftz_float(om->tfv[8*Q-1]);
   }	  
 
   u.v = _mm_mul_ps(mpv, tmdv); path[0] = u.p[r];
@@ -443,7 +443,7 @@ utest_stotrace(ESL_GETOPTS *go, ESL_RANDOMNESS *rng, ESL_ALPHABET *abc, P7_PROFI
       }
       p7_trace_Reuse(tr);
     }
-  if (esl_FCompare(maxsc, vsc, 0.1) != eslOK) esl_fatal("stochastic trace failed to sample the Viterbi path");
+  if (esl_FCompare_old(maxsc, vsc, 0.1) != eslOK) esl_fatal("stochastic trace failed to sample the Viterbi path");
   
   p7_trace_Destroy(tr);
   p7_trace_Destroy(vtr);

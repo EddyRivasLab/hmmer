@@ -215,7 +215,7 @@ p7_gmx_Destroy(P7_GMX *gx)
  * Synopsis:  Compare two DP matrices for equality within given tolerance.
  *
  * Purpose:   Compare all the values in DP matrices <gx1> and <gx2> using
- *            <esl_FCompare()> and relative epsilon <tolerance>. If any
+ *            <esl_FCompare_old()> and relative epsilon <tolerance>. If any
  *            value pairs differ by more than the acceptable <tolerance>
  *            return <eslFAIL>.  If all value pairs are identical within
  *            tolerance, return <eslOK>. 
@@ -231,12 +231,12 @@ p7_gmx_Compare(P7_GMX *gx1, P7_GMX *gx2, float tolerance)
   {
       for (k = 1; k <= gx1->M; k++) /* k=0 is a boundary; doesn't need to be checked */
       {
-		  if (esl_FCompare(gx1->dp[i][k * p7G_NSCELLS + p7G_M],  gx2->dp[i][k * p7G_NSCELLS + p7G_M], tolerance) != eslOK) return eslFAIL;
-		  if (esl_FCompare(gx1->dp[i][k * p7G_NSCELLS + p7G_I],  gx2->dp[i][k * p7G_NSCELLS + p7G_I], tolerance) != eslOK) return eslFAIL;
-		  if (esl_FCompare(gx1->dp[i][k * p7G_NSCELLS + p7G_D],  gx2->dp[i][k * p7G_NSCELLS + p7G_D], tolerance) != eslOK) return eslFAIL;
+        if (esl_FCompare_old(gx1->dp[i][k * p7G_NSCELLS + p7G_M],  gx2->dp[i][k * p7G_NSCELLS + p7G_M], tolerance) != eslOK) return eslFAIL;
+        if (esl_FCompare_old(gx1->dp[i][k * p7G_NSCELLS + p7G_I],  gx2->dp[i][k * p7G_NSCELLS + p7G_I], tolerance) != eslOK) return eslFAIL;
+        if (esl_FCompare_old(gx1->dp[i][k * p7G_NSCELLS + p7G_D],  gx2->dp[i][k * p7G_NSCELLS + p7G_D], tolerance) != eslOK) return eslFAIL;
       }
       for (x = 0; x < p7G_NXCELLS; x++)
-	if (esl_FCompare(gx1->xmx[i * p7G_NXCELLS + x], gx2->xmx[i * p7G_NXCELLS + x], tolerance) != eslOK) return eslFAIL;
+	if (esl_FCompare_old(gx1->xmx[i * p7G_NXCELLS + x], gx2->xmx[i * p7G_NXCELLS + x], tolerance) != eslOK) return eslFAIL;
   }
   return eslOK;	
 }

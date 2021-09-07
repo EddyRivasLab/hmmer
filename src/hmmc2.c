@@ -334,10 +334,11 @@ int main(int argc, char *argv[])
       n = sizeof(sstatus);
       total += n;
       if ((size = readn(sock, &sstatus, n)) == -1) {
-        printf("MY ERRNO IS %d\n", errno);
-        if(errno == ECONNRESET || errno == ESRCH || errno == 0) {
+        //printf("MY ERRNO IS %d\n", errno);
+        if(errno == ECONNRESET || errno == ESRCH || errno == EPERM || errno == 0) {
           // when daemon is shut down normally, the readn() is expected to fail - but w/ various errors, depending on OS, etc. 
           // our design for this should be rethought - I added the ESRCH test to hack around a unit test failure. [SRE 7/25/20]
+          //   ... and EPERM, ditto, for OS/X Big Sur with MPI [SRE 4/19/21, xref H10/106]
           fprintf(stderr, "Daemon exited, shutting down\n");
           exit(0);
         }
