@@ -188,7 +188,7 @@ int buildAndWriteFMIndex (FM_METADATA *meta, uint32_t seq_offset, uint32_t ambig
 
   int num_freq_cnts_b  = 1+ceil((double)N/(meta->freq_cnt_b));
   int num_freq_cnts_sb = 1+ceil((double)N/meta->freq_cnt_sb);
-  int num_SA_samples   = floor((double)N/meta->freq_SA);
+  int num_SA_samples   = 1+floor((double)N/meta->freq_SA);
 
   if (SAsamp != NULL) {
     ESL_REALLOC ((*Tcompressed), compressed_bytes * sizeof(uint8_t));
@@ -533,7 +533,7 @@ main(int argc, char **argv)
   esl_sqfile_SetDigital(sqfp, abc);
   block = esl_sq_CreateDigitalBlock(FM_BLOCK_COUNT, abc);
   block->complete = FALSE;
-  max_block_size = FM_BLOCK_OVERLAP+block_size+1  + block_size*.05; // +1 for the '$',  +5% of block size because that's the slop allowed by readwindow
+  max_block_size = FM_BLOCK_OVERLAP+block_size+1  + ceil(block_size*.05); // first +1 for the '$',  +5% of block size because that's the slop allowed by readwindow
 
   /* Allocate BWT, Text, SA, and FM-index data structures, allowing storage of maximally large sequence*/
   ESL_ALLOC(fm_data, sizeof(FM_DATA) );
@@ -786,7 +786,7 @@ main(int argc, char **argv)
     compressed_bytes =   ((chars_per_byte-1+block_length)/chars_per_byte);
     num_freq_cnts_b  = 1+ceil((double)block_length/meta->freq_cnt_b);
     num_freq_cnts_sb = 1+ceil((double)block_length/meta->freq_cnt_sb);
-    num_SA_samples   = floor((double)block_length/meta->freq_SA);
+    num_SA_samples   = 1+floor((double)block_length/meta->freq_SA);
 
 
     //j==0 test cause T and SA to be written only for forward sequence
