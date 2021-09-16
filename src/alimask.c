@@ -438,6 +438,7 @@ main(int argc, char **argv)
          * that maps to a model position, and ending with the final ali position in that range
          * that maps to a model position
          */
+        alistart=0;
         while (model2ali_map[alistart] < mask_starts[i] )                    alistart++;
         aliend = alistart;
         while (aliend < model_len && model2ali_map[aliend] <= mask_ends[i])  aliend++;
