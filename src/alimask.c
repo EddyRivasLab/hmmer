@@ -265,6 +265,7 @@ main(int argc, char **argv)
   int64_t       pos1, pos2;       // esl_regexp_ParseCoordString() works in int64_t coords now; this is a hackaround
 
   char         *rangestr;
+  char         *rangestr_ptr;
   char         *range;
 
 
@@ -315,6 +316,7 @@ main(int argc, char **argv)
   } else {
     if (puts("Must specify mask range with --modelrange, --alirange, --model2ali, or --ali2model\n") < 0) ESL_XEXCEPTION_SYS(eslEWRITE, "write failed"); goto ERROR;
   }
+  rangestr_ptr = rangestr;
 
   while ( (status = esl_strtok(&rangestr, ",", &range) ) == eslOK) {
     status = esl_regexp_ParseCoordString(range, &pos1, &pos2);
@@ -330,7 +332,7 @@ main(int argc, char **argv)
     mask_range_cnt++;
   }
 
-
+  free(rangestr_ptr);
   /* Start timing. */
   esl_stopwatch_Start(w);
 
@@ -469,7 +471,9 @@ main(int argc, char **argv)
   if (esl_opt_IsOn(go, "-o"))  fclose(ofp);
   if (postmsafp) fclose(postmsafp);
   if (afp)       esl_msafile_Close(afp);
+  if (msa)       esl_msa_Destroy(msa);
   if (abc)       esl_alphabet_Destroy(abc);
+  if (model2ali_map) free(model2ali_map);
 
   esl_getopts_Destroy(go);
   esl_stopwatch_Destroy(w);
