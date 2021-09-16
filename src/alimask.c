@@ -353,7 +353,7 @@ main(int argc, char **argv)
 
   if (esl_opt_IsUsed(go, "--alirange") || esl_opt_IsUsed(go, "--modelrange") ) {
     postmsafp = fopen(postmsafile, "w");
-    if (postmsafp == NULL) p7_Fail("Failed to MSA output file %s for writing", postmsafile);
+    if (postmsafp == NULL) p7_Fail("Failed to open MSA output file %s for writing", postmsafile);
   }
 
   if (esl_opt_IsUsed(go, "-o")) 
