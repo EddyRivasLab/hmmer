@@ -57,9 +57,9 @@ static ESL_OPTIONS options[] = {
 /* mask ranges */
   { "--modelrange", eslARG_STRING, NULL, NULL, NULL,  NULL,    NULL,     RANGEOPTS,  "range(s) for mask(s) in model coordinates", 5 },
   { "--alirange",   eslARG_STRING, NULL, NULL, NULL,  NULL,    NULL,     RANGEOPTS,  "range(s) for mask(s) in alignment coordinates", 5 },
-  { "--apendmask",    eslARG_NONE, NULL, NULL, NULL,  NULL,  WGTOPTS,         NULL,  "add to existing mask (default ignores to existing mask)",    5 },
-  { "--model2ali",  eslARG_STRING, NULL, NULL, NULL,  NULL,    NULL,     RANGEOPTS,  "given model ranges, print corresp. input alignment ranges", 5 },
-  { "--ali2model",  eslARG_STRING, NULL, NULL, NULL,  NULL,    NULL,     RANGEOPTS,  "given alignment ranges, print corresp. model ranges", 5 },
+  { "--appendmask",    eslARG_NONE, NULL, NULL, NULL,  NULL,  WGTOPTS,         NULL,  "add to existing mask (default ignores the existing mask)",    5 },
+  { "--model2ali",  eslARG_STRING, NULL, NULL, NULL,  NULL,    NULL,     RANGEOPTS,  "print msa column range for each input model range; no postmsa", 5 },
+  { "--ali2model",  eslARG_STRING, NULL, NULL, NULL,  NULL,    NULL,     RANGEOPTS,  "print model range for each input msa column range; no postmsa", 5 },
 
 /* Other options */
   { "--informat", eslARG_STRING,      NULL,    NULL, NULL,   NULL,   NULL,  NULL, "assert input alifile is in format <s> (no autodetect)", 8 },
@@ -70,7 +70,7 @@ static ESL_OPTIONS options[] = {
 
 
 static char usage[]  = "[-options] <msafile> <postmsafile>";
-static char banner[] = "appending modelmask line to a multiple sequence alignments";
+static char banner[] = "append modelmask line to a multiple sequence alignment";
 
 static int output_header(const ESL_GETOPTS *go, FILE *ofp, char *alifile, char *postmsafile);
 
