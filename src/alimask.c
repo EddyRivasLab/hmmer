@@ -57,7 +57,7 @@ static ESL_OPTIONS options[] = {
 /* mask ranges */
   { "--modelrange", eslARG_STRING, NULL, NULL, NULL,  NULL,    NULL,     RANGEOPTS,  "range(s) for mask(s) in model coordinates", 5 },
   { "--alirange",   eslARG_STRING, NULL, NULL, NULL,  NULL,    NULL,     RANGEOPTS,  "range(s) for mask(s) in alignment coordinates", 5 },
-  { "--appendmask",    eslARG_NONE, NULL, NULL, NULL,  NULL,  WGTOPTS,         NULL,  "add to existing mask (default ignores the existing mask)",    5 },
+  { "--appendmask",    eslARG_NONE, NULL, NULL, NULL,  NULL,  NULL,         NULL,  "add to existing mask (default ignores the existing mask)",    5 },
   { "--model2ali",  eslARG_STRING, NULL, NULL, NULL,  NULL,    NULL,     RANGEOPTS,  "print msa column range for each input model range; no postmsa", 5 },
   { "--ali2model",  eslARG_STRING, NULL, NULL, NULL,  NULL,    NULL,     RANGEOPTS,  "print model range for each input msa column range; no postmsa", 5 },
 
@@ -150,7 +150,7 @@ output_header(const ESL_GETOPTS *go, FILE *ofp, char *alifile, char *postmsafile
 
   if (esl_opt_IsUsed(go, "--alirange")   && fprintf(ofp, "# alignment range:                  %s\n",        esl_opt_GetString(go, "--alirange"))  < 0) ESL_EXCEPTION_SYS(eslEWRITE, "write failed");
   if (esl_opt_IsUsed(go, "--modelrange") && fprintf(ofp, "# model range:                      %s\n",        esl_opt_GetString(go, "--modelrange"))< 0) ESL_EXCEPTION_SYS(eslEWRITE, "write failed");
-  if (esl_opt_IsUsed(go, "--apendmask")  && fprintf(ofp, "# add to existing mask:             [on]\n"                                            )< 0) ESL_EXCEPTION_SYS(eslEWRITE, "write failed");
+  if (esl_opt_IsUsed(go, "--appendmask")  && fprintf(ofp, "# add to existing mask:             [on]\n"                                            )< 0) ESL_EXCEPTION_SYS(eslEWRITE, "write failed");
 
   if (esl_opt_IsUsed(go, "--model2ali")   && fprintf(ofp, "# ali ranges for model range:      %s\n",        esl_opt_GetString(go, "--model2ali"))  < 0) ESL_EXCEPTION_SYS(eslEWRITE, "write failed");
   if (esl_opt_IsUsed(go, "--ali2model")   && fprintf(ofp, "# model ranges for ali range:      %s\n",        esl_opt_GetString(go, "--ali2model"))  < 0) ESL_EXCEPTION_SYS(eslEWRITE, "write failed");
@@ -281,7 +281,7 @@ main(int argc, char **argv)
   /* Parse the command line
    */
   process_commandline(argc, argv, &go, &alifile, &postmsafile);
-  keep_mm = esl_opt_IsUsed(go, "--apendmask");
+  keep_mm = esl_opt_IsUsed(go, "--appendmask");
 
   /* Initialize what we can in the config structure (without knowing the alphabet yet).
    * Fields controlled by masters are set up in usual_master() or mpi_master()

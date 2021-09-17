@@ -103,7 +103,7 @@ Supply the given range(s) in model coordinates.
 Supply the given range(s) in alignment coordinates. 
 
 .TP
-.B \-\-apendmask 
+.B \-\-appendmask 
 Add to the existing mask found with the alignment.
 The default is to overwrite any existing mask. 
 
