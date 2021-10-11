@@ -221,8 +221,10 @@ int buildAndWriteFMIndex (FM_METADATA *meta, uint32_t seq_offset, uint32_t ambig
   cnts_sb[BWT[0]]++;
   cnts_b[BWT[0]]++;
 
-  if (SAsamp != NULL)
+  if (SAsamp != NULL) {
     SAsamp[0] = 0; // not used, since indexing is base-1. Set for the sake of consistency of output.
+    SAsamp[num_SA_samples-1] = 0; //this may sometimes not be filled below; set to avoid valgrind error in fwrite
+  }
 
   //Scan through SA to build the BWT and FM index structures
   for(j=1; j < N; ++j) {
@@ -549,7 +551,7 @@ main(int argc, char **argv)
   ESL_ALLOC (fm_data->BWT_mem, max_block_size * sizeof(uint8_t));
   fm_data->BWT = fm_data->BWT_mem;  // in SSE code, used to align memory. Here, doesn't matter
   ESL_ALLOC (fm_data->SA, max_block_size * sizeof(int));
-  ESL_ALLOC (SAsamp,     (floor((double)max_block_size/meta->freq_SA) ) * sizeof(uint32_t));
+  ESL_ALLOC (SAsamp,     (1 + floor((double)max_block_size/meta->freq_SA) ) * sizeof(uint32_t));
   ESL_ALLOC (fm_data->occCnts_sb, (1+ceil((double)max_block_size/meta->freq_cnt_sb)) *  meta->alph_size * sizeof(uint32_t)); // every freq_cnt_sb positions, store an array of ints
   ESL_ALLOC (fm_data->occCnts_b,  ( 1+ceil((double)max_block_size/meta->freq_cnt_b)) *  meta->alph_size * sizeof(uint16_t)); // every freq_cnt_b positions, store an array of 8-byte ints
   ESL_ALLOC (cnts_sb,    meta->alph_size * sizeof(uint32_t));
