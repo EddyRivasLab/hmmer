@@ -1802,7 +1802,7 @@ extern int fm_initConfigGeneric( FM_CFG *cfg, ESL_GETOPTS *go);
 /* fm_ssv.c */
 extern int p7_SSVFM_longlarget( P7_OPROFILE *om, float nu, P7_BG *bg, double F1,
                       const FM_DATA *fmf, const FM_DATA *fmb, FM_CFG *fm_cfg, const P7_SCOREDATA *ssvdata,
-                      int strands, P7_HMM_WINDOWLIST *windowlist);
+                      int strands, ESL_RANDOMNESS *r, P7_HMM_WINDOWLIST *windowlist);
 
 
 /* fm_sse.c */

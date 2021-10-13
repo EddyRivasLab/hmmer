@@ -423,7 +423,7 @@ main(int argc, char **argv)
 
   int            in_ambig_run = 0;
 
-  ESL_RANDOMNESS *r   = esl_randomness_CreateFast(42);
+  ESL_RANDOMNESS *r   = esl_randomness_Create(42);
 
 
 #if !defined (eslENABLE_SSE)

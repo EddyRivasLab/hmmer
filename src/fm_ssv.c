@@ -726,7 +726,7 @@ FM_extendSeed(FM_DIAG *diag, const FM_DATA *fm, const P7_SCOREDATA *ssvdata, FM_
 int
 p7_SSVFM_longlarget( P7_OPROFILE *om, float nu, P7_BG *bg, double F1,
          const FM_DATA *fmf, const FM_DATA *fmb, FM_CFG *fm_cfg, const P7_SCOREDATA *ssvdata,
-         int strands, P7_HMM_WINDOWLIST *windowlist)
+         int strands, ESL_RANDOMNESS *r, P7_HMM_WINDOWLIST *windowlist)
 {
   float sc_thresh, sc_threshFM;
   float invP;
@@ -754,8 +754,11 @@ p7_SSVFM_longlarget( P7_OPROFILE *om, float nu, P7_BG *bg, double F1,
 
   /* convert the consensus to a collection of ints, so I can test for runs of identity to the consensus */
   ESL_ALLOC(consensus, (om->M+1)*sizeof(uint8_t) );
-  for (i=1; i<=om->M; i++)
+  for (i=1; i<=om->M; i++) {
     consensus[i] = om->abc->inmap[(int)(om->consensus[i])];
+    if (consensus[i] > om->abc->K)
+          consensus[i] = esl_rnd_Roll(r,om->abc->K);
+  }
 
 
   /* Set false target length. This is a conservative estimate of the length of window that'll
