@@ -435,6 +435,8 @@ AS_IF([test "x$with_gsl" != xno],
 # which may be in librt
 AC_SEARCH_LIBS(clock_gettime, [rt posix4])
 
+# mingw mmap
+AC_SEARCH_LIBS(mmap, [mman])
 
 ################################################################
 # 7. Checks for headers
@@ -673,6 +675,7 @@ AC_CONFIG_HEADERS([libdivsufsort/divsufsort.h])
 # Testsuite sqc tests rely on it.
 AC_CONFIG_LINKS([src/impl:${ac_top_build_prefix}src/impl_${impl_choice}])
 
+AC_CONFIG_COMMANDS_PRE([test -d src/impl && rm -rf src/impl])
 
 
 ################################################################

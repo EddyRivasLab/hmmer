@@ -377,7 +377,9 @@ main(int argc, char **argv)
 
 
   clock_t t1, t2;
+#ifndef __MINGW32__
   struct tms ts1, ts2;
+#endif /*  __MINGW32__ */
 
   long i,j,c;
 
@@ -472,7 +474,11 @@ main(int argc, char **argv)
 
 
   //start timer
+#ifdef __MINGW32__
+  t1  = clock();
+#else
   t1 = times(&ts1);
+#endif /*  __MINGW32__ */
 
   output_header(stdout, go, fname_in, fname_out);
 
@@ -854,10 +860,17 @@ main(int argc, char **argv)
   esl_getopts_Destroy(go);
 
 
-  // compute and print the elapsed time in millisec
+#ifdef __MINGW32__
+  t2  = clock();
+#else
   t2 = times(&ts2);
+#endif
   {
+#ifdef __MINGW32__
+    double clk_ticks = CLOCKS_PER_SEC;
+#else
     double clk_ticks = sysconf(_SC_CLK_TCK);
+#endif /*  __MINGW32__ */
     double elapsedTime = (t2-t1)/clk_ticks;
 
     fprintf (stderr, "run time:  %.2f seconds\n", elapsedTime);

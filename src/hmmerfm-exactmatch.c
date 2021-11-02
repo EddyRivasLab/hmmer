@@ -1,6 +1,8 @@
 #include "p7_config.h"
 
+#ifndef __MINGW32__
 #include <sys/times.h>
+#endif /*  __MINGW32__ */
 #include <string.h>
 
 #include "easel.h"
@@ -216,7 +218,9 @@ main(int argc,  char *argv[])
 {
   void* tmp; // used for RALLOC calls
   clock_t t1, t2;
+#ifndef __MINGW32__
   struct tms ts1, ts2;
+#endif /*  __MINGW32__ */
   char *fname_fm      = NULL;
   char *fname_queries = NULL;
   FM_HIT *hits        = NULL;
@@ -247,7 +251,11 @@ main(int argc,  char *argv[])
   ESL_ALPHABET *abc = NULL;
 
   //start timer
+#ifdef __MINGW32__
+  t1  = clock();
+#else
   t1 = times(&ts1);
+#endif /*  __MINGW32__ */
 
   process_commandline(argc, argv, &go, &fname_fm, &fname_queries);
 
@@ -492,9 +500,17 @@ main(int argc,  char *argv[])
 
 
   // compute and print the elapsed time in millisec
+#ifdef __MINGW32__
+  t2  = clock();
+#else
   t2 = times(&ts2);
+#endif /*  __MINGW32__ */
   {
+#ifdef __MINGW32__
+    double clk_ticks = CLOCKS_PER_SEC;
+#else
     double clk_ticks = sysconf(_SC_CLK_TCK);
+#endif /*  __MINGW32__ */
     double elapsedTime = (t2-t1)/clk_ticks;
     double throughput = cfg->occCallCnt/elapsedTime;
 
