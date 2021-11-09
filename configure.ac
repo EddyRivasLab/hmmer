@@ -675,6 +675,9 @@ AC_CONFIG_HEADERS([libdivsufsort/divsufsort.h])
 # Testsuite sqc tests rely on it.
 AC_CONFIG_LINKS([src/impl:${ac_top_build_prefix}src/impl_${impl_choice}])
 
+# Windows does not support symlinks so this command prevents the previous
+# throwing an error on subsequent configures.  However, you will need to do 
+# a manual copy prior to running tests.  The copy should be done during make.
 AC_CONFIG_COMMANDS_PRE([test -d src/impl && rm -rf src/impl])
 
 

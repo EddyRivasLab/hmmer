@@ -1,3 +1,91 @@
+## Port of HMMER to Windows using MinGW
+
+The following recipie describes how to build native executables for windows using 
+[MSYS2](https://www.msys2.org/) and [MInGW](https://www.mingw-w64.org/).
+
+Prior to building install MSYS2, I used [chocolately](https://chocolatey.org/) 
+(`choco.exe install msys2`), but you can also use an
+[installer](https://repo.msys2.org/distrib/x86_64/)
+
+
+In the MSYS2 shell install these packages (picking all groups)
+
+```console
+pacman -S base-devel gcc vim cmake 
+pacman -S mingw-w64-x86_64-toolchain
+pacman -S diffutils
+```
+
+There is no mman library for windows, but a wrapper is available for MinGW.  
+Download it from [github](https://github.com/alitrack/mman-win32) and build 
+in MSYS2 (here installing it to c:\local).
+
+```console
+./configure --prefix=c:/local
+mingw32-make.exe dev
+mingw32-make.exe install
+```
+
+Configure HMMR
+```console
+CPPFLAGS="-Ic:/local/include" LDFLAGS=" -Lc:/local/lib" CFLAGS="-g -O0" ./configure --prefix=c:/local
+```
+
+If `configure` is not present it will need to be generated on a LINUX system using `autoconf`.
+
+Check that configure has picked up the mman library.
+
+```console
+HMMER configuration:
+   compiler:             gcc -g -O0   -pthread
+   host:                 x86_64-w64-mingw32
+   linker:               -L/c/local/lib
+   libraries:            -lmman   -lpthread
+   DP implementation:    sse
+```
+
+Make, test and install.  
+
+```console
+mingw32-make.exe dev           # build everything- there should be no warnings
+rm -rf src/impl                
+cp -r src/impl_sse src/impl    # No symlinks on windows, so this needs to be copied
+mingw32-make.exe check         # Run the tests
+mings32-make.exe install       # install if you're happy with test results
+```
+
+### Porting notes
+
+Windows (and MinGW) do not support signals and sockets.  Programs that use sockets will not work:
+
+Use of shell commands is not supported.  For example, code like 
+
+```C
+popen("cat esltmpfile 2>/dev/null");
+system("gzip -c eslfile 2>/dev/null > eslfile.gz");
+```
+
+Will compile but not run (at least not in a any portable fashion).
+I've disabled unit tests that use this type of code.
+
+The temporary files created by `esl_tmpfile` will persist on the filesystem in TEMP.
+In Windows it is not possible to delete a file that is in use.
+
+### Failed tests
+
+All C unit tests should pass.
+
+Many of the perl test script use shell
+
+i1-degen-residues.pl fails with `FAIL: reformat changed .dna test` L46 failed system command.
+
+esl-afetch.itest.pl fails with `FAIL: esl-afetch fetched incorrectly at ./esl-afetch.itest.pl line 61.` L61 pattern match fails because of windows CRLF
+
+
+
+
+### Failed tests
+
 ## HMMER - biological sequence analysis using profile HMMs
 
 [![](https://travis-ci.org/EddyRivasLab/hmmer.svg?branch=develop)](https://travis-ci.org/EddyRivasLab/hmmer)

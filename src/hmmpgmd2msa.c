@@ -179,7 +179,11 @@ hmmpgmd2msa(void *data, P7_HMM *hmm, ESL_SQ *qsq, int *incl, int incl_size, int 
     if(th.hit[i]->flags & p7_IS_INCLUDED){
       if(excl_size > 0){
         for( c = 0; c < excl_size; c++){
+#ifdef __MINGW32__
+          if(excl[c] == (long long)(th.hit[i]->name) ){
+#else
           if(excl[c] == (long)(th.hit[i]->name) ){
+#endif /* __MINGW32__ */
             th.hit[i]->flags = p7_IS_DROPPED;
             th.hit[i]->nincluded = 0;
             break;
@@ -189,7 +193,11 @@ hmmpgmd2msa(void *data, P7_HMM *hmm, ESL_SQ *qsq, int *incl, int incl_size, int 
     }else{
       if(incl_size > 0){
     	for( c = 0; c < incl_size; c++){
+#ifdef __MINGW32__
+          if(incl[c] == (long long)th.hit[i]->name ){
+#else
           if(incl[c] == (long)th.hit[i]->name ){
+#endif /* __MINGW32__ */
             th.hit[i]->flags = p7_IS_INCLUDED;
           }
         }
