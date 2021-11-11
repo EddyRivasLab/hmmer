@@ -27,12 +27,16 @@ mingw32-make.exe install
 ```
 
 Configure HMMR
+
+If `configure` is not present it will need to be generated on a LINUX system using `autoconf`.
+The presence of carriage returns (`\r`) in `config.sub` or `config.guess` will cause `autoconf` to fail.
+Git operations may result in the insertion of `\r` depending on the `core.autocrlf` setting.
+
+Once configure is generated:
+
 ```console
 CPPFLAGS="-Ic:/local/include" LDFLAGS=" -Lc:/local/lib" CFLAGS="-g -O0" ./configure --prefix=c:/local
 ```
-
-If `configure` is not present it will need to be generated on a LINUX system using `autoconf`.
-
 Check that configure has picked up the mman library.
 
 ```console
@@ -47,16 +51,20 @@ HMMER configuration:
 Make, test and install.  
 
 ```console
+mingw32-make.exe clean
 mingw32-make.exe dev           # build everything- there should be no warnings
 rm -rf src/impl                
 cp -r src/impl_sse src/impl    # No symlinks on windows, so this needs to be copied
-mingw32-make.exe check         # Run the tests
-mings32-make.exe install       # install if you're happy with test results
+mingw32-make.exe check         # Run the tests. 2 will fail
+mingw32-make.exe install       # install if you're happy with test results
 ```
 
 ### Porting notes
 
-Windows (and MinGW) do not support signals and sockets.  Programs that use sockets will not work:
+Windows (and MinGW) do not support signals and sockets.  Lack of socket support
+mean that the  client server daemon 
+commands `hmmpgmd` and `hmmpgmd_shard` do not function (the executables are compiled, but they
+won't work.)
 
 Use of shell commands is not supported.  For example, code like 
 
@@ -66,25 +74,32 @@ system("gzip -c eslfile 2>/dev/null > eslfile.gz");
 ```
 
 Will compile but not run (at least not in a any portable fashion).
-I've disabled unit tests that use this type of code.
+I  disabled unit tests that use this type of code.
+
+1. Case 5 in esl_buffer_utest::main
+2. esl_buffer_utest::utestOpenPipe
+3. The gzip output case in esl_buffer_utest::utestSetOffset
+4. esl_buffer_utest::utest_halfnewline (requires signals)
 
 The temporary files created by `esl_tmpfile` will persist on the filesystem in TEMP.
 In Windows it is not possible to delete a file that is in use.
 
 ### Failed tests
 
-All C unit tests should pass.
+All tests except `hmmpgmd_ga` and `hmmpgmd_shard_ga` should pass.
+Since the `hmmpgmd` and `hmmpgmd_shard` are broken that is expected.
 
-Many of the perl test script use shell
+```console
+    exercise  297 [           hmmpgmd_ga] ...     FAILED [command failed]
+    exercise  299 [     hmmpgmd_shard_ga] ...     FAILED [command failed]
 
-i1-degen-residues.pl fails with `FAIL: reformat changed .dna test` L46 failed system command.
+2 of 307 exercises at level <= 2 FAILED.
+```
 
-esl-afetch.itest.pl fails with `FAIL: esl-afetch fetched incorrectly at ./esl-afetch.itest.pl line 61.` L61 pattern match fails because of windows CRLF
+The tests use the perl and python executables installed in the MSYS2 shell.
 
-
-
-
-### Failed tests
+Test code at a level > 2 has not been ported and may not run correctly (because of windows text mode
+the test scripts need changes even when the commands function correcty).
 
 ## HMMER - biological sequence analysis using profile HMMs
 
