@@ -101,6 +101,6 @@ Since the `hmmpgmd` and `hmmpgmd_shard` commands are broken that is expected.
 The tests use the perl and python executables installed in the MSYS2 shell.
 
 Test code at a level > 2 has not been ported and may not run correctly (because of windows text mode,
-the test scripts frequently need changes even when the commands function correcty).
+the test scripts frequently need changes even when the commands function correctly).
 
 
