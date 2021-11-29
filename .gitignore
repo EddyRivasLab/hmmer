@@ -1,4 +1,3 @@
-configure
 config.log
 config.status
 Makefile
@@ -8,6 +7,7 @@ easel
 *.dSYM
 *.stamp
 *.exe
+!binaries/*.exe
 src/*_example
 src/*_example?
 src/*_utest
