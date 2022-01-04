@@ -131,13 +131,16 @@
  */
 #undef HAVE_FLUSH_ZERO_MODE
 
-/* On windows unsigned long int is 4 bytes, use unsigned long long for pointer arithmetic instead
- */
-#ifdef __MINGW32__
-typedef unsigned long long POINTER;
-#else
-typedef unsigned long int POINTER;
-#endif /* __MINGW32__ */
+#undef HAVE_STDINT_H
+#undef HAVE_INTTYPES_H
+
+#if HAVE_STDINT_h
+#include <stdint.h>
+#elif HAVE_INTTYPES_H
+#include <inttypes.h>
+#endif
+
+typedef uintptr_t POINTER;
 
 #endif /*P7_CONFIGH_INCLUDED*/
 

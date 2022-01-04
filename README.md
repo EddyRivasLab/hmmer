@@ -1,17 +1,18 @@
 # Port of HMMER to Windows using MinGW
 
-This project is a port of HMMR source code to the [MInGW](https://www.mingw-w64.org) compiler.  
+This project is a port of HMMER source code to the [MInGW](https://www.mingw-w64.org) compiler.  
 
 With the exception of `hmmpgmd` and `hmmpgmd_shard` the Windows native executables pass all tests.
 
 If prefer not to do your own build the resulting executables are in the [binaries](/binaries) directory.
 
-The source code in this project was created from [hmmr](https://github.com/jones-gareth/hmmer/tree/mingw-build)
-and [easel](https://github.com/jones-gareth/easel/tree/mingw-build) forks of the develop branches of HMMR.
+The source code in this project was created from [hmmer](https://github.com/jones-gareth/hmmer/tree/mingw-build)
+and [easel](https://github.com/jones-gareth/easel/tree/mingw-build) forks of the develop branches 
+of [HMMER](https://github.com/EddyRivasLab/hmmer/tree/develop).
 
 ## Build Recipe
 
-The following recipie describes how to build native executables for windows using 
+The following recipe describes how to build native executables for windows using 
 [MSYS2](https://www.msys2.org/) and [MInGW](https://www.mingw-w64.org/). At the time
  of writing the compiler was `gcc version 11.2.0 (Rev1, Built by MSYS2 project)`
 
@@ -47,7 +48,7 @@ cd hmmer
 git clone https://github.com/jones-gareth/easel
 ```
 
-**Configure HMMR**
+**Configure HMMER**
 
 If `configure` is not present it will need to be generated on a LINUX system using `autoconf`.
 
@@ -71,7 +72,7 @@ HMMER configuration:
 
 ```console
 mingw32-make.exe clean
-mingw32-make.exe dev          # build everything- there should be no warnings
+mingw32-make.exe dev           # build everything- there should be no warnings
 rm -rf src/impl                
 cp -r src/impl_sse src/impl    # No symlinks on windows, so this needs to be copied
 mingw32-make.exe check         # Run the tests. 2 will fail
