@@ -81,7 +81,7 @@ ifndef V
 		        ${MAKE} -s -C $$subdir
 endif
 
-.PHONY: all dev check pdf install uninstall clean distclean TAGS
+.PHONY: all dev check pdf install install-strip uninstall clean distclean TAGS
 
 # all: Compile all documented executables.
 #      (Excludes test programs.)
@@ -135,6 +135,14 @@ install: all
 	${MAKE} -C src install
 	${MAKE} -C documentation install
 
+# install-strip: same as install, but strip binaries
+#
+install-strip: all
+	${INSTALL} -d ${DESTDIR}${bindir}
+	${INSTALL} -d ${DESTDIR}${man1dir}
+	${MAKE} -C src install-strip
+	${MAKE} -C documentation install
+
 # uninstall: reverses the steps of "make install".
 #
 uninstall: 
@@ -150,7 +158,7 @@ clean:
 	${QUIET_SUBDIR0}documentation ${QUIET_SUBDIR1} clean
 	${QUIET_SUBDIR0}${ESLDIR}     ${QUIET_SUBDIR1} clean
 	${QUIET_SUBDIR0}${SADIR}      ${QUIET_SUBDIR1} clean
-	${QUIET}-rm -f *.o *~ Makefile.bak core TAGS gmon.out
+	${QUIET}-rm -f *.o *~ Makefile.bak core TAGS TAGS.part gmon.out
 ifndef V
 	@echo '     ' CLEAN hmmer
 endif
@@ -166,7 +174,7 @@ distclean:
 	${QUIET_SUBDIR0}${SADIR}      ${QUIET_SUBDIR1} distclean
 	${QUIET}-rm config.log config.status
 	${QUIET}-rm -rf autom4te.cache
-	${QUIET}-rm -f *.o *~ Makefile.bak core TAGS gmon.out
+	${QUIET}-rm -f *.o *~ Makefile.bak core TAGS TAGS.part gmon.out
 	${QUIET}-rm -f cscope.po.out cscope.out cscope.in.out cscope.files
 	${QUIET}-rm -f src/impl
 	${QUIET}-rm Makefile

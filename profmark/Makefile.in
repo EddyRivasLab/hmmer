@@ -11,7 +11,6 @@ CPPFLAGS       = @CPPFLAGS@
 LDFLAGS        = @LDFLAGS@
 DEFS           = @DEFS@
 LIBS           = -lhmmer -leasel @LIBS@ @LIBGSL@ @PTHREAD_LIBS@ -lm
-MPILIBS        = @MPILIBS@
 IMPLDIR        = impl_@IMPL_CHOICE@
 
 ESLDIR    = @HMMER_ESLDIR@
@@ -43,12 +42,12 @@ all:    ${PROGS}
 dev:    ${PROGS}
 
 ${PROGS}: % : %.o ../${ESLDIR}/libeasel.a ../src/libhmmer.a 
-	${QUIET_GEN}${CC} ${CFLAGS} ${SSE_CFLAGS} ${VMX_CFLAGS} ${PTHREAD_CFLAGS} ${DEFS} ${LDFLAGS} -L../${ESLDIR} -L../src -o $@ $@.o ${LIBS}
+	${QUIET_GEN}${CC} ${CPPFLAGS} ${CFLAGS} ${SSE_CFLAGS} ${VMX_CFLAGS} ${PTHREAD_CFLAGS} ${DEFS} ${LDFLAGS} -L../${ESLDIR} -L../src -o $@ $@.o ${LIBS}
 
 ${PROGOBJS}: ../src/hmmer.h ../src/p7_config.h
 
 .c.o: 
-	${QUIET_CC}${CC} ${ESLINC} ${SRCINC} ${CFLAGS} ${SSE_CFLAGS} ${VMX_CFLAGS} ${PTHREAD_CFLAGS} ${DEFS} -o $@ -c $<		
+	${QUIET_CC}${CC} ${ESLINC} ${SRCINC} ${CPPFLAGS} ${CFLAGS} ${SSE_CFLAGS} ${VMX_CFLAGS} ${PTHREAD_CFLAGS} ${DEFS} -o $@ -c $<		
 
 clean:
 	-rm -f *.o *~ ${PROGS} 

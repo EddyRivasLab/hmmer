@@ -508,20 +508,15 @@ fm_FM_read( FM_DATA *fm, FM_METADATA *meta, int getAll )
   int status;
 
 
-  if(fread(&(fm->N), sizeof(uint64_t), 1, meta->fp) !=  1)
-    esl_fatal( "%s: Error reading block_length in FM index.\n", __FILE__);
-  if(fread(&(fm->term_loc), sizeof(uint32_t), 1, meta->fp) !=  1)
-    esl_fatal( "%s: Error reading terminal location in FM index.\n", __FILE__);
-  if(fread(&(fm->seq_offset), sizeof(uint32_t), 1, meta->fp) !=  1)
-    esl_fatal( "%s: Error reading seq_offset in FM index.\n", __FILE__);
-  if(fread(&(fm->ambig_offset), sizeof(uint32_t), 1, meta->fp) !=  1)
-    esl_fatal( "%s: Error reading ambig_offset in FM index.\n", __FILE__);
-  if(fread(&(fm->overlap), sizeof(uint32_t), 1, meta->fp) !=  1)
-    esl_fatal( "%s: Error reading overlap in FM index.\n", __FILE__);
-  if(fread(&(fm->seq_cnt), sizeof(uint32_t), 1, meta->fp) !=  1)
-    esl_fatal( "%s: Error reading seq_cnt in FM index.\n", __FILE__);
-  if(fread(&(fm->ambig_cnt), sizeof(uint32_t), 1, meta->fp) !=  1)
-    esl_fatal( "%s: Error reading ambig_cnt in FM index.\n", __FILE__);
+  if(fread(&(fm->N), sizeof(uint64_t), 1, meta->fp) !=  1            ||
+     fread(&(fm->term_loc), sizeof(uint32_t), 1, meta->fp) !=  1     ||
+     fread(&(fm->seq_offset), sizeof(uint32_t), 1, meta->fp) !=  1   ||
+     fread(&(fm->ambig_offset), sizeof(uint32_t), 1, meta->fp) !=  1 ||
+     fread(&(fm->overlap), sizeof(uint32_t), 1, meta->fp) !=  1      ||
+     fread(&(fm->seq_cnt), sizeof(uint32_t), 1, meta->fp) !=  1      ||
+     fread(&(fm->ambig_cnt), sizeof(uint32_t), 1, meta->fp) !=  1
+     )
+       {status=eslEFORMAT; goto ERROR;}
 
   compressed_bytes =   ((chars_per_byte-1+fm->N)/chars_per_byte);
   num_freq_cnts_b  = 1+ceil((double)fm->N/meta->freq_cnt_b);
@@ -538,18 +533,14 @@ fm_FM_read( FM_DATA *fm, FM_METADATA *meta, int getAll )
   ESL_ALLOC (fm->occCnts_sb,  num_freq_cnts_sb *  (meta->alph_size ) * sizeof(uint32_t)); // every freq_cnt positions, store an array of ints
 
 
-  if(getAll && fread(fm->T, sizeof(uint8_t), compressed_bytes, meta->fp) != compressed_bytes)
-    esl_fatal( "%s: Error reading T in FM index.\n", __FILE__);
-  if( fread(fm->BWT, sizeof(uint8_t), compressed_bytes, meta->fp)  != compressed_bytes)
-    esl_fatal( "%s: Error reading BWT in FM index.\n", __FILE__);
-  if(getAll && fread(fm->SA, sizeof(uint32_t), (size_t)num_SA_samples, meta->fp) != (size_t)num_SA_samples)
-    esl_fatal( "%s: Error reading SA in FM index.\n", __FILE__);
-
-  if(fread(fm->occCnts_b, sizeof(uint16_t)*(meta->alph_size), (size_t)num_freq_cnts_b, meta->fp) != (size_t)num_freq_cnts_b)
-    esl_fatal( "%s: Error reading occCnts_b in FM index.\n", __FILE__);
-  if(fread(fm->occCnts_sb, sizeof(uint32_t)*(meta->alph_size), (size_t)num_freq_cnts_sb, meta->fp) != (size_t)num_freq_cnts_sb)
-    esl_fatal( "%s: Error reading occCnts_sb in FM index.\n", __FILE__);
-
+  if(
+     (getAll && fread(fm->T, sizeof(uint8_t), compressed_bytes, meta->fp) != compressed_bytes) ||
+     (fread(fm->BWT, sizeof(uint8_t), compressed_bytes, meta->fp)  != compressed_bytes) ||
+     (getAll && fread(fm->SA, sizeof(uint32_t), (size_t)num_SA_samples, meta->fp) != (size_t)num_SA_samples)  ||
+     (fread(fm->occCnts_b, sizeof(uint16_t)*(meta->alph_size), (size_t)num_freq_cnts_b, meta->fp) != (size_t)num_freq_cnts_b)  ||
+     (fread(fm->occCnts_sb, sizeof(uint32_t)*(meta->alph_size), (size_t)num_freq_cnts_sb, meta->fp) != (size_t)num_freq_cnts_sb)
+    )
+    {status=eslEFORMAT; goto ERROR;}
 
   //shortcut variables
   C          = fm->C;
@@ -579,8 +570,7 @@ fm_FM_read( FM_DATA *fm, FM_METADATA *meta, int getAll )
 
 ERROR:
   fm_FM_destroy(fm, getAll);
-  esl_fatal("Error allocating memory in %s\n", "readFM");
-  return eslFAIL;
+  return status;
 }
 
 
@@ -611,25 +601,33 @@ fm_readFMmeta( FM_METADATA *meta)
       fread(&(meta->ambig_list->count), sizeof(meta->ambig_list->count),    1, meta->fp) != 1 ||
       fread(&(meta->char_count),   sizeof(meta->char_count),   1, meta->fp) != 1
   )
-    esl_fatal( "%s: Error reading meta data for FM index.\n", __FILE__);
+  {status=eslEFORMAT; goto ERROR;}
+
+  /* sanity check - are these metadata for a real FM index?
+   * TODO: in an upcoming renovation of FM, capture FM validation & version as part of metadata header
+   */
+  if (  meta->alph_type != fm_DNA ||  /* this is the only legal value for nhmmer */
+        meta->fwd_only > 1        ||  /* must be 0 (false) or 1 (true) */
+        meta->charBits > 8        ||  /* should really be 2 ... but allowing for future growth */
+        meta->freq_SA > 10000         /* a suffix array sampling of this scale is insane */
+  )
+  {status=eslEFORMAT; return status;}
 
 
   ESL_ALLOC (meta->seq_data,  meta->seq_count   * sizeof(FM_SEQDATA));
-  if (meta->seq_data == NULL  )
-    esl_fatal("unable to allocate memory to store FM meta data\n");
 
 
   for (i=0; i<meta->seq_count; i++) {
-    if( fread(&(meta->seq_data[i].target_id),    sizeof(meta->seq_data[i].target_id),           1, meta->fp) != 1 ||
-        fread(&(meta->seq_data[i].target_start), sizeof(meta->seq_data[i].target_start),        1, meta->fp) != 1 ||
-        fread(&(meta->seq_data[i].fm_start),     sizeof(meta->seq_data[i].fm_start),        1, meta->fp) != 1 ||
+    if( fread(&(meta->seq_data[i].target_id),    sizeof(meta->seq_data[i].target_id),    1, meta->fp) != 1 ||
+        fread(&(meta->seq_data[i].target_start), sizeof(meta->seq_data[i].target_start), 1, meta->fp) != 1 ||
+        fread(&(meta->seq_data[i].fm_start),     sizeof(meta->seq_data[i].fm_start),     1, meta->fp) != 1 ||
         fread(&(meta->seq_data[i].length),       sizeof(meta->seq_data[i].length),       1, meta->fp) != 1 ||
         fread(&(meta->seq_data[i].name_length),  sizeof(meta->seq_data[i].name_length),  1, meta->fp) != 1 ||
         fread(&(meta->seq_data[i].acc_length),   sizeof(meta->seq_data[i].acc_length),   1, meta->fp) != 1 ||
         fread(&(meta->seq_data[i].source_length),sizeof(meta->seq_data[i].source_length),1, meta->fp) != 1 ||
         fread(&(meta->seq_data[i].desc_length),  sizeof(meta->seq_data[i].desc_length),  1, meta->fp) != 1
         )
-      esl_fatal( "%s: Error reading meta data for FM index.\n", __FILE__);
+        {status=eslEFORMAT; goto ERROR;}
 
     ESL_ALLOC (meta->seq_data[i].name,  (1+meta->seq_data[i].name_length)   * sizeof(char));
     ESL_ALLOC (meta->seq_data[i].acc,   (1+meta->seq_data[i].acc_length)    * sizeof(char));
@@ -640,15 +638,13 @@ fm_readFMmeta( FM_METADATA *meta)
         fread(meta->seq_data[i].name,   sizeof(char), meta->seq_data[i].name_length+1   , meta->fp) !=  meta->seq_data[i].name_length+1  ||
         fread(meta->seq_data[i].acc,    sizeof(char), meta->seq_data[i].acc_length+1    , meta->fp) !=  meta->seq_data[i].acc_length+1  ||
         fread(meta->seq_data[i].source, sizeof(char), meta->seq_data[i].source_length+1 , meta->fp) !=  meta->seq_data[i].source_length+1  ||
-        fread(meta->seq_data[i].desc,   sizeof(char), meta->seq_data[i].desc_length+1   , meta->fp) !=  meta->seq_data[i].desc_length+1 )
-      esl_fatal( "%s: Error reading meta data for FM index.\n", __FILE__);
-
+        fread(meta->seq_data[i].desc,   sizeof(char), meta->seq_data[i].desc_length+1   , meta->fp) !=  meta->seq_data[i].desc_length+1
+      )
+      {status=eslEFORMAT; goto ERROR;}
   }
 
   if (meta->ambig_list->count > meta->ambig_list->size) {
     ESL_REALLOC(meta->ambig_list->ranges,  meta->ambig_list->count  * sizeof(FM_INTERVAL));
-    if (meta->ambig_list->ranges == NULL  )
-      esl_fatal("unable to allocate memory to store FM ambiguity data\n");
     meta->ambig_list->size = meta->ambig_list->count;
   }
 
@@ -656,7 +652,7 @@ fm_readFMmeta( FM_METADATA *meta)
     if( fread(&(meta->ambig_list->ranges[i].lower),   sizeof(meta->ambig_list->ranges[i].lower),       1, meta->fp) != 1 ||
         fread(&(meta->ambig_list->ranges[i].upper),   sizeof(meta->ambig_list->ranges[i].upper),       1, meta->fp) != 1
     )
-      esl_fatal( "%s: Error reading ambiguity data for FM index.\n", __FILE__);
+    {status=eslEAMBIGUOUS; goto ERROR;}
   }
 
   return eslOK;
@@ -670,8 +666,7 @@ ERROR:
   }
   free(meta);
 
-   esl_fatal("Error allocating memory in %s\n", "readFM");
-   return eslFAIL;
+  return status;
 }
 
 
@@ -683,25 +678,12 @@ fm_configAlloc(FM_CFG **cfg)
 {
   int status;
 
-  if ( cfg == NULL)
-    esl_fatal("null pointer when allocating FM configuration\n");
-
+  if (cfg == NULL) {status=eslERANGE; goto ERROR;}
   *cfg = NULL;
 
   ESL_ALLOC(*cfg, sizeof(FM_CFG) );
-  if ((*cfg) == NULL)
-    esl_fatal("unable to allocate memory to store FM config data\n");
-
   ESL_ALLOC((*cfg)->meta, sizeof(FM_METADATA));
-  if ((*cfg)->meta == NULL)
-    esl_fatal("unable to allocate memory to store FM meta data\n");
-
   ESL_ALLOC ((*cfg)->meta->ambig_list, sizeof(FM_AMBIGLIST));
-  if ((*cfg)->meta->ambig_list == NULL)
-      esl_fatal("unable to allocate memory to store FM ambiguity data\n");
-
-
-
 
   return eslOK;
 
@@ -710,7 +692,7 @@ ERROR:
     if ((*cfg)->meta != NULL) free ((*cfg)->meta);
     free (*cfg);
   }
-  return eslEMEM;
+  return status;
 }
 
 

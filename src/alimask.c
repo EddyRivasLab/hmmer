@@ -259,6 +259,7 @@ main(int argc, char **argv)
   int           mask_range_cnt = 0;
   uint32_t      mask_starts[100]; // over-the-top allocation.
   uint32_t      mask_ends[100];
+  int64_t       pos1, pos2;       // esl_regexp_ParseCoordString() works in int64_t coords now; this is a hackaround
 
   char         *rangestr;
   char         *range;
@@ -313,10 +314,11 @@ main(int argc, char **argv)
   }
 
   while ( (status = esl_strtok(&rangestr, ",", &range) ) == eslOK) {
-    status = esl_regexp_ParseCoordString(range, mask_starts + mask_range_cnt, mask_ends + mask_range_cnt );
+    status = esl_regexp_ParseCoordString(range, &pos1, &pos2);
     if (status == eslESYNTAX) esl_fatal("range flags take coords <from>..<to>; %s not recognized", range);
     if (status == eslFAIL)    esl_fatal("Failed to find <from> or <to> coord in %s", range);
-
+    mask_starts[mask_range_cnt] = (uint32_t) pos1;
+    mask_ends[mask_range_cnt]   = (uint32_t) pos2;
     mask_range_cnt++;
   }
 
@@ -375,16 +377,20 @@ main(int argc, char **argv)
 
   // convert model coordinates to alignment coordinates, if necessary
   if (esl_opt_IsUsed(go, "--modelrange") || esl_opt_IsUsed(go, "--model2ali") || esl_opt_IsUsed(go, "--ali2model") ) {
+    ESL_MSAWEIGHT_CFG *cfg     = esl_msaweight_cfg_Create();
+    float              symfrac = esl_opt_GetReal(go, "--symfrac");
+    int                do_hand = esl_opt_IsOn(go, "--hand");
 
-    float symfrac = esl_opt_GetReal(go, "--symfrac");
-    int do_hand  =  esl_opt_IsOn(go, "--hand");
+    cfg->ignore_rf = (do_hand ? FALSE : TRUE);  // PB weights only use RF-marked consensus cols if --hand is on. [iss #180]
 
     //same as p7_builder relative_weights
     if      (esl_opt_IsOn(go, "--wnone")  )                  { esl_vec_DSet(msa->wgt, msa->nseq, 1.); }
     else if (esl_opt_IsOn(go, "--wgiven") )                  ;
-    else if (esl_opt_IsOn(go, "--wpb")    )                  status = esl_msaweight_PB(msa);
+    else if (esl_opt_IsOn(go, "--wpb")    )                  status = esl_msaweight_PB_adv(cfg, msa, /*ESL_MSAWEIGHT_DAT=*/ NULL);
     else if (esl_opt_IsOn(go, "--wgsc")   )                  status = esl_msaweight_GSC(msa);
     else if (esl_opt_IsOn(go, "--wblosum"))                  status = esl_msaweight_BLOSUM(msa, esl_opt_GetReal(go, "--wid"));
+
+    esl_msaweight_cfg_Destroy(cfg);
 
     if ((status =  esl_msa_MarkFragments_old(msa, esl_opt_GetReal(go, "--fragthresh")))           != eslOK) goto ERROR;
 
