@@ -29,6 +29,8 @@ rocplot.c          : Constructs ROC plot of results, with bootstrapped
 
 rocplot.pl         : quick and dirty ROC plot, no bootstrapping.
 
+There are also example x-fps-<tool> scripts for running profmark searches against other
+homology search tools.
 
 
 
@@ -83,19 +85,16 @@ construction protocol, the procedure is as follows:
      Defined as sequences < x*average length (in residues); default
      x=0.70; controlled by -F option.
 
-   : Try to split into a training set and test set such that no test
-     sequence has >= x% identity to any training sequence. Pairwise 
-     % identity as defined by <esl_dst_XPairId()> on the given alignment. 
-     Default x=25% identity; controlled by -1 <x> option. The default 
-     option --blue and --cobalt are randomized algorithms. The option 
-     -R x runs the splitting algorithm x times and outputs the split 
-     maximizing |training|*|test|. The -T x runs the splitting algorithm 
-     at most x times and stops when a split above the specified size 
-     thresholds is found. 
-     
+   : Try to split the MSA into a training set and test set such that no test
+     sequence has >= x% identity to any training sequence, using <esl_dst_XPairId>
+     as the metric of % identity. The default value of x is 25, and can be changed with
+     the -1 option.  Create-profmark supports three splitting algorithms.  The default
+     uses single-linkage clustering to construct the test and train sets, while --blue
+     and --cobalt are randomized algorithms that typically perform better on large alignments. The -R y option tells create-profrmark to perform y splits and
+     return the one that maximizes |training|*|test|, while the -T z option runs the splitting algorithm at most T times, returning the first successful split.
      
    : For the remaining test sequences, remove redundancy by performing
-     another single linkage clustering by percent identity, at another
+     another clustering by percent identity, at another
      threshold x. Default x=50%; controlled by -2 <x> option. For each
      cluster, one test sequence is chosen at random as a
      representative. 
