@@ -639,13 +639,18 @@ separate_sets(struct cfg_s *cfg, ESL_MSA *msa, ESL_MSA **ret_trainmsa, ESL_STACK
     }
     
     ESL_ALLOC(assignment2, sizeof(int) * msa->nseq);
-    ESL_ALLOC(assignment3, sizeof(int) * msa->nseq);
+    if(cfg->idthresh3 < 1){ // only allocate this if we're using the -3 option
+      ESL_ALLOC(assignment3, sizeof(int) * msa->nseq);
+    }
+    else{
+      assignment3 = NULL;
+    }
     int counter=1;
     int max_tries = (esl_opt_GetInteger(go, "-T") > esl_opt_GetInteger(go, "-R")) ? esl_opt_GetInteger(go, "-T") : esl_opt_GetInteger(go, "-R");
         
     while (counter <= max_tries){	      
 	    /* separate sequences into training set and proto-test set*/
-        
+
       if (esl_opt_GetBoolean(go, "--random")){
         if ((status = esl_msa_bi_iset_Random(msa, cfg->idthresh1, &assignment,  cfg->r, esl_opt_GetReal(go, "--rp"))) != eslOK) goto ERROR;
         smaller = 2;
@@ -823,8 +828,6 @@ separate_sets(struct cfg_s *cfg, ESL_MSA *msa, ESL_MSA **ret_trainmsa, ESL_STACK
           if ((status = esl_msa_SequenceSubset(b_testmsa, useme, &final_testmsa)) != eslOK) goto ERROR;
         }
 
-        free(b_assignment_train);
-        free(b_assignment_test);
         esl_msa_Destroy(b_testmsa);
       }
     } //end if best of 
