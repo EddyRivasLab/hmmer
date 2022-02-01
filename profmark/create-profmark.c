@@ -80,13 +80,13 @@ static ESL_OPTIONS options[] = {
   { "--msaout",  eslARG_NONE,  FALSE, NULL, NULL, NULL, NULL, NULL,        "return training and test sets as MSAs; omit seqdb", 4 },
   { "--noavg",  eslARG_NONE,  FALSE, NULL, NULL, NULL, NULL, NULL,         "do not compute avgid, report as 0", 4 },
   { "--conn",  eslARG_NONE,  FALSE, NULL, NULL, NULL, NULL, NULL,          "replace avgid with fraction conn at -1 x", 4 },
-  { "--printout",  eslARG_NONE,  FALSE, NULL, NULL, NULL, NULL, NULL,      "pint out fams that failed to split", 4 },
-  { "--rp",    eslARG_REAL, "0.75", NULL,"0<x<=1.0",NULL,NULL,NULL,        "in random, select training seqs iid Bernoulli(x)", 4 },
+  { "--printout",  eslARG_NONE,  FALSE, NULL, NULL, NULL, NULL, NULL,      "print out families that failed to split", 4 },
+  { "--rp",    eslARG_REAL, "0.75", NULL,"0<x<=1.0",NULL,NULL,NULL,        "set the probability that a sequence will be placed in the training set when doing a random split", 4 },
 
   /* Options controlling method of splitting into testing and training sets  */
-  { "--cluster",    eslARG_NONE, FALSE, NULL, NULL, SEP_OPTS, NULL, NULL, "single linkage clustering",	5 },
+  { "--cluster",    eslARG_NONE, "default", NULL, NULL, SEP_OPTS, NULL, NULL, "single linkage clustering",	5 },
   { "--cobalt", eslARG_NONE,    FALSE, NULL, NULL, SEP_OPTS, NULL, NULL, "greedy algorithm with random order",       5 },
-  { "--blue", eslARG_NONE,    "default", NULL, NULL, SEP_OPTS, NULL, NULL, "multi-round random election process",       5 },
+  { "--blue", eslARG_NONE,    FALSE, NULL, NULL, SEP_OPTS, NULL, NULL, "multi-round random election process",       5 },
   { "--random", eslARG_NONE,    FALSE, NULL, NULL, SEP_OPTS, NULL, NULL, "random iid selection of training set",       5 },
 
   { 0,0,0,0,0,0,0,0,0,0 },
@@ -215,6 +215,9 @@ main(int argc, char **argv)
   else if (esl_opt_ArgNumber(go)!= 2 && msaout && dev){
       cmdline_failure(argv[0], "Incorrect number of command line arguments; in msaout or dev mode, two required: <basename> <msafile>\n");
   }
+  if(esl_opt_GetBoolean(go, "--conn") && esl_opt_GetBoolean(go, "--noavg")){
+    cmdline_failure(argv[0], "Selecting both --conn and --noavg is not allowed, as both alter the avgid field of the output\n");
+  }
   basename = esl_opt_GetArg(go, 1);
   alifile  = esl_opt_GetArg(go, 2);
   alifmt   = eslMSAFILE_STOCKHOLM;
@@ -294,7 +297,6 @@ main(int argc, char **argv)
   if (!dev && !msaout){
       process_dbfile(&cfg, dbfile, dbfmt);
   }
-    
   /* Read and process MSAs one at a time  */
   nali = 0;
   while ((status = esl_msafile_Read(afp, &origmsa)) != eslEOF)
@@ -426,14 +428,19 @@ main(int argc, char **argv)
 	          printf("Algorithm failed to separate %-20s\n", msa->name);
       }
       
-      if(trainmsa){
-          esl_msa_Destroy(trainmsa);
-      }
-      if(testmsa){
-          esl_msa_Destroy(testmsa);
-      }
-      esl_msa_Destroy(origmsa);
-      esl_msa_Destroy(msa);
+    if(trainmsa){
+     esl_msa_Destroy(trainmsa);
+    }
+    if(testmsa){
+    esl_msa_Destroy(testmsa);
+    }
+    if(teststack){
+      ESL_SQ     *sq;
+      while (esl_stack_PPop(teststack, (void **) &sq) == eslOK) esl_sq_Destroy(sq);
+      esl_stack_Destroy(teststack);
+    }
+    esl_msa_Destroy(origmsa);
+    esl_msa_Destroy(msa);
   }
   if  (nali == 0) esl_fatal("Algorithm failed to separate all families in MSA\n", alifile);
 
@@ -450,6 +457,10 @@ main(int argc, char **argv)
   if (cfg.pidfp) fclose(cfg.pidfp);
   esl_randomness_Destroy(cfg.r);
   esl_alphabet_Destroy(cfg.abc);
+  if(cfg.test_lens != NULL){
+    free(cfg.test_lens);
+  }
+  esl_sqfile_Close(cfg.dbfp);
   esl_msafile_Close(afp);
   esl_getopts_Destroy(go);
   return 0;
@@ -486,7 +497,6 @@ process_dbfile(struct cfg_s *cfg, char *dbfile, int dbfmt)
   /* Open SSI index */
   if (esl_sqfile_OpenSSI(cfg->dbfp, NULL) != eslOK) esl_fatal("Failed to open SSI index file");
   if (cfg->dbfp->data.ascii.ssi->nprimary != cfg->db_nseq)     esl_fatal("oops, nprimary != nseq");
-
   esl_sq_Destroy(sq);
   return eslOK;
 }
@@ -533,6 +543,8 @@ separate_sets(struct cfg_s *cfg, ESL_MSA *msa, ESL_MSA **ret_trainmsa, ESL_STACK
   ESL_STACK *teststack = NULL;
   ESL_SQ    *sq        = NULL;
   int *assignment = NULL;
+  int *assignment2 = NULL;
+  int *assignment3 = NULL;
   int *nin        = NULL;
   int *useme      = NULL;
   int  nc         = 0;
@@ -556,7 +568,7 @@ separate_sets(struct cfg_s *cfg, ESL_MSA *msa, ESL_MSA **ret_trainmsa, ESL_STACK
 
   if ((teststack = esl_stack_PCreate()) == NULL) { status = eslEMEM; goto ERROR; }
   ESL_ALLOC(useme, sizeof(int) * msa->nseq);
-
+  ESL_ALLOC(assignment, sizeof(int) * msa->nseq);
 
   /* for cluster option */  
   if (esl_opt_GetBoolean(go, "--cluster") ){
@@ -574,9 +586,9 @@ separate_sets(struct cfg_s *cfg, ESL_MSA *msa, ESL_MSA **ret_trainmsa, ESL_STACK
 
     /* If fewer sequences than --mintrain went into the training msa or there are not at least --mintest sequences left, then we're done here */
     if (c_train < esl_opt_GetInteger(go,"--mintrain") || msa->nseq - c_train < esl_opt_GetInteger(go, "--mintest")) {
-      free(useme);
-      free(assignment);
-      free(nin);
+      if(useme) free(useme);
+      if(assignment) free(assignment);
+      if(nin) free(nin);
       *ret_trainmsa  = trainmsa;
       *ret_teststack = teststack;
       *ret_testmsa = final_testmsa;
@@ -615,9 +627,6 @@ separate_sets(struct cfg_s *cfg, ESL_MSA *msa, ESL_MSA **ret_trainmsa, ESL_STACK
         if ((status = esl_msa_SequenceSubset(testmsa, useme, &final_testmsa)) != eslOK) goto ERROR;
     }
 
-    free(useme);
-    free(nin);
-    free(assignment);
     esl_msa_Destroy(testmsa);
   }  
 
@@ -629,226 +638,212 @@ separate_sets(struct cfg_s *cfg, ESL_MSA *msa, ESL_MSA **ret_trainmsa, ESL_STACK
         ESL_ALLOC(b_assignment_test, sizeof(int) * msa->nseq);
     }
     
-    int *assignment2 = NULL;
-    int *assignment3 = NULL;
+    ESL_ALLOC(assignment2, sizeof(int) * msa->nseq);
+    ESL_ALLOC(assignment3, sizeof(int) * msa->nseq);
     int counter=1;
     int max_tries = (esl_opt_GetInteger(go, "-T") > esl_opt_GetInteger(go, "-R")) ? esl_opt_GetInteger(go, "-T") : esl_opt_GetInteger(go, "-R");
         
     while (counter <= max_tries){	      
-	      /* separate sequences into training set and proto-test set*/
+	    /* separate sequences into training set and proto-test set*/
         
-        if (esl_opt_GetBoolean(go, "--random")){
-            if ((status = esl_msa_bi_iset_Random(msa, cfg->idthresh1, &assignment, &nin, cfg->r, esl_opt_GetReal(go, "--rp"))) != eslOK) goto ERROR;
-            smaller = 2;
-            larger = 1;
+      if (esl_opt_GetBoolean(go, "--random")){
+        if ((status = esl_msa_bi_iset_Random(msa, cfg->idthresh1, &assignment,  cfg->r, esl_opt_GetReal(go, "--rp"))) != eslOK) goto ERROR;
+        smaller = 2;
+        larger = 1;
+      }
+        
+      else {
+        if (esl_opt_GetBoolean(go, "--cobalt")){
+          if ((status = esl_msa_bi_iset_Cobalt(msa, cfg->idthresh1, &assignment, &larger, cfg->r)) != eslOK) goto ERROR;
         }
-        
-        else {
-            if (esl_opt_GetBoolean(go, "--cobalt")){
-              if ((status = esl_msa_bi_iset_Cobalt(msa, cfg->idthresh1, &assignment, &nin, &larger, cfg->r)) != eslOK) goto ERROR;
-            }
 
-            if (esl_opt_GetBoolean(go, "--blue")){
-              if ((status = esl_msa_bi_iset_Blue(msa, cfg->idthresh1, &assignment, &nin, &larger, cfg->r)) != eslOK) goto ERROR;
-            }
-            smaller = (larger==1) ? 2 : 1;
+        if (esl_opt_GetBoolean(go, "--blue")){
+          if ((status = esl_msa_bi_iset_Blue(msa, cfg->idthresh1, &assignment, &larger, cfg->r)) != eslOK) goto ERROR;
         }
+        smaller = (larger==1) ? 2 : 1;
+      }
         
-        c_train=0; /* size of training set */
-        c_test=0; /* size of proto test set */
-        for (i = 0; i < msa->nseq; i++){ 
-            if (assignment[i] == larger) c_train++;
-            if (assignment[i] == smaller) c_test++;
-            useme[i] = (assignment[i] == larger) ? 1 : 0;
+      c_train=0; /* size of training set */
+      c_test=0; /* size of proto test set */
+      for (i = 0; i < msa->nseq; i++){ 
+        if (assignment[i] == larger) c_train++;
+        if (assignment[i] == smaller) c_test++;
+        useme[i] = (assignment[i] == larger) ? 1 : 0;
+      }
+        
+      /* If fewer sequences than --mintrain are in training or there are not at least --mintest sequences in proto test set, then we're done here */
+  	  if (c_train < esl_opt_GetInteger(go,"--mintrain") || c_test < esl_opt_GetInteger(go, "--mintest")) {
+  	    counter++;
+  	    continue;
+  	  }
+        
+      if ((status = esl_msa_SequenceSubset(msa, useme, &trainmsa)) != eslOK) goto ERROR;
+      free(nin);         nin        = NULL;
+        
+      /* if idthresh3 < 1, need to find iset in the training set */
+      if (cfg->idthresh3 < 1){
+
+        if (esl_opt_GetBoolean(go, "--cobalt") || esl_opt_GetBoolean(go, "--random")){
+          if ((status = esl_msa_iset_Cobalt(trainmsa, cfg->idthresh3, &assignment3, cfg->r)) != eslOK) goto ERROR;   
         }
-        
-        /* If fewer sequences than --mintrain are in training or there are not at least --mintest sequences in proto test set, then we're done here */
-  	    if (c_train < esl_opt_GetInteger(go,"--mintrain") || c_test < esl_opt_GetInteger(go, "--mintest")) {
-  	      free(assignment);	      	      
-  	      free(nin);
-  	      counter++;
-  	      continue;
-  	    }
-        
-        if ((status = esl_msa_SequenceSubset(msa, useme, &trainmsa)) != eslOK) goto ERROR;
-        free(nin);         nin        = NULL;
-        
-        /* if idthresh3 < 1, need to find iset in the training set */
-        if (cfg->idthresh3 < 1){
 
-            if (esl_opt_GetBoolean(go, "--cobalt") || esl_opt_GetBoolean(go, "--random")){
-              if ((status = esl_msa_iset_Cobalt(trainmsa, cfg->idthresh3, &assignment3, &nin, cfg->r)) != eslOK) goto ERROR;   
-            }
+        if (esl_opt_GetBoolean(go, "--blue")){
+          if ((status = esl_msa_iset_Blue(trainmsa, cfg->idthresh3, &assignment3,cfg->r)) != eslOK) goto ERROR;    
+        }
 
-            if (esl_opt_GetBoolean(go, "--blue")){
-              if ((status = esl_msa_iset_Blue(trainmsa, cfg->idthresh3, &assignment3, &nin, cfg->r)) != eslOK) goto ERROR;    
-            }
-
-            c_train=0; /* size of test set */
-            for (i = 0; i < trainmsa->nseq; i++){ 
-                if (assignment3[i] == 1){
-                    useme[i]=1;
-                    c_train++;
-                }
-                else useme[i]=0;
-            }
+        c_train=0; /* size of test set */
+        for (i = 0; i < trainmsa->nseq; i++){ 
+          if (assignment3[i] == 1){
+            useme[i]=1;
+            c_train++;
+          }
+          else useme[i]=0;
+        }
             
-             if (c_train < esl_opt_GetInteger(go,"--mintrain")) {
-              trainmsa = NULL;
-              free(assignment);	 
-              free(assignment3);	 
-              free(nin);
-              counter++;
-              continue;
-            }
-            
-            if ((status = esl_msa_SequenceSubset(trainmsa, useme, &trainmsa)) != eslOK) goto ERROR;
-
+        if (c_train < esl_opt_GetInteger(go,"--mintrain")) {
+          trainmsa = NULL;
+          counter++;
+          continue;
         }
+            
+        if ((status = esl_msa_SequenceSubset(trainmsa, useme, &trainmsa)) != eslOK) goto ERROR;
+
+      }
 	
 
 
 
-        /* Put all the other sequences into an MSA of their own; from these, we'll choose test sequences. */
+      /* Put all the other sequences into an MSA of their own; from these, we'll choose test sequences. */
   	    
-  	    for (i = 0; i < msa->nseq; i++) useme[i] = (assignment[i] == smaller) ? 1 : 0;
-  	    if ((status = esl_msa_SequenceSubset(msa, useme, &testmsa))!= eslOK) goto ERROR;
+  	  for (i = 0; i < msa->nseq; i++) useme[i] = (assignment[i] == smaller) ? 1 : 0;
+  	  if ((status = esl_msa_SequenceSubset(msa, useme, &testmsa))!= eslOK) goto ERROR;
 
-  	    /* Find iset among test sequences. */
-  	    free(nin);         nin        = NULL;
+  	  /* Find iset among test sequences. */
+  	  free(nin);         nin        = NULL;
 
-  	    if (esl_opt_GetBoolean(go, "--cobalt") || esl_opt_GetBoolean(go, "--random")){
-  	      if ((status = esl_msa_iset_Cobalt(testmsa, cfg->idthresh2, &assignment2, &nin, cfg->r)) != eslOK) goto ERROR;    
-  	    }
+  	  if (esl_opt_GetBoolean(go, "--cobalt") || esl_opt_GetBoolean(go, "--random")){
+  	    if ((status = esl_msa_iset_Cobalt(testmsa, cfg->idthresh2, &assignment2,  cfg->r)) != eslOK) goto ERROR;    
+  	  }
 
-  	    if (esl_opt_GetBoolean(go, "--blue")){
-  	      if ((status = esl_msa_iset_Blue(testmsa, cfg->idthresh2, &assignment2, &nin, cfg->r)) != eslOK) goto ERROR;    
-  	    }
+  	  if (esl_opt_GetBoolean(go, "--blue")){
+  	    if ((status = esl_msa_iset_Blue(testmsa, cfg->idthresh2, &assignment2,  cfg->r)) != eslOK) goto ERROR;    
+  	  }
 
-  	    c_test=0; /* size of test set */
-  	    for (i = 0; i < testmsa->nseq; i++){ 
-  	        if (assignment2[i] == 1) c_test++;
-  	    }
+  	  c_test=0; /* size of test set */
+  	  for (i = 0; i < testmsa->nseq; i++){ 
+  	    if (assignment2[i] == 1) c_test++;
+  	  }
 
-        /* continue to next iteration if test set is too small */
-  	    if (c_test < esl_opt_GetInteger(go, "--mintest")) {
-  	    	esl_msa_Destroy(testmsa);
-            if (assignment3) free(assignment3);
-  	        free(assignment2);	
-            free(assignment);	
-  	        free(nin); 
-  		    counter++;
-  		    continue;
-  	    }
+      /* continue to next iteration if test set is too small */
+  	  if (c_test < esl_opt_GetInteger(go, "--mintest")) {
+  	    esl_msa_Destroy(testmsa);
+  		  counter++;
+  		  continue;
+  	  }
         
         /* if best-of option, store if this is best split so far */
-        if (esl_opt_GetInteger(go, "-R")>1){
-            if ( c_test >= esl_opt_GetInteger(go, "--mintest") && c_test * c_train > b_test * b_train ){
-                /* this is current best result*/
-                b_test=c_test;
-                b_train=c_train;
+      if (esl_opt_GetInteger(go, "-R")>1){
+        if ( c_test >= esl_opt_GetInteger(go, "--mintest") && c_test * c_train > b_test * b_train ){
+          /* this is current best result*/
+          b_test=c_test;
+          b_train=c_train;
 
-                /*change assignment into 0/1 instead of 0/1/2; 1 now means larger, 0 means 0 or smaller */
-                /* doing this so we don't have to keep track of larger*/
-                int pos = -1;
-                for(i=0; i<msa->nseq; i++){
-                  if (!assignment3){
-                      if (assignment[i]==larger) b_assignment_train[i]=1;
-                      else b_assignment_train[i]=0;
-                  }
-                  else{
-                       if (assignment[i]==larger){
-                           pos +=1;
-                           if (assignment3[pos] == 1) b_assignment_train[i]=1;
-                           else b_assignment_train[i]=0;
-                      }
-                      else b_assignment_train[i]=0;
-                  }
-                }
-                for (i = 0; i < testmsa->nseq; i++) {
-                  b_assignment_test[i]= assignment2[i];
-                }
-                b_testmsa=esl_msa_Clone(testmsa);
+          /*change assignment into 0/1 instead of 0/1/2; 1 now means larger, 0 means 0 or smaller */
+          /* doing this so we don't have to keep track of larger*/
+          int pos = -1;
+          for(i=0; i<msa->nseq; i++){
+            if (!assignment3){
+              if (assignment[i]==larger) b_assignment_train[i]=1;
+                else b_assignment_train[i]=0;
             }
-            
-            free(nin);
-            free(assignment);
-            free(assignment2);
-            free(assignment3);
-            esl_msa_Destroy(testmsa);
-            counter++;
+            else{
+              if (assignment[i]==larger){
+                pos +=1;
+                if (assignment3[pos] == 1) b_assignment_train[i]=1;
+                else b_assignment_train[i]=0;
+              }
+              else b_assignment_train[i]=0;
+            }
+          }
+          for (i = 0; i < testmsa->nseq; i++) {
+            b_assignment_test[i]= assignment2[i];
+          }
+          b_testmsa=esl_msa_Clone(testmsa);
         }
+        esl_msa_Destroy(testmsa);
+        counter++;
+      }
        
 
-        /* if not best-of, this split passes, so return it */
-  	    else{
-  		    for (i=0; i < testmsa->nseq; i++){
-  			    if (assignment2[i] == 1) {
-                    useme[i]=1;
-  			        esl_sq_FetchFromMSA(testmsa, i, &sq);
-  			        esl_stack_PPush(teststack, (void *) sq);
-  		        }
-                else useme[i]=0;
+      /* if not best-of, this split passes, so return it */
+  	  else{
+  		  for (i=0; i < testmsa->nseq; i++){
+  			  if (assignment2[i] == 1) {
+            useme[i]=1;
+  			    esl_sq_FetchFromMSA(testmsa, i, &sq);
+  			    esl_stack_PPush(teststack, (void *) sq);
   		    }
-          /* if msaout, make new test msa with chosen msa seqs */
-          if (esl_opt_GetBoolean(go, "--msaout")){
-              if ((status = esl_msa_SequenceSubset(testmsa, useme, &final_testmsa)) != eslOK) goto ERROR;
-          }
-          esl_msa_Destroy(testmsa);
-          *tries=counter;
-          free(nin);
-	      free(assignment);
-          free(assignment2);
-		  break;
-		    }
+          else useme[i]=0;
+  		  }
+        /* if msaout, make new test msa with chosen msa seqs */
+        if (esl_opt_GetBoolean(go, "--msaout")){
+          if ((status = esl_msa_SequenceSubset(testmsa, useme, &final_testmsa)) != eslOK) goto ERROR;
+        }
+        esl_msa_Destroy(testmsa);
+        *tries=counter;
+		    break;
+		  }
     } //end while loop
       
 
     /* if best-of option, need to gather best split if exists */
     if (esl_opt_GetInteger(go, "-R")>1){
-        /* never produced a split that satisfies mintest and mintrain thresholds*/
-        if (b_train==0 || b_test ==0){
-            trainmsa=NULL;
-            teststack=NULL;
-            final_testmsa=NULL;
-        }
+      /* never produced a split that satisfies mintest and mintrain thresholds*/
+      if (b_train==0 || b_test ==0){
+        trainmsa=NULL;
+        teststack=NULL;
+        final_testmsa=NULL;
+      }
 
-         /* return trainmsa, final_testmsa (if msaout), and teststack associated with best round*/
-        else{  
-            for (i = 0; i < msa->nseq; i++) useme[i] = (b_assignment_train[i] == 1) ? 1 : 0;
-            if ((status = esl_msa_SequenceSubset(msa, useme, &trainmsa)) != eslOK) goto ERROR;
-            for (i=0; i < b_testmsa->nseq; i++){
-                if (b_assignment_test[i] == 1) {
-                    useme[i]=1;
-                    esl_sq_FetchFromMSA(b_testmsa, i, &sq);
-                    esl_stack_PPush(teststack, (void *) sq);
-                }
-                else useme[i]=0;
-            }
+      /* return trainmsa, final_testmsa (if msaout), and teststack associated with best round*/
+      else{  
+        for (i = 0; i < msa->nseq; i++) useme[i] = (b_assignment_train[i] == 1) ? 1 : 0;
+        if ((status = esl_msa_SequenceSubset(msa, useme, &trainmsa)) != eslOK) goto ERROR;
+        for (i=0; i < b_testmsa->nseq; i++){
+          if (b_assignment_test[i] == 1) {
+            useme[i]=1;
+            esl_sq_FetchFromMSA(b_testmsa, i, &sq);
+            esl_stack_PPush(teststack, (void *) sq);
+          }
+          else useme[i]=0;
+        }
             
-            /* if msaout, make new test msa with chosen msa seqs */
-            if (esl_opt_GetBoolean(go, "--msaout")){
-                if ((status = esl_msa_SequenceSubset(b_testmsa, useme, &final_testmsa)) != eslOK) goto ERROR;
-            }
-
-            free(b_assignment_train);
-            free(b_assignment_test);
-            esl_msa_Destroy(b_testmsa);
+        /* if msaout, make new test msa with chosen msa seqs */
+        if (esl_opt_GetBoolean(go, "--msaout")){
+          if ((status = esl_msa_SequenceSubset(b_testmsa, useme, &final_testmsa)) != eslOK) goto ERROR;
         }
+
+        free(b_assignment_train);
+        free(b_assignment_test);
+        esl_msa_Destroy(b_testmsa);
+      }
     } //end if best of 
-  free(useme);          
+         
   
   } //end else not cluster
    
   *ret_trainmsa  = trainmsa;
   *ret_testmsa  = final_testmsa;
   *ret_teststack = teststack;
-  return eslOK;
-
-  ERROR:
   if (useme      != NULL) free(useme);
   if (assignment != NULL) free(assignment);
+  if (assignment2) free(assignment2);
+  if (assignment3) free(assignment3);
   if (nin        != NULL) free(nin);
+  if (b_assignment_train) free(b_assignment_train);
+  if (b_assignment_test) free(b_assignment_test);
+  return eslOK;
+ERROR:
   esl_msa_Destroy(trainmsa);
   esl_msa_Destroy(testmsa);
   if (final_testmsa){
@@ -860,6 +855,7 @@ separate_sets(struct cfg_s *cfg, ESL_MSA *msa, ESL_MSA **ret_trainmsa, ESL_STACK
   *ret_teststack = NULL;
   *ret_testmsa  = NULL;
   return status;
+
 }
 
 
@@ -1000,12 +996,10 @@ synthesize_positives(ESL_GETOPTS *go, struct cfg_s *cfg, char *testname, ESL_STA
 static int
 synthesize_negatives(ESL_GETOPTS *go, struct cfg_s *cfg, int nneg)
 {
-  printf("in synthesized negative function");
   ESL_SQ *sq = esl_sq_CreateDigital(cfg->abc);
   int     a;
   int     i;
   int     L1,L2,L3,d1n,d2n;
-  printf(" synthesized negatives for loop about to begin");
 
   for (i = 0; i < nneg; i++)
     {
@@ -1071,9 +1065,9 @@ set_random_segment(ESL_GETOPTS *go, struct cfg_s *cfg, FILE *logfp, ESL_DSQ *dsq
 
   if (L==0) return eslOK;
   if (L > cfg->db_maxL) esl_fatal("can't fetch a segment of length %d; database max is %d\n", L, cfg->db_maxL);
-
   /* fetch a random subseq from the source database */
   esl_sq_GrowTo(sq, L);
+ ESL_DSQ *check = sq->dsq;
   if (db_dependent)
     {
       do {
@@ -1103,8 +1097,11 @@ set_random_segment(ESL_GETOPTS *go, struct cfg_s *cfg, FILE *logfp, ESL_DSQ *dsq
   else if (esl_opt_GetBoolean(go, "--reverse")) status = esl_rsq_XReverse  (sq->dsq, L, sq->dsq);
   else if (esl_opt_GetBoolean(go, "--iid"))     status = esl_rsq_xIID      (cfg->r, cfg->fq, cfg->abc->K, L, sq->dsq);
   if (status != eslOK) esl_fatal("esl's shuffling failed");
-
+  
   memcpy(dsq, sq->dsq+1, sizeof(ESL_DSQ) * L);
+  if(sq->dsq != check){
+    printf("DSQ changed from %p to %p not by realloc\n", check, sq->dsq);
+  }
   esl_sq_Destroy(sq);
   free(pkey);
   return eslOK;
