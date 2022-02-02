@@ -29,6 +29,8 @@ rocplot.c          : Constructs ROC plot of results, with bootstrapped
 
 rocplot.pl         : quick and dirty ROC plot, no bootstrapping.
 
+There are also example x-fps-<tool> scripts for running profmark searches against other
+homology search tools.
 
 
 
@@ -49,6 +51,17 @@ Creates five output files:
    <benchmark_prefix>.pos  - table summarizing positive test set
    <benchmark_prefix>.neg  - table summarizing negative test set                
 The format of these files is described in the following section.
+
+Alternately, instead of synthesizing positive and negative sequence, profmark can be configured to output a training and test MSAs
+
+Usage:    ./create-profmark --msaout <benchmark_prefix> <Stockholm MSA file> 
+Example:  ./create-profmark --msaout pmark Pfam-A.seed 
+
+Creates three output files:
+   <benchmark_prefix>.tbl  - table summarizing the benchmark
+   <benchmark_prefix>.msa_train  - MSA queries, stockholm format
+   <benchmark_prefix>.msa_test   - MSA test sequences, stockholm format
+
 
 
 Briefly: each input alignment in the <Stockholm MSA file> is split
@@ -72,16 +85,16 @@ construction protocol, the procedure is as follows:
      Defined as sequences < x*average length (in residues); default
      x=0.70; controlled by -F option.
 
-   : Try to split into a training set and test set such that no test
-     sequence has >= x% identity to any training sequence.  Uses
-     efficient single-linkage-clustering at x threshold; defines
-     largest cluster as training set, all other clusters as test
-     set. Pairwise % identity as defined by <esl_dst_XPairId()> on the
-     given alignment. Default x=25% identity; controlled by -1 <x>
-     option.
-
+   : Try to split the MSA into a training set and test set such that no test
+     sequence has >= x% identity to any training sequence, using <esl_dst_XPairId>
+     as the metric of % identity. The default value of x is 25, and can be changed with
+     the -1 option.  Create-profmark supports three splitting algorithms.  The default
+     uses single-linkage clustering to construct the test and train sets, while --blue
+     and --cobalt are randomized algorithms that typically perform better on large alignments. The -R y option tells create-profrmark to perform y splits and
+     return the one that maximizes |training|*|test|, while the -T z option runs the splitting algorithm at most T times, returning the first successful split.
+     
    : For the remaining test sequences, remove redundancy by performing
-     another single linkage clustering by percent identity, at another
+     another clustering by percent identity, at another
      threshold x. Default x=50%; controlled by -2 <x> option. For each
      cluster, one test sequence is chosen at random as a
      representative. 
@@ -95,9 +108,13 @@ construction protocol, the procedure is as follows:
      single-sequence-query tests to start on a random but reproducible
      single query sequence, simply by taking the first seq in the
      alignment.) Other than this (row) permutation, the training set
-     is preserved in its original alignment.
+     is preserved in its original alignment. If --msaout, do the same
+     for the test set alignment
 
-   : The training set alignment is written to <benchmark_prefix>.msa.
+   : The training set alignment is written to <benchmark_prefix>.msa. If 
+     --msaout, the training and test set alignments are written to 
+     <benchmark_prefix>.msa_train and <benchmark_prefix>.msa_test respectively,
+     and the remaining steps are skipped.
 
    : The test set is now considered to be "test domains", and we
      construct positive test sequences by embedding these domains
@@ -129,21 +146,21 @@ construction protocol, the procedure is as follows:
      constructed (where all the sequence segments came from) are 
      written to the <benchmark_prefix>.pos file.
 
-   : Finally a set of <N> negative test sequences is constructed. 
-     Default N=200000; controlled by the -N option.
-     For each negative:
+ : Finally a set of <N> negative test sequences is constructed. 
+   Default N=200000; controlled by the -N option.
+   For each negative:
 
-        : choose one of the positive test seqs at random; we will use
-          the same set of segment lengths to construct a negative.
+    : choose one of the positive test seqs at random; we will use
+      the same set of segment lengths to construct a negative.
 
-        : for every segment, insert a nonhomologous sequence generated
-          by the same method we used for nonhomologous segments in
-	  the positive sequences.
+    : for every segment, insert a nonhomologous sequence generated
+      by the same method we used for nonhomologous segments in
+      the positive sequences.
 
-   : The test sequences are appended in FASTA format to the to the
-     <benchmark_prefix>.fa file. Details of how they were constructed
-     (where all the sequence segments came from) are written to the
-     <benchmark_prefix>.neg file.
+ : The test sequences are appended in FASTA format to the to the
+  <benchmark_prefix>.fa file. Details of how they were constructed
+  (where all the sequence segments came from) are written to the
+  <benchmark_prefix>.neg file.
      
 
 ================================================================
