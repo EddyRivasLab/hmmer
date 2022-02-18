@@ -55,7 +55,7 @@
 ################################################################
 # Autoconf 2.61 (circa 2006) has a bug in AC_FUNC_FSEEKO; don't use it.
 # 2.63 was released in 2008.
-AC_PREREQ(2.63)
+AC_PREREQ([2.71])
 
 # Our extra macros are with Easel, in easel/m4.
 # It's sort of standard to expect them in m4/, don't
@@ -77,7 +77,7 @@ m4_include([easel/m4/esl_pic_flags.m4])
 # 2. AC_INIT
 ################################################################
 
-AC_INIT(HMMER, 3.3.2, sean@eddylab.org, hmmer)
+AC_INIT([HMMER],[3.3.2],[sean@eddylab.org],[hmmer])
 AC_MSG_NOTICE([Configuring HMMER3 for your system.])
 
 # remember if the user is overriding CFLAGS
@@ -242,7 +242,8 @@ AX_PROG_CC_MPI([test x"$enable_mpi" = xyes],
     [ if test x"$enable_mpi" = xyes; then
         AC_MSG_ERROR([MPI library not found for --enable-mpi]);
       fi])
-AC_PROG_CC_STDC
+
+AC_PROG_CC
 AC_PROG_CPP
 AC_PROG_INSTALL
 AC_CHECK_TOOL([STRIP],[strip])
