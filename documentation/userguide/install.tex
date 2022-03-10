@@ -254,7 +254,7 @@ Multithreaded HMMER programs use master/worker parallelization, with
 \mono{<n>} worker threads and one master thread. When HMMER is run on
 a machine with multiple available cores, the default number of worker
 threads is two\footnote{Set by a compile-time configuration option,
-  \mono{P7\_NCPU}, in \mono{src/p7\_config.h.in}.}. You can control the
+  \mono{p7\_NCPU}, in \mono{src/p7\_config.h.in}.}. You can control the
 number of cores each HMMER process will use for computation with the
 \mono{{-}{-}cpu <n>} command line option or the \mono{HMMER\_NCPU}
 environment variable.
