@@ -56,6 +56,61 @@ p7_tophits_Create(void)
 }
 
 
+/* Function:  p7_tophits_Clone()
+ * Synopsis:  Create a duplicate of an existing <P7_TOPHITS> object.
+ *
+ * Purpose:   Creates a duplicate of the existing <P7_TOPHITS> object <h>.
+ *
+ * Returns:   ptr to the duplicate <P7_TOPHITS> object.
+ *
+ * Throws:    <NULL> on allocation failure.
+ */
+P7_TOPHITS *
+p7_tophits_Clone(const P7_TOPHITS *h)
+{
+  int i;
+  int status;
+  ptrdiff_t diff;
+  P7_TOPHITS *h2 = NULL;
+
+  ESL_ALLOC(h2, sizeof(P7_TOPHITS));
+  
+  h2->nreported = h->nreported;
+  h2->nincluded = h->nincluded;
+  h2->is_sorted_by_sortkey = h->is_sorted_by_sortkey;
+  h2->is_sorted_by_seqidx = h->is_sorted_by_seqidx;
+  
+  h2->N = h->N;
+  h2->Nalloc = h->N;
+  
+  h2->hit = NULL;
+  h2->unsrt = NULL;
+  
+  ESL_ALLOC(h2->hit,   sizeof(P7_HIT *) * h2->N);
+  ESL_ALLOC(h2->unsrt, sizeof(P7_HIT)   * h2->N);
+  
+  // set NULL pointers everywhere before allocating to avoid double free on error
+  for (i = 0; i < h2->N; i++) {
+    h2->unsrt[i].name = NULL;
+    h2->unsrt[i].acc = NULL;
+    h2->unsrt[i].desc = NULL;
+    h2->unsrt[i].dcl = NULL;
+  }
+  
+  // copy domains and update offsets in the sorted hit array
+  for (i = 0; i < h2->N; i++) {
+    if ((status = p7_hit_Copy(&(h->unsrt[i]), &(h2->unsrt[i]))) != eslOK) goto ERROR;
+    h2->hit[i] = h2->unsrt + (h->hit[i] - h->unsrt);
+  }
+  
+  return h2;
+
+ ERROR:
+  p7_tophits_Destroy(h2);
+  return NULL;
+}
+
+
 /* Function:  p7_tophits_Grow()
  * Synopsis:  Reallocates a larger hit list, if needed.
  *

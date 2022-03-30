@@ -1515,6 +1515,7 @@ extern int p7_Builder_MaxLength      (P7_HMM *hmm, double emit_thresh);
 /* p7_domain.c */
 extern P7_DOMAIN *p7_domain_Create_empty();
 extern void p7_domain_Destroy(P7_DOMAIN *obj);
+extern int p7_domain_Copy(const P7_DOMAIN *src, P7_DOMAIN *dst);
 extern int p7_domain_Serialize(const P7_DOMAIN *obj, uint8_t **buf, uint32_t *n, uint32_t *nalloc);
 extern int p7_domain_Deserialize(const uint8_t *buf, uint32_t *n, P7_DOMAIN *ret_obj);
 extern int p7_domain_TestSample(ESL_RAND64 *rng, P7_DOMAIN **ret_obj);
@@ -1547,6 +1548,7 @@ extern int     p7_gmx_DumpWindow(FILE *fp, P7_GMX *gx, int istart, int iend, int
 /* p7_hit.c */
 extern P7_HIT *p7_hit_Create_empty();
 extern void p7_hit_Destroy(P7_HIT *the_hit);
+extern int p7_hit_Copy(const P7_HIT *src, P7_HIT *dst);
 extern int p7_hit_Serialize(const P7_HIT *obj, uint8_t **buf, uint32_t *n, uint32_t *nalloc);
 extern int p7_hit_Deserialize(const uint8_t *buf, uint32_t *n, P7_HIT *ret_obj);
 extern int p7_hit_TestSample(ESL_RAND64 *rng, P7_HIT **ret_obj);
@@ -1692,6 +1694,7 @@ extern void    p7_spensemble_Destroy(P7_SPENSEMBLE *sp);
 /* p7_tophits.c */
 extern P7_TOPHITS *p7_tophits_Create(void);
 extern int         p7_tophits_Grow(P7_TOPHITS *h);
+extern P7_TOPHITS *p7_tophits_Clone(const P7_TOPHITS *h);
 extern int         p7_tophits_CreateNextHit(P7_TOPHITS *h, P7_HIT **ret_hit);
 extern int         p7_tophits_Add(P7_TOPHITS *h,
 				  char *name, char *acc, char *desc, 

@@ -123,6 +123,65 @@ extern void p7_hit_Destroy(P7_HIT *the_hit){
   return;
 }
 
+/* Function: p7_hit_Copy()
+ * Synopsis: Copy a hit.
+ *
+ * Purpose:  Copies hit <src> to hit <dst>, where <dst> has already been 
+ *           allocated.
+ * 
+ * Returns:   <eslOK> on success.
+ * 
+ * Throws:    <eslEMEM> on allocation error.
+ */
+extern int p7_hit_Copy(const P7_HIT *src, P7_HIT *dst){
+  int i;
+  int status;
+  char *name = NULL, *acc = NULL, *desc = NULL;
+  P7_DOMAIN *dcl = NULL;
+  
+  // make all failible allocations to local variables first
+  if (src->name != NULL) {
+    if ((status = esl_strdup(src->name, -1, &name)) != eslOK) goto ERROR;
+  }
+  if (src->acc != NULL) {
+    if ((status = esl_strdup(src->acc, -1, &acc)) != eslOK) goto ERROR;
+  }
+  if (src->desc != NULL) {
+    if ((status = esl_strdup(src->desc, -1, &desc)) != eslOK) goto ERROR;
+  }
+  if (src->dcl != NULL) {
+    ESL_ALLOC(dcl, sizeof(P7_DOMAIN) * src->ndom);
+    for (i = 0; i < src->ndom; i++) {
+      dcl[i].ad = NULL;
+      dcl[i].scores_per_pos = NULL;
+    }
+    for (i = 0; i < src->ndom; i++) {
+      if ((status = p7_domain_Copy(&(src->dcl[i]), &(dcl[i]))) != eslOK) goto ERROR;
+    }
+  }
+  
+  // update <dst> after all allocations succeeded
+  memcpy(dst, src, sizeof(P7_HIT));
+  dst->name = name;
+  dst->acc = acc;
+  dst->desc = desc;
+  dst->dcl = dcl;
+  return eslOK;
+    
+ERROR:
+  free(name);
+  free(acc);
+  free(desc);
+  if (dcl != NULL) {
+    for (i = 0; i < src->ndom; i++) {
+      free(dcl[i].ad);
+      free(dcl[i].scores_per_pos);
+    }
+    free(dcl);
+  }
+  return status;
+}
+
 
 /* Function:  p7_HIT_Serialize
  * Synopsis:  Serializes a P7_HIT object into a stream of bytes

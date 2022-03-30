@@ -13,6 +13,8 @@
 #include <string.h>
 
 #include "easel.h"
+#include "esl_vectorops.h"
+
 #include "hmmer.h"
 
 /* Function: p7_domain_Create_empty
@@ -84,6 +86,41 @@ extern void p7_domain_Destroy(P7_DOMAIN *obj){
   return;
 }
 
+/* Function: p7_domain_Copy()
+ * Synopsis: Copy a domain.
+ *
+ * Purpose:  Copies domain <src> to hit <dst>, where <dst> has already been
+ *           allocated.
+ *
+ * Returns:   <eslOK> on success.
+ *
+ * Throws:    <eslEMEM> on allocation error.
+ */
+extern int p7_domain_Copy(const P7_DOMAIN *src, P7_DOMAIN *dst){
+  int status = eslOK;
+  P7_ALIDISPLAY* ad = NULL;
+  float* scores_per_pos = NULL;
+
+  // allocate everything before editing <dst>
+  if (src->ad != NULL) {
+    if ((ad = p7_alidisplay_Clone(src->ad)) == NULL) ESL_XEXCEPTION(eslEMEM, "allocation failure");
+    if (src->scores_per_pos != NULL) {
+      ESL_ALLOC(scores_per_pos, sizeof(float) * src->ad->N);
+      esl_vec_FCopy(src->scores_per_pos, src->ad->N, scores_per_pos);
+    }
+  }
+
+  // allocation succeeded so we can update <dst>
+  memcpy(dst, src, sizeof(P7_DOMAIN));
+  dst->ad = ad;
+  dst->scores_per_pos = scores_per_pos;
+  return status;
+
+ERROR:
+  free(ad);
+  free(scores_per_pos);
+  return status;
+}
 
 /* Function:  p7_domain_Serialize
  * Synopsis:  Serializes a P7_DOMAIN object into a stream of bytes
