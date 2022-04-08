@@ -700,11 +700,19 @@ serial_master(ESL_GETOPTS *go, struct cfg_s *cfg)
     else if (status == eslEINVAL)    p7_Fail("Can't autodetect format of a stdin or .gz seqfile");
     else if (status != eslOK)        p7_Fail("Unexpected error %d opening target sequence database file %s\n", status, cfg->dbfile);
     else {
-      int q_type = eslUNKNOWN;
-      esl_sqfile_GuessAlphabet(dbfp, &q_type);
       /* We assume the query is the guide for alphabet type, allowing it to override
        * guesser uncertainty;  but if the guesser is certain that the target sequence
        * is a protein (or something else non-nucleotide), we fail with an error. */
+      int q_type = eslUNKNOWN;
+      if ( esl_opt_IsOn(go, "--dna") )
+          q_type     = eslDNA;
+      else if ( esl_opt_IsOn(go, "--rna") )
+          q_type     = eslRNA;
+      else {
+          status = esl_sqfile_GuessAlphabet(dbfp, &q_type);
+          if (status != eslOK)
+              p7_Fail("Unable to guess alphabet for target sequence database file %s\n",   cfg->dbfile);
+      }
       if (! (q_type == eslDNA || q_type == eslRNA || q_type == eslUNKNOWN))
         p7_Fail("Invalid alphabet type in target for nhmmer. Expect DNA or RNA.\n");
 
