@@ -526,7 +526,7 @@ fm_FM_read( FM_DATA *fm, FM_METADATA *meta, int getAll )
   // allocate space, then read the data
   if (getAll) ESL_ALLOC (fm->T, sizeof(uint8_t) * compressed_bytes );
   ESL_ALLOC (fm->BWT_mem,  sizeof(uint8_t) * (compressed_bytes + 31) ); // +31 for manual 16-byte alignment  ( typically only need +15, but this allows offset in memory, plus offset in case of <16 bytes of characters at the end)
-     fm->BWT =   (uint8_t *) (((unsigned long int)fm->BWT_mem + 15) & (~0xf));   // align vector memory on 16-byte boundaries
+     fm->BWT =   (uint8_t *) (((POINTER)fm->BWT_mem + 15) & (~0xf));   // align vector memory on 16-byte boundaries
   if (getAll) ESL_ALLOC (fm->SA, num_SA_samples * sizeof(uint32_t));
   ESL_ALLOC (fm->C, (1+meta->alph_size) * sizeof(int64_t));
   ESL_ALLOC (fm->occCnts_b,  num_freq_cnts_b *  (meta->alph_size ) * sizeof(uint16_t)); // every freq_cnt positions, store an array of ints

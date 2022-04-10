@@ -435,6 +435,8 @@ AS_IF([test "x$with_gsl" != xno],
 # which may be in librt
 AC_SEARCH_LIBS(clock_gettime, [rt posix4])
 
+# mingw mmap
+AC_SEARCH_LIBS(mmap, [mman])
 
 ################################################################
 # 7. Checks for headers
@@ -480,6 +482,7 @@ AC_TYPE_UINT8_T
 AC_TYPE_UINT16_T
 AC_TYPE_UINT32_T
 AC_TYPE_UINT64_T
+AC_TYPE_UINTPTR_T
 AC_TYPE_OFF_T
 
 
@@ -673,6 +676,10 @@ AC_CONFIG_HEADERS([libdivsufsort/divsufsort.h])
 # Testsuite sqc tests rely on it.
 AC_CONFIG_LINKS([src/impl:${ac_top_build_prefix}src/impl_${impl_choice}])
 
+# Windows does not support symlinks so this command prevents the previous
+# throwing an error on subsequent configures.  However, you will need to do 
+# a manual copy prior to running tests.  The copy should be done during make.
+AC_CONFIG_COMMANDS_PRE([test -d src/impl && rm -rf src/impl])
 
 
 ################################################################

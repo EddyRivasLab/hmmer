@@ -336,7 +336,7 @@ open_engine(const char *filename, char *env, P7_HMMFILE **ret_hfp, int do_ascii_
    *    names of expected index and binary database files.
    */
   if (hfp->f == NULL) {
-    if ((hfp->f = fopen(filename, "r")) != NULL) {
+    if ((hfp->f = fopen(filename, "rb")) != NULL) {
       if ((status = esl_strdup(filename, n, &(hfp->fname)))    != eslOK) ESL_XFAIL(status, errbuf, "esl_strdup() failed, shouldn't happen");
     } else if (esl_FileEnvOpen(filename, env, &(hfp->f), &envfile) == eslOK) {
       n = strlen(envfile);
@@ -2392,7 +2392,7 @@ utest_io_30(char *tmpfile, int format, P7_HMM *hmm)
   p7_hmmfile_Close(hfp);
 
   /* Do it all again, but with binary format */
-  if ((fp = fopen(tmpfile, "w"))                  == NULL)   esl_fatal(msg);
+  if ((fp = fopen(tmpfile, "wb"))                  == NULL)   esl_fatal(msg);
   if (p7_hmmfile_WriteBinary(fp, format, hmm)     != eslOK)  esl_fatal(msg);
   fclose(fp);
   if (p7_hmmfile_OpenE(tmpfile, NULL, &hfp, NULL) != eslOK)  esl_fatal(msg);

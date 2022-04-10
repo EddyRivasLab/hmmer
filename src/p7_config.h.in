@@ -131,5 +131,16 @@
  */
 #undef HAVE_FLUSH_ZERO_MODE
 
+#undef HAVE_STDINT_H
+#undef HAVE_INTTYPES_H
+
+#if HAVE_STDINT_h
+#include <stdint.h>
+#elif HAVE_INTTYPES_H
+#include <inttypes.h>
+#endif
+
+typedef uintptr_t POINTER;
+
 #endif /*P7_CONFIGH_INCLUDED*/
 

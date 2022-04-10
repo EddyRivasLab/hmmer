@@ -16,6 +16,7 @@ mandir      = @mandir@
 docdir      = @docdir@
 pdfdir      = @pdfdir@
 mandir      = @mandir@
+EXEEXT      = @EXEEXT@
 man1dir     = ${mandir}/man1
 man1ext     = .1
 
@@ -272,7 +273,7 @@ ${PROGOBJS}:    ${HDRS} p7_config.h
 ${AUXPROGOBJS}: ${HDRS} p7_config.h
 
 ${PROGS} ${AUXPROGS}: % : %.o  libhmmer.a ../${ESLDIR}/libeasel.a 
-	${QUIET_GEN}${CC} ${CFLAGS} ${PTHREAD_CFLAGS} ${PIC_CFLAGS} ${SSE_CFLAGS} ${VMX_CFLAGS} ${DEFS} ${CPPFLAGS} ${LDFLAGS} ${MYLIBDIRS} -o $@ $@.o ${LIBS}
+	${QUIET_GEN}${CC} ${CFLAGS} ${PTHREAD_CFLAGS} ${PIC_CFLAGS} ${SSE_CFLAGS} ${VMX_CFLAGS} ${DEFS} ${CPPFLAGS} ${LDFLAGS} ${MYLIBDIRS} -o $@${EXEEXT} $@.o ${LIBS}
 
 .c.o:
 	${QUIET_CC}${CC} ${CFLAGS} ${PTHREAD_CFLAGS} ${PIC_CFLAGS} ${SSE_CFLAGS} ${VMX_CFLAGS} ${DEFS} ${CPPFLAGS} ${MYINCDIRS} -o $@ -c $<
@@ -341,18 +342,18 @@ ${EXAMPLES}: libhmmer.a ${HDRS} p7_config.h
 
 install:
 	for file in ${PROGS}; do \
-	   ${INSTALL} -m 0755 $$file ${DESTDIR}${bindir}/ ;\
+	   ${INSTALL} -m 0755 $$file${EXEEXT} ${DESTDIR}${bindir}/ ;\
 	done
 
 install-strip:
 	for file in ${PROGS}; do \
 	   ${STRIP} $$file ;\
-	   ${INSTALL} -m 0755 $$file ${DESTDIR}${bindir}/ ;\
+	   ${INSTALL} -m 0755 $$file${EXEEXT} ${DESTDIR}${bindir}/ ;\
 	done
 
 uninstall:
 	for file in ${PROGS}; do \
-	   rm -f ${DESTDIR}${bindir}/$$file ;\
+	   rm -f ${DESTDIR}${bindir}/$$file${EXEEXT} ;\
 	done
 
 clean:
@@ -366,6 +367,9 @@ clean:
 	-rm -f ${EXAMPLES}
 	-rm -f *.gcno
 	-rm -f cscope.out
+	for prog in ${PROGS} ${AUXPROGS}; do \
+           if test -f $$prog${EXEEXT}; then rm -f $$prog${EXEEXT}; fi; \
+        done
 	for prog in ${PROGS} ${AUXPROGS} ${UTESTS} ${STATS} ${BENCHMARKS} ${EXAMPLES} ${ITESTS}; do \
 	   if test -d $$prog.dSYM; then rm -rf $$prog.dSYM; fi ;\
 	done

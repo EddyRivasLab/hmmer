@@ -56,11 +56,11 @@ close ALI1;
 @symfrac_choices = ( 0.0, 0.0, 0.0, 0.0, 0.6 );
 @minl_choices    = ( 0.0, 0.0, 1.0, 0.5, 0.5 );
 @minu_choices    = ( 0.0, 1.0, 1.0, 0.8, 0.8 );
-@answers         = ( "ACDEFAIKLMNPQRSA\n", 
-		     "AcdefaIKLMNPqrsa\n",
-		     "AxxxxxIKLMNPxxxx\n",
-		     "ACDefxIKLMNPxxxx\n",
-		     "ACDefxIKLMxxxx\n");
+@answers         = ( "ACDEFAIKLMNPQRSA", 
+		     "AcdefaIKLMNPqrsa",
+		     "AxxxxxIKLMNPxxxx",
+		     "ACDefxIKLMNPxxxx",
+		     "ACDefxIKLMxxxx");
 
 for ($i = 0; $i < $#symfrac_choices; $i++)
 {
@@ -70,6 +70,10 @@ for ($i = 0; $i < $#symfrac_choices; $i++)
     @output = `$builddir/src/hmmemit  -C --minl $minl_choices[$i] --minu $minu_choices[$i] $tmppfx.hmm 2>&1`;
     if ($? != 0) { die "FAIL: hmmemit failed\n"; }
 
+    chomp($output[1]);
+    if ($output[1] =~ /\r$/) { 
+        chop($output[1]);
+    }
     if ($output[1] ne $answers[$i]) { die "FAIL: hmmemit, expected $answers[$i]; saw $output[1]\n"; }
 }
 	

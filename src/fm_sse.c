@@ -80,7 +80,7 @@ fm_configInit( FM_CFG *cfg, ESL_GETOPTS *go )
     //set up an array of vectors, one for each character in the alphabet
   cfg->fm_chars_v         = NULL;
   ESL_ALLOC (cfg->fm_chars_mem, cfg->meta->alph_size * sizeof(__m128)  + 15 ); // +15 for manual 16-byte alignment, which matters for SIMD stuff
-  cfg->fm_chars_v =   (__m128i *) (((unsigned long int)(cfg->fm_chars_mem) + 15) & (~0xf));   /* align vector memory on 16-byte boundaries */
+  cfg->fm_chars_v =   (__m128i *) (((POINTER)(cfg->fm_chars_mem) + 15) & (~0xf));   /* align vector memory on 16-byte boundaries */
 
 
   for (i=0; i<cfg->meta->alph_size; i++) {
@@ -109,10 +109,10 @@ fm_configInit( FM_CFG *cfg, ESL_GETOPTS *go )
   cfg->fm_masks_v         = NULL;
   cfg->fm_reverse_masks_v = NULL;
   ESL_ALLOC (cfg->fm_masks_mem, (1+trim_chunk_count) *sizeof(__m128)  + 15 ); // +15 for manual 16-byte alignment, which matters for SIMD stuff
-     cfg->fm_masks_v =   (__m128i *) (((unsigned long int)(cfg->fm_masks_mem) + 15) & (~0xf));   /* align vector memory on 16-byte boundaries */
+     cfg->fm_masks_v =   (__m128i *) (((POINTER)(cfg->fm_masks_mem) + 15) & (~0xf));   /* align vector memory on 16-byte boundaries */
 
   ESL_ALLOC (cfg->fm_reverse_masks_mem, (1+trim_chunk_count) *sizeof(__m128)  + 15 ); // +15 for manual 16-byte alignment, which matters for SIMD stuff
-     cfg->fm_reverse_masks_v =   (__m128i *) (((unsigned long int)(cfg->fm_reverse_masks_mem) + 15) & (~0xf));   /* align vector memory on 16-byte boundaries */
+     cfg->fm_reverse_masks_v =   (__m128i *) (((POINTER)(cfg->fm_reverse_masks_mem) + 15) & (~0xf));   /* align vector memory on 16-byte boundaries */
 
   {
     byte_m128 arr;

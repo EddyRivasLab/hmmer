@@ -86,12 +86,12 @@ p7_oprofile_Create(int allocM, const ESL_ALPHABET *abc)
   ESL_ALLOC(om->rfv, sizeof(__m128  *) * abc->Kp); 
 
   /* align vector memory on 16-byte boundaries */
-  om->rbv[0] = (__m128i *) (((unsigned long int) om->rbv_mem + 15) & (~0xf));
-  om->sbv[0] = (__m128i *) (((unsigned long int) om->sbv_mem + 15) & (~0xf));
-  om->rwv[0] = (__m128i *) (((unsigned long int) om->rwv_mem + 15) & (~0xf));
-  om->twv    = (__m128i *) (((unsigned long int) om->twv_mem + 15) & (~0xf));
-  om->rfv[0] = (__m128  *) (((unsigned long int) om->rfv_mem + 15) & (~0xf));
-  om->tfv    = (__m128  *) (((unsigned long int) om->tfv_mem + 15) & (~0xf));
+  om->rbv[0] = (__m128i *) (((POINTER) om->rbv_mem + 15) & (~0xf));
+  om->sbv[0] = (__m128i *) (((POINTER) om->sbv_mem + 15) & (~0xf));
+  om->rwv[0] = (__m128i *) (((POINTER) om->rwv_mem + 15) & (~0xf));
+  om->twv    = (__m128i *) (((POINTER) om->twv_mem + 15) & (~0xf));
+  om->rfv[0] = (__m128  *) (((POINTER) om->rfv_mem + 15) & (~0xf));
+  om->tfv    = (__m128  *) (((POINTER) om->tfv_mem + 15) & (~0xf));
 
   /* set the rest of the row pointers for match emissions */
   for (x = 1; x < abc->Kp; x++) {
@@ -300,12 +300,12 @@ p7_oprofile_Copy(P7_OPROFILE *om1)
   ESL_ALLOC(om2->rfv, sizeof(__m128  *) * abc->Kp); 
 
   /* align vector memory on 16-byte boundaries */
-  om2->rbv[0] = (__m128i *) (((unsigned long int) om2->rbv_mem + 15) & (~0xf));
-  om2->sbv[0] = (__m128i *) (((unsigned long int) om2->sbv_mem + 15) & (~0xf));
-  om2->rwv[0] = (__m128i *) (((unsigned long int) om2->rwv_mem + 15) & (~0xf));
-  om2->twv    = (__m128i *) (((unsigned long int) om2->twv_mem + 15) & (~0xf));
-  om2->rfv[0] = (__m128  *) (((unsigned long int) om2->rfv_mem + 15) & (~0xf));
-  om2->tfv    = (__m128  *) (((unsigned long int) om2->tfv_mem + 15) & (~0xf));
+  om2->rbv[0] = (__m128i *) (((POINTER) om2->rbv_mem + 15) & (~0xf));
+  om2->sbv[0] = (__m128i *) (((POINTER) om2->sbv_mem + 15) & (~0xf));
+  om2->rwv[0] = (__m128i *) (((POINTER) om2->rwv_mem + 15) & (~0xf));
+  om2->twv    = (__m128i *) (((POINTER) om2->twv_mem + 15) & (~0xf));
+  om2->rfv[0] = (__m128  *) (((POINTER) om2->rfv_mem + 15) & (~0xf));
+  om2->tfv    = (__m128  *) (((POINTER) om2->tfv_mem + 15) & (~0xf));
 
   /* copy the vector data */
   memcpy(om2->rbv[0], om1->rbv[0], sizeof(__m128i) * nqb  * abc->Kp);

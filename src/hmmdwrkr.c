@@ -2,6 +2,7 @@
  */
 #include "p7_config.h"
 
+#ifndef __MINGW32__
 #ifdef HMMER_THREADS
 
 #include <stdio.h>
@@ -881,6 +882,6 @@ setup_masterside_comm(ESL_GETOPTS *opts)
 }
 
 #endif /*HMMER_THREADS*/
-
+#endif /*  __MINGW32__ */
 
 

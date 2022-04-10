@@ -3,6 +3,7 @@
  */
 #include "p7_config.h"
 
+#ifndef __MINGW32__
 #ifdef HMMER_THREADS
 
 #include <stdio.h>
@@ -1961,6 +1962,6 @@ setup_workerside_comm(ESL_GETOPTS *opts, WORKERSIDE_ARGS *args)
 }
 
 #endif /*HMMER_THREADS*/
-
+#endif /*  __MINGW32__ */
 
 

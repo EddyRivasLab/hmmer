@@ -32,6 +32,7 @@ sub ParseTbl {
     {
 	if (/^\#/) { next; }
 	chop;
+    if (/\r/) { chop; }
 	@fields = split(' ', $_, 19);
 
 	$tname[$ntbl]     = $fields[0];
@@ -93,6 +94,7 @@ sub ParseDomTbl {
     {
 	if (/^\#/) { next; }
 	chop;
+    if (/\r/) { chop; }
 	@fields = split(' ', $_, 23);
 
 	$tname[$ndomtbl]   = $fields[0];

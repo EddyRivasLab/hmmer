@@ -2042,7 +2042,11 @@ p7_tophits_TabularTail(FILE *ofp, const char *progname, enum p7_pipemodes_e pipe
 
   if ((status = esl_opt_SpoofCmdline(go, &spoof_cmd)) != eslOK) goto ERROR;
   if (date == -1)                                               ESL_XEXCEPTION(eslESYS, "time() failed");
+#ifdef __MINGW32__
+  if (ctime_s(timestamp, 32, &date) != 0)                       ESL_XEXCEPTION(eslESYS, "ctime_s() failed");
+#else
   if ((ctime_r(&date, timestamp)) == NULL)                      ESL_XEXCEPTION(eslESYS, "ctime_r() failed");
+#endif /* __MINGW32__ */
   switch (pipemode) {
     case p7_SEARCH_SEQS: strcpy(modestamp, "SEARCH"); break;
     case p7_SCAN_MODELS: strcpy(modestamp, "SCAN");   break;

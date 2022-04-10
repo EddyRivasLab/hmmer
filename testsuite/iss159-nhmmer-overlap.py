@@ -18,8 +18,9 @@ builddir = sys.argv[1]
 srcdir   = sys.argv[2]
 tmppfx   = sys.argv[3]
 
-if (not os.path.exists('{}/src/hmmbuild'.format(builddir))): sys.exit("FAIL: didn't find {}/src/hmmbuild".format(builddir))
-if (not os.path.exists('{}/src/nhmmer'.format(builddir))):   sys.exit("FAIL: didn't find {}/src/nhmmer".format(builddir))
+suffix = '.exe' if os.name == 'nt' else ''
+if (not os.path.exists('{}/src/hmmbuild{}'.format(builddir, suffix))): sys.exit("FAIL: didn't find {}/src/hmmbuild{}".format(builddir, suffix))
+if (not os.path.exists('{}/src/nhmmer{}'.format(builddir, suffix))):   sys.exit("FAIL: didn't find {}/src/nhmmer{}".format(builddir, suffix))
 
 with open('{0}.sto'.format(tmppfx), 'w') as f:
     print ("""\

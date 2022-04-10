@@ -106,7 +106,7 @@ if ($verbose) { print "$tag...\n"; }
 
 $output = `cat $arg1 $arg2 | $prog - - 2>&1`;            
 if (!$?) { die "FAIL: $tag should fail on double - -\n"; }
-if ($output !~ /^\nERROR: Either <hmmfile> or <seqfile>/) { die "FAIL: $tag didn't give expected error message for the - - case.\n"; }
+if ($output !~ /^\r?\nERROR: Either <hmmfile> or <seqfile>/) { die "FAIL: $tag didn't give expected error message for the - - case.\n"; }
 
 
 ################################################################
@@ -183,11 +183,19 @@ if ($verbose) { print "$tag...\n"; }
 
 $output = `cat $arg1 $arg2 | $prog -f - - 2>&1`;
 if (! $?) { die "FAIL: $tag should have failed on double - -\n"; }
-if ($output !~ /^Either <hmmfile> or <keyfile>/) { die "FAIL: $tag didn't give expected error message for the - - case.\n"; }
+if ($^O eq 'MSWin32' || $^O eq 'msys') {
+    
+} else {
+    if ($output !~ /^Either <hmmfile> or <keyfile>/) { die "FAIL: $tag didn't give expected error message for the - - case.\n"; }
+}
 
 `$prog --index $arg1            > $tmppfx.out1`;   if ($?)   { die "FAIL: $tag --index $tag1\n"; }
 $output = `cat $arg1 | $prog --index - 2>&1`;      if (! $?) { die "FAIL: $tag should reject - for <hmmfile> when using --index\n"; }
-if ($output !~ /^Can't use - with --index/) { die "FAIL: $tag didn't give expected error message for the - - case.\n"; }
+if ($^O eq 'MSWin32' || $^O eq 'msys') {
+    if ($output !~ /\r?\nCan't use - with --index/) { die "FAIL: $tag didn't give expected error message for the - - case.\n"; }
+} else {
+    if ($output !~ /^Can't use - with --index/) { die "FAIL: $tag didn't give expected error message for the - - case.\n"; }
+}
 
 ################################################################
 # hmmpress
@@ -199,7 +207,7 @@ $tag1 = "<hmmfile>";        $arg1 = "$tmppfx.hmm";
 if ($verbose) { print "$tag...\n"; }
 
 $output = `cat $arg1 | $prog - 2>&1`;        if (! $?) { die "FAIL: $tag should reject - for <hmmfile>\n"; }
-if ($output !~ /^\nError: Can't use - for <hmmfile>/) { die "FAIL: $tag didn't give expected error message.\n"; }
+if ($output !~ /^\r?\nError: Can't use - for <hmmfile>/) { die "FAIL: $tag didn't give expected error message.\n"; }
 
 #################################################################
 # hmmscan.

@@ -1,4 +1,3 @@
-configure
 config.log
 config.status
 Makefile
@@ -7,6 +6,8 @@ easel
 *.o
 *.dSYM
 *.stamp
+*.exe
+!binaries/*.exe
 src/*_example
 src/*_example?
 src/*_utest
@@ -47,3 +48,4 @@ src/makehmmerdb
 src/nhmmer
 src/nhmmscan
 src/phmmer
+mman-win32/

@@ -580,7 +580,11 @@ p7_hmm_SetCtime(P7_HMM *hmm)
 
   ESL_ALLOC(s, 32);
   if ((date = time(NULL)) == -1)               { status = eslESYS; goto ERROR; }
+#ifdef __MINGW32__
+  if (ctime_s(s, 32, &date) != 0)              { status = eslESYS; goto ERROR; }
+#else
   if (ctime_r(&date, s) == NULL)               { status = eslESYS; goto ERROR; }
+#endif
   if ((status = esl_strchop(s, -1)) != eslOK)  {                   goto ERROR; }
   
   if (hmm->ctime != NULL) free(hmm->ctime);

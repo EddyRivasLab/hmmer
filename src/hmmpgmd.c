@@ -2,6 +2,7 @@
  */
 #include "p7_config.h"
 
+#ifndef __MINGW32__
 #ifdef HMMER_THREADS
 
 #include <stdio.h>
@@ -218,4 +219,4 @@ main(int argc, char **argv)
  */
 
 #endif /*HMMER_THREADS*/
-
+#endif /*  __MINGW32__ */
