@@ -1442,6 +1442,8 @@ extern int p7_hmm_MPIUnpack(char *buf, int n, int *pos, MPI_Comm comm, ESL_ALPHA
 extern int p7_hmm_MPIRecv(int source, int tag, MPI_Comm comm, char **buf, int *nalloc, ESL_ALPHABET **abc, P7_HMM **ret_hmm);
 
 extern int p7_profile_MPISend(P7_PROFILE *gm, int dest, int tag, MPI_Comm comm, char **buf, int *nalloc);
+extern int p7_profile_MPIPackSize(P7_PROFILE *gm, MPI_Comm comm, int *ret_n);
+extern int p7_profile_MPIPack(P7_PROFILE *gm, char *buf, int n, int *position, MPI_Comm comm);
 extern int p7_profile_MPIRecv(int source, int tag, MPI_Comm comm, const ESL_ALPHABET *abc, const P7_BG *bg,
 			      char **buf, int *nalloc,  P7_PROFILE **ret_gm);
 
@@ -1650,11 +1652,9 @@ extern int p7_Pipeline_LongTarget   (P7_PIPELINE *pli, P7_OPROFILE *om, P7_SCORE
                                      const ESL_SQ *sq, int complementarity,
                                      const FM_DATA *fmf, const FM_DATA *fmb, FM_CFG *fm_cfg
                                      );
-
-
-
+extern int p7_Pipeline_Mainstage(P7_PIPELINE *pli, P7_OPROFILE *om, P7_BG *bg, const ESL_SQ *sq, const ESL_SQ *ntsq, P7_TOPHITS *hitlist, float fwdsc, float nullsc);
+extern int p7_Pipeline_Overthruster(P7_PIPELINE *pli, P7_OPROFILE *om, P7_BG *bg, const ESL_SQ *sq, float *ret_fwdsc, float *ret_nullsc);
 extern int p7_pli_Statistics(FILE *ofp, P7_PIPELINE *pli, ESL_STOPWATCH *w);
-
 
 /* p7_prior.c */
 extern P7_PRIOR  *p7_prior_CreateAmino(void);

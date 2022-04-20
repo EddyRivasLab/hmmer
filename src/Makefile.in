@@ -131,11 +131,14 @@ OBJS =  build.o\
 	hmmdutils.o\
 	hmmer.o\
 	logsum.o\
+	master_node.o\
 	modelconfig.o\
 	modelstats.o\
 	mpisupport.o\
 	seqmodel.o\
+	shard.o\
 	tracealign.o\
+	worker_node.o\
 	p7_alidisplay.o\
 	p7_bg.o\
 	p7_builder.o\

@@ -676,7 +676,7 @@ p7_pipeline_Merge(P7_PIPELINE *p1, P7_PIPELINE *p2)
  *            and handle normal errors appropriately, which we haven't 
  *            been careful enough about. [SRE H9/4]
  */
-int p7_Pipeline_Overthruster(P7_PIPELINE *pli, P7_OPROFILE *om, P7_BG *bg, const ESL_SQ *sq, float *ret_fwdsc, float *ret_nullsc)
+extern int p7_Pipeline_Overthruster(P7_PIPELINE *pli, P7_OPROFILE *om, P7_BG *bg, const ESL_SQ *sq, float *ret_fwdsc, float *ret_nullsc)
 {
   //P7_HIT *hit = NULL;     /* ptr to the current hit output data      */
   float usc, vfsc, fwdsc; /* filter scores                           */
@@ -792,7 +792,7 @@ int p7_Pipeline_Overthruster(P7_PIPELINE *pli, P7_OPROFILE *om, P7_BG *bg, const
    *            and handle normal errors appropriately, which we haven't
    *            been careful enough about. [SRE H9/4]
    */
-  int p7_Pipeline_Mainstage(P7_PIPELINE * pli, P7_OPROFILE * om, P7_BG * bg, const ESL_SQ *sq, const ESL_SQ *ntsq, P7_TOPHITS *hitlist, float fwdsc, float nullsc)
+  extern int p7_Pipeline_Mainstage(P7_PIPELINE * pli, P7_OPROFILE * om, P7_BG * bg, const ESL_SQ *sq, const ESL_SQ *ntsq, P7_TOPHITS *hitlist, float fwdsc, float nullsc)
   {
     P7_HIT *hit = NULL;     /* ptr to the current hit output data      */                    
     float seqbias;
@@ -989,7 +989,7 @@ int p7_Pipeline_Overthruster(P7_PIPELINE *pli, P7_OPROFILE *om, P7_BG *bg, const
  *            calls p7_pipeline_Mainstage for final hit/miss determination and hitlist
  *            insertion.
  */
-int p7_Pipeline(P7_PIPELINE *pli, P7_OPROFILE *om, P7_BG *bg, const ESL_SQ *sq, const ESL_SQ *ntsq, P7_TOPHITS *hitlist)
+extern int p7_Pipeline(P7_PIPELINE *pli, P7_OPROFILE *om, P7_BG *bg, const ESL_SQ *sq, const ESL_SQ *ntsq, P7_TOPHITS *hitlist)
 {
   int status;
   float fwdsc;
