@@ -54,7 +54,7 @@ typedef struct p7_shard{
 	uint64_t num_objects;
 
 	//! Blob of memory that the shard contents go in.
-	void *contents;
+	char *contents;
 
 	//! Separate blob for the descriptive data
 	void *descriptors;

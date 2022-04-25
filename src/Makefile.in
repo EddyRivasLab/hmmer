@@ -204,6 +204,7 @@ UTESTS =\
 	p7_hmmd_search_stats_utest\
 	p7_hmm_utest\
 	p7_hmmfile_utest\
+	p7_mpisupport_utest\
 	p7_profile_utest\
 	p7_tophits_utest\
 	p7_trace_utest\

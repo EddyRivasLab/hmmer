@@ -67,7 +67,7 @@ typedef struct p7_work_chunk{
   */
 typedef struct p7_backend_queue_entry{
   	//! The sequence the backend should process, if we're doing a one-HMM, many-sequence comparison
-	ESL_DSQ *sequence;
+	ESL_SQ *sequence;
     
     //! Sequence length if we're doing a one-HMM, many-sequence comparison
 	int L;
@@ -105,6 +105,9 @@ typedef struct p7_worker_thread_state{
 
 	//! Thread's background model of the expected score achieved by a random sequence, used to make pass/fail decisions after filters 
 	P7_BG *bg;
+
+	// lock that controls access to the tophiits object
+	pthread_mutex_t hits_lock;
 
 	//! Unordered list of hits that this thread has found, linked via the large pointers in each ESL_RED_BLACK_DOUBLEKEY structure
 	P7_TOPHITS *tophits;
@@ -149,7 +152,7 @@ typedef struct p7_server_workernode_state{
 	/*! Thread-local state, represented as array[num_threads] of P7_WORKER_THREAD_STATE objects.  
 	 * \details doesn't require synchronization or volatile because each thread only touches its own state object
 	 */
-	P7_WORKER_THREAD_STATE *thread_state;
+	P7_SERVER_WORKER_THREAD_STATE *thread_state;
 
 
 	// fields below here are written once multithreaded execution begins, so do have to be volatile
@@ -215,17 +218,7 @@ typedef struct p7_server_workernode_state{
 	//! lock on the list of hits this node has found
 	pthread_mutex_t hit_list_lock;
 
-	//! Red-black tree of hits that the workernode has found.  Used to keep hits sorted.  
-	ESL_RED_BLACK_DOUBLEKEY *hit_list;
-
-	//! How many hits does the hit_list contain?
-	uint64_t hits_in_list;
-	
-	//! lock on the empty hit pool
-	pthread_mutex_t empty_hit_pool_lock;
-	
-	//! Pool of hit objects to draw from
-  	ESL_RED_BLACK_DOUBLEKEY *empty_hit_pool;
+	P7_TOPHITS *tophits;
 	
 	//! Global work queue, implemented as a linked_list of P7_WORK_CHUNK objects
   	P7_WORK_CHUNK *global_queue;

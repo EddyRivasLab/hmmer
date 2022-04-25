@@ -1,5 +1,6 @@
 /** \file worker_node.c Functions that implement the worker nodes when HMMER is run in server mode
 */
+#define HAVE_MPI
 #include <pthread.h>
 #include <sys/time.h>
 #include <string.h>
@@ -27,7 +28,6 @@ static P7_BACKEND_QUEUE_ENTRY *workernode_get_backend_queue_entry_from_pool(P7_S
 static P7_BACKEND_QUEUE_ENTRY *workernode_get_backend_queue_entry_from_queue(P7_SERVER_WORKERNODE_STATE *workernode);
 static void workernode_put_backend_queue_entry_in_pool(P7_SERVER_WORKERNODE_STATE *workernode, P7_BACKEND_QUEUE_ENTRY *the_entry);
 static void workernode_put_backend_queue_entry_in_queue(P7_SERVER_WORKERNODE_STATE *workernode, P7_BACKEND_QUEUE_ENTRY *the_entry);
-static ESL_RED_BLACK_DOUBLEKEY *workernode_get_hit_list_entry_from_pool(P7_SERVER_WORKERNODE_STATE *workernode, uint32_t my_id);
 static uint64_t worker_thread_get_chunk(P7_SERVER_WORKERNODE_STATE *workernode, uint32_t my_id, volatile uint64_t *start, volatile uint64_t *end);
 static int32_t worker_thread_steal(P7_SERVER_WORKERNODE_STATE *workernode, uint32_t my_id);
 static void workernode_request_Work(uint32_t my_shard);
@@ -798,8 +798,8 @@ void p7_server_workernode_end_search(P7_SERVER_WORKERNODE_STATE *workernode){
   // First, mark the node idle
   workernode->search_type = IDLE;
 
-  // Reset the hit list.  
-  workernode->hit_list = NULL;
+  p7_tophits_Destroy(workernode->tophits);
+  workernode->tophits = NULL;
 }
 
 
@@ -833,12 +833,6 @@ void *p7_server_worker_thread(void *worker_argument){
 
   workernode->thread_state[my_id].pipeline = p7_pipeline_Create(workernode->commandline_options, 100, 100, FALSE, p7_SEARCH_SEQS);
   if(workernode->thread_state[my_id].pipeline == NULL){
-    p7_Fail("Unable to allocate memory in p7_server_worker_thread\n");
-  }
-
-  // Allocate a pool of empty hit objects
-  workernode->thread_state[my_id].empty_hit_pool = p7_hitlist_entry_pool_Create(HITLIST_POOL_SIZE);
-   if(workernode->thread_state[my_id].empty_hit_pool == NULL){
     p7_Fail("Unable to allocate memory in p7_server_worker_thread\n");
   }
 
@@ -1040,7 +1034,7 @@ void p7_server_workernode_main(int argc, char **argv, int my_rank, MPI_Datatype 
         // request some work to start off with 
         workernode_request_Work(workernode->my_shard);
 
-        p7_profile_mpi_Unpack(compare_obj_buff, compare_obj_buff_length, &temp_pos, MPI_COMM_WORLD, &abc, &gm);
+        p7_profile_MPIUnpack(compare_obj_buff, compare_obj_buff_length, &temp_pos, MPI_COMM_WORLD, &abc, &gm);
 
         ESL_RED_BLACK_DOUBLEKEY *last_hit_list;
 
@@ -1111,32 +1105,30 @@ void p7_server_workernode_main(int argc, char **argv, int my_rank, MPI_Datatype 
 
             // Task 3: Move any hits that the worker threads have found into the node's hit list and send them to the master if we 
             // have enough to make that worthwhile
-            ESL_RED_BLACK_DOUBLEKEY *hits, *hit_temp;
+            P7_TOPHITS *hits;
             for(thread = 0; thread < workernode->num_threads; thread++){
-              if(workernode->thread_state[thread].my_hits != NULL){
-                // This thread has hits that we need to put in the tree
+              if(workernode->thread_state[thread].tophits->N > 50){
+                // This thread has enough hits that we should merge them into the node tree
                 while(pthread_mutex_trylock(&(workernode->thread_state[thread].hits_lock))){
                 // spin-wait until the lock on the hitlist is cleared.  Should never be locked for long
                 }
                 // grab the hits out of the worker thread
-                hits = workernode->thread_state[thread].my_hits;
-                workernode->thread_state[thread].my_hits = NULL;
+                hits = workernode->thread_state[thread].tophits;
+                workernode->thread_state[thread].tophits= p7_tophits_Create();
                 pthread_mutex_unlock(&(workernode->thread_state[thread].hits_lock));
-                while(hits != NULL){
-                  hit_temp = hits->large;
-                  hits->large = workernode->hit_list;
-                  workernode->hit_list = hits;
-                  workernode->hits_in_list++;
-                  hits = hit_temp;
-                }
-              }
+                p7_tophits_Merge(workernode->tophits, hits);
+                p7_tophits_Destroy(hits); // tophits_Merge mangles the second tophits
+               }
             }
-            if(workernode->hits_in_list > 1000){ // Arbitrary number, but seems to work fine
-              if(p7_mpi_send_and_recycle_unsorted_hits(workernode->hit_list, 0, HMMER_HIT_MPI_TAG, MPI_COMM_WORLD, &send_buf, &send_buf_length, workernode) != eslOK){
+            if(workernode->tophits->N > 1000){ // Arbitrary number, but seems to work fine
+
+              if(p7_tophits_MPISend(workernode->tophits, 0, HMMER_HIT_MPI_TAG, MPI_COMM_WORLD, &send_buf, &send_buf_length) 
+              != eslOK){
                 p7_Fail("Failed to send hit messages to master\n");
               }
-              workernode->hit_list = NULL;
-              workernode->hits_in_list = 0;
+              p7_tophits_Destroy(workernode->tophits); // clear out the hits we just sent
+              workernode->tophits = p7_tophits_Create();            
+
             }
           }
 
@@ -1184,31 +1176,27 @@ void p7_server_workernode_main(int argc, char **argv, int my_rank, MPI_Datatype 
 
         // At this point, we've completed the search, so send any hits that are still on this node to the master
         int thread;
-        ESL_RED_BLACK_DOUBLEKEY *hits, *hit_temp;
+        P7_TOPHITS *hits;
         for(thread = 0; thread < workernode->num_threads; thread++){
-          if(workernode->thread_state[thread].my_hits != NULL){
+          if(workernode->thread_state[thread].tophits->N > 0){
             // This thread has hits that we need to put in the tree
             while(pthread_mutex_trylock(&(workernode->thread_state[thread].hits_lock))){
             // spin-wait until the lock on the hitlist is cleared.  Should never be locked for long
             }
             // grab the hits out of the workernode
-            hits = workernode->thread_state[thread].my_hits;
-            workernode->thread_state[thread].my_hits = NULL;
+            hits = workernode->thread_state[thread].tophits;
+            workernode->thread_state[thread].tophits = p7_tophits_Create();
             pthread_mutex_unlock(&(workernode->thread_state[thread].hits_lock));
-            while(hits != NULL){
-              hit_temp = hits->large;
-              hits->large = workernode->hit_list;
-              workernode->hit_list = hits;
-              workernode->hits_in_list++;
-              hits = hit_temp;
-            }
+            p7_tophits_Merge(workernode->tophits, hits);
+            p7_tophits_Destroy(hits); // tophits_Merge mangles the second tophits
           }
         }
-        if(p7_mpi_send_and_recycle_unsorted_hits(workernode->hit_list, 0, HMMER_HIT_FINAL_MPI_TAG, MPI_COMM_WORLD, &send_buf, &send_buf_length, workernode) != eslOK){
-          p7_Fail("Failed to send hit messages to master\n");
-        }
-        workernode->hit_list = NULL;
-        workernode->hits_in_list = 0;
+        if(p7_tophits_MPISend(workernode->tophits, 0, HMMER_HIT_MPI_TAG, MPI_COMM_WORLD, &send_buf, &send_buf_length) 
+              != eslOK){
+                p7_Fail("Failed to send hit messages to master\n");
+              }
+        p7_tophits_Destroy(workernode->tophits);
+        workernode->tophits = p7_tophits_Create();
         p7_server_workernode_end_search(workernode);
         break;
 
@@ -1283,7 +1271,7 @@ P7_ENGINE_STATS *p7_server_workernode_aggregate_stats(P7_SERVER_WORKERNODE_STATE
 static int worker_thread_front_end_sequence_search_loop(P7_SERVER_WORKERNODE_STATE *workernode, uint32_t my_id){
 
   uint64_t start,end;
-  char *the_sequence;
+  ESL_SQ *the_sequence;
 
   while(1){ // Iterate forever, we'll return from the function rather than exiting this loop
  
@@ -1345,24 +1333,18 @@ static int worker_thread_front_end_sequence_search_loop(P7_SERVER_WORKERNODE_STA
       uint64_t chunk_end = end; // process sequences until we see a long operation or hit the end of the chunk
 
       // get pointer to first sequence to search
-      p7_shard_Find_Contents_Nexthigh(workernode->database_shards[workernode->compare_database], start,  &(the_sequence));
+      p7_shard_Find_Contents_Nexthigh(workernode->database_shards[workernode->compare_database], start, (char **) &(the_sequence));
 
       while(start <= chunk_end){
 
 
         chunk_end = workernode->work[my_id].end; // update this to reduce redundant work.
 
-        // grab the sequence Id and length out of the shard 
-        uint64_t seq_id = *((uint64_t *) the_sequence);
-        the_sequence += sizeof(uint64_t);
-        uint64_t L = *((uint64_t *) the_sequence);
-        the_sequence += sizeof(uint64_t);
-
-        p7_bg_SetLength(workernode->thread_state[my_id].bg, L);           
-        p7_oprofile_ReconfigLength(workernode->thread_state[my_id].om, L);
+        p7_bg_SetLength(workernode->thread_state[my_id].bg, the_sequence->L);           
+        p7_oprofile_ReconfigLength(workernode->thread_state[my_id].om, the_sequence->L);
         float nullsc, fwdsc;
         // The overthruster filters are the front end of the engine
-        int status = p7_Pipeline_Overthruster(workernode->thread_state[my_id].pipeline, workernode->thread_state[my_id].om, workernode->thread_state[my_id].bg, (ESL_SQ *) the_sequence, &fwdsc, &nullsc);
+        int status = p7_Pipeline_Overthruster(workernode->thread_state[my_id].pipeline, workernode->thread_state[my_id].om, workernode->thread_state[my_id].bg, the_sequence, &fwdsc, &nullsc);
 
         if (status == eslFAIL)
         {                                  // filters say no match, go on to next sequence
@@ -1394,9 +1376,8 @@ static int worker_thread_front_end_sequence_search_loop(P7_SERVER_WORKERNODE_STA
             the_entry->pipeline = workernode->thread_state[my_id].pipeline;
             workernode->thread_state[my_id].pipeline = temp_mask;
             // populate the fields
-            the_entry->sequence = (ESL_DSQ *) the_sequence;
-            the_entry->L = L;
-            the_entry->seq_id = seq_id;
+            the_entry->sequence = the_sequence;
+            the_entry->L = the_sequence->L;
             the_entry->next = NULL;
             the_entry->fwdsc = fwdsc;
             the_entry->nullsc = nullsc;
@@ -1475,8 +1456,7 @@ static int worker_thread_front_end_sequence_search_loop(P7_SERVER_WORKERNODE_STA
         // if we get this far, we weren't switched to the backend, so go on to the next sequence or back to look for more work
         start += workernode->num_shards;
         p7_pipeline_Reuse(workernode->thread_state[my_id].pipeline);
-        the_sequence += L+2;  // advance to start of next sequence
-        // +2 for begin-of-sequence and end-of-sequence sentinels around dsq
+        the_sequence += 1;  // advance to start of next sequence
       }
     }
 
@@ -1509,9 +1489,13 @@ static void worker_thread_back_end_sequence_search_loop(P7_SERVER_WORKERNODE_STA
     P7_PIPELINE *temp_pipeline = the_entry->pipeline;
     the_entry->pipeline = workernode->thread_state[my_id].pipeline;
     workernode->thread_state[my_id].pipeline = temp_pipeline;
-    p7_profile_SetLength(workernode->thread_state[my_id].gm, the_entry->L);
-
+    p7_ReconfigLength(workernode->thread_state[my_id].gm, the_entry->L);
+    
+    while(pthread_mutex_trylock(&(workernode->thread_state[my_id].hits_lock))){
+    // Need to acquire the lock on the hit list in case we find a hit
+    }
     p7_Pipeline_Mainstage(workernode->thread_state[my_id].pipeline, workernode->thread_state[my_id].om, workernode->thread_state[my_id].bg, the_entry->sequence, NULL, NULL , the_entry->fwdsc, the_entry->nullsc); 
+    pthread_mutex_unlock(&(workernode->thread_state[my_id].hits_lock));
 
 #ifdef TEST_SEQUENCES 
       // Record that we processed this sequence
@@ -1721,75 +1705,6 @@ static void workernode_put_backend_queue_entry_in_queue(P7_SERVER_WORKERNODE_STA
   }
 }
  
-
-// workernode_get_hit_list_entry_from_pool
-/*! \brief Returns an empty hit list entry (an ESL_RED_BLACK_DOUBLEKEY object whose contents are a hitlist object) from one of the workernode's pools
- *  \details Searches the calling thread's local hit list entry pool first, and then the workernode's global hit list entry pool.  Allocates additional
- *  hit list entries if both pools are empty.
- *
- *  We do this two-level search for two reasons.  First, it reduces contention on the global hit list entry pool's lock, since most requests for entries
- *  are satisfied out of the thread's local pool.  Second, when hit list entries are no longer needed, they are returned to the global pool, so we need
- *  a mechanism to move them to the local pools as needed.
- *
- *  \param [in,out] workernode The worker node's P7_SERVER_WORKERNODE_STATE object, which is modified during execution.
- *  \param [in] my_id The thread id (index into arrays of thread-specific state) of the thread that called this function.
- *  \returns A pointer to the selected hit list entry.  Calls p7_Fail to exit the program with an error message if it is unable to return a hit list entry.
- */ 
-static ESL_RED_BLACK_DOUBLEKEY *workernode_get_hit_list_entry_from_pool(P7_SERVER_WORKERNODE_STATE *workernode, uint32_t my_id){
-  ESL_RED_BLACK_DOUBLEKEY *the_entry;
-
-  if(workernode->thread_state[my_id].empty_hit_pool == NULL){ 
-    // There are no free entries in the thread's pool
-
-    if(workernode->empty_hit_pool!= NULL){
-      // The global pool has entries, so grab some of them
-
-      while(pthread_mutex_trylock(&(workernode->empty_hit_pool_lock))){
-      } // spin-wait on the hit pool lock, which should never be locked long
-
-      int entries_moved = 0;
-      // copy entries from the global pool to our local pool
-      while((workernode->empty_hit_pool != NULL) && (entries_moved < HITLIST_POOL_SIZE)){
-        the_entry = workernode->empty_hit_pool;
-        workernode->empty_hit_pool = the_entry->large;
-        the_entry->large = workernode->thread_state[my_id].empty_hit_pool;
-        workernode->thread_state[my_id].empty_hit_pool = the_entry;
-        entries_moved +=1;
-      }
-      pthread_mutex_unlock(&(workernode->empty_hit_pool_lock)); 
-      // release lock
-
-      if(entries_moved == 0){
-        // We were unable to move any entries because someone else had taken them all between the time
-        // we examined the pool and the time we acquired the lock.
-        // When this happens, just allocate more entries into our local pool.
-        workernode->thread_state[my_id].empty_hit_pool = p7_hitlist_entry_pool_Create(HITLIST_POOL_SIZE);
-        if(workernode->thread_state[my_id].empty_hit_pool == NULL){
-          p7_Fail("Unable to allocate memory in p7_get_hit_tree_entry_from_pool");
-        }
-      }
-    }
-    else{
-      // The global pool had no entries either, so allocate some more.  
-      workernode->thread_state[my_id].empty_hit_pool = p7_hitlist_entry_pool_Create(HITLIST_POOL_SIZE);
-
-      if(workernode->thread_state[my_id].empty_hit_pool == NULL){
-        p7_Fail("Unable to allocate memory in p7_get_hit_tree_entry_from_pool");
-      }
-    }
-  }
-  
-  // grab the first free hit off of the pool now that we know there is one 
-  the_entry = workernode->thread_state[my_id].empty_hit_pool;
-  workernode->thread_state[my_id].empty_hit_pool = workernode->thread_state[my_id].empty_hit_pool->large;
-
-  /* Clean up the tree link pointers in the_entry to guarantee we don't create trees that contain pointers to random places */
-  the_entry->parent = NULL;
-  the_entry->small = NULL;
-  the_entry->large = NULL;
-  return the_entry;
-}
-
 
 // worker_thread_get_chunk
 /*! \brief Gets a chunk of work from the global work queue for the worker thread to work on, if possible.

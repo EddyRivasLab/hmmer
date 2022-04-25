@@ -414,7 +414,7 @@ void p7_server_master_node_main(int argc, char ** argv, MPI_Datatype *server_mpi
     }
     pack_position = 0; // initialize this to the start of the buffer 
 
-    if(p7_profile_mpi_Pack    (hmm, hmmbuffer, hmm_length, &pack_position, MPI_COMM_WORLD) != eslOK){
+    if(p7_profile_MPIPack    (hmm, hmmbuffer, hmm_length, &pack_position, MPI_COMM_WORLD) != eslOK){
       p7_Fail("Packing profile failed in master_node_main\n");
     }    // pack the hmm for sending
   

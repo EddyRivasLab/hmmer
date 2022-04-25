@@ -1152,7 +1152,7 @@ mpi_worker(ESL_GETOPTS *go, struct cfg_s *cfg)
   char             errbuf[eslERRBUFSIZE];
 
   w = esl_stopwatch_Create();
-
+printf("Starting mpi_worker on node %d\n",cfg->my_rank);
   /* Open the target sequence database */
   status = esl_sqfile_Open(cfg->dbfile, dbfmt, p7_SEQDBENV, &dbfp);
   if      (status == eslENOTFOUND) mpi_failure("Failed to open sequence file %s for reading\n",          cfg->dbfile);
