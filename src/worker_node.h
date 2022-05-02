@@ -109,7 +109,7 @@ typedef struct p7_worker_thread_state{
 	// lock that controls access to the tophiits object
 	pthread_mutex_t hits_lock;
 
-	//! Unordered list of hits that this thread has found, linked via the large pointers in each ESL_RED_BLACK_DOUBLEKEY structure
+	//! hits that this thread has found
 	P7_TOPHITS *tophits;
 
 	//! Number of comparisons this thread has enqueued for processing by the back end, used to decide which thread to switch to back-end mode when needed
@@ -292,7 +292,7 @@ typedef struct p7_server_worker_argument{
  ************************************************************************/ 
 
 // Creates and initializes a P7_SERVER_WORKERNODE_STATE object.  Do not call this directly. Call p7_server_workernode_Setup, which calls p7_server_workernode_Create
-P7_SERVER_WORKERNODE_STATE *p7_server_workernode_Create(uint32_t num_databases, uint32_t num_shards, uint32_t my_shard, uint32_t num_threads);
+P7_SERVER_WORKERNODE_STATE *p7_server_workernode_Create(uint32_t num_databases, uint32_t num_shards, uint32_t my_shard, uint32_t num_threads, ESL_GETOPTS *go);
 
 
 // Performs all of the setup required by a worker node, including creating data structures, 
@@ -323,7 +323,7 @@ int p7_server_workernode_start_amino_vs_hmm_db(P7_SERVER_WORKERNODE_STATE *worke
 void p7_server_workernode_end_search(P7_SERVER_WORKERNODE_STATE *workernode);
 
 // Worker node main function, should be called at startup on all worker nodes
-void p7_server_workernode_main(int argc, char **argv, int my_rank, MPI_Datatype *server_mpitypes);
+void p7_server_workernode_main(int argc, char **argv, int my_rank, MPI_Datatype *server_mpitypes, ESL_GETOPTS *go);
 
 // Top-level function for the worker threads (all threads on a worker node except the main thread)
 void *p7_server_worker_thread(void *worker_argument);

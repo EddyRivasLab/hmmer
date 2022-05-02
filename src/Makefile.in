@@ -59,6 +59,7 @@ PROGS = alimask\
 	hmmpress\
 	hmmscan\
 	hmmsearch\
+	hmmserver\
 	hmmsim\
 	hmmstat\
 	jackhmmer\
@@ -84,6 +85,7 @@ PROGOBJS =\
 	hmmpress.o\
 	hmmscan.o\
 	hmmsearch.o\
+	hmmserver.o\
 	hmmsim.o\
 	hmmstat.o\
 	jackhmmer.o\

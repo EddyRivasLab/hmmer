@@ -670,7 +670,7 @@ int p7_profile_MPIUnpack(char *buf, int n, int *position, MPI_Comm comm, ESL_ALP
   if (MPI_Unpack(buf, n, position, gm->consensus,               M+2, MPI_CHAR,  comm) != 0) ESL_XEXCEPTION(eslESYS, "unpack failed");
   if (MPI_Unpack(buf, n, position, gm->evparam,         p7_NEVPARAM, MPI_FLOAT, comm) != 0) ESL_XEXCEPTION(eslESYS, "unpack failed");
   if (MPI_Unpack(buf, n, position, gm->cutoff,          p7_NCUTOFFS, MPI_FLOAT, comm) != 0) ESL_XEXCEPTION(eslESYS, "unpack failed");
-  if (MPI_Unpack(buf, n, position, gm->compo,           p7_NCUTOFFS, MPI_FLOAT, comm) != 0) ESL_XEXCEPTION(eslESYS, "unpack failed");
+  if (MPI_Unpack(buf, n, position, gm->compo,           p7_MAXABET, MPI_FLOAT, comm) != 0) ESL_XEXCEPTION(eslESYS, "unpack failed");
   
   gm->abc = *abc;
   gm->M   = M;

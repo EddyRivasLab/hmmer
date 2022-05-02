@@ -157,7 +157,7 @@ P7_SHARD *p7_shard_Create_sqdata(char *filename, uint32_t num_shards, uint32_t m
   the_shard->total_length = 0; // start out empty
 
   // take a wild guess at how many sequences we will read
-  uint64_t size_increment = 1000;
+  uint64_t size_increment = 1000000;
   uint64_t allocated_sequences = size_increment;
   ESL_SQ_BLOCK *sequences = esl_sq_CreateDigitalBlock(size_increment, abc);
 
@@ -173,7 +173,7 @@ P7_SHARD *p7_shard_Create_sqdata(char *filename, uint32_t num_shards, uint32_t m
           // I have to care about this sequence
           my_sequences++;
 
-          if(my_sequences > allocated_sequences){
+          if(my_sequences >= allocated_sequences){
             allocated_sequences += size_increment;
             if (esl_sq_BlockGrowTo(sequences, allocated_sequences, 1, abc) != eslOK)
             {
@@ -183,8 +183,11 @@ P7_SHARD *p7_shard_Create_sqdata(char *filename, uint32_t num_shards, uint32_t m
       }
         sequence_count++;
     }
-
-  the_shard->contents = sequences->list;
+  sequences->count=my_sequences;
+  sequences->listSize=allocated_sequences;
+  sequences->complete=1;
+  sequences->first_seqidx = 0;
+  the_shard->contents = (char *) sequences->list;
   the_shard->descriptors = sequences; // Hack to save the full ESL_SQ_BLOCK object
   // close the sequence file
   esl_sqfile_Close(dbfp);

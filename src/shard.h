@@ -77,12 +77,12 @@ P7_SHARD *p7_shard_Create_sqdata(char *filename, uint32_t num_shards, uint32_t m
 // Creates a shard whose contents are the specified fraction of the HMM file specified in filename
 P7_SHARD *p7_shard_Create_hmmfile(char *filename, uint32_t num_shards, uint32_t my_shard);
 
-// If the shard contains an object with the specified ID, returns a pointer to the contents field of that object in ret_object
-// Otherwise, returns a pointer to the contents field of the object with the next higher ID that is in the shard
+// If the shard contains an object with the specified ID, places a pointer to the contents field of that object in ret_object and returns the ID
+// Otherwise, does the same with the object of the next higher ID
 int p7_shard_Find_Contents_Nexthigh(P7_SHARD *the_shard, uint64_t id, char **ret_object);
 
-// If the shard contains an object with the specified ID, returns a pointer to the contents field of that object in ret_object
-// Otherwise, returns a pointer to the contents field of the object with the next lower ID that is in the shard
+// If the shard contains an object with the specified ID, places a pointer to the contents field of that object in ret_object and returns the ID
+// Otherwise, does the same with the object of the next lower ID
 int p7_shard_Find_Contents_Nextlow(P7_SHARD *the_shard, uint64_t id, char **ret_object);
 
 // If the shard contains an object with the specified ID, returns a pointer to the descriptor field of that object in ret_object

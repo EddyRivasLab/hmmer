@@ -116,6 +116,7 @@ void p7_server_masternode_Destroy(P7_SERVER_MASTERNODE_STATE *masternode){
   while(current != NULL){
     next = current->next;
     p7_tophits_Destroy(current->tophits);
+    free(current->buffer);
     free(current);
     current = next;
   }
@@ -174,7 +175,7 @@ void p7_server_masternode_Setup(uint32_t num_shards, uint32_t num_databases, cha
         p7_Fail("Unable to allocate memory in p7_server_masternode_Create\n");
       }
     }
-    else if(!strncmp(id_string, "Easel dsqdata", 13)){
+    else if(!strncmp(id_string, ">", 1)){
       // its a dsqdata file
       current_shard = p7_shard_Create_sqdata(database_names[i], 1, 0);
       if(current_shard == NULL){
@@ -182,7 +183,7 @@ void p7_server_masternode_Setup(uint32_t num_shards, uint32_t num_databases, cha
       }
     }
     else{
-      p7_Fail("Couldn't determine type of datafile for database %s in p7_server_workernode_setup\n", database_names[i]);
+      p7_Fail("Couldn't determine type of datafile for database %s in p7_server_masternode_setup\n", database_names[i]);
     }
 
     if(i > masternode->num_databases){
@@ -212,24 +213,12 @@ P7_SERVER_MESSAGE *p7_server_message_Create(){
     ESL_ALLOC(the_message, sizeof(P7_SERVER_MESSAGE));
     the_message->tophits = NULL;
     the_message->next = NULL;
+    the_message->buffer_alloc = 1024;
+    ESL_ALLOC(the_message->buffer, the_message->buffer_alloc);
     return the_message;
 ERROR:
   p7_Fail("Unable to allocate memory in p7_server_message_Create");  
 }
-
-// ESL setup for the p7_master_node_main function
-#ifdef HAVE_MPI
-static ESL_OPTIONS options[] = {
-  /* name           type      default  env  range  toggles reqs incomp  help                               docgroup*/
-  { "-h",        eslARG_NONE,  FALSE, NULL, NULL,  NULL,  NULL, NULL, "show brief help on version and usage",  0 },
-  { "-n",       eslARG_INT,    "1",   NULL, NULL,  NULL,  NULL, NULL, "number of searches to run (default 1)", 0 },
-  { "-c",       eslARG_INT,    "0",   NULL, NULL,  NULL,  NULL, NULL, "number of worker cores to use per node (default all)", 0 },
-  {  0, 0, 0, 0, 0, 0, 0, 0, 0, 0 },
-};
-
-static char usage[]  = "[-options] <hmmfile> <seqence database>";
-static char banner[] = "hmmpgmd2, the server version of HMMER 4";
-#endif 
 
 // p7_master_node_main
 /*! \brief Top-level function run on each master node
@@ -243,7 +232,7 @@ static char banner[] = "hmmpgmd2, the server version of HMMER 4";
  *  \bug Currently requires that the server be run on at least two nodes.  Need to modify the code to run correctly on one node, possibly
  *  as two MPI ranks.
  */
-void p7_server_master_node_main(int argc, char ** argv, MPI_Datatype *server_mpitypes){
+void p7_server_master_node_main(int argc, char ** argv, MPI_Datatype *server_mpitypes, ESL_GETOPTS *go){
 #ifndef HAVE_MPI
   p7_Fail("P7_master_node_main requires MPI and HMMER was compiled without MPI support");
 #endif
@@ -251,17 +240,11 @@ void p7_server_master_node_main(int argc, char ** argv, MPI_Datatype *server_mpi
 #ifdef HAVE_MPI
   // For now, we only use one shard.  This will change in the future
   int num_shards = 1; // Change this to calculate number of shards based on database size
-
-  // Get the command-line options
-  ESL_GETOPTS    *go      = p7_CreateDefaultApp(options, 2, argc, argv, banner, usage);
-  if(go == NULL){
-    p7_Fail("Unable to allocate memory in master_node_main\n");
-  }
+  
   char           *hmmfile = esl_opt_GetArg(go, 1);
   char           *seqfile = esl_opt_GetArg(go, 2);
 
   uint64_t num_searches = esl_opt_GetInteger(go, "-n");
-  esl_getopts_Destroy(go); // done with the options now
 
   ESL_ALPHABET   *abc     = NULL;
   int status; // return code from ESL routines
@@ -270,7 +253,8 @@ void p7_server_master_node_main(int argc, char ** argv, MPI_Datatype *server_mpi
   char *database_names[2];
   database_names[0] = hmmfile;
   database_names[1] = seqfile;
-
+  impl_Init();                  /* processor specific initialization */
+  p7_FLogsumInit();		/* we're going to use table-driven Logsum() approximations at times */
 
   int num_nodes;
 
@@ -319,10 +303,6 @@ void p7_server_master_node_main(int argc, char ** argv, MPI_Datatype *server_mpi
   // For testing, search the entire database
   P7_SHARD *database_shard = masternode->database_shards[1];
   P7_SHARD *hmm_shard = masternode->database_shards[0];
- 
-  search_start = database_shard->directory[0].index;
-  search_end = database_shard->directory[database_shard->num_objects -1].index;
-
 // Temp code to generate a random list of sequence names out of the sequence database
   
 /*  char* name;
@@ -379,7 +359,7 @@ void p7_server_master_node_main(int argc, char ** argv, MPI_Datatype *server_mpi
     // For now_search the entire database
     search_start = database_shard->directory[0].index;
     search_end = database_shard->directory[database_shard->num_objects -1].index;
-
+    uint64_t search_length = (search_end - search_start) +1;
 
     chunk_size = ((search_end - search_start) / (masternode->num_worker_nodes * 128 )) +1; // round this up to avoid small amount of leftover work at the end
 
@@ -401,9 +381,8 @@ void p7_server_master_node_main(int argc, char ** argv, MPI_Datatype *server_mpi
 
     // Get the HMM this search will compare against
     hmm = ((P7_PROFILE **) hmm_shard->descriptors)[search * search_increment];
-    strcpy(outfile_name, "/tmp/");
-    strcat(outfile_name, hmm->name);
-    strcat(outfile_name, ".hits");
+    strcpy(outfile_name, hmm->name);
+    strcat(outfile_name, ".tblout");
 
     // Pack the HMM into a buffer for broadcast
     p7_profile_MPIPackSize(hmm, MPI_COMM_WORLD, &hmm_length); // get the length of the profile
@@ -436,6 +415,21 @@ void p7_server_master_node_main(int argc, char ** argv, MPI_Datatype *server_mpi
     double gcups = (ncells/elapsed_time) / 1.0e9;
     printf("%s, %lf, %d, %lf\n", hmm->name, elapsed_time, hmm->M, gcups);
     char commandstring[255];
+    P7_PIPELINE *pipeline= p7_pipeline_Create(go, hmm->M, 100, FALSE, p7_SEARCH_SEQS); /* L_hint = 100 is just a dummy for now */
+    P7_BG *bg = p7_bg_Create(hmm->abc);
+    P7_OPROFILE *om = p7_oprofile_Create(hmm->M, hmm->abc);
+    p7_oprofile_Convert (hmm, om);
+    p7_pli_NewModel(pipeline, om, bg); // Set the pipeline up for this HMM
+
+    pipeline->Z = search_length;
+    FILE *tblfp    = fopen(outfile_name,    "w");
+    p7_tophits_SortBySortkey(masternode->tophits);
+    p7_tophits_Threshold(masternode->tophits, pipeline);
+    p7_tophits_TabularTargets(tblfp, hmm->name, hmm->acc, masternode->tophits, pipeline, 1);
+    p7_tophits_Destroy(masternode->tophits); //Reset for next search
+    masternode->tophits = p7_tophits_Create();
+    p7_pipeline_Destroy(pipeline);
+    p7_bg_Destroy(bg);
   }
 
   // Shut everything down once we've done the requested searches
@@ -456,7 +450,12 @@ void p7_server_master_node_main(int argc, char ** argv, MPI_Datatype *server_mpi
 
   // there may be a dangling message buffer that's neither on the empty or full lists, so deal with it.
   if(buffer != NULL){
-    p7_tophits_Destroy(buffer->tophits);
+    if (buffer->tophits != NULL){
+      p7_tophits_Destroy(buffer->tophits);
+    }
+    if(buffer->buffer != NULL){
+      free(buffer->buffer);
+    }
     free(buffer);
   }
   free(hmmbuffer); 
@@ -499,7 +498,7 @@ void *p7_server_master_hit_thread(void *argument){
     while(masternode->worker_nodes_done < masternode->num_worker_nodes){
 
       if(masternode->full_hit_message_pool != NULL){
-        // Theres at least one message of hits for us to handle
+        // There's at least one message of hits for us to handle
         P7_SERVER_MESSAGE *the_message, *prev;
         prev = NULL;
         while(pthread_mutex_trylock(&(masternode->full_hit_message_pool_lock))){
@@ -524,6 +523,7 @@ void *p7_server_master_hit_thread(void *argument){
         pthread_mutex_unlock(&(masternode->full_hit_message_pool_lock));
         p7_tophits_Merge(masternode->tophits, the_message->tophits);
         p7_tophits_Destroy(the_message->tophits);
+        the_message->tophits = NULL;
         if(the_message->status.MPI_TAG == HMMER_HIT_FINAL_MPI_TAG){
           //this hit message was the last one from a thread, so increment the number of threads that have finished
           masternode->worker_nodes_done++; //we're the only thread that changes this during a search, so no need to lock
@@ -599,21 +599,22 @@ void p7_masternode_message_handler(P7_SERVER_MASTERNODE_STATE *masternode, P7_SE
   int message_length;
   uint32_t requester_shard;
   P7_SERVER_CHUNK_REPLY the_reply;
-  char *temp_buffer, **temp_buffer_handle;
-  int temp_buffer_size = 1000;
-  ESL_ALLOC(temp_buffer, temp_buffer_size);
-  temp_buffer_handle = &temp_buffer;
+  
   if(found_message){
+    //printf("Masternode received message\n");
     // Do different things for each message type
     switch((*buffer_handle)->status.MPI_TAG){
-      case HMMER_HIT_MPI_TAG:
-      case HMMER_HIT_FINAL_MPI_TAG:
-        // The message was a set of hits from a worker node, so copy it into the buffer and queue the buffer for processing by the hit thread
-        masternode->hit_messages_received++;
-        p7_tophits_MPIRecv((*buffer_handle)->status.MPI_SOURCE, (*buffer_handle)->status.MPI_TAG, MPI_COMM_WORLD, temp_buffer_handle, &temp_buffer_size, &((*buffer_handle)->tophits));
+    case HMMER_HIT_FINAL_MPI_TAG:
+      //printf("HMMER_HIT_FINAL_MPI_TAG message received\n");
+    case HMMER_HIT_MPI_TAG:
+      //printf("HMMER_HIT_MPI_TAG message received\n");
+      // The message was a set of hits from a worker node, so copy it into the buffer and queue the buffer for processing by the hit thread
+      masternode->hit_messages_received++;
+      p7_tophits_MPIRecv((*buffer_handle)->status.MPI_SOURCE, (*buffer_handle)->status.MPI_TAG, MPI_COMM_WORLD, &((*buffer_handle)->buffer), &((*buffer_handle)->buffer_alloc), &((*buffer_handle)->tophits));
 
-        //Put the message in the list for the hit thread to process
-        while(pthread_mutex_trylock(&(masternode->full_hit_message_pool_lock))){
+      // Put the message in the list for the hit thread to process
+      while (pthread_mutex_trylock(&(masternode->full_hit_message_pool_lock)))
+      {
         // spin to acquire the lock
         }
 
@@ -673,3 +674,4 @@ void p7_masternode_message_handler(P7_SERVER_MASTERNODE_STATE *masternode, P7_SE
     return;
 #endif    
 }
+

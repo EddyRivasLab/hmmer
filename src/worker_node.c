@@ -77,7 +77,7 @@ static int server_set_shard(P7_SERVER_WORKERNODE_STATE *workernode, P7_SHARD *th
  * \returns The created and initialized P7_WORKERNODE_STATE object
  */
 
-P7_SERVER_WORKERNODE_STATE *p7_server_workernode_Create(uint32_t num_databases, uint32_t num_shards, uint32_t my_shard, uint32_t num_threads){
+P7_SERVER_WORKERNODE_STATE *p7_server_workernode_Create(uint32_t num_databases, uint32_t num_shards, uint32_t my_shard, uint32_t num_threads, ESL_GETOPTS *go){
 
   int status; // return value from ESL functions
   int i;
@@ -85,7 +85,7 @@ P7_SERVER_WORKERNODE_STATE *p7_server_workernode_Create(uint32_t num_databases, 
   P7_SERVER_WORKERNODE_STATE *workernode;
 
   ESL_ALLOC(workernode, sizeof(P7_SERVER_WORKERNODE_STATE));
-
+  workernode->commandline_options = go;
   // copy in parameters
   workernode->num_databases = num_databases;
   workernode->num_shards = num_shards;
@@ -115,7 +115,11 @@ P7_SERVER_WORKERNODE_STATE *p7_server_workernode_Create(uint32_t num_databases, 
   // allocate the space for this array.  Worker threads will fill in contents
   ESL_ALLOC(workernode->thread_state, (num_threads * sizeof(P7_SERVER_WORKER_THREAD_STATE)));
   for(i = 0; i < num_threads; i++){
-    workernode->thread_state[i].tophits = NULL;
+    workernode->thread_state[i].tophits = p7_tophits_Create();
+    workernode->thread_state[i].pipeline = NULL;
+    workernode->thread_state[i].om = NULL;
+    workernode->thread_state[i].gm = NULL;
+    workernode->thread_state[i].bg = NULL;
     workernode->thread_state[i].comparisons_queued = 0;
     if(pthread_mutex_init(&(workernode->thread_state[i].hits_lock), NULL)){
       p7_Fail("Unable to create mutex in p7_server_workernode_Create");
@@ -241,8 +245,8 @@ void p7_server_workernode_Destroy(P7_SERVER_WORKERNODE_STATE *workernode){
   P7_BACKEND_QUEUE_ENTRY *current, *next;
   current = workernode->backend_pool;
   while(current != NULL){
-    next = current->next;
-    //p7_sparsemask_Destroy(current->sm);
+    next = current->next; 
+    p7_pipeline_Destroy(current->pipeline);
     free(current);
     current = next;
    }
@@ -311,8 +315,8 @@ void p7_server_workernode_Destroy(P7_SERVER_WORKERNODE_STATE *workernode){
  */
 int p7_server_workernode_Setup(uint32_t num_databases, char **database_names, uint32_t num_shards, uint32_t my_shard, uint32_t num_threads, ESL_GETOPTS *commandline_options,  P7_SERVER_WORKERNODE_STATE **workernode){
   FILE *datafile;
-  char id_string[13];
-
+  char id_string[14];
+  id_string[13] = '\0';
   int i;
 
   uint32_t worker_threads;
@@ -326,22 +330,21 @@ int p7_server_workernode_Setup(uint32_t num_databases, char **database_names, ui
   }
 
   // Then, create the workernode object
-  *workernode = p7_server_workernode_Create(num_databases, num_shards, my_shard, worker_threads);
+  *workernode = p7_server_workernode_Create(num_databases, num_shards, my_shard, worker_threads, commandline_options);
   if(workernode == NULL){
     p7_Fail("Unable to allocate memory in p7_server_workernode_Setup\n");
   }
 
-  // need the command-line options to create comparison pipelines
-  (*workernode)->commandline_options = commandline_options;
   // Next, read databases from disk and install shards in the workernode
   for(i = 0; i < num_databases; i++){
     P7_SHARD *current_shard;
 
     datafile = fopen(database_names[i], "r");
     fread(id_string, 13, 1, datafile); //grab the first 13 characters of the file to determine the type of database it holds
+    printf("%s\n", id_string);
     fclose(datafile);
-        
-    if(!strncmp(id_string, "HMMER3", 6)){
+    if (!strncmp(id_string, "HMMER3", 6))
+    {
       // This is an HMM file
       current_shard = p7_shard_Create_hmmfile(database_names[i], num_shards, my_shard);
       if(current_shard == NULL){
@@ -349,14 +352,15 @@ int p7_server_workernode_Setup(uint32_t num_databases, char **database_names, ui
       }
     }
     else if(!strncmp(id_string, ">", 1)){
-      // its a dsqdata file
+      // its an sqdata file
       current_shard = p7_shard_Create_sqdata(database_names[i], num_shards, my_shard);
       if(current_shard == NULL){
-        p7_Fail("Unable to allocate memory in p7_server_workernode_Setup\n");
+        p7_Fail("Unable to allocate memory in p7_servere_workernode_Setup\n");
       }
     }
-    else{
-      p7_Fail("Couldn't determine type of datafile for database %s in p7_server_workernode_setup\n", database_names[i]);
+    else
+    {
+      p7_Fail("Couldn't determine type of datafile for database %s in p7_server_workernode_setup.\n", database_names[i], id_string);
     }
 
     if(current_shard == NULL){
@@ -428,7 +432,7 @@ int p7_server_workernode_start_hmm_vs_amino_db(P7_SERVER_WORKERNODE_STATE *worke
   P7_SHARD *the_shard = workernode->database_shards[database];
 
   uint64_t real_start, real_end;
-  char *sequence_pointer;
+ 
   //bounds-check the start and end parameters
   if((start_object > the_shard->directory[the_shard->num_objects -1].index) || (end_object > the_shard->directory[the_shard->num_objects-1].index)){
     p7_Fail("Attempt to reference out-of-bound object id in p7_server_workernode_start_hmm_vs_amino_db.  Start object = %lu, end object = %lu\n", start_object, end_object);
@@ -442,18 +446,13 @@ int p7_server_workernode_start_hmm_vs_amino_db(P7_SERVER_WORKERNODE_STATE *worke
     real_start = the_shard->directory[0].index;
   }
   else{
-    p7_shard_Find_Contents_Nexthigh(the_shard, start_object, &(sequence_pointer));
-      real_start = *((uint64_t *) sequence_pointer); // grab the id of the object in the database whose id is equal to or next greater than
-      // start_object
+    real_start = p7_shard_Find_Id_Nexthigh(the_shard, start_object);
   }
   if(end_object == 0){ // implicit "start at last object"
     real_end =the_shard->directory[workernode->database_shards[database]->num_objects -1].index;
   }
   else{
-    p7_shard_Find_Contents_Nextlow(the_shard, end_object, &(sequence_pointer));
-
-    real_end = *((uint64_t *) sequence_pointer); // grab the id of the object in the database whose id is closest to 
-    //end_object, but not greater 
+    real_end = p7_shard_Find_Id_Nextlow(the_shard, end_object);
   }
 
 
@@ -799,7 +798,7 @@ void p7_server_workernode_end_search(P7_SERVER_WORKERNODE_STATE *workernode){
   workernode->search_type = IDLE;
 
   p7_tophits_Destroy(workernode->tophits);
-  workernode->tophits = NULL;
+  workernode->tophits = p7_tophits_Create(); // Create new tophits for next search
 }
 
 
@@ -883,7 +882,7 @@ void *p7_server_worker_thread(void *worker_argument){
 
           p7_oprofile_Convert (workernode->thread_state[my_id].gm, workernode->thread_state[my_id].om);
 
-          p7_bg_SetFilter(workernode->thread_state[my_id].bg, workernode->thread_state[my_id].om->M, workernode->thread_state[my_id].om->compo);
+          p7_pli_NewModel(workernode->thread_state[my_id].pipeline, workernode->thread_state[my_id].om, workernode->thread_state[my_id].bg);
         }
 
         stop = 0;
@@ -927,19 +926,6 @@ void *p7_server_worker_thread(void *worker_argument){
 
 }
 
-#ifdef HAVE_MPI
-// Set up variables required by Easel's argument processor.  These are used by p7_server_workernode_main
-static ESL_OPTIONS options[] = {
-  /* name           type      default  env  range  toggles reqs incomp  help                               docgroup*/
-  { "-h",        eslARG_NONE,  FALSE,  NULL, NULL,   NULL,  NULL, NULL, "show brief help on version and usage",  0 },
-    { "-n",       eslARG_INT,    "1",   NULL, NULL,  NULL,  NULL, NULL, "number of searches to run (default 1)", 0 },
-   { "-c",       eslARG_INT,    "0",   NULL, NULL,  NULL,  NULL, NULL, "number of compute cores to use per node (default = all of them)", 0 },
-  {  0, 0, 0, 0, 0, 0, 0, 0, 0, 0 },
-};
-
-static char usage[]  = "[-options] <hmmfile> <seqence database>";
-static char banner[] = "hmmpgmd2, the server version of HMMER 4";
-#endif
 
 // p7_server_workernode_main
 /*! \brief Top-level function for a workernode, which starts up all other services.
@@ -953,7 +939,7 @@ static char banner[] = "hmmpgmd2, the server version of HMMER 4";
  *  \bug code to extract database names from arguments needs to be revised when we build the real UI for the server
  *  \bug needs to be extended to support searches other than hmmsearch
  */
-void p7_server_workernode_main(int argc, char **argv, int my_rank, MPI_Datatype *server_mpitypes){
+void p7_server_workernode_main(int argc, char **argv, int my_rank, MPI_Datatype *server_mpitypes, ESL_GETOPTS *go){
 
 #ifndef HAVE_MPI
       p7_Fail("Attempt to start workernode_main when HMMER was compiled without MPI support");
@@ -965,14 +951,11 @@ void p7_server_workernode_main(int argc, char **argv, int my_rank, MPI_Datatype 
   int send_buf_length = 100 * 1024; // size of the send buffer. Default to 100kB, send code will resize as necessary
   ESL_ALLOC(send_buf, send_buf_length * sizeof(char));
 
-  ESL_GETOPTS    *go      = p7_CreateDefaultApp(options, 2, argc, argv, banner, usage);
-  if(go == NULL){
-    p7_Fail("Unable to allocate memory in workernode_main\n");
-  }
-
   // FIXME: change this to handle variable numbers of databases once we specify the server UI
   char           *hmmfile = esl_opt_GetArg(go, 1);
   char           *seqfile = esl_opt_GetArg(go, 2);
+  impl_Init();                  /* processor specific initialization */
+  p7_FLogsumInit();		/* we're going to use table-driven Logsum() approximations at times */
   uint32_t num_worker_cores;
   if(esl_opt_IsUsed(go, "-c")){
     num_worker_cores = esl_opt_GetInteger(go, "-c");
@@ -1014,7 +997,7 @@ void p7_server_workernode_main(int argc, char **argv, int my_rank, MPI_Datatype 
     int temp_pos = 0;
   
     P7_HMM         *hmm     = NULL;
-    ESL_ALPHABET   *abc     = NULL;
+    ESL_ALPHABET   *abc     = esl_alphabet_Create(eslAMINO);
 
     P7_PROFILE     *gm      = NULL;
     int stop = 0;
@@ -1035,8 +1018,6 @@ void p7_server_workernode_main(int argc, char **argv, int my_rank, MPI_Datatype 
         workernode_request_Work(workernode->my_shard);
 
         p7_profile_MPIUnpack(compare_obj_buff, compare_obj_buff_length, &temp_pos, MPI_COMM_WORLD, &abc, &gm);
-
-        ESL_RED_BLACK_DOUBLEKEY *last_hit_list;
 
         // Wait to get an initial work range back from the master
         P7_SERVER_CHUNK_REPLY work_reply;
@@ -1126,6 +1107,7 @@ void p7_server_workernode_main(int argc, char **argv, int my_rank, MPI_Datatype 
               != eslOK){
                 p7_Fail("Failed to send hit messages to master\n");
               }
+              //printf("Sending HMMER_HIT_MPI_TAG message\n");
               p7_tophits_Destroy(workernode->tophits); // clear out the hits we just sent
               workernode->tophits = p7_tophits_Create();            
 
@@ -1191,10 +1173,12 @@ void p7_server_workernode_main(int argc, char **argv, int my_rank, MPI_Datatype 
             p7_tophits_Destroy(hits); // tophits_Merge mangles the second tophits
           }
         }
-        if(p7_tophits_MPISend(workernode->tophits, 0, HMMER_HIT_MPI_TAG, MPI_COMM_WORLD, &send_buf, &send_buf_length) 
+        if(p7_tophits_MPISend(workernode->tophits, 0, HMMER_HIT_FINAL_MPI_TAG, MPI_COMM_WORLD, &send_buf, &send_buf_length) 
               != eslOK){
                 p7_Fail("Failed to send hit messages to master\n");
               }
+        //printf("Sending HMMER_HIT_FINAL_MPI_TAG message\n");
+
         p7_tophits_Destroy(workernode->tophits);
         workernode->tophits = p7_tophits_Create();
         p7_server_workernode_end_search(workernode);
@@ -1289,7 +1273,7 @@ static int worker_thread_front_end_sequence_search_loop(P7_SERVER_WORKERNODE_STA
     // grab the start and end pointers from our work queue
     start = workernode->work[my_id].start;
     end = workernode->work[my_id].end;
-
+    //printf("Worker thread %d starting chuk from %ld to %ld\n", my_id, workernode->work[my_id].start, workernode->work[my_id].end);
     pthread_mutex_unlock(&(workernode->work[my_id].lock)); // release lock
 
     if(!work_on_global){
@@ -1375,6 +1359,7 @@ static int worker_thread_front_end_sequence_search_loop(P7_SERVER_WORKERNODE_STA
             P7_PIPELINE *temp_mask = the_entry->pipeline;
             the_entry->pipeline = workernode->thread_state[my_id].pipeline;
             workernode->thread_state[my_id].pipeline = temp_mask;
+            p7_pli_NewModel(workernode->thread_state[my_id].pipeline, workernode->thread_state[my_id].om, workernode->thread_state[my_id].bg); // Set the pipeline up for this HMM
             // populate the fields
             the_entry->sequence = the_sequence;
             the_entry->L = the_sequence->L;
@@ -1494,7 +1479,7 @@ static void worker_thread_back_end_sequence_search_loop(P7_SERVER_WORKERNODE_STA
     while(pthread_mutex_trylock(&(workernode->thread_state[my_id].hits_lock))){
     // Need to acquire the lock on the hit list in case we find a hit
     }
-    p7_Pipeline_Mainstage(workernode->thread_state[my_id].pipeline, workernode->thread_state[my_id].om, workernode->thread_state[my_id].bg, the_entry->sequence, NULL, NULL , the_entry->fwdsc, the_entry->nullsc); 
+    p7_Pipeline_Mainstage(workernode->thread_state[my_id].pipeline, workernode->thread_state[my_id].om, workernode->thread_state[my_id].bg, the_entry->sequence, NULL, workernode->thread_state[my_id].tophits , the_entry->fwdsc, the_entry->nullsc); 
     pthread_mutex_unlock(&(workernode->thread_state[my_id].hits_lock));
 
 #ifdef TEST_SEQUENCES 
@@ -1580,6 +1565,7 @@ static P7_BACKEND_QUEUE_ENTRY *workernode_backend_pool_Create(int num_entries, E
 
   prev = NULL;
   int i;
+  ESL_ALPHABET *temp_abc = esl_alphabet_Create(eslAMINO);
   for(i = 0; i< num_entries; i++){
     ESL_ALLOC(the_entry, sizeof(P7_BACKEND_QUEUE_ENTRY));
     the_entry->sequence = NULL;

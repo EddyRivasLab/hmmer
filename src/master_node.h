@@ -21,6 +21,8 @@ typedef struct p7_server_message{
   // structure containing hits returned by a worker
   P7_TOPHITS *tophits;
 
+  int buffer_alloc;
+  char *buffer;
   //! Pointer used to construct linked lists of messages that have to be processed
   struct p7_server_message *next;
 } P7_SERVER_MESSAGE;
@@ -116,7 +118,7 @@ typedef struct p7_server_masternode_hit_thread_argument{
 P7_SERVER_MESSAGE *p7_server_message_Create();
 
 // main function called on the master node at startup
-void p7_server_master_node_main(int argc, char ** argv, MPI_Datatype *server_mpitypes);
+void p7_server_master_node_main(int argc, char ** argv, MPI_Datatype *server_mpitypes, ESL_GETOPTS *go);
 
 // Thread that assembles incoming hits from the worker nodes
 void *p7_server_master_hit_thread(void *worker_argument);
