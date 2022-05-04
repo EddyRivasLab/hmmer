@@ -533,6 +533,9 @@ serial_master(ESL_GETOPTS *go, struct cfg_s *cfg)
     }
 #endif
 
+  if(ncpus < 0){ //Check to silence GCC warning, even though getopts checks that ncpus <=0
+    ncpus=1;
+  }
   infocnt = (ncpus == 0) ? 1 : ncpus;
   ESL_ALLOC(info, sizeof(*info) * infocnt);
 

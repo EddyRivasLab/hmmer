@@ -18,7 +18,7 @@
 #endif /*HAVE_MPI*/
 
 #include <unistd.h> // for testing
-#define HAVE_MPI
+//#define HAVE_MPI
 // p7_server_masternode_Create
 /*! \brief Creates and initializes a P7_SERVER_MASTERNODE_STATE object
  *  \param [in] num_shards The number of shards each database will be divided into.
@@ -135,7 +135,8 @@ void p7_server_masternode_Destroy(P7_SERVER_MASTERNODE_STATE *masternode){
   pthread_mutex_destroy(&(masternode->hit_wait_lock));
 
   free(masternode->work_queues);
-
+  
+  p7_tophits_Destroy(masternode->tophits);
   // and finally, the base object
   free(masternode);
 }
@@ -295,7 +296,7 @@ void p7_server_master_node_main(int argc, char ** argv, MPI_Datatype *server_mpi
   int hmm_buffer_size;
   hmm_buffer_size = 100000;
 
-  P7_PROFILE *hmm;
+  P7_PROFILE *gm;
   int hmm_length, pack_position;
 
   uint64_t search_start, search_end;
@@ -380,12 +381,12 @@ void p7_server_master_node_main(int argc, char ** argv, MPI_Datatype *server_mpi
     pthread_mutex_unlock(&(masternode->hit_wait_lock));
 
     // Get the HMM this search will compare against
-    hmm = ((P7_PROFILE **) hmm_shard->descriptors)[search * search_increment];
-    strcpy(outfile_name, hmm->name);
+    gm = ((P7_PROFILE **) hmm_shard->descriptors)[search * search_increment];
+    strcpy(outfile_name, gm->name);
     strcat(outfile_name, ".tblout");
 
     // Pack the HMM into a buffer for broadcast
-    p7_profile_MPIPackSize(hmm, MPI_COMM_WORLD, &hmm_length); // get the length of the profile
+    p7_profile_MPIPackSize(gm, MPI_COMM_WORLD, &hmm_length); // get the length of the profile
     the_command.compare_obj_length = hmm_length;
 
     if(hmm_length > hmm_buffer_size){ // need to grow the send buffer
@@ -393,7 +394,7 @@ void p7_server_master_node_main(int argc, char ** argv, MPI_Datatype *server_mpi
     }
     pack_position = 0; // initialize this to the start of the buffer 
 
-    if(p7_profile_MPIPack    (hmm, hmmbuffer, hmm_length, &pack_position, MPI_COMM_WORLD) != eslOK){
+    if(p7_profile_MPIPack    (gm, hmmbuffer, hmm_length, &pack_position, MPI_COMM_WORLD) != eslOK){
       p7_Fail("Packing profile failed in master_node_main\n");
     }    // pack the hmm for sending
   
@@ -410,26 +411,28 @@ void p7_server_master_node_main(int argc, char ** argv, MPI_Datatype *server_mpi
     }
 
     gettimeofday(&end, NULL);
-    double ncells = (double) hmm->M * (double) database_shard->total_length;
+    double ncells = (double) gm->M * (double) database_shard->total_length;
     double elapsed_time = ((double)((end.tv_sec * 1000000 + (end.tv_usec)) - (start.tv_sec * 1000000 + start.tv_usec)))/1000000.0;
     double gcups = (ncells/elapsed_time) / 1.0e9;
-    printf("%s, %lf, %d, %lf\n", hmm->name, elapsed_time, hmm->M, gcups);
+    printf("%s, %lf, %d, %lf\n", gm->name, elapsed_time, gm->M, gcups);
     char commandstring[255];
-    P7_PIPELINE *pipeline= p7_pipeline_Create(go, hmm->M, 100, FALSE, p7_SEARCH_SEQS); /* L_hint = 100 is just a dummy for now */
-    P7_BG *bg = p7_bg_Create(hmm->abc);
-    P7_OPROFILE *om = p7_oprofile_Create(hmm->M, hmm->abc);
-    p7_oprofile_Convert (hmm, om);
+    P7_PIPELINE *pipeline= p7_pipeline_Create(go, gm->M, 100, FALSE, p7_SEARCH_SEQS); /* L_hint = 100 is just a dummy for now */
+    P7_BG *bg = p7_bg_Create(gm->abc);
+    P7_OPROFILE *om = p7_oprofile_Create(gm->M, gm->abc);
+    p7_oprofile_Convert (gm, om);
     p7_pli_NewModel(pipeline, om, bg); // Set the pipeline up for this HMM
 
     pipeline->Z = search_length;
     FILE *tblfp    = fopen(outfile_name,    "w");
     p7_tophits_SortBySortkey(masternode->tophits);
     p7_tophits_Threshold(masternode->tophits, pipeline);
-    p7_tophits_TabularTargets(tblfp, hmm->name, hmm->acc, masternode->tophits, pipeline, 1);
+    p7_tophits_TabularTargets(tblfp, gm->name, gm->acc, masternode->tophits, pipeline, 1);
     p7_tophits_Destroy(masternode->tophits); //Reset for next search
     masternode->tophits = p7_tophits_Create();
     p7_pipeline_Destroy(pipeline);
     p7_bg_Destroy(bg);
+    p7_oprofile_Destroy(om);
+    // Don't need to free gm here.  It gets cleaned up as part of the shard clean-up
   }
 
   // Shut everything down once we've done the requested searches

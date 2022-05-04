@@ -1,6 +1,6 @@
 /** \file worker_node.c Functions that implement the worker nodes when HMMER is run in server mode
 */
-#define HAVE_MPI
+//#define HAVE_MPI
 #include <pthread.h>
 #include <sys/time.h>
 #include <string.h>
@@ -234,6 +234,7 @@ void p7_server_workernode_Destroy(P7_SERVER_WORKERNODE_STATE *workernode){
       p7_shard_Destroy(workernode->database_shards[i]);
     }
   }
+  free(workernode->database_shards); 
 
   // clean up the work descriptor array
   for(i= 0; i < workernode->num_threads; i++){
@@ -264,10 +265,12 @@ void p7_server_workernode_Destroy(P7_SERVER_WORKERNODE_STATE *workernode){
     }
     if(workernode->thread_state[i].bg != NULL){
       p7_bg_Destroy(workernode->thread_state[i].bg);
-    } 
+    }
+    p7_tophits_Destroy(workernode->thread_state[i].tophits);
     pthread_join(workernode->thread_objs[i], NULL); 
   }
- free(workernode->thread_objs);
+  free(workernode->thread_state);
+  free(workernode->thread_objs);
 
   // clean up the wait lock
   pthread_mutex_destroy(&(workernode->wait_lock));
@@ -282,7 +285,8 @@ void p7_server_workernode_Destroy(P7_SERVER_WORKERNODE_STATE *workernode){
   if(workernode->compare_sequence){
     free(workernode->compare_sequence);
   }
-
+  free(workernode->global_queue);
+  p7_tophits_Destroy(workernode->tophits);
   //finally, free the workernode structure itself
   free(workernode);
 }
@@ -922,6 +926,7 @@ void *p7_server_worker_thread(void *worker_argument){
 
   esl_alphabet_Destroy(temp_abc);
   // If we get here, shutdown has been set, so exit the thread
+  free(worker_argument);
   pthread_exit(NULL);
 
 }
@@ -1565,7 +1570,6 @@ static P7_BACKEND_QUEUE_ENTRY *workernode_backend_pool_Create(int num_entries, E
 
   prev = NULL;
   int i;
-  ESL_ALPHABET *temp_abc = esl_alphabet_Create(eslAMINO);
   for(i = 0; i< num_entries; i++){
     ESL_ALLOC(the_entry, sizeof(P7_BACKEND_QUEUE_ENTRY));
     the_entry->sequence = NULL;
