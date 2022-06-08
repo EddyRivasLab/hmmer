@@ -84,7 +84,7 @@ typedef struct {
   int              idle_cnt;
   struct worker_s *idling;
 
-  RANGE_LIST       *range_list;  /* (optional) list of ranges searched within the seqdb */
+  RANGE_LIST       *range_list;  /* (optional) list of ranges searched within the (seqdb|hmmdb) */
 
   int              completed;
 } WORKERSIDE_ARGS;
@@ -313,8 +313,18 @@ process_search(WORKERSIDE_ARGS *args, QUEUE_DATA *query)
       client_msg(query->sock, eslFAIL, "Specified sequence database has not been loaded into the daemon. \n");
       return;
     }
-    else{ 
+    else{
       cnt = args->seq_db->db[query->dbx].count;
+
+      //if range(s) are given, count how many of the seqdb's sequences are within supplied range(s)
+      if (args->range_list) {
+        int range_cnt = 0; // this will now count how many of the seqs in the db are within the range
+        for (i=0; i<cnt; i++) {
+          if ( hmmpgmd_IsWithinRanges(args->seq_db->list[i].idx, args->range_list ) )
+            range_cnt++;
+        }
+        cnt = range_cnt;
+      }
     }
   } else {
     if(args->hmm_db == NULL){
@@ -322,26 +332,25 @@ process_search(WORKERSIDE_ARGS *args, QUEUE_DATA *query)
       client_msg(query->sock, eslFAIL, "No HMM database has been loaded into the daemon. \n");
       return;
     }
-    else{ 
-     cnt = args->hmm_db->n;
+    else{
+      cnt = args->hmm_db->n;
+
+      //if range(s) are given, count how many of the hmmdb's hmms are within supplied range(s)
+      if (args->range_list) {
+        int range_cnt = 0; // this will now count how many of the hmms in the db are within the range
+        for (i=0; i<cnt; i++) {
+          if ( hmmpgmd_IsWithinRanges(args->hmm_db->list[i]->idx, args->range_list ) )
+            range_cnt++;
+        }
+        cnt = range_cnt;
+      }
     }
   }
-  
+
   // start timer after we make sure the relevant database exists to make cleanup easier on error
   w = esl_stopwatch_Create();
   esl_stopwatch_Start(w);
   init_results(&results);
-
-  //if range(s) are given, count how many of the seqdb's sequences are within supplied range(s)
-  if (args->range_list) { // can only happen in HMMD_CMD_SEARCH case
-    int range_cnt = 0; // this will now count how many of the seqs in the db are within the range
-    for (i=0; i<cnt; i++) {
-      if ( hmmpgmd_IsWithinRanges(args->seq_db->list[i].idx, args->range_list ) )
-        range_cnt++;
-    }
-    cnt = range_cnt;
-  }
-
 
   inx = 0;
   tries = 0;
@@ -368,12 +377,17 @@ process_search(WORKERSIDE_ARGS *args, QUEUE_DATA *query)
         worker->srch_inx = inx;
         if (args->range_list) {
           // if ranges are given, need to split the db list based on which elements in the list are within the given range(s)
-          int goal = cnt / ready_workers; //how many within-range sequences do I want to ask this worker to handle
-          int curr = 0;                   //how many within-range sequences have I seen since the start of this full-db range
+          int goal = cnt / ready_workers; //how many within-range sequences/hmms do I want to ask this worker to handle
+          int curr = 0;                   //how many within-range sequences/hmms have I seen since the start of this full-db range
           worker->srch_cnt = 0;
           while (curr < goal) {
-            if ( hmmpgmd_IsWithinRanges (args->seq_db->list[inx].idx, args->range_list ) )
-                curr++;
+            if (query->cmd_type == HMMD_CMD_SEARCH) {
+              if ( hmmpgmd_IsWithinRanges (args->seq_db->list[inx].idx, args->range_list ) )
+                  curr++;
+            } else {
+              if ( hmmpgmd_IsWithinRanges (args->hmm_db->list[inx]->idx, args->range_list ) )
+                  curr++;
+            }
             worker->srch_cnt++;
             inx++;
           }
@@ -602,9 +616,15 @@ master_process(ESL_GETOPTS *go)
         ESL_ALLOC(worker_comm.range_list, sizeof(RANGE_LIST));
         hmmpgmd_GetRanges(worker_comm.range_list, esl_opt_GetString(query->opts, "--seqdb_ranges"));
       }
-      process_search(&worker_comm, query); 
+      process_search(&worker_comm, query);
       break;
-    case HMMD_CMD_SCAN:        process_search(&worker_comm, query); break;
+    case HMMD_CMD_SCAN:
+      if (esl_opt_IsUsed(query->opts, "--hmmdb_ranges")) {
+        ESL_ALLOC(worker_comm.range_list, sizeof(RANGE_LIST));
+        hmmpgmd_GetRanges(worker_comm.range_list, esl_opt_GetString(query->opts, "--hmmdb_ranges"));
+      }
+      process_search(&worker_comm, query);
+      break;
     case HMMD_CMD_SHUTDOWN:    
       process_shutdown(&worker_comm, query);
       p7_syslog(LOG_ERR,"[%s:%d] - shutting down...\n", __FILE__, __LINE__);

@@ -113,17 +113,18 @@ typedef struct p7_oprofile_s {
   off_t  eoff;                  /* offset to last byte of record; -1 if unknown      */
 
   /* Information, annotation copied from parent profile:                             */
-  char  *name;      /* unique name of model                              */
-  char  *acc;      /* unique accession of model, or NULL                */
-  char  *desc;                  /* brief (1-line) description of model, or NULL      */
-  char  *rf;                    /* reference line           1..M; *ref=0: unused     */
-  char  *mm;                    /* modelmask line           1..M; *ref=0: unused     */
-  char  *cs;                    /* consensus structure line 1..M, *cs=0: unused      */
-  char  *consensus;    /* consensus residues for ali display, 1..M          */
-  float  evparam[p7_NEVPARAM];   /* parameters for determining E-values, or UNSET     */
-  float  cutoff[p7_NCUTOFFS];   /* per-seq/per-dom bit cutoffs, or UNSET             */
-  float  compo[p7_MAXABET];  /* per-model HMM filter composition, or UNSET        */
-  const ESL_ALPHABET *abc;  /* copy of ptr to alphabet information               */
+  char    *name;                 /* unique name of model                             */
+  char    *acc;                  /* unique accession of model, or NULL               */
+  int64_t  idx;                  /* ctr for this model                               */
+  char    *desc;                 /* brief (1-line) description of model, or NULL     */
+  char    *rf;                   /* reference line           1..M; *ref=0: unused    */
+  char    *mm;                   /* modelmask line           1..M; *ref=0: unused    */
+  char    *cs;                   /* consensus structure line 1..M, *cs=0: unused     */
+  char    *consensus;            /* consensus residues for ali display, 1..M         */
+  float    evparam[p7_NEVPARAM]; /* parameters for determining E-values, or UNSET    */
+  float    cutoff[p7_NCUTOFFS];  /* per-seq/per-dom bit cutoffs, or UNSET            */
+  float    compo[p7_MAXABET];    /* per-model HMM filter composition, or UNSET       */
+  const ESL_ALPHABET *abc;       /* copy of ptr to alphabet information              */
 
   /* Information about current configuration, size, allocation                       */
   int    L;      /* current configured target seq length              */

@@ -60,7 +60,7 @@ typedef struct {
   ESL_ALPHABET     *abc;         /* digital alphabet                 */
   ESL_GETOPTS      *opts;        /* search specific options          */
 
-  RANGE_LIST       *range_list;  /* (optional) list of ranges searched within the seqdb */
+  RANGE_LIST       *range_list;  /* (optional) list of ranges searched within the hmmdb/seqdb */
 
   double            elapsed;     /* elapsed search time              */
 
@@ -228,6 +228,10 @@ process_SearchCmd(HMMD_COMMAND *cmd, WORKER_ENV *env, QUEUE_DATA *query)
     ESL_ALLOC(info->range_list, sizeof(RANGE_LIST));
     hmmpgmd_GetRanges(info->range_list, esl_opt_GetString(query->opts, "--seqdb_ranges"));
   }
+  if (esl_opt_IsUsed(query->opts, "--hmmdb_ranges")) {
+    ESL_ALLOC(info->range_list, sizeof(RANGE_LIST));
+    hmmpgmd_GetRanges(info->range_list, esl_opt_GetString(query->opts, "--hmmdb_ranges"));
+  }
 
 
   if (query->cmd_type == HMMD_CMD_SEARCH) threadObj = esl_threads_Create(&search_thread);
@@ -242,8 +246,10 @@ process_SearchCmd(HMMD_COMMAND *cmd, WORKER_ENV *env, QUEUE_DATA *query)
           (query->cmd_type == HMMD_CMD_SEARCH) ? "SEQ" : "HMM", 
           query->dbx, query->inx, query->inx + query->cnt - 1);
 
-  if (info->range_list)
+  if (esl_opt_IsUsed(query->opts, "--seqdb_ranges"))
     fprintf(stdout, " in range(s) %s", esl_opt_GetString(query->opts, "--seqdb_ranges"));
+  else if (esl_opt_IsUsed(query->opts, "--hmmdb_ranges"))
+    fprintf(stdout, " in range(s) %s", esl_opt_GetString(query->opts, "--hmmdb_ranges"));
 
   fprintf(stdout, "\n");
 
@@ -265,8 +271,7 @@ process_SearchCmd(HMMD_COMMAND *cmd, WORKER_ENV *env, QUEUE_DATA *query)
     info[i].limit     = &limit;	       /* ditto. TODO: come back and clean this up. */
 
     if (query->cmd_type == HMMD_CMD_SEARCH) {
-      HMMER_SEQ **list  = env->seq_db->db[query->dbx].list;
-      info[i].sq_list   = &list[query->inx];
+      info[i].sq_list   = &env->seq_db->db[query->dbx].list[query->inx];
       info[i].sq_cnt    = query->cnt;
       info[i].db_Z      = env->seq_db->db[query->dbx].K;
       info[i].om_list   = NULL;
@@ -738,12 +743,14 @@ scan_thread(void *arg)
 
     /* Main loop: */
     for (i = 0; i < count; ++i, ++om) {
-      p7_pli_NewModel(pli, *om, bg);
-      p7_bg_SetLength(bg, info->seq->n);
-      p7_oprofile_ReconfigLength(*om, info->seq->n);
-	      
-      p7_Pipeline(pli, *om, bg, info->seq, NULL, th);
-      p7_pipeline_Reuse(pli);
+      if ( !(info->range_list) || hmmpgmd_IsWithinRanges ((*om)->idx, info->range_list)) {
+        p7_pli_NewModel(pli, *om, bg);
+        p7_bg_SetLength(bg, info->seq->n);
+        p7_oprofile_ReconfigLength(*om, info->seq->n);
+
+        p7_Pipeline(pli, *om, bg, info->seq, NULL, th);
+        p7_pipeline_Reuse(pli);
+      }
     }
   }
 

@@ -90,9 +90,10 @@ static ESL_OPTIONS searchOpts[] = {
   { "--nonull2",    eslARG_NONE,       NULL, NULL, NULL,      NULL,  NULL, NULL,        "turn off biased composition score corrections",               12 },
   { "-Z",           eslARG_REAL,      FALSE, NULL, "x>0",     NULL,  NULL, NULL,        "set # of comparisons done, for E-value calculation",          12 },
   { "--domZ",       eslARG_REAL,      FALSE, NULL, "x>0",     NULL,  NULL, NULL,        "set # of significant seqs, for domain E-value calculation",   12 },
-  { "--hmmdb",      eslARG_INT,       NULL,  NULL, "n>0",   NULL,  NULL,  "--seqdb",       "hmm database to search",                                      12 },
-  { "--seqdb",      eslARG_INT,         NULL,  NULL, "n>0",   NULL,  NULL,  "--hmmdb",       "protein database to search",                                  12 },
-  { "--seqdb_ranges",eslARG_STRING,     NULL,  NULL,  NULL,   NULL, "--seqdb", NULL,         "range(s) of sequences within --seqdb that will be searched",  12 },
+  { "--hmmdb",      eslARG_INT,       NULL,  NULL, "n>0",   NULL,  NULL,  "--seqdb",    "hmm database to search",                                      12 },
+  { "--hmmdb_ranges",eslARG_STRING,     NULL,  NULL,  NULL,   NULL, "--hmmdb", NULL,    "range(s) of hmms within --hmmdb that will be searched",       12 },
+  { "--seqdb",      eslARG_INT,         NULL,  NULL, "n>0",   NULL,  NULL,  "--hmmdb",  "protein database to search",                                  12 },
+  { "--seqdb_ranges",eslARG_STRING,     NULL,  NULL,  NULL,   NULL, "--seqdb", NULL,    "range(s) of sequences within --seqdb that will be searched",  12 },
   
 
   /* name           type        default  env  range toggles reqs incomp  help                                          docgroup*/
@@ -275,7 +276,7 @@ hmmpgmd_GetRanges (RANGE_LIST *list, char *rangestr)  {
   rangestr_cpy_ptr = rangestr_cpy;
   while ( (status = esl_strtok(&rangestr_cpy, ",", &range) ) == eslOK) {
     status = esl_regexp_ParseCoordString(range, &pos1, &pos2);
-    if (status == eslESYNTAX) esl_fatal("--seqdb_ranges takes coords <from>..<to>; %s not recognized", range);
+    if (status == eslESYNTAX) esl_fatal("--(hmmdb|seqdb)_ranges takes coords <from>..<to>; %s not recognized", range);
     if (status == eslFAIL)    esl_fatal("Failed to find <from> or <to> coord in %s", range);
     list->starts[list->N] = (uint32_t) pos1;
     list->ends[list->N]   = (uint32_t) pos2;

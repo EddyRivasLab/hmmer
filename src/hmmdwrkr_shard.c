@@ -245,15 +245,11 @@ process_SearchCmd(HMMD_COMMAND_SHARD *cmd, WORKER_ENV *env, QUEUE_DATA_SHARD *qu
   if (esl_opt_IsUsed(query->opts, "--seqdb_ranges")) {
     ESL_ALLOC(info->range_list, sizeof(RANGE_LIST));
     hmmpgmd_GetRanges(info->range_list, esl_opt_GetString(query->opts, "--seqdb_ranges"));
- /*   printf("Range-list query detected, with ranges: ");
-    for(int temp = 0; temp < info->range_list->N; temp++){
-      if(temp > 0){
-        printf(", ");
-      }
-      printf("%d..%d", info->range_list->starts[temp], info->range_list->ends[temp]);
-    }
-    printf("\n");  */
-  }  
+  }
+  if (esl_opt_IsUsed(query->opts, "--hmmdb_ranges")) {
+    ESL_ALLOC(info->range_list, sizeof(RANGE_LIST));
+    hmmpgmd_GetRanges(info->range_list, esl_opt_GetString(query->opts, "--hmmdb_ranges"));
+  }
 
 
   if (query->cmd_type == HMMD_CMD_SEARCH) threadObj = esl_threads_Create(&search_thread);
@@ -268,8 +264,10 @@ process_SearchCmd(HMMD_COMMAND_SHARD *cmd, WORKER_ENV *env, QUEUE_DATA_SHARD *qu
           (query->cmd_type == HMMD_CMD_SEARCH) ? "SEQ" : "HMM", 
           query->dbx, query->inx, query->inx + query->cnt - 1);
 
-  if (info->range_list)
+  if (esl_opt_IsUsed(query->opts, "--seqdb_ranges"))
     fprintf(stdout, " in range(s) %s", esl_opt_GetString(query->opts, "--seqdb_ranges"));
+  else if (esl_opt_IsUsed(query->opts, "--hmmdb_ranges"))
+    fprintf(stdout, " in range(s) %s", esl_opt_GetString(query->opts, "--hmmdb_ranges"));
 
   fprintf(stdout, "\n");
 

@@ -640,9 +640,15 @@ master_process_shard(ESL_GETOPTS *go)
         ESL_ALLOC(worker_comm.range_list, sizeof(RANGE_LIST));
         hmmpgmd_GetRanges(worker_comm.range_list, esl_opt_GetString(query->opts, "--seqdb_ranges"));
       }
-      process_search(&worker_comm, query); 
+      process_search(&worker_comm, query);
       break;
-    case HMMD_CMD_SCAN:        process_search(&worker_comm, query); break;
+    case HMMD_CMD_SCAN:
+      if (esl_opt_IsUsed(query->opts, "--hmmdb_ranges")) {
+        ESL_ALLOC(worker_comm.range_list, sizeof(RANGE_LIST));
+        hmmpgmd_GetRanges(worker_comm.range_list, esl_opt_GetString(query->opts, "--hmmdb_ranges"));
+      }
+      process_search(&worker_comm, query);
+      break;
     case HMMD_CMD_SHUTDOWN:    
       process_shutdown(&worker_comm, query);
       p7_syslog(LOG_ERR,"[%s:%d] - shutting down...\n", __FILE__, __LINE__);
