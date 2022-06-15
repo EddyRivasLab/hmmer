@@ -55,7 +55,7 @@
 ################################################################
 # Autoconf 2.61 (circa 2006) has a bug in AC_FUNC_FSEEKO; don't use it.
 # 2.63 was released in 2008.
-AC_PREREQ([2.71])
+AC_PREREQ([2.69])
 
 # Our extra macros are with Easel, in easel/m4.
 # It's sort of standard to expect them in m4/, don't
