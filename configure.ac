@@ -253,6 +253,8 @@ AX_PROG_CC_MPI([test x"$enable_mpi" = xyes],
       fi])
 
 AC_PROG_CC
+AC_PROG_CC_C99
+
 AC_PROG_CPP
 AC_PROG_INSTALL
 AC_CHECK_TOOL([STRIP],[strip])
