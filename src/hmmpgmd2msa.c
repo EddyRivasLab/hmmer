@@ -537,6 +537,7 @@ void hmmpgmd2msa_utest(int ntrials, char *hmmfile){
   HMMD_SEARCH_STATS stats;
   uint32_t n = 0;
   uint32_t nalloc = 0;
+  int i, j, k;
 
   buf_data = NULL;
   buf = &(buf_data);
@@ -560,10 +561,10 @@ void hmmpgmd2msa_utest(int ntrials, char *hmmfile){
   P7_PIPELINE *pli=p7_pipeline_Create(NULL, hmm->M, 400, FALSE, p7_SEARCH_SEQS);
   p7_pli_NewModel(pli, oprofile, bg);
 
-  for(int j = 0; j < ntrials; j++){
+  for(j = 0; j < ntrials; j++){
     
     // sample sequences from the HMM
-    for(int i = 0; i < NUM_TEST_SEQUENCES; i++){
+    for(i = 0; i < NUM_TEST_SEQUENCES; i++){
       sequences[i] = esl_sq_CreateDigital(abc);
       p7_ProfileEmit(rng, hmm, profile, bg, sequences[i], NULL);
     }
@@ -571,7 +572,7 @@ void hmmpgmd2msa_utest(int ntrials, char *hmmfile){
     hitlist = p7_tophits_Create();
 
     // Search all of the sampled sequences against the HMM to generate a set of hits
-    for(int i = 0; i < NUM_TEST_SEQUENCES; i++){
+    for(i = 0; i < NUM_TEST_SEQUENCES; i++){
       p7_pli_NewSeq(pli, sequences[i]);
       p7_bg_SetLength(bg, sequences[i]->n);
       p7_oprofile_ReconfigLength(oprofile, sequences[i]->n);
@@ -617,7 +618,7 @@ void hmmpgmd2msa_utest(int ntrials, char *hmmfile){
       p7_Fail(msg);
     }
 
-    for(int k = 0; k < hitlist->N; k++){
+    for(k = 0; k < hitlist->N; k++){
       if(p7_hit_Serialize(hitlist->hit[k], buf, &n, &nalloc) !=eslOK){
         p7_Fail(msg);
       }
@@ -634,7 +635,7 @@ void hmmpgmd2msa_utest(int ntrials, char *hmmfile){
 
     // clean up after ourselves 
     p7_tophits_Destroy(hitlist);
-    for(int k = 0; k < NUM_TEST_SEQUENCES; k++){
+    for(k = 0; k < NUM_TEST_SEQUENCES; k++){
       esl_sq_Destroy(sequences[k]);
       sequences[k] = NULL;
     }
