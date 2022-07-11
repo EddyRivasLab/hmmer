@@ -129,7 +129,6 @@ select_m(ESL_RANDOMNESS *rng, const P7_OPROFILE *om, const P7_OMX *ox, int i, in
   int     r     = (k-1) / Q;
   __m128 *tp    = om->tfv + 7*q;       	/* *tp now at start of transitions to cur cell M(i,k) */
   __m128  xBv   = _mm_set1_ps(ox->xmx[(i-1)*p7X_NXCELLS+p7X_B]);
-  __m128  zerov = _mm_setzero_ps();
   __m128  mpv, dpv, ipv;
   union { __m128 v; float p[4]; } u;
   float   path[4];
@@ -160,7 +159,6 @@ select_d(ESL_RANDOMNESS *rng, const P7_OPROFILE *om, const P7_OMX *ox, int i, in
   int     Q     = p7O_NQF(ox->M);
   int     q     = (k-1) % Q;		/* (q,r) is position of the current DP cell D(i,k) */
   int     r     = (k-1) / Q;
-  __m128  zerov = _mm_setzero_ps();
   __m128  mpv, dpv;
   __m128  tmdv, tddv;
   union { __m128 v; float p[4]; } u;

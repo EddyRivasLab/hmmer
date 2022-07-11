@@ -68,10 +68,9 @@ p7_tophits_Create(void)
 P7_TOPHITS *
 p7_tophits_Clone(const P7_TOPHITS *h)
 {
+  P7_TOPHITS *h2 = NULL;
   int i;
   int status;
-  ptrdiff_t diff;
-  P7_TOPHITS *h2 = NULL;
 
   ESL_ALLOC(h2, sizeof(P7_TOPHITS));
   
