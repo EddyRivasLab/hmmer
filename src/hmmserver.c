@@ -27,8 +27,14 @@ static ESL_OPTIONS options[] = {
     /* name           type      default  env  range  toggles reqs incomp  help                               docgroup*/
     {"-h", eslARG_NONE, FALSE, NULL, NULL, NULL, NULL, NULL, "show brief help on version and usage", 0},
     {"-n", eslARG_INT, "1", NULL, NULL, NULL, NULL, NULL, "number of searches to run (default 1)", 0},
-    {"-c", eslARG_INT, "0", NULL, NULL, NULL, NULL, NULL, "number of worker cores to use per node (default all)", 0},
+    { "--cpu",        eslARG_INT,  0,"HMMER_NCPU","n>0",        NULL,  NULL,  "--master",      "number of cores to use on each worker node (defaults to all)",      12 },
+  { "--num_shards", eslARG_INT,    "1",      NULL, "1<=n<512",      NULL,  NULL,  "--worker",      "number of shards to divide each database into.",      12 },
     {"--stall", eslARG_NONE, FALSE, NULL, NULL, NULL, NULL, NULL, "arrest after start: for debugging MPI under gdb", 0},
+    { "--cport",      eslARG_INT,     "51371",  NULL, "49151<n<65536",NULL,  NULL,  "--worker",      "port to use for client/server communication",                 12 },
+    { "--wport",      eslARG_INT,     "51372",  NULL, "49151<n<65536",NULL,  NULL,  NULL,            "port to use for server/worker communication",                 12 },
+    { "--ccncts",     eslARG_INT,     "16",     NULL, "n>0",          NULL,  NULL,  "--worker",      "maximum number of client side connections to accept",         12 },
+    { "--wcncts",     eslARG_INT,     "32",     NULL, "n>0",          NULL,  NULL,  "--worker",      "maximum number of worker side connections to accept",         12 },
+    { "--pid",        eslARG_OUTFILE, NULL,     NULL, NULL,           NULL,  NULL,  NULL,            "file to write process id to",                                 12 },
     {"--acc", eslARG_NONE, FALSE, NULL, NULL, NULL, NULL, NULL, "prefer accessions over names in output", 2},
     {"--noali", eslARG_NONE, FALSE, NULL, NULL, NULL, NULL, NULL, "don't output alignments, so output is smaller", 2},
     {"-E", eslARG_REAL, "10.0", NULL, "x>0", NULL, NULL, REPOPTS, "report sequences <= this E-value threshold in output", 4},
@@ -59,8 +65,9 @@ static ESL_OPTIONS options[] = {
     {0, 0, 0, 0, 0, 0, 0, 0, 0, 0},
 };
 
-static char usage[]  = "[-options] <hmmfile> <seqence database>";
-static char banner[] = "hmmserver, the server version of HMMER 4";
+
+static char usage[]  = "[-options] <seqence database>";
+static char banner[] = "hmmserver, the server version of HMMER 3";
 #endif
  
 //! Main function for the hmmserver program
@@ -70,7 +77,7 @@ int main(int argc, char **argv){
 	printf("Hmmserver was compiled without MPI support, and does nothing without that support\n");
 #endif	
 #ifdef HAVE_MPI
-    ESL_GETOPTS *go = p7_CreateDefaultApp(options, 2, argc, argv, banner, usage);
+    ESL_GETOPTS *go = p7_CreateDefaultApp(options, 1, argc, argv, banner, usage);
     int stalling = FALSE;
     /* For debugging: stall until GDB can be attached */
     if (esl_opt_GetBoolean(go, "--stall"))

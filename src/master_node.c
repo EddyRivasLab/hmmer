@@ -5,19 +5,820 @@
 #include <string.h>
 #include <sys/time.h>
 
-#include "easel.h"
-#include "hmmer.h"
 
-#include "hmmserver.h"
-#include "master_node.h"
-#include "shard.h"
-#include "worker_node.h"
 #ifdef HAVE_MPI
 #include <mpi.h>
 #include "esl_mpi.h"
 #endif /*HAVE_MPI*/
+#include <setjmp.h>
+#include <sys/socket.h>
+#ifdef HAVE_NETINET_IN_H
+#include <netinet/in.h>     /* On FreeBSD, you need netinet/in.h for struct sockaddr_in            */
+#endif                      /* On OpenBSD, netinet/in.h is required for (must precede) arpa/inet.h */
+#include <arpa/inet.h>
+#include <syslog.h>
+#include <assert.h>
+#include <errno.h>
+#ifndef HMMER_THREADS
+#error "Program requires pthreads be enabled."
+#endif /*HMMER_THREADS*/
+#include "easel.h"
+#include "esl_alphabet.h"
+#include "esl_getopts.h"
+#include "esl_sq.h"
+#include "esl_sqio.h"
+#include "esl_stack.h"
+#include "esl_stopwatch.h"
+#include "esl_threads.h"
+#include "hmmer.h"
+#include "hmmserver.h"
+#include "master_node.h"
+#include "shard.h"
+#include "worker_node.h"
+#include "hmmpgmd.h"
+#include "hmmpgmd_shard.h"
 
+#define MAX_BUFFER   4096
 #include <unistd.h> // for testing
+
+/* Functions to communicate with the client via sockets.  Taken from the original hmmpgmd*/
+typedef struct {
+  int             sock_fd;
+  char            ip_addr[64];
+
+  ESL_STACK      *cmdstack;	/* stack of commands that clients want done */
+} CLIENTSIDE_ARGS;
+
+
+typedef struct {
+  HMMD_SEARCH_STATS   stats;
+  HMMD_SEARCH_STATUS  status;
+  P7_HIT           **hits;
+  int                 nhits;
+  int                 db_inx;
+  int                 db_cnt;
+  int                 errors;
+} SEARCH_RESULTS;
+
+
+
+static void
+init_results(SEARCH_RESULTS *results)
+{
+  results->status.status     = eslOK;
+  results->status.msg_size   = 0;
+
+  results->stats.nhits       = 0;
+  results->stats.nreported   = 0;
+  results->stats.nincluded   = 0;
+
+  results->stats.nmodels     = 0;
+  results->stats.nseqs       = 0;
+  results->stats.n_past_msv  = 0;
+  results->stats.n_past_bias = 0;
+  results->stats.n_past_vit  = 0;
+  results->stats.n_past_fwd  = 0;
+  results->stats.Z           = 0;
+
+  results->hits              = NULL;
+  results->nhits             = 0;
+  results->db_inx            = 0;
+  results->db_cnt            = 0;
+  results->errors            = 0;
+}
+
+// Qsort comparison function to sort a list of pointers to P7_HITs
+static int
+hit_sorter2(const void *p1, const void *p2)
+{
+  int cmp;
+
+  const P7_HIT *h1 = *((P7_HIT **) p1);
+  const P7_HIT *h2 = *((P7_HIT **) p2);
+
+  cmp  = (h1->sortkey < h2->sortkey);
+  cmp -= (h1->sortkey > h2->sortkey);
+
+  return cmp;
+}
+
+static void
+forward_results(QUEUE_DATA_SHARD *query, SEARCH_RESULTS *results)
+{
+  P7_TOPHITS         th;
+  P7_PIPELINE        *pli   = NULL;
+  P7_DOMAIN         **dcl   = NULL;
+  P7_HIT             *hits  = NULL;
+  int fd;
+  int n;
+  uint8_t **buf, **buf2, **buf3, *buf_ptr, *buf2_ptr, *buf3_ptr;
+  uint32_t nalloc, nalloc2, nalloc3, buf_offset, buf_offset2, buf_offset3;
+  enum p7_pipemodes_e mode;
+
+  // Initialize these pointers-to-pointers that we'll use for sending data
+  buf_ptr = NULL;
+  buf = &(buf_ptr);
+  buf2_ptr = NULL;
+  buf2 = &(buf2_ptr);
+  buf3_ptr = NULL;
+  buf3 = &(buf3_ptr);
+
+  fd    = query->sock;
+
+  if (query->cmd_type == HMMD_CMD_SEARCH) mode = p7_SEARCH_SEQS;
+  else                                    mode = p7_SCAN_MODELS;
+    
+  /* sort the hits and apply score and E-value thresholds */
+  if (results->nhits > 0) {
+    if(results->stats.hit_offsets != NULL){
+      if ((results->stats.hit_offsets = realloc(results->stats.hit_offsets, results->stats.nhits * sizeof(uint64_t))) == NULL) LOG_FATAL_MSG("malloc", errno);
+    }
+    else{
+      if ((results->stats.hit_offsets = malloc(results->stats.nhits * sizeof(uint64_t))) == NULL) LOG_FATAL_MSG("malloc", errno);
+    }
+
+    // sort the hits 
+    qsort(results->hits, results->stats.nhits, sizeof(P7_HIT *), hit_sorter2);
+
+    th.unsrt     = NULL;
+    th.N         = results->stats.nhits;
+    th.nreported = 0;
+    th.nincluded = 0;
+    th.is_sorted_by_sortkey = 0;
+    th.is_sorted_by_seqidx  = 0;
+      
+    pli = p7_pipeline_Create(query->opts, 100, 100, FALSE, mode);
+    pli->nmodels     = results->stats.nmodels;
+    pli->nseqs       = results->stats.nseqs;
+    pli->n_past_msv  = results->stats.n_past_msv;
+    pli->n_past_bias = results->stats.n_past_bias;
+    pli->n_past_vit  = results->stats.n_past_vit;
+    pli->n_past_fwd  = results->stats.n_past_fwd;
+
+    pli->Z           = results->stats.Z;
+    pli->domZ        = results->stats.domZ;
+    pli->Z_setby     = results->stats.Z_setby;
+    pli->domZ_setby  = results->stats.domZ_setby;
+
+
+    th.hit = results->hits;
+
+    p7_tophits_Threshold(&th, pli);
+
+    /* after the top hits thresholds are checked, the number of sequences
+     * and domains to be reported can change. */
+    results->stats.nreported = th.nreported;
+    results->stats.nincluded = th.nincluded;
+    results->stats.domZ      = pli->domZ;
+    results->stats.Z         = pli->Z;
+  }
+
+  /* Build the buffers of serialized results we'll send back to the client.  
+     Use three buffers, one for each object, because we need to build them in reverse order.
+     We need to serialize the hits to build the hits_offset array in HMMD_SEARCH_STATS.
+     We need the length of the serialized hits and HMMD_SEARCH_STATS objects to fill out the msg_size
+     field in status, but we want to send status, then stats, then hits */
+
+  nalloc = 0;
+  buf_offset = 0;
+
+  // First, the buffer of hits
+  for(int i =0; i< results->stats.nhits; i++){
+   
+    results->stats.hit_offsets[i] = buf_offset;
+    if(p7_hit_Serialize(results->hits[i], buf, &buf_offset, &nalloc) != eslOK){
+      LOG_FATAL_MSG("Serializing P7_HIT failed", errno);
+    }
+
+  }
+  if(results->stats.nhits == 0){
+    results->stats.hit_offsets = NULL;
+  }
+
+  // Second, the buffer with the HMMD_SEARCH_STATS object
+
+  buf_offset2 = 0;
+  nalloc2 = 0; 
+  if(p7_hmmd_search_stats_Serialize(&(results->stats), buf2, &buf_offset2, &nalloc2) != eslOK){
+    LOG_FATAL_MSG("Serializing HMMD_SEARCH_STATS failed", errno);
+  }
+
+  results->status.msg_size = buf_offset + buf_offset2; // set size of second message
+  
+  // Third, the buffer with the HMMD_SEARCH_STATUS object
+  buf_offset3 = 0;
+  nalloc3 = 0;
+  if(hmmd_search_status_Serialize(&(results->status), buf3, &buf_offset3, &nalloc3) != eslOK){
+    LOG_FATAL_MSG("Serializing HMMD_SEARCH_STATUS failed", errno);
+  }
+
+  // Now, send the buffers in the reverse of the order they were built
+  /* send back a successful status message */
+  n = buf_offset3;
+
+  if (writen(fd, buf3_ptr, n) != n) {
+    p7_syslog(LOG_ERR,"[%s:%d] - writing %s error %d - %s\n", __FILE__, __LINE__, query->ip_addr, errno, strerror(errno));
+    goto CLEAR;
+  }
+
+  // and the stats object
+  n=buf_offset2;
+
+  if (writen(fd, buf2_ptr, n) != n) {
+    p7_syslog(LOG_ERR,"[%s:%d] - writing %s error %d - %s\n", __FILE__, __LINE__, query->ip_addr, errno, strerror(errno));
+    goto CLEAR;
+  }
+  printf("%p\n", results->hits[1]);
+  // and finally the hits 
+  n=buf_offset;
+
+  if (writen(fd, buf_ptr, n) != n) {
+    p7_syslog(LOG_ERR,"[%s:%d] - writing %s error %d - %s\n", __FILE__, __LINE__, query->ip_addr, errno, strerror(errno));
+    goto CLEAR;
+  }
+  printf("Results for %s (%d) sent %" PRId64 " bytes\n", query->ip_addr, fd, results->status.msg_size);
+  printf("Hits:%"PRId64 "  reported:%" PRId64 "  included:%"PRId64 "\n", results->stats.nhits, results->stats.nreported, results->stats.nincluded);
+  fflush(stdout);
+
+ CLEAR:
+  /* free all the data */
+  for(int i = 0; i < results->stats.nhits; i++){
+    p7_hit_Destroy(results->hits[i]);
+  }
+
+  free(results->hits);
+  results->hits = NULL;
+
+  if (pli)  p7_pipeline_Destroy(pli);
+  if (hits) free(hits);
+  if (dcl)  free(dcl);
+  if(buf_ptr != NULL){
+    free(buf_ptr);
+  }
+  if(buf2_ptr != NULL){
+    free(buf2_ptr);
+  }
+  if(buf3_ptr != NULL){
+    free(buf3_ptr);
+  }
+  if(results->stats.hit_offsets != NULL){
+    free(results->stats.hit_offsets);
+  }
+  init_results(results);
+  return;
+}
+
+
+static void
+free_QueueData_shard(QUEUE_DATA_SHARD *data)
+{
+  /* free the query data */
+  esl_getopts_Destroy(data->opts);
+
+  if (data->abc != NULL) esl_alphabet_Destroy(data->abc);
+  if (data->hmm != NULL) p7_hmm_Destroy(data->hmm);
+  if (data->seq != NULL) esl_sq_Destroy(data->seq);
+  if (data->cmd != NULL) free(data->cmd);
+  memset(data, 0, sizeof(*data));
+  free(data);
+}
+
+static void print_client_msg(int fd, int status, char *format, va_list ap)
+{
+  uint32_t nalloc =0;
+  uint32_t buf_offset = 0;
+  uint8_t *buf = NULL;
+  char  ebuf[512];
+
+  HMMD_SEARCH_STATUS s;
+
+  memset(&s, 0, sizeof(HMMD_SEARCH_STATUS));
+
+  s.status   = status;
+  s.msg_size = vsnprintf(ebuf, sizeof(ebuf), format, ap) +1; /* +1 because we send the \0 */
+
+  p7_syslog(LOG_ERR, ebuf);
+
+  if(hmmd_search_status_Serialize(&s, &buf, &buf_offset, &nalloc) != eslOK){
+    LOG_FATAL_MSG("Serializing HMMD_SEARCH_STATUS failed", errno);
+  }
+  /* send back an unsuccessful status message */
+
+  if (writen(fd, buf, buf_offset) != buf_offset) {
+    p7_syslog(LOG_ERR,"[%s:%d] - writing (%d) error %d - %s\n", __FILE__, __LINE__, fd, errno, strerror(errno));
+    return;
+  }
+  if (writen(fd, ebuf, s.msg_size) != s.msg_size)  {
+    p7_syslog(LOG_ERR,"[%s:%d] - writing (%d) error %d - %s\n", __FILE__, __LINE__, fd, errno, strerror(errno));
+    return;
+  }
+
+  free(buf);
+}
+
+static void
+client_msg(int fd, int status, char *format, ...)
+{
+  va_list ap;
+
+  va_start(ap, format);
+  print_client_msg(fd, status, format, ap);
+  va_end(ap);
+}
+
+static void
+client_msg_longjmp(int fd, int status, jmp_buf *env, char *format, ...)
+{
+  va_list ap;
+
+  va_start(ap, format);
+  print_client_msg(fd, status, format, ap);
+  va_end(ap);
+
+  longjmp(*env, 1);
+}
+
+
+static void
+process_ServerCmd(char *ptr, CLIENTSIDE_ARGS *data)
+{
+  QUEUE_DATA_SHARD    *parms    = NULL;     /* cmd to queue           */
+  HMMD_COMMAND_SHARD  *cmd      = NULL;     /* parsed cmd to process  */
+  int            fd       = data->sock_fd;
+  ESL_STACK     *cmdstack = data->cmdstack;
+  char          *s;
+  time_t         date;
+  char           timestamp[32];
+
+  /* skip leading white spaces */
+  ++ptr;
+  while (*ptr == ' ' || *ptr == '\t') ++ptr;
+
+  /* skip to the end of the line */
+  s = ptr;
+  while (*s && (*s != '\n' && *s != '\r')) ++s;
+  *s = 0;
+
+  /* process the different commands */
+  s = strsep(&ptr, " \t");
+  if (strcmp(s, "shutdown") == 0) 
+    {
+      if ((cmd = malloc(sizeof(HMMD_HEADER))) == NULL) LOG_FATAL_MSG("malloc", errno);
+      memset(cmd, 0, sizeof(HMMD_HEADER)); /* avoid uninit bytes & valgrind bitching. Remove, if we ever serialize structs correctly. */
+      cmd->hdr.length  = 0;
+      cmd->hdr.command = HMMD_CMD_SHUTDOWN;
+    } 
+  else 
+    {
+      client_msg(fd, eslEINVAL, "Unknown command %s\n", s);
+      return;
+    }
+
+  if ((parms = malloc(sizeof(QUEUE_DATA_SHARD))) == NULL) LOG_FATAL_MSG("malloc", errno);
+  memset(parms, 0, sizeof(QUEUE_DATA_SHARD)); /* avoid valgrind bitches about uninit bytes; remove if structs are serialized properly */
+
+  parms->hmm  = NULL;
+  parms->seq  = NULL;
+  parms->abc  = NULL;
+  parms->opts = NULL;
+  parms->dbx  = -1;
+  parms->cmd  = cmd;
+
+  strcpy(parms->ip_addr, data->ip_addr);
+  parms->sock       = fd;
+  parms->cmd_type   = cmd->hdr.command;
+  parms->query_type = 0;
+
+  date = time(NULL);
+  ctime_r(&date, timestamp);
+  printf("\n%s", timestamp);	/* note ctime_r() leaves \n on end of timestamp */
+  printf("Queuing command %d from %s (%d)\n", cmd->hdr.command, parms->ip_addr, parms->sock);
+  fflush(stdout);
+
+  esl_stack_PPush(cmdstack, parms);
+}
+static int
+clientside_loop(CLIENTSIDE_ARGS *data)
+{
+  int                status;
+
+  char              *ptr;
+  char              *buffer;
+  char               opt_str[MAX_BUFFER];
+
+  int                dbx;
+  int                buf_size;
+  int                remaining;
+  int                amount;
+  int                eod;
+  int                n;
+
+  P7_HMM            *hmm     = NULL;     /* query HMM                      */
+  ESL_SQ            *seq     = NULL;     /* query sequence                 */
+  ESL_SCOREMATRIX   *sco     = NULL;     /* scoring matrix                 */
+  P7_HMMFILE        *hfp     = NULL;
+  ESL_ALPHABET      *abc     = NULL;     /* digital alphabet               */
+  ESL_GETOPTS       *opts    = NULL;     /* search specific options        */
+  HMMD_COMMAND_SHARD      *cmd     = NULL;     /* search cmd to send to workers  */
+
+  ESL_STACK         *cmdstack = data->cmdstack;
+  QUEUE_DATA_SHARD        *parms;
+  jmp_buf            jmp_env;
+  time_t             date;
+  char               timestamp[32];
+
+  buf_size = MAX_BUFFER;
+  if ((buffer  = malloc(buf_size))   == NULL) LOG_FATAL_MSG("malloc", errno);
+  ptr = buffer;
+  remaining = buf_size;
+  amount = 0;
+
+  eod = 0;
+  while (!eod) {
+    int   l;
+    char *s;
+
+    /* Receive message from client */
+    if ((n = read(data->sock_fd, ptr, remaining)) < 0) {
+      p7_syslog(LOG_ERR,"[%s:%d] - reading %s error %d - %s\n", __FILE__, __LINE__, data->ip_addr, errno, strerror(errno));
+      return 1;
+    }
+
+    if (n == 0) return 1;
+
+    ptr += n;
+    amount += n;
+    remaining -= n;
+
+    /* scan backwards till we hit the start of the line */
+    l = amount;
+    s = ptr - 1;
+    while (l-- > 0 && (*s == '\n' || *s == '\r')) --s;
+    while (l-- > 0 && (*s != '\n' && *s != '\r')) --s;
+    eod = (amount > 1 && *(s + 1) == '/' && *(s + 2) == '/' );
+
+    /* if the buffer is full, make it larger */
+    if (!eod && remaining == 0) {
+      if ((buffer = realloc(buffer, buf_size * 2)) == NULL) LOG_FATAL_MSG("realloc", errno);
+      ptr = buffer + buf_size;
+      remaining = buf_size;
+      buf_size *= 2;
+    }
+  }
+
+  /* zero terminate the buffer */
+  if (remaining == 0) {
+    if ((buffer = realloc(buffer, buf_size + 1)) == NULL) LOG_FATAL_MSG("realloc", errno);
+    ptr = buffer + buf_size;
+  }
+  *ptr = 0;
+
+  /* skip all leading white spaces */
+  ptr = buffer;
+  while (*ptr && isspace(*ptr)) ++ptr;
+
+  opt_str[0] = 0;
+  if (*ptr == '!') {
+    process_ServerCmd(ptr, data);
+    free(buffer);
+    return 0;
+  } else if (*ptr == '@') {
+    char *s = ++ptr;
+
+    /* skip to the end of the line */
+    while (*ptr && (*ptr != '\n' && *ptr != '\r')) ++ptr;
+    *ptr++ = 0;
+
+    /* create a commandline string with dummy program name for
+     * the esl_opt_ProcessSpoof() function to parse.
+     */
+    snprintf(opt_str, sizeof(opt_str), "hmmpgmd %s\n", s);
+
+    /* skip remaining white spaces */
+    while (*ptr && isspace(*ptr)) ++ptr;
+  } else {
+    client_msg(data->sock_fd, eslEFORMAT, "Missing options string");
+    free(buffer);
+    return 0;
+  }
+
+  if (strncmp(ptr, "//", 2) == 0) {
+    client_msg(data->sock_fd, eslEFORMAT, "Missing search sequence/hmm");
+    free(buffer);
+    return 0;
+  }
+
+  if (!setjmp(jmp_env)) {
+    dbx = 0;
+    
+    status = process_searchopts(data->sock_fd, opt_str, &opts);
+    if (status != eslOK) {
+      client_msg_longjmp(data->sock_fd, status, &jmp_env, "Failed to parse options string: %s", opts->errbuf);
+    }
+
+    /* the options string can handle an optional database */
+    if (esl_opt_ArgNumber(opts) > 0) {
+      client_msg_longjmp(data->sock_fd, status, &jmp_env, "Incorrect number of command line arguments.");
+    }
+
+    if (esl_opt_IsUsed(opts, "--seqdb")) {
+      dbx = esl_opt_GetInteger(opts, "--seqdb");
+    } else if (esl_opt_IsUsed(opts, "--hmmdb")) {
+      dbx = esl_opt_GetInteger(opts, "--hmmdb");
+    } else {
+      client_msg_longjmp(data->sock_fd, eslEINVAL, &jmp_env, "No search database specified, --seqdb or --hmmdb.");
+    }
+
+
+    abc = esl_alphabet_Create(eslAMINO);
+    seq = NULL;
+    hmm = NULL;
+
+    if (*ptr == '>') {
+      /* try to parse the input buffer as a FASTA sequence */
+      seq = esl_sq_CreateDigital(abc);
+      /* try to parse the input buffer as a FASTA sequence */
+      status = esl_sqio_Parse(ptr, strlen(ptr), seq, eslSQFILE_DAEMON);
+      if (status != eslOK) client_msg_longjmp(data->sock_fd, status, &jmp_env, "Error parsing FASTA sequence");
+      if (seq->n < 1) client_msg_longjmp(data->sock_fd, eslEFORMAT, &jmp_env, "Error zero length FASTA sequence");
+
+    } else if (strncmp(ptr, "HMM", 3) == 0) {
+      if (esl_opt_IsUsed(opts, "--hmmdb")) {
+        client_msg_longjmp(data->sock_fd, status, &jmp_env, "A HMM cannot be used to search a hmm database");
+      }
+
+      /* try to parse the buffer as an hmm */
+      status = p7_hmmfile_OpenBuffer(ptr, strlen(ptr), &hfp);
+      if (status != eslOK) client_msg_longjmp(data->sock_fd, status, &jmp_env, "Failed to open query hmm buffer");
+
+      status = p7_hmmfile_Read(hfp, &abc,  &hmm);
+      if (status != eslOK) client_msg_longjmp(data->sock_fd, status, &jmp_env, "Error reading query hmm: %s", hfp->errbuf);
+
+      p7_hmmfile_Close(hfp);
+
+    } else {
+      /* no idea what we are trying to parse */
+      client_msg_longjmp(data->sock_fd, eslEFORMAT, &jmp_env, "Unknown query sequence/hmm format");
+    }
+  } else {
+    /* an error occured some where, so try to clean up */
+    if (opts != NULL) esl_getopts_Destroy(opts);
+    if (abc  != NULL) esl_alphabet_Destroy(abc);
+    if (hmm  != NULL) p7_hmm_Destroy(hmm);
+    if (seq  != NULL) esl_sq_Destroy(seq);
+    if (sco  != NULL) esl_scorematrix_Destroy(sco);
+
+    free(buffer);
+    return 0;
+  }
+
+  if ((parms = malloc(sizeof(QUEUE_DATA_SHARD))) == NULL) LOG_FATAL_MSG("malloc", errno);
+
+  /* build the search structure that will be sent to all the workers */
+  n = sizeof(HMMD_COMMAND_SHARD);
+  n = n + strlen(opt_str) + 1;
+
+  if (seq != NULL) {
+    n = n + strlen(seq->name) + 1;
+    n = n + strlen(seq->desc) + 1;
+    n = n + seq->n + 2;
+  } else {
+    n = n + sizeof(P7_HMM);
+    n = n + sizeof(float) * (hmm->M + 1) * p7H_NTRANSITIONS;
+    n = n + sizeof(float) * (hmm->M + 1) * abc->K;
+    n = n + sizeof(float) * (hmm->M + 1) * abc->K;
+    if (hmm->name   != NULL)    n = n + strlen(hmm->name) + 1;
+    if (hmm->acc    != NULL)    n = n + strlen(hmm->acc)  + 1;
+    if (hmm->desc   != NULL)    n = n + strlen(hmm->desc) + 1;
+    if (hmm->flags & p7H_RF)    n = n + hmm->M + 2;
+    if (hmm->flags & p7H_MMASK) n = n + hmm->M + 2;
+    if (hmm->flags & p7H_CONS)  n = n + hmm->M + 2;
+    if (hmm->flags & p7H_CS)    n = n + hmm->M + 2;
+    if (hmm->flags & p7H_CA)    n = n + hmm->M + 2;
+    if (hmm->flags & p7H_MAP)   n = n + sizeof(int) * (hmm->M + 1);
+  }
+
+  if ((cmd = malloc(n)) == NULL) LOG_FATAL_MSG("malloc", errno);
+  memset(cmd, 0, n);		/* silence valgrind bitching about uninit bytes; remove if we ever serialize structs properly */
+  cmd->hdr.length       = n - sizeof(HMMD_HEADER);
+  cmd->hdr.command      = (esl_opt_IsUsed(opts, "--seqdb")) ? HMMD_CMD_SEARCH : HMMD_CMD_SCAN;
+  cmd->srch.db_inx      = dbx - 1;   /* the program indexes databases 0 .. n-1 */
+  cmd->srch.opts_length = strlen(opt_str) + 1;
+
+  ptr = cmd->srch.data;
+
+  memcpy(ptr, opt_str, cmd->srch.opts_length);
+  ptr += cmd->srch.opts_length;
+  
+  if (seq != NULL) {
+    cmd->srch.query_type   = HMMD_SEQUENCE;
+    cmd->srch.query_length = seq->n + 2;
+
+    n = strlen(seq->name) + 1;
+    memcpy(ptr, seq->name, n);
+    ptr += n;
+
+    n = strlen(seq->desc) + 1;
+    memcpy(ptr, seq->desc, n);
+    ptr += n;
+
+    n = seq->n + 2;
+    memcpy(ptr, seq->dsq, n);
+    ptr += n;
+  } else {
+    cmd->srch.query_type   = HMMD_HMM;
+    cmd->srch.query_length = hmm->M;
+
+    n = sizeof(P7_HMM);
+    memcpy(ptr, hmm, n);
+    ptr += n;
+
+    n = sizeof(float) * (hmm->M + 1) * p7H_NTRANSITIONS;
+    memcpy(ptr, *hmm->t, n);
+    ptr += n;
+
+    n = sizeof(float) * (hmm->M + 1) * abc->K;
+    memcpy(ptr, *hmm->mat, n);
+    ptr += n;
+    memcpy(ptr, *hmm->ins, n);
+    ptr += n;
+
+    if (hmm->name) { n = strlen(hmm->name) + 1;  memcpy(ptr, hmm->name, n);  ptr += n; }
+    if (hmm->acc)  { n = strlen(hmm->acc)  + 1;  memcpy(ptr, hmm->acc, n);   ptr += n; }
+    if (hmm->desc) { n = strlen(hmm->desc) + 1;  memcpy(ptr, hmm->desc, n);  ptr += n; }
+
+    n = hmm->M + 2;
+    if (hmm->flags & p7H_RF)    { memcpy(ptr, hmm->rf,        n); ptr += n; }
+    if (hmm->flags & p7H_MMASK) { memcpy(ptr, hmm->mm,        n); ptr += n; }
+    if (hmm->flags & p7H_CONS)  { memcpy(ptr, hmm->consensus, n); ptr += n; }
+    if (hmm->flags & p7H_CS)    { memcpy(ptr, hmm->cs,        n); ptr += n; }
+    if (hmm->flags & p7H_CA)    { memcpy(ptr, hmm->ca,        n); ptr += n; }
+
+    if (hmm->flags & p7H_MAP) {
+      n = sizeof(int) * (hmm->M + 1);
+      memcpy(ptr, hmm->map, n);
+      ptr += n;
+    }
+  }
+
+  parms->hmm  = hmm;
+  parms->seq  = seq;
+  parms->abc  = abc;
+  parms->opts = opts;
+  parms->dbx  = dbx - 1;
+  parms->cmd  = cmd;
+
+  strcpy(parms->ip_addr, data->ip_addr);
+  parms->sock       = data->sock_fd;
+  parms->cmd_type   = cmd->hdr.command;
+  parms->query_type = (seq != NULL) ? HMMD_SEQUENCE : HMMD_HMM;
+
+  date = time(NULL);
+  ctime_r(&date, timestamp);
+  printf("\n%s", timestamp);	/* note ctime_r() leaves \n on end of timestamp */
+
+  if (parms->seq != NULL) {
+    printf("Queuing %s %s from %s (%d)\n", (cmd->hdr.command == HMMD_CMD_SEARCH) ? "search" : "scan", parms->seq->name, parms->ip_addr, parms->sock);
+  } else {
+    printf("Queuing hmm %s from %s (%d)\n", parms->hmm->name, parms->ip_addr, parms->sock);
+  }
+  printf("%s", opt_str);	/* note opt_str already has trailing \n */
+  fflush(stdout);
+
+  esl_stack_PPush(cmdstack, parms);
+
+  free(buffer);
+  return 0;
+}
+
+
+
+/* discard_function()
+ * function handed to esl_stack_DiscardSelected() to remove
+ * all commands in the stack that are associated with a
+ * particular client socket, because we're closing that
+ * client down. Prototype to this is dictate by the generalized
+ * interface to esl_stack_DiscardSelected().
+ */
+static int
+discard_function(void *elemp, void *args)
+{
+  QUEUE_DATA_SHARD  *elem = (QUEUE_DATA_SHARD *) elemp;
+  int          fd   = * (int *) args;
+
+  if (elem->sock == fd) 
+    {
+      free_QueueData_shard(elem);
+      return TRUE;
+    }
+  return FALSE;
+}
+
+
+static void *
+clientside_thread(void *arg)
+{
+  int              eof;
+  CLIENTSIDE_ARGS *data = (CLIENTSIDE_ARGS *)arg;
+
+  /* Guarantees that thread resources are deallocated upon return */
+  pthread_detach(pthread_self()); 
+
+  eof = 0;
+  while (!eof) {
+    eof = clientside_loop(data);
+  }
+
+  /* remove any commands in stack associated with this client's socket */
+  esl_stack_DiscardSelected(data->cmdstack, discard_function, &(data->sock_fd));
+
+  printf("Closing %s (%d)\n", data->ip_addr, data->sock_fd);
+  fflush(stdout);
+
+  close(data->sock_fd);
+  free(data);
+
+  pthread_exit(NULL);
+}
+
+static void *
+client_comm_thread(void *arg)
+{
+  int                  n;
+  int                  fd;
+  int                  addrlen;
+  pthread_t            thread_id;
+
+  struct sockaddr_in   addr;
+
+  CLIENTSIDE_ARGS     *targs    = NULL;
+  CLIENTSIDE_ARGS     *data     = (CLIENTSIDE_ARGS *)arg;
+
+  for ( ;; ) {
+
+    /* Wait for a client to connect */
+    n = sizeof(addr);
+    if ((fd = accept(data->sock_fd, (struct sockaddr *)&addr, (unsigned int *)&n)) < 0) LOG_FATAL_MSG("accept", errno);
+
+    if ((targs = malloc(sizeof(CLIENTSIDE_ARGS))) == NULL) LOG_FATAL_MSG("malloc", errno);
+    targs->cmdstack   = data->cmdstack;
+    targs->sock_fd    = fd;
+
+    addrlen = sizeof(targs->ip_addr);
+    strncpy(targs->ip_addr, inet_ntoa(addr.sin_addr), addrlen);
+    targs->ip_addr[addrlen-1] = 0;
+
+    if ((n = pthread_create(&thread_id, NULL, clientside_thread, targs)) != 0) LOG_FATAL_MSG("thread create", n);
+  }
+  
+  pthread_exit(NULL);
+}
+
+static void 
+setup_clientside_comm(ESL_GETOPTS *opts, CLIENTSIDE_ARGS *args)
+{
+  int                  n;
+  int                  reuse;
+  int                  sock_fd;
+  pthread_t            thread_id;
+
+  struct linger        linger;
+  struct sockaddr_in   addr;
+
+  /* Create socket for incoming connections */
+  if ((sock_fd = socket(PF_INET, SOCK_STREAM, IPPROTO_TCP)) < 0) LOG_FATAL_MSG("socket", errno);
+      
+  /* incase the server went down in an ungraceful way, allow the port to be
+   * reused avoiding the timeout.
+   */
+  reuse = 1;
+  if (setsockopt(sock_fd, SOL_SOCKET, SO_REUSEADDR, (void *)&reuse, sizeof(reuse)) < 0) LOG_FATAL_MSG("setsockopt", errno);
+
+  /* the sockets are never closed, so if the server exits, force the kernel to
+   * close the socket and clear it so the server can be restarted immediately.
+   */
+  linger.l_onoff = 1;
+  linger.l_linger = 0;
+  if (setsockopt(sock_fd, SOL_SOCKET, SO_LINGER, (void *)&linger, sizeof(linger)) < 0) LOG_FATAL_MSG("setsockopt", errno);
+
+  /* Construct local address structure */
+  memset(&addr, 0, sizeof(addr));
+  addr.sin_family = AF_INET;
+  addr.sin_addr.s_addr = htonl(INADDR_ANY);
+  addr.sin_port = htons(esl_opt_GetInteger(opts, "--cport"));
+
+  /* Bind to the local address */
+  if (bind(sock_fd, (struct sockaddr *) &addr, sizeof(addr)) < 0) LOG_FATAL_MSG("bind", errno);
+
+  /* Mark the socket so it will listen for incoming connections */
+  if (listen(sock_fd, esl_opt_GetInteger(opts, "--ccncts")) < 0) LOG_FATAL_MSG("listen", errno);
+  args->sock_fd = sock_fd;
+
+  if ((n = pthread_create(&thread_id, NULL, client_comm_thread, (void *)args)) != 0) LOG_FATAL_MSG("socket", n);
+}
+
+
+
 //#define HAVE_MPI
 // p7_server_masternode_Create
 /*! \brief Creates and initializes a P7_SERVER_MASTERNODE_STATE object
@@ -221,75 +1022,20 @@ ERROR:
   p7_Fail("Unable to allocate memory in p7_server_message_Create");  
 }
 
-// p7_master_node_main
-/*! \brief Top-level function run on each master node
- *  \details Creates and initializes the main P7_MASTERNODE_STATE object for the master node, then enters a loop
- *  where it starts the number of searches specified on the command line, and reports the amount of time each search took.
- *  \param [in] argc The argument count (argc) passed to the program that invoked p7_master_node_main
- *  \param [in] argv The command-line arguments (argv) passed to the program that invoked p7_master_node_main
- *  \param [in] server_mpitypes Data structure that defines the custom MPI datatypes we use
- *  \warning This function will be significantly overhauled as we implement the server's UI, so that it receives search commands from
- *  user machines and executes them.  The current version is only valid for performance testing. 
- *  \bug Currently requires that the server be run on at least two nodes.  Need to modify the code to run correctly on one node, possibly
- *  as two MPI ranks.
- */
-void p7_server_master_node_main(int argc, char ** argv, MPI_Datatype *server_mpitypes, ESL_GETOPTS *go){
-#ifndef HAVE_MPI
-  p7_Fail("P7_master_node_main requires MPI and HMMER was compiled without MPI support");
-#endif
-
-#ifdef HAVE_MPI
-  // For now, we only use one shard.  This will change in the future
-  int num_shards = 1; // Change this to calculate number of shards based on database size
-  
-  char           *hmmfile = esl_opt_GetArg(go, 1);
-  char           *seqfile = esl_opt_GetArg(go, 2);
-
-  uint64_t num_searches = esl_opt_GetInteger(go, "-n");
-
-  ESL_ALPHABET   *abc     = NULL;
-  int status; // return code from ESL routines
-
-  // For performance tests, we only use two databases.  That will become a command-line argument
-  char *database_names[2];
-  database_names[0] = hmmfile;
-  database_names[1] = seqfile;
-  impl_Init();                  /* processor specific initialization */
-  p7_FLogsumInit();		/* we're going to use table-driven Logsum() approximations at times */
-
-  int num_nodes;
-
-  // Get the number of nodes that we're running on 
-  MPI_Comm_size(MPI_COMM_WORLD, &num_nodes);
-
-  if(num_nodes < 2){
-    p7_Fail("Found 0 worker ranks.  Please re-run with at least 2 MPI ranks so that there can be a master and at least one worker rank.");
-  }
-
-  // Set up the masternode state object for this node
-  P7_SERVER_MASTERNODE_STATE *masternode;
-  masternode = p7_server_masternode_Create(num_shards, num_nodes -1);
-  if(masternode == NULL){
-    p7_Fail("Unable to allocate memory in master_node_main\n");
-  }
-
-  // load the databases.  To be removed when we implement the UI
-  p7_server_masternode_Setup(num_shards, 2, database_names, masternode);
-
-
-
-  // Tell all of the workers how many shards we're using
-  MPI_Bcast(&num_shards, 1, MPI_INT, 0, MPI_COMM_WORLD);
-
-  // Create hit processing thread
-  P7_SERVER_MASTERNODE_HIT_THREAD_ARGUMENT hit_argument;
-  hit_argument.masternode = masternode;
-  pthread_attr_t attr;
-
-  // Enter the performance test region
-  uint64_t num_hmms = masternode->database_shards[0]->num_objects;
-  uint64_t search_increment = num_hmms/num_searches;
-
+/* Sends a search to the worker nodes, waits for results, and returns them to the client */
+int process_search(P7_SERVER_MASTERNODE_STATE *masternode, QUEUE_DATA_SHARD *query, MPI_Datatype *server_mpitypes, ESL_GETOPTS *go){
+  struct timeval start, end;
+  uint64_t search_increment = 1;
+  int status;
+  P7_SERVER_COMMAND the_command;
+  the_command.type = P7_SERVER_HMM_VS_SEQUENCES;
+  the_command.db = 0;
+  SEARCH_RESULTS results;
+  P7_SERVER_MESSAGE *buffer, **buffer_handle; //Use this to avoid need to re-aquire message buffer
+  // when we poll and don't find a message
+  buffer = NULL;
+  buffer_handle = &(buffer);
+  init_results(&results);
   char *hmmbuffer;
   ESL_ALLOC(hmmbuffer, 100000* sizeof(char));  // take a wild guess at a buffer that will hold most hmms
   
@@ -299,63 +1045,14 @@ void p7_server_master_node_main(int argc, char ** argv, MPI_Datatype *server_mpi
   P7_PROFILE *gm;
   int hmm_length, pack_position;
 
-  uint64_t search_start, search_end;
-
   // For testing, search the entire database
-  P7_SHARD *database_shard = masternode->database_shards[1];
-  P7_SHARD *hmm_shard = masternode->database_shards[0];
-// Temp code to generate a random list of sequence names out of the sequence database
+  P7_SHARD *database_shard = masternode->database_shards[0];
+
+
+  masternode->hit_messages_received = 0;
+  gettimeofday(&start, NULL);
   
-/*  char* name;
-  int rand_id, seq;
-  uint32_t rand_seed;
-  struct timeval current_time;
-  gettimeofday(&current_time, NULL);
-  ESL_RANDOMNESS *rng;
-  rng = esl_randomness_Create (current_time.tv_usec); // use number of microseconds in the current time as a "random" seed
-  // Yes, this is way overkill for just sampling some sequences to create a benchmark, but it's about as easy as doing it the "bad" way
-  for (seq = 0; seq < 50; seq++){
-    rand_id = esl_rnd_Roll(rng, database_shard->num_objects); // generate a random index into the database
-    p7_shard_Find_Descriptor_Nexthigh(database_shard, rand_id, &name); // get pointer to the name of the indexed sequence
-    printf("%s\n", name);
-  }
-*/  
-  // block until everyone is ready to go
-  MPI_Barrier(MPI_COMM_WORLD);
-
-  //create pthread attribute structure
-  if(pthread_attr_init(&attr)){
-    p7_Fail("Couldn't create pthread attr structure in master_node_main");
-  }
-  if(pthread_create(&(masternode->hit_thread_object), &attr, p7_server_master_hit_thread, (void *) &hit_argument)){
-    p7_Fail("Unable to create hit thread in master_node_main");
-  }
-  if(pthread_attr_destroy(&attr)){
-    p7_Fail("Couldn't destroy pthread attr structure in master_node_main");
-  }
-
-  while(!masternode->hit_thread_ready){
-    // wait for the hit thread to start up;
-  }
-  struct timeval start, end;
-  P7_SERVER_COMMAND the_command;
-  the_command.type = P7_SERVER_HMM_VS_SEQUENCES;
-  the_command.db = 0;
-  char outfile_name[255];
-  int search;
-
-
-  P7_SERVER_MESSAGE *buffer, **buffer_handle; //Use this to avoid need to re-aquire message buffer
-  // when we poll and don't find a message
-  buffer = NULL;
-  buffer_handle = &(buffer);
-
-  // Performance test loop.  Perform the specified number of searches.
-  for(search = 0; search < num_searches; search++){
-    masternode->hit_messages_received = 0;
-    gettimeofday(&start, NULL);
-  
-    uint64_t search_start, search_end, chunk_size;
+  uint64_t search_start, search_end, chunk_size;
     
     // For now_search the entire database
     search_start = database_shard->directory[0].index;
@@ -381,10 +1078,10 @@ void p7_server_master_node_main(int argc, char ** argv, MPI_Datatype *server_mpi
     pthread_mutex_unlock(&(masternode->hit_wait_lock));
 
     // Get the HMM this search will compare against
-    gm = ((P7_PROFILE **) hmm_shard->descriptors)[search * search_increment];
-    strcpy(outfile_name, gm->name);
-    strcat(outfile_name, ".tblout");
-
+    gm = p7_profile_Create (query->hmm->M, query->abc);
+    P7_BG *bg = p7_bg_Create(gm->abc);
+    p7_ProfileConfig(query->hmm, bg, gm, 100, p7_LOCAL); /* 100 is a dummy length for now; and MSVFilter requires local mode */
+    
     // Pack the HMM into a buffer for broadcast
     p7_profile_MPIPackSize(gm, MPI_COMM_WORLD, &hmm_length); // get the length of the profile
     the_command.compare_obj_length = hmm_length;
@@ -415,27 +1112,33 @@ void p7_server_master_node_main(int argc, char ** argv, MPI_Datatype *server_mpi
     double elapsed_time = ((double)((end.tv_sec * 1000000 + (end.tv_usec)) - (start.tv_sec * 1000000 + start.tv_usec)))/1000000.0;
     double gcups = (ncells/elapsed_time) / 1.0e9;
     printf("%s, %lf, %d, %lf\n", gm->name, elapsed_time, gm->M, gcups);
-    char commandstring[255];
-    P7_PIPELINE *pipeline= p7_pipeline_Create(go, gm->M, 100, FALSE, p7_SEARCH_SEQS); /* L_hint = 100 is just a dummy for now */
-    P7_BG *bg = p7_bg_Create(gm->abc);
-    P7_OPROFILE *om = p7_oprofile_Create(gm->M, gm->abc);
-    p7_oprofile_Convert (gm, om);
-    p7_pli_NewModel(pipeline, om, bg); // Set the pipeline up for this HMM
+    
 
-    pipeline->Z = search_length;
-    FILE *tblfp    = fopen(outfile_name,    "w");
-    p7_tophits_SortBySortkey(masternode->tophits);
-    p7_tophits_Threshold(masternode->tophits, pipeline);
-    p7_tophits_TabularTargets(tblfp, gm->name, gm->acc, masternode->tophits, pipeline, 1);
+    //Send results back to client
+    results.nhits = masternode->tophits->N;
+    results.stats.nhits = masternode->tophits->N;
+    results.stats.hit_offsets = NULL;
+    ESL_ALLOC(results.hits, results.nhits *sizeof(P7_HIT *));
+    int counter;
+    for(counter = 0; counter <results.nhits; counter++){
+      results.hits[counter] =masternode->tophits->unsrt + counter;
+    }
+
+
+    forward_results(query, &results);
+
+
     p7_tophits_Destroy(masternode->tophits); //Reset for next search
     masternode->tophits = p7_tophits_Create();
-    p7_pipeline_Destroy(pipeline);
     p7_bg_Destroy(bg);
-    p7_oprofile_Destroy(om);
-    // Don't need to free gm here.  It gets cleaned up as part of the shard clean-up
-  }
+    p7_profile_Destroy(gm);
+    return eslOK;
+  ERROR:
+    p7_Fail("Unable to allocate memory in process_search");
+}
 
-  // Shut everything down once we've done the requested searches
+void process_shutdown(P7_SERVER_MASTERNODE_STATE *masternode, MPI_Datatype *server_mpitypes){
+  P7_SERVER_COMMAND the_command;
   the_command.type = P7_SERVER_SHUTDOWN_WORKERS;
 
   MPI_Bcast(&the_command, 1, server_mpitypes[P7_SERVER_COMMAND_MPITYPE], 0, MPI_COMM_WORLD);
@@ -444,30 +1147,143 @@ void p7_server_master_node_main(int argc, char ** argv, MPI_Datatype *server_mpi
   masternode->shutdown = 1;
   pthread_mutex_unlock(&(masternode->hit_wait_lock));
 
-  pthread_cond_broadcast(&(masternode->start)); // signal hit processing thread to start
+  pthread_cond_broadcast(&(masternode->start));
 
   // spurious barrier for testing so that master doesn't exit immediately
   MPI_Barrier(MPI_COMM_WORLD);
 
   // Clean up memory
 
-  // there may be a dangling message buffer that's neither on the empty or full lists, so deal with it.
-  if(buffer != NULL){
-    if (buffer->tophits != NULL){
-      p7_tophits_Destroy(buffer->tophits);
-    }
-    if(buffer->buffer != NULL){
-      free(buffer->buffer);
-    }
-    free(buffer);
-  }
-  free(hmmbuffer); 
   p7_server_masternode_Destroy(masternode);
   
+}
+// p7_master_node_main
+/*! \brief Top-level function run on each master node
+ *  \details Creates and initializes the main P7_MASTERNODE_STATE object for the master node, then enters a loop
+ *  where it starts the number of searches specified on the command line, and reports the amount of time each search took.
+ *  \param [in] argc The argument count (argc) passed to the program that invoked p7_master_node_main
+ *  \param [in] argv The command-line arguments (argv) passed to the program that invoked p7_master_node_main
+ *  \param [in] server_mpitypes Data structure that defines the custom MPI datatypes we use
+ *  \warning This function will be significantly overhauled as we implement the server's UI, so that it receives search commands from
+ *  user machines and executes them.  The current version is only valid for performance testing. 
+ *  \bug Currently requires that the server be run on at least two nodes.  Need to modify the code to run correctly on one node, possibly
+ *  as two MPI ranks.
+ */
+void p7_server_master_node_main(int argc, char ** argv, MPI_Datatype *server_mpitypes, ESL_GETOPTS *go){
+#ifndef HAVE_MPI
+  p7_Fail("P7_master_node_main requires MPI and HMMER was compiled without MPI support");
+#endif
+
+#ifdef HAVE_MPI
+  // For now, we only use one shard.  This will change in the future
+  int num_shards = 1; // Change this to calculate number of shards based on database size
+  
+  char           *seqfile = esl_opt_GetArg(go, 1);
+
+  uint64_t num_searches = esl_opt_GetInteger(go, "-n");
+
+  ESL_ALPHABET   *abc     = NULL;
+  int status; // return code from ESL routines
+
+  // For performance tests, we only use two databases.  That will become a command-line argument
+  char *database_names[1];
+  database_names[0] = seqfile;
+  impl_Init();                  /* processor specific initialization */
+  p7_FLogsumInit();		/* we're going to use table-driven Logsum() approximations at times */
+
+  int num_nodes;
+
+  // Get the number of nodes that we're running on 
+  MPI_Comm_size(MPI_COMM_WORLD, &num_nodes);
+
+  if(num_nodes < 2){
+    p7_Fail("Found 0 worker ranks.  Please re-run with at least 2 MPI ranks so that there can be a master and at least one worker rank.");
+  }
+
+  // Set up the masternode state object for this node
+  P7_SERVER_MASTERNODE_STATE *masternode;
+  masternode = p7_server_masternode_Create(num_shards, num_nodes -1);
+  if(masternode == NULL){
+    p7_Fail("Unable to allocate memory in master_node_main\n");
+  }
+
+  // load the databases.  To be removed when we implement the UI
+  p7_server_masternode_Setup(num_shards, 1, database_names, masternode);
+
+
+
+  // Tell all of the workers how many shards we're using
+  MPI_Bcast(&num_shards, 1, MPI_INT, 0, MPI_COMM_WORLD);
+
+  // Create hit processing thread
+  P7_SERVER_MASTERNODE_HIT_THREAD_ARGUMENT hit_argument;
+  hit_argument.masternode = masternode;
+  pthread_attr_t attr;
+
+  // block until everyone is ready to go
+  MPI_Barrier(MPI_COMM_WORLD);
+
+  //create pthread attribute structure
+  if(pthread_attr_init(&attr)){
+    p7_Fail("Couldn't create pthread attr structure in master_node_main");
+  }
+  if(pthread_create(&(masternode->hit_thread_object), &attr, p7_server_master_hit_thread, (void *) &hit_argument)){
+    p7_Fail("Unable to create hit thread in master_node_main");
+  }
+  if(pthread_attr_destroy(&attr)){
+    p7_Fail("Couldn't destroy pthread attr structure in master_node_main");
+  }
+
+  while(!masternode->hit_thread_ready){
+    // wait for the hit thread to start up;
+  }
+  struct timeval start, end;
+
+    /* initialize the search stack, set it up for interthread communication  */
+  ESL_STACK *cmdstack = esl_stack_PCreate();
+  esl_stack_UseMutex(cmdstack);
+  esl_stack_UseCond(cmdstack);
+
+  /* start the communications with the web clients */
+  CLIENTSIDE_ARGS client_comm;
+  client_comm.cmdstack = cmdstack;
+  setup_clientside_comm(go, &client_comm);
+  printf("clientside communication started\n");
+
+  int shutdown = 0;
+  QUEUE_DATA_SHARD         *query      = NULL;
+  while (!shutdown &&  esl_stack_PPop(cmdstack, (void **) &query) == eslOK) {
+    printf("Processing command %d from %s\n", query->cmd_type, query->ip_addr);
+    fflush(stdout);
+
+    //worker_comm.range_list = NULL;
+
+    switch(query->cmd_type) {
+    case HMMD_CMD_SEARCH:
+/*      if (esl_opt_IsUsed(query->opts, "--seqdb_ranges")) {
+        ESL_ALLOC(worker_comm.range_list, sizeof(RANGE_LIST));
+        hmmpgmd_GetRanges(worker_comm.range_list, esl_opt_GetString(query->opts, "--seqdb_ranges"));
+      }*/
+      process_search(masternode, query, server_mpitypes, go); 
+      break;
+    case HMMD_CMD_SCAN:        process_search(masternode, query, server_mpitypes, go); break;
+    case HMMD_CMD_SHUTDOWN:    
+      process_shutdown(masternode, server_mpitypes);
+      p7_syslog(LOG_ERR,"[%s:%d] - shutting down...\n", __FILE__, __LINE__);
+      shutdown = 1;
+      break;
+    default:
+      p7_syslog(LOG_ERR,"[%s:%d] - unknown command %d from %s\n", __FILE__, __LINE__, query->cmd_type, query->ip_addr);
+      break;
+    }
+
+    free_QueueData_shard(query);
+  }
+
   exit(0);
   // GOTO target used to catch error cases from ESL_ALLOC
   ERROR:
-    p7_Fail("Unable to allocate memory in master_node_main");
+    p7_Fail("Unable to allocate memory in p7_master_node_main");
 #endif
 }
 

@@ -345,7 +345,7 @@ int p7_server_workernode_Setup(uint32_t num_databases, char **database_names, ui
 
     datafile = fopen(database_names[i], "r");
     fread(id_string, 13, 1, datafile); //grab the first 13 characters of the file to determine the type of database it holds
-    printf("%s\n", id_string);
+    //printf("%s\n", id_string);
     fclose(datafile);
     if (!strncmp(id_string, "HMMER3", 6))
     {
@@ -957,13 +957,12 @@ void p7_server_workernode_main(int argc, char **argv, int my_rank, MPI_Datatype 
   ESL_ALLOC(send_buf, send_buf_length * sizeof(char));
 
   // FIXME: change this to handle variable numbers of databases once we specify the server UI
-  char           *hmmfile = esl_opt_GetArg(go, 1);
-  char           *seqfile = esl_opt_GetArg(go, 2);
+  char           *seqfile = esl_opt_GetArg(go, 1);
   impl_Init();                  /* processor specific initialization */
   p7_FLogsumInit();		/* we're going to use table-driven Logsum() approximations at times */
   uint32_t num_worker_cores;
-  if(esl_opt_IsUsed(go, "-c")){
-    num_worker_cores = esl_opt_GetInteger(go, "-c");
+  if(esl_opt_IsUsed(go, "--cpu")){
+    num_worker_cores = esl_opt_GetInteger(go, "--cpu");
   }
   else{
     num_worker_cores = 0;  // default to the number that the hardware reports
