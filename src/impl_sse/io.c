@@ -440,7 +440,6 @@ int
 p7_oprofile_ReadBlockMSV(P7_HMMFILE *hfp, ESL_ALPHABET **byp_abc, P7_OM_BLOCK *hmmBlock)
 {
   int     i;
-  int     size = 0;
   int     status = eslOK;
 
   hmmBlock->count = 0;
@@ -448,7 +447,6 @@ p7_oprofile_ReadBlockMSV(P7_HMMFILE *hfp, ESL_ALPHABET **byp_abc, P7_OM_BLOCK *h
     {
       status = p7_oprofile_ReadMSV(hfp, byp_abc, &hmmBlock->list[i]);
       if (status != eslOK) break;
-      size += hmmBlock->list[i]->M;
       ++hmmBlock->count;
     }
 
