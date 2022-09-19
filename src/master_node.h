@@ -61,12 +61,17 @@ typedef struct p7_server_masternode_state{
   // Hits found by the current search
   P7_TOPHITS *tophits;
   
+  // Pipeline object to accumulate statistics from the workers
+  P7_PIPELINE *pipeline;
+
   //! Number of worker nodes, typicaly one less than the total number of nodes
   int num_worker_nodes; 
 
   //! Number of worker nodes that have finished their parts of the current search
   volatile int worker_nodes_done; 
 
+  //! Number of worker nodes that have returned their pipeline statistics
+  volatile int worker_stats_received;
   //! Pthread object for the hit sorter thread
   pthread_t hit_thread_object;
 
@@ -134,4 +139,4 @@ void p7_server_masternode_Setup(uint32_t num_shards, uint32_t num_databases, cha
 
 
 // handles incoming messages to the master node
-void p7_masternode_message_handler(P7_SERVER_MASTERNODE_STATE *masternode, P7_SERVER_MESSAGE **buffer_handle, MPI_Datatype *server_mpitypes);
+void p7_masternode_message_handler(P7_SERVER_MASTERNODE_STATE *masternode, P7_SERVER_MESSAGE **buffer_handle, MPI_Datatype *server_mpitypes, ESL_GETOPTS *go);

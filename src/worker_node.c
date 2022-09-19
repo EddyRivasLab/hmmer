@@ -1163,7 +1163,11 @@ void p7_server_workernode_main(int argc, char **argv, int my_rank, MPI_Datatype 
         // At this point, we've completed the search, so send any hits that are still on this node to the master
         int thread;
         P7_TOPHITS *hits;
+        P7_PIPELINE *pli;
+        pli = p7_pipeline_Create(go, 100, 100, FALSE, p7_SEARCH_SEQS);
+
         for(thread = 0; thread < workernode->num_threads; thread++){
+          p7_pipeline_Merge(pli, workernode->thread_state[thread].pipeline);
           if(workernode->thread_state[thread].tophits->N > 0){
             // This thread has hits that we need to put in the tree
             while(pthread_mutex_trylock(&(workernode->thread_state[thread].hits_lock))){
@@ -1181,6 +1185,13 @@ void p7_server_workernode_main(int argc, char **argv, int my_rank, MPI_Datatype 
               != eslOK){
                 p7_Fail("Failed to send hit messages to master\n");
               }
+p7_pli_Statistics(stdout, pli, NULL);
+
+        if(p7_pipeline_MPISend(pli, 0, HMMER_PIPELINE_STATE_MPI_TAG, MPI_COMM_WORLD, &send_buf, &send_buf_length) != eslOK){
+          p7_Fail("Failed to send pipeline state to master");
+        }
+        printf("Workernode stats sent\n");
+        p7_pipeline_Destroy(pli);
         //printf("Sending HMMER_HIT_FINAL_MPI_TAG message\n");
 
         p7_tophits_Destroy(workernode->tophits);
@@ -1332,6 +1343,8 @@ static int worker_thread_front_end_sequence_search_loop(P7_SERVER_WORKERNODE_STA
         p7_oprofile_ReconfigLength(workernode->thread_state[my_id].om, the_sequence->L);
         float nullsc, fwdsc;
         // The overthruster filters are the front end of the engine
+        p7_pli_NewSeq(workernode->thread_state[my_id].pipeline, the_sequence);
+
         int status = p7_Pipeline_Overthruster(workernode->thread_state[my_id].pipeline, workernode->thread_state[my_id].om, workernode->thread_state[my_id].bg, the_sequence, &fwdsc, &nullsc);
 
         if (status == eslFAIL)

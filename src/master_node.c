@@ -241,11 +241,8 @@ forward_results(QUEUE_DATA_SHARD *query, SEARCH_RESULTS *results)
   fflush(stdout);
 
  CLEAR:
-  /* free all the data */
-  for(int i = 0; i < results->stats.nhits; i++){
-    p7_hit_Destroy(results->hits[i]);
-  }
-
+  // don't need to free the actual hits -- they'll get cleaned up when the tophits object they came from
+  // gets destroyed
   free(results->hits);
   results->hits = NULL;
 
@@ -853,7 +850,7 @@ P7_SERVER_MASTERNODE_STATE *p7_server_masternode_Create(uint32_t num_shards, int
 
   // No worker nodes are done with searches at initializaiton time
   the_node->worker_nodes_done = 0;
-
+  the_node->worker_stats_received = 0;
   // Create 10 empty message buffers by default.  Don't need to get this exactly right
   // as the message receiving code will allocate more if necessary
   the_node->empty_hit_message_pool = NULL;
@@ -1048,7 +1045,7 @@ int process_search(P7_SERVER_MASTERNODE_STATE *masternode, QUEUE_DATA_SHARD *que
   // For testing, search the entire database
   P7_SHARD *database_shard = masternode->database_shards[0];
 
-
+  masternode->pipeline =  p7_pipeline_Create(go, 100, 100, FALSE, p7_SEARCH_SEQS);
   masternode->hit_messages_received = 0;
   gettimeofday(&start, NULL);
   
@@ -1073,7 +1070,7 @@ int process_search(P7_SERVER_MASTERNODE_STATE *masternode, QUEUE_DATA_SHARD *que
     while(pthread_mutex_trylock(&(masternode->hit_wait_lock))){  // Wait until hit thread is sitting at cond_wait
     }
     masternode->worker_nodes_done = 0;  // None of the workers are finished at search start time
- 
+    masternode->worker_stats_received = 0; // and none have sent pipeline statistics
     pthread_cond_broadcast(&(masternode->start)); // signal hit processing thread to start
     pthread_mutex_unlock(&(masternode->hit_wait_lock));
 
@@ -1103,10 +1100,11 @@ int process_search(P7_SERVER_MASTERNODE_STATE *masternode, QUEUE_DATA_SHARD *que
     MPI_Bcast(hmmbuffer, the_command.compare_obj_length, MPI_CHAR, 0, MPI_COMM_WORLD);
 
     // loop here until all of the workers are done with the search
-    while(masternode->worker_nodes_done < masternode->num_worker_nodes){
-      p7_masternode_message_handler(masternode, buffer_handle, server_mpitypes);  //Poll for incoming messages
+    while((masternode->worker_nodes_done < masternode->num_worker_nodes) || (masternode->worker_stats_received < masternode->num_worker_nodes))
+    {
+      p7_masternode_message_handler(masternode, buffer_handle, server_mpitypes, go);  //Poll for incoming messages
     }
-
+    printf("Masternode starting to return results\n");
     gettimeofday(&end, NULL);
     double ncells = (double) gm->M * (double) database_shard->total_length;
     double elapsed_time = ((double)((end.tv_sec * 1000000 + (end.tv_usec)) - (start.tv_sec * 1000000 + start.tv_usec)))/1000000.0;
@@ -1124,9 +1122,24 @@ int process_search(P7_SERVER_MASTERNODE_STATE *masternode, QUEUE_DATA_SHARD *que
       results.hits[counter] =masternode->tophits->unsrt + counter;
     }
 
+    //Put pipeline statistics in results
+    results.stats.elapsed = elapsed_time;
+    results.stats.Z = masternode->pipeline->Z;
+    results.stats.domZ = masternode->pipeline->domZ;
+    results.stats.domZ_setby = masternode->pipeline->domZ_setby;
+    results.stats.nmodels = masternode->pipeline->nmodels;
+    results.stats.nseqs = masternode->pipeline->nseqs;
+    results.stats.n_past_msv = masternode->pipeline->n_past_msv;
+    results.stats.n_past_bias = masternode->pipeline->n_past_bias;
+    results.stats.n_past_vit = masternode->pipeline->n_past_vit;
+    results.stats.n_past_fwd = masternode->pipeline->n_past_fwd;
+    results.stats.nreported = 0;
+    results.stats.nincluded = 0;
 
-    forward_results(query, &results);
-
+    // Send results back to client
+    forward_results(query, &results); 
+    printf("Results returned\n");
+    p7_pipeline_Destroy(masternode->pipeline);
 
     p7_tophits_Destroy(masternode->tophits); //Reset for next search
     masternode->tophits = p7_tophits_Create();
@@ -1358,6 +1371,7 @@ void *p7_server_master_hit_thread(void *argument){
         pthread_mutex_unlock(&(masternode->empty_hit_message_pool_lock));
       }
     }
+    printf("Masternode hit thread completed\n");
   }
   p7_Fail("Master node hit thread somehow reached unreachable end point\n");
 }
@@ -1382,7 +1396,7 @@ void *p7_server_master_hit_thread(void *argument){
  *  \param [in] server_mpitypes A data structure that defines the custom MPI datatypes that the server uses
  *  \returns Nothing.  Calls p7_Fail() to exit the program if unable to complete successfully.
  */ 
-void p7_masternode_message_handler(P7_SERVER_MASTERNODE_STATE *masternode, P7_SERVER_MESSAGE **buffer_handle, MPI_Datatype *server_mpitypes){
+void p7_masternode_message_handler(P7_SERVER_MASTERNODE_STATE *masternode, P7_SERVER_MESSAGE **buffer_handle, MPI_Datatype *server_mpitypes, ESL_GETOPTS *go){
 #ifndef HAVE_MPI
   p7_Fail("Attempt to call p7_masternode_message_handler when HMMER was compiled without MPI support");
 #endif
@@ -1423,10 +1437,18 @@ void p7_masternode_message_handler(P7_SERVER_MASTERNODE_STATE *masternode, P7_SE
     //printf("Masternode received message\n");
     // Do different things for each message type
     switch((*buffer_handle)->status.MPI_TAG){
+    case HMMER_PIPELINE_STATE_MPI_TAG:
+      P7_PIPELINE *temp_pipeline;
+      p7_pipeline_MPIRecv((*buffer_handle)->status.MPI_SOURCE, (*buffer_handle)->status.MPI_TAG, MPI_COMM_WORLD, &((*buffer_handle)->buffer), &((*buffer_handle)->buffer_alloc), go, &temp_pipeline);
+      p7_pipeline_Merge(masternode->pipeline, temp_pipeline);
+      p7_pipeline_Destroy(temp_pipeline);
+      masternode->worker_stats_received++;
+      printf("Worker stats received, have seen %d\n", masternode->worker_stats_received);
+      break;
     case HMMER_HIT_FINAL_MPI_TAG:
-      //printf("HMMER_HIT_FINAL_MPI_TAG message received\n");
+      printf("HMMER_HIT_FINAL_MPI_TAG message received\n");
     case HMMER_HIT_MPI_TAG:
-      //printf("HMMER_HIT_MPI_TAG message received\n");
+      printf("HMMER_HIT_MPI_TAG message received\n");
       // The message was a set of hits from a worker node, so copy it into the buffer and queue the buffer for processing by the hit thread
       masternode->hit_messages_received++;
       p7_tophits_MPIRecv((*buffer_handle)->status.MPI_SOURCE, (*buffer_handle)->status.MPI_TAG, MPI_COMM_WORLD, &((*buffer_handle)->buffer), &((*buffer_handle)->buffer_alloc), &((*buffer_handle)->tophits));

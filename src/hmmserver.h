@@ -42,5 +42,6 @@ typedef struct p7_server_chunk_reply{
 #define HMMER_HIT_FINAL_MPI_TAG 0x2
 #define HMMER_WORK_REQUEST_TAG 0x3
 #define HMMER_WORK_REPLY_TAG 0x4
+#define HMMER_PIPELINE_STATE_MPI_TAG 0x5
 
 #endif
