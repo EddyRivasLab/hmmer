@@ -1134,6 +1134,7 @@ int process_search(P7_SERVER_MASTERNODE_STATE *masternode, QUEUE_DATA_SHARD *que
     results.stats.elapsed = elapsed_time;
     results.stats.Z = masternode->pipeline->Z;
     results.stats.domZ = masternode->pipeline->domZ;
+    results.stats.Z_setby = masternode->pipeline->Z_setby;
     results.stats.domZ_setby = masternode->pipeline->domZ_setby;
     if(masternode->pipeline->mode == p7_SEARCH_SEQS){
       results.stats.nmodels = 1;

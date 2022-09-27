@@ -130,6 +130,7 @@ extern int p7_hmmd_search_stats_Serialize(const HMMD_SEARCH_STATS *obj, uint8_t 
       *ptr = 2;
       break;
     default:
+      printf("obj->Z_setby = %d\n", obj->Z_setby);
       ESL_EXCEPTION(eslEINVAL,"Error: unknown enum type found in HMMD_SEARCH_STATS_Serialize");
   }
   ptr += 1;
@@ -145,6 +146,7 @@ extern int p7_hmmd_search_stats_Serialize(const HMMD_SEARCH_STATS *obj, uint8_t 
       *ptr = 2;
       break;
     default:
+      printf("obj->domZ_setby = %d\n", obj->domZ_setby);
       ESL_EXCEPTION(eslEINVAL, "Error: unknown enum type found in HMMD_SEARCH_STATS_Serialize");
   }
   ptr += 1;
