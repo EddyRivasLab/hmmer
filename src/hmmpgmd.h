@@ -21,7 +21,9 @@ typedef struct {
   enum p7_zsetby_e domZ_setby;	/* how domZ was set                         */
 
   uint64_t   nmodels;         	/* # of HMMs searched                       */
+  uint64_t   nnodes;            /* # of HMM nodes searched */
   uint64_t   nseqs;           	/* # of sequences searched                  */
+  uint64_t   nres;              /* # of residues searched */
   uint64_t   n_past_msv;      	/* # comparisons that pass MSVFilter()      */
   uint64_t   n_past_bias;     	/* # comparisons that pass bias filter      */
   uint64_t   n_past_vit;      	/* # comparisons that pass ViterbiFilter()  */
@@ -94,7 +96,7 @@ typedef struct {
 } HMMD_COMMAND;
 
 #define HMMD_SEARCH_STATUS_SERIAL_SIZE sizeof(uint32_t) + sizeof(uint64_t)
-#define HMMD_SEARCH_STATS_SERIAL_BASE (5 * sizeof(double)) + (9 * sizeof(uint64_t)) + 2
+#define HMMD_SEARCH_STATS_SERIAL_BASE (5 * sizeof(double)) + (11 * sizeof(uint64_t)) + 21
 // The 2 is two enums at one byte/enum as we serialize them
 #define MSG_SIZE(x) (sizeof(HMMD_HEADER) + ((HMMD_HEADER *)(x))->length)
 

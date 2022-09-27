@@ -103,7 +103,8 @@ HDRS =  hmmer.h \
 	p7_gbands.h \
 	p7_gmxb.h \
 	p7_gmxchk.h \
-	p7_hmmcache.h
+	p7_hmmcache.h \
+	hmmpgmd.h
 
 OBJS =  build.o\
 	cachedb.o\

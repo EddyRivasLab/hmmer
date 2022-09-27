@@ -485,7 +485,9 @@ int main(int argc, char *argv[])
         w->sys           = stats->sys;
 
         pli->nmodels     = stats->nmodels;
-        pli->nseqs       = stats->nseqs;
+        pli->nnodes      = stats->nnodes;
+        pli->nseqs       = stats->nseqs;  
+        pli->nres        = stats->nres;
         pli->n_past_msv  = stats->n_past_msv;
         pli->n_past_bias = stats->n_past_bias;
         pli->n_past_vit  = stats->n_past_vit;

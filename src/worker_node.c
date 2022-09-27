@@ -117,6 +117,7 @@ P7_SERVER_WORKERNODE_STATE *p7_server_workernode_Create(uint32_t num_databases, 
   for(i = 0; i < num_threads; i++){
     workernode->thread_state[i].tophits = p7_tophits_Create();
     workernode->thread_state[i].pipeline = NULL;
+    workernode->thread_state[i].stats_pipeline = NULL;
     workernode->thread_state[i].om = NULL;
     workernode->thread_state[i].gm = NULL;
     workernode->thread_state[i].bg = NULL;
@@ -415,7 +416,6 @@ int p7_server_workernode_start_hmm_vs_amino_db(P7_SERVER_WORKERNODE_STATE *worke
   }
   int i;
 
-
   workernode->no_steal = 0;  // reset this to allow stealing work for the new search
   
   //install the model we'll be comparing against
@@ -475,6 +475,10 @@ int p7_server_workernode_start_hmm_vs_amino_db(P7_SERVER_WORKERNODE_STATE *worke
   for(i = 0; i < workernode->num_threads; i++){
     workernode->thread_state[i].mode = FRONTEND; // all threads start out processing front-end comparisons
     workernode->thread_state[i].comparisons_queued = 0; // reset this
+    workernode->thread_state[i].stats_pipeline = p7_pipeline_Create(workernode->commandline_options, 100, 100, FALSE, p7_SEARCH_SEQS);
+    if(workernode->thread_state[i].stats_pipeline == NULL){
+      p7_Fail("Unable to allocate memory in p7_server_workernode_start_hmm_vs_amino_db.\n");
+    }
   }
   workernode->num_backend_threads = 0;
 
@@ -650,6 +654,14 @@ int p7_server_workernode_start_amino_vs_hmm_db(P7_SERVER_WORKERNODE_STATE *worke
   uint64_t task_size = ((real_end - real_start)/workernode->num_threads) + 1; // +1 to not lose some objects due to round-off error
   uint64_t task_start = real_start;
   uint64_t task_end;
+  // Set up the statistic pipelines
+  int i; 
+  for(i=0; i< workernode->num_threads; i++){
+    workernode->thread_state[i].stats_pipeline = p7_pipeline_Create(workernode->commandline_options, 100, 100, FALSE, p7_SCAN_MODELS);
+    if(workernode->thread_state[i].stats_pipeline == NULL){
+      p7_Fail("Unable to allocate memory in p7_server_workernode_start_amino_vs_hmm_db.\n");
+    }
+  }
   uint64_t thread = 0;
 
   while((thread < workernode->num_threads) && (task_start <= real_end)){
@@ -834,11 +846,6 @@ void *p7_server_worker_thread(void *worker_argument){
     p7_Fail("Unable to allocate memory in p7_server_worker_thread\n");
   }
 
-  workernode->thread_state[my_id].pipeline = p7_pipeline_Create(workernode->commandline_options, 100, 100, FALSE, p7_SEARCH_SEQS);
-  if(workernode->thread_state[my_id].pipeline == NULL){
-    p7_Fail("Unable to allocate memory in p7_server_worker_thread\n");
-  }
-
   // Tell the master thread that we're awake and ready to go
   if(pthread_mutex_lock(&(workernode->wait_lock))){  // Use blocking lock here because we may be waiting a while
     p7_Fail("Couldn't acquire wait_lock mutex in p7_server_worker_thread");
@@ -886,7 +893,6 @@ void *p7_server_worker_thread(void *worker_argument){
 
           p7_oprofile_Convert (workernode->thread_state[my_id].gm, workernode->thread_state[my_id].om);
 
-          p7_pli_NewModel(workernode->thread_state[my_id].pipeline, workernode->thread_state[my_id].om, workernode->thread_state[my_id].bg);
         }
 
         stop = 0;
@@ -1167,7 +1173,7 @@ void p7_server_workernode_main(int argc, char **argv, int my_rank, MPI_Datatype 
         pli = p7_pipeline_Create(go, 100, 100, FALSE, p7_SEARCH_SEQS);
 
         for(thread = 0; thread < workernode->num_threads; thread++){
-          p7_pipeline_Merge(pli, workernode->thread_state[thread].pipeline);
+          p7_pipeline_Merge(pli, workernode->thread_state[thread].stats_pipeline);
           if(workernode->thread_state[thread].tophits->N > 0){
             // This thread has hits that we need to put in the tree
             while(pthread_mutex_trylock(&(workernode->thread_state[thread].hits_lock))){
@@ -1272,6 +1278,22 @@ static int worker_thread_front_end_sequence_search_loop(P7_SERVER_WORKERNODE_STA
   uint64_t start,end;
   ESL_SQ *the_sequence;
 
+  if ((workernode->thread_state[my_id].pipeline != NULL)){
+    p7_Fail("Illegal state at start of worker_thread_front_end_sequence_search_loop");
+  }
+  if((workernode->search_type == SEQUENCE_SEARCH) || (workernode->search_type == SEQUENCE_SEARCH_CONTINUE)){
+    workernode->thread_state[my_id].pipeline = p7_pipeline_Create(workernode->commandline_options, 100, 100, FALSE, p7_SEARCH_SEQS);
+    if(workernode->thread_state[my_id].pipeline == NULL){
+      p7_Fail("Unable to allocate memory in worker_thread_front_end_sequence_search_loop.\n");
+    }
+    p7_pli_NewModel(workernode->thread_state[my_id].pipeline, workernode->thread_state[my_id].om, workernode->thread_state[my_id].bg);
+  }
+  else{
+    workernode->thread_state[my_id].pipeline = p7_pipeline_Create(workernode->commandline_options, 100, 100, FALSE, p7_SCAN_MODELS);
+    if(workernode->thread_state[my_id].pipeline == NULL){
+      p7_Fail("Unable to allocate memory in worker_thread_front_end_sequence_search_loop.\n");
+    }
+  }
   while(1){ // Iterate forever, we'll return from the function rather than exiting this loop
  
 
@@ -1293,11 +1315,17 @@ static int worker_thread_front_end_sequence_search_loop(P7_SERVER_WORKERNODE_STA
 
     if(!work_on_global){
     // there was no work on the global queue, so try to steal
-      if(!worker_thread_steal(workernode, my_id)){
+      if(1 || !worker_thread_steal(workernode, my_id)){
         // no more work, stop looping
         if(workernode->backend_queue_depth == 0){
         // There are also no backend queue entries to process
-        p7_pipeline_Reuse(workernode->thread_state[my_id].pipeline); // scrub the engine for next time
+          if(workernode->thread_state[my_id].pipeline != NULL){
+            //Merge stats into running list and clean up the current pipeline
+            p7_pipeline_Merge(workernode->thread_state[my_id].stats_pipeline, workernode->thread_state[my_id].pipeline);
+
+            p7_pipeline_Destroy(workernode->thread_state[my_id].pipeline); // scrub the engine for next time
+            workernode->thread_state[my_id].pipeline = NULL;
+          }        
         return 1;
         }
         else{
@@ -1311,7 +1339,13 @@ static int worker_thread_front_end_sequence_search_loop(P7_SERVER_WORKERNODE_STA
             workernode->thread_state[my_id].mode = BACKEND;
           }
           pthread_mutex_unlock(&(workernode->backend_threads_lock));
-          p7_pipeline_Reuse(workernode->thread_state[my_id].pipeline); // scrub the engine for next time
+          if(workernode->thread_state[my_id].pipeline != NULL){
+            //Merge stats into running list and clean up the current pipeline
+            p7_pipeline_Merge(workernode->thread_state[my_id].stats_pipeline, workernode->thread_state[my_id].pipeline);
+
+            p7_pipeline_Destroy(workernode->thread_state[my_id].pipeline); // scrub the engine for next time
+            workernode->thread_state[my_id].pipeline = NULL;
+          }         
           return 0;
         }
       }
@@ -1330,7 +1364,6 @@ static int worker_thread_front_end_sequence_search_loop(P7_SERVER_WORKERNODE_STA
           
     if((start != -1) && (start <= end)){
       uint64_t chunk_end = end; // process sequences until we see a long operation or hit the end of the chunk
-
       // get pointer to first sequence to search
       p7_shard_Find_Contents_Nexthigh(workernode->database_shards[workernode->compare_database], start, (char **) &(the_sequence));
 
@@ -1372,11 +1405,25 @@ static int worker_thread_front_end_sequence_search_loop(P7_SERVER_WORKERNODE_STA
             // get an entry to put this comparison in
             P7_BACKEND_QUEUE_ENTRY * the_entry = workernode_get_backend_queue_entry_from_pool(workernode);
 
+
+            // Merge our pipeline stats into the running total
+            p7_pipeline_Merge(workernode->thread_state[my_id].stats_pipeline, workernode->thread_state[my_id].pipeline);
             //swap our pipeline with the one in the entry
-            P7_PIPELINE *temp_mask = the_entry->pipeline;
             the_entry->pipeline = workernode->thread_state[my_id].pipeline;
-            workernode->thread_state[my_id].pipeline = temp_mask;
-            p7_pli_NewModel(workernode->thread_state[my_id].pipeline, workernode->thread_state[my_id].om, workernode->thread_state[my_id].bg); // Set the pipeline up for this HMM
+            if((workernode->search_type == SEQUENCE_SEARCH) || (workernode->search_type == SEQUENCE_SEARCH_CONTINUE)){
+              workernode->thread_state[my_id].pipeline = p7_pipeline_Create(workernode->commandline_options, 100, 100, FALSE, p7_SEARCH_SEQS);
+              if(workernode->thread_state[my_id].pipeline == NULL){
+                p7_Fail("Unable to allocate memory in worker_thread_front_end_sequence_search_loop.\n");
+              }
+              p7_pli_NewModel(workernode->thread_state[my_id].pipeline, workernode->thread_state[my_id].om, workernode->thread_state[my_id].bg);
+            }
+            else{
+              workernode->thread_state[my_id].pipeline = p7_pipeline_Create(workernode->commandline_options, 100, 100, FALSE, p7_SCAN_MODELS);
+              if(workernode->thread_state[my_id].pipeline == NULL){
+              p7_Fail("Unable to allocate memory in worker_thread_front_end_sequence_search_loop.\n");
+              }
+            }
+
             // populate the fields
             the_entry->sequence = the_sequence;
             the_entry->L = the_sequence->L;
@@ -1451,7 +1498,11 @@ static int worker_thread_front_end_sequence_search_loop(P7_SERVER_WORKERNODE_STA
 
              
           }
-          p7_pipeline_Reuse(workernode->thread_state[my_id].pipeline);
+          //Merge the current statistics into the running list
+          p7_pipeline_Merge(workernode->thread_state[my_id].stats_pipeline, workernode->thread_state[my_id].pipeline);
+          //and free the current pipeline
+          p7_pipeline_Destroy(workernode->thread_state[my_id].pipeline);
+          workernode->thread_state[my_id].pipeline = NULL;
           return(0);
         }
 
@@ -1489,7 +1540,7 @@ static void worker_thread_back_end_sequence_search_loop(P7_SERVER_WORKERNODE_STA
     p7_bg_SetLength(workernode->thread_state[my_id].bg, the_entry->L);           
     p7_oprofile_ReconfigLength(workernode->thread_state[my_id].om, the_entry->L);
     P7_PIPELINE *temp_pipeline = the_entry->pipeline;
-    the_entry->pipeline = workernode->thread_state[my_id].pipeline;
+    the_entry->pipeline = NULL;
     workernode->thread_state[my_id].pipeline = temp_pipeline;
     p7_ReconfigLength(workernode->thread_state[my_id].gm, the_entry->L);
     
@@ -1505,7 +1556,8 @@ static void worker_thread_back_end_sequence_search_loop(P7_SERVER_WORKERNODE_STA
 #endif
 
     workernode_put_backend_queue_entry_in_pool(workernode, the_entry); // Put the entry back in the free pool
-    p7_pipeline_Reuse(workernode->thread_state[my_id].pipeline);  // Reset engine structure for next comparison
+    p7_pipeline_Destroy(workernode->thread_state[my_id].pipeline);  // Clean up pipeline
+    workernode->thread_state[my_id].pipeline = NULL;
     the_entry = workernode_get_backend_queue_entry_from_queue(workernode); //see if there's another backend operation to do
   }
 
@@ -1588,7 +1640,7 @@ static P7_BACKEND_QUEUE_ENTRY *workernode_backend_pool_Create(int num_entries, E
     the_entry->L = 0;
     the_entry->next = prev;
 
-    the_entry->pipeline = p7_pipeline_Create(go, 100, 100, FALSE, p7_SEARCH_SEQS);
+    the_entry->pipeline = NULL;
     the_entry->fwdsc = eslINFINITY;
     the_entry->nullsc = eslINFINITY;
     
@@ -1849,7 +1901,7 @@ int32_t worker_thread_steal(P7_SERVER_WORKERNODE_STATE *workernode, uint32_t my_
 
   for(i = 0; i < workernode->num_threads; i++){
      if((workernode->work[i].start != -1) && (workernode->work[i].start < workernode->work[i].end) && (workernode->thread_state[i].mode == FRONTEND)){ 
-    // There's some stealable work in the potential victim's queue (never steal the current task)
+    // There's some stealable work in the potential victim's queue.
       stealable_work = workernode->work[i].end - workernode->work[i].start;
       if(stealable_work > most_work){
         most_work = stealable_work;
@@ -1866,11 +1918,11 @@ int32_t worker_thread_steal(P7_SERVER_WORKERNODE_STATE *workernode, uint32_t my_
 
   // If we get this far, we found someone to steal from.
   while(pthread_mutex_trylock(&(workernode->work[victim_id].lock))){
-        // spin-wait until the lock on our queue is cleared.  Should never be locked for long
+        // spin-wait until the lock on the victim's queue is cleared.  Should never be locked for long
   }
 
   // steal the lower half of the work from the victim's work queue if possible
-  if((workernode->work[victim_id].start >= workernode->work[victim_id].end) || workernode->work[victim_id].start == (uint64_t) -1){
+  if((workernode->work[victim_id].start >= workernode->work[victim_id].end) || (workernode->work[victim_id].start == (uint64_t) -1) || workernode->thread_state[victim_id].mode != FRONTEND){
     // there was no stealable work left by the time we decided who to steal from, so release the lock and try again
     if(pthread_mutex_unlock(&(workernode->work[victim_id].lock))){
       p7_Fail("Couldn't unlock work mutex in worker_thread_steal");

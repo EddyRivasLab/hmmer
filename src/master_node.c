@@ -73,7 +73,9 @@ init_results(SEARCH_RESULTS *results)
   results->stats.nincluded   = 0;
 
   results->stats.nmodels     = 0;
+  results->stats.nnodes      = 0;
   results->stats.nseqs       = 0;
+  results->stats.nres        = 0;
   results->stats.n_past_msv  = 0;
   results->stats.n_past_bias = 0;
   results->stats.n_past_vit  = 0;
@@ -122,7 +124,6 @@ forward_results(QUEUE_DATA_SHARD *query, SEARCH_RESULTS *results)
   buf2 = &(buf2_ptr);
   buf3_ptr = NULL;
   buf3 = &(buf3_ptr);
-
   fd    = query->sock;
 
   if (query->cmd_type == HMMD_CMD_SEARCH) mode = p7_SEARCH_SEQS;
@@ -149,7 +150,9 @@ forward_results(QUEUE_DATA_SHARD *query, SEARCH_RESULTS *results)
       
     pli = p7_pipeline_Create(query->opts, 100, 100, FALSE, mode);
     pli->nmodels     = results->stats.nmodels;
+    pli->nnodes      = results->stats.nnodes;
     pli->nseqs       = results->stats.nseqs;
+    pli->nres        = results->stats.nres;
     pli->n_past_msv  = results->stats.n_past_msv;
     pli->n_past_bias = results->stats.n_past_bias;
     pli->n_past_vit  = results->stats.n_past_vit;
@@ -1021,6 +1024,11 @@ ERROR:
 
 /* Sends a search to the worker nodes, waits for results, and returns them to the client */
 int process_search(P7_SERVER_MASTERNODE_STATE *masternode, QUEUE_DATA_SHARD *query, MPI_Datatype *server_mpitypes, ESL_GETOPTS *go){
+  #ifndef HAVE_MPI
+  p7_Fail("process_search requires MPI and HMMER was compiled without MPI support");
+#endif
+
+#ifdef HAVE_MPI
   struct timeval start, end;
   uint64_t search_increment = 1;
   int status;
@@ -1104,7 +1112,7 @@ int process_search(P7_SERVER_MASTERNODE_STATE *masternode, QUEUE_DATA_SHARD *que
     {
       p7_masternode_message_handler(masternode, buffer_handle, server_mpitypes, go);  //Poll for incoming messages
     }
-    printf("Masternode starting to return results\n");
+
     gettimeofday(&end, NULL);
     double ncells = (double) gm->M * (double) database_shard->total_length;
     double elapsed_time = ((double)((end.tv_sec * 1000000 + (end.tv_usec)) - (start.tv_sec * 1000000 + start.tv_usec)))/1000000.0;
@@ -1127,18 +1135,28 @@ int process_search(P7_SERVER_MASTERNODE_STATE *masternode, QUEUE_DATA_SHARD *que
     results.stats.Z = masternode->pipeline->Z;
     results.stats.domZ = masternode->pipeline->domZ;
     results.stats.domZ_setby = masternode->pipeline->domZ_setby;
-    results.stats.nmodels = masternode->pipeline->nmodels;
-    results.stats.nseqs = masternode->pipeline->nseqs;
+    if(masternode->pipeline->mode == p7_SEARCH_SEQS){
+      results.stats.nmodels = 1;
+      results.stats.nnodes = gm->M;
+      results.stats.nseqs = masternode->pipeline->nseqs;
+      results.stats.nres = masternode->pipeline->nres;
+    }
+    else{
+      results.stats.nmodels = masternode->pipeline->nmodels;
+      results.stats.nnodes = masternode->pipeline->nnodes;
+      results.stats.nseqs = 1;
+      results.stats.nres = -1; /* Fix when support scan */
+    }
+    printf("results.stats.nres = %lld\n", results.stats.nres);
     results.stats.n_past_msv = masternode->pipeline->n_past_msv;
     results.stats.n_past_bias = masternode->pipeline->n_past_bias;
     results.stats.n_past_vit = masternode->pipeline->n_past_vit;
     results.stats.n_past_fwd = masternode->pipeline->n_past_fwd;
-    results.stats.nreported = 0;
-    results.stats.nincluded = 0;
+    results.stats.nreported = masternode->tophits->nreported;
+    results.stats.nincluded = masternode->tophits->nincluded;
 
     // Send results back to client
     forward_results(query, &results); 
-    printf("Results returned\n");
     p7_pipeline_Destroy(masternode->pipeline);
 
     p7_tophits_Destroy(masternode->tophits); //Reset for next search
@@ -1148,12 +1166,17 @@ int process_search(P7_SERVER_MASTERNODE_STATE *masternode, QUEUE_DATA_SHARD *que
     return eslOK;
   ERROR:
     p7_Fail("Unable to allocate memory in process_search");
+#endif
 }
 
 void process_shutdown(P7_SERVER_MASTERNODE_STATE *masternode, MPI_Datatype *server_mpitypes){
   P7_SERVER_COMMAND the_command;
   the_command.type = P7_SERVER_SHUTDOWN_WORKERS;
+#ifndef HAVE_MPI
+  p7_Fail("process_shutdown requires MPI and HMMER was compiled without MPI support");
+#endif
 
+#ifdef HAVE_MPI
   MPI_Bcast(&the_command, 1, server_mpitypes[P7_SERVER_COMMAND_MPITYPE], 0, MPI_COMM_WORLD);
   while(pthread_mutex_trylock(&(masternode->hit_wait_lock))){  // Acquire this to prevent races
   }
@@ -1168,7 +1191,7 @@ void process_shutdown(P7_SERVER_MASTERNODE_STATE *masternode, MPI_Datatype *serv
   // Clean up memory
 
   p7_server_masternode_Destroy(masternode);
-  
+#endif
 }
 // p7_master_node_main
 /*! \brief Top-level function run on each master node
@@ -1308,6 +1331,11 @@ void p7_server_master_node_main(int argc, char ** argv, MPI_Datatype *server_mpi
  *  \returns Nothing.
  */
 void *p7_server_master_hit_thread(void *argument){
+  #ifndef HAVE_MPI
+  p7_Fail("P7_master_hit_thread requires MPI and HMMER was compiled without MPI support");
+#endif
+
+#ifdef HAVE_MPI
   // unpack our argument object
   P7_SERVER_MASTERNODE_HIT_THREAD_ARGUMENT *the_argument;
   the_argument = (P7_SERVER_MASTERNODE_HIT_THREAD_ARGUMENT *) argument;
@@ -1371,9 +1399,9 @@ void *p7_server_master_hit_thread(void *argument){
         pthread_mutex_unlock(&(masternode->empty_hit_message_pool_lock));
       }
     }
-    printf("Masternode hit thread completed\n");
   }
   p7_Fail("Master node hit thread somehow reached unreachable end point\n");
+  #endif
 }
 
 
@@ -1443,7 +1471,6 @@ void p7_masternode_message_handler(P7_SERVER_MASTERNODE_STATE *masternode, P7_SE
       p7_pipeline_Merge(masternode->pipeline, temp_pipeline);
       p7_pipeline_Destroy(temp_pipeline);
       masternode->worker_stats_received++;
-      printf("Worker stats received, have seen %d\n", masternode->worker_stats_received);
       break;
     case HMMER_HIT_FINAL_MPI_TAG:
       printf("HMMER_HIT_FINAL_MPI_TAG message received\n");

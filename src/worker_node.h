@@ -94,6 +94,9 @@ typedef struct p7_worker_thread_state{
 	//! State data for the thread's comparison engine
 	P7_PIPELINE  *pipeline;
 	
+	//! Pipeline that stores statistics because we swap pipelines a lot
+	P7_PIPELINE *stats_pipeline;
+	
 	//! Is the thread processing front-end or back-end comparisons
 	P7_THREAD_MODE mode;
 
