@@ -351,14 +351,14 @@ int p7_server_workernode_Setup(uint32_t num_databases, char **database_names, ui
     if (!strncmp(id_string, "HMMER3", 6))
     {
       // This is an HMM file
-      current_shard = p7_shard_Create_hmmfile(database_names[i], num_shards, my_shard);
+      current_shard = p7_shard_Create_hmmfile(database_names[i], num_shards, my_shard, 0);
       if(current_shard == NULL){
         p7_Fail("Unable to allocate memory in p7_server_workernode_Setup\n");
       }
     }
     else if(!strncmp(id_string, ">", 1)){
       // its an sqdata file
-      current_shard = p7_shard_Create_sqdata(database_names[i], num_shards, my_shard);
+      current_shard = p7_shard_Create_sqdata(database_names[i], num_shards, my_shard, 0);
       if(current_shard == NULL){
         p7_Fail("Unable to allocate memory in p7_servere_workernode_Setup\n");
       }

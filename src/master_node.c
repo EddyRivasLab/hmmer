@@ -972,14 +972,14 @@ void p7_server_masternode_Setup(uint32_t num_shards, uint32_t num_databases, cha
         
     if(!strncmp(id_string, "HMMER3", 5)){
       // This is an HMM file
-      current_shard = p7_shard_Create_hmmfile(database_names[i], 1, 0);
+      current_shard = p7_shard_Create_hmmfile(database_names[i], 1, 0, 1);
       if(current_shard == NULL){
         p7_Fail("Unable to allocate memory in p7_server_masternode_Create\n");
       }
     }
     else if(!strncmp(id_string, ">", 1)){
       // its a dsqdata file
-      current_shard = p7_shard_Create_sqdata(database_names[i], 1, 0);
+      current_shard = p7_shard_Create_sqdata(database_names[i], 1, 0, 1);
       if(current_shard == NULL){
         p7_Fail("Unable to allocate memory in p7_server_masternode_Create\n");
       }

@@ -13,9 +13,10 @@
 /*! @param filename The name of the .hmm file containing the database.
     @param num_shards The number of shards the database will be divided into.
     @param my_shard Which shard of the database should be generated? Must be between 0 and num_shards.
+    @param masternode Is this shard being loaded into the master node.
     @return The new shard.  Calls p7_Fail() to exit the program if unable to complete successfully.  */
-P7_SHARD *p7_shard_Create_hmmfile(char *filename, uint32_t num_shards, uint32_t my_shard){
-  // return value used to tell if many ESL routines completed successfully
+P7_SHARD *p7_shard_Create_hmmfile(char *filename, uint32_t num_shards, uint32_t my_shard, int masternode){
+  // return value used to tell if many Easel routines completed successfully
   int status;
 
   // allocate the base shard object
@@ -38,9 +39,14 @@ P7_SHARD *p7_shard_Create_hmmfile(char *filename, uint32_t num_shards, uint32_t 
   // start with space for 100 pointers
   
   uint64_t descriptors_buffer_size = 100 * sizeof(P7_PROFILE *); // and for descriptors
-  ESL_ALLOC(the_shard->contents, contents_buffer_size);
-  ESL_ALLOC(the_shard->descriptors, descriptors_buffer_size);
-
+  if(!masternode){  // only load contents and descriptors into worker nodes
+    ESL_ALLOC(the_shard->contents, contents_buffer_size);
+    ESL_ALLOC(the_shard->descriptors, descriptors_buffer_size);
+  }
+  else{
+    the_shard->contents = NULL;
+    the_shard->descriptors = NULL;
+  }
   uint64_t contents_offset = 0;
   uint64_t descriptors_offset = 0;
 
@@ -58,30 +64,32 @@ P7_SHARD *p7_shard_Create_hmmfile(char *filename, uint32_t num_shards, uint32_t 
     // There's another HMM in the file
     if(hmms_in_file % num_shards == my_shard){
       // Need to put this HMM in the shard
+      if(!masternode){
+        // Create all of the standard data structures that define the HMM
+        bg = p7_bg_Create(abc);
+        gm = p7_profile_Create (hmm->M, abc);
+        if(gm == NULL){
+          p7_Fail("Unable to allocate memory in p7_shard_Create_hmmfile");
+        }
 
-      // Create all of the standard data structures that define the HMM
-      bg = p7_bg_Create(abc);
-      gm = p7_profile_Create (hmm->M, abc);
-      if(gm == NULL){
-        p7_Fail("Unable to allocate memory in p7_shard_Create_hmmfile");
+        om = p7_oprofile_Create(hmm->M, abc);
+        if(om == NULL){
+          p7_Fail("Unable to allocate memory in p7_shard_Create_hmmfile");
+        }
+
+        p7_ProfileConfig (hmm, bg, gm, 100, p7_LOCAL);
+        p7_oprofile_Convert (gm, om);
       }
-
-      om = p7_oprofile_Create(hmm->M, abc);
-      if(om == NULL){
-        p7_Fail("Unable to allocate memory in p7_shard_Create_hmmfile");
-      }
-
-      p7_ProfileConfig (hmm, bg, gm, 100, p7_LOCAL);
-      p7_oprofile_Convert (gm, om);
-
       while(num_hmms >= directory_size){
         // We need to allocate more space
         directory_size = directory_size *2;
         ESL_REALLOC(the_shard->directory, (directory_size * sizeof(P7_SHARD_DIRECTORY_ENTRY)));
         contents_buffer_size = contents_buffer_size *2;
-        ESL_REALLOC(the_shard->contents, contents_buffer_size);
-        descriptors_buffer_size = descriptors_buffer_size *2;
-        ESL_REALLOC(the_shard->descriptors, descriptors_buffer_size);
+        if(!masternode){
+          ESL_REALLOC(the_shard->contents, contents_buffer_size);
+          descriptors_buffer_size = descriptors_buffer_size *2;
+          ESL_REALLOC(the_shard->descriptors, descriptors_buffer_size);
+        }
       }
 
       // Create the directory entry for this HMM now that we know there's space
@@ -91,29 +99,38 @@ P7_SHARD *p7_shard_Create_hmmfile(char *filename, uint32_t num_shards, uint32_t 
 
       // copying multi-level data structures into regions of memory that we might realloc is really hard, so instead
       // we store pointers to each HMM's oprofile and profile in the contents and descriptor structure, respectively
-      P7_OPROFILE **contents_pointer = ((P7_OPROFILE **) the_shard->contents) + num_hmms;
-      *contents_pointer = om;
-      contents_offset += sizeof(P7_OPROFILE *);
-      P7_PROFILE **descriptors_pointer = ((P7_PROFILE **) the_shard->descriptors) + num_hmms;
-      *descriptors_pointer = gm;
-      descriptors_offset += sizeof(P7_PROFILE *);
+      if(!masternode){
+        P7_OPROFILE **contents_pointer = ((P7_OPROFILE **) the_shard->contents) + num_hmms;
+        *contents_pointer = om;
+        contents_offset += sizeof(P7_OPROFILE *);
+        P7_PROFILE **descriptors_pointer = ((P7_PROFILE **) the_shard->descriptors) + num_hmms;
+        *descriptors_pointer = gm;
+        descriptors_offset += sizeof(P7_PROFILE *);
+      }
 
       num_hmms+= 1; // Increment this last for ease of zero-based addressing
     }
 
     hmms_in_file++;
     // Done with this HMM, so tear down the data structures
-    p7_hmm_Destroy(hmm);
-    p7_bg_Destroy(bg);
-    
-  }
+    if(!masternode){
+      p7_hmm_Destroy(hmm);
+      p7_bg_Destroy(bg);
 
-  the_shard->abc = abc;  // copy the alphabet into the shard so we can free it when done
+    }
+  }
+  if(!masternode){
+    the_shard->abc = abc;  // copy the alphabet into the shard so we can free it when done
+  }
+  else{
+    the_shard->abc = NULL;
+  }
   // realloc shard's memory buffers down to the actual size needed
   ESL_REALLOC(the_shard->directory, (num_hmms * sizeof(P7_SHARD_DIRECTORY_ENTRY)));
-  ESL_REALLOC(the_shard->contents, contents_offset);
-  ESL_REALLOC(the_shard->descriptors, descriptors_offset); 
-  
+  if(!masternode){
+    ESL_REALLOC(the_shard->contents, contents_offset);
+    ESL_REALLOC(the_shard->descriptors, descriptors_offset); 
+  }
   the_shard->num_objects = num_hmms;
 
   p7_hmmfile_Close(hfp);
@@ -129,7 +146,7 @@ P7_SHARD *p7_shard_Create_hmmfile(char *filename, uint32_t num_shards, uint32_t 
 /* \brief Creates a shard of sequence data from a fasta file
  * \returns The new shard.  Calls p7_Fail() to exit the program if unable to complete successfully.
  */
-P7_SHARD *p7_shard_Create_sqdata(char *filename, uint32_t num_shards, uint32_t my_shard){
+P7_SHARD *p7_shard_Create_sqdata(char *filename, uint32_t num_shards, uint32_t my_shard, int masternode){
  
   //! return value used to tell if many esl routines completed successfully
   int status;
@@ -159,25 +176,29 @@ P7_SHARD *p7_shard_Create_sqdata(char *filename, uint32_t num_shards, uint32_t m
   // take a wild guess at how many sequences we will read
   uint64_t size_increment = 1000000;
   uint64_t allocated_sequences = size_increment;
-  ESL_SQ_BLOCK *sequences = esl_sq_CreateDigitalBlock(size_increment, abc);
+  ESL_SQ_BLOCK *sequences = NULL;
+  sequences = esl_sq_CreateDigitalBlock(size_increment, abc);
 
   the_shard->descriptors = NULL;
     // counter to check that number of sequences we put in the shard matches what the database says should go there
   uint64_t sequence_count = 0; 
   uint64_t my_sequences = 0;
-
+  uint64_t sequence_index = 0;
   // process each of the sequences in the file
-  while (esl_sqio_Read(dbfp, &(sequences->list[my_sequences])) == eslOK)
+  while (esl_sqio_Read(dbfp, &(sequences->list[sequence_index])) == eslOK)
     {
       if (sequence_count % num_shards == my_shard) {
           // I have to care about this sequence
           my_sequences++;
-
-          if(my_sequences >= allocated_sequences){
-            allocated_sequences += size_increment;
-            if (esl_sq_BlockGrowTo(sequences, allocated_sequences, 1, abc) != eslOK)
-            {
-              goto ERROR;
+          the_shard->total_length += sequences->list[sequence_index].L;
+          if(!masternode){
+            sequence_index++; // Only step through the array if we're a worker node
+            if(sequence_index >= allocated_sequences){
+              allocated_sequences += size_increment;
+              if (esl_sq_BlockGrowTo(sequences, allocated_sequences, 1, abc) != eslOK)
+              {
+                goto ERROR;
+              }
             }
           }
       }
@@ -187,8 +208,16 @@ P7_SHARD *p7_shard_Create_sqdata(char *filename, uint32_t num_shards, uint32_t m
   sequences->listSize=allocated_sequences;
   sequences->complete=1;
   sequences->first_seqidx = 0;
-  the_shard->contents = (char *) sequences->list;
-  the_shard->descriptors = sequences; // Hack to save the full ESL_SQ_BLOCK object
+  
+  if(!masternode){
+    the_shard->contents = (char *) sequences->list;
+    the_shard->descriptors = sequences; // Hack to save the full ESL_SQ_BLOCK object
+  }
+  else{
+    the_shard->contents = NULL; // Don't use either of these on master node
+    the_shard->descriptors = NULL;
+    esl_sq_DestroyBlock(sequences); // don't need this any more if we're the master node
+  }
   // close the sequence file
   esl_sqfile_Close(dbfp);
 
@@ -216,11 +245,12 @@ P7_SHARD *p7_shard_Create_sqdata(char *filename, uint32_t num_shards, uint32_t m
  *  \returns Nothing
  */
 void p7_shard_Destroy(P7_SHARD *the_shard){
-
+  if(the_shard->abc !=NULL){
+  
   esl_alphabet_Destroy(the_shard->abc);  // free the shard's alphabet
-
+  }
   // free all of the heap-allocated sub-objects
-  if(the_shard->data_type == HMM){
+  if(the_shard->data_type == HMM && the_shard->contents != NULL){
     // Contents and descriptors are arrays of pointers to structures, need to free the pointed-to structures
     // For sequence shards, the contents and descriptors are flat arrays of bytes, so can just be freed
     int i;

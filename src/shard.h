@@ -72,10 +72,10 @@ typedef struct p7_shard{
 } P7_SHARD;
 
 // Creates a shard whose contents are the specified fraction of the dsqdata database specified in basename
-P7_SHARD *p7_shard_Create_sqdata(char *filename, uint32_t num_shards, uint32_t my_shard);
+P7_SHARD *p7_shard_Create_sqdata(char *filename, uint32_t num_shards, uint32_t my_shard, int masternode);
 
 // Creates a shard whose contents are the specified fraction of the HMM file specified in filename
-P7_SHARD *p7_shard_Create_hmmfile(char *filename, uint32_t num_shards, uint32_t my_shard);
+P7_SHARD *p7_shard_Create_hmmfile(char *filename, uint32_t num_shards, uint32_t my_shard, int masternode);
 
 // If the shard contains an object with the specified ID, places a pointer to the contents field of that object in ret_object and returns the ID
 // Otherwise, does the same with the object of the next higher ID
