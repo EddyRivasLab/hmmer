@@ -963,7 +963,7 @@ void p7_server_workernode_main(int argc, char **argv, int my_rank, MPI_Datatype 
   ESL_ALLOC(send_buf, send_buf_length * sizeof(char));
 
   // FIXME: change this to handle variable numbers of databases once we specify the server UI
-  char           *seqfile = esl_opt_GetArg(go, 1);
+
   impl_Init();                  /* processor specific initialization */
   p7_FLogsumInit();		/* we're going to use table-driven Logsum() approximations at times */
   uint32_t num_worker_cores;
@@ -982,11 +982,18 @@ void p7_server_workernode_main(int argc, char **argv, int my_rank, MPI_Datatype 
   MPI_Bcast(&num_shards, 1, MPI_INT, 0, MPI_COMM_WORLD);
     
   P7_SERVER_WORKERNODE_STATE *workernode;
+  int num_databases = esl_opt_GetInteger(go, "--num_dbs");
+  char **database_names;
+  ESL_ALLOC(database_names, num_databases * sizeof(char *));
 
+  int c1;
+  for(c1 =0; c1< num_databases; c1++){
+    database_names[c1] = esl_opt_GetArg(go, c1+1);  //esl_opt_GetArg is 1..num_args
+  }
   // FIXME: Support loading multiple databases once server UI specced out
-  p7_server_workernode_Setup(1, &(seqfile), 1, 0, num_worker_cores, go, &workernode);
+  p7_server_workernode_Setup(num_databases, database_names, 1, 0, num_worker_cores, go, &workernode);
   workernode->my_rank = my_rank;
- 
+  free(database_names);
   // block until all nodes ready
   MPI_Barrier(MPI_COMM_WORLD);
 
@@ -1196,7 +1203,6 @@ p7_pli_Statistics(stdout, pli, NULL);
         if(p7_pipeline_MPISend(pli, 0, HMMER_PIPELINE_STATE_MPI_TAG, MPI_COMM_WORLD, &send_buf, &send_buf_length) != eslOK){
           p7_Fail("Failed to send pipeline state to master");
         }
-        printf("Workernode stats sent\n");
         p7_pipeline_Destroy(pli);
         //printf("Sending HMMER_HIT_FINAL_MPI_TAG message\n");
 
@@ -1310,7 +1316,10 @@ static int worker_thread_front_end_sequence_search_loop(P7_SERVER_WORKERNODE_STA
     // grab the start and end pointers from our work queue
     start = workernode->work[my_id].start;
     end = workernode->work[my_id].end;
+    if(work_on_global){
     //printf("Worker thread %d starting chuk from %ld to %ld\n", my_id, workernode->work[my_id].start, workernode->work[my_id].end);
+    } 
+    
     pthread_mutex_unlock(&(workernode->work[my_id].lock)); // release lock
 
     if(!work_on_global){

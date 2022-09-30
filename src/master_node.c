@@ -516,11 +516,6 @@ clientside_loop(CLIENTSIDE_ARGS *data)
       client_msg_longjmp(data->sock_fd, status, &jmp_env, "Failed to parse options string: %s", opts->errbuf);
     }
 
-    /* the options string can handle an optional database */
-    if (esl_opt_ArgNumber(opts) > 0) {
-      client_msg_longjmp(data->sock_fd, status, &jmp_env, "Incorrect number of command line arguments.");
-    }
-
     if (esl_opt_IsUsed(opts, "--seqdb")) {
       dbx = esl_opt_GetInteger(opts, "--seqdb");
     } else if (esl_opt_IsUsed(opts, "--hmmdb")) {
@@ -1034,7 +1029,7 @@ int process_search(P7_SERVER_MASTERNODE_STATE *masternode, QUEUE_DATA_SHARD *que
   int status;
   P7_SERVER_COMMAND the_command;
   the_command.type = P7_SERVER_HMM_VS_SEQUENCES;
-  the_command.db = 0;
+  the_command.db = query->dbx;
   SEARCH_RESULTS results;
   P7_SERVER_MESSAGE *buffer, **buffer_handle; //Use this to avoid need to re-aquire message buffer
   // when we poll and don't find a message
@@ -1051,7 +1046,7 @@ int process_search(P7_SERVER_MASTERNODE_STATE *masternode, QUEUE_DATA_SHARD *que
   int hmm_length, pack_position;
 
   // For testing, search the entire database
-  P7_SHARD *database_shard = masternode->database_shards[0];
+  P7_SHARD *database_shard = masternode->database_shards[the_command.db];
 
   masternode->pipeline =  p7_pipeline_Create(go, 100, 100, FALSE, p7_SEARCH_SEQS);
   masternode->hit_messages_received = 0;
@@ -1214,17 +1209,21 @@ void p7_server_master_node_main(int argc, char ** argv, MPI_Datatype *server_mpi
 #ifdef HAVE_MPI
   // For now, we only use one shard.  This will change in the future
   int num_shards = 1; // Change this to calculate number of shards based on database size
-  
-  char           *seqfile = esl_opt_GetArg(go, 1);
+  int num_dbs = esl_opt_GetInteger(go, "--num_dbs"); 
 
-  uint64_t num_searches = esl_opt_GetInteger(go, "-n");
+
 
   ESL_ALPHABET   *abc     = NULL;
   int status; // return code from ESL routines
 
   // For performance tests, we only use two databases.  That will become a command-line argument
-  char *database_names[1];
-  database_names[0] = seqfile;
+  char **database_names;
+  ESL_ALLOC(database_names, num_dbs * sizeof(char *));
+  int c1;
+  for(c1 = 0; c1< num_dbs; c1++){
+    database_names[c1] = esl_opt_GetArg(go, c1+1);
+  }
+
   impl_Init();                  /* processor specific initialization */
   p7_FLogsumInit();		/* we're going to use table-driven Logsum() approximations at times */
 
@@ -1244,10 +1243,9 @@ void p7_server_master_node_main(int argc, char ** argv, MPI_Datatype *server_mpi
     p7_Fail("Unable to allocate memory in master_node_main\n");
   }
 
-  // load the databases.  To be removed when we implement the UI
-  p7_server_masternode_Setup(num_shards, 1, database_names, masternode);
+  p7_server_masternode_Setup(num_shards, num_dbs, database_names, masternode);
 
-
+  free(database_names);
 
   // Tell all of the workers how many shards we're using
   MPI_Bcast(&num_shards, 1, MPI_INT, 0, MPI_COMM_WORLD);

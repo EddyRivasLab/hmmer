@@ -26,9 +26,9 @@
 static ESL_OPTIONS options[] = {
     /* name           type      default  env  range  toggles reqs incomp  help                               docgroup*/
     {"-h", eslARG_NONE, FALSE, NULL, NULL, NULL, NULL, NULL, "show brief help on version and usage", 0},
-    {"-n", eslARG_INT, "1", NULL, NULL, NULL, NULL, NULL, "number of searches to run (default 1)", 0},
-    { "--cpu",        eslARG_INT,  0,"HMMER_NCPU","n>0",        NULL,  NULL,  "--master",      "number of cores to use on each worker node (defaults to all)",      12 },
-  { "--num_shards", eslARG_INT,    "1",      NULL, "1<=n<512",      NULL,  NULL,  "--worker",      "number of shards to divide each database into.",      12 },
+    { "--cpu",        eslARG_INT,  "0","HMMER_NCPU","n>=0",        NULL,  NULL,  NULL,      "number of cores to use on each worker node (defaults to all)",      12 },
+    { "--num_shards", eslARG_INT,    "1",      NULL, "1<=n<512",      NULL,  NULL,  NULL,      "number of shards to divide each database into.",      12 },
+    {"--num_dbs",     eslARG_INT,  "1",   NULL,   "1<=n<512", NULL, NULL, NULL, "number of databases to load"},
     {"--stall", eslARG_NONE, FALSE, NULL, NULL, NULL, NULL, NULL, "arrest after start: for debugging MPI under gdb", 0},
     { "--cport",      eslARG_INT,     "51371",  NULL, "49151<n<65536",NULL,  NULL,  "--worker",      "port to use for client/server communication",                 12 },
     { "--wport",      eslARG_INT,     "51372",  NULL, "49151<n<65536",NULL,  NULL,  NULL,            "port to use for server/worker communication",                 12 },
@@ -77,7 +77,10 @@ int main(int argc, char **argv){
 	printf("Hmmserver was compiled without MPI support, and does nothing without that support\n");
 #endif	
 #ifdef HAVE_MPI
-    ESL_GETOPTS *go = p7_CreateDefaultApp(options, 1, argc, argv, banner, usage);
+    ESL_GETOPTS *go = p7_CreateDefaultApp(options, -1, argc, argv, banner, usage);
+    if(esl_opt_ArgNumber(go) != esl_opt_GetInteger(go, "--num_dbs")){
+        p7_Fail("Error: number of database files provided as arguments not equal to the value passed to --num_dbs");
+    }
     int stalling = FALSE;
     /* For debugging: stall until GDB can be attached */
     if (esl_opt_GetBoolean(go, "--stall"))

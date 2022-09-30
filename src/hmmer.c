@@ -87,7 +87,8 @@ p7_banner(FILE *fp, const char *progname, char *banner)
  *            <easel/esl_getopts.c>.
  *
  * Args:      options - array of <ESL_OPTIONS> structures for getopts
- *            nargs   - number of cmd line arguments expected (excl. of cmdname)
+ *            nargs   - number of cmd line arguments expected (excl. of cmdname) If nargs = -1, the number
+ *                      of command-line arguments may vary from run to run.
  *            argc    - <argc> from main()
  *            argv    - <argv> from main()
  *            banner  - optional one-line description of program (or NULL)
@@ -133,7 +134,7 @@ p7_CreateDefaultApp(ESL_OPTIONS *options, int nargs, int argc, char **argv, char
       esl_opt_DisplayHelp(stdout, go, 0, 2, 80);
       exit(0);
     }
-  if (esl_opt_ArgNumber(go) != nargs) 
+  if (nargs != -1 && esl_opt_ArgNumber(go) != nargs) 
     {
       puts("Incorrect number of command line arguments.");
       esl_usage(stdout, argv[0], usage);
