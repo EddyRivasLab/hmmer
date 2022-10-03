@@ -47,6 +47,7 @@ typedef struct {
   char            ip_addr[64];
 
   ESL_STACK      *cmdstack;	/* stack of commands that clients want done */
+  P7_SERVER_MASTERNODE_STATE *masternode;
 } CLIENTSIDE_ARGS;
 
 
@@ -524,6 +525,7 @@ clientside_loop(CLIENTSIDE_ARGS *data)
       client_msg_longjmp(data->sock_fd, eslEINVAL, &jmp_env, "No search database specified, --seqdb or --hmmdb.");
     }
 
+    
 
     abc = esl_alphabet_Create(eslAMINO);
     seq = NULL;
@@ -1281,6 +1283,7 @@ void p7_server_master_node_main(int argc, char ** argv, MPI_Datatype *server_mpi
 
   /* start the communications with the web clients */
   CLIENTSIDE_ARGS client_comm;
+  client_comm.masternode = masternode;
   client_comm.cmdstack = cmdstack;
   setup_clientside_comm(go, &client_comm);
   printf("clientside communication started\n");
