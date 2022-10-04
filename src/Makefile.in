@@ -106,7 +106,7 @@ HDRS =  hmmer.h \
 	p7_hmmcache.h \
 	hmmpgmd.h\
 	shard.h\
-	masternode.h\
+	master_node.h\
 	worker_node.h
 
 OBJS =  build.o\

@@ -16,9 +16,16 @@
 #include <netinet/in.h>     /* On FreeBSD, you need netinet/in.h for struct sockaddr_in            */
 #endif                      /* On OpenBSD, netinet/in.h is required for (must precede) arpa/inet.h */
 #include <arpa/inet.h>
+#include <sys/ioctl.h>
+#include <sys/types.h>
+#include <sys/socket.h>
+#include <netdb.h>
+#include <net/if.h>
 #include <syslog.h>
 #include <assert.h>
 #include <errno.h>
+#include <limits.h>
+
 #ifndef HMMER_THREADS
 #error "Program requires pthreads be enabled."
 #endif /*HMMER_THREADS*/
@@ -964,7 +971,8 @@ void p7_server_masternode_Setup(uint32_t num_shards, uint32_t num_databases, cha
     P7_SHARD *current_shard;
 
     datafile = fopen(database_names[i], "r");
-    fread(id_string, 13, 1, datafile); //grab the first 13 characters of the file to determine the type of database it holds
+    int silence_warning;
+    silence_warning = fread(id_string, 13, 1, datafile); //grab the first 13 characters of the file to determine the type of database it holds
     fclose(datafile);
         
     if(!strncmp(id_string, "HMMER3", 5)){
@@ -1094,7 +1102,7 @@ int process_search(P7_SERVER_MASTERNODE_STATE *masternode, QUEUE_DATA_SHARD *que
     pack_position = 0; // initialize this to the start of the buffer 
 
     if(p7_profile_MPIPack    (gm, hmmbuffer, hmm_length, &pack_position, MPI_COMM_WORLD) != eslOK){
-      p7_Fail("Packing profile failed in master_node_main\n");
+      p7_Fail("Packing profile failed in process_search\n");
     }    // pack the hmm for sending
   
 
@@ -1145,7 +1153,7 @@ int process_search(P7_SERVER_MASTERNODE_STATE *masternode, QUEUE_DATA_SHARD *que
       results.stats.nseqs = 1;
       results.stats.nres = -1; /* Fix when support scan */
     }
-    printf("results.stats.nres = %lld\n", results.stats.nres);
+    printf("results.stats.nres = %ld\n", results.stats.nres);
     results.stats.n_past_msv = masternode->pipeline->n_past_msv;
     results.stats.n_past_bias = masternode->pipeline->n_past_bias;
     results.stats.n_past_vit = masternode->pipeline->n_past_vit;
@@ -1209,6 +1217,21 @@ void p7_server_master_node_main(int argc, char ** argv, MPI_Datatype *server_mpi
 #endif
 
 #ifdef HAVE_MPI
+  //Get the fully-qualified hostname of the machine we're on
+  char hostname[HOST_NAME_MAX];
+  hostname[HOST_NAME_MAX-1]='\0';
+  gethostname(hostname, HOST_NAME_MAX-1);
+  struct addrinfo hints, *info, *p;
+  memset(&hints, 0, sizeof(hints));
+  hints.ai_family = AF_UNSPEC;
+  hints.ai_socktype = SOCK_STREAM;
+  hints.ai_flags = AI_CANONNAME;
+  getaddrinfo(hostname, "http", &hints, &info);
+  for(p = info; p != NULL; p = p->ai_next){
+    printf("Master node is running on: %s\n", p->ai_canonname);
+  }
+  freeaddrinfo(info);
+
   // For now, we only use one shard.  This will change in the future
   int num_shards = 1; // Change this to calculate number of shards based on database size
   int num_dbs = esl_opt_GetInteger(go, "--num_dbs"); 
