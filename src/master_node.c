@@ -526,8 +526,22 @@ clientside_loop(CLIENTSIDE_ARGS *data)
 
     if (esl_opt_IsUsed(opts, "--seqdb")) {
       dbx = esl_opt_GetInteger(opts, "--seqdb");
+      if((dbx < 1) || (dbx > data->masternode->num_databases)){
+        printf("invalid seq db found\n");
+        client_msg_longjmp(data->sock_fd, eslEINVAL, &jmp_env, "Nonexistent database %d specified.  Valid database ID's for this server range from 1 to %d\n", dbx, data->masternode->num_databases);
+      }
+      if (data->masternode->database_shards[dbx-1]->data_type != AMINO){
+        client_msg_longjmp(data->sock_fd, eslEINVAL, &jmp_env, "Error: database %d is not a sequence database\n", dbx);
+      }
     } else if (esl_opt_IsUsed(opts, "--hmmdb")) {
       dbx = esl_opt_GetInteger(opts, "--hmmdb");
+      if((dbx < 1) || (dbx > data->masternode->num_databases)){
+
+        client_msg_longjmp(data->sock_fd, eslEINVAL, &jmp_env, "Nonexistent database %d specified.  Valid database ID's for this server range from 1 to %d\n", dbx, data->masternode->num_databases);
+      }
+      if (data->masternode->database_shards[dbx-1]->data_type != HMM){
+        client_msg_longjmp(data->sock_fd, eslEINVAL, &jmp_env, "Error: database %d is not an HMM database\n", dbx);
+      }
     } else {
       client_msg_longjmp(data->sock_fd, eslEINVAL, &jmp_env, "No search database specified, --seqdb or --hmmdb.");
     }
@@ -767,10 +781,12 @@ client_comm_thread(void *arg)
     if ((targs = malloc(sizeof(CLIENTSIDE_ARGS))) == NULL) LOG_FATAL_MSG("malloc", errno);
     targs->cmdstack   = data->cmdstack;
     targs->sock_fd    = fd;
+    targs->masternode = data->masternode;
 
     addrlen = sizeof(targs->ip_addr);
     strncpy(targs->ip_addr, inet_ntoa(addr.sin_addr), addrlen);
     targs->ip_addr[addrlen-1] = 0;
+
 
     if ((n = pthread_create(&thread_id, NULL, clientside_thread, targs)) != 0) LOG_FATAL_MSG("thread create", n);
   }
