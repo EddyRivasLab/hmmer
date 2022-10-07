@@ -1,0 +1,68 @@
+name: Linux
+
+on:
+  pull_request:
+  push:
+
+jobs:
+  build:
+    name: Build Linux x86_64
+    runs-on: [ubuntu-latest]
+    steps:
+
+    - name: Checkout hmmer
+      uses: actions/checkout@v3
+      with:
+        ref: develop
+    
+    - name: Checkout easel
+      uses: actions/checkout@v3
+      with:
+        repository: EddyRivasLab/easel
+        path: easel
+        ref: develop
+
+    - name: Build & test
+      run: |
+        set -x
+        autoconf
+        ./configure
+        make -j2
+        make check
+
+  build-aarch64:
+    name: Build Linux aarch64
+    runs-on: [ubuntu-latest]
+    steps:
+    
+    - name: Checkout hmmer
+      uses: actions/checkout@v3
+      with:
+        ref: develop
+    
+    - name: Checkout easel
+      uses: actions/checkout@v3
+      with:
+        repository: EddyRivasLab/easel
+        path: easel
+        ref: develop
+
+    - name: Build & test
+      uses: uraimo/run-on-arch-action@v2
+      with:
+        arch: aarch64
+        distro: ubuntu20.04
+        githubToken: ${{ github.token }}
+        dockerRunArgs: |
+          --volume "${PWD}:/hhmer"
+        install: |
+          apt-get update -q -y
+          apt-get install -q -y autoconf make gcc
+        run: |
+          set -x
+          cd /hhmer
+          autoconf
+          ./configure
+          make -j2
+          make check
+
