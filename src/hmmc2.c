@@ -195,7 +195,9 @@ int main(int argc, char *argv[])
   ESL_STOPWATCH   *w       = NULL;
   P7_PIPELINE     *pli     = NULL;
   P7_TOPHITS      *th      = NULL;
-
+  FILE *tblfp= NULL;  // file pointer for tabular output (--tblout)
+  FILE *domtblfp = NULL; // file pointer for domtable output (--domtblout)
+  FILE *pfamtblfp;  //file pointer for Pfam table output 
   HMMD_SEARCH_STATS   *stats;
   HMMD_SEARCH_STATUS   sstatus;
   uint8_t *buf;
@@ -289,6 +291,7 @@ int main(int argc, char *argv[])
 
   seq[0] = 0;
   while (strncmp(seq, "//", 2) != 0) {
+
     int rem;
     int total = 0;
 
@@ -410,7 +413,7 @@ int main(int argc, char *argv[])
 
       if (status == eslOK) {
         total = 0;
-
+        esl_stopwatch_Start(w);
         /* Send the string to the server */ 
         n = strlen(seq);
         printf ("Sending data %" PRIu64 ":\n", n);
@@ -538,14 +541,19 @@ int main(int argc, char *argv[])
         /* adjust the reported and included hits */
         //th->is_sorted = FALSE;
         //p7_tophits_Sort(th);
-		
+        esl_stopwatch_Stop(w);
         /* Print the results.  */
+        if (tblfp)     p7_tophits_TabularTargets(tblfp,    hmm->name, hmm->acc, th, pli, 1); // fix these when add hmmscan
+        if (domtblfp)  p7_tophits_TabularDomains(domtblfp, hmm->name, hmm->acc, th, pli, 1);
+        if (pfamtblfp) p7_tophits_TabularXfam(pfamtblfp, hmm->name, hmm->acc, th, pli);
         if (scores) { p7_tophits_Targets(stdout, th, pli, 120); fprintf(stdout, "\n\n"); }
         if (ali)    { p7_tophits_Domains(stdout, th, pli, 120); fprintf(stdout, "\n\n"); }
         p7_pli_Statistics(stdout, pli, w);  
 
         p7_pipeline_Destroy(pli); 
         p7_tophits_Destroy(th);
+        esl_stopwatch_Destroy(w);
+        w=esl_stopwatch_Create();
         free(buf);
 
         fprintf(stdout, "//\n");  fflush(stdout);

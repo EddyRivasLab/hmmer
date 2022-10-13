@@ -427,6 +427,8 @@ clientside_loop(CLIENTSIDE_ARGS *data)
   P7_HMMFILE        *hfp     = NULL;
   ESL_ALPHABET      *abc     = NULL;     /* digital alphabet               */
   ESL_GETOPTS       *opts    = NULL;     /* search specific options        */
+  P7_BUILDER       *bld      = NULL;         /* HMM construction configuration */
+  P7_BG            *bg       = NULL;         /* null model                     */
   HMMD_COMMAND_SHARD      *cmd     = NULL;     /* search cmd to send to workers  */
 
   ESL_STACK         *cmdstack = data->cmdstack;
@@ -555,14 +557,51 @@ clientside_loop(CLIENTSIDE_ARGS *data)
     if (*ptr == '>') {
       /* try to parse the input buffer as a FASTA sequence */
       seq = esl_sq_CreateDigital(abc);
+      bg = p7_bg_Create(abc);
       /* try to parse the input buffer as a FASTA sequence */
       status = esl_sqio_Parse(ptr, strlen(ptr), seq, eslSQFILE_DAEMON);
       if (status != eslOK) client_msg_longjmp(data->sock_fd, status, &jmp_env, "Error parsing FASTA sequence");
       if (seq->n < 1) client_msg_longjmp(data->sock_fd, eslEFORMAT, &jmp_env, "Error zero length FASTA sequence");
 
-    } else if (strncmp(ptr, "HMM", 3) == 0) {
-      if (esl_opt_IsUsed(opts, "--hmmdb")) {
-        client_msg_longjmp(data->sock_fd, status, &jmp_env, "A HMM cannot be used to search a hmm database");
+      if(data->masternode->database_shards[dbx-1]->data_type == AMINO){
+        // Searching an amino database with another sequence requires that we create an HMM from the sequence 
+        // a la phmmer
+
+        bld = p7_builder_Create(NULL, abc);
+        int seed;
+        if ((seed = esl_opt_GetInteger(opts, "--seed")) > 0) {
+          esl_randomness_Init(bld->r, seed);
+          bld->do_reseeding = TRUE;
+        }
+        bld->EmL = esl_opt_GetInteger(opts, "--EmL");
+        bld->EmN = esl_opt_GetInteger(opts, "--EmN");
+        bld->EvL = esl_opt_GetInteger(opts, "--EvL");
+        bld->EvN = esl_opt_GetInteger(opts, "--EvN");
+        bld->EfL = esl_opt_GetInteger(opts, "--EfL");
+        bld->EfN = esl_opt_GetInteger(opts, "--EfN");
+        bld->Eft = esl_opt_GetReal   (opts, "--Eft");
+
+        if (esl_opt_IsOn(opts, "--mxfile")) {
+          status = p7_builder_SetScoreSystem (bld, esl_opt_GetString(opts, "--mxfile"), NULL, esl_opt_GetReal(opts, "--popen"), esl_opt_GetReal(opts, "--pextend"), bg);
+        }
+        else{ 
+          status = p7_builder_LoadScoreSystem(bld, esl_opt_GetString(opts, "--mx"), esl_opt_GetReal(opts, "--popen"), esl_opt_GetReal(opts, "--pextend"), bg);
+        } 
+    
+        if (status != eslOK) {
+          client_msg_longjmp(data->sock_fd, eslEINVAL, &jmp_env, "hmmpgmd: failed to set single query sequence score system: %s", bld->errbuf);
+        }
+        p7_SingleBuilder(bld, seq, bg, &hmm, NULL, NULL, NULL);
+        esl_sq_Destroy(seq); // Free the sequence and set it to NULL so that the rest of the routine thinks 
+        // we were always doing an hmm-sequence search.
+        seq = NULL;
+        p7_builder_Destroy(bld);
+        p7_bg_Destroy(bg);
+      }
+    }
+    else if (strncmp(ptr, "HMM", 3) == 0) {
+       if (data->masternode->database_shards[dbx-1]->data_type == HMM){
+        client_msg_longjmp(data->sock_fd, status, &jmp_env, "Database %d contains HMM data, and a HMM cannot be used to search a HMM database", dbx);
       }
 
       /* try to parse the buffer as an hmm */
