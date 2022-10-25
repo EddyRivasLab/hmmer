@@ -139,4 +139,4 @@ void p7_server_masternode_Setup(uint32_t num_shards, uint32_t num_databases, cha
 
 
 // handles incoming messages to the master node
-void p7_masternode_message_handler(P7_SERVER_MASTERNODE_STATE *masternode, P7_SERVER_MESSAGE **buffer_handle, MPI_Datatype *server_mpitypes, ESL_GETOPTS *go);
+void p7_masternode_message_handler(P7_SERVER_MASTERNODE_STATE *masternode, P7_SERVER_MESSAGE **buffer_handle, MPI_Datatype *server_mpitypes, ESL_GETOPTS *query_opts);

@@ -526,26 +526,34 @@ clientside_loop(CLIENTSIDE_ARGS *data)
       client_msg_longjmp(data->sock_fd, status, &jmp_env, "Failed to parse options string: %s", opts->errbuf);
     }
 
-    if (esl_opt_IsUsed(opts, "--seqdb")) {
+    if (esl_opt_IsUsed(opts, "--db")) {
+      dbx = esl_opt_GetInteger(opts, "--db");
+      if((dbx < 1) || (dbx > data->masternode->num_databases)){
+        client_msg_longjmp(data->sock_fd, eslEINVAL, &jmp_env, "Nonexistent database %d specified.  Valid database ID's for this server range from 1 to %d\n", dbx, data->masternode->num_databases);
+      }
+    
+    } 
+     if (esl_opt_IsUsed(opts, "--seqdb")) {
+      if(dbx != 0){
+        client_msg_longjmp(data->sock_fd, eslEINVAL, &jmp_env, "Error: exactly one of --db, --seqdb, and --hmmdb must be specified");
+      }
       dbx = esl_opt_GetInteger(opts, "--seqdb");
       if((dbx < 1) || (dbx > data->masternode->num_databases)){
-        printf("invalid seq db found\n");
         client_msg_longjmp(data->sock_fd, eslEINVAL, &jmp_env, "Nonexistent database %d specified.  Valid database ID's for this server range from 1 to %d\n", dbx, data->masternode->num_databases);
       }
-      if (data->masternode->database_shards[dbx-1]->data_type != AMINO){
-        client_msg_longjmp(data->sock_fd, eslEINVAL, &jmp_env, "Error: database %d is not a sequence database\n", dbx);
+     }
+     if (esl_opt_IsUsed(opts, "--hmmdb")) {
+      if(dbx != 0){
+        client_msg_longjmp(data->sock_fd, eslEINVAL, &jmp_env, "Error: exactly one of --db, --seqdb, and --hmmdb must be specified");
       }
-    } else if (esl_opt_IsUsed(opts, "--hmmdb")) {
-      dbx = esl_opt_GetInteger(opts, "--hmmdb");
+      dbx = esl_opt_GetInteger(opts, "--db");
       if((dbx < 1) || (dbx > data->masternode->num_databases)){
-
         client_msg_longjmp(data->sock_fd, eslEINVAL, &jmp_env, "Nonexistent database %d specified.  Valid database ID's for this server range from 1 to %d\n", dbx, data->masternode->num_databases);
       }
-      if (data->masternode->database_shards[dbx-1]->data_type != HMM){
-        client_msg_longjmp(data->sock_fd, eslEINVAL, &jmp_env, "Error: database %d is not an HMM database\n", dbx);
-      }
-    } else {
-      client_msg_longjmp(data->sock_fd, eslEINVAL, &jmp_env, "No search database specified, --seqdb or --hmmdb.");
+    } 
+    
+    if(dbx == 0) {
+      client_msg_longjmp(data->sock_fd, eslEINVAL, &jmp_env, "No search database specified, --db <database #> is required");
     }
 
     
@@ -1083,7 +1091,7 @@ ERROR:
 }
 
 /* Sends a search to the worker nodes, waits for results, and returns them to the client */
-int process_search(P7_SERVER_MASTERNODE_STATE *masternode, QUEUE_DATA_SHARD *query, MPI_Datatype *server_mpitypes, ESL_GETOPTS *go){
+int process_search(P7_SERVER_MASTERNODE_STATE *masternode, QUEUE_DATA_SHARD *query, MPI_Datatype *server_mpitypes){
   #ifndef HAVE_MPI
   p7_Fail("process_search requires MPI and HMMER was compiled without MPI support");
 #endif
@@ -1113,7 +1121,7 @@ int process_search(P7_SERVER_MASTERNODE_STATE *masternode, QUEUE_DATA_SHARD *que
   // For testing, search the entire database
   P7_SHARD *database_shard = masternode->database_shards[the_command.db];
 
-  masternode->pipeline =  p7_pipeline_Create(go, 100, 100, FALSE, p7_SEARCH_SEQS);
+  masternode->pipeline =  p7_pipeline_Create(query->opts, 100, 100, FALSE, p7_SEARCH_SEQS);
   masternode->hit_messages_received = 0;
   gettimeofday(&start, NULL);
   
@@ -1170,7 +1178,7 @@ int process_search(P7_SERVER_MASTERNODE_STATE *masternode, QUEUE_DATA_SHARD *que
     // loop here until all of the workers are done with the search
     while((masternode->worker_nodes_done < masternode->num_worker_nodes) || (masternode->worker_stats_received < masternode->num_worker_nodes))
     {
-      p7_masternode_message_handler(masternode, buffer_handle, server_mpitypes, go);  //Poll for incoming messages
+      p7_masternode_message_handler(masternode, buffer_handle, server_mpitypes, query->opts);  //Poll for incoming messages
     }
 
     gettimeofday(&end, NULL);
@@ -1208,7 +1216,6 @@ int process_search(P7_SERVER_MASTERNODE_STATE *masternode, QUEUE_DATA_SHARD *que
       results.stats.nseqs = 1;
       results.stats.nres = -1; /* Fix when support scan */
     }
-    printf("results.stats.nres = %ld\n", results.stats.nres);
     results.stats.n_past_msv = masternode->pipeline->n_past_msv;
     results.stats.n_past_bias = masternode->pipeline->n_past_bias;
     results.stats.n_past_vit = masternode->pipeline->n_past_vit;
@@ -1281,7 +1288,7 @@ void p7_server_master_node_main(int argc, char ** argv, MPI_Datatype *server_mpi
   hints.ai_family = AF_UNSPEC;
   hints.ai_socktype = SOCK_STREAM;
   hints.ai_flags = AI_CANONNAME;
-  getaddrinfo(hostname, "http", &hints, &info);
+  getaddrinfo(hostname, NULL, &hints, &info);
   for(p = info; p != NULL; p = p->ai_next){
     printf("Master node is running on: %s\n", p->ai_canonname);
   }
@@ -1380,9 +1387,9 @@ void p7_server_master_node_main(int argc, char ** argv, MPI_Datatype *server_mpi
         ESL_ALLOC(worker_comm.range_list, sizeof(RANGE_LIST));
         hmmpgmd_GetRanges(worker_comm.range_list, esl_opt_GetString(query->opts, "--seqdb_ranges"));
       }*/
-      process_search(masternode, query, server_mpitypes, go); 
+      process_search(masternode, query, server_mpitypes); 
       break;
-    case HMMD_CMD_SCAN:        process_search(masternode, query, server_mpitypes, go); break;
+    case HMMD_CMD_SCAN:        process_search(masternode, query, server_mpitypes); break;
     case HMMD_CMD_SHUTDOWN:    
       process_shutdown(masternode, server_mpitypes);
       p7_syslog(LOG_ERR,"[%s:%d] - shutting down...\n", __FILE__, __LINE__);
@@ -1504,7 +1511,7 @@ void *p7_server_master_hit_thread(void *argument){
  *  \param [in] server_mpitypes A data structure that defines the custom MPI datatypes that the server uses
  *  \returns Nothing.  Calls p7_Fail() to exit the program if unable to complete successfully.
  */ 
-void p7_masternode_message_handler(P7_SERVER_MASTERNODE_STATE *masternode, P7_SERVER_MESSAGE **buffer_handle, MPI_Datatype *server_mpitypes, ESL_GETOPTS *go){
+void p7_masternode_message_handler(P7_SERVER_MASTERNODE_STATE *masternode, P7_SERVER_MESSAGE **buffer_handle, MPI_Datatype *server_mpitypes, ESL_GETOPTS *query_opts){
 #ifndef HAVE_MPI
   p7_Fail("Attempt to call p7_masternode_message_handler when HMMER was compiled without MPI support");
 #endif
@@ -1547,7 +1554,7 @@ void p7_masternode_message_handler(P7_SERVER_MASTERNODE_STATE *masternode, P7_SE
     switch((*buffer_handle)->status.MPI_TAG){
     case HMMER_PIPELINE_STATE_MPI_TAG:
       P7_PIPELINE *temp_pipeline;
-      p7_pipeline_MPIRecv((*buffer_handle)->status.MPI_SOURCE, (*buffer_handle)->status.MPI_TAG, MPI_COMM_WORLD, &((*buffer_handle)->buffer), &((*buffer_handle)->buffer_alloc), go, &temp_pipeline);
+      p7_pipeline_MPIRecv((*buffer_handle)->status.MPI_SOURCE, (*buffer_handle)->status.MPI_TAG, MPI_COMM_WORLD, &((*buffer_handle)->buffer), &((*buffer_handle)->buffer_alloc), query_opts, &temp_pipeline);
       p7_pipeline_Merge(masternode->pipeline, temp_pipeline);
       p7_pipeline_Destroy(temp_pipeline);
       masternode->worker_stats_received++;

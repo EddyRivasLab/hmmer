@@ -50,6 +50,7 @@ MYINCDIRS = -I../${ESLDIR} \
 PROGS = alimask\
 	hmmalign\
 	hmmbuild\
+	hmmclient\
 	hmmconvert\
 	hmmemit\
 	hmmfetch\
@@ -77,6 +78,7 @@ PROGOBJS =\
 	alimask.o\
 	hmmalign.o\
 	hmmbuild.o\
+	hmmclient.o\
 	hmmconvert.o\
 	hmmemit.o\
 	hmmfetch.o\

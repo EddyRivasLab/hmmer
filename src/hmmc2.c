@@ -195,9 +195,7 @@ int main(int argc, char *argv[])
   ESL_STOPWATCH   *w       = NULL;
   P7_PIPELINE     *pli     = NULL;
   P7_TOPHITS      *th      = NULL;
-  FILE *tblfp= NULL;  // file pointer for tabular output (--tblout)
-  FILE *domtblfp = NULL; // file pointer for domtable output (--domtblout)
-  FILE *pfamtblfp;  //file pointer for Pfam table output 
+
   HMMD_SEARCH_STATS   *stats;
   HMMD_SEARCH_STATUS   sstatus;
   uint8_t *buf;
@@ -543,9 +541,7 @@ int main(int argc, char *argv[])
         //p7_tophits_Sort(th);
         esl_stopwatch_Stop(w);
         /* Print the results.  */
-        if (tblfp)     p7_tophits_TabularTargets(tblfp,    hmm->name, hmm->acc, th, pli, 1); // fix these when add hmmscan
-        if (domtblfp)  p7_tophits_TabularDomains(domtblfp, hmm->name, hmm->acc, th, pli, 1);
-        if (pfamtblfp) p7_tophits_TabularXfam(pfamtblfp, hmm->name, hmm->acc, th, pli);
+
         if (scores) { p7_tophits_Targets(stdout, th, pli, 120); fprintf(stdout, "\n\n"); }
         if (ali)    { p7_tophits_Domains(stdout, th, pli, 120); fprintf(stdout, "\n\n"); }
         p7_pli_Statistics(stdout, pli, w);  
