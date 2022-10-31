@@ -4,6 +4,9 @@
 
 typedef struct {
   uint32_t   status;            /* error status                             */
+  uint32_t   type;              /* either HMMD_CMD_SEARCH or HMMD_CMD_SCAN, as defined below */
+                                /* Added for new hmmserver/hmmclient pair because hmmclient needs to know */
+                                /* what type of search is being done, but doesn't have access to that information*/
   uint64_t   msg_size;          /* size of the next packet.  if status not  */
                                 /* zero, the length is for the error string */
                                 /* otherwise it is the length of the data   */
@@ -95,7 +98,7 @@ typedef struct {
   };
 } HMMD_COMMAND;
 
-#define HMMD_SEARCH_STATUS_SERIAL_SIZE sizeof(uint32_t) + sizeof(uint64_t)
+#define HMMD_SEARCH_STATUS_SERIAL_SIZE sizeof(uint32_t) + sizeof(uint32_t) + sizeof(uint64_t)
 #define HMMD_SEARCH_STATS_SERIAL_BASE (5 * sizeof(double)) + (11 * sizeof(uint64_t)) + 21
 // The 2 is two enums at one byte/enum as we serialize them
 #define MSG_SIZE(x) (sizeof(HMMD_HEADER) + ((HMMD_HEADER *)(x))->length)

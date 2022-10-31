@@ -78,8 +78,11 @@ extern int hmmd_search_status_Serialize(const HMMD_SEARCH_STATUS *obj, uint8_t *
   network_32bit = esl_hton32(obj->status);
   memcpy(ptr, &network_32bit, sizeof(int32_t));
   ptr += sizeof(int32_t);
-
-  // Field 2: msg_size
+  // Field 2: type() field
+  network_32bit = esl_hton32(obj->status);
+  memcpy(ptr, &network_32bit, sizeof(int32_t));
+  ptr += sizeof(int32_t);
+  // Field 3: msg_size
   network_64bit = esl_hton64(obj->msg_size);
   memcpy(ptr, &network_64bit, sizeof(int64_t));
   ptr += sizeof(int64_t);
@@ -123,6 +126,11 @@ extern int hmmd_search_status_Deserialize(const uint8_t *buf, uint32_t *n, HMMD_
   ret_obj->status = esl_ntoh32(network_32bit);
   ptr += sizeof(uint32_t);
 
+  //Second field: type
+  memcpy(&network_32bit, ptr, sizeof(uint32_t)); // Grab the bytes out of the buffer
+  ret_obj->type = esl_ntoh32(network_32bit);
+  ptr += sizeof(uint32_t);
+
   //Field 2: msg_size
   memcpy(&network_64bit, ptr, sizeof(uint64_t)); // Grab the bytes out of the buffer
   ret_obj->msg_size = esl_ntoh64(network_64bit);
@@ -141,7 +149,7 @@ extern int hmmd_search_status_Deserialize(const uint8_t *buf, uint32_t *n, HMMD_
  *
  * Purpose:   Creates a HMMD_SEARCH_STATUS object that contains random data.  This data will be syntactically correct, 
  *            but is not intended to be in any way a "reasonable" hit.  For example, the number of P7_DOMAIN
- *            objects in the HMMD_SEARCH_STATUS objects will match the value of the object's ndom field, but the vales of the 
+ *            objects in the HMMD_SEARCH_STATUS objects will match the value of the object's ndom field, but the values of the 
  *            object's score, pre_score, and sum_score fields may not be consistent with each other.  
  *
  * Inputs:    rng: the random-number generator to use in creating this object.
