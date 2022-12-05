@@ -1,6 +1,6 @@
-/* SSE implementation of stochastic backtrace of a Forward matrix.
+/* NEON implementation of stochastic backtrace of a Forward matrix.
  * (Compare generic version, p7_GStochasticTrace().)
- * 
+ *
  * Contents:
  *    1. Stochastic trace implementation.
  *    2. Selection of steps in the traceback.
@@ -8,24 +8,23 @@
  *    4. Unit tests.
  *    5. Test driver.
  *    6. Example.
- *    
- * SRE, Fri Aug 15 08:02:43 2008 [Janelia]
- */   
+ *
+ * ML, Fri Mar 12 22:28:49 2021 [Heidelberg]
+ */
 #include "p7_config.h"
 
 #include <stdio.h>
 #include <math.h>
 
-#include <xmmintrin.h>		/* SSE  */
-#include <emmintrin.h>		/* SSE2 */
+#include <arm_neon.h>		/* NEON  */
 
 #include "easel.h"
 #include "esl_random.h"
-#include "esl_sse.h"
+#include "esl_neon.h"
 #include "esl_vectorops.h"
 
 #include "hmmer.h"
-#include "impl_sse.h"
+#include "impl_neon.h"
 
 static inline int select_m(ESL_RANDOMNESS *rng, const P7_OPROFILE *om, const P7_OMX *ox, int i, int k);
 static inline int select_d(ESL_RANDOMNESS *rng, const P7_OPROFILE *om, const P7_OMX *ox, int i, int k);
@@ -48,8 +47,8 @@ static inline int select_b(ESL_RANDOMNESS *rng, const P7_OPROFILE *om, const P7_
  * Purpose:   Perform a stochastic traceback from Forward matrix <ox>,
  *            using random number generator <r>, in order to sample an
  *            alignment of model <om> to digital sequence <dsq> of
- *            length <L>. 
- *            
+ *            length <L>.
+ *
  *            The sampled traceback is returned in <tr>, which the
  *            caller provides with at least an initial allocation;
  *            the <tr> allocation will be grown as needed here.
@@ -74,11 +73,11 @@ p7_StochasticTrace(ESL_RANDOMNESS *rng, const ESL_DSQ *dsq, int L, const P7_OPRO
   int   i;			/* position in sequence 1..L */
   int   k;			/* position in model 1..M */
   int   s0, s1;			/* choice of a state */
-  int   status;			
-  
+  int   status;
+
   if (tr->N != 0) ESL_EXCEPTION(eslEINVAL, "trace not empty; needs to be Reuse()'d?");
 
-  i = L;			
+  i = L;
   k = 0;
   if ((status = p7_trace_Append(tr, p7T_T, k, i)) != eslOK) return status;
   if ((status = p7_trace_Append(tr, p7T_C, k, i)) != eslOK) return status;
@@ -124,30 +123,31 @@ p7_StochasticTrace(ESL_RANDOMNESS *rng, const ESL_DSQ *dsq, int L, const P7_OPRO
 static inline int
 select_m(ESL_RANDOMNESS *rng, const P7_OPROFILE *om, const P7_OMX *ox, int i, int k)
 {
-  int     Q     = p7O_NQF(ox->M);
-  int     q     = (k-1) % Q;		/* (q,r) is position of the current DP cell M(i,k) */
-  int     r     = (k-1) / Q;
-  __m128 *tp    = om->tfv + 7*q;       	/* *tp now at start of transitions to cur cell M(i,k) */
-  __m128  xBv   = _mm_set1_ps(ox->xmx[(i-1)*p7X_NXCELLS+p7X_B]);
-  __m128  mpv, dpv, ipv;
-  union { __m128 v; float p[4]; } u;
+  int     		 Q     = p7O_NQF(ox->M);
+  int  				 q     = (k-1) % Q;		/* (q,r) is position of the current DP cell M(i,k) */
+  int     		 r     = (k-1) / Q;
+  float32x4_t *tp    = om->tfv + 7*q;       	/* *tp now at start of transitions to cur cell M(i,k) */
+  float32x4_t  xBv   = vmovq_n_f32(ox->xmx[(i-1)*p7X_NXCELLS+p7X_B]);
+  float32x4_t  zerov = vmovq_n_f32(0.0);
+  float32x4_t  mpv, dpv, ipv;
+  union { float32x4_t v; float p[4]; } u;
   float   path[4];
   int     state[4] = { p7T_B, p7T_M, p7T_I, p7T_D };
-  
+
   if (q > 0) {
     mpv = ox->dpf[i-1][(q-1)*3 + p7X_M];
     dpv = ox->dpf[i-1][(q-1)*3 + p7X_D];
     ipv = ox->dpf[i-1][(q-1)*3 + p7X_I];
   } else {
-    mpv = esl_sse_rightshiftz_float(ox->dpf[i-1][(Q-1)*3 + p7X_M]);
-    dpv = esl_sse_rightshiftz_float(ox->dpf[i-1][(Q-1)*3 + p7X_D]);
-    ipv = esl_sse_rightshiftz_float(ox->dpf[i-1][(Q-1)*3 + p7X_I]);
-  }	  
-  
-  u.v = _mm_mul_ps(xBv, *tp); tp++;  path[0] = u.p[r];
-  u.v = _mm_mul_ps(mpv, *tp); tp++;  path[1] = u.p[r];
-  u.v = _mm_mul_ps(ipv, *tp); tp++;  path[2] = u.p[r];
-  u.v = _mm_mul_ps(dpv, *tp);        path[3] = u.p[r];
+		mpv = esl_neon_rightshift_float((esl_neon_128f_t) ox->dpf[i-1][(Q-1)*3 + p7X_M], (esl_neon_128f_t) zerov).f32x4;
+    dpv = esl_neon_rightshift_float((esl_neon_128f_t) ox->dpf[i-1][(Q-1)*3 + p7X_D], (esl_neon_128f_t) zerov).f32x4;
+    ipv = esl_neon_rightshift_float((esl_neon_128f_t) ox->dpf[i-1][(Q-1)*3 + p7X_I], (esl_neon_128f_t) zerov).f32x4;
+  }
+
+  u.v = vmulq_f32(xBv, *tp); tp++;  path[0] = u.p[r];
+  u.v = vmulq_f32(mpv, *tp); tp++;  path[1] = u.p[r];
+  u.v = vmulq_f32(ipv, *tp); tp++;  path[2] = u.p[r];
+  u.v = vmulq_f32(dpv, *tp);        path[3] = u.p[r];
   esl_vec_FNorm(path, 4);
   return state[esl_rnd_FChoose(rng, path, 4)];
 }
@@ -156,12 +156,13 @@ select_m(ESL_RANDOMNESS *rng, const P7_OPROFILE *om, const P7_OMX *ox, int i, in
 static inline int
 select_d(ESL_RANDOMNESS *rng, const P7_OPROFILE *om, const P7_OMX *ox, int i, int k)
 {
-  int     Q     = p7O_NQF(ox->M);
-  int     q     = (k-1) % Q;		/* (q,r) is position of the current DP cell D(i,k) */
-  int     r     = (k-1) / Q;
-  __m128  mpv, dpv;
-  __m128  tmdv, tddv;
-  union { __m128 v; float p[4]; } u;
+  int          Q     = p7O_NQF(ox->M);
+  int          q     = (k-1) % Q;		/* (q,r) is position of the current DP cell D(i,k) */
+  int          r     = (k-1) / Q;
+  float32x4_t  zerov = vmovq_n_f32(0.0);
+  float32x4_t  mpv, dpv;
+  float32x4_t  tmdv, tddv;
+  union { float32x4_t v; float p[4]; } u;
   float   path[2];
   int     state[2] = { p7T_M, p7T_D };
 
@@ -171,14 +172,14 @@ select_d(ESL_RANDOMNESS *rng, const P7_OPROFILE *om, const P7_OMX *ox, int i, in
     tmdv = om->tfv[7*(q-1) + p7O_MD];
     tddv = om->tfv[7*Q + (q-1)];
   } else {
-    mpv  = esl_sse_rightshiftz_float(ox->dpf[i][(Q-1)*3 + p7X_M]);
-    dpv  = esl_sse_rightshiftz_float(ox->dpf[i][(Q-1)*3 + p7X_D]);
-    tmdv = esl_sse_rightshiftz_float(om->tfv[7*(Q-1) + p7O_MD]);
-    tddv = esl_sse_rightshiftz_float(om->tfv[8*Q-1]);
-  }	  
+    mpv  = esl_neon_rightshift_float((esl_neon_128f_t) ox->dpf[i][(Q-1)*3 + p7X_M], (esl_neon_128f_t) zerov).f32x4;
+    dpv  = esl_neon_rightshift_float((esl_neon_128f_t) ox->dpf[i][(Q-1)*3 + p7X_D], (esl_neon_128f_t) zerov).f32x4;
+    tmdv = esl_neon_rightshift_float((esl_neon_128f_t) om->tfv[7*(Q-1) + p7O_MD],   (esl_neon_128f_t) zerov).f32x4;
+    tddv = esl_neon_rightshift_float((esl_neon_128f_t) om->tfv[8*Q-1],              (esl_neon_128f_t) zerov).f32x4;
+  }
 
-  u.v = _mm_mul_ps(mpv, tmdv); path[0] = u.p[r];
-  u.v = _mm_mul_ps(dpv, tddv); path[1] = u.p[r];
+  u.v = vmulq_f32(mpv, tmdv); path[0] = u.p[r];
+  u.v = vmulq_f32(dpv, tddv); path[1] = u.p[r];
   esl_vec_FNorm(path, 2);
   return state[esl_rnd_FChoose(rng, path, 2)];
 }
@@ -187,18 +188,18 @@ select_d(ESL_RANDOMNESS *rng, const P7_OPROFILE *om, const P7_OMX *ox, int i, in
 static inline int
 select_i(ESL_RANDOMNESS *rng, const P7_OPROFILE *om, const P7_OMX *ox, int i, int k)
 {
-  int     Q     = p7O_NQF(ox->M);
-  int     q    = (k-1) % Q;		/* (q,r) is position of the current DP cell D(i,k) */
-  int     r    = (k-1) / Q;
-  __m128  mpv  = ox->dpf[i-1][q*3 + p7X_M];
-  __m128  ipv  = ox->dpf[i-1][q*3 + p7X_I];
-  __m128 *tp   = om->tfv + 7*q + p7O_MI;
-  union { __m128 v; float p[4]; } u;
+  int          Q     = p7O_NQF(ox->M);
+  int          q    = (k-1) % Q;		/* (q,r) is position of the current DP cell D(i,k) */
+  int          r    = (k-1) / Q;
+  float32x4_t  mpv  = ox->dpf[i-1][q*3 + p7X_M];
+  float32x4_t  ipv  = ox->dpf[i-1][q*3 + p7X_I];
+  float32x4_t *tp   = om->tfv + 7*q + p7O_MI;
+  union { float32x4_t v; float p[4]; } u;
   float   path[2];
   int     state[2] = { p7T_M, p7T_I };
 
-  u.v = _mm_mul_ps(mpv, *tp); tp++;  path[0] = u.p[r];
-  u.v = _mm_mul_ps(ipv, *tp);        path[1] = u.p[r];
+  u.v = vmulq_f32(mpv, *tp); tp++;  path[0] = u.p[r];
+  u.v = vmulq_f32(ipv, *tp);        path[1] = u.p[r];
   esl_vec_FNorm(path, 2);
   return state[esl_rnd_FChoose(rng, path, 2)];
 }
@@ -240,31 +241,31 @@ select_j(ESL_RANDOMNESS *rng, const P7_OPROFILE *om, const P7_OMX *ox, int i)
 /* E(i) is reached from any M(i, k=1..M) or D(i, k=2..M). */
 /* Using FChoose() here would mean allocating tmp space for 2M-1 paths;
  * instead we use the fact that E(i) is itself the necessary normalization
- * factor, and implement FChoose's algorithm here for an on-the-fly 
+ * factor, and implement FChoose's algorithm here for an on-the-fly
  * calculation.
  * Note that that means double-precision calculation, to be sure 0.0 <= roll < 1.0
  */
 static inline int
 select_e(ESL_RANDOMNESS *rng, const P7_OPROFILE *om, const P7_OMX *ox, int i, int *ret_k)
 {
-  int    Q     = p7O_NQF(ox->M);
-  double sum   = 0.0;
-  double roll  = esl_random(rng);
-  double norm  = 1.0 / ox->xmx[i*p7X_NXCELLS+p7X_E];
-  __m128 xEv   = _mm_set1_ps(norm); /* all M, D already scaled exactly the same */
-  union { __m128 v; float p[4]; } u;
+  int         Q     = p7O_NQF(ox->M);
+  double      sum   = 0.0;
+  double      roll  = esl_random(rng);
+  double      norm  = 1.0 / ox->xmx[i*p7X_NXCELLS+p7X_E];
+  float32x4_t xEv   = vmovq_n_f32(norm); /* all M, D already scaled exactly the same */
+  union { float32x4_t v; float p[4]; } u;
   int    q,r;
 
   while (1) {
     for (q = 0; q < Q; q++)
       {
-	u.v = _mm_mul_ps(ox->dpf[i][q*3 + p7X_M], xEv);
+	u.v = vmulq_f32(ox->dpf[i][q*3 + p7X_M], xEv);
 	for (r = 0; r < 4; r++) {
 	  sum += u.p[r];
 	  if (roll < sum) { *ret_k = r*Q + q + 1; return p7T_M;}
 	}
 
-	u.v = _mm_mul_ps(ox->dpf[i][q*3 + p7X_D], xEv);
+	u.v = vmulq_f32(ox->dpf[i][q*3 + p7X_D], xEv);
 	for (r = 0; r < 4; r++) {
 	  sum += u.p[r];
 	  if (roll < sum) { *ret_k = r*Q + q + 1; return p7T_D;}
@@ -274,7 +275,7 @@ select_e(ESL_RANDOMNESS *rng, const P7_OPROFILE *om, const P7_OMX *ox, int i, in
   }
   /*UNREACHED*/
   ESL_EXCEPTION(-1, "unreached code was reached. universe collapses.");
-} 
+}
 
 /* B(i) is reached from N(i) or J(i). */
 static inline int
@@ -319,9 +320,9 @@ static ESL_OPTIONS options[] = {
   {  0, 0, 0, 0, 0, 0, 0, 0, 0, 0 },
 };
 static char usage[]  = "[-options] <hmmfile>";
-static char banner[] = "benchmark driver for stochastic traceback, SSE version";
+static char banner[] = "benchmark driver for stochastic traceback, NEON version";
 
-int 
+int
 main(int argc, char **argv)
 {
   ESL_GETOPTS    *go      = p7_CreateDefaultApp(options, 1, argc, argv, banner, usage);
@@ -343,7 +344,7 @@ main(int argc, char **argv)
   int             i;
   float           sc, fsc, vsc;
   float           bestsc  = -eslINFINITY;
-  
+
   if (p7_hmmfile_OpenE(hmmfile, NULL, &hfp, NULL) != eslOK) p7_Fail("Failed to open HMM file %s", hmmfile);
   if (p7_hmmfile_Read(hfp, &abc, &hmm)            != eslOK) p7_Fail("Failed to read HMM");
 
@@ -399,7 +400,7 @@ main(int argc, char **argv)
 #ifdef p7STOTRACE_TESTDRIVE
 #include "esl_getopts.h"
 
-/* tests: 
+/* tests:
  *   1. each sampled trace must validate.
  *   2. each trace must be <= viterbi trace score
  *   3. in a large # of traces, one is "equal" to the viterbi trace score.
@@ -431,7 +432,7 @@ utest_stotrace(ESL_GETOPTS *go, ESL_RANDOMNESS *rng, ESL_ALPHABET *abc, P7_PROFI
     {
       if (p7_StochasticTrace(rng, dsq, L, om, ox, tr) != eslOK) esl_fatal("stochastic trace failed");
       if (p7_trace_Validate(tr, abc, dsq, errbuf)     != eslOK) esl_fatal("trace invalid:\n%s", errbuf);
-      if (p7_trace_Score(tr, dsq, gm, &sc)            != eslOK) esl_fatal("trace scoring failed"); 
+      if (p7_trace_Score(tr, dsq, gm, &sc)            != eslOK) esl_fatal("trace scoring failed");
 
       maxsc = ESL_MAX(sc, maxsc);
       if (sc > vsc + 0.001){	/* need a little tolerance of floating point math here  */
@@ -442,7 +443,7 @@ utest_stotrace(ESL_GETOPTS *go, ESL_RANDOMNESS *rng, ESL_ALPHABET *abc, P7_PROFI
       p7_trace_Reuse(tr);
     }
   if (esl_FCompare_old(maxsc, vsc, 0.1) != eslOK) esl_fatal("stochastic trace failed to sample the Viterbi path");
-  
+
   p7_trace_Destroy(tr);
   p7_trace_Destroy(vtr);
   p7_omx_Destroy(ox);
@@ -454,11 +455,10 @@ utest_stotrace(ESL_GETOPTS *go, ESL_RANDOMNESS *rng, ESL_ALPHABET *abc, P7_PROFI
 
 
 /*****************************************************************
- * 5. Test driver 
+ * 5. Test driver
  *****************************************************************/
 #ifdef p7STOTRACE_TESTDRIVE
-/* gcc -std=gnu99 -msse2 -g -Wall -o stotrace_utest -Dp7STOTRACE_TESTDRIVE -I.. -L.. -I../../easel -L../../easel stotrace.c -lhmmer -leasel -lm
- */
+
 #include "easel.h"
 #include "esl_getopts.h"
 #include "esl_randomseq.h"
@@ -510,7 +510,7 @@ main(int argc, char **argv)
   if ((sq = esl_sq_CreateDigital(abc))             == NULL) esl_fatal("sequence allocation failed");
   if (p7_ProfileEmit(r, hmm, gm, bg, sq, NULL)    != eslOK) esl_fatal("profile emission failed");
   utest_stotrace(go, r, abc, gm, om, sq->dsq, sq->n, ntrace);
-   
+
   esl_sq_Destroy(sq);
   free(dsq);
   p7_oprofile_Destroy(om);
@@ -530,10 +530,7 @@ main(int argc, char **argv)
  * 6. Example.
  *****************************************************************/
 #ifdef p7STOTRACE_EXAMPLE
-/* 
-   gcc -g -Wall -msse2 -std=gnu99 -o stotrace_example -I.. -L.. -I../../easel -L../../easel -Dp7STOTRACE_EXAMPLE stotrace.c -lhmmer -leasel -lm
-   ./example <hmmfile> <seqfile>
- */ 
+
 
 #include "p7_config.h"
 
@@ -545,7 +542,7 @@ main(int argc, char **argv)
 #include "esl_sqio.h"
 
 #include "hmmer.h"
-#include "impl_sse.h"
+#include "impl_neon.h"
 
 static ESL_OPTIONS options[] = {
   /* name           type      default  env  range toggles reqs incomp  help                                       docgroup*/
@@ -557,9 +554,9 @@ static ESL_OPTIONS options[] = {
   {  0, 0, 0, 0, 0, 0, 0, 0, 0, 0 },
 };
 static char usage[]  = "[-options] <hmmfile> <seqfile>";
-static char banner[] = "example of stochastic backtrace (SSE version)";
+static char banner[] = "example of stochastic backtrace (NEON version)";
 
-int 
+int
 main(int argc, char **argv)
 {
   ESL_GETOPTS    *go      = p7_CreateDefaultApp(options, 2, argc, argv, banner, usage);
@@ -602,13 +599,13 @@ main(int argc, char **argv)
   gm = p7_profile_Create(hmm->M, abc);   p7_ProfileConfig(hmm, bg, gm, sq->n, p7_LOCAL);
   om = p7_oprofile_Create(gm->M, abc);   p7_oprofile_Convert(gm, om);
 
-  if (esl_opt_GetBoolean(go, "-p")) p7_oprofile_Dump(stdout, om);  
+  if (esl_opt_GetBoolean(go, "-p")) p7_oprofile_Dump(stdout, om);
 
   fwd = p7_omx_Create(gm->M, sq->n, sq->n);
   gx  = p7_gmx_Create(gm->M, sq->n);
   tr  = p7_trace_Create();
 
-  if (esl_opt_GetBoolean(go, "-m") == TRUE) p7_omx_SetDumpMode(stdout, fwd, TRUE); 
+  if (esl_opt_GetBoolean(go, "-m") == TRUE) p7_omx_SetDumpMode(stdout, fwd, TRUE);
   p7_GViterbi(sq->dsq, sq->n, gm, gx,  &vsc);
   p7_Forward (sq->dsq, sq->n, om, fwd, &fsc);
 
@@ -616,7 +613,7 @@ main(int argc, char **argv)
     {
       p7_StochasticTrace(rng, sq->dsq, sq->n, om, fwd, tr);
       p7_trace_Score(tr, sq->dsq, gm, &tsc);
-  
+
       if (esl_opt_GetBoolean(go, "-t") == TRUE) p7_trace_Dump(stdout, tr, gm, sq->dsq);
       if (p7_trace_Validate(tr, abc, sq->dsq, errbuf) != eslOK)  p7_Die("trace %d fails validation:\n%s\n", i, errbuf);
 
@@ -644,5 +641,3 @@ main(int argc, char **argv)
 }
 #endif /*p7STOTRACE_EXAMPLE*/
 /*------------------------ end, example -------------------------*/
-
-

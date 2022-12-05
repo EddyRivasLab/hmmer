@@ -84,7 +84,9 @@ ERROR:
  */
 
 extern void p7_hit_Destroy(P7_HIT *the_hit){
-  if (the_hit == NULL){
+  int i;
+  if (the_hit == NULL)
+  {
     return;
   }
 
@@ -104,7 +106,7 @@ extern void p7_hit_Destroy(P7_HIT *the_hit){
 
   // need to do this manually rather than calling p7_domain_Destroy because we have an array of hits as one record
   if(the_hit->dcl !=NULL){
-    for(int i = 0; i < the_hit->ndom; i++){
+    for(i = 0; i < the_hit->ndom; i++){
       if(the_hit->dcl[i].scores_per_pos != NULL){
         free(the_hit->dcl[i].scores_per_pos);
       }
@@ -223,7 +225,7 @@ extern int p7_hit_Serialize(const P7_HIT *obj, uint8_t **buf, uint32_t *n, uint3
   uint32_t network_32bit; // hold 32-bit fields after conversion to network order
   uint64_t network_64bit; // hold 64-bit fields after conversion to network order
   uint8_t presence_flags = 0;
-
+  int i;
 
   // check to make sure we were passed a valid pointer 
   if(obj == NULL || buf == NULL || n == NULL || ((*buf == NULL) && ((*n != 0) || (*nalloc != 0)))) { 
@@ -404,7 +406,7 @@ extern int p7_hit_Serialize(const P7_HIT *obj, uint8_t **buf, uint32_t *n, uint3
 
   *n = ptr - *buf;  // update n to point to end of serialized region
 
-  for(int i = 0; i < obj->ndom; i++){
+  for(i = 0; i < obj->ndom; i++){
     status = p7_domain_Serialize(&(obj->dcl[i]), buf, n, nalloc);
     if(status != eslOK){
       return status;
@@ -443,10 +445,12 @@ extern int p7_hit_Deserialize(const uint8_t *buf, uint32_t *n, P7_HIT *ret_obj){
   uint32_t host_32bit; //variable to hold 64-bit values after conversion to host order
   uint32_t obj_size; // How much space does the variable-length portion of the serialized object take up?
   int status, string_length; 
-  uint8_t presence_flags; 
-  if(ret_obj == NULL || buf == NULL || n == NULL){
+  uint8_t presence_flags;
+  int i;
+  if (ret_obj == NULL || buf == NULL || n == NULL)
+  {
     return eslEINVAL;
-  }   
+  }
 
   ptr = (uint8_t *) buf + *n;
   
@@ -622,7 +626,7 @@ extern int p7_hit_Deserialize(const uint8_t *buf, uint32_t *n, P7_HIT *ret_obj){
 
   *n = ptr- buf; // reset n to point just past fixed-length fields
 
-  for(int i = 0; i < ret_obj->ndom; i++){
+  for(i = 0; i < ret_obj->ndom; i++){
     ret_obj->dcl[i].scores_per_pos = NULL;  // set internal pointers to known values so that domain_Deserialize does the right thing
     ret_obj->dcl[i].ad = NULL;
     int ret_code = p7_domain_Deserialize(buf, n, &(ret_obj->dcl[i]));
@@ -656,7 +660,7 @@ ERROR:
  * Throws:    Returns eslEMEM if unable to allocate or re-allocate memory. Returns eslEINVAL if ret_obj == NULL
  */
 extern int p7_hit_TestSample(ESL_RAND64 *rng, P7_HIT **ret_obj){
-  int status;
+  int status, i;
   int string_length;
   if(ret_obj == NULL){
     return eslEINVAL;
@@ -735,7 +739,7 @@ extern int p7_hit_TestSample(ESL_RAND64 *rng, P7_HIT **ret_obj){
 
   P7_DOMAIN **handle, *ptr; 
   handle = &ptr;
-  for(int i = 0; i < the_obj->ndom; i++){
+  for(i = 0; i < the_obj->ndom; i++){
     ptr = &(the_obj->dcl[i]);
     p7_domain_TestSample(rng, handle);
   }
@@ -764,7 +768,9 @@ ERROR:
  * Throws:    Nothing
  */ 
 extern int p7_hit_Compare(P7_HIT *first, P7_HIT *second, double atol, double rtol){
-  if(strcmp(first->name, second->name) != 0){
+  int i;
+  if (strcmp(first->name, second->name) != 0)
+  {
     return eslFAIL;
   }
 
@@ -868,7 +874,7 @@ extern int p7_hit_Compare(P7_HIT *first, P7_HIT *second, double atol, double rto
     return eslFAIL;
   }
 
-  for(int i = 0; i < first->ndom; i++){
+  for(i = 0; i < first->ndom; i++){
     if(p7_domain_Compare(&(first->dcl[i]), &(second->dcl[i]), atol, rtol) != eslOK){
       return eslFAIL;
     }

@@ -53,7 +53,6 @@ main(int argc, char **argv)
   struct dbfiles *dbf     = NULL;
   uint16_t        fh      = 0;
   int             nmodel  = 0;
-  uint64_t        totM    = 0;
   int             status;
   char            errbuf[eslERRBUFSIZE];
 
@@ -84,7 +83,6 @@ main(int argc, char **argv)
       }
 
       nmodel++;
-      totM += hmm->M;
 
       gm = p7_profile_Create(hmm->M, abc);
       p7_ProfileConfig(hmm, bg, gm, 400, p7_LOCAL);
