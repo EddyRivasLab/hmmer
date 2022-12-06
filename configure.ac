@@ -192,6 +192,15 @@ case $enable_debugging in
      *)  AC_MSG_ERROR([Unknown argument to --enable-debugging: $enable_debugging]);;
 esac
 
+# --enable-fortify=x      - set FORTIFY_SOURCE at level x to check bounds of array
+# accesses
+AC_ARG_ENABLE(fortify,
+  [
+    AS_HELP_STRING([--enable-fortify=x],[pass -D_FORTIFY_SOURCE=x to compiler to check for buffer overflows])
+  ],
+  enable_fortify=$enableval,
+  enable_fortify=no)
+
 
 AC_ARG_ENABLE(gcov,    [AS_HELP_STRING([--enable-gcov],    [compile for code coverage testing])],        enable_gcov=$enableval,    enable_gcov=no)
 AC_ARG_ENABLE(gprof,   [AS_HELP_STRING([--enable-gprof],   [compile for gcc code profiling])],           enable_gprof=$enableval,   enable_gprof=no)
@@ -285,7 +294,10 @@ elif test x"${CFLAGS}" = x; then
    CFLAGS="-O3"
 fi
 
-
+# See if we should be passing -D_ENABLE_FORTIFY
+if test "$enable_fortify" != "no"; then
+  CFLAGS="${CFLAGS} -D_FORTIFY_SOURCE=$enable_fortify"
+fi
 # PIC (position-independent code) for shared library support
 #
 if test "$enable_pic" = "yes"; then
