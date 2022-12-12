@@ -140,6 +140,7 @@ P7_SHARD *p7_shard_Create_hmmfile(char *filename, uint32_t num_shards, uint32_t 
   // GOTO target used to catch error cases from ESL_ALLOC
   ERROR:
     p7_Fail("Unable to allocate memory in p7_shard_Create_hmmfile");
+    return NULL; // Silence compilerr warning on Mac
 }
 
 // p7_shard_Create_dsqdata
@@ -235,6 +236,7 @@ P7_SHARD *p7_shard_Create_sqdata(char *filename, uint32_t num_shards, uint32_t m
   // GOTO target used to catch error cases from ESL_ALLOC because we're too low-tech to write in C++
   ERROR:
     p7_Fail("Unable to allocate memory in p7_shard_Create_dsqdata");
+    return NULL; //silence compiler warning on Mac
 }
 
 
@@ -328,6 +330,7 @@ int p7_shard_Find_Contents_Nextlow(P7_SHARD *the_shard, uint64_t id, char **ret_
     }
     else{
       p7_Fail("search error in p7_shard_Find_Contents_Nextlow");
+      return eslFAIL; //Silence compiler warning on Mac
     }
   }
 }
@@ -383,6 +386,7 @@ uint64_t p7_shard_Find_Id_Nextlow(P7_SHARD *the_shard, uint64_t id){
     }
     else{
       p7_Fail("search error in p7_shard_Find_Contents_Nextlow");
+      return eslFAIL; // silence compiler warning on Mac
     }
   }
 }
@@ -442,6 +446,7 @@ int p7_shard_Find_Contents_Nexthigh(P7_SHARD *the_shard, uint64_t id, char **ret
     }
     else{
       p7_Fail("search error in p7_shard_Find_Contents_Nexthigh");
+      return eslFAIL; // Silence compiler warning on Mac
     }
   }
 }
@@ -494,6 +499,7 @@ uint64_t p7_shard_Find_Id_Nexthigh(P7_SHARD *the_shard, uint64_t id){
     }
     else{
       p7_Fail("search error in p7_shard_Find_Contents_Nexthigh");
+      return eslFAIL; //Silence compiler warning on Mac
     }
   }
 }
@@ -547,6 +553,7 @@ uint64_t p7_shard_Find_Index_Nexthigh(P7_SHARD *the_shard, uint64_t id){
     }
     else{
       p7_Fail("search error in p7_shard_Find_Contents_Nexthigh");
+      return eslFAIL; //Silence compiler warning on Mac.
     }
   }
 }
@@ -610,6 +617,7 @@ int p7_shard_Find_Descriptor_Nexthigh(P7_SHARD *the_shard, uint64_t id, char **r
     }
     else{
       p7_Fail("search error in p7_shard_Find_Descriptor_Nexthigh");
+      return eslFAIL; // silence compiler warning on Mac
     }
   }
 }

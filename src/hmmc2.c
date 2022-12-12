@@ -407,7 +407,6 @@ int main(int argc, char *argv[])
       abc = esl_alphabet_Create(eslAMINO);
 
       if (status == eslOK) {
-        total = 0;
         esl_stopwatch_Start(w);
         /* Send the string to the server */ 
         n = strlen(seq);
