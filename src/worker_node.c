@@ -218,6 +218,7 @@ P7_SERVER_WORKERNODE_STATE *p7_server_workernode_Create(uint32_t num_databases, 
   // GOTO target used to catch error cases from ESL_ALLOC
 ERROR:
   p7_Fail("Unable to allocate memory in p7_server_workernode_Create");
+  return NULL; //silence compiler warning on Mac
 }
 
 
@@ -742,6 +743,7 @@ int p7_server_workernode_create_threads(P7_SERVER_WORKERNODE_STATE *workernode){
 // GOTO target used to catch error cases from ESL_ALLOC because we're too low-tech to write in C++
 ERROR:
   p7_Fail("Unable to allocate memory in p7_server_workernode_create_threads");
+  return eslFAIL; // silence compiler warning on Mac
 }
 
 
@@ -913,6 +915,7 @@ void *p7_server_worker_thread(void *worker_argument){
         break;
       
       case HMM_SEARCH:
+      case HMM_SEARCH_CONTINUE:
        p7_Fail("Hmmscan functionality disabled in this version\n");
 
         break;
@@ -1660,6 +1663,7 @@ static P7_BACKEND_QUEUE_ENTRY *workernode_backend_pool_Create(int num_entries, E
   // GOTO target used to catch error cases from ESL_ALLOC
 ERROR:
   p7_Fail("Unable to allocate memory in p7_backend_pool_Create");  
+  return NULL;  //Silence compiler warning on Mac
 }
 
 

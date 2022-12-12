@@ -691,8 +691,8 @@ gather_results(QUEUE_DATA *query, WORKERSIDE_ARGS *comm, SEARCH_RESULTS *results
 {
   int cnt;
   int n;
-
-  WORKER_DATA        *worker;
+  int i0, i1;
+  WORKER_DATA *worker;
 
   /* allocate spaces to hold all the hits */
   cnt = results->nhits + MAX_WORKERS;
@@ -732,7 +732,7 @@ gather_results(QUEUE_DATA *query, WORKERSIDE_ARGS *comm, SEARCH_RESULTS *results
         }
 
         // copy this worker's hits into the global list
-        for(int i0 = 0, i1 = previous_hits; i1 < results->stats.nhits; i0++, i1++){
+        for(i0 = 0, i1 = previous_hits; i1 < results->stats.nhits; i0++, i1++){
           results->hits[i1] = worker->hits[i0];
         }
 
@@ -780,7 +780,7 @@ forward_results(QUEUE_DATA *query, SEARCH_RESULTS *results)
   uint8_t **buf, **buf2, **buf3, *buf_ptr, *buf2_ptr, *buf3_ptr;
   uint32_t nalloc, nalloc2, nalloc3, buf_offset, buf_offset2, buf_offset3;
   enum p7_pipemodes_e mode;
-
+  int i;
   // Initialize these pointers-to-pointers that we'll use for sending data
   buf_ptr = NULL;
   buf = &(buf_ptr);
@@ -849,7 +849,7 @@ forward_results(QUEUE_DATA *query, SEARCH_RESULTS *results)
   buf_offset = 0;
 
   // First, the buffer of hits
-  for(int i =0; i< results->stats.nhits; i++){
+  for(i =0; i< results->stats.nhits; i++){
    
     results->stats.hit_offsets[i] = buf_offset;
     if(p7_hit_Serialize(results->hits[i], buf, &buf_offset, &nalloc) != eslOK){
@@ -908,7 +908,7 @@ forward_results(QUEUE_DATA *query, SEARCH_RESULTS *results)
 
  CLEAR:
   /* free all the data */
-  for(int i = 0; i < results->stats.nhits; i++){
+  for(i = 0; i < results->stats.nhits; i++){
     p7_hit_Destroy(results->hits[i]);
   }
 
@@ -937,10 +937,12 @@ forward_results(QUEUE_DATA *query, SEARCH_RESULTS *results)
 static void
 destroy_worker(WORKER_DATA *worker)
 {
-  if (worker == NULL) {
+  int i;
+  if (worker == NULL)
+  {
     if (worker->err_buf  != NULL) free(worker->err_buf);
     if (worker->hits != NULL){
-      for(int i = 0; i < worker->allocated_hits; i++){
+      for(i = 0; i < worker->allocated_hits; i++){
         p7_hit_Destroy(worker->hits[i]);
       }
       free(worker->hits);
@@ -967,7 +969,7 @@ clear_results(WORKERSIDE_ARGS *args, SEARCH_RESULTS *results)
   while (worker != NULL) {
     if (worker->err_buf  != NULL) free(worker->err_buf);
     if(worker->hits != NULL){
-      for(int i =0; i < worker->allocated_hits; i++){
+      for(i =0; i < worker->allocated_hits; i++){
         p7_hit_Destroy(worker->hits[i]);
       }
       free(worker->hits);
@@ -1473,7 +1475,7 @@ workerside_loop(WORKERSIDE_ARGS *data, WORKER_DATA *worker)
   ESL_STOPWATCH      *w     = NULL;
   HMMD_SEARCH_STATS  *stats = NULL;
   HMMD_COMMAND        cmd;
-  int    n;
+  int    n, i;
   int    size;
   int    total;
   char  *ptr;
@@ -1609,7 +1611,7 @@ workerside_loop(WORKERSIDE_ARGS *data, WORKER_DATA *worker)
         }
         worker->allocated_hits = stats->nhits;  // Need this if we have to destroy the worker because of an error
         /* read in the hits */
-        for(int i = 0; i < stats->nhits; i++){
+        for(i = 0; i < stats->nhits; i++){
           worker->hits[i] = p7_hit_Create_empty();
           if(worker->hits[i] == NULL){
             LOG_FATAL_MSG("malloc", errno);

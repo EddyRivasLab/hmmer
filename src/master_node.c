@@ -960,7 +960,8 @@ P7_SERVER_MASTERNODE_STATE *p7_server_masternode_Create(uint32_t num_shards, int
 
   // GOTO target used to catch error cases from ESL_ALLOC
 ERROR:
-  p7_Fail("Unable to allocate memory in p7_server_masternode_Create");  
+  p7_Fail("Unable to allocate memory in p7_server_masternode_Create");
+  return NULL; //Silence compiler warning on Mac
 }
 
 
@@ -1089,6 +1090,7 @@ P7_SERVER_MESSAGE *p7_server_message_Create(){
     return the_message;
 ERROR:
   p7_Fail("Unable to allocate memory in p7_server_message_Create");  
+  return NULL; // Silence compiler warning on Mac
 }
 
 /* Sends a search to the worker nodes, waits for results, and returns them to the client */
@@ -1233,7 +1235,8 @@ int process_search(P7_SERVER_MASTERNODE_STATE *masternode, QUEUE_DATA_SHARD *que
     p7_profile_Destroy(gm);
     return eslOK;
   ERROR:
-    p7_Fail("Unable to allocate memory in process_search");
+    p7_Fail("Unable to allocate memory in process_search"); 
+    return eslFAIL; // Silence compiler warning on Mac
 #endif
 }
 
@@ -1280,9 +1283,9 @@ void p7_server_master_node_main(int argc, char ** argv, MPI_Datatype *server_mpi
 
 #ifdef HAVE_MPI
   //Get the fully-qualified hostname of the machine we're on
-  char hostname[HOST_NAME_MAX];
-  hostname[HOST_NAME_MAX-1]='\0';
-  gethostname(hostname, HOST_NAME_MAX-1);
+  char hostname[_POSIX_HOST_NAME_MAX];
+  hostname[_POSIX_HOST_NAME_MAX-1]='\0';
+  gethostname(hostname, _POSIX_HOST_NAME_MAX-1);
   struct addrinfo hints, *info, *p;
   memset(&hints, 0, sizeof(hints));
   hints.ai_family = AF_UNSPEC;
@@ -1519,6 +1522,7 @@ void p7_masternode_message_handler(P7_SERVER_MASTERNODE_STATE *masternode, P7_SE
 #ifdef HAVE_MPI
   int status; // return code from ESL_*ALLOC
   int hit_messages_received = 0;
+  P7_PIPELINE *temp_pipeline;
   if(*buffer_handle == NULL){
     //Try to grab a message buffer from the empty message pool
     while(pthread_mutex_trylock(&(masternode->empty_hit_message_pool_lock))){
@@ -1553,7 +1557,6 @@ void p7_masternode_message_handler(P7_SERVER_MASTERNODE_STATE *masternode, P7_SE
     // Do different things for each message type
     switch((*buffer_handle)->status.MPI_TAG){
     case HMMER_PIPELINE_STATE_MPI_TAG:
-      P7_PIPELINE *temp_pipeline;
       p7_pipeline_MPIRecv((*buffer_handle)->status.MPI_SOURCE, (*buffer_handle)->status.MPI_TAG, MPI_COMM_WORLD, &((*buffer_handle)->buffer), &((*buffer_handle)->buffer_alloc), query_opts, &temp_pipeline);
       p7_pipeline_Merge(masternode->pipeline, temp_pipeline);
       p7_pipeline_Destroy(temp_pipeline);

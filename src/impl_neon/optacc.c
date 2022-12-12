@@ -1,5 +1,5 @@
-/* Optimal accuracy alignment; SSE version.
- * 
+/* Optimal accuracy alignment; NEON version.
+ *
  * Contents:
  *   1. Optimal accuracy alignment, DP fill
  *   2. OA traceback
@@ -7,18 +7,17 @@
  *   4. Unit tests
  *   5. Test driver
  *   6. Example
- * 
+ *
  * SRE, Mon Aug 18 20:01:01 2008 [Casa de Gatos]
  */
 #include "p7_config.h"
 
 #include <float.h>
 
-#include <xmmintrin.h>
-#include <emmintrin.h>
+#include <arm_neon.h>
 
 #include "easel.h"
-#include "esl_sse.h"
+#include "esl_neon.h"
 #include "esl_vectorops.h"
 
 #include "hmmer.h"
@@ -34,19 +33,19 @@
  *
  * Purpose:   Calculates the fill step of the optimal accuracy decoding
  *            algorithm \citep{Kall05}.
- *            
+ *
  *            Caller provides the posterior decoding matrix <pp>,
  *            which was calculated by Forward/Backward on a target sequence
  *            of length <pp->L> using the query model <om>.
- *            
+ *
  *            Caller also provides a DP matrix <ox>, allocated for a full
  *            <om->M> by <L> comparison. The routine fills this in
  *            with OA scores.
- *  
- * Args:      gm    - query profile      
+ *
+ * Args:      gm    - query profile
  *            pp    - posterior decoding matrix created by <p7_GPosteriorDecoding()>
- *            gx    - RESULT: caller provided DP matrix for <gm->M> by <L> 
- *            ret_e - RETURN: expected number of correctly decoded positions 
+ *            gx    - RESULT: caller provided DP matrix for <gm->M> by <L>
+ *            ret_e - RETURN: expected number of correctly decoded positions
  *
  * Returns:   <eslOK> on success, and <*ret_e> contains the final OA
  *            score, which is the expected number of correctly decoded
@@ -57,18 +56,18 @@
 int
 p7_OptimalAccuracy(const P7_OPROFILE *om, const P7_OMX *pp, P7_OMX *ox, float *ret_e)
 {
-  register __m128 mpv, dpv, ipv;   /* previous row values                                       */
-  register __m128 sv;		   /* temp storage of 1 curr row value in progress              */
-  register __m128 xEv;		   /* E state: keeps max for Mk->E as we go                     */
-  register __m128 xBv;		   /* B state: splatted vector of B[i-1] for B->Mk calculations */
-  register __m128 dcv;
-  float  *xmx = ox->xmx;
-  __m128 *dpc = ox->dpf[0];        /* current row, for use in {MDI}MO(dpp,q) access macro       */
-  __m128 *dpp;                     /* previous row, for use in {MDI}MO(dpp,q) access macro      */
-  __m128 *ppp;			   /* quads in the <pp> posterior probability matrix            */
-  __m128 *tp;			   /* quads in the <om->tfv> transition scores                  */
-  __m128 zerov = _mm_setzero_ps();
-  __m128 infv  = _mm_set1_ps(-eslINFINITY);
+  register float32x4_t mpv, dpv, ipv;   /* previous row values                                       */
+  register float32x4_t sv;		   /* temp storage of 1 curr row value in progress              */
+  register float32x4_t xEv;		   /* E state: keeps max for Mk->E as we go                     */
+  register float32x4_t xBv;		   /* B state: splatted vector of B[i-1] for B->Mk calculations */
+  register float32x4_t dcv;
+  float       *xmx  = ox->xmx;
+  float32x4_t *dpc  = ox->dpf[0];        /* current row, for use in {MDI}MO(dpp,q) access macro       */
+  float32x4_t *dpp;                     /* previous row, for use in {MDI}MO(dpp,q) access macro      */
+  float32x4_t *ppp;			   /* quads in the <pp> posterior probability matrix            */
+  float32x4_t *tp;			   /* quads in the <om->tfv> transition scores                  */
+  float32x4_t zerov = vmovq_n_f32(0.0);
+  float32x4_t infv  = vmovq_n_f32(-eslINFINITY);
   int M = om->M;
   int Q = p7O_NQF(M);
   int q;
@@ -93,20 +92,20 @@ p7_OptimalAccuracy(const P7_OPROFILE *om, const P7_OMX *pp, P7_OMX *ox, float *r
       tp  = om->tfv;		/* transition probabilities */
       dcv = infv;
       xEv = infv;
-      xBv = _mm_set1_ps(XMXo(i-1, p7X_B));
+      xBv = vmovq_n_f32(XMXo(i-1, p7X_B));
 
-      mpv = esl_sse_rightshift_ps(MMO(dpp,Q-1), infv);  /* Right shifts by 4 bytes. 4,8,12,x becomes x,4,8,12. */
-      dpv = esl_sse_rightshift_ps(DMO(dpp,Q-1), infv);
-      ipv = esl_sse_rightshift_ps(IMO(dpp,Q-1), infv);
+      mpv = esl_neon_rightshift_float((esl_neon_128f_t) MMO(dpp,Q-1), (esl_neon_128f_t) infv).f32x4;  /* Right shifts by 4 bytes. 4,8,12,x becomes x,4,8,12. */
+      dpv = esl_neon_rightshift_float((esl_neon_128f_t) DMO(dpp,Q-1), (esl_neon_128f_t) infv).f32x4;
+      ipv = esl_neon_rightshift_float((esl_neon_128f_t) IMO(dpp,Q-1), (esl_neon_128f_t) infv).f32x4;
       for (q = 0; q < Q; q++)
 	{
-	  sv  =                _mm_and_ps(_mm_cmpgt_ps(*tp, zerov), xBv);  tp++;
-	  sv  = _mm_max_ps(sv, _mm_and_ps(_mm_cmpgt_ps(*tp, zerov), mpv)); tp++;
-	  sv  = _mm_max_ps(sv, _mm_and_ps(_mm_cmpgt_ps(*tp, zerov), ipv)); tp++;
-	  sv  = _mm_max_ps(sv, _mm_and_ps(_mm_cmpgt_ps(*tp, zerov), dpv)); tp++;
-	  sv  = _mm_add_ps(sv, *ppp);                                      ppp += 2;
-	  xEv = _mm_max_ps(xEv, sv);
-	  
+	  sv  =               vreinterpretq_f32_u32(vandq_u32(vcgtq_f32(*tp, zerov), vreinterpretq_u32_f32(xBv)));  tp++;
+    sv  = vmaxq_f32(sv, vreinterpretq_f32_u32(vandq_u32(vcgtq_f32(*tp, zerov), vreinterpretq_u32_f32(mpv)))); tp++;
+    sv  = vmaxq_f32(sv, vreinterpretq_f32_u32(vandq_u32(vcgtq_f32(*tp, zerov), vreinterpretq_u32_f32(ipv)))); tp++;
+	  sv  = vmaxq_f32(sv, vreinterpretq_f32_u32(vandq_u32(vcgtq_f32(*tp, zerov), vreinterpretq_u32_f32(dpv)))); tp++;
+	  sv  = vaddq_f32(sv, *ppp);                                                                                ppp += 2;
+	  xEv = vmaxq_f32(xEv, sv);
+
 	  mpv = MMO(dpp,q);
 	  dpv = DMO(dpp,q);
 	  ipv = IMO(dpp,q);
@@ -114,42 +113,42 @@ p7_OptimalAccuracy(const P7_OPROFILE *om, const P7_OMX *pp, P7_OMX *ox, float *r
 	  MMO(dpc,q) = sv;
 	  DMO(dpc,q) = dcv;
 
-	  dcv = _mm_and_ps(_mm_cmpgt_ps(*tp, zerov), sv); tp++;
+	  dcv = vreinterpretq_f32_u32(vandq_u32(vcgtq_f32(*tp, zerov), vreinterpretq_u32_f32(sv))); tp++;
 
-	  sv         =                _mm_and_ps(_mm_cmpgt_ps(*tp, zerov), mpv);   tp++;
-	  sv         = _mm_max_ps(sv, _mm_and_ps(_mm_cmpgt_ps(*tp, zerov), ipv));  tp++;
-	  IMO(dpc,q) = _mm_add_ps(sv, *ppp);                                       ppp++;
+	  sv         =               vreinterpretq_f32_u32(vandq_u32(vcgtq_f32(*tp, zerov), vreinterpretq_u32_f32(mpv)));   tp++;
+	  sv         = vmaxq_f32(sv, vreinterpretq_f32_u32(vandq_u32(vcgtq_f32(*tp, zerov), vreinterpretq_u32_f32(ipv))));  tp++;
+	  IMO(dpc,q) = vaddq_f32(sv, *ppp);                                   ppp++;
 	}
-      
-      /* dcv has carried through from end of q loop above; store it 
+
+      /* dcv has carried through from end of q loop above; store it
        * in first pass, we add M->D and D->D path into DMX
        */
-      dcv = esl_sse_rightshift_ps(dcv, infv); 
+      dcv = esl_neon_rightshift_float((esl_neon_128f_t) dcv, (esl_neon_128f_t) infv).f32x4;
       tp  = om->tfv + 7*Q;	/* set tp to start of the DD's */
       for (q = 0; q < Q; q++)
 	{
-	  DMO(dpc, q) = _mm_max_ps(dcv, DMO(dpc, q));
-	  dcv         = _mm_and_ps(_mm_cmpgt_ps(*tp, zerov), DMO(dpc,q));   tp++;
+	  DMO(dpc, q) = vmaxq_f32(dcv, DMO(dpc, q));
+	  dcv         = vreinterpretq_f32_u32(vandq_u32(vcgtq_f32(*tp, zerov), vreinterpretq_u32_f32(DMO(dpc,q))));   tp++;
 	}
 
       /* fully serialized D->D; can optimize later */
       for (j = 1; j < 4; j++)
 	{
-	  dcv = esl_sse_rightshift_ps(dcv, infv);
-	  tp  = om->tfv + 7*Q;	
+	  dcv = esl_neon_rightshift_float((esl_neon_128f_t) dcv, (esl_neon_128f_t) infv).f32x4;
+	  tp  = om->tfv + 7*Q;
 	  for (q = 0; q < Q; q++)
 	    {
-	      DMO(dpc, q) = _mm_max_ps(dcv, DMO(dpc, q));
-	      dcv         = _mm_and_ps(_mm_cmpgt_ps(*tp, zerov), dcv);   tp++;
+	      DMO(dpc, q) = vmaxq_f32(dcv, DMO(dpc, q));
+	      dcv         = vreinterpretq_f32_u32(vandq_u32(vcgtq_f32(*tp, zerov), vreinterpretq_u32_f32(dcv)));   tp++;
 	    }
 	}
 
       /* D->E paths */
-      for (q = 0; q < Q; q++) xEv = _mm_max_ps(xEv, DMO(dpc,q));
-      
+      for (q = 0; q < Q; q++) xEv = vmaxq_f32(xEv, DMO(dpc,q));
+
       /* Specials */
-      esl_sse_hmax_ps(xEv, &(XMXo(i,p7X_E)));
-      
+      XMXo(i,p7X_E) = esl_neon_hmax_f32((esl_neon_128f_t) xEv);
+
       t1 = ( (om->xf[p7O_J][p7O_LOOP] == 0.0) ? 0.0 : ox->xmx[(i-1)*p7X_NXCELLS+p7X_J] + pp->xmx[i*p7X_NXCELLS+p7X_J]);
       t2 = ( (om->xf[p7O_E][p7O_LOOP] == 0.0) ? 0.0 : ox->xmx[   i *p7X_NXCELLS+p7X_E]);
       ox->xmx[i*p7X_NXCELLS+p7X_J] = ESL_MAX(t1, t2);
@@ -157,9 +156,9 @@ p7_OptimalAccuracy(const P7_OPROFILE *om, const P7_OMX *pp, P7_OMX *ox, float *r
       t1 = ( (om->xf[p7O_C][p7O_LOOP] == 0.0) ? 0.0 : ox->xmx[(i-1)*p7X_NXCELLS+p7X_C] + pp->xmx[i*p7X_NXCELLS+p7X_C]);
       t2 = ( (om->xf[p7O_E][p7O_MOVE] == 0.0) ? 0.0 : ox->xmx[   i *p7X_NXCELLS+p7X_E]);
       ox->xmx[i*p7X_NXCELLS+p7X_C] = ESL_MAX(t1, t2);
-      
+
       ox->xmx[i*p7X_NXCELLS+p7X_N] = ((om->xf[p7O_N][p7O_LOOP] == 0.0) ? 0.0 : ox->xmx[(i-1)*p7X_NXCELLS+p7X_N] + pp->xmx[i*p7X_NXCELLS+p7X_N]);
-      
+
       t1 = ( (om->xf[p7O_N][p7O_MOVE] == 0.0) ? 0.0 : ox->xmx[i*p7X_NXCELLS+p7X_N]);
       t2 = ( (om->xf[p7O_J][p7O_MOVE] == 0.0) ? 0.0 : ox->xmx[i*p7X_NXCELLS+p7X_J]);
       ox->xmx[i*p7X_NXCELLS+p7X_B] = ESL_MAX(t1, t2);
@@ -196,14 +195,14 @@ static inline int select_b(const P7_OPROFILE *om,                   const P7_OMX
  *
  * Purpose:   The traceback stage of the optimal accuracy decoding algorithm
  *            \citep{Kall05}.
- *            
+ *
  *            Caller provides the OA DP matrix <ox> that was just
  *            calculated by <p7_OptimalAccuracyDP()>, as well as the
  *            posterior decoding matrix <pp>, which was calculated by
  *            Forward/Backward on a target sequence using the query
  *            model <gm>. Because the calculation depends only on
  *            <pp>, the target sequence itself need not be provided.
- *            
+ *
  *            The resulting optimal accuracy decoding traceback is put
  *            in a caller-provided traceback structure <tr>, which the
  *            caller has allocated for optional posterior probability
@@ -228,8 +227,8 @@ p7_OATrace(const P7_OPROFILE *om, const P7_OMX *pp, const P7_OMX *ox, P7_TRACE *
   int   k   = 0;		/* position in model 1..M */
   int   s0, s1;			/* choice of a state */
   float postprob;
-  int   status;			
-  
+  int   status;
+
   if (tr->N != 0) ESL_EXCEPTION(eslEINVAL, "trace not empty; needs to be Reuse()'d?");
 
   if ((status = p7_trace_AppendWithPP(tr, p7T_T, k, i, 0.0)) != eslOK) return status;
@@ -268,11 +267,11 @@ get_postprob(const P7_OMX *pp, int scur, int sprv, int k, int i)
   int     Q     = p7O_NQF(pp->M);
   int     q     = (k-1) % Q;		/* (q,r) is position of the current DP cell M(i,k) */
   int     r     = (k-1) / Q;
-  union { __m128 v; float p[4]; } u;
+  union { float32x4_t v; float p[4]; } u;
 
   switch (scur) {
-  case p7T_M: u.v = MMO(pp->dpf[i], q); return u.p[r]; 
-  case p7T_I: u.v = IMO(pp->dpf[i], q); return u.p[r]; 
+  case p7T_M: u.v = MMO(pp->dpf[i], q); return u.p[r];
+  case p7T_I: u.v = IMO(pp->dpf[i], q); return u.p[r];
   case p7T_N: if (sprv == scur) return pp->xmx[i*p7X_NXCELLS+p7X_N];
   case p7T_C: if (sprv == scur) return pp->xmx[i*p7X_NXCELLS+p7X_C];
   case p7T_J: if (sprv == scur) return pp->xmx[i*p7X_NXCELLS+p7X_J];
@@ -284,31 +283,32 @@ get_postprob(const P7_OMX *pp, int scur, int sprv, int k, int i)
 static inline int
 select_m(const P7_OPROFILE *om, const P7_OMX *ox, int i, int k)
 {
-  int     Q     = p7O_NQF(ox->M);
-  int     q     = (k-1) % Q;		/* (q,r) is position of the current DP cell M(i,k) */
-  int     r     = (k-1) / Q;
-  __m128 *tp    = om->tfv + 7*q;       	/* *tp now at start of transitions to cur cell M(i,k) */
-  __m128  xBv   = _mm_set1_ps(ox->xmx[(i-1)*p7X_NXCELLS+p7X_B]);
-  __m128  mpv, dpv, ipv;
-  union { __m128 v; float p[4]; } u, tv;
+  int          Q     = p7O_NQF(ox->M);
+  int          q     = (k-1) % Q;		/* (q,r) is position of the current DP cell M(i,k) */
+  int          r     = (k-1) / Q;
+  float32x4_t *tp    = om->tfv + 7*q;       	/* *tp now at start of transitions to cur cell M(i,k) */
+  float32x4_t  xBv   = vmovq_n_f32(ox->xmx[(i-1)*p7X_NXCELLS+p7X_B]);
+  float32x4_t  zerov = vmovq_n_f32(0.0);
+  float32x4_t  mpv, dpv, ipv;
+  union { float32x4_t v; float p[4]; } u, tv;
   float   path[4];
   int     state[4] = { p7T_M, p7T_I, p7T_D, p7T_B };
-  
+
   if (q > 0) {
     mpv = ox->dpf[i-1][(q-1)*3 + p7X_M];
     dpv = ox->dpf[i-1][(q-1)*3 + p7X_D];
     ipv = ox->dpf[i-1][(q-1)*3 + p7X_I];
   } else {
-    mpv = esl_sse_rightshiftz_float(ox->dpf[i-1][(Q-1)*3 + p7X_M]);
-    dpv = esl_sse_rightshiftz_float(ox->dpf[i-1][(Q-1)*3 + p7X_D]);
-    ipv = esl_sse_rightshiftz_float(ox->dpf[i-1][(Q-1)*3 + p7X_I]);
-  }	  
+    mpv = esl_neon_rightshift_float((esl_neon_128f_t) ox->dpf[i-1][(Q-1)*3 + p7X_M], (esl_neon_128f_t) zerov).f32x4;
+    dpv = esl_neon_rightshift_float((esl_neon_128f_t) ox->dpf[i-1][(Q-1)*3 + p7X_D], (esl_neon_128f_t) zerov).f32x4;
+    ipv = esl_neon_rightshift_float((esl_neon_128f_t) ox->dpf[i-1][(Q-1)*3 + p7X_I], (esl_neon_128f_t) zerov).f32x4;
+  }
 
   /* paths are numbered so that most desirable choice in case of tie is first. */
   u.v = xBv;  tv.v = *tp;  path[3] = ((tv.p[r] == 0.0) ?  -eslINFINITY : u.p[r]);  tp++;
   u.v = mpv;  tv.v = *tp;  path[0] = ((tv.p[r] == 0.0) ?  -eslINFINITY : u.p[r]);  tp++;
   u.v = ipv;  tv.v = *tp;  path[1] = ((tv.p[r] == 0.0) ?  -eslINFINITY : u.p[r]);  tp++;
-  u.v = dpv;  tv.v = *tp;  path[2] = ((tv.p[r] == 0.0) ?  -eslINFINITY : u.p[r]);  
+  u.v = dpv;  tv.v = *tp;  path[2] = ((tv.p[r] == 0.0) ?  -eslINFINITY : u.p[r]);
   return state[esl_vec_FArgMax(path, 4)];
 }
 
@@ -320,7 +320,8 @@ select_d(const P7_OPROFILE *om, const P7_OMX *ox, int i, int k)
   int     Q     = p7O_NQF(ox->M);
   int     q     = (k-1) % Q;		/* (q,r) is position of the current DP cell D(i,k) */
   int     r     = (k-1) / Q;
-  union { __m128 v; float p[4]; } mpv, dpv, tmdv, tddv;
+  float32x4_t  zerov = vmovq_n_f32(0.0);
+  union { float32x4_t v; float p[4]; } mpv, dpv, tmdv, tddv;
   float   path[2];
 
   if (q > 0) {
@@ -329,11 +330,11 @@ select_d(const P7_OPROFILE *om, const P7_OMX *ox, int i, int k)
     tmdv.v = om->tfv[7*(q-1) + p7O_MD];
     tddv.v = om->tfv[7*Q + (q-1)];
   } else {
-    mpv.v  = esl_sse_rightshiftz_float(ox->dpf[i][(Q-1)*3 + p7X_M]);
-    dpv.v  = esl_sse_rightshiftz_float(ox->dpf[i][(Q-1)*3 + p7X_D]);
-    tmdv.v = esl_sse_rightshiftz_float(om->tfv[7*(Q-1) + p7O_MD]);
-    tddv.v = esl_sse_rightshiftz_float(om->tfv[8*Q-1]);
-  }	  
+    mpv.v  = esl_neon_rightshift_float((esl_neon_128f_t) ox->dpf[i][(Q-1)*3 + p7X_M], (esl_neon_128f_t) zerov).f32x4;
+    dpv.v  = esl_neon_rightshift_float((esl_neon_128f_t) ox->dpf[i][(Q-1)*3 + p7X_D], (esl_neon_128f_t) zerov).f32x4;
+    tmdv.v = esl_neon_rightshift_float((esl_neon_128f_t) om->tfv[7*(Q-1) + p7O_MD],   (esl_neon_128f_t) zerov).f32x4;
+    tddv.v = esl_neon_rightshift_float((esl_neon_128f_t) om->tfv[8*Q-1],              (esl_neon_128f_t) zerov).f32x4;
+  }
 
   path[0] = ((tmdv.p[r] == 0.0) ? -eslINFINITY : mpv.p[r]);
   path[1] = ((tddv.p[r] == 0.0) ? -eslINFINITY : dpv.p[r]);
@@ -344,15 +345,15 @@ select_d(const P7_OPROFILE *om, const P7_OMX *ox, int i, int k)
 static inline int
 select_i(const P7_OPROFILE *om, const P7_OMX *ox, int i, int k)
 {
-  int     Q    = p7O_NQF(ox->M);
-  int     q    = (k-1) % Q;		/* (q,r) is position of the current DP cell D(i,k) */
-  int     r    = (k-1) / Q;
-  __m128 *tp   = om->tfv + 7*q + p7O_MI;
-  union { __m128 v; float p[4]; } tv, mpv, ipv;
+  int          Q   = p7O_NQF(ox->M);
+  int          q   = (k-1) % Q;		/* (q,r) is position of the current DP cell D(i,k) */
+  int          r   = (k-1) / Q;
+  float32x4_t *tp  = om->tfv + 7*q + p7O_MI;
+  union { float32x4_t v; float p[4]; } tv, mpv, ipv;
   float   path[2];
 
   mpv.v = ox->dpf[i-1][q*3 + p7X_M]; tv.v = *tp;  path[0] = ((tv.p[r] == 0.0) ? -eslINFINITY : mpv.p[r]);  tp++;
-  ipv.v = ox->dpf[i-1][q*3 + p7X_I]; tv.v = *tp;  path[1] = ((tv.p[r] == 0.0) ? -eslINFINITY : ipv.p[r]);  
+  ipv.v = ox->dpf[i-1][q*3 + p7X_I]; tv.v = *tp;  path[1] = ((tv.p[r] == 0.0) ? -eslINFINITY : ipv.p[r]);
   return  ((path[0] >= path[1]) ? p7T_M : p7T_I);
 }
 
@@ -383,15 +384,15 @@ select_j(const P7_OPROFILE *om, const P7_OMX *pp, const P7_OMX *ox, int i)
   path[1] = ( (om->xf[p7O_E][p7O_LOOP] == 0.0) ? -eslINFINITY : ox->xmx[   i *p7X_NXCELLS+p7X_E]);
   return  ((path[0] > path[1]) ? p7T_J : p7T_E);
 }
- 
+
 /* E(i) is reached from any M(i, k=1..M) or D(i, k=2..M). */
 /* This assumes all M_k->E, D_k->E are 1.0 */
 static inline int
 select_e(const P7_OPROFILE *om, const P7_OMX *ox, int i, int *ret_k)
 {
-  int     Q     = p7O_NQF(ox->M);
-  __m128 *dp    = ox->dpf[i];
-  union { __m128 v; float p[4]; } u;
+  int     Q          = p7O_NQF(ox->M);
+  float32x4_t *dp    = ox->dpf[i];
+  union { float32x4_t v; float p[4]; } u;
   float  max   = -eslINFINITY;
   int    smax, kmax;
   int    q,r;
@@ -426,11 +427,11 @@ select_b(const P7_OPROFILE *om, const P7_OMX *ox, int i)
  * 3. Benchmark driver
  *****************************************************************/
 #ifdef p7OPTACC_BENCHMARK
-/* 
-   icc  -O3 -static -o optacc_benchmark -I.. -L.. -I../../easel -L../../easel -Dp7OPTACC_BENCHMARK optacc.c -lhmmer -leasel -lm 
+/*
+   icc  -O3 -static -o optacc_benchmark -I.. -L.. -I../../easel -L../../easel -Dp7OPTACC_BENCHMARK optacc.c -lhmmer -leasel -lm
 
    ./optacc_benchmark <hmmfile>         runs benchmark on optimal accuracy fill and trace
-   ./optacc_benchmark -c -N1 <hmmfile>  compare scores of SSE version to generic impl
+   ./optacc_benchmark -c -N1 <hmmfile>  compare scores of NEON version to generic impl
    ./optacc_benchmark -x -N1 <hmmfile>  test that scores match trusted implementation.
 
                     RRM_1 (M=72)       Caudal_act (M=136)     SMC_N (M=1151)
@@ -448,23 +449,23 @@ select_b(const P7_OPROFILE *om, const P7_OMX *ox, int i)
 #include "esl_stopwatch.h"
 
 #include "hmmer.h"
-#include "impl_sse.h"
+#include "impl_neon.h"
 
 static ESL_OPTIONS options[] = {
   /* name           type      default  env  range toggles reqs incomp  help                                       docgroup*/
   { "-h",        eslARG_NONE,   FALSE, NULL, NULL,  NULL,  NULL, NULL, "show brief help on version and usage",             0 },
-  { "-c",        eslARG_NONE,   FALSE, NULL, NULL,  NULL,  NULL, "-x", "compare scores to generic implementation (debug)", 0 }, 
+  { "-c",        eslARG_NONE,   FALSE, NULL, NULL,  NULL,  NULL, "-x", "compare scores to generic implementation (debug)", 0 },
   { "-s",        eslARG_INT,     "42", NULL, NULL,  NULL,  NULL, NULL, "set random number seed to <n>",                    0 },
   { "-x",        eslARG_NONE,   FALSE, NULL, NULL,  NULL,  NULL, "-c", "equate scores to trusted implementation (debug)",  0 },
   { "-L",        eslARG_INT,    "400", NULL, "n>0", NULL,  NULL, NULL, "length of random target seqs",                     0 },
   { "-N",        eslARG_INT,  "50000", NULL, "n>0", NULL,  NULL, NULL, "number of random target seqs",                     0 },
-  { "--notrace", eslARG_NONE,   FALSE, NULL, NULL,  NULL,  NULL, NULL, "only benchmark the DP fill stage",                 0 }, 
+  { "--notrace", eslARG_NONE,   FALSE, NULL, NULL,  NULL,  NULL, NULL, "only benchmark the DP fill stage",                 0 },
   {  0, 0, 0, 0, 0, 0, 0, 0, 0, 0 },
 };
 static char usage[]  = "[-options] <hmmfile>";
-static char banner[] = "benchmark driver for optimal accuracy alignment, SSE version";
+static char banner[] = "benchmark driver for optimal accuracy alignment, NEON version";
 
-int 
+int
 main(int argc, char **argv)
 {
   ESL_GETOPTS    *go      = p7_CreateDefaultApp(options, 1, argc, argv, banner, usage);
@@ -510,7 +511,7 @@ main(int argc, char **argv)
   esl_rsq_xfIID(r, bg->f, abc->K, L, dsq);
   p7_Forward (dsq, L, om, ox1,      &fsc);
   p7_Backward(dsq, L, om, ox1, ox2, &bsc);
-  p7_Decoding(om, ox1, ox2, ox2);              
+  p7_Decoding(om, ox1, ox2, ox2);
 
   esl_stopwatch_Start(w);
   for (i = 0; i < N; i++)
@@ -534,14 +535,14 @@ main(int argc, char **argv)
     {
       gx1 = p7_gmx_Create(gm->M, L);
       gx2 = p7_gmx_Create(gm->M, L);
-      
+
       p7_GForward (dsq, L, gm, gx1, &fsc_g);
       p7_GBackward(dsq, L, gm, gx2, &bsc_g);
-      p7_GDecoding(gm, gx1, gx2, gx2);             
+      p7_GDecoding(gm, gx1, gx2, gx2);
       p7_GOptimalAccuracy(gm, gx2, gx1, &accscore_g);
 
       printf("generic:  fwd=%8.4f  bck=%8.4f  acc=%8.4f\n", fsc_g, bsc_g, accscore_g);
-      printf("SSE:      fwd=%8.4f  bck=%8.4f  acc=%8.4f\n", fsc,   bsc,   accscore);
+      printf("NEON:      fwd=%8.4f  bck=%8.4f  acc=%8.4f\n", fsc,   bsc,   accscore);
 
       p7_gmx_Destroy(gx1);
       p7_gmx_Destroy(gx2);
@@ -575,17 +576,17 @@ main(int argc, char **argv)
 #include "esl_alphabet.h"
 #include "esl_getopts.h"
 #include "esl_random.h"
-/* 
+/*
  * 1. Compare accscore to GOptimalAccuracy().
  * 2. Compare trace to GOATrace().
- * 
+ *
  * Note: This test is subject to some expected noise and can fail
  * for entirely innocent reasons. Generic Forward/Backward calculations with
  * p7_GForward(), p7_GBackward() use coarse-grain table lookups to sum
  * log probabilities, and sufficient roundoff error can accumulate to
  * change the optimal accuracy traceback, causing this test to fail.
  * So, if optacc_utest fails, before you go looking for bugs, first
- * go to ../logsum.c, change the #ifdef to activate the slow/accurate 
+ * go to ../logsum.c, change the #ifdef to activate the slow/accurate
  * version, recompile and rerun optacc_utest. If the failure goes away,
  * you can ignore it.   - SRE, Wed Dec 17 09:45:31 2008
  */
@@ -630,13 +631,13 @@ utest_optacc(ESL_GETOPTS *go, ESL_RANDOMNESS *r, ESL_ALPHABET *abc, P7_BG *bg, i
       if (p7_OptimalAccuracy(om, ox2, ox1, &accscore)     != eslOK) esl_fatal(msg);
 
 #if 0
-      p7_omx_FDeconvert(ox1, gx1); 
-      p7_gmx_Dump(stdout, gx1, p7_DEFAULT); 
-      p7_omx_FDeconvert(ox2, gx1); 
-      p7_gmx_Dump(stdout, gx1, p7_DEFAULT); 
+      p7_omx_FDeconvert(ox1, gx1);
+      p7_gmx_Dump(stdout, gx1, p7_DEFAULT);
+      p7_omx_FDeconvert(ox2, gx1);
+      p7_gmx_Dump(stdout, gx1, p7_DEFAULT);
 #endif
       if (p7_OATrace(om, ox2, ox1, tr)                    != eslOK) esl_fatal(msg);
-      
+
       if (p7_GForward (sq->dsq, sq->n, gm, gx1, &fsc_g)   != eslOK) esl_fatal(msg);
       if (p7_GBackward(sq->dsq, sq->n, gm, gx2, &bsc_g)   != eslOK) esl_fatal(msg);
 
@@ -647,7 +648,7 @@ utest_optacc(ESL_GETOPTS *go, ESL_RANDOMNESS *r, ESL_ALPHABET *abc, P7_BG *bg, i
 
       if (p7_GDecoding(gm, gx1, gx2, gx2)                 != eslOK) esl_fatal(msg);
       if (p7_GOptimalAccuracy(gm, gx2, gx1, &accscore_g)  != eslOK) esl_fatal(msg);
-      
+
 #if 0
       p7_gmx_Dump(stdout, gx1, p7_DEFAULT); /* oa */
       p7_gmx_Dump(stdout, gx2, p7_DEFAULT); /* pp */
@@ -683,7 +684,7 @@ utest_optacc(ESL_GETOPTS *go, ESL_RANDOMNESS *r, ESL_ALPHABET *abc, P7_BG *bg, i
       /* the above deserves explanation:
        *  - accscore_o is the accuracy of the originally emitted trace, according
        *      to the generic posterior decoding matrix <gx2>. This is a lower bound
-       *      on the expected # of accurately aligned residues found by a DP 
+       *      on the expected # of accurately aligned residues found by a DP
        *      optimization.
        *  - accscore is the accuracy found by the fast (vector) code DP implementation.
        *  - accscore_g is the accuracy found by the generic DP implementation.
@@ -693,12 +694,12 @@ utest_optacc(ESL_GETOPTS *go, ESL_RANDOMNESS *r, ESL_ALPHABET *abc, P7_BG *bg, i
        *  - accscore_g2 is the accuracy of the traceback identified by the generic
        *      DP implementation. It should be identical (within order-of-evaluation
        *      roundoff error) to accscore_g.
-       *      
+       *
        * the "accscore_g2 < accscore_o" test is carefully contrived.
-       * accscore_o is a theoretical lower bound but because of fp error, 
+       * accscore_o is a theoretical lower bound but because of fp error,
        * accscore and (much more rarely) even accscore_g can exceed accscore_o.
        * accscore_g2, however, is calculated with identical order of evaluation
-       * as accscore_o if the optimal trace does turn out to be identical to 
+       * as accscore_o if the optimal trace does turn out to be identical to
        * the originally emitted trace. It should be extremely unlikely (though
        * not impossible) for accscore_o to exceed accscore_g2. (The DP algorithm
        * would have to identify a trace that was different than the original trace,
@@ -719,7 +720,7 @@ utest_optacc(ESL_GETOPTS *go, ESL_RANDOMNESS *r, ESL_ALPHABET *abc, P7_BG *bg, i
   p7_gmx_Destroy(gx2);
   p7_gmx_Destroy(gx1);
   p7_omx_Destroy(ox2);
-  p7_omx_Destroy(ox1);  
+  p7_omx_Destroy(ox1);
   esl_sq_Destroy(sq);
   p7_oprofile_Destroy(om);
   p7_profile_Destroy(gm);
@@ -740,22 +741,21 @@ utest_optacc(ESL_GETOPTS *go, ESL_RANDOMNESS *r, ESL_ALPHABET *abc, P7_BG *bg, i
 /* Failures in this test are to be expected, if you change the defaults.
  * The default RNG seed of 41 is very carefully chosen! Most seeds will
  * cause this test to fail. (Only 13 and 41 work for seeds 1..50.)
- * 
+ *
  * The generic fwd/bck algorithms work in log space and suffer from a
  * small amount of imprecision, not only from the use of FLogsum()'s
  * table-driven approximation, but even (apparently) inherent in log()
  * and exp(). To minimize this, the generic decoding algorithm burns
  * time renormalizing each row. Still, it's a problem. See notes at
  * the header of utest_optacc() for more info.
- * 
+ *
  * Another expected failure mode is when a fwd, bck nat score are close to
  * 0.0; FCompare() can evaluate two close-to-zero numbers as "different"
  * even if their absolute diff is negligible. (I suppose I could fix this.)
  */
 
-/* 
-   gcc -g -Wall -msse2 -std=gnu99 -o optacc_utest -I.. -L.. -I../../easel -L../../easel -Dp7OPTACC_TESTDRIVE optacc.c -lhmmer -leasel -lm
-   ./optacc_utest
+/*
+     ./optacc_utest
  */
 #include "p7_config.h"
 
@@ -764,7 +764,7 @@ utest_optacc(ESL_GETOPTS *go, ESL_RANDOMNESS *r, ESL_ALPHABET *abc, P7_BG *bg, i
 #include "esl_getopts.h"
 
 #include "hmmer.h"
-#include "impl_sse.h"
+#include "impl_neon.h"
 
 static ESL_OPTIONS options[] = {
   /* name           type      default  env  range toggles reqs incomp  help                                       docgroup*/
@@ -777,7 +777,7 @@ static ESL_OPTIONS options[] = {
   {  0, 0, 0, 0, 0, 0, 0, 0, 0, 0 },
 };
 static char usage[]  = "[-options]";
-static char banner[] = "test driver for SSE Forward, Backward implementations";
+static char banner[] = "test driver for NEON Forward, Backward implementations";
 
 int
 main(int argc, char **argv)
@@ -805,9 +805,9 @@ main(int argc, char **argv)
   if ((abc = esl_alphabet_Create(eslAMINO)) == NULL)  esl_fatal("failed to create alphabet");
   if ((bg = p7_bg_Create(abc))              == NULL)  esl_fatal("failed to create null model");
 
-  utest_optacc(go, r, abc, bg, M, L, N);   
-  utest_optacc(go, r, abc, bg, 1, L, 10);  
-  utest_optacc(go, r, abc, bg, M, 1, 10);  
+  utest_optacc(go, r, abc, bg, M, L, N);
+  utest_optacc(go, r, abc, bg, 1, L, 10);
+  utest_optacc(go, r, abc, bg, M, 1, 10);
 
   esl_alphabet_Destroy(abc);
   p7_bg_Destroy(bg);
@@ -826,7 +826,7 @@ main(int argc, char **argv)
  * 6. Example
  *****************************************************************/
 #ifdef p7OPTACC_EXAMPLE
-/* 
+/*
    gcc -g -Wall -o optacc_example -Dp7OPTACC_EXAMPLE -I.. -I../../easel -L.. -L../../easel optacc.c -lhmmer -leasel -lm
    ./optacc_example <hmmfile> <seqfile>
 */
@@ -839,7 +839,7 @@ main(int argc, char **argv)
 #include "esl_sqio.h"
 
 #include "hmmer.h"
-#include "impl_sse.h"
+#include "impl_neon.h"
 
 static ESL_OPTIONS options[] = {
   /* name           type      default  env  range toggles reqs incomp  help                                       docgroup*/
@@ -849,9 +849,9 @@ static ESL_OPTIONS options[] = {
   {  0, 0, 0, 0, 0, 0, 0, 0, 0, 0 },
 };
 static char usage[]  = "[-options] <hmmfile> <seqfile>";
-static char banner[] = "example of optimal accuracy alignment, SSE implementation";
+static char banner[] = "example of optimal accuracy alignment, NEON implementation";
 
-int 
+int
 main(int argc, char **argv)
 {
   ESL_GETOPTS    *go      = p7_CreateDefaultApp(options, 2, argc, argv, banner, usage);
@@ -879,7 +879,7 @@ main(int argc, char **argv)
   if (p7_hmmfile_OpenE(hmmfile, NULL, &hfp, NULL) != eslOK) p7_Fail("Failed to open HMM file %s", hmmfile);
   if (p7_hmmfile_Read(hfp, &abc, &hmm)            != eslOK) p7_Fail("Failed to read HMM");
   p7_hmmfile_Close(hfp);
- 
+
   /* Read in one sequence */
   sq     = esl_sq_CreateDigital(abc);
   status = esl_sqfile_OpenDigital(abc, seqfile, format, NULL, &sqfp);
@@ -889,7 +889,7 @@ main(int argc, char **argv)
   else if (status != eslOK)        p7_Fail("Open failed, code %d.", status);
   if  (esl_sqio_Read(sqfp, sq) != eslOK) p7_Fail("Failed to read sequence");
   esl_sqfile_Close(sqfp);
- 
+
   /* Configure a profile from the HMM */
   bg = p7_bg_Create(abc);                 p7_bg_SetLength(bg, sq->n);
   gm = p7_profile_Create(hmm->M, abc);    p7_ProfileConfig(hmm, bg, gm, sq->n, p7_LOCAL); /* multihit local: H3 default */
@@ -908,7 +908,7 @@ main(int argc, char **argv)
   p7_Decoding(om, ox1, ox2, ox2);                   /* <gx2> is now the posterior decoding matrix */
   p7_OptimalAccuracy(om, ox2, ox1, &accscore);	    /* <gx1> is now the OA matrix */
   p7_OATrace(om, ox2, ox1, tr);
-  
+
   if (esl_opt_GetBoolean(go, "-d")) { p7_omx_FDeconvert(ox2, gx);  p7_gmx_Dump(stdout, gx, p7_DEFAULT); }
   if (esl_opt_GetBoolean(go, "-m")) { p7_omx_FDeconvert(ox1, gx);  p7_gmx_Dump(stdout, gx, p7_DEFAULT); }
 
@@ -936,7 +936,3 @@ main(int argc, char **argv)
 }
 #endif /*p7OPTACC_EXAMPLE*/
 /*-------------------- end, example -----------------------------*/
-
-
-
-
