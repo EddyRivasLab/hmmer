@@ -74,6 +74,7 @@ static void
 init_results(SEARCH_RESULTS *results)
 {
   results->status.status     = eslOK;
+  results->status.type = -1;  // Illegal value, must be set before sending
   results->status.msg_size   = 0;
 
   results->stats.nhits       = 0;
@@ -215,7 +216,7 @@ forward_results(QUEUE_DATA_SHARD *query, SEARCH_RESULTS *results)
   }
 
   results->status.msg_size = buf_offset + buf_offset2; // set size of second message
-  
+  results->status.type = query->cmd_type;
   // Third, the buffer with the HMMD_SEARCH_STATUS object
   buf_offset3 = 0;
   nalloc3 = 0;
@@ -523,7 +524,7 @@ clientside_loop(CLIENTSIDE_ARGS *data)
     
     status = process_searchopts(data->sock_fd, opt_str, &opts);
     if (status != eslOK) {
-      client_msg_longjmp(data->sock_fd, status, &jmp_env, "Failed to parse options string: %s", opts->errbuf);
+      client_msg_longjmp(data->sock_fd, status, &jmp_env, "Failed to parse options string: %s", opt_str);
     }
 
     if (esl_opt_IsUsed(opts, "--db")) {
@@ -546,7 +547,7 @@ clientside_loop(CLIENTSIDE_ARGS *data)
       if(dbx != 0){
         client_msg_longjmp(data->sock_fd, eslEINVAL, &jmp_env, "Error: exactly one of --db, --seqdb, and --hmmdb must be specified");
       }
-      dbx = esl_opt_GetInteger(opts, "--db");
+      dbx = esl_opt_GetInteger(opts, "--hmmdb");
       if((dbx < 1) || (dbx > data->masternode->num_databases)){
         client_msg_longjmp(data->sock_fd, eslEINVAL, &jmp_env, "Nonexistent database %d specified.  Valid database ID's for this server range from 1 to %d\n", dbx, data->masternode->num_databases);
       }
@@ -1223,7 +1224,6 @@ int process_search(P7_SERVER_MASTERNODE_STATE *masternode, QUEUE_DATA_SHARD *que
     results.stats.nreported = masternode->tophits->nreported;
     results.stats.nincluded = masternode->tophits->nincluded;
 
-    // Send results back to client
     forward_results(query, &results); 
     p7_pipeline_Destroy(masternode->pipeline);
 

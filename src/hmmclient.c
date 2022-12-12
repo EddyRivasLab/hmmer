@@ -41,7 +41,7 @@ static ESL_OPTIONS options[] = {
   /* Interface with server */
   { "-s",           eslARG_STRING,   "localhost", NULL, NULL,    NULL,  NULL,  NULL,            "name of the machine running hmmserver (default localhost)",                         8 },
   { "-p",           eslARG_INT,   "51371", NULL, NULL,    NULL,  NULL,  NULL,            "number of the port that hmmserver is listening on (default 51371)",                         8 },
-  { "-d",           eslARG_STRING,   "1", NULL, NULL,    NULL,  NULL,  NULL,            "number of the database to search (default 1)",                         8 },
+  { "--db",           eslARG_STRING,   "1", NULL, NULL,    NULL,  NULL,  NULL,            "number of the database to search (default 1)",                         8 },
       /* Control of output */
   { "-o",           eslARG_OUTFILE, NULL, NULL, NULL,    NULL,  NULL,  NULL,            "direct output to file <f>, not stdout",                        2 },
   { "-A",           eslARG_OUTFILE, NULL, NULL, NULL,    NULL,  NULL,  NULL,            "save multiple alignment of all hits to file <f>",              2 },
@@ -156,7 +156,7 @@ process_commandline(int argc, char **argv, ESL_GETOPTS **ret_go, char **ret_quer
 
   if (esl_opt_ArgNumber(go)                  != 1)     { if (puts("Incorrect number of command line arguments.")      < 0) ESL_XEXCEPTION_SYS(eslEWRITE, "write failed"); goto FAILURE; }
   if ((*ret_query= esl_opt_GetArg(go, 1)) == NULL)  { if (puts("Failed to get <queryfile> argument on command line") < 0) ESL_XEXCEPTION_SYS(eslEWRITE, "write failed"); goto FAILURE; }
-  *ret_db = esl_opt_GetString (go, "-d");
+  *ret_db = esl_opt_GetString (go, "--db");
   *ret_go = go;
   return eslOK;
   
@@ -299,11 +299,20 @@ main(int argc, char **argv)
     p7_Fail("Unable to open query file %s\n", queryfile);
   }
   // Start building the command string to send to the server
-  strcpy(cmd, "@--db ");
-  rem -= 7; 
-
-  strcat(cmd, search_db);
-  rem -= strlen(search_db);
+  // Can skip the length checks on cmd, because we know it has enough space for the opening command chars
+  if(esl_opt_IsDefault(go, "--db")){//need to construct default database specifier
+    strcpy(cmd, "@--db 1 ");
+    rem -= 8;
+  }
+  else{//just need the starting @ symbol
+    strcpy(cmd, "@");
+    rem -=1;
+    strcat(cmd, search_db);
+    rem -= strlen(search_db);
+    strcat(cmd, " ");
+    rem -= 1;
+  }
+  
 
   while(strlen(optsstring)+1 >rem){
     cmd = realloc(cmd, 2*cmdlen); 
@@ -408,9 +417,22 @@ main(int argc, char **argv)
     p7_Fail("Unable to deserialize search stats object \n");
   }
 
-// Create the structures we'll deserialize the hits into
-  pli = p7_pipeline_Create(go, 100, 100, FALSE, (esl_opt_IsUsed(go, "--seqdb")) ? p7_SEARCH_SEQS : p7_SCAN_MODELS);
 
+  if(sstatus.type == HMMD_CMD_SEARCH){
+    // Create the structures we'll deserialize the hits into
+    pli = p7_pipeline_Create(go, 100, 100, FALSE, p7_SEARCH_SEQS);
+    printf("Search status received\n");
+  }
+  else if(sstatus.type == HMMD_CMD_SCAN){
+    // Create the structures we'll deserialize the hits into
+    pli = p7_pipeline_Create(go, 100, 100, FALSE, p7_SCAN_MODELS);
+    printf("Scan status received\n");
+  }
+  else p7_Fail("Illegal search type of %d found in HMMD_SEARCH_STATUS\n", sstatus.type);
+
+  if(pli == NULL){
+    p7_Fail("Unable to create pipeline data structure in hmmclient\n");
+  }
         /* copy the search stats */
   w->elapsed       = stats->elapsed;
   w->user          = stats->user;
