@@ -196,7 +196,6 @@ forward_results(QUEUE_DATA_SHARD *query, SEARCH_RESULTS *results)
 
   // First, the buffer of hits
   for(int i =0; i< results->stats.nhits; i++){
-   
     results->stats.hit_offsets[i] = buf_offset;
     if(p7_hit_Serialize(results->hits[i], buf, &buf_offset, &nalloc) != eslOK){
       LOG_FATAL_MSG("Serializing P7_HIT failed", errno);
@@ -437,7 +436,7 @@ clientside_loop(CLIENTSIDE_ARGS *data)
   jmp_buf            jmp_env;
   time_t             date;
   char               timestamp[32];
-
+  int search_type = -1;
   buf_size = MAX_BUFFER;
   if ((buffer  = malloc(buf_size))   == NULL) LOG_FATAL_MSG("malloc", errno);
   ptr = buffer;
@@ -526,7 +525,7 @@ clientside_loop(CLIENTSIDE_ARGS *data)
     if (status != eslOK) {
       client_msg_longjmp(data->sock_fd, status, &jmp_env, "Failed to parse options string: %s", opt_str);
     }
-
+printf("received options string of: %s\n", opt_str);
     if (esl_opt_IsUsed(opts, "--db")) {
       dbx = esl_opt_GetInteger(opts, "--db");
       if((dbx < 1) || (dbx > data->masternode->num_databases)){
@@ -573,6 +572,7 @@ clientside_loop(CLIENTSIDE_ARGS *data)
       if (seq->n < 1) client_msg_longjmp(data->sock_fd, eslEFORMAT, &jmp_env, "Error zero length FASTA sequence");
 
       if(data->masternode->database_shards[dbx-1]->data_type == AMINO){
+        search_type = HMMD_CMD_SEARCH;
         // Searching an amino database with another sequence requires that we create an HMM from the sequence 
         // a la phmmer
 
@@ -607,12 +607,15 @@ clientside_loop(CLIENTSIDE_ARGS *data)
         p7_builder_Destroy(bld);
         p7_bg_Destroy(bg);
       }
+      else{
+        search_type = HMMD_CMD_SCAN;
+      }
     }
     else if (strncmp(ptr, "HMM", 3) == 0) {
        if (data->masternode->database_shards[dbx-1]->data_type == HMM){
         client_msg_longjmp(data->sock_fd, status, &jmp_env, "Database %d contains HMM data, and a HMM cannot be used to search a HMM database", dbx);
       }
-
+      search_type = HMMD_CMD_SEARCH;
       /* try to parse the buffer as an hmm */
       status = p7_hmmfile_OpenBuffer(ptr, strlen(ptr), &hfp);
       if (status != eslOK) client_msg_longjmp(data->sock_fd, status, &jmp_env, "Failed to open query hmm buffer");
@@ -667,7 +670,10 @@ clientside_loop(CLIENTSIDE_ARGS *data)
   if ((cmd = malloc(n)) == NULL) LOG_FATAL_MSG("malloc", errno);
   memset(cmd, 0, n);		/* silence valgrind bitching about uninit bytes; remove if we ever serialize structs properly */
   cmd->hdr.length       = n - sizeof(HMMD_HEADER);
-  cmd->hdr.command      = (esl_opt_IsUsed(opts, "--seqdb")) ? HMMD_CMD_SEARCH : HMMD_CMD_SCAN;
+  if(search_type == -1){
+    p7_Fail("search type not set");
+  }
+  cmd->hdr.command      = search_type;
   cmd->srch.db_inx      = dbx - 1;   /* the program indexes databases 0 .. n-1 */
   cmd->srch.opts_length = strlen(opt_str) + 1;
 
@@ -1113,6 +1119,7 @@ int process_search(P7_SERVER_MASTERNODE_STATE *masternode, QUEUE_DATA_SHARD *que
   buffer_handle = &(buffer);
   init_results(&results);
   char *hmmbuffer;
+  char *optsstring;
   ESL_ALLOC(hmmbuffer, 100000* sizeof(char));  // take a wild guess at a buffer that will hold most hmms
   
   int hmm_buffer_size;
@@ -1171,12 +1178,19 @@ int process_search(P7_SERVER_MASTERNODE_STATE *masternode, QUEUE_DATA_SHARD *que
       p7_Fail("Packing profile failed in process_search\n");
     }    // pack the hmm for sending
   
-
+    // Prep to send the options string to the workers
+    optsstring =esl_getopts_CreateOptsLine(query->opts); 
+    the_command.options_length = strlen(optsstring) +1;
+    printf("Options length is %lu\n", the_command.options_length);
     // First, send the command to start the search
     MPI_Bcast(&the_command, 1, server_mpitypes[P7_SERVER_COMMAND_MPITYPE], 0, MPI_COMM_WORLD);
 
     // Now, broadcast the HMM
     MPI_Bcast(hmmbuffer, the_command.compare_obj_length, MPI_CHAR, 0, MPI_COMM_WORLD);
+
+    // and the options string
+    MPI_Bcast(optsstring, the_command.options_length, MPI_CHAR, 0, MPI_COMM_WORLD);
+
 
     // loop here until all of the workers are done with the search
     while((masternode->worker_nodes_done < masternode->num_worker_nodes) || (masternode->worker_stats_received < masternode->num_worker_nodes))
@@ -1228,7 +1242,7 @@ int process_search(P7_SERVER_MASTERNODE_STATE *masternode, QUEUE_DATA_SHARD *que
 
     forward_results(query, &results); 
     p7_pipeline_Destroy(masternode->pipeline);
-
+    free(optsstring);
     p7_tophits_Destroy(masternode->tophits); //Reset for next search
     masternode->tophits = p7_tophits_Create();
     p7_bg_Destroy(bg);
@@ -1392,7 +1406,9 @@ void p7_server_master_node_main(int argc, char ** argv, MPI_Datatype *server_mpi
       }*/
       process_search(masternode, query, server_mpitypes); 
       break;
-    case HMMD_CMD_SCAN:        process_search(masternode, query, server_mpitypes); break;
+    case HMMD_CMD_SCAN:        
+      p7_Fail("Scans are not currently implemented");
+      break;
     case HMMD_CMD_SHUTDOWN:    
       process_shutdown(masternode, server_mpitypes);
       p7_syslog(LOG_ERR,"[%s:%d] - shutting down...\n", __FILE__, __LINE__);
@@ -1617,7 +1633,7 @@ void p7_masternode_message_handler(P7_SERVER_MASTERNODE_STATE *masternode, P7_SE
         }
 
         //send the reply
-        if ( MPI_Send(&the_reply, 1, server_mpitypes[P7_SERVER_COMMAND_MPITYPE],  (*buffer_handle)->status.MPI_SOURCE, HMMER_WORK_REPLY_TAG, MPI_COMM_WORLD) != MPI_SUCCESS) p7_Fail("MPI send failed in p7_masternode_message_handler");
+        if ( MPI_Send(&the_reply, 1, server_mpitypes[P7_SERVER_CHUNK_REPLY_MPITYPE],  (*buffer_handle)->status.MPI_SOURCE, HMMER_WORK_REPLY_TAG, MPI_COMM_WORLD) != MPI_SUCCESS) p7_Fail("MPI send failed in p7_masternode_message_handler");
 
         break;
       default:

@@ -27,72 +27,11 @@
 
 #include "hmmer.h"
 #include "hmmpgmd.h"
+#include "hmmserver.h"
 
-#define REPOPTS     "-E,-T,--cut_ga,--cut_nc,--cut_tc"
-#define DOMREPOPTS  "--domE,--domT,--cut_ga,--cut_nc,--cut_tc"
-#define INCOPTS     "--incE,--incT,--cut_ga,--cut_nc,--cut_tc"
-#define INCDOMOPTS  "--incdomE,--incdomT,--cut_ga,--cut_nc,--cut_tc"
-#define THRESHOPTS  "-E,-T,--domE,--domT,--incE,--incT,--incdomE,--incdomT,--cut_ga,--cut_nc,--cut_tc"
 #define MAX_READ_LEN     4096
 
-static ESL_OPTIONS options[] = {
-  /* name           type      default  env  range     toggles   reqs   incomp              help                                                      docgroup*/
-  { "-h",           eslARG_NONE,   FALSE, NULL, NULL,    NULL,  NULL,  NULL,            "show brief help on version and usage",                         1 },
-  /* Interface with server */
-  { "-s",           eslARG_STRING,   "localhost", NULL, NULL,    NULL,  NULL,  NULL,            "name of the machine running hmmserver (default localhost)",                         8 },
-  { "-p",           eslARG_INT,   "51371", NULL, NULL,    NULL,  NULL,  NULL,            "number of the port that hmmserver is listening on (default 51371)",                         8 },
-  { "--db",           eslARG_STRING,   "1", NULL, NULL,    NULL,  NULL,  NULL,            "number of the database to search (default 1)",                         8 },
-      /* Control of output */
-  { "-o",           eslARG_OUTFILE, NULL, NULL, NULL,    NULL,  NULL,  NULL,            "direct output to file <f>, not stdout",                        2 },
-  { "-A",           eslARG_OUTFILE, NULL, NULL, NULL,    NULL,  NULL,  NULL,            "save multiple alignment of all hits to file <f>",              2 },
-  { "--tblout",     eslARG_OUTFILE, NULL, NULL, NULL,    NULL,  NULL,  NULL,            "save parseable table of per-sequence hits to file <f>",        2 },
-  { "--domtblout",  eslARG_OUTFILE, NULL, NULL, NULL,    NULL,  NULL,  NULL,            "save parseable table of per-domain hits to file <f>",          2 },
-  { "--pfamtblout", eslARG_OUTFILE, NULL, NULL, NULL,    NULL,  NULL,  NULL,            "save table of hits and domains to file, in Pfam format <f>",   2 },
-  { "--acc",        eslARG_NONE,   FALSE, NULL, NULL,    NULL,  NULL,  NULL,            "prefer accessions over names in output",                       2 },
-  { "--noali",      eslARG_NONE,   FALSE, NULL, NULL,    NULL,  NULL,  NULL,            "don't output alignments, so output is smaller",                2 },
-  { "--notextw",    eslARG_NONE,    NULL, NULL, NULL,    NULL,  NULL, "--textw",        "unlimit ASCII text output line width",                         2 },
-  { "--textw",      eslARG_INT,    "120", NULL, "n>=120",NULL,  NULL, "--notextw",      "set max width of ASCII text output lines",                     2 },
-/* Control of scoring system */
-  { "--popen",      eslARG_REAL,       "0.02", NULL, "0<=x<0.5",NULL,  NULL,  NULL,              "gap open probability",                                         3 },
-  { "--pextend",    eslARG_REAL,        "0.4", NULL, "0<=x<1",  NULL,  NULL,  NULL,              "gap extend probability",                                       3 },
-  { "--mx",         eslARG_STRING, "BLOSUM62", NULL, NULL,      NULL,  NULL,  "--mxfile",        "substitution score matrix choice (of some built-in matrices)", 3 },
-  { "--mxfile",     eslARG_INFILE,       NULL, NULL, NULL,      NULL,  NULL,  "--mx",            "read substitution score matrix from file <f>",                 3 },
-  /* Control of reporting thresholds */
-  { "-E",           eslARG_REAL,  "10.0", NULL, "x>0",   NULL,  NULL,  REPOPTS,         "report sequences <= this E-value threshold in output",         4 },
-  { "-T",           eslARG_REAL,   FALSE, NULL, NULL,    NULL,  NULL,  REPOPTS,         "report sequences >= this score threshold in output",           4 },
-  { "--domE",       eslARG_REAL,  "10.0", NULL, "x>0",   NULL,  NULL,  DOMREPOPTS,      "report domains <= this E-value threshold in output",           4 },
-  { "--domT",       eslARG_REAL,   FALSE, NULL, NULL,    NULL,  NULL,  DOMREPOPTS,      "report domains >= this score cutoff in output",                4 },
-  /* Control of inclusion (significance) thresholds */
-  { "--incE",       eslARG_REAL,  "0.01", NULL, "x>0",   NULL,  NULL,  INCOPTS,         "consider sequences <= this E-value threshold as significant",  5 },
-  { "--incT",       eslARG_REAL,   FALSE, NULL, NULL,    NULL,  NULL,  INCOPTS,         "consider sequences >= this score threshold as significant",    5 },
-  { "--incdomE",    eslARG_REAL,  "0.01", NULL, "x>0",   NULL,  NULL,  INCDOMOPTS,      "consider domains <= this E-value threshold as significant",    5 },
-  { "--incdomT",    eslARG_REAL,   FALSE, NULL, NULL,    NULL,  NULL,  INCDOMOPTS,      "consider domains >= this score threshold as significant",      5 },
-  /* Model-specific thresholding for both reporting and inclusion */
-  { "--cut_ga",     eslARG_NONE,   FALSE, NULL, NULL,    NULL,  NULL,  THRESHOPTS,      "use profile's GA gathering cutoffs to set all thresholding",   6 },
-  { "--cut_nc",     eslARG_NONE,   FALSE, NULL, NULL,    NULL,  NULL,  THRESHOPTS,      "use profile's NC noise cutoffs to set all thresholding",       6 },
-  { "--cut_tc",     eslARG_NONE,   FALSE, NULL, NULL,    NULL,  NULL,  THRESHOPTS,      "use profile's TC trusted cutoffs to set all thresholding",     6 },
-  /* Control of acceleration pipeline */
-  { "--max",        eslARG_NONE,   FALSE, NULL, NULL,    NULL,  NULL, "--F1,--F2,--F3", "Turn all heuristic filters off (less speed, more power)",      7 },
-  { "--F1",         eslARG_REAL,  "0.02", NULL, NULL,    NULL,  NULL, "--max",          "Stage 1 (MSV) threshold: promote hits w/ P <= F1",             7 },
-  { "--F2",         eslARG_REAL,  "1e-3", NULL, NULL,    NULL,  NULL, "--max",          "Stage 2 (Vit) threshold: promote hits w/ P <= F2",             7 },
-  { "--F3",         eslARG_REAL,  "1e-5", NULL, NULL,    NULL,  NULL, "--max",          "Stage 3 (Fwd) threshold: promote hits w/ P <= F3",             7 },
-  { "--nobias",     eslARG_NONE,   NULL,  NULL, NULL,    NULL,  NULL, "--max",          "turn off composition bias filter",                             7 },
-/* Control of E-value calibration */
-  { "--EmL",        eslARG_INT,         "200", NULL,"n>0",      NULL,  NULL,  NULL,              "length of sequences for MSV Gumbel mu fit",                   11 },   
-  { "--EmN",        eslARG_INT,         "200", NULL,"n>0",      NULL,  NULL,  NULL,              "number of sequences for MSV Gumbel mu fit",                   11 },   
-  { "--EvL",        eslARG_INT,         "200", NULL,"n>0",      NULL,  NULL,  NULL,              "length of sequences for Viterbi Gumbel mu fit",               11 },   
-  { "--EvN",        eslARG_INT,         "200", NULL,"n>0",      NULL,  NULL,  NULL,              "number of sequences for Viterbi Gumbel mu fit",               11 },   
-  { "--EfL",        eslARG_INT,         "100", NULL,"n>0",      NULL,  NULL,  NULL,              "length of sequences for Forward exp tail tau fit",            11 },   
-  { "--EfN",        eslARG_INT,         "200", NULL,"n>0",      NULL,  NULL,  NULL,              "number of sequences for Forward exp tail tau fit",            11 },   
-  { "--Eft",        eslARG_REAL,       "0.04", NULL,"0<x<1",    NULL,  NULL,  NULL,              "tail mass for Forward exponential tail tau fit",              11 },    
-/* Other options */
-  { "--nonull2",    eslARG_NONE,   NULL,  NULL, NULL,    NULL,  NULL,  NULL,            "turn off biased composition score corrections",               12 },
-  { "-Z",           eslARG_REAL,   FALSE, NULL, "x>0",   NULL,  NULL,  NULL,            "set # of comparisons done, for E-value calculation",          12 },
-  { "--domZ",       eslARG_REAL,   FALSE, NULL, "x>0",   NULL,  NULL,  NULL,            "set # of significant seqs, for domain E-value calculation",   12 },
-  { "--seed",       eslARG_INT,    "42",  NULL, "n>=0",  NULL,  NULL,  NULL,            "set RNG seed to <n> (if 0: one-time arbitrary seed)",         12 },
-  { "--qformat",    eslARG_STRING,      NULL, NULL, NULL,      NULL,  NULL,  NULL,              "assert query <seqfile> is in format <s>: no autodetection",   12 },
-  {  0, 0, 0, 0, 0, 0, 0, 0, 0, 0 },
-};
+
 
 static char usage[]  = " <queryfile> <database number to search>";
 static char banner[] = "search profile(s) against a sequence database";
@@ -119,7 +58,7 @@ struct cfg_s {
 static int
 process_commandline(int argc, char **argv, ESL_GETOPTS **ret_go, char **ret_query, char **ret_db)
 {
-  ESL_GETOPTS *go = esl_getopts_Create(options);
+  ESL_GETOPTS *go = esl_getopts_Create(server_Client_Options);
   int          status;
 
   if (esl_opt_ProcessEnvironment(go)         != eslOK)  { if (printf("Failed to process environment: %s\n", go->errbuf) < 0) ESL_XEXCEPTION_SYS(eslEWRITE, "write failed"); goto FAILURE; }
@@ -243,7 +182,6 @@ main(int argc, char **argv)
   int cmdlen = MAX_READ_LEN;
   int eod = 0; 
   int i;
-  ESL_STOPWATCH   *w       = NULL;
   P7_PIPELINE     *pli     = NULL;
   P7_TOPHITS      *th      = NULL;
   FILE *qf = fopen(queryfile, "r"); 
@@ -255,6 +193,13 @@ main(int argc, char **argv)
   P7_HMM          *hmm     = NULL;        /* query HMM                       */
   ESL_SQ          *sq      = NULL;        /* one target sequence (digital)   */
   ESL_ALPHABET    *abc     = NULL;        /* digital alphabet                */
+  int textw = 0;
+  ESL_STOPWATCH   *w;
+  w = esl_stopwatch_Create();
+  esl_stopwatch_Start(w);
+  if (esl_opt_GetBoolean(go, "--notextw")) textw = 0;
+  else                                     textw = esl_opt_GetInteger(go, "--textw");
+
   //set up the sockets connection to the server
 
   // step 1: networking voodoo to get the IP address of the hostname for the server 
@@ -272,7 +217,6 @@ main(int argc, char **argv)
   }
 
   strcpy(server_ip, inet_ntoa(addr_temp->sin_addr));
-  printf("Trying to connect to server at IP %s\n", server_ip);
 
   /* Create a reliable, stream socket using TCP */
   if ((sock = socket(AF_INET, SOCK_STREAM, 0)) < 0) {
@@ -280,7 +224,7 @@ main(int argc, char **argv)
     exit(1);
   }
 
-  serv_port = esl_opt_GetInteger(go, "-p");
+  serv_port = esl_opt_GetInteger(go, "--cport");
   /* Construct the server address structure */
   memset(&serv_addr, 0, sizeof(serv_addr));
   serv_addr.sin_family      = AF_INET;
@@ -356,10 +300,7 @@ main(int argc, char **argv)
     cmdlen +=3; 
     strcat(cmd, "//\n");
   }
-
-  printf("About to send this command string:\n%s",cmd);
   n = strlen(cmd);
-  printf ("Sending data %d\n", n);
   if (writen(sock, cmd, n) != n) {
     p7_Fail("[%s:%d] write (size %" PRIu64 ") error %d - %s\n", __FILE__, __LINE__, n, errno, strerror(errno));
     exit(1);
@@ -421,12 +362,10 @@ main(int argc, char **argv)
   if(sstatus.type == HMMD_CMD_SEARCH){
     // Create the structures we'll deserialize the hits into
     pli = p7_pipeline_Create(go, 100, 100, FALSE, p7_SEARCH_SEQS);
-    printf("Search status received\n");
   }
   else if(sstatus.type == HMMD_CMD_SCAN){
     // Create the structures we'll deserialize the hits into
     pli = p7_pipeline_Create(go, 100, 100, FALSE, p7_SCAN_MODELS);
-    printf("Scan status received\n");
   }
   else p7_Fail("Illegal search type of %d found in HMMD_SEARCH_STATUS\n", sstatus.type);
 
@@ -434,9 +373,6 @@ main(int argc, char **argv)
     p7_Fail("Unable to create pipeline data structure in hmmclient\n");
   }
         /* copy the search stats */
-  w->elapsed       = stats->elapsed;
-  w->user          = stats->user;
-  w->sys           = stats->sys;
 
   pli->nmodels     = stats->nmodels;
   pli->nnodes      = stats->nnodes;
@@ -486,6 +422,58 @@ main(int argc, char **argv)
     th->hit[i] = &(th->unsrt[i]);  
   }
 
+// ok, we've received all the hits.  Now, display them.
+  FILE *ofp = stdout; 
+  FILE *afp = NULL;
+  FILE *tblfp = NULL;
+  FILE *domtblfp = NULL;
+  FILE *pfamtblfp = NULL;
+
+  /* Open the results output files */
+  if (esl_opt_IsOn(go, "-o"))          { if ((ofp      = fopen(esl_opt_GetString(go, "-o"), "w")) == NULL) p7_Fail("Failed to open output file %s for writing\n",    esl_opt_GetString(go, "-o")); }
+  if (esl_opt_IsOn(go, "-A"))          { if ((afp      = fopen(esl_opt_GetString(go, "-A"), "w")) == NULL) p7_Fail("Failed to open alignment file %s for writing\n", esl_opt_GetString(go, "-A")); }
+  if (esl_opt_IsOn(go, "--tblout"))    { if ((tblfp    = fopen(esl_opt_GetString(go, "--tblout"),    "w")) == NULL)  esl_fatal("Failed to open tabular per-seq output file %s for writing\n", esl_opt_GetString(go, "--tblout")); }
+  if (esl_opt_IsOn(go, "--domtblout")) { if ((domtblfp = fopen(esl_opt_GetString(go, "--domtblout"), "w")) == NULL)  esl_fatal("Failed to open tabular per-dom output file %s for writing\n", esl_opt_GetString(go, "--domtblout")); }
+  if (esl_opt_IsOn(go, "--pfamtblout")){ if ((pfamtblfp = fopen(esl_opt_GetString(go, "--pfamtblout"), "w")) == NULL)  esl_fatal("Failed to open pfam-style tabular output file %s for writing\n", esl_opt_GetString(go, "--pfamtblout")); }
+
+
+  p7_tophits_SortBySortkey(th);
+  p7_tophits_Targets(ofp, th, pli, textw); if (fprintf(ofp, "\n\n") < 0) ESL_EXCEPTION_SYS(eslEWRITE, "write failed");
+  p7_tophits_Domains(ofp, th, pli, textw); if (fprintf(ofp, "\n\n") < 0) ESL_EXCEPTION_SYS(eslEWRITE, "write failed");
+
+  if (tblfp)     p7_tophits_TabularTargets(tblfp,    hmm->name, hmm->acc, th, pli, 1);
+  if (domtblfp)  p7_tophits_TabularDomains(domtblfp, hmm->name, hmm->acc, th, pli, 1);
+  if (pfamtblfp) p7_tophits_TabularXfam(pfamtblfp, hmm->name, hmm->acc, th, pli);
+  
+  esl_stopwatch_Stop(w);
+  p7_pli_Statistics(ofp, pli, w);
+  if (fprintf(ofp, "//\n") < 0) ESL_EXCEPTION_SYS(eslEWRITE, "write failed");
+  
+      /* Output the results in an MSA (-A option) */
+  if (afp) {
+	  ESL_MSA *msa = NULL;
+
+	  if (p7_tophits_Alignment(th, abc, NULL, NULL, 0, p7_ALL_CONSENSUS_COLS, &msa) == eslOK){
+	    esl_msa_SetName     (msa, hmm->name, -1);
+	    esl_msa_SetAccession(msa, hmm->acc,  -1);
+	    esl_msa_SetDesc     (msa, hmm->desc, -1);
+	    esl_msa_FormatAuthor(msa, "hmmsearch (HMMER %s)", HMMER_VERSION);
+
+	    if (textw > 0) esl_msafile_Write(afp, msa, eslMSAFILE_STOCKHOLM);
+	    else           esl_msafile_Write(afp, msa, eslMSAFILE_PFAM);
+	  
+	    if (fprintf(ofp, "# Alignment of %d hits satisfying inclusion thresholds saved to: %s\n", msa->nseq, esl_opt_GetString(go, "-A")) < 0) ESL_EXCEPTION_SYS(eslEWRITE, "write failed");
+	  } 
+    else { if (fprintf(ofp, "# No hits satisfy inclusion thresholds; no alignment saved\n") < 0) ESL_EXCEPTION_SYS(eslEWRITE, "write failed"); }
+	  
+	  esl_msa_Destroy(msa);
+  }
+  /* Terminate outputs... any last words?
+   */
+  if (tblfp)    p7_tophits_TabularTail(tblfp,    "hmmclient", p7_SEARCH_SEQS, queryfile, search_db, go);
+  if (domtblfp) p7_tophits_TabularTail(domtblfp, "hmmclient", p7_SEARCH_SEQS, queryfile, search_db, go);
+  if (pfamtblfp) p7_tophits_TabularTail(pfamtblfp,"hmmclient", p7_SEARCH_SEQS, queryfile, search_db, go);
+  if (ofp)      { if (fprintf(ofp, "[ok]\n") < 0) ESL_EXCEPTION_SYS(eslEWRITE, "write failed"); }
 
 
 
@@ -496,6 +484,11 @@ main(int argc, char **argv)
   if (abc) esl_alphabet_Destroy(abc);
   if (hmm) p7_hmm_Destroy(hmm);
   if (sq)  esl_sq_Destroy(sq);
+  if (ofp != stdout) fclose(ofp);
+  if (afp)           fclose(afp);
+  if (tblfp)         fclose(tblfp);
+  if (domtblfp)      fclose(domtblfp);
+  if (pfamtblfp)     fclose(pfamtblfp);
 
   return status;
 ERROR:  

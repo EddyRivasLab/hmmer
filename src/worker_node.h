@@ -295,11 +295,11 @@ typedef struct p7_server_worker_argument{
  ************************************************************************/ 
 
 // Creates and initializes a P7_SERVER_WORKERNODE_STATE object.  Do not call this directly. Call p7_server_workernode_Setup, which calls p7_server_workernode_Create
-P7_SERVER_WORKERNODE_STATE *p7_server_workernode_Create(uint32_t num_databases, uint32_t num_shards, uint32_t my_shard, uint32_t num_threads, ESL_GETOPTS *go);
+P7_SERVER_WORKERNODE_STATE *p7_server_workernode_Create(uint32_t num_databases, uint32_t num_shards, uint32_t my_shard, uint32_t num_threads);
 
 
 // Performs all of the setup required by a worker node, including creating data structures, 
-int p7_server_workernode_Setup(uint32_t num_databases, char **database_names, uint32_t num_shards, uint32_t my_shard, uint32_t num_threads, ESL_GETOPTS *commandline_options, P7_SERVER_WORKERNODE_STATE **workernode);
+int p7_server_workernode_Setup(uint32_t num_databases, char **database_names, uint32_t num_shards, uint32_t my_shard, uint32_t num_threads, P7_SERVER_WORKERNODE_STATE **workernode);
 
 // Frees memory used by a P7_WORKERNODE_STATE data structure, cleans up internal pthread locks, etc.
 void p7_server_workernode_Destroy(P7_SERVER_WORKERNODE_STATE *workernode);

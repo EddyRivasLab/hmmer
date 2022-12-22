@@ -79,7 +79,7 @@ extern int hmmd_search_status_Serialize(const HMMD_SEARCH_STATUS *obj, uint8_t *
   memcpy(ptr, &network_32bit, sizeof(int32_t));
   ptr += sizeof(int32_t);
   // Field 2: type() field
-  network_32bit = esl_hton32(obj->status);
+  network_32bit = esl_hton32(obj->type);
   memcpy(ptr, &network_32bit, sizeof(int32_t));
   ptr += sizeof(int32_t);
   // Field 3: msg_size

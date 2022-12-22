@@ -16,56 +16,19 @@
 
 // Take this out when done debugging the server
 #define SERVER_DEBUG
-#define REPOPTS "-E,-T,--cut_ga,--cut_nc,--cut_tc"
-#define DOMREPOPTS "--domE,--domT,--cut_ga,--cut_nc,--cut_tc"
-#define INCOPTS "--incE,--incT,--cut_ga,--cut_nc,--cut_tc"
-#define INCDOMOPTS "--incdomE,--incdomT,--cut_ga,--cut_nc,--cut_tc"
-#define THRESHOPTS "-E,-T,--domE,--domT,--incE,--incT,--incdomE,--incdomT,--cut_ga,--cut_nc,--cut_tc"
 
 #ifdef HAVE_MPI
 static ESL_OPTIONS options[] = {
-    /* name           type      default  env  range  toggles reqs incomp  help                               docgroup*/
-    {"-h", eslARG_NONE, FALSE, NULL, NULL, NULL, NULL, NULL, "show brief help on version and usage", 0},
-    { "--cpu",        eslARG_INT,  "0","HMMER_NCPU","n>=0",        NULL,  NULL,  NULL,      "number of cores to use on each worker node (defaults to all)",      12 },
-    { "--num_shards", eslARG_INT,    "1",      NULL, "1<=n<512",      NULL,  NULL,  NULL,      "number of shards to divide each database into.",      12 },
-    {"--num_dbs",     eslARG_INT,  "1",   NULL,   "1<=n<512", NULL, NULL, NULL, "number of databases to load"},
-    {"--stall", eslARG_NONE, FALSE, NULL, NULL, NULL, NULL, NULL, "arrest after start: for debugging MPI under gdb", 0},
-    { "--cport",      eslARG_INT,     "51371",  NULL, "49151<n<65536",NULL,  NULL,  "--worker",      "port to use for client/server communication",                 12 },
-    { "--wport",      eslARG_INT,     "51372",  NULL, "49151<n<65536",NULL,  NULL,  NULL,            "port to use for server/worker communication",                 12 },
-    { "--ccncts",     eslARG_INT,     "16",     NULL, "n>0",          NULL,  NULL,  "--worker",      "maximum number of client side connections to accept",         12 },
-    { "--wcncts",     eslARG_INT,     "32",     NULL, "n>0",          NULL,  NULL,  "--worker",      "maximum number of worker side connections to accept",         12 },
-    { "--pid",        eslARG_OUTFILE, NULL,     NULL, NULL,           NULL,  NULL,  NULL,            "file to write process id to",                                 12 },
-    {"--acc", eslARG_NONE, FALSE, NULL, NULL, NULL, NULL, NULL, "prefer accessions over names in output", 2},
-    {"--noali", eslARG_NONE, FALSE, NULL, NULL, NULL, NULL, NULL, "don't output alignments, so output is smaller", 2},
-    {"-E", eslARG_REAL, "10.0", NULL, "x>0", NULL, NULL, REPOPTS, "report sequences <= this E-value threshold in output", 4},
-    {"-T", eslARG_REAL, FALSE, NULL, NULL, NULL, NULL, REPOPTS, "report sequences >= this score threshold in output", 4},
-    {"--domE", eslARG_REAL, "10.0", NULL, "x>0", NULL, NULL, DOMREPOPTS, "report domains <= this E-value threshold in output", 4},
-    {"--domT", eslARG_REAL, FALSE, NULL, NULL, NULL, NULL, DOMREPOPTS, "report domains >= this score cutoff in output", 4},
-    /* Control of inclusion (significance) thresholds */
-    {"--incE", eslARG_REAL, "0.01", NULL, "x>0", NULL, NULL, INCOPTS, "consider sequences <= this E-value threshold as significant", 5},
-    {"--incT", eslARG_REAL, FALSE, NULL, NULL, NULL, NULL, INCOPTS, "consider sequences >= this score threshold as significant", 5},
-    {"--incdomE", eslARG_REAL, "0.01", NULL, "x>0", NULL, NULL, INCDOMOPTS, "consider domains <= this E-value threshold as significant", 5},
-    {"--incdomT", eslARG_REAL, FALSE, NULL, NULL, NULL, NULL, INCDOMOPTS, "consider domains >= this score threshold as significant", 5},
-    /* Model-specific thresholding for both reporting and inclusion */
-    {"--cut_ga", eslARG_NONE, FALSE, NULL, NULL, NULL, NULL, THRESHOPTS, "use profile's GA gathering cutoffs to set all thresholding", 6},
-    {"--cut_nc", eslARG_NONE, FALSE, NULL, NULL, NULL, NULL, THRESHOPTS, "use profile's NC noise cutoffs to set all thresholding", 6},
-    {"--cut_tc", eslARG_NONE, FALSE, NULL, NULL, NULL, NULL, THRESHOPTS, "use profile's TC trusted cutoffs to set all thresholding", 6},
-    /* Control of acceleration pipeline */
-    {"--max", eslARG_NONE, FALSE, NULL, NULL, NULL, NULL, "--F1,--F2,--F3", "Turn all heuristic filters off (less speed, more power)", 7},
-    {"--F1", eslARG_REAL, "0.02", NULL, NULL, NULL, NULL, "--max", "Stage 1 (MSV) threshold: promote hits w/ P <= F1", 7},
-    {"--F2", eslARG_REAL, "1e-3", NULL, NULL, NULL, NULL, "--max", "Stage 2 (Vit) threshold: promote hits w/ P <= F2", 7},
-    {"--F3", eslARG_REAL, "1e-5", NULL, NULL, NULL, NULL, "--max", "Stage 3 (Fwd) threshold: promote hits w/ P <= F3", 7},
-    {"--nobias", eslARG_NONE, NULL, NULL, NULL, NULL, NULL, "--max", "turn off composition bias filter", 7},
-
-    /* Other options */
-    {"--nonull2", eslARG_NONE, NULL, NULL, NULL, NULL, NULL, NULL, "turn off biased composition score corrections", 12},
-    {"-Z", eslARG_REAL, FALSE, NULL, "x>0", NULL, NULL, NULL, "set # of comparisons done, for E-value calculation", 12},
-    {"--domZ", eslARG_REAL, FALSE, NULL, "x>0", NULL, NULL, NULL, "set # of significant seqs, for domain E-value calculation", 12},
-    {"--seed", eslARG_INT, "42", NULL, "n>=0", NULL, NULL, NULL, "set RNG seed to <n> (if 0: one-time arbitrary seed)", 12},
-    {0, 0, 0, 0, 0, 0, 0, 0, 0, 0},
+  /* name           type      default  env  range     toggles   reqs   incomp              help                                                      docgroup*/
+  { "-h",           eslARG_NONE,   FALSE, NULL, NULL,    NULL,  NULL,  NULL,            "show brief help on version and usage",                         1 },
+  /* Interface with server */
+  { "--cport",      eslARG_INT,     "51371",  NULL, "49151<n<65536",NULL,  NULL,  "--worker",      "port to use for client/server communication",                 12 },
+  { "--ccncts",     eslARG_INT,     "16",     NULL, "n>0",          NULL,  NULL,  "--worker",      "maximum number of client side connections to accept",         12 },
+  { "--num_dbs",		eslARG_INT,					"1", NULL, NULL,	NULL, NULL, NULL,								"number of databases to load into RAM (default 1)",						8 }, 
+  { "--cpu",       eslARG_INT,    "0",  NULL, "n>=0",  NULL,  NULL,  NULL,            "Number of compute threads to run per worker node. 0 = max possible (default)",         12 },
+  { "--stall", 			eslARG_NONE,   FALSE, NULL, NULL,    NULL,  NULL,  NULL,            "Stall after start untill debugger says to resume (debugging option)"},
+  {  0, 0, 0, 0, 0, 0, 0, 0, 0, 0 },
 };
-
-
 static char usage[]  = "[-options] <seqence database>";
 static char banner[] = "hmmserver, the server version of HMMER 3";
 #endif
@@ -178,20 +141,20 @@ int main(int argc, char **argv){
 	// First, the command type (P7_DAEMON_COMMAND)
 	P7_SERVER_COMMAND the_command;
 
-	// P7_DAEMON_COMMAND is two unsigned 32-bit ints followed by an unsigned 64-bit int
-	MPI_Datatype temp1[3] = {MPI_UNSIGNED, MPI_UNSIGNED, MPI_UNSIGNED_LONG_LONG};
-	MPI_Aint disp1[3];
+	// P7_DAEMON_COMMAND is two unsigned 32-bit ints followed by two unsigned 64-bit ints
+	MPI_Datatype temp1[4] = {MPI_UNSIGNED, MPI_UNSIGNED, MPI_UNSIGNED_LONG_LONG, MPI_UNSIGNED_LONG_LONG};
+	MPI_Aint disp1[4];
 
 	// compute displacements from the start of the structure to each element
 	disp1[0] = (MPI_Aint)&(the_command.type) - (MPI_Aint)&(the_command);
 	disp1[1] = (MPI_Aint)&(the_command.db) - (MPI_Aint)&(the_command);
 	disp1[2] = (MPI_Aint)&(the_command.compare_obj_length) - (MPI_Aint)&(the_command);
-
+    disp1[3] = (MPI_Aint)&(the_command.options_length) - (MPI_Aint)&(the_command);
 	// block lengths for this structure (all 1)
-	int blocklen1[3] = {1,1,1};
+	int blocklen1[4] = {1,1,1,1};
 
 	// now, define the type
-	MPI_Type_create_struct(3, blocklen1, disp1, temp1, &(server_mpitypes[P7_SERVER_COMMAND_MPITYPE]));
+	MPI_Type_create_struct(4, blocklen1, disp1, temp1, &(server_mpitypes[P7_SERVER_COMMAND_MPITYPE]));
 	MPI_Type_commit(&(server_mpitypes[P7_SERVER_COMMAND_MPITYPE]));
 
 	// P7_DAEMON_CHUNK_REPLY is two unsigned 64-bit ints
@@ -200,7 +163,7 @@ int main(int argc, char **argv){
 	MPI_Aint disp2[2];
 
 	disp2[0] = (MPI_Aint)&(the_reply.start) - (MPI_Aint)&(the_reply);
-	disp2[1] = (MPI_Aint)&(the_reply.end) - (MPI_Aint)&(the_reply.start);
+	disp2[1] = (MPI_Aint)&(the_reply.end) - (MPI_Aint)&(the_reply);
 
 	int blocklen2[2] = {1,1};
 	MPI_Type_create_struct(2, blocklen2, disp2, temp2, &(server_mpitypes[P7_SERVER_CHUNK_REPLY_MPITYPE]));

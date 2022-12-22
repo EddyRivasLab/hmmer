@@ -77,7 +77,7 @@ static int server_set_shard(P7_SERVER_WORKERNODE_STATE *workernode, P7_SHARD *th
  * \returns The created and initialized P7_WORKERNODE_STATE object
  */
 
-P7_SERVER_WORKERNODE_STATE *p7_server_workernode_Create(uint32_t num_databases, uint32_t num_shards, uint32_t my_shard, uint32_t num_threads, ESL_GETOPTS *go){
+P7_SERVER_WORKERNODE_STATE *p7_server_workernode_Create(uint32_t num_databases, uint32_t num_shards, uint32_t my_shard, uint32_t num_threads){
 
   int status; // return value from ESL functions
   int i;
@@ -85,7 +85,7 @@ P7_SERVER_WORKERNODE_STATE *p7_server_workernode_Create(uint32_t num_databases, 
   P7_SERVER_WORKERNODE_STATE *workernode;
 
   ESL_ALLOC(workernode, sizeof(P7_SERVER_WORKERNODE_STATE));
-  workernode->commandline_options = go;
+  workernode->commandline_options = NULL;
   // copy in parameters
   workernode->num_databases = num_databases;
   workernode->num_shards = num_shards;
@@ -319,7 +319,7 @@ void p7_server_workernode_Destroy(P7_SERVER_WORKERNODE_STATE *workernode){
  *  \bug examines the first few characters of each database file to determine what type of data the file contains instead of calling the 
  *  "blessed" datatype-detection routines
  */
-int p7_server_workernode_Setup(uint32_t num_databases, char **database_names, uint32_t num_shards, uint32_t my_shard, uint32_t num_threads, ESL_GETOPTS *commandline_options,  P7_SERVER_WORKERNODE_STATE **workernode){
+int p7_server_workernode_Setup(uint32_t num_databases, char **database_names, uint32_t num_shards, uint32_t my_shard, uint32_t num_threads, P7_SERVER_WORKERNODE_STATE **workernode){
   FILE *datafile;
   char id_string[14];
   id_string[13] = '\0';
@@ -336,7 +336,7 @@ int p7_server_workernode_Setup(uint32_t num_databases, char **database_names, ui
   }
 
   // Then, create the workernode object
-  *workernode = p7_server_workernode_Create(num_databases, num_shards, my_shard, worker_threads, commandline_options);
+  *workernode = p7_server_workernode_Create(num_databases, num_shards, my_shard, worker_threads);
   if(workernode == NULL){
     p7_Fail("Unable to allocate memory in p7_server_workernode_Setup\n");
   }
@@ -994,7 +994,7 @@ void p7_server_workernode_main(int argc, char **argv, int my_rank, MPI_Datatype 
     database_names[c1] = esl_opt_GetArg(go, c1+1);  //esl_opt_GetArg is 1..num_args
   }
   // FIXME: Support loading multiple databases once server UI specced out
-  p7_server_workernode_Setup(num_databases, database_names, 1, 0, num_worker_cores, go, &workernode);
+  p7_server_workernode_Setup(num_databases, database_names, 1, 0, num_worker_cores, &workernode);
   workernode->my_rank = my_rank;
   free(database_names);
   // block until all nodes ready
@@ -1033,6 +1033,19 @@ void p7_server_workernode_main(int argc, char **argv, int my_rank, MPI_Datatype 
 
         // receive the HMM to search against from the master
         MPI_Bcast(compare_obj_buff, the_command.compare_obj_length, MPI_CHAR, 0, MPI_COMM_WORLD);
+
+        // and the options string
+        char *optsstring;
+        ESL_ALLOC(optsstring, the_command.options_length);
+        MPI_Bcast(optsstring, the_command.options_length, MPI_CHAR, 0, MPI_COMM_WORLD);
+
+        // Update getopts structure in workernode
+        if (workernode->commandline_options != NULL){
+          esl_getopts_Destroy(workernode->commandline_options);
+        }
+        if ((workernode->commandline_options = esl_getopts_Create(server_Client_Options))       == NULL)  p7_Die("Couldn't allocate memory in worker_node.c");
+        if ((status = esl_opt_ProcessSpoof(workernode->commandline_options, optsstring)) != eslOK) p7_Die("Error processing search options in worker_node.c");
+        if ((status = esl_opt_VerifyConfig(workernode->commandline_options))        != eslOK) p7_Die("Error processing search options in worker_node.c");
 
         // request some work to start off with 
         workernode_request_Work(workernode->my_shard);
@@ -1180,7 +1193,7 @@ void p7_server_workernode_main(int argc, char **argv, int my_rank, MPI_Datatype 
         int thread;
         P7_TOPHITS *hits;
         P7_PIPELINE *pli;
-        pli = p7_pipeline_Create(go, 100, 100, FALSE, p7_SEARCH_SEQS);
+        pli = p7_pipeline_Create(workernode->commandline_options, 100, 100, FALSE, p7_SEARCH_SEQS);
 
         for(thread = 0; thread < workernode->num_threads; thread++){
           p7_pipeline_Merge(pli, workernode->thread_state[thread].stats_pipeline);
@@ -1201,7 +1214,6 @@ void p7_server_workernode_main(int argc, char **argv, int my_rank, MPI_Datatype 
               != eslOK){
                 p7_Fail("Failed to send hit messages to master\n");
               }
-p7_pli_Statistics(stdout, pli, NULL);
 
         if(p7_pipeline_MPISend(pli, 0, HMMER_PIPELINE_STATE_MPI_TAG, MPI_COMM_WORLD, &send_buf, &send_buf_length) != eslOK){
           p7_Fail("Failed to send pipeline state to master");
