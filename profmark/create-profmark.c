@@ -2,7 +2,7 @@
  *
  * Usage:
  *     create-profmark <basename> <msafile> <seqdb>
- *    or:
+ * or:
  *     create-profmark --onlysplit <basename> <msafile> 
  *  
  * Contents:
@@ -54,9 +54,9 @@ static char usage[]  = "[options] <basename> <msafile> <seqdb>\n     (with --onl
 #define pmSPLIT_OPTS   "--cluster,--cobalt,--blue,--random"          // toggle group of training/testset-separating options
 #define pmSHUFFLE_OPTS "--mono,--di,--markov0,--markov1,--reverse"   // toggle group of nonhomolog seq shuffling/generating options          
 
-typedef enum { pmCLUSTER = 0,
-               pmCOBALT  = 1,
-               pmBLUE    = 2,
+typedef enum { pmCOBALT  = 0,
+               pmBLUE    = 1,
+               pmCLUSTER = 2,
                pmRANDOM  = 3 } PM_SPLIT;
 
 typedef enum { pmMONOSHUFFLE = 0,
@@ -72,22 +72,22 @@ static ESL_OPTIONS options[] = {
   { "-1", eslARG_REAL,  "0.25", NULL, "0<x<=1.0", NULL, NULL, NULL, "split so no train/test seq pair has > x identity",    1 },
   { "-2", eslARG_REAL,  "0.50", NULL, "0<x<=1.0", NULL, NULL, NULL, "filter test seqs so no pair has > x identity",        1 },
   { "-3", eslARG_REAL,   "1.0", NULL, "0<x<=1.0", NULL, NULL, NULL, "filter training seqs so no pair has > x identity",    1 },
-  { "-N", eslARG_INT, "200000", NULL,      "n>0", NULL, NULL, NULL, "number of negative test seqs",                        1 },
+  { "-N", eslARG_INT, "200000", NULL,     "n>=0", NULL, NULL, NULL, "number of negative test seqs",                        1 },
   { "-S", eslARG_INT,      "0", NULL,       NULL, NULL, NULL, NULL, "specify RNG seed (0: use a random seed)",             1 },
 
   /* Options defining other characteristics of the benchmark */
   { "--fragthresh", eslARG_REAL,    "0.5", NULL, "0<=x<=1",      NULL, NULL, NULL,  "exclude sequence fragments with aspan/alen < x",            2 },
   { "--mintrain",   eslARG_INT,       "1", NULL,     "n>0",      NULL, NULL, NULL,  "minimum number of training domains required per input MSA", 2 },
-  { "--mintest",    eslARG_INT,       "1", NULL,     "n>0",      NULL, NULL, NULL,  "minimum number of test domains required per input MSA",     2 },
+  { "--mintest",    eslARG_INT,       "2", NULL,     "n>0",      NULL, NULL, NULL,  "minimum number of test domains required per input MSA",     2 }, // 2, because default is to make 2-domain synthetic positives
   { "--maxtrain",   eslARG_INT,     FALSE, NULL,     "n>0",      NULL, NULL, NULL,  "maximum number of training domains taken per input MSA",    2 },
   { "--maxtest",    eslARG_INT,     FALSE, NULL,     "n>0",      NULL, NULL, NULL,  "maximum number of test domains taken per input MSA",        2 },
   { "--single",     eslARG_NONE,    FALSE, NULL,      NULL,      NULL, NULL, NULL,  "embed one, not two domains in each positive",               2 },
 
   /* Options controlling choice of method for splitting into testing and training sets  */
-  { "--cluster",    eslARG_NONE,    FALSE, NULL,      NULL,  pmSPLIT_OPTS, NULL, NULL,  "single linkage clustering",                                 3 },
-  { "--cobalt",     eslARG_NONE,"default", NULL,      NULL,  pmSPLIT_OPTS, NULL, NULL,  "greedy algorithm with random order",                        3 },
-  { "--blue",       eslARG_NONE,    FALSE, NULL,      NULL,  pmSPLIT_OPTS, NULL, NULL,  "multi-round random election process",                       3 },
-  { "--random",     eslARG_NONE,    FALSE, NULL,      NULL,  pmSPLIT_OPTS, NULL, NULL,  "random selection of training set",                          3 },
+  { "--cobalt",     eslARG_NONE,"default", NULL,      NULL,  pmSPLIT_OPTS, NULL, NULL,  "greedy algorithm with random order",                    3 },
+  { "--blue",       eslARG_NONE,    FALSE, NULL,      NULL,  pmSPLIT_OPTS, NULL, NULL,  "multi-round random election process",                   3 },
+  { "--cluster",    eslARG_NONE,    FALSE, NULL,      NULL,  pmSPLIT_OPTS, NULL, NULL,  "single linkage clustering",                             3 },
+  { "--random",     eslARG_NONE,    FALSE, NULL,      NULL,  pmSPLIT_OPTS, NULL, NULL,  "random selection of training set",                      3 },
 
   /* Other options controlling splitting/filtering method */
   { "--bestof",      eslARG_INT,     NULL, NULL,     "n>0",      NULL, NULL,       "--cluster,--firstof", "output best of n runs of an iset splitting algorithm",     4 },
@@ -103,7 +103,7 @@ static ESL_OPTIONS options[] = {
   { "--iid",       eslARG_NONE,    FALSE, NULL,       NULL, pmSHUFFLE_OPTS, NULL, NULL,  "generate random iid sequence for negatives",                5 },
 
   /* Options defining other characteristics of nonhomologous segments */
-  { "--dmu",       eslARG_REAL,    "4.8", NULL,       NULL,      NULL, NULL, NULL,  "set mu param, domain length lognormal distribution",        6 },
+  { "--dmu",       eslARG_REAL,    "4.8", NULL,       NULL,      NULL, NULL, NULL,  "set mu param, domain length lognormal distribution",        6 },  // [xref H12/147 for these fits]
   { "--dsigma",    eslARG_REAL,   "0.69", NULL,       NULL,      NULL, NULL, NULL,  "set sigma param, domain length lognormal distribution",     6 },
   { "--smu",       eslARG_REAL,    "5.6", NULL,       NULL,      NULL, NULL, NULL,  "set mu param, sequence length lognormal distribution",      6 },
   { "--ssigma",    eslARG_REAL,   "0.75", NULL,       NULL,      NULL, NULL, NULL,  "set sigma param, sequence length lognormal distribution",   6 },
@@ -116,9 +116,7 @@ static ESL_OPTIONS options[] = {
 
   /* Other options I will probably organize better someday */
   { "--onlysplit", eslARG_NONE,    FALSE, NULL, NULL, NULL, NULL, NULL, "split to MSAs (.{train/test}.msa); don't make +/- seqs; no <seqfile> arg", 8 },
-  { "--onlytbl",   eslARG_NONE,    FALSE, NULL, NULL, NULL, NULL, NULL, "only output the .tbl summary file, not .msa|.fa|.pos|.neg",                8 },
   { "--speedtest", eslARG_NONE,    FALSE, NULL, NULL, NULL, NULL, NULL, "don't compute expensive avgid/avgconn statistics for .tbl file",           8 },
-
   { 0,0,0,0,0,0,0,0,0,0 },
 };
   
@@ -134,10 +132,10 @@ typedef struct {
   int64_t         db_nseq;       // # of sequences in db; same as dbssi->nprimary
 
   FILE           *out_tbl;       // summary table, columnar and whitespace-delim
-  FILE           *out_train;     // query MSAs (training sets) are written here, Stockholm format (NULL if --onlytbl)
-  FILE           *out_test;      // Usually .test.fa (FASTA) with pos/neg seqs; with --onlysplit, .test.msa.  (NULL if --onlytbl)
-  FILE           *out_postbl;    // summary table for positive synthetic seqs (NULL if --onlysplit | --onlytbl)
-  FILE           *out_negtbl;    // summary table for negative synthetic seqs (NULL if --onlysplit | --onlytbl)
+  FILE           *out_train;     // query MSAs (training sets) are written here, Stockholm format 
+  FILE           *out_test;      // Usually .test.fa (FASTA) with pos/neg seqs; with --onlysplit, .test.msa.  
+  FILE           *out_postbl;    // summary table for positive synthetic seqs (NULL if --onlysplit)
+  FILE           *out_negtbl;    // summary table for negative synthetic seqs (NULL if --onlysplit)
 
   float           idthresh1;     // fractional id threshold for train/test split        (no train/test pair > this id)  (1.0 = iid random split, typical in machine learning)
   float           idthresh2;     //                     ... for filtering test seqs     (no test pair have > this id)   (1.0 = no filtering)
@@ -152,7 +150,7 @@ typedef struct {
   int             max_ntest;    //           ...  of test
   int             do_single;    // embed one instead of two domains in each positive
 
-  PM_SPLIT        which_algo;   // default: pmCLUSTER;     or pmCOBALT | pmBLUE | pmRANDOM
+  PM_SPLIT        which_algo;   // default: pmCOBALT;      or pmBLUE | pmCLUSTER | pmRANDOM
   PM_SHUFFLE      which_shuf;   // default: pmMONOSHUFFLE; or pmDISHUFFLE | pmMARKOV0 | pmMARKOV1 | pmREVERSE | pmIID
 
   int             do_bestof;    // TRUE to take best splitting result of <ntries> runs
@@ -259,16 +257,16 @@ create_config(char *argv0, ESL_GETOPTS *go)
 
   if ((cfg->rng = esl_randomness_Create(esl_opt_GetInteger(go, "-S"))) == NULL) goto ERROR;
 
-  cfg->fragthresh  = esl_opt_GetReal(go, "--fragthresh");
+  cfg->fragthresh  = esl_opt_GetReal   (go, "--fragthresh");
   cfg->min_ntrain  = esl_opt_GetInteger(go, "--mintrain");
   cfg->min_ntest   = esl_opt_GetInteger(go, "--mintest");
   cfg->max_ntrain  = (esl_opt_IsOn(go, "--maxtrain") ? esl_opt_GetInteger(go, "--maxtrain") : 0);
   cfg->max_ntest   = (esl_opt_IsOn(go, "--maxtest")  ? esl_opt_GetInteger(go, "--maxtest")  : 0);
   cfg->do_single   = esl_opt_GetBoolean(go, "--single");
 
-  if      (esl_opt_GetBoolean(go, "--cluster"))  cfg->which_algo = pmCLUSTER;
-  else if (esl_opt_GetBoolean(go, "--cobalt"))   cfg->which_algo = pmCOBALT;
+  if      (esl_opt_GetBoolean(go, "--cobalt"))   cfg->which_algo = pmCOBALT;
   else if (esl_opt_GetBoolean(go, "--blue"))     cfg->which_algo = pmBLUE;
+  else if (esl_opt_GetBoolean(go, "--cluster"))  cfg->which_algo = pmCLUSTER;
   else if (esl_opt_GetBoolean(go, "--random"))   cfg->which_algo = pmRANDOM;
   else esl_fatal("no split algorithm selected (this can't happen)");
 
@@ -297,7 +295,6 @@ create_config(char *argv0, ESL_GETOPTS *go)
   else                                        cfg->abc = NULL;
 
   cfg->do_onlysplit = esl_opt_GetBoolean(go, "--onlysplit");
-  cfg->do_onlytbl   = esl_opt_GetBoolean(go, "--onlytbl");
   cfg->do_speedtest = esl_opt_GetBoolean(go, "--speedtest");
 
   /* Configuration that is currently not runtime-configurable */
@@ -343,36 +340,33 @@ open_iofiles(PM_CONFIG *cfg, const char *basename, const char *msafile, const ch
       cfg->db_nseq = cfg->dbssi->nprimary;
     }
 
-  /* Output files depend on --onlytbl, --onlysplit
+  /* Output files depend on --onlysplit
    *        default:       .tbl   .train.msa  .test.fa   .pos  .neg
    *    --onlysplit:       .tbl   .train.msa  .test.msa  -     -
-   *      --onlytbl:       .tbl   -           -          -     -
    */
   if (snprintf(outfile, 256, "%s.tbl", basename) >= 256)  esl_fatal("Failed to construct output summary table file name");
   if ((cfg->out_tbl = fopen(outfile, "w"))      == NULL)  esl_fatal("Failed to open output summary table file %s", outfile);
 
-  if (! cfg->do_onlytbl)
+  if (snprintf(outfile, 256, "%s.train.msa", basename) >= 256)  esl_fatal("Failed to construct output training MSA file name");
+  if ((cfg->out_train = fopen(outfile, "w"))           == NULL) esl_fatal("Failed to open output training MSA file %s", outfile);
+
+  if (cfg->do_onlysplit)
     {
-      if (snprintf(outfile, 256, "%s.train.msa", basename) >= 256)  esl_fatal("Failed to construct output training MSA file name");
-      if ((cfg->out_train = fopen(outfile, "w"))           == NULL) esl_fatal("Failed to open output training MSA file %s", outfile);
-
-      if (cfg->do_onlysplit)
-        {
-          if (snprintf(outfile, 256, "%s.test.msa", basename) >= 256)  esl_fatal("Failed to construct output test MSA file name");
-          if ((cfg->out_test = fopen(outfile, "w"))           == NULL) esl_fatal("Failed to open output test MSA file %s", outfile);
-        }
-      else
-        {
-          if (snprintf(outfile, 256, "%s.test.fa", basename) >= 256)  esl_fatal("Failed to construct output test sequences file name");
-          if ((cfg->out_test   = fopen(outfile, "w"))        == NULL) esl_fatal("Failed to open output test sequences file %s", outfile);
-
-          if (snprintf(outfile, 256, "%s.pos", basename) >= 256)  esl_fatal("Failed to construct output positives table file name");
-          if ((cfg->out_postbl = fopen(outfile, "w"))    == NULL) esl_fatal("Failed to open output positives table file %s", outfile);
-
-          if (snprintf(outfile, 256, "%s.neg", basename) >= 256)  esl_fatal("Failed to construct output negatives table file name");
-          if ((cfg->out_negtbl = fopen(outfile, "w"))    == NULL) esl_fatal("Failed to open output negatives table file %s", outfile);
-        }
+      if (snprintf(outfile, 256, "%s.test.msa", basename) >= 256)  esl_fatal("Failed to construct output test MSA file name");
+      if ((cfg->out_test = fopen(outfile, "w"))           == NULL) esl_fatal("Failed to open output test MSA file %s", outfile);
     }
+  else
+    {
+      if (snprintf(outfile, 256, "%s.test.fa", basename) >= 256)  esl_fatal("Failed to construct output test sequences file name");
+      if ((cfg->out_test   = fopen(outfile, "w"))        == NULL) esl_fatal("Failed to open output test sequences file %s", outfile);
+
+      if (snprintf(outfile, 256, "%s.pos", basename) >= 256)  esl_fatal("Failed to construct output positives table file name");
+      if ((cfg->out_postbl = fopen(outfile, "w"))    == NULL) esl_fatal("Failed to open output positives table file %s", outfile);
+
+      if (snprintf(outfile, 256, "%s.neg", basename) >= 256)  esl_fatal("Failed to construct output negatives table file name");
+      if ((cfg->out_negtbl = fopen(outfile, "w"))    == NULL) esl_fatal("Failed to open output negatives table file %s", outfile);
+    }
+
 }
 /***********  end, command line processing ***********************/
 
@@ -382,7 +376,7 @@ open_iofiles(PM_CONFIG *cfg, const char *basename, const char *msafile, const ch
  * 2. Splitting MSAs to create train/test sets (of domains)
  *****************************************************************/
 
-/* In digital mode, we'll need to pass the clustering routine two parameters -
+/* Need to pass the clustering routine two parameters -
  * %id threshold and alphabet ptr - so make a structure that bundles them.
  */
 typedef struct {
@@ -393,7 +387,7 @@ typedef struct {
 
 /* is_linked()
  *
- * This helper function gets passed to the clustering routines, along
+ * This helper function gets passed to the clustering/linking routines, along
  * with the <struct islinked_param_s> packet. Seq pairs with > maxid
  * are defined as "linked".
  */
@@ -604,10 +598,12 @@ filter_msa_by_iset(ESL_RANDOMNESS *rng, const ESL_MSA *msa, const int *V, int nV
     if (assignment[i] == 1) S[nS++] = V[i];
 
   *ret_nS = nS;
+  free(wrk); free(assignment);
   return eslOK;
 
  ERROR:
   *ret_nS = 0;
+  free(wrk); free(assignment);
   return status;
 }
 
@@ -894,18 +890,26 @@ static void
 set_homologous_segment(FILE *logfp, const ESL_MSA *msa, int idx, ESL_DSQ *dsqp)
 {
   int apos;
+  int rlen = 0;
 
   for (apos = 1; msa->ax[idx][apos] != eslDSQ_SENTINEL; apos++)
-    if (! esl_abc_XIsGap(msa->abc, msa->ax[idx][apos])) 
-      *dsqp++ = msa->ax[idx][apos];
+    if (! esl_abc_XIsGap(msa->abc, msa->ax[idx][apos]))
+      {
+        *dsqp++ = msa->ax[idx][apos];
+        rlen++;
+      }
 
   if (logfp)
-    fprintf(logfp, " %-32s %6d %6d .", msa->sqname[idx], 1, apos-1);  // apos-1 is the unaligned raw seqlen
+    fprintf(logfp, " %-32s %6d %6d %6d .", msa->sqname[idx], rlen, 1, rlen);
+
+  // all embedded segments are full length, so "<rlen> 1 <rlen>" output is redundant
+  // but in future, we might embed partial length homologous segments,
+  // to test local alignment
 }
 
 
 static void
-synthesize_twodom_positives(const PM_CONFIG *cfg, const ESL_MSA *msa, const int *T, int nT, int *tot_npositives)
+synthesize_twodom_positives(const PM_CONFIG *cfg, const ESL_MSA *msa, const int *T, int nT, int *tot_npos)
 {
   ESL_SQ *sq = esl_sq_CreateDigital(cfg->abc);
   int      i = 0;      // counter over positive test seqs we create
@@ -927,8 +931,8 @@ synthesize_twodom_positives(const PM_CONFIG *cfg, const ESL_MSA *msa, const int 
       embed_two(cfg->rng, L, d1n, d2n, &L1, &L2, &L3);
       esl_sq_GrowTo(sq, L);
 
-      (*tot_npositives)++;
-      esl_sq_FormatName(sq, "%s/%d/%d-%d/%d-%d", msa->name, *tot_npositives, L1+1, L1+d1n, L1+d1n+L2+1, L1+d1n+L2+d2n);
+      (*tot_npos)++;
+      esl_sq_FormatName(sq, "%s/%d/%d-%d/%d-%d", msa->name, *tot_npos, L1+1, L1+d1n, L1+d1n+L2+1, L1+d1n+L2+d2n);
       esl_sq_FormatDesc(sq, "domains: %s %s", msa->sqname[T[i]], msa->sqname[T[i+1]]);
       sq->n = L;
       sq->dsq[0] = sq->dsq[L+1] = eslDSQ_SENTINEL;
@@ -1009,10 +1013,13 @@ synthesize_twodom_negatives(const PM_CONFIG *cfg)
  * Out:
  *   Synthetic positive test seqs written to cfg->out_test file
  *   Tabular info about them written to cfg->out_postbl file
- *   <*tot_npositives> is the # of positive test seqs we made
+ *
+ *   <*totpos> is a running total of the # of positive test seqs we've
+ *   made so far, over all MSAs. This is used as part of the construction
+ *   of the name of a positive test seq.
  */
 static void
-synthesize_onedom_positives(const PM_CONFIG *cfg, const ESL_MSA *msa, const int *T, int nT, int *tot_npositives)
+synthesize_onedom_positives(const PM_CONFIG *cfg, const ESL_MSA *msa, const int *T, int nT, int *tot_npos)
 {
   ESL_SQ *sq = esl_sq_CreateDigital(cfg->abc);
   int      i = 0;      // counter over positive test seqs we create
@@ -1033,8 +1040,8 @@ synthesize_onedom_positives(const PM_CONFIG *cfg, const ESL_MSA *msa, const int 
       embed_one(cfg->rng, L, d1n, &L1, &L2);
       esl_sq_GrowTo(sq, L);
 
-      (*tot_npositives)++;
-      esl_sq_FormatName(sq, "%s/%d/%d-%d",  msa->name, *tot_npositives, L1+1, L1+d1n);
+      (*tot_npos)++;
+      esl_sq_FormatName(sq, "%s/%d/%d-%d",  msa->name, *tot_npos, L1+1, L1+d1n);
       esl_sq_FormatDesc(sq, "domain: %s",   msa->sqname[T[i]]);
       sq->n = L;
       sq->dsq[0] = sq->dsq[L+1] = eslDSQ_SENTINEL;
@@ -1232,7 +1239,7 @@ write_msa_subset(FILE *ofp, const ESL_MSA *msa, const int *S, int nS)
  * <msa> may be modified here: non-IUPAC residue symbols are converted in-place to X.
  */
 static void
-process_msa(PM_CONFIG *cfg, ESL_MSA *msa, int *tot_npositives)
+process_msa(PM_CONFIG *cfg, ESL_MSA *msa, int *tot_npos)
 {
   int   *V = NULL;    // set of non-fragment seqs in input MSA; as an ordered list of nV indices 0..nseq-1
   int   *S = NULL;    //  ... training set
@@ -1241,6 +1248,7 @@ process_msa(PM_CONFIG *cfg, ESL_MSA *msa, int *tot_npositives)
   double avgid   = 0.0;  // average pairwise identity in MSA (after fragment removal)
   double avgconn = 0.0;  // average pairwise connectivity at idthresh1
   int    ntries  = 1;    // with randomized iset algorithms and  --bestof or (especially) --firstof, how many tries we made at splitting
+  int    prv_npos = *tot_npos;  // remember previous total number of synthetic positive seqs created
   int    split_success;
   int    status;
 
@@ -1281,19 +1289,18 @@ process_msa(PM_CONFIG *cfg, ESL_MSA *msa, int *tot_npositives)
         write_msa_subset(cfg->out_train, msa, S, nS);
         write_msa_subset(cfg->out_test,  msa, T, nT);
       }
-      *tot_npositives = 0;
     }
   else if (split_success) 
     {
       write_msa_subset(cfg->out_train, msa, S, nS);
 
-      if (cfg->do_single) synthesize_onedom_positives(cfg, msa, T, nT, tot_npositives);
-      else                synthesize_twodom_positives(cfg, msa, T, nT, tot_npositives);
+      if (cfg->do_single) synthesize_onedom_positives(cfg, msa, T, nT, tot_npos);
+      else                synthesize_twodom_positives(cfg, msa, T, nT, tot_npos);
     }
 
   fprintf(cfg->out_tbl, "%-20s %6d %6" PRId64 " %6d %3.0f%% %3.0f%% %3d %4s %6d %6d %6d\n",
           msa->name, msa->nseq, msa->alen, msa->nseq-nV, 100.*avgid, 100.*avgconn, ntries,
-          (split_success ? "ok" : "FAIL"), nS, nT, *tot_npositives);
+          (split_success ? "ok" : "FAIL"), nS, nT, *tot_npos - prv_npos);
 
   free(V); free(S); free(T);
   return;
@@ -1314,7 +1321,7 @@ main(int argc, char **argv)
   char         *msafile  = NULL;
   char         *dbfile   = NULL;
   ESL_MSA      *msa      = NULL;
-  int           tot_npositives = 0;
+  int           tot_npos = 0;     // running count of total # of true positives synthesized, over all MSAs 
   int           status;
 
   go = esl_getopts_Create(options);
@@ -1335,12 +1342,12 @@ main(int argc, char **argv)
 
   while (( status = esl_msafile_Read(cfg->afp, &msa)) == eslOK)
     {
-      process_msa(cfg, msa, &tot_npositives);    // table output is from process_msa()
+      process_msa(cfg, msa, &tot_npos);    // table output is from process_msa().
       esl_msa_Destroy(msa);
     }
   if (status != eslEOF) esl_msafile_ReadFailure(cfg->afp, status);
 
-  if (! (cfg->do_onlysplit || cfg->do_onlytbl)) {
+  if (! cfg->do_onlysplit) {
     if (cfg->do_single) synthesize_onedom_negatives(cfg);
     else                synthesize_twodom_negatives(cfg);
   }
