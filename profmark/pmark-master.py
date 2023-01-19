@@ -77,5 +77,6 @@ with open('{0}/{0}.sh'.format(resultdir), 'w') as f:
 # Submit the job array
 #
 cmd = 'sbatch --array=0-{0} {1}/{1}.sh'.format(ncpu-1, resultdir)
-print(cmd)
+subprocess.run(cmd.split())
+
     

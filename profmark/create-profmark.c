@@ -307,7 +307,7 @@ create_config(char *argv0, ESL_GETOPTS *go)
   /* Configuration problems too complex to be detected by ESL_GETOPTS */
   if (cfg->seq_mu < cfg->dom_mu)
     cmdline_failure(argv0, "You want to set the mu for seq length larger than for domain length,\nwhen you use the --smu or --dmu options.\n");
-  if (! cfg->do_single && cfg->min_test < 2)
+  if (! cfg->do_single && cfg->min_ntest < 2)
     cmdline_failure(argv0, "Default (without --single) embeds two domains per synthetic positive seq; --mintest must be >= 2.\n");  
 
   return cfg;
