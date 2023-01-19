@@ -48,11 +48,11 @@ later section of these notes.)
 
 | file  |  description |
 |-------|--------------|
-| `<benchmark_prefix>.msa`  | MSA queries; Stockholm format |
-| `<benchmark_prefix>.fa`   | synthetic positive and negative sequence targets; FASTA format |
-| `<benchmark_prefix>.tbl`  | table summarizing the benchmark |
-| `<benchmark_prefix>.pos`  | table summarizing synthetic positive test set |
-| `<benchmark_prefix>.neg`  | table summarizing synthetic negative test set |
+| `<benchmark_prefix>.train.msa`  | MSA queries; Stockholm format |
+| `<benchmark_prefix>.test.fa`    | synthetic positive and negative sequence targets; FASTA format |
+| `<benchmark_prefix>.tbl`        | table summarizing the benchmark |
+| `<benchmark_prefix>.pos`        | table summarizing synthetic positive test set |
+| `<benchmark_prefix>.neg`        | table summarizing synthetic negative test set |
 
 Briefly: each input alignment in the `<Stockholm MSA file>` is split
 into a query alignment and a nonredundant set of test domains by two
@@ -68,7 +68,7 @@ are deliberately created in this patchwork to simulate some of the
 inhomogeneity of real sequences.
 
 Alternatively, instead of creating full-length positive and negative
-test sequences in FASTA format in the .fa file, `create_profmark` can
+test sequences in FASTA format in the .test.fa file, `create_profmark` can
 also be used to split input MSAs into training and test MSAs. Since no
 nonhomologous sequence source is needed, the `<FASTA sequence database>`
 argument isn't used.
@@ -81,8 +81,8 @@ With `--onlysplit`, three output files are created:
 | file  |  description |
 |-------|--------------|
 | `<benchmark_prefix>.tbl`       | table summarizing the benchmark |
-| `<benchmark_prefix>.msa_train` | MSA queries, Stockholm format   |
-| `<benchmark_prefix>.msa_test`  | MSA test sequences, Stockholm format |
+| `<benchmark_prefix>.train.msa` | MSA queries, Stockholm format   |
+| `<benchmark_prefix>.test.msa`  | MSA test sequences, Stockholm format |
 
 
 ### Detailed stepwise explanation of the procedure
@@ -224,7 +224,7 @@ construction protocol, the procedure is as follows:
 
      If the split was successful, and `--speedtest` isn't on, the
      training and test set alignments are written to
-     `<benchmark_prefix>.msa_train` and `<benchmark_prefix>.msa_test`.
+     `<benchmark_prefix>.train.msa` and `<benchmark_prefix>.test.msa`.
      Remaining steps below are skipped.
 	 
 	 We use the `--speedtest` option to benchmark time performance of
@@ -236,7 +236,7 @@ construction protocol, the procedure is as follows:
 	 alignment outputs and only writes the .tbl output file.
 
    - **Otherwise, write the training set alignment to
-     `<benchmark_prefix>.msa`, and continue.**
+     `<benchmark_prefix>.train.msa`, and continue.**
 
    - **Synthesize full-length positive test sequences.**
 
@@ -279,7 +279,7 @@ construction protocol, the procedure is as follows:
           is concatenated c times to length cL >= W first.
 		  
         5. The embedded-domain positive test sequences are written in FASTA format
-           to the `<benchmark_prefix>.fa` file. Details of how they were 
+           to the `<benchmark_prefix>.test.fa` file. Details of how they were 
            constructed (where all the sequence segments came from) are 
            written to the `<benchmark_prefix>.pos` file.
 
@@ -311,18 +311,18 @@ construction protocol, the procedure is as follows:
 	 4. Synthesize the five nonhomologous sequences as above.
 
    The test sequences are appended in FASTA format to the 
-   `<benchmark_prefix>.fa` file. Details of how they were constructed
+   `<benchmark_prefix>.test.fa` file. Details of how they were constructed
    (where all the sequence segments came from) are written to the
    `<benchmark_prefix>.neg` file.
      
 
-## 2. Format of the output files (.msa, .fa, .tbl, .pos, .neg)
+## 2. Format of the output files (.train.msa, .test.fa, .tbl, .pos, .neg)
 
-The `<basepfx>.msa` file is a Stockholm file containing all the query
+The `<basepfx>.train.msa` file is a Stockholm file containing all the query
 alignments in the training set. The name of each alignment is
 unchanged from the original.
 
-The `<basepfx>.fa` file is a FASTA file containing the positive and
+The `<basepfx>.test.fa` file is a FASTA file containing the positive and
 negative test sequences in the test set.
 
 
@@ -366,6 +366,16 @@ In more detail, these 11 fields are:
 | `nS`                | number of seqs in training set S, if split succeeded; else 0 |
 | `nT`                | number of seqs in test set T, if split succeeded; else 0 |
 | `npos`              | number of synthetic positive seqs created from test domains |
+
+
+The "ok" vs. "FAIL" flag has a subtly different meaning in default
+vs. `--onlysplit` modes. With `--onlysplit`, "ok" means that the split
+succeeded. Without `--onlysplit`, "ok" means that the split succeeded
+and we successfully generated positive test sequences for this family
+(and the query training MSA, of course). If you want to filter the
+.tbl file for MSAs that are usable in a benchmark, rather than just
+seeing the status of all MSAs we _tried_ to use, you can filter on
+field 8 being "ok". That's what the pmark_master.py script does.
 
 
 ### Format of .pos output file
@@ -449,7 +459,7 @@ sequences.
 | Number of query alignments: |  `wc -l <benchmark_prefix>.tbl` |
 | Number of positives:        |  `wc -l <benchmark_prefix>.pos` |
 | Number of negatives:        |  `wc -l <benchmark_prefix>.neg` |
-| Test sequence length dist:  |  `esl-seqstat <benchmark_prefix>.fa` |
+| Test sequence length dist:  |  `esl-seqstat <benchmark_prefix>.test.fa` |
 | # of training seqs:         |  `avg -f6 <benchmark_prefix>.tbl`    |
 | # of test seqs:             |  `avg -f8 <benchmark_prefix>.tbl`    |
 
@@ -482,7 +492,7 @@ script> on each of these subtables.
 The jobs in SGE are named <resultdir>.<i>.
 
 The <benchmark script> is passed 7 arguments:
- <top_builddir> <top_srcdir> <resultdir> <subtbl> <benchmark_prefix.msa> <benchmark_prefix.fa> <outfile>
+ <top_builddir> <top_srcdir> <resultdir> <subtbl> <benchmark_prefix.train.msa> <benchmark_prefix.test.fa> <outfile>
 where <subtbl> is <resultdir>/tbl.<i> (the list of queries this
 parallelized instance of the benchmark driver is supposed to process), 
 and <outfile> is a file named <resultdir>/tbl<i>.out.
@@ -523,18 +533,18 @@ A driver script gets the 7 arguments as described above:
 	                  lists the query alignments this instantiation
 			  of the driver is supposed to work on.
 
- <benchmark_prefix.msa> : the benchmark's MSA file; query alignments named
+ <benchmark_prefix.train.msa> : the benchmark's MSA file; query alignments named
                           in <subtbl> will be esl-alifetch'ed from here.
 
-  <benchmark_prefix.fa> : the benchmark's positive and negative sequences;
+  <benchmark_prefix.test.fa> : the benchmark's positive and negative sequences;
                           this will be used as the target database for
 			  searches the driver runs. 
 
                           As a special case (i.e. hack), iterative
 			  search benchmarks may look for related
-			  files, such as <benchmark_prefix.fa.iter>, a
+			  files, such as <benchmark_prefix.test.fa.iter>, a
 			  sequence database to iterate on first before
-			  running on <benchmark_prefix.fa>.
+			  running on <benchmark_prefix.test.fa>.
 
               <outfile> : a whitespace-delimited tabular output file, 
                           one line per target sequence, described below.

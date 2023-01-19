@@ -32,6 +32,7 @@
 #include "easel.h"
 #include "esl_alphabet.h"
 #include "esl_cluster.h"
+#include "esl_composition.h"
 #include "esl_distance.h"
 #include "esl_getopts.h"
 #include "esl_iset.h"
@@ -171,6 +172,7 @@ typedef struct {
   int             max_comparisons; // max # of pairwise comparisons to allow in XAvgSubsetConnectivity() before switching to sampling
 
   ESL_ALPHABET   *abc;           // digital sequence alphabet
+  double         *fq;            // background residue frequencies, for iid random generation
 } PM_CONFIG;
 
 
@@ -227,6 +229,7 @@ destroy_config(PM_CONFIG *cfg)
 
     esl_randomness_Destroy(cfg->rng);
     esl_alphabet_Destroy(cfg->abc);
+    free(cfg->fq);
     free(cfg);
   }
 }
@@ -292,7 +295,8 @@ create_config(char *argv0, ESL_GETOPTS *go)
   if      (esl_opt_GetBoolean(go, "--amino")) cfg->abc = esl_alphabet_Create(eslAMINO);
   else if (esl_opt_GetBoolean(go, "--dna"))   cfg->abc = esl_alphabet_Create(eslDNA);
   else if (esl_opt_GetBoolean(go, "--rna"))   cfg->abc = esl_alphabet_Create(eslRNA);
-  else                                        cfg->abc = NULL;
+  else                                        cfg->abc = NULL;  // by default, we don't know alphabet until we see the open msafile
+  cfg->fq = NULL;                                               // ... and therefore we won't allocate or set iid bg fq's until we're in open_iofiles
 
   cfg->do_onlysplit = esl_opt_GetBoolean(go, "--onlysplit");
   cfg->do_speedtest = esl_opt_GetBoolean(go, "--speedtest");
@@ -303,6 +307,8 @@ create_config(char *argv0, ESL_GETOPTS *go)
   /* Configuration problems too complex to be detected by ESL_GETOPTS */
   if (cfg->seq_mu < cfg->dom_mu)
     cmdline_failure(argv0, "You want to set the mu for seq length larger than for domain length,\nwhen you use the --smu or --dmu options.\n");
+  if (! cfg->do_single && cfg->min_test < 2)
+    cmdline_failure(argv0, "Default (without --single) embeds two domains per synthetic positive seq; --mintest must be >= 2.\n");  
 
   return cfg;
 
@@ -319,11 +325,16 @@ open_iofiles(PM_CONFIG *cfg, const char *basename, const char *msafile, const ch
   char outfile[256];                    // constructed name of an output file, <basename>.suffix
   int  status;
  
-  /* default config has cfg->abc = NULL and we'll get the alphabet from the msafile;
+  /* default config has cfg->abc = NULL and we get the alphabet from the msafile;
    * but alphabet may have been asserted, in which case cfg->abc is already the alphabet
    */
   status = esl_msafile_Open(&(cfg->abc), msafile, /*env:*/NULL, alifmt, /*fmtdata:*/NULL, &(cfg->afp));
   if (status != eslOK) esl_msafile_OpenFailure(cfg->afp, status);
+
+  /* only now are we sure that we have the alphabet set; now we can initialize cfg->fq background frequencies */
+  ESL_ALLOC(cfg->fq, sizeof(double) * cfg->abc->K);
+  if (cfg->abc->type == eslAMINO) esl_composition_SW34(cfg->fq);
+  else                            esl_vec_DSet(cfg->fq, cfg->abc->K, 1.0 / (double) cfg->abc->K);
 
   if (! cfg->do_onlysplit)
     {
@@ -366,7 +377,10 @@ open_iofiles(PM_CONFIG *cfg, const char *basename, const char *msafile, const ch
       if (snprintf(outfile, 256, "%s.neg", basename) >= 256)  esl_fatal("Failed to construct output negatives table file name");
       if ((cfg->out_negtbl = fopen(outfile, "w"))    == NULL) esl_fatal("Failed to open output negatives table file %s", outfile);
     }
+  return;
 
+ ERROR:
+  esl_fatal("allocation failed");
 }
 /***********  end, command line processing ***********************/
 
@@ -878,7 +892,16 @@ set_random_segment(const PM_CONFIG *cfg, FILE *logfp, int W, ESL_DSQ *dsqp)
    * Since we're making the seq left to right, we only need to replace at -1.
    */
   x = dsqp[-1];  dsqp[-1] = dsqp[W] = eslDSQ_SENTINEL;
-  esl_rsq_XShuffle(cfg->rng, dsqp-1, W, dsqp-1);
+
+  if      (cfg->which_shuf == pmMONOSHUFFLE) esl_rsq_XShuffle  (cfg->rng, dsqp-1, W,               dsqp-1);
+  else if (cfg->which_shuf == pmDISHUFFLE) {
+    if (W < cfg->minDPL)                     esl_rsq_XShuffle  (cfg->rng, dsqp-1, W,               dsqp-1);
+    else                                     esl_rsq_XShuffleDP(cfg->rng, dsqp-1, W, cfg->abc->Kp, dsqp-1);
+  }
+  else if (cfg->which_shuf == pmMARKOV0)     esl_rsq_XMarkov0  (cfg->rng, dsqp-1, W, cfg->abc->Kp, dsqp-1);
+  else if (cfg->which_shuf == pmMARKOV1)     esl_rsq_XMarkov1  (cfg->rng, dsqp-1, W, cfg->abc->Kp, dsqp-1);
+  else if (cfg->which_shuf == pmREVERSE)     esl_rsq_XReverse  (          dsqp-1, W,               dsqp-1);
+  else if (cfg->which_shuf == pmIID)         esl_rsq_xIID      (cfg->rng, cfg->fq, cfg->abc->K, W, dsqp-1);
   dsqp[-1]  = x;
 
   esl_sq_Destroy(sq);
