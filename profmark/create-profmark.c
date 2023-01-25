@@ -18,13 +18,13 @@
  *        [for each MSA:]
  *           process_msa
  *              remove_fragments
- *              train_test_by_cluster        | train_test_by_iset
- *                 split_msa_by_cluster           split_msa_by_iset
- *                 filter_msa_by_cluster x2       filter_msa_by_iset x2
+ *              train_test_by_iset        | train_test_by_cluster
+ *                 split_msa_by_iset      |     split_msa_by_cluster
+ *                 filter_msa_by_iset x2  |     filter_msa_by_cluster x2
  *              validate_split
- *        synthesize_twodom_negatives | synthesize_onedom_negatives   
- *           embed_two                     embed_one  
- *           set_random_segment x5         set_random_segment x3
+ *        synthesize_onedom_negatives   |  synthesize_twodom_negatives 
+ *           embed_one                  |     embed_two  
+ *           set_random_segment x3      |     set_random_segment x5
  */
 #include <stdio.h>
 #include <string.h>
@@ -52,12 +52,12 @@
 static char banner[] = "construct a benchmark profile training/test set";
 static char usage[]  = "[options] <basename> <msafile> <seqdb>\n     (with --onlysplit, omit <seqdb>)";
 
-#define pmSPLIT_OPTS   "--cluster,--cobalt,--blue,--random"          // toggle group of training/testset-separating options
+#define pmSPLIT_OPTS   "--cobalt,--blue,--cluster,--random"          // toggle group of training/testset-separating options
 #define pmSHUFFLE_OPTS "--mono,--di,--markov0,--markov1,--reverse"   // toggle group of nonhomolog seq shuffling/generating options          
 
-typedef enum { pmCOBALT  = 0,
-               pmBLUE    = 1,
-               pmCLUSTER = 2,
+typedef enum { pmCLUSTER = 0,
+               pmCOBALT  = 1,
+               pmBLUE    = 2,
                pmRANDOM  = 3 } PM_SPLIT;
 
 typedef enum { pmMONOSHUFFLE = 0,
@@ -78,11 +78,11 @@ static ESL_OPTIONS options[] = {
 
   /* Options defining other characteristics of the benchmark */
   { "--fragthresh", eslARG_REAL,    "0.5", NULL, "0<=x<=1",      NULL, NULL, NULL,  "exclude sequence fragments with aspan/alen < x",            2 },
-  { "--mintrain",   eslARG_INT,       "1", NULL,     "n>0",      NULL, NULL, NULL,  "minimum number of training domains required per input MSA", 2 },
-  { "--mintest",    eslARG_INT,       "2", NULL,     "n>0",      NULL, NULL, NULL,  "minimum number of test domains required per input MSA",     2 }, // 2, because default is to make 2-domain synthetic positives
-  { "--maxtrain",   eslARG_INT,     FALSE, NULL,     "n>0",      NULL, NULL, NULL,  "maximum number of training domains taken per input MSA",    2 },
-  { "--maxtest",    eslARG_INT,     FALSE, NULL,     "n>0",      NULL, NULL, NULL,  "maximum number of test domains taken per input MSA",        2 },
-  { "--single",     eslARG_NONE,    FALSE, NULL,      NULL,      NULL, NULL, NULL,  "embed one, not two domains in each positive",               2 },
+  { "--mintrain",   eslARG_INT,      "10", NULL,     "n>0",      NULL, NULL, NULL,  "minimum number of training domains required per input MSA", 2 },
+  { "--mintest",    eslARG_INT,       "2", NULL,     "n>0",      NULL, NULL, NULL,  "minimum number of test domains required per input MSA",     2 }, 
+  { "--maxtrain",   eslARG_INT,     FALSE, NULL,    "n>=0",      NULL, NULL, NULL,  "maximum number of training domains taken per input MSA",    2 },
+  { "--maxtest",    eslARG_INT,      "10", NULL,    "n>=0",      NULL, NULL, NULL,  "maximum number of test domains taken per input MSA",        2 },
+  { "--double",     eslARG_NONE,    FALSE, NULL,      NULL,      NULL, NULL, NULL,  "embed two, not one domain in each positive",                2 },
 
   /* Options controlling choice of method for splitting into testing and training sets  */
   { "--cobalt",     eslARG_NONE,"default", NULL,      NULL,  pmSPLIT_OPTS, NULL, NULL,  "greedy algorithm with random order",                    3 },
@@ -93,7 +93,7 @@ static ESL_OPTIONS options[] = {
   /* Other options controlling splitting/filtering method */
   { "--bestof",      eslARG_INT,     NULL, NULL,     "n>0",      NULL, NULL,       "--cluster,--firstof", "output best of n runs of an iset splitting algorithm",     4 },
   { "--firstof",     eslARG_INT,     NULL, NULL,     "n>0",      NULL, NULL,       "--cluster,--bestof",  "output first passing split, try at most n times",          4 },
-  { "--rp",         eslARG_REAL,   "0.75", NULL,"0<x<=1.0",      NULL, "--random", NULL,                  "set prob to put seq in training set with --random split",  4 },
+  { "--rp",          eslARG_REAL,  "0.75", NULL,"0<x<=1.0",      NULL, "--random", NULL,                  "set prob to put seq in training set with --random split",  4 },
 
   /* Options controlling choice of method for nonhomologous segment randomization */
   { "--mono",      eslARG_NONE,"default", NULL,       NULL, pmSHUFFLE_OPTS, NULL, NULL,  "shuffle preserving monoresidue composition",                5 },
@@ -116,15 +116,15 @@ static ESL_OPTIONS options[] = {
   { "--rna",       eslARG_NONE,    FALSE, NULL, NULL, NULL, NULL, "--amino,--dna",  "<msafile> contains RNA alignments",     7 },
 
   /* Other options I will probably organize better someday */
-  { "--onlysplit", eslARG_NONE,    FALSE, NULL, NULL, NULL, NULL, NULL, "split to MSAs (.{train/test}.msa); don't make +/- seqs; no <seqfile> arg", 8 },
-  { "--speedtest", eslARG_NONE,    FALSE, NULL, NULL, NULL, NULL, NULL, "don't compute expensive avgid/avgconn statistics for .tbl file",           8 },
+  { "--onlysplit", eslARG_NONE,    FALSE, NULL, NULL, NULL, NULL, NULL, "split to .{train/test}.msa, no +/- seqs, no <seqfile> arg",      8 },
+  { "--speedtest", eslARG_NONE,    FALSE, NULL, NULL, NULL, NULL, NULL, "don't compute expensive avgid/avgconn statistics for .tbl file", 8 },
   { 0,0,0,0,0,0,0,0,0,0 },
 };
   
 /* PM_CONFIG
  *
- * I think you can't make this const. It contains things that keep a
- * dynamic state: the RNG, and open i/o files.
+ * Don't make this const. It contains things that have dynamic state:
+ * RNG, open i/o files.
  */
 typedef struct {
   ESL_MSAFILE    *afp;           // open MSA database for training/test splits
@@ -149,7 +149,7 @@ typedef struct {
   int             min_ntest;    //           ...  of test 
   int             max_ntrain;   // maximum number of training domains per input alignment; 0=unlimited/option not turned on
   int             max_ntest;    //           ...  of test
-  int             do_single;    // embed one instead of two domains in each positive
+  int             do_double;    // embed two instead of one domain in each positive
 
   PM_SPLIT        which_algo;   // default: pmCOBALT;      or pmBLUE | pmCLUSTER | pmRANDOM
   PM_SHUFFLE      which_shuf;   // default: pmMONOSHUFFLE; or pmDISHUFFLE | pmMARKOV0 | pmMARKOV1 | pmREVERSE | pmIID
@@ -166,7 +166,6 @@ typedef struct {
   int             minDPL;       // when using dishuffling option, for any shuffled segment < this length, use monoshuffling instead
 
   int             do_onlysplit;  // if TRUE, only split to MSA outputs .{train/test}.msa. Don't generate pos/neg seqs.
-  int             do_onlytbl;    // if TRUE, only output the summary .tbl file, not .msa|.fa seqfiles or .pos|.neg tables.
   int             do_speedtest;  // if TRUE, skip expensive avgid/avgconn statistics for the .tbl file, just write 0
 
   int             max_comparisons; // max # of pairwise comparisons to allow in XAvgSubsetConnectivity() before switching to sampling
@@ -204,7 +203,7 @@ static void
 cmdline_failure(char *argv0, char *format, ...)
 {
   va_list argp;
-  printf("There's a problem with those command line settings:\n"); 
+  printf("There's a problem with your command line:\n"); 
   va_start(argp, format);
   vfprintf(stderr, format, argp);
   va_end(argp);
@@ -265,7 +264,7 @@ create_config(char *argv0, ESL_GETOPTS *go)
   cfg->min_ntest   = esl_opt_GetInteger(go, "--mintest");
   cfg->max_ntrain  = (esl_opt_IsOn(go, "--maxtrain") ? esl_opt_GetInteger(go, "--maxtrain") : 0);
   cfg->max_ntest   = (esl_opt_IsOn(go, "--maxtest")  ? esl_opt_GetInteger(go, "--maxtest")  : 0);
-  cfg->do_single   = esl_opt_GetBoolean(go, "--single");
+  cfg->do_double   = esl_opt_GetBoolean(go, "--double");
 
   if      (esl_opt_GetBoolean(go, "--cobalt"))   cfg->which_algo = pmCOBALT;
   else if (esl_opt_GetBoolean(go, "--blue"))     cfg->which_algo = pmBLUE;
@@ -302,14 +301,13 @@ create_config(char *argv0, ESL_GETOPTS *go)
   cfg->do_speedtest = esl_opt_GetBoolean(go, "--speedtest");
 
   /* Configuration that is currently not runtime-configurable */
-  cfg->max_comparisons = 1000; // 10000; SRE TK
+  cfg->max_comparisons = 10000; // [xref 2022/0725-avgpid-by-sampling]
 
   /* Configuration problems too complex to be detected by ESL_GETOPTS */
   if (cfg->seq_mu < cfg->dom_mu)
     cmdline_failure(argv0, "You want to set the mu for seq length larger than for domain length,\nwhen you use the --smu or --dmu options.\n");
-  if (! cfg->do_single && cfg->min_ntest < 2)
-    cmdline_failure(argv0, "Default (without --single) embeds two domains per synthetic positive seq; --mintest must be >= 2.\n");  
-
+  if (cfg->do_double && cfg->min_ntest < 2)
+    cmdline_failure(argv0, "--double embeds two domains per synthetic positive seq; --mintest must be >= 2.\n");  
   return cfg;
 
  ERROR:
@@ -346,7 +344,8 @@ open_iofiles(PM_CONFIG *cfg, const char *basename, const char *msafile, const ch
       else if (status != eslOK)        esl_fatal("Open failed, code %d.", status);
 
       /* Open its SSI index */
-      if (esl_sqfile_OpenSSI(cfg->dbfp, NULL) != eslOK)  esl_fatal("Failed to open SSI index file");  // <NULL> means no optional ssi filename; use the default <dbfile>.ssi
+      if (esl_sqfile_OpenSSI(cfg->dbfp, NULL) != eslOK)   // <NULL> means no optional ssi filename; use the default <dbfile>.ssi
+        esl_fatal("Failed to find an SSI index %s.ssi for <seqdb>\nUse `esl-sfetch --index %s` to create the SSI index file", dbfile, dbfile);
       cfg->dbssi   = cfg->dbfp->data.ascii.ssi;
       cfg->db_nseq = cfg->dbssi->nprimary;
     }
@@ -1189,42 +1188,42 @@ validate_split(PM_CONFIG *cfg, const ESL_MSA *msa, const int *S, int nS, const i
     for (j = 0; j < nT; j++)
       {
         if (S[i] == T[j])   // self comparison would have given 100% identity anyway, but may as well check
-          esl_fatal("training/test sets not disjoint: %d in both (%s)", S[i], msa->sqname[S[i]]);
+          esl_fatal("training/test sets for %s not disjoint: %d in both (%s)", msa->name, S[i], msa->sqname[S[i]]);
 
         esl_dst_XPairId(cfg->abc, msa->ax[S[i]], msa->ax[T[j]], &pid, /*opt_nid=*/NULL, /*opt_n=*/NULL); // deliberately not using is_linked(), to doublecheck
         if (pid > cfg->idthresh1)
-          esl_fatal("training/test set have a pair at %.3f identity: %d and %d (%s and %s)",
-                    pid, S[i], T[j], msa->sqname[S[i]], msa->sqname[T[j]]);
+          esl_fatal("training/test set for %s have a pair at %.3f identity: %d and %d (%s and %s)",
+                    msa->name, pid, S[i], T[j], msa->sqname[S[i]], msa->sqname[T[j]]);
       }
 
   /* Test set obeys size thresholds, has no duplicates, and if idthresh2 is set, no pair > idthresh2 */
-  if (cfg->min_ntest > 0 && nT < cfg->min_ntest) esl_fatal("test set too small (%d < %d)", nT, cfg->min_ntest);
-  if (cfg->max_ntest > 0 && nT > cfg->max_ntest) esl_fatal("test set too large (%d > %d)", nT, cfg->max_ntest);
+  if (cfg->min_ntest > 0 && nT < cfg->min_ntest) esl_fatal("test set for %s too small (%d < %d)", msa->name, nT, cfg->min_ntest);
+  if (cfg->max_ntest > 0 && nT > cfg->max_ntest) esl_fatal("test set for %s too large (%d > %d)", msa->name, nT, cfg->max_ntest);
   for (i = 0; i < nT; i++)
     for (j = i+1; j < nT; j++)
       {
         if (T[i] == T[j])
-          esl_fatal("test set has a duplicate: %d appears twice (%s)", T[i], msa->sqname[T[i]]);
+          esl_fatal("test set for %s has a duplicate: %d appears twice (%s)", msa->name, T[i], msa->sqname[T[i]]);
         
         esl_dst_XPairId(cfg->abc, msa->ax[T[i]], msa->ax[T[j]], &pid, /*opt_nid=*/NULL, /*opt_n=*/NULL); 
         if (cfg->idthresh2 < 1.0 && pid > cfg->idthresh2)
-          esl_fatal("test set contains a pair at %.3f identity: %d and %d (%s and %s)",
-                    pid, T[i], T[j], msa->sqname[T[i]], msa->sqname[T[j]]);
+          esl_fatal("test set for %s contains a pair at %.3f identity: %d and %d (%s and %s)",
+                    msa->name, pid, T[i], T[j], msa->sqname[T[i]], msa->sqname[T[j]]);
       }
 
   /* Same, for training set and idthresh3 */
-  if (cfg->min_ntest > 0 && nS < cfg->min_ntrain) esl_fatal("training set too small (%d < %d)", nS, cfg->min_ntrain);
-  if (cfg->max_ntest > 0 && nS > cfg->max_ntrain) esl_fatal("training set too large (%d > %d)", nS, cfg->max_ntrain);
+  if (cfg->min_ntrain > 0 && nS < cfg->min_ntrain) esl_fatal("training set for %s too small (%d < %d)", msa->name, nS, cfg->min_ntrain);
+  if (cfg->max_ntrain > 0 && nS > cfg->max_ntrain) esl_fatal("training set for %s too large (%d > %d)", msa->name, nS, cfg->max_ntrain);
   for (i = 0; i < nS; i++)
     for (j = i+1; j < nS; j++)
       {
         if (S[i] == S[j])
-          esl_fatal("training set has a duplicate: %d appears twice (%s)", S[i], msa->sqname[S[i]]);
+          esl_fatal("training set for %s has a duplicate: %d appears twice (%s)", msa->name, S[i], msa->sqname[S[i]]);
         
         esl_dst_XPairId(cfg->abc, msa->ax[S[i]], msa->ax[S[j]], &pid, /*opt_nid=*/NULL, /*opt_n=*/NULL); 
         if (cfg->idthresh3 < 1.0 && pid > cfg->idthresh3)
-          esl_fatal("training set contains a pair at %.3f identity: %d and %d (%s and %s)",
-                    pid, S[i], S[j], msa->sqname[S[i]], msa->sqname[S[j]]);
+          esl_fatal("training set for %s contains a pair at %.3f identity: %d and %d (%s and %s)",
+                    msa->name, pid, S[i], S[j], msa->sqname[S[i]], msa->sqname[S[j]]);
       }
 }
 
@@ -1299,8 +1298,8 @@ process_msa(PM_CONFIG *cfg, ESL_MSA *msa, int *tot_npos)
   else if (status == eslFAIL) split_success = FALSE;
   else     esl_fatal("unexpected error in train/test splitting");
 
-  esl_vec_IShuffle(cfg->rng, S, nS);  if (cfg->max_ntrain) nS = cfg->max_ntrain;  // because we just shuffled, downsampling is simple
-  esl_vec_IShuffle(cfg->rng, T, nT);  if (cfg->max_ntest)  nT = cfg->max_ntest; 
+  esl_vec_IShuffle(cfg->rng, S, nS);  if (cfg->max_ntrain) nS = ESL_MIN(nS, cfg->max_ntrain);  // because we just shuffled, downsampling is simple
+  esl_vec_IShuffle(cfg->rng, T, nT);  if (cfg->max_ntest)  nT = ESL_MIN(nT, cfg->max_ntest); 
 
 #if eslDEBUGLEVEL >= 1      // validation is expensive too; only do it in debugging code, not production
   if (split_success) validate_split(cfg, msa, S, nS, T, nT);
@@ -1317,8 +1316,8 @@ process_msa(PM_CONFIG *cfg, ESL_MSA *msa, int *tot_npos)
     {
       write_msa_subset(cfg->out_train, msa, S, nS);
 
-      if (cfg->do_single) synthesize_onedom_positives(cfg, msa, T, nT, tot_npos);
-      else                synthesize_twodom_positives(cfg, msa, T, nT, tot_npos);
+      if (cfg->do_double) synthesize_twodom_positives(cfg, msa, T, nT, tot_npos);
+      else                synthesize_onedom_positives(cfg, msa, T, nT, tot_npos);
     }
 
   fprintf(cfg->out_tbl, "%-20s %6d %6" PRId64 " %6d %3.0f%% %3.0f%% %3d %4s %6d %6d %6d\n",
@@ -1371,8 +1370,8 @@ main(int argc, char **argv)
   if (status != eslEOF) esl_msafile_ReadFailure(cfg->afp, status);
 
   if (! cfg->do_onlysplit) {
-    if (cfg->do_single) synthesize_onedom_negatives(cfg);
-    else                synthesize_twodom_negatives(cfg);
+    if (cfg->do_double) synthesize_twodom_negatives(cfg);
+    else                synthesize_onedom_negatives(cfg);
   }
 
   destroy_config(cfg);  // includes closing io files
