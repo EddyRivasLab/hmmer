@@ -43,7 +43,7 @@ typedef struct queue_data_shard_s {
   int            dbx;         /* database index to search       */
   int            inx;         /* sequence index to start search */
   int            cnt;         /* number of sequences to search  */
-
+  char           *optsstring; /* Options string used to create the search-specific options*/
 } QUEUE_DATA_SHARD;
 
 #endif /*P7_HMMPGMD_SHARD_INCLUDED*/

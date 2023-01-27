@@ -140,6 +140,7 @@ extern int  process_searchopts(int fd, char *cmdstr, ESL_GETOPTS **ret_opts);
 extern void worker_process(ESL_GETOPTS *go);
 extern void master_process(ESL_GETOPTS *go);
 
+void p7_search_stats_Destroy(HMMD_SEARCH_STATS *obj);
 extern int p7_hmmd_search_stats_Serialize(const HMMD_SEARCH_STATS *obj, uint8_t **buf, uint32_t *n, uint32_t *nalloc);
 extern int p7_hmmd_search_stats_Deserialize(const uint8_t *buf, uint32_t *pos, HMMD_SEARCH_STATS *ret_obj);
 

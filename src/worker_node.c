@@ -21,6 +21,7 @@
 
 // Forward declarations for static functions
 static int worker_thread_front_end_sequence_search_loop(P7_SERVER_WORKERNODE_STATE *workernode, uint32_t my_id);
+static int worker_thread_front_end_hmm_search_loop(P7_SERVER_WORKERNODE_STATE *workernode, uint32_t my_id);
 static void worker_thread_back_end_sequence_search_loop(P7_SERVER_WORKERNODE_STATE *workernode, uint32_t my_id);
 static void workernode_increase_backend_threads(P7_SERVER_WORKERNODE_STATE *workernode);
 static P7_BACKEND_QUEUE_ENTRY *workernode_backend_pool_Create(int num_entries, ESL_GETOPTS *go);
@@ -1038,7 +1039,7 @@ void p7_server_workernode_main(int argc, char **argv, int my_rank, MPI_Datatype 
         char *optsstring;
         ESL_ALLOC(optsstring, the_command.options_length);
         MPI_Bcast(optsstring, the_command.options_length, MPI_CHAR, 0, MPI_COMM_WORLD);
-
+printf("Worker saw optsstring of %s\n", optsstring);
         // Update getopts structure in workernode
         if (workernode->commandline_options != NULL){
           esl_getopts_Destroy(workernode->commandline_options);

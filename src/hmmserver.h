@@ -41,7 +41,10 @@ static ESL_OPTIONS server_Client_Options[] = {
   /* Interface with server */
   { "-s",           eslARG_STRING,   "localhost", NULL, NULL,    NULL,  NULL,  NULL,            "name of the machine running hmmserver (default localhost)",                         8 },
   { "--cport",      eslARG_INT,     "51371",  NULL, "49151<n<65536",NULL,  NULL,  "--worker",      "port to use for client/server communication",                 12 },
-  { "--db",           eslARG_STRING,   "1", NULL, NULL,    NULL,  NULL,  NULL,            "number of the database to search (default 1)",                         8 },
+  { "--db",           eslARG_INT,   "-1", NULL, NULL,    NULL,  NULL,  NULL,            "number of the database to search (default 1)",                         8 },
+  // seqdb and hmmdb provided only for backward compatibility, will be removed
+  { "--seqdb",           eslARG_INT,   "-1", NULL, NULL,    NULL,  NULL,  NULL,            "number of the database to search (default 1)",                         8 },
+  { "--hmmdb",           eslARG_INT,   "-1", NULL, NULL,    NULL,  NULL,  NULL,            "number of the database to search (default 1)",                         8 },
       /* Control of output */
   { "-o",           eslARG_OUTFILE, NULL, NULL, NULL,    NULL,  NULL,  NULL,            "direct output to file <f>, not stdout",                        2 },
   { "-A",           eslARG_OUTFILE, NULL, NULL, NULL,    NULL,  NULL,  NULL,            "save multiple alignment of all hits to file <f>",              2 },

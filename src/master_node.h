@@ -11,7 +11,23 @@ typedef char MPI_Status;
 //! Hack to get the code to compile when we build without MPI support, is #ifdefed out when we have MPI
 typedef char MPI_Datatype;
 #endif
+// data structure used to hold a pending search operation on the master node
+typedef struct p7_server_queue_data_s {
+  uint32_t       cmd_type;    /* type of command to perform     */
+  uint32_t       query_type;  /* type of the query              */
+  P7_HMM        *hmm;         /* query HMM                      */
+  ESL_SQ        *seq;         /* query sequence                 */
+  ESL_ALPHABET  *abc;         /* digital alphabet               */
+  ESL_GETOPTS   *opts;        /* search specific options        */
 
+  int            sock;        /* socket descriptor of client    */
+  char           ip_addr[64];
+
+  int            dbx;         /* database index to search       */
+  int            inx;         /* sequence index to start search */
+  int            cnt;         /* number of sequences to search  */
+  char           *optsstring; /* Options string used to create the search-specific options*/
+} P7_SERVER_QUEUE_DATA;
 
 //! Data structure that the main thread uses to receive messages and pass them to the hit processing thread
 typedef struct p7_server_message{

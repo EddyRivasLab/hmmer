@@ -60,7 +60,7 @@ process_commandline(int argc, char **argv, ESL_GETOPTS **ret_go, char **ret_quer
 {
   ESL_GETOPTS *go = esl_getopts_Create(server_Client_Options);
   int          status;
-
+  int dbx = 0;
   if (esl_opt_ProcessEnvironment(go)         != eslOK)  { if (printf("Failed to process environment: %s\n", go->errbuf) < 0) ESL_XEXCEPTION_SYS(eslEWRITE, "write failed"); goto FAILURE; }
   if (esl_opt_ProcessCmdline(go, argc, argv) != eslOK)  { if (printf("Failed to parse command line: %s\n",  go->errbuf) < 0) ESL_XEXCEPTION_SYS(eslEWRITE, "write failed"); goto FAILURE; }
   if (esl_opt_VerifyConfig(go)               != eslOK)  { if (printf("Failed to parse command line: %s\n",  go->errbuf) < 0) ESL_XEXCEPTION_SYS(eslEWRITE, "write failed"); goto FAILURE; }
@@ -95,7 +95,28 @@ process_commandline(int argc, char **argv, ESL_GETOPTS **ret_go, char **ret_quer
 
   if (esl_opt_ArgNumber(go)                  != 1)     { if (puts("Incorrect number of command line arguments.")      < 0) ESL_XEXCEPTION_SYS(eslEWRITE, "write failed"); goto FAILURE; }
   if ((*ret_query= esl_opt_GetArg(go, 1)) == NULL)  { if (puts("Failed to get <queryfile> argument on command line") < 0) ESL_XEXCEPTION_SYS(eslEWRITE, "write failed"); goto FAILURE; }
-  *ret_db = esl_opt_GetString (go, "--db");
+  if (esl_opt_IsUsed(go, "--db")) {
+      dbx = esl_opt_GetInteger(go, "--db");
+    } 
+  if (esl_opt_IsUsed(go, "--seqdb")) {
+      if(dbx != 0){
+        p7_Die("Error: exactly one of --db, --seqdb, and --hmmdb must be specified");
+      }
+      dbx = esl_opt_GetInteger(go, "--seqdb");
+     }
+  if (esl_opt_IsUsed(go, "--hmmdb")) {
+      if(dbx != 0){
+        p7_Die("Error: exactly one of --db, --seqdb, and --hmmdb must be specified");
+      }
+      dbx = esl_opt_GetInteger(go, "--hmmdb");
+  }
+  if (dbx == 0){
+    dbx = 1;  //Default to searching first database
+  }
+  ESL_ALLOC(*ret_db, (int)log10(dbx) +2); // +2 for end-of-string character and because most logs are non-integer
+  // and round down6
+
+  sprintf(*ret_db, "%d", esl_opt_GetInteger (go, "--db"));
   *ret_go = go;
   return eslOK;
   
@@ -190,7 +211,6 @@ main(int argc, char **argv)
   HMMD_SEARCH_STATS   *stats;
   HMMD_SEARCH_STATUS   sstatus;
   struct sockaddr_in   serv_addr;
-  P7_HMM          *hmm     = NULL;        /* query HMM                       */
   ESL_SQ          *sq      = NULL;        /* one target sequence (digital)   */
   ESL_ALPHABET    *abc     = NULL;        /* digital alphabet                */
   int textw = 0;
@@ -301,6 +321,7 @@ main(int argc, char **argv)
     strcat(cmd, "//\n");
   }
   n = strlen(cmd);
+  printf("sending %s to server\n", cmd);
   if (writen(sock, cmd, n) != n) {
     p7_Fail("[%s:%d] write (size %" PRIu64 ") error %d - %s\n", __FILE__, __LINE__, n, errno, strerror(errno));
     exit(1);
@@ -332,7 +353,6 @@ main(int argc, char **argv)
     }
 
     if (abc) esl_alphabet_Destroy(abc);
-    if (hmm) p7_hmm_Destroy(hmm);
     if (sq)  esl_sq_Destroy(sq);
     free(ebuf);
     p7_Fail("ERROR (%d): %s\n", sstatus.status, ebuf);
@@ -421,7 +441,8 @@ main(int argc, char **argv)
     }
     th->hit[i] = &(th->unsrt[i]);  
   }
-
+  free(buf);
+  p7_search_stats_Destroy(stats);
 // ok, we've received all the hits.  Now, display them.
   FILE *ofp = stdout; 
   FILE *afp = NULL;
@@ -441,9 +462,9 @@ main(int argc, char **argv)
   p7_tophits_Targets(ofp, th, pli, textw); if (fprintf(ofp, "\n\n") < 0) ESL_EXCEPTION_SYS(eslEWRITE, "write failed");
   p7_tophits_Domains(ofp, th, pli, textw); if (fprintf(ofp, "\n\n") < 0) ESL_EXCEPTION_SYS(eslEWRITE, "write failed");
 
-  if (tblfp)     p7_tophits_TabularTargets(tblfp,    hmm->name, hmm->acc, th, pli, 1);
-  if (domtblfp)  p7_tophits_TabularDomains(domtblfp, hmm->name, hmm->acc, th, pli, 1);
-  if (pfamtblfp) p7_tophits_TabularXfam(pfamtblfp, hmm->name, hmm->acc, th, pli);
+  if (tblfp)     p7_tophits_TabularTargets(tblfp,    "", "", th, pli, 1);
+  if (domtblfp)  p7_tophits_TabularDomains(domtblfp, "", "", th, pli, 1);
+  if (pfamtblfp) p7_tophits_TabularXfam(pfamtblfp, "", "", th, pli);
   
   esl_stopwatch_Stop(w);
   p7_pli_Statistics(ofp, pli, w);
@@ -454,10 +475,10 @@ main(int argc, char **argv)
 	  ESL_MSA *msa = NULL;
 
 	  if (p7_tophits_Alignment(th, abc, NULL, NULL, 0, p7_ALL_CONSENSUS_COLS, &msa) == eslOK){
-	    esl_msa_SetName     (msa, hmm->name, -1);
-	    esl_msa_SetAccession(msa, hmm->acc,  -1);
-	    esl_msa_SetDesc     (msa, hmm->desc, -1);
-	    esl_msa_FormatAuthor(msa, "hmmsearch (HMMER %s)", HMMER_VERSION);
+	    //esl_msa_SetName     (msa, hmm->name, -1);
+	    //esl_msa_SetAccession(msa, hmm->acc,  -1);
+	    //esl_msa_SetDesc     (msa, hmm->desc, -1);
+	    esl_msa_FormatAuthor(msa, "hmmclient (HMMER %s)", HMMER_VERSION);
 
 	    if (textw > 0) esl_msafile_Write(afp, msa, eslMSAFILE_STOCKHOLM);
 	    else           esl_msafile_Write(afp, msa, eslMSAFILE_PFAM);
@@ -477,18 +498,23 @@ main(int argc, char **argv)
 
 
 
+  // Note: queryfile doesn't need to be freed, it will point to a region of the stack
   esl_getopts_Destroy(go);
+  if(search_db) free(search_db);
   if(buffer) free(buffer);
   if(cmd) free(cmd);
+  esl_stopwatch_Destroy(w);
   if(optsstring) free(optsstring);
   if (abc) esl_alphabet_Destroy(abc);
-  if (hmm) p7_hmm_Destroy(hmm);
   if (sq)  esl_sq_Destroy(sq);
+  if(pli) p7_pipeline_Destroy(pli);
+  if(th) p7_tophits_Destroy(th);
   if (ofp != stdout) fclose(ofp);
   if (afp)           fclose(afp);
   if (tblfp)         fclose(tblfp);
   if (domtblfp)      fclose(domtblfp);
   if (pfamtblfp)     fclose(pfamtblfp);
+  freeaddrinfo(info);  // Clean up that data structure
 
   return status;
 ERROR:  

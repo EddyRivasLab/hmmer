@@ -18,6 +18,16 @@
 #include "hmmer.h"
 #include "hmmpgmd.h"
 
+/* Function: p7_hmmd_search_stats_Destroy
+   Synopsis: frees the memory used by a p7_hmmd_search_stats object 
+   Inputs:   obj, the object to be freed
+   Returns:  nothing
+*/
+void p7_search_stats_Destroy(HMMD_SEARCH_STATS *obj){
+  if(obj->hit_offsets) free(obj->hit_offsets);
+  free(obj);
+}
+
 /* Function:  p7_hmmd_search_stats_Serialize
  * Synopsis:  Serializes a HMMD_SEARCH_STATS object into a stream of bytes
  *.           that can be reliably transmitted over internet sockets
