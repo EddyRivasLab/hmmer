@@ -201,7 +201,12 @@ main(int argc, char **argv)
   ESL_ALLOC(cmd, MAX_READ_LEN);
   int rem = MAX_READ_LEN;
   int cmdlen = MAX_READ_LEN;
-  int eod = 0; 
+  int eod = 0;
+  int optslen;
+  char *query_name=NULL, *query_accession=NULL, *query_obj=NULL;
+  P7_HMM *query_hmm=NULL;
+  ESL_SQ *query_seq = NULL;
+  P7_HMMFILE      *hfp      = NULL;  
   int i;
   P7_PIPELINE     *pli     = NULL;
   P7_TOPHITS      *th      = NULL;
@@ -211,7 +216,6 @@ main(int argc, char **argv)
   HMMD_SEARCH_STATS   *stats;
   HMMD_SEARCH_STATUS   sstatus;
   struct sockaddr_in   serv_addr;
-  ESL_SQ          *sq      = NULL;        /* one target sequence (digital)   */
   ESL_ALPHABET    *abc     = NULL;        /* digital alphabet                */
   int textw = 0;
   ESL_STOPWATCH   *w;
@@ -267,14 +271,16 @@ main(int argc, char **argv)
   if(esl_opt_IsDefault(go, "--db")){//need to construct default database specifier
     strcpy(cmd, "@--db 1 ");
     rem -= 8;
+    optslen = 9 + strlen(optsstring);
   }
   else{//just need the starting @ symbol
     strcpy(cmd, "@");
     rem -=1;
     strcat(cmd, search_db);
     rem -= strlen(search_db);
+    optslen = 3 + strlen(search_db) + strlen(optsstring);
     strcat(cmd, " ");
-    rem -= 1;
+    rem -= 2;
   }
   
 
@@ -287,9 +293,10 @@ main(int argc, char **argv)
     cmdlen *=2;
   }
   
+
   strcat(cmd, optsstring);
   strcat(cmd, "\n");
-
+  
   while (!eod) {
     if (fgets(buffer, MAX_READ_LEN, qf) != NULL) {
         n = strlen(buffer);
@@ -320,13 +327,39 @@ main(int argc, char **argv)
     cmdlen +=3; 
     strcat(cmd, "//\n");
   }
-  n = strlen(cmd);
-  printf("sending %s to server\n", cmd);
+  char *cmdend = strstr(cmd, "//");
+  n = (cmdend - cmd) + 3;
+  printf("sending %s to server, length %d\n", cmd, n);
   if (writen(sock, cmd, n) != n) {
     p7_Fail("[%s:%d] write (size %" PRIu64 ") error %d - %s\n", __FILE__, __LINE__, n, errno, strerror(errno));
     exit(1);
   }
+  // parse query object and get name/accession
+  query_obj = cmd + optslen;  // save pointer to  start of query object.  Needs to happen here because otherwise becomes stale if we 
+  // realloc cmd because it overflows
+  if (*query_obj == '>') {
+    /* try to parse the input buffer as a FASTA sequence */
+    abc = esl_alphabet_Create(eslAMINO);
+    query_seq = esl_sq_CreateDigital(abc);
+    status = esl_sqio_Parse(query_obj, strlen(query_obj), query_seq, eslSQFILE_DAEMON);
+    if (status != eslOK) p7_Die("Error parsing query as FASTA sequence");
+    if (query_seq->n < 1) p7_Die("Error zero length query sequence");
+    query_name = query_seq->name;
+    query_accession = query_seq->acc;
+  }
+  else if (strncmp(query_obj, "HMM", 3) == 0) {
+    status = p7_hmmfile_OpenBuffer(query_obj, strlen(query_obj), &hfp);
+    if (status != eslOK) p7_Die("Failed to open query hmm buffer %d", status);
 
+    status = p7_hmmfile_Read(hfp, &abc,  &query_hmm);
+    if (status != eslOK) p7_Die("Error reading query hmm: %s", hfp->errbuf);
+    query_name=query_hmm->name;
+    query_accession = query_hmm->acc;
+    p7_hmmfile_Close(hfp);
+  }
+  else{
+    p7_Die("Unable to parse query file");
+  }
   // Get the status structure back from the server
   buf = malloc(HMMD_SEARCH_STATUS_SERIAL_SIZE);
   buf_offset = 0;
@@ -353,7 +386,6 @@ main(int argc, char **argv)
     }
 
     if (abc) esl_alphabet_Destroy(abc);
-    if (sq)  esl_sq_Destroy(sq);
     free(ebuf);
     p7_Fail("ERROR (%d): %s\n", sstatus.status, ebuf);
   }
@@ -462,9 +494,9 @@ main(int argc, char **argv)
   p7_tophits_Targets(ofp, th, pli, textw); if (fprintf(ofp, "\n\n") < 0) ESL_EXCEPTION_SYS(eslEWRITE, "write failed");
   p7_tophits_Domains(ofp, th, pli, textw); if (fprintf(ofp, "\n\n") < 0) ESL_EXCEPTION_SYS(eslEWRITE, "write failed");
 
-  if (tblfp)     p7_tophits_TabularTargets(tblfp,    "", "", th, pli, 1);
-  if (domtblfp)  p7_tophits_TabularDomains(domtblfp, "", "", th, pli, 1);
-  if (pfamtblfp) p7_tophits_TabularXfam(pfamtblfp, "", "", th, pli);
+  if (tblfp)     p7_tophits_TabularTargets(tblfp,    query_name, query_accession, th, pli, 1);
+  if (domtblfp)  p7_tophits_TabularDomains(domtblfp, query_name, query_accession, th, pli, 1);
+  if (pfamtblfp) p7_tophits_TabularXfam(pfamtblfp, query_name, query_accession, th, pli);
   
   esl_stopwatch_Stop(w);
   p7_pli_Statistics(ofp, pli, w);
@@ -500,13 +532,14 @@ main(int argc, char **argv)
 
   // Note: queryfile doesn't need to be freed, it will point to a region of the stack
   esl_getopts_Destroy(go);
+  if(query_hmm) p7_hmm_Destroy(query_hmm);
+  if(query_seq) esl_sq_Destroy(query_seq);
   if(search_db) free(search_db);
   if(buffer) free(buffer);
   if(cmd) free(cmd);
   esl_stopwatch_Destroy(w);
   if(optsstring) free(optsstring);
   if (abc) esl_alphabet_Destroy(abc);
-  if (sq)  esl_sq_Destroy(sq);
   if(pli) p7_pipeline_Destroy(pli);
   if(th) p7_tophits_Destroy(th);
   if (ofp != stdout) fclose(ofp);

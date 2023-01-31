@@ -296,8 +296,7 @@ forward_results(P7_SERVER_QUEUE_DATA *query, SEARCH_RESULTS *results)
  CLEAR:
   // don't need to free the actual hits -- they'll get cleaned up when the tophits object they came from
   // gets destroyed
-  free(results->hits);
-  results->hits = NULL;
+  if(results->nhits)  free(results->hits);  // init_results will set hits = NULL
 
   if (pli)  p7_pipeline_Destroy(pli);
   if (hits) free(hits);
@@ -1165,7 +1164,9 @@ int process_search(P7_SERVER_MASTERNODE_STATE *masternode, P7_SERVER_QUEUE_DATA 
     results.nhits = masternode->tophits->N;
     results.stats.nhits = masternode->tophits->N;
     results.stats.hit_offsets = NULL;
-    ESL_ALLOC(results.hits, results.nhits *sizeof(P7_HIT *));
+    if (results.nhits > 0){
+      ESL_ALLOC(results.hits, results.nhits *sizeof(P7_HIT *));
+    }
     int counter;
     for(counter = 0; counter <results.nhits; counter++){
       results.hits[counter] =masternode->tophits->unsrt + counter;
