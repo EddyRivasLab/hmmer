@@ -69,7 +69,7 @@ if not tblfp: sys.exit("failed to open tblfile {} for reading".format(tblfile))
 if not outfp: sys.exit("failed to open outfile {} for writing".format(outfile))
 
 for line in tblfp:
-    (msaname, discard_rest) = line.split(None, 1)
+    msaname = line.split(None, 1)[0]
     
     cmd = 'esl-afetch -o {0}/{1}.sto {2} {1}'.format(resultdir, msaname, msafile)
     r = subprocess.run(cmd.split(), capture_output=True, encoding='utf-8')
