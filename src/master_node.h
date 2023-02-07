@@ -138,6 +138,9 @@ typedef struct p7_server_masternode_hit_thread_argument{
 //creates and returns a mesasge buffer object
 P7_SERVER_MESSAGE *p7_server_message_Create();
 
+//Frees a message buffer object
+void p7_server_message_Destroy(P7_SERVER_MESSAGE *message);
+
 // main function called on the master node at startup
 void p7_server_master_node_main(int argc, char ** argv, MPI_Datatype *server_mpitypes, ESL_GETOPTS *go);
 

@@ -291,6 +291,7 @@ void p7_server_workernode_Destroy(P7_SERVER_WORKERNODE_STATE *workernode){
   free(workernode->global_queue);
   p7_tophits_Destroy(workernode->tophits);
   //finally, free the workernode structure itself
+  esl_getopts_Destroy(workernode->commandline_options);
   free(workernode);
 }
 
@@ -1047,7 +1048,7 @@ printf("Worker saw optsstring of %s\n", optsstring);
         if ((workernode->commandline_options = esl_getopts_Create(server_Client_Options))       == NULL)  p7_Die("Couldn't allocate memory in worker_node.c");
         if ((status = esl_opt_ProcessSpoof(workernode->commandline_options, optsstring)) != eslOK) p7_Die("Error processing search options in worker_node.c");
         if ((status = esl_opt_VerifyConfig(workernode->commandline_options))        != eslOK) p7_Die("Error processing search options in worker_node.c");
-
+        free(optsstring);
         // request some work to start off with 
         workernode_request_Work(workernode->my_shard);
 
@@ -1198,6 +1199,8 @@ printf("Worker saw optsstring of %s\n", optsstring);
 
         for(thread = 0; thread < workernode->num_threads; thread++){
           p7_pipeline_Merge(pli, workernode->thread_state[thread].stats_pipeline);
+          p7_pipeline_Destroy(workernode->thread_state[thread].stats_pipeline);
+          workernode->thread_state[thread].stats_pipeline=NULL;
           if(workernode->thread_state[thread].tophits->N > 0){
             // This thread has hits that we need to put in the tree
             while(pthread_mutex_trylock(&(workernode->thread_state[thread].hits_lock))){
@@ -1235,6 +1238,7 @@ printf("Worker saw optsstring of %s\n", optsstring);
         workernode->shutdown = 1; // tell threads to shut down
         p7_server_workernode_release_threads(workernode); // release any waiting threads to process the shutdown
         p7_server_workernode_Destroy(workernode);
+        MPI_Finalize();
         exit(0);
         break;
       default:  // Unrecognized command code

@@ -126,9 +126,11 @@ int main(int argc, char **argv){
        */
 	// If we get this far, we're the child process that was forked, so start the actual server
 
-	int provided;
+	int provided=-1;
 	MPI_Init_thread(NULL, NULL, MPI_THREAD_FUNNELED, &provided);
-
+    if(provided != MPI_THREAD_FUNNELED){
+        p7_Die("Unable to obtain required level of thread support from MPI\n");
+    }
 	int num_nodes;
 	MPI_Comm_size(MPI_COMM_WORLD, &num_nodes);
 

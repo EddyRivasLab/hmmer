@@ -443,6 +443,7 @@ process_ServerCmd(char *ptr, CLIENTSIDE_ARGS *data)
   fflush(stdout);
 
   esl_stack_PPush(cmdstack, parms);
+  free(cmd);
 }
 static int
 clientside_loop(CLIENTSIDE_ARGS *data)
@@ -493,8 +494,10 @@ clientside_loop(CLIENTSIDE_ARGS *data)
       return 1;
     }
 
-    if (n == 0) return 1;
-
+    if (n == 0) {
+      free(buffer);
+      return 1;
+    }
     ptr += n;
     amount += n;
     remaining -= n;
@@ -543,13 +546,13 @@ clientside_loop(CLIENTSIDE_ARGS *data)
 
 
     slen = strlen(s);
-    opt_str = (char *) malloc(slen +9);  //This does not need to get freed in this function.  It gets added to the query
+    opt_str = (char *) malloc(slen +10);  //This does not need to get freed in this function.  It gets added to the query
     // data structure, which is freed after the query has been completed
     if (opt_str == NULL){
       client_msg_longjmp(data->sock_fd, status, &jmp_env, "Unable to allocate memory for options string. This is a fatal error");
     }
-    int strl = snprintf(opt_str, slen+9, "hmmpgmd %s\n", s);
-    opt_str[strl] = '\0'; // snprintf appears to sometimes not terminate string even though it's supposed to.
+    int strl = snprintf(opt_str, slen+10, "hmmpgmd %s\n", s);
+    //opt_str[strl] = '\0'; // snprintf appears to sometimes not terminate string even though it's supposed to.
     /* skip remaining white spaces */
     while (*ptr && isspace(*ptr)) ++ptr;
   } else {
@@ -674,7 +677,6 @@ printf("received options string of: %s\n", opt_str);
       if (status != eslOK) client_msg_longjmp(data->sock_fd, status, &jmp_env, "Error reading query hmm: %s", hfp->errbuf);
 
       p7_hmmfile_Close(hfp);
-
     } else {
       /* no idea what we are trying to parse */
       client_msg_longjmp(data->sock_fd, eslEFORMAT, &jmp_env, "Unknown query sequence/hmm format");
@@ -750,10 +752,7 @@ clientside_thread(void *arg)
 {
   int              eof;
   CLIENTSIDE_ARGS *data = (CLIENTSIDE_ARGS *)arg;
-
-  /* Guarantees that thread resources are deallocated upon return */
-  pthread_detach(pthread_self()); 
-
+  pthread_detach(pthread_self()); // Mark our resources to be cleaned up on thread exit
   eof = 0;
   while (!eof) {
     eof = clientside_loop(data);
@@ -768,7 +767,6 @@ clientside_thread(void *arg)
   close(data->sock_fd);
   free(data);
 
-  pthread_exit(NULL);
 }
 
 static void *
@@ -783,7 +781,7 @@ client_comm_thread(void *arg)
 
   CLIENTSIDE_ARGS     *targs    = NULL;
   CLIENTSIDE_ARGS     *data     = (CLIENTSIDE_ARGS *)arg;
-
+  pthread_detach(pthread_self()); // mark our resources to be cleaned up on thread exit
   for ( ;; ) {
 
     /* Wait for a client to connect */
@@ -802,11 +800,9 @@ client_comm_thread(void *arg)
 
     if ((n = pthread_create(&thread_id, NULL, clientside_thread, targs)) != 0) LOG_FATAL_MSG("thread create", n);
   }
-  
-  pthread_exit(NULL);
 }
 
-static void 
+static void
 setup_clientside_comm(ESL_GETOPTS *opts, CLIENTSIDE_ARGS *args)
 {
   int                  n;
@@ -949,17 +945,14 @@ void p7_server_masternode_Destroy(P7_SERVER_MASTERNODE_STATE *masternode){
   current = (P7_SERVER_MESSAGE *) masternode->empty_hit_message_pool;
   while(current != NULL){
     next = current->next;
-    p7_tophits_Destroy(current->tophits);
-    free(current->buffer);
-    free(current);
+    p7_server_message_Destroy(current);
     current = next;
   }
 
   current = (P7_SERVER_MESSAGE *) masternode->full_hit_message_pool;
   while(current != NULL){
     next = current->next;
-    p7_tophits_Destroy(current->tophits);
-    free(current);
+    p7_server_message_Destroy(current);
     current = next;
   }
   
@@ -1057,6 +1050,19 @@ ERROR:
   return NULL; // Silence compiler warning on Mac
 }
 
+// p7_server_message_Destroy()
+// Frees the memory in a p7_server_message object
+void p7_server_message_Destroy(P7_SERVER_MESSAGE *message){
+  if(message->tophits){
+    p7_tophits_Destroy(message->tophits);
+  }
+  if(message->buffer){
+    free(message->buffer);
+  }
+  free(message);
+}
+
+
 /* Sends a search to the worker nodes, waits for results, and returns them to the client */
 int process_search(P7_SERVER_MASTERNODE_STATE *masternode, P7_SERVER_QUEUE_DATA *query, MPI_Datatype *server_mpitypes){
   #ifndef HAVE_MPI
@@ -1152,7 +1158,9 @@ int process_search(P7_SERVER_MASTERNODE_STATE *masternode, P7_SERVER_QUEUE_DATA 
     {
       p7_masternode_message_handler(masternode, buffer_handle, server_mpitypes, query->opts);  //Poll for incoming messages
     }
-
+    if(*buffer_handle != NULL){ // need to clean up that buffer
+     p7_server_message_Destroy(*buffer_handle); 
+    }
     gettimeofday(&end, NULL);
     double ncells = (double) gm->M * (double) database_shard->total_length;
     double elapsed_time = ((double)((end.tv_sec * 1000000 + (end.tv_usec)) - (start.tv_sec * 1000000 + start.tv_usec)))/1000000.0;
@@ -1174,6 +1182,8 @@ int process_search(P7_SERVER_MASTERNODE_STATE *masternode, P7_SERVER_QUEUE_DATA 
 
     //Put pipeline statistics in results
     results.stats.elapsed = elapsed_time;
+    results.stats.user = 0;
+    results.stats.sys =0;
     results.stats.Z = masternode->pipeline->Z;
     results.stats.domZ = masternode->pipeline->domZ;
     results.stats.Z_setby = masternode->pipeline->Z_setby;
@@ -1231,7 +1241,7 @@ void process_shutdown(P7_SERVER_MASTERNODE_STATE *masternode, MPI_Datatype *serv
   MPI_Barrier(MPI_COMM_WORLD);
 
   // Clean up memory
-
+  MPI_Finalize(); // Tell MPI we're done
   p7_server_masternode_Destroy(masternode);
 #endif
 }
@@ -1413,6 +1423,7 @@ void *p7_server_master_hit_thread(void *argument){
     pthread_cond_wait(&(masternode->start), &(masternode->hit_wait_lock)); // wait until master tells us to go
  
     if(masternode->shutdown){ //main thread wants us to exit
+      pthread_detach(pthread_self());
       pthread_exit(NULL);
     }
     
@@ -1533,6 +1544,7 @@ void p7_masternode_message_handler(P7_SERVER_MASTERNODE_STATE *masternode, P7_SE
       p7_pipeline_Merge(masternode->pipeline, temp_pipeline);
       p7_pipeline_Destroy(temp_pipeline);
       masternode->worker_stats_received++;
+
       break;
     case HMMER_HIT_FINAL_MPI_TAG:
     //  printf("HMMER_HIT_FINAL_MPI_TAG message received\n");
