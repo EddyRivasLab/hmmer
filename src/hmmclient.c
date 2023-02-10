@@ -30,7 +30,7 @@
 #include "hmmserver.h"
 
 #define MAX_READ_LEN     4096
-
+typedef enum QUERY_TYPE{AMINO, HMM} query_type;
 
 
 static char usage[]  = " <queryfile> <database number to search>";
@@ -219,11 +219,13 @@ main(int argc, char **argv)
   ESL_ALPHABET    *abc     = NULL;        /* digital alphabet                */
   int textw = 0;
   ESL_STOPWATCH   *w;
+  query_type qt;
+  int query_len=0;
+  char *query_start = NULL;
   w = esl_stopwatch_Create();
-  esl_stopwatch_Start(w);
   if (esl_opt_GetBoolean(go, "--notextw")) textw = 0;
   else                                     textw = esl_opt_GetInteger(go, "--textw");
-
+  abc = esl_alphabet_Create(eslAMINO);
   //set up the sockets connection to the server
 
   // step 1: networking voodoo to get the IP address of the hostname for the server 
@@ -237,14 +239,14 @@ main(int argc, char **argv)
   struct sockaddr_in *addr_temp;
   addr_temp = (struct sockaddr_in *) info->ai_addr;
   if (strlen(inet_ntoa(addr_temp->sin_addr)) > 255){
-    p7_Fail("IP address of server %s appears to be more than 255 characters long, something has gone horribly wrong.\n",esl_opt_GetString(go, "-s"));
+    p7_Die("IP address of server %s appears to be more than 255 characters long, something has gone horribly wrong.\n",esl_opt_GetString(go, "-s"));
   }
 
   strcpy(server_ip, inet_ntoa(addr_temp->sin_addr));
 
   /* Create a reliable, stream socket using TCP */
   if ((sock = socket(AF_INET, SOCK_STREAM, 0)) < 0) {
-    p7_Fail("[%s:%d] socket error %d - %s\n", __FILE__, __LINE__, errno, strerror(errno));
+    p7_Die("[%s:%d] socket error %d - %s\n", __FILE__, __LINE__, errno, strerror(errno));
     exit(1);
   }
 
@@ -255,17 +257,18 @@ main(int argc, char **argv)
   serv_addr.sin_addr.s_addr = inet_addr(server_ip);
   serv_addr.sin_port        = htons(serv_port);
   if ((inet_pton(AF_INET, server_ip, &serv_addr.sin_addr)) < 0) {
-    p7_Fail("[%s:%d] inet_pton error %d - %s\n", __FILE__, __LINE__, errno, strerror(errno));
+    p7_Die("[%s:%d] inet_pton error %d - %s\n", __FILE__, __LINE__, errno, strerror(errno));
   }
 
   /* Establish the connection to the server */
   if (connect(sock, (struct sockaddr *) &serv_addr, sizeof(serv_addr)) < 0) {
-    p7_Fail("[%s:%d] connect error %d - %s\n", __FILE__, __LINE__, errno, strerror(errno));
+    p7_Die("[%s:%d] connect error %d - %s\n", __FILE__, __LINE__, errno, strerror(errno));
   }
 
   if(qf == NULL){
-    p7_Fail("Unable to open query file %s\n", queryfile);
+    p7_Die("Unable to open query file %s\n", queryfile);
   }
+
   // Start building the command string to send to the server
   // Can skip the length checks on cmd, because we know it has enough space for the opening command chars
   if(esl_opt_IsDefault(go, "--db")){//need to construct default database specifier
@@ -287,7 +290,7 @@ main(int argc, char **argv)
   while(strlen(optsstring)+1 >rem){
     cmd = realloc(cmd, 2*cmdlen); 
     if(cmd ==NULL){
-      p7_Fail("[%s:%d] realloc error %d - %s\n", __FILE__, __LINE__, errno, strerror(errno));
+      p7_Die("[%s:%d] realloc error %d - %s\n", __FILE__, __LINE__, errno, strerror(errno));
     }
     rem += cmdlen;
     cmdlen *=2;
@@ -296,186 +299,7 @@ main(int argc, char **argv)
 
   strcat(cmd, optsstring);
   strcat(cmd, "\n");
-  
-  while (!eod) {
-    if (fgets(buffer, MAX_READ_LEN, qf) != NULL) {
-        n = strlen(buffer);
-        if (n >= rem) {
-          if ((cmd = realloc(cmd, cmdlen * 2)) == NULL) {
-            p7_Fail("[%s:%d] realloc error %d - %s\n", __FILE__, __LINE__, errno, strerror(errno));
-          }
-          rem += cmdlen;
-          cmdlen *= 2;
-        }
-        strcat(cmd, buffer);
-        rem -= n;
-        cmdlen += n;
-        eod = (strncmp(buffer, "//", 2) == 0);
-    } 
-    else {
-        eod = 2;
-    }
-  }
-  if(eod ==2){
-    // We reached the end of the query object without finding a terminating '//' pair.  This is expected when the query object is a FASTA-format sequence
-    if(rem < 3){
-      if ((cmd = realloc(cmd, cmdlen +3)) == NULL) {
-        p7_Fail("[%s:%d] realloc error %d - %s\n", __FILE__, __LINE__, errno, strerror(errno));
-      }
-    }
-    rem +=3;
-    cmdlen +=3; 
-    strcat(cmd, "//\n");
-  }
-  char *cmdend = strstr(cmd, "//");
-  n = (cmdend - cmd) + 3;
-  printf("sending %s to server, length %d\n", cmd, n);
-  if (writen(sock, cmd, n) != n) {
-    p7_Fail("[%s:%d] write (size %" PRIu64 ") error %d - %s\n", __FILE__, __LINE__, n, errno, strerror(errno));
-    exit(1);
-  }
-  // parse query object and get name/accession
-  query_obj = cmd + optslen;  // save pointer to  start of query object.  Needs to happen here because otherwise becomes stale if we 
-  // realloc cmd because it overflows
-  if (*query_obj == '>') {
-    /* try to parse the input buffer as a FASTA sequence */
-    abc = esl_alphabet_Create(eslAMINO);
-    query_seq = esl_sq_CreateDigital(abc);
-    status = esl_sqio_Parse(query_obj, strlen(query_obj), query_seq, eslSQFILE_DAEMON);
-    if (status != eslOK) p7_Die("Error parsing query as FASTA sequence");
-    if (query_seq->n < 1) p7_Die("Error zero length query sequence");
-    query_name = query_seq->name;
-    query_accession = query_seq->acc;
-  }
-  else if (strncmp(query_obj, "HMM", 3) == 0) {
-    status = p7_hmmfile_OpenBuffer(query_obj, strlen(query_obj), &hfp);
-    if (status != eslOK) p7_Die("Failed to open query hmm buffer %d", status);
-
-    status = p7_hmmfile_Read(hfp, &abc,  &query_hmm);
-    if (status != eslOK) p7_Die("Error reading query hmm: %s", hfp->errbuf);
-    query_name=query_hmm->name;
-    query_accession = query_hmm->acc;
-    p7_hmmfile_Close(hfp);
-  }
-  else{
-    p7_Die("Unable to parse query file");
-  }
-  // Get the status structure back from the server
-  buf = malloc(HMMD_SEARCH_STATUS_SERIAL_SIZE);
-  buf_offset = 0;
-  n = HMMD_SEARCH_STATUS_SERIAL_SIZE;
-  int size;
-  if(buf == NULL){
-    p7_Fail("Unable to allocate memory for search status structure\n");
-  }
-
-  if ((size = readn(sock, buf, n)) == -1) {
-    p7_Fail("[%s:%d] read error %d - %s\n", __FILE__, __LINE__, errno, strerror(errno));
-  }
-
-  if(hmmd_search_status_Deserialize(buf, &buf_offset, &sstatus) != eslOK){
-    p7_Fail("Unable to deserialize search status object \n");
-  }
-
-  if (sstatus.status != eslOK) {
-    char *ebuf;
-    n = sstatus.msg_size;
-    ebuf = malloc(n);
-    if ((size = readn(sock, ebuf, n)) == -1) {
-      p7_Fail("[%s:%d] read error %d - %s\n", __FILE__, __LINE__, errno, strerror(errno));
-    }
-
-    if (abc) esl_alphabet_Destroy(abc);
-    free(ebuf);
-    p7_Fail("ERROR (%d): %s\n", sstatus.status, ebuf);
-  }
-
-  free(buf); // clear this out 
-  buf_offset = 0; // reset to beginning for next serialized object
-  n = sstatus.msg_size;
-
-  if ((buf = malloc(n)) == NULL) {
-    p7_Fail("[%s:%d] malloc error %d - %s\n", __FILE__, __LINE__, errno, strerror(errno));
-  }
-  // Grab the serialized search results
-  if ((size = readn(sock, buf, n)) == -1) {
-    p7_Fail("[%s:%d] read error %d - %s\n", __FILE__, __LINE__, errno, strerror(errno));
-  }
-
-  if ((stats = malloc(sizeof(HMMD_SEARCH_STATS))) == NULL) {
-    p7_Fail("[%s:%d] malloc error %d - %s\n", __FILE__, __LINE__, errno, strerror(errno));
-  }
-  stats->hit_offsets = NULL; // force allocation of memory for this in _Deserialize
-  if(p7_hmmd_search_stats_Deserialize(buf, &buf_offset, stats) != eslOK){
-    p7_Fail("Unable to deserialize search stats object \n");
-  }
-
-
-  if(sstatus.type == HMMD_CMD_SEARCH){
-    // Create the structures we'll deserialize the hits into
-    pli = p7_pipeline_Create(go, 100, 100, FALSE, p7_SEARCH_SEQS);
-  }
-  else if(sstatus.type == HMMD_CMD_SCAN){
-    // Create the structures we'll deserialize the hits into
-    pli = p7_pipeline_Create(go, 100, 100, FALSE, p7_SCAN_MODELS);
-  }
-  else p7_Fail("Illegal search type of %d found in HMMD_SEARCH_STATUS\n", sstatus.type);
-
-  if(pli == NULL){
-    p7_Fail("Unable to create pipeline data structure in hmmclient\n");
-  }
-        /* copy the search stats */
-
-  pli->nmodels     = stats->nmodels;
-  pli->nnodes      = stats->nnodes;
-  pli->nseqs       = stats->nseqs;  
-  pli->nres        = stats->nres;
-  pli->n_past_msv  = stats->n_past_msv;
-  pli->n_past_bias = stats->n_past_bias;
-  pli->n_past_vit  = stats->n_past_vit;
-  pli->n_past_fwd  = stats->n_past_fwd;
-
-  pli->Z           = stats->Z;
-  pli->domZ        = stats->domZ;
-  pli->Z_setby     = stats->Z_setby;
-  pli->domZ_setby  = stats->domZ_setby;
-
-  th = p7_tophits_Create(); 
-
-  free(th->unsrt); // free these because p7_tophits_Create() allocates a default amount of memory for them, and we're going to allocate the exact right amount next
-  free(th->hit);
-
-  th->N         = stats->nhits;
-  if ((th->unsrt = malloc(stats-> nhits *sizeof(P7_HIT))) == NULL) {
-    p7_Fail("[%s:%d] malloc error %d - %s\n", __FILE__, __LINE__, errno, strerror(errno));
-  }
-  th->nreported = stats->nreported;
-  th->nincluded = stats->nincluded;
-  th->is_sorted_by_seqidx  = FALSE;
-  th->is_sorted_by_sortkey = TRUE;
-
-  if ((th->hit = malloc(sizeof(void *) * stats->nhits)) == NULL) {
-    p7_Fail("[%s:%d] malloc error %d - %s\n", __FILE__, __LINE__, errno, strerror(errno));
-  }
-  hits_start = buf_offset;
-  // deserialize the hits
-  for (i = 0; i < stats->nhits; ++i) {
-    // set all internal pointers of the hit to NULL before deserializing into it
-    th->unsrt[i].name = NULL;
-    th->unsrt[i].acc = NULL;
-    th->unsrt[i].desc = NULL;
-    th->unsrt[i].dcl = NULL;
-    if((buf_offset -hits_start) != stats->hit_offsets[i]){
-      printf("Hit offset %d did not match expected.  Found %d, expected %" PRIu64 "\n", i, (buf_offset-hits_start), stats->hit_offsets[i]);
-    }
-    if(p7_hit_Deserialize(buf, &buf_offset, &(th->unsrt[i])) != eslOK){
-            p7_Fail("Unable to deserialize hit %d\n", i);
-    }
-    th->hit[i] = &(th->unsrt[i]);  
-  }
-  free(buf);
-  p7_search_stats_Destroy(stats);
-// ok, we've received all the hits.  Now, display them.
+  rem -= strlen(optsstring)+1;
   FILE *ofp = stdout; 
   FILE *afp = NULL;
   FILE *tblfp = NULL;
@@ -483,73 +307,331 @@ main(int argc, char **argv)
   FILE *pfamtblfp = NULL;
 
   /* Open the results output files */
-  if (esl_opt_IsOn(go, "-o"))          { if ((ofp      = fopen(esl_opt_GetString(go, "-o"), "w")) == NULL) p7_Fail("Failed to open output file %s for writing\n",    esl_opt_GetString(go, "-o")); }
-  if (esl_opt_IsOn(go, "-A"))          { if ((afp      = fopen(esl_opt_GetString(go, "-A"), "w")) == NULL) p7_Fail("Failed to open alignment file %s for writing\n", esl_opt_GetString(go, "-A")); }
+  if (esl_opt_IsOn(go, "-o"))          { if ((ofp      = fopen(esl_opt_GetString(go, "-o"), "w")) == NULL) p7_Die("Failed to open output file %s for writing\n",    esl_opt_GetString(go, "-o")); }
+  if (esl_opt_IsOn(go, "-A"))          { if ((afp      = fopen(esl_opt_GetString(go, "-A"), "w")) == NULL) p7_Die("Failed to open alignment file %s for writing\n", esl_opt_GetString(go, "-A")); }
   if (esl_opt_IsOn(go, "--tblout"))    { if ((tblfp    = fopen(esl_opt_GetString(go, "--tblout"),    "w")) == NULL)  esl_fatal("Failed to open tabular per-seq output file %s for writing\n", esl_opt_GetString(go, "--tblout")); }
   if (esl_opt_IsOn(go, "--domtblout")) { if ((domtblfp = fopen(esl_opt_GetString(go, "--domtblout"), "w")) == NULL)  esl_fatal("Failed to open tabular per-dom output file %s for writing\n", esl_opt_GetString(go, "--domtblout")); }
   if (esl_opt_IsOn(go, "--pfamtblout")){ if ((pfamtblfp = fopen(esl_opt_GetString(go, "--pfamtblout"), "w")) == NULL)  esl_fatal("Failed to open pfam-style tabular output file %s for writing\n", esl_opt_GetString(go, "--pfamtblout")); }
 
+  // Now process the input query file
+  query_len = 0;
+  int read_len = 0;
+  int found_next_sequence=0;
+  int done = 0;
+  if(fgets(buffer, MAX_READ_LEN, qf) == NULL){
+    p7_Die("Unable to read any data from query input\n");
+  }
+  while(!done){ // Should always have valid data in the buffer at this point if not done
+  // Get the type of the query object and handle accordingly
+    esl_stopwatch_Start(w);
+    if(*buffer == '>'){ // FASTA sequence, handle the first line
+      read_len = strlen(buffer);
+      while(rem < read_len){
+        cmd = realloc(cmd, 2*cmdlen); 
+        if(cmd ==NULL){
+          p7_Die("[%s:%d] realloc error %d - %s\n", __FILE__, __LINE__, errno, strerror(errno));
+        } 
+        rem += cmdlen;
+        cmdlen *=2;
+      }
+      strcat(cmd, buffer);
+      rem -= read_len;
+      query_len += read_len;
+      found_next_sequence = 0;
+      // Now, the remaining lines
+      while(fgets(buffer, MAX_READ_LEN, qf) != NULL){
+        if(strchr(buffer, '>') != NULL){ //The sequence ended on the previous line
+          found_next_sequence = 1;
+          break;
+        }
+        else{ // Copy the current line into the command and continue
+          read_len = strlen(buffer);
+          while(rem < read_len){
+          cmd = realloc(cmd, 2*cmdlen); 
+          if(cmd ==NULL){
+            p7_Die("[%s:%d] realloc error %d - %s\n", __FILE__, __LINE__, errno, strerror(errno));
+          } 
+          rem += cmdlen;
+          cmdlen *=2;
+          }
+          strcat(cmd, buffer);
+          rem -= read_len;
+        }
+      }
+      // At this point, we've read the entire sequence into the command, so terminate it
+      while(rem < 3){
+        cmd = realloc(cmd, 2*cmdlen); 
+        if(cmd ==NULL){
+          p7_Die("[%s:%d] realloc error %d - %s\n", __FILE__, __LINE__, errno, strerror(errno));
+        } 
+        rem += cmdlen;
+        cmdlen *=2;
+      }
+      strcat(cmd, "//\n");
+      if(!found_next_sequence){ // we're at the end of the input file
+        done = 1;
+      }
+      // we now have a complete query object, try to parse it as a FASTA string
+      query_seq = esl_sq_CreateDigital(abc);
+      query_obj = cmd + optslen;  // save pointer to  start of query object.  Needs to happen here because otherwise becomes stale if we 
+      // realloc cmd because it overflows
+      status = esl_sqio_Parse(query_obj, strlen(query_obj), query_seq, eslSQFILE_DAEMON);
+      if (status != eslOK) p7_Die("Error parsing query as FASTA sequence");
+      if (query_seq->n < 1) p7_Die("Error zero length query sequence");
+      query_name = query_seq->name;
+      query_accession = query_seq->acc;
+    }
+    else if (strncmp(buffer, "HMM", 3) == 0) { // HMM query
+      // add the first line to the command
+      read_len = strlen(buffer);
+      while(rem < read_len){
+        cmd = realloc(cmd, 2*cmdlen); 
+        if(cmd ==NULL){
+          p7_Die("[%s:%d] realloc error %d - %s\n", __FILE__, __LINE__, errno, strerror(errno));
+        } 
+        rem += cmdlen;
+        cmdlen *=2;
+      }
+      strcat(cmd, buffer);
+      rem -= read_len;
+      while(fgets(buffer, MAX_READ_LEN, qf) != NULL){
+        //handle lines of the HMM
+        read_len = strlen(buffer);
+        while(rem < read_len){
+          cmd = realloc(cmd, 2*cmdlen); 
+          if(cmd ==NULL){
+            p7_Die("[%s:%d] realloc error %d - %s\n", __FILE__, __LINE__, errno, strerror(errno));
+          } 
+          rem += cmdlen;
+          cmdlen *=2;
+        }
+        strcat(cmd, buffer);
+        rem -= read_len;
+        if(strstr(buffer, "//")){ // Found end of HMM
+          if(fgets(buffer, MAX_READ_LEN, qf) == NULL){
+            // at end of file
+            done = 1;
+          }
+          break;
+        }
+      }
+      // We should now have a valid HMM in the command buffer, try to parse it
+      query_obj = cmd + optslen;  // save pointer to  start of query object.  Needs to happen here because otherwise becomes stale if we 
+      // realloc cmd because it overflows
+      status = p7_hmmfile_OpenBuffer(query_obj, strlen(query_obj), &hfp);
+      if (status != eslOK) p7_Die("Failed to open query hmm buffer %d", status);
 
-  p7_tophits_SortBySortkey(th);
-  p7_tophits_Targets(ofp, th, pli, textw); if (fprintf(ofp, "\n\n") < 0) ESL_EXCEPTION_SYS(eslEWRITE, "write failed");
-  p7_tophits_Domains(ofp, th, pli, textw); if (fprintf(ofp, "\n\n") < 0) ESL_EXCEPTION_SYS(eslEWRITE, "write failed");
+      status = p7_hmmfile_Read(hfp, &abc,  &query_hmm);
+      if (status != eslOK) p7_Die("Error reading query hmm: %s", hfp->errbuf);
+      query_name=query_hmm->name;
+      query_accession = query_hmm->acc;
+      p7_hmmfile_Close(hfp);
+      //p7_hmm_Destroy(query_hmm);
+    }
+    else{
+      p7_Die("Couldn't parse query object as either FASTA sequence or HMM, and those are the only query objects hmmclient handles\n");
+    }
 
-  if (tblfp)     p7_tophits_TabularTargets(tblfp,    query_name, query_accession, th, pli, 1);
-  if (domtblfp)  p7_tophits_TabularDomains(domtblfp, query_name, query_accession, th, pli, 1);
-  if (pfamtblfp) p7_tophits_TabularXfam(pfamtblfp, query_name, query_accession, th, pli);
+    // When we get here, we should have a full query object, so send it to the server
+    printf("%s\n", query_name);
+    int num_rounds = 1; // use this when jackhmmer support added
+    for(;num_rounds >0; num_rounds--){
+      printf("sending %s to server, length %d\n", cmd, strlen(cmd));
+      if (writen(sock, cmd, strlen(cmd)) != strlen(cmd)) {
+        p7_Die("[%s:%d] write (size %" PRIu64 ") error %d - %s\n", __FILE__, __LINE__, n, errno, strerror(errno));
+      }
+       // Get the status structure back from the server
+      buf = malloc(HMMD_SEARCH_STATUS_SERIAL_SIZE);
+      buf_offset = 0;
+      n = HMMD_SEARCH_STATUS_SERIAL_SIZE;
+      int size;
+      if(buf == NULL){
+        p7_Die("Unable to allocate memory for search status structure\n");
+      }
+
+      if ((size = readn(sock, buf, n)) == -1) {
+        p7_Die("[%s:%d] read error %d - %s\n", __FILE__, __LINE__, errno, strerror(errno));
+      }
+
+      if(hmmd_search_status_Deserialize(buf, &buf_offset, &sstatus) != eslOK){
+        p7_Die("Unable to deserialize search status object \n");
+      }
+
+      if (sstatus.status != eslOK) {
+        char *ebuf;
+          n = sstatus.msg_size;
+          ebuf = malloc(n);
+          if ((size = readn(sock, ebuf, n)) == -1) {
+            p7_Die("[%s:%d] read error %d - %s\n", __FILE__, __LINE__, errno, strerror(errno));
+          }   
+        if(abc) esl_alphabet_Destroy(abc);
+        free(ebuf);
+        p7_Die("ERROR (%d): %s\n", sstatus.status, ebuf);
+      }
+
+      free(buf); // clear this out 
+      buf_offset = 0; // reset to beginning for next serialized object
+      n = sstatus.msg_size;
+
+      if ((buf = malloc(n)) == NULL) {
+        p7_Die("[%s:%d] malloc error %d - %s\n", __FILE__, __LINE__, errno, strerror(errno));
+      }
+      // Grab the serialized search results
+      if ((size = readn(sock, buf, n)) == -1) {
+        p7_Die("[%s:%d] read error %d - %s\n", __FILE__, __LINE__, errno, strerror(errno));
+      } 
+
+      if ((stats = malloc(sizeof(HMMD_SEARCH_STATS))) == NULL) {
+        p7_Die("[%s:%d] malloc error %d - %s\n", __FILE__, __LINE__, errno, strerror(errno));
+      }
+      stats->hit_offsets = NULL; // force allocation of memory for this in _Deserialize
+      if(p7_hmmd_search_stats_Deserialize(buf, &buf_offset, stats) != eslOK){
+        p7_Die("Unable to deserialize search stats object \n");
+      }
+
+
+      if(sstatus.type == HMMD_CMD_SEARCH){
+        // Create the structures we'll deserialize the hits into
+        pli = p7_pipeline_Create(go, 100, 100, FALSE, p7_SEARCH_SEQS);
+      }
+      else if(sstatus.type == HMMD_CMD_SCAN){
+        // Create the structures we'll deserialize the hits into
+        pli = p7_pipeline_Create(go, 100, 100, FALSE, p7_SCAN_MODELS);
+      }
+      else p7_Die("Illegal search type of %d found in HMMD_SEARCH_STATUS\n", sstatus.type);
+
+      if(pli == NULL){
+        p7_Die("Unable to create pipeline data structure in hmmclient\n");
+      }
+        /* copy the search stats */
+
+      pli->nmodels     = stats->nmodels;
+      pli->nnodes      = stats->nnodes;
+      pli->nseqs       = stats->nseqs;  
+      pli->nres        = stats->nres;
+      pli->n_past_msv  = stats->n_past_msv;
+      pli->n_past_bias = stats->n_past_bias;
+      pli->n_past_vit  = stats->n_past_vit;
+      pli->n_past_fwd  = stats->n_past_fwd;
+
+      pli->Z           = stats->Z;
+      pli->domZ        = stats->domZ;
+      pli->Z_setby     = stats->Z_setby;
+      pli->domZ_setby  = stats->domZ_setby;
+
+      th = p7_tophits_Create(); 
+
+      free(th->unsrt); // free these because p7_tophits_Create() allocates a default amount of memory for them, and we're going to allocate the exact right amount next
+      free(th->hit);
+
+      th->N         = stats->nhits;
+      if ((th->unsrt = malloc(stats-> nhits *sizeof(P7_HIT))) == NULL) {
+        p7_Die("[%s:%d] malloc error %d - %s\n", __FILE__, __LINE__, errno, strerror(errno));
+      }
+      th->nreported = stats->nreported;
+      th->nincluded = stats->nincluded;
+      th->is_sorted_by_seqidx  = FALSE;
+      th->is_sorted_by_sortkey = TRUE;
+
+      if ((th->hit = malloc(sizeof(void *) * stats->nhits)) == NULL) {
+        p7_Die("[%s:%d] malloc error %d - %s\n", __FILE__, __LINE__, errno, strerror(errno));
+      }
+      hits_start = buf_offset;
+      // deserialize the hits
+      for (i = 0; i < stats->nhits; ++i) {
+        // set all internal pointers of the hit to NULL before deserializing into it
+        th->unsrt[i].name = NULL;
+        th->unsrt[i].acc = NULL;
+        th->unsrt[i].desc = NULL;
+        th->unsrt[i].dcl = NULL;
+        if((buf_offset -hits_start) != stats->hit_offsets[i]){
+          printf("Hit offset %d did not match expected.  Found %d, expected %" PRIu64 "\n", i, (buf_offset-hits_start), stats->hit_offsets[i]);
+        }
+        if(p7_hit_Deserialize(buf, &buf_offset, &(th->unsrt[i])) != eslOK){
+          p7_Die("Unable to deserialize hit %d\n", i);
+        }
+        th->hit[i] = &(th->unsrt[i]);  
+      }
+      free(buf);
+      p7_search_stats_Destroy(stats);
+      // ok, we've received all the hits.  Now, display them.
+
+      p7_tophits_SortBySortkey(th);
+      p7_tophits_Targets(ofp, th, pli, textw); if (fprintf(ofp, "\n\n") < 0) ESL_EXCEPTION_SYS(eslEWRITE, "write failed");
+      p7_tophits_Domains(ofp, th, pli, textw); if (fprintf(ofp, "\n\n") < 0) ESL_EXCEPTION_SYS(eslEWRITE, "write failed");
+
+      if (tblfp)     p7_tophits_TabularTargets(tblfp,    query_name, query_accession, th, pli, 1);
+      if (domtblfp)  p7_tophits_TabularDomains(domtblfp, query_name, query_accession, th, pli, 1);
+      if (pfamtblfp) p7_tophits_TabularXfam(pfamtblfp, query_name, query_accession, th, pli);
   
-  esl_stopwatch_Stop(w);
-  p7_pli_Statistics(ofp, pli, w);
-  if (fprintf(ofp, "//\n") < 0) ESL_EXCEPTION_SYS(eslEWRITE, "write failed");
+      esl_stopwatch_Stop(w);
+      p7_pli_Statistics(ofp, pli, w);
+      if (fprintf(ofp, "//\n") < 0) ESL_EXCEPTION_SYS(eslEWRITE, "write failed");
   
       /* Output the results in an MSA (-A option) */
-  if (afp) {
-	  ESL_MSA *msa = NULL;
+      if (afp) {
+	      ESL_MSA *msa = NULL;
 
-	  if (p7_tophits_Alignment(th, abc, NULL, NULL, 0, p7_ALL_CONSENSUS_COLS, &msa) == eslOK){
-	    //esl_msa_SetName     (msa, hmm->name, -1);
-	    //esl_msa_SetAccession(msa, hmm->acc,  -1);
-	    //esl_msa_SetDesc     (msa, hmm->desc, -1);
-	    esl_msa_FormatAuthor(msa, "hmmclient (HMMER %s)", HMMER_VERSION);
+	      if (p7_tophits_Alignment(th, abc, NULL, NULL, 0, p7_ALL_CONSENSUS_COLS, &msa) == eslOK){
+	        esl_msa_SetName     (msa, query_name, -1);
+	        esl_msa_SetAccession(msa, query_accession,  -1);
+	        //esl_msa_SetDesc     (msa, hmm->desc, -1);
+	        esl_msa_FormatAuthor(msa, "hmmclient (HMMER %s)", HMMER_VERSION);
 
-	    if (textw > 0) esl_msafile_Write(afp, msa, eslMSAFILE_STOCKHOLM);
-	    else           esl_msafile_Write(afp, msa, eslMSAFILE_PFAM);
+	        if (textw > 0) esl_msafile_Write(afp, msa, eslMSAFILE_STOCKHOLM);
+	        else           esl_msafile_Write(afp, msa, eslMSAFILE_PFAM);
 	  
-	    if (fprintf(ofp, "# Alignment of %d hits satisfying inclusion thresholds saved to: %s\n", msa->nseq, esl_opt_GetString(go, "-A")) < 0) ESL_EXCEPTION_SYS(eslEWRITE, "write failed");
-	  } 
-    else { if (fprintf(ofp, "# No hits satisfy inclusion thresholds; no alignment saved\n") < 0) ESL_EXCEPTION_SYS(eslEWRITE, "write failed"); }
+	        if (fprintf(ofp, "# Alignment of %d hits satisfying inclusion thresholds saved to: %s\n", msa->nseq, esl_opt_GetString(go, "-A")) < 0) ESL_EXCEPTION_SYS(eslEWRITE, "write failed");
+	      } 
+      else { if (fprintf(ofp, "# No hits satisfy inclusion thresholds; no alignment saved\n") < 0) ESL_EXCEPTION_SYS(eslEWRITE, "write failed"); }
 	  
-	  esl_msa_Destroy(msa);
+	     esl_msa_Destroy(msa);
+      }
+      /* Terminate outputs... any last words?
+       */
+      if (tblfp)    p7_tophits_TabularTail(tblfp,    "hmmclient", p7_SEARCH_SEQS, queryfile, search_db, go);
+      if (domtblfp) p7_tophits_TabularTail(domtblfp, "hmmclient", p7_SEARCH_SEQS, queryfile, search_db, go);
+      if (pfamtblfp) p7_tophits_TabularTail(pfamtblfp,"hmmclient", p7_SEARCH_SEQS, queryfile, search_db, go);
+      if (ofp)      { if (fprintf(ofp, "[ok]\n") < 0) ESL_EXCEPTION_SYS(eslEWRITE, "write failed"); }
+
+
+
+      // Note: queryfile doesn't need to be freed, it will point to a region of the stack
+      if(pli) p7_pipeline_Destroy(pli);
+      if(th) p7_tophits_Destroy(th);
+
+
+    }
+
+    // Get ready for the next query object, if any
+    cmd[optslen] = '\0'; //shorten back to the options string
+    rem =cmdlen - optslen;
+    if(query_hmm){
+      p7_hmm_Destroy(query_hmm);
+      query_hmm = NULL;
+    }
+    if(query_seq){
+      esl_sq_Destroy(query_seq);
+      query_seq = NULL;
+    }
+
   }
-  /* Terminate outputs... any last words?
-   */
-  if (tblfp)    p7_tophits_TabularTail(tblfp,    "hmmclient", p7_SEARCH_SEQS, queryfile, search_db, go);
-  if (domtblfp) p7_tophits_TabularTail(domtblfp, "hmmclient", p7_SEARCH_SEQS, queryfile, search_db, go);
-  if (pfamtblfp) p7_tophits_TabularTail(pfamtblfp,"hmmclient", p7_SEARCH_SEQS, queryfile, search_db, go);
-  if (ofp)      { if (fprintf(ofp, "[ok]\n") < 0) ESL_EXCEPTION_SYS(eslEWRITE, "write failed"); }
 
-
-
-  // Note: queryfile doesn't need to be freed, it will point to a region of the stack
+  // Clean up memory to keep Valgrind happy.
+  esl_stopwatch_Destroy(w);
   esl_getopts_Destroy(go);
-  if(query_hmm) p7_hmm_Destroy(query_hmm);
-  if(query_seq) esl_sq_Destroy(query_seq);
+  if(optsstring) free(optsstring);
   if(search_db) free(search_db);
   if(buffer) free(buffer);
   if(cmd) free(cmd);
-  esl_stopwatch_Destroy(w);
-  if(optsstring) free(optsstring);
-  if (abc) esl_alphabet_Destroy(abc);
-  if(pli) p7_pipeline_Destroy(pli);
-  if(th) p7_tophits_Destroy(th);
   if (ofp != stdout) fclose(ofp);
   if (afp)           fclose(afp);
   if (tblfp)         fclose(tblfp);
   if (domtblfp)      fclose(domtblfp);
   if (pfamtblfp)     fclose(pfamtblfp);
   freeaddrinfo(info);  // Clean up that data structure
-
-  return status;
+  esl_alphabet_Destroy(abc);
+  exit(0); // done now, so quit
 ERROR:  
-    p7_Fail("Unable to allocate memory in hmmclient\n");
+    p7_Die("Unable to allocate memory in hmmclient\n");
 }

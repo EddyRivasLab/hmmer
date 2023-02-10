@@ -493,7 +493,7 @@ clientside_loop(CLIENTSIDE_ARGS *data)
       p7_syslog(LOG_ERR,"[%s:%d] - reading %s error %d - %s\n", __FILE__, __LINE__, data->ip_addr, errno, strerror(errno));
       return 1;
     }
-
+    
     if (n == 0) {
       free(buffer);
       return 1;
@@ -501,7 +501,7 @@ clientside_loop(CLIENTSIDE_ARGS *data)
     ptr += n;
     amount += n;
     remaining -= n;
-
+    printf("Received %d bytes, total so far is %d\n", n, amount);
     /* scan backwards till we hit the start of the line */
     l = amount;
     s = ptr - 1;
@@ -551,8 +551,13 @@ clientside_loop(CLIENTSIDE_ARGS *data)
     if (opt_str == NULL){
       client_msg_longjmp(data->sock_fd, status, &jmp_env, "Unable to allocate memory for options string. This is a fatal error");
     }
-    int strl = snprintf(opt_str, slen+10, "hmmpgmd %s\n", s);
-    //opt_str[strl] = '\0'; // snprintf appears to sometimes not terminate string even though it's supposed to.
+    if(strlen(s) > 0){
+      int strl = snprintf(opt_str, slen+10, "hmmpgmd %s\n", s);
+      opt_str[strl] = '\0'; // snprintf appears to sometimes not terminate string even though it's supposed to.
+    }
+    else{ // esl_opt_ProcessSpoof seems to have trouble with options strings that have trailing spaces
+      strcpy(opt_str, "hmmpgmd\n");
+    }    
     /* skip remaining white spaces */
     while (*ptr && isspace(*ptr)) ++ptr;
   } else {
@@ -569,11 +574,11 @@ clientside_loop(CLIENTSIDE_ARGS *data)
 
   if (!setjmp(jmp_env)) {
     dbx = 0;
-    
+  printf("received options string of: %s\n", opt_str);
   if ((opts = esl_getopts_Create(server_Client_Options))       == NULL)  client_msg_longjmp(data->sock_fd, status, &jmp_env, "Failed to create search options object");
   if ((status = esl_opt_ProcessSpoof(opts, opt_str)) != eslOK) client_msg_longjmp(data->sock_fd, status, &jmp_env, "Failed to parse options string: %s", opt_str);
   if ((status = esl_opt_VerifyConfig(opts))         != eslOK) client_msg_longjmp(data->sock_fd, status, &jmp_env, "Failed to parse options string: %s", opt_str);
-printf("received options string of: %s\n", opt_str);
+
     if (esl_opt_IsUsed(opts, "--db")) {
       dbx = esl_opt_GetInteger(opts, "--db");
       if((dbx < 1) || (dbx > data->masternode->num_databases)){
