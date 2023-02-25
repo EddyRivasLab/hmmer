@@ -784,31 +784,31 @@ extern int p7_hit_Compare(P7_HIT *first, P7_HIT *second, double atol, double rto
     return eslFAIL;
   }
 
-  if(esl_DCompareNew(first->sortkey, second->sortkey, atol, rtol) != eslOK){
+  if(esl_DCompare(first->sortkey, second->sortkey, atol, rtol) != eslOK){
     return eslFAIL;
   }
 
-  if(esl_FCompareNew(first->score, second->score, (float) atol, (float) rtol) != eslOK){
+  if(esl_FCompare(first->score, second->score, (float) atol, (float) rtol) != eslOK){
     return eslFAIL;
   }
 
-  if(esl_FCompareNew(first->pre_score, second->pre_score, (float) atol, (float) rtol) != eslOK){
+  if(esl_FCompare(first->pre_score, second->pre_score, (float) atol, (float) rtol) != eslOK){
     return eslFAIL;
   }
 
-  if(esl_FCompareNew(first->sum_score, second->sum_score, (float) atol, (float) rtol) != eslOK){
+  if(esl_FCompare(first->sum_score, second->sum_score, (float) atol, (float) rtol) != eslOK){
     return eslFAIL;
   }
 
-  if(esl_DCompareNew(first->lnP, second->lnP, atol, rtol) != eslOK){
+  if(esl_DCompare(first->lnP, second->lnP, atol, rtol) != eslOK){
     return eslFAIL;
   }
 
- if(esl_DCompareNew(first->pre_lnP, second->pre_lnP, atol, rtol) != eslOK){
+ if(esl_DCompare(first->pre_lnP, second->pre_lnP, atol, rtol) != eslOK){
     return eslFAIL;
   }
 
- if(esl_DCompareNew(first->sum_lnP, second->sum_lnP, atol, rtol) != eslOK){
+ if(esl_DCompare(first->sum_lnP, second->sum_lnP, atol, rtol) != eslOK){
     return eslFAIL;
   }
 

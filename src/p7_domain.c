@@ -537,7 +537,7 @@ extern int p7_domain_Compare(P7_DOMAIN *first, P7_DOMAIN *second, double atol, d
   if(esl_FCompare(first->bitscore, second->bitscore, (float) atol, (float) rtol) != eslOK){
     return eslFAIL;
   }
- if(esl_DCompareNew(first->lnP, second->lnP, atol, rtol) != eslOK){
+ if(esl_DCompare(first->lnP, second->lnP, atol, rtol) != eslOK){
     return eslFAIL;
   }
   if(first->lnP != second->lnP){
