@@ -1379,7 +1379,7 @@ void p7_server_master_node_main(int argc, char ** argv, MPI_Datatype *server_mpi
       process_search(masternode, query, server_mpitypes); 
       break;
     case HMMD_CMD_SCAN:        
-      p7_Fail("Scans are not currently implemented");
+     //process_scan(masternode, query, server_mpitypes);
       break;
     case HMMD_CMD_SHUTDOWN:    
       process_shutdown(masternode, server_mpitypes);

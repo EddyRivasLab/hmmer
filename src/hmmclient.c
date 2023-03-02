@@ -53,6 +53,50 @@ struct cfg_s {
   int              n_targetseq;       /* number of sequences in the restricted range */
 };
 
+/* checkpoint_msa()
+ *
+ * Purpose:   Save <msa> to a file <basename>-<iteration>.sto.
+ *            If <nquery == 1>, start a new checkpoint file;
+ *            for <nquery > 1>, append to existing one.
+ */
+static void
+checkpoint_msa(int nquery, ESL_MSA *msa, char *basename, int iteration)
+{
+  FILE *fp         = NULL;
+  char *filename   = NULL;
+
+  esl_sprintf(&filename, "%s-%d.sto", basename, iteration);
+  if (nquery == 1) { if ((fp = fopen(filename, "w")) == NULL) p7_Fail("Failed to open MSA checkpoint file %s for writing\n", filename); }
+  else             { if ((fp = fopen(filename, "a")) == NULL) p7_Fail("Failed to open MSA checkpoint file %s for append\n",  filename); }
+  esl_msafile_Write(fp, msa, eslMSAFILE_PFAM);
+  
+  fclose(fp);
+  free(filename);
+  return;
+
+}
+
+/* checkpoint_hmm()
+ *
+ * Purpose:   Save <hmm> to a file <basename>-<iteration>.hmm.
+ *            If <nquery == 1>, start a new checkpoint file;
+ *            for <nquery > 1>, append to existing one.
+ */
+static void
+checkpoint_hmm(int nquery, P7_HMM *hmm, char *basename, int iteration)
+{
+  FILE *fp         = NULL;
+  char *filename   = NULL;
+
+  esl_sprintf(&filename, "%s-%d.hmm", basename, iteration);
+  if (nquery == 1) { if ((fp = fopen(filename, "w")) == NULL) p7_Fail("Failed to open HMM checkpoint file %s for writing\n", filename); }
+  else             { if ((fp = fopen(filename, "a")) == NULL) p7_Fail("Failed to open HMM checkpoint file %s for append\n",  filename); }
+  p7_hmmfile_WriteASCII(fp, -1, hmm);
+  
+  fclose(fp);
+  free(filename);
+  return;
+}
 
 
 static int
@@ -203,7 +247,7 @@ main(int argc, char **argv)
   int cmdlen = MAX_READ_LEN;
   int eod = 0;
   int optslen;
-  char *query_name=NULL, *query_accession=NULL, *query_obj=NULL;
+  char *query_name=NULL, *query_accession=NULL, *query_obj=NULL, *query_desc=NULL;
   P7_HMM *query_hmm=NULL;
   ESL_SQ *query_seq = NULL;
   P7_HMMFILE      *hfp      = NULL;  
@@ -217,15 +261,31 @@ main(int argc, char **argv)
   HMMD_SEARCH_STATUS   sstatus;
   struct sockaddr_in   serv_addr;
   ESL_ALPHABET    *abc     = NULL;        /* digital alphabet                */
+  int              prv_msa_nseq;
   int textw = 0;
   ESL_STOPWATCH   *w;
+  ESL_MSA *msa = NULL;
+  ESL_KEYHASH     *kh       = NULL;		  /* hash of previous top hits' ranks                */
   query_type qt;
   int query_len=0;
   char *query_start = NULL;
+  P7_BG           *bg       = NULL;		  /* null model */
+  P7_TRACE   *qtr=NULL;
   w = esl_stopwatch_Create();
+  kh            = esl_keyhash_Create();
+  int nnew_targets;
   if (esl_opt_GetBoolean(go, "--notextw")) textw = 0;
   else                                     textw = esl_opt_GetInteger(go, "--textw");
   abc = esl_alphabet_Create(eslAMINO);
+  bg = p7_bg_Create(abc);
+  int converged=0; 
+  int num_rounds =1;
+  if(esl_opt_GetInteger(go, "--jack") > 1){
+    num_rounds = esl_opt_GetInteger(go, "--jack");
+  }
+  if(esl_opt_GetInteger(go, "--jack") < 0){
+    p7_Die("The argument to '--jack' was negative, and it is not possible to perform a negative number of jackhmmer rounds.");
+  }
   //set up the sockets connection to the server
 
   // step 1: networking voodoo to get the IP address of the hostname for the server 
@@ -285,10 +345,33 @@ main(int argc, char **argv)
     strcat(cmd, " ");
     rem -= 2;
   }
-  
-
+  if(esl_opt_GetInteger(go, "--jack") > 1){ // We're doing a jackhmmer search, so might have to change the 
+  // --incE and --incdomE values to match jackhmmer
+    if(esl_opt_GetSetter(go, "--incE") == eslARG_SETBY_DEFAULT){  // use esl_opt_GetSetter rather than esl_opt_IsDefault
+      // because esl_opt_IsDefault returns true if the user has manually set a flag to its default value.  In that case, 
+      // we want to honor the user's input, not override.
+      
+      // add flag to change value to jackhmmer default
+      while(rem < 13){
+        ESL_REALLOC(cmd, 2*cmdlen);
+        rem += cmdlen;
+        cmdlen *=2;
+      }
+      strcat(cmd, "--incE 0.001 ");
+      optslen += 13;
+    }
+    if(esl_opt_GetSetter(go, "--incdomE")==  eslARG_SETBY_DEFAULT){ // add flag to change value to jackhmmer default
+      while(rem < 16){
+        ESL_REALLOC(cmd, 2*cmdlen);
+        rem += cmdlen;
+        cmdlen *=2;
+      }
+      strcat(cmd, "--incdomE 0.001 ");
+      optslen += 16;
+    }
+  }
   while(strlen(optsstring)+1 >rem){
-    cmd = realloc(cmd, 2*cmdlen); 
+    ESL_REALLOC(cmd, 2*cmdlen);
     if(cmd ==NULL){
       p7_Die("[%s:%d] realloc error %d - %s\n", __FILE__, __LINE__, errno, strerror(errno));
     }
@@ -306,6 +389,17 @@ main(int argc, char **argv)
   FILE *domtblfp = NULL;
   FILE *pfamtblfp = NULL;
 
+
+  /* Initialize builder configuration 
+   * Default matrix is stored in the --mx option, so it's always IsOn(). 
+   * Check --mxfile first; then go to the --mx option and the default. 
+   */
+  P7_BUILDER      *bld      = NULL;               /* HMM construction configuration                  */
+  bld = p7_builder_Create(go, abc);
+  if (esl_opt_IsOn(go, "--mxfile")) status = p7_builder_SetScoreSystem (bld, esl_opt_GetString(go, "--mxfile"), NULL, esl_opt_GetReal(go, "--popen"), esl_opt_GetReal(go, "--pextend"), bg);
+  else                              status = p7_builder_LoadScoreSystem(bld, esl_opt_GetString(go, "--mx"),           esl_opt_GetReal(go, "--popen"), esl_opt_GetReal(go, "--pextend"), bg); 
+  if (status != eslOK) p7_Fail("Failed to set single query seq score system:\n%s\n", bld->errbuf);
+
   /* Open the results output files */
   if (esl_opt_IsOn(go, "-o"))          { if ((ofp      = fopen(esl_opt_GetString(go, "-o"), "w")) == NULL) p7_Die("Failed to open output file %s for writing\n",    esl_opt_GetString(go, "-o")); }
   if (esl_opt_IsOn(go, "-A"))          { if ((afp      = fopen(esl_opt_GetString(go, "-A"), "w")) == NULL) p7_Die("Failed to open alignment file %s for writing\n", esl_opt_GetString(go, "-A")); }
@@ -318,12 +412,14 @@ main(int argc, char **argv)
   int read_len = 0;
   int found_next_sequence=0;
   int done = 0;
+  int nquery =0;
   if(fgets(buffer, MAX_READ_LEN, qf) == NULL){
     p7_Die("Unable to read any data from query input\n");
   }
   while(!done){ // Should always have valid data in the buffer at this point if not done
   // Get the type of the query object and handle accordingly
     esl_stopwatch_Start(w);
+    nquery++;
     if(*buffer == '>'){ // FASTA sequence, handle the first line
       read_len = strlen(buffer);
       while(rem < read_len){
@@ -380,8 +476,17 @@ main(int argc, char **argv)
       if (query_seq->n < 1) p7_Die("Error zero length query sequence");
       query_name = query_seq->name;
       query_accession = query_seq->acc;
+      query_desc = query_seq->desc;
+      if (num_rounds > 1)	// jackhmmer search, so need an inital trace
+	    {
+	      p7_SingleBuilder(bld, query_seq, bg, &query_hmm, &qtr, NULL, NULL); /* bypass HMM - only need model */
+	      prv_msa_nseq = 1;
+	    }
     }
     else if (strncmp(buffer, "HMM", 3) == 0) { // HMM query
+      if(num_rounds > 1){  // We've been told to perform a jackhmmer search, which is not possible With a HMM query object
+        p7_Die("The '--jack' option was set, requesting a multi-round jackhmmer search, but jackhmmer searches can only be done on protein sequence queries.");
+      }
       // add the first line to the command
       read_len = strlen(buffer);
       while(rem < read_len){
@@ -425,6 +530,7 @@ main(int argc, char **argv)
       if (status != eslOK) p7_Die("Error reading query hmm: %s", hfp->errbuf);
       query_name=query_hmm->name;
       query_accession = query_hmm->acc;
+      query_desc = query_hmm->desc;
       p7_hmmfile_Close(hfp);
       //p7_hmm_Destroy(query_hmm);
     }
@@ -434,9 +540,33 @@ main(int argc, char **argv)
 
     // When we get here, we should have a full query object, so send it to the server
     printf("%s\n", query_name);
-    int num_rounds = 1; // use this when jackhmmer support added
-    for(;num_rounds >0; num_rounds--){
-      printf("sending %s to server, length %d\n", cmd, strlen(cmd));
+    //reset num_counds and converged here to handle multi-query input files
+    if(esl_opt_GetInteger(go, "--jack") > 1){
+      num_rounds = esl_opt_GetInteger(go, "--jack");
+    }
+    else{
+      num_rounds = 1;
+    }
+    converged = 0;
+    prv_msa_nseq = 0;
+    int iteration=0;
+    while(num_rounds > 0 && !converged){
+      iteration++;
+	    if (esl_opt_IsOn(go, "--chkhmm") &&query_hmm != NULL) {
+	      checkpoint_hmm(nquery, query_hmm, esl_opt_GetString(go, "--chkhmm"), iteration);
+	    }
+      // Freeing these here looks weird.  The reason we do it is that we may have done a previous
+      // jackhmmer search round, in which case these will have been allocated and we don't want to 
+      // free them at the end of the loop because we need them to output results after the final iteration
+      if(pli) {
+        p7_pipeline_Destroy(pli);
+        pli=NULL;
+      }
+      if(th){
+        p7_tophits_Destroy(th);
+        th=NULL;
+      }
+      //printf("sending %s to server, length %d\n", cmd, strlen(cmd));
       if (writen(sock, cmd, strlen(cmd)) != strlen(cmd)) {
         p7_Die("[%s:%d] write (size %" PRIu64 ") error %d - %s\n", __FILE__, __LINE__, n, errno, strerror(errno));
       }
@@ -555,11 +685,94 @@ main(int argc, char **argv)
       free(buf);
       p7_search_stats_Destroy(stats);
       // ok, we've received all the hits.  Now, display them.
-
+      if (fprintf(ofp, "Query:       %s  \n", query_name)  < 0) ESL_EXCEPTION_SYS(eslEWRITE, "write failed");
+      if (fprintf(ofp, "Accession:   %s\n", query_accession)  < 0) ESL_EXCEPTION_SYS(eslEWRITE, "write failed"); 
+      if (fprintf(ofp, "Description: %s\n", query_desc) < 0) ESL_EXCEPTION_SYS(eslEWRITE, "write failed"); 
       p7_tophits_SortBySortkey(th);
+      p7_tophits_Threshold(th, pli); 
       p7_tophits_Targets(ofp, th, pli, textw); if (fprintf(ofp, "\n\n") < 0) ESL_EXCEPTION_SYS(eslEWRITE, "write failed");
       p7_tophits_Domains(ofp, th, pli, textw); if (fprintf(ofp, "\n\n") < 0) ESL_EXCEPTION_SYS(eslEWRITE, "write failed");
 
+      num_rounds -=1;
+      if(num_rounds > 0){ // need to build HMM for next jackhmmer round
+         /* Create alignment of the top hits */
+	      /* <&qsq, &qtr, 1> included in p7_tophits_Alignment args here => initial query is added to the msa at each round. */
+	      p7_tophits_Alignment(th, abc, &query_seq, &qtr, 1, p7_ALL_CONSENSUS_COLS, &msa);
+        p7_tophits_CompareRanking(th, kh, &nnew_targets);
+	      esl_msa_Digitize(abc,msa,NULL);
+	      esl_msa_FormatName(msa, "%s-i%d", query_name, iteration);  
+	      esl_msa_SetAccession(msa, query_accession,  -1);
+	      esl_msa_SetDesc     (msa, query_desc, -1);  // need to get description 
+	      esl_msa_FormatAuthor(msa, "hmmclient (HMMER %s)", HMMER_VERSION);
+
+	      /* Optional checkpointing */
+	      if (esl_opt_IsOn(go, "--chkali")) checkpoint_msa(nquery, msa, esl_opt_GetString(go, "--chkali"), iteration);
+
+        	  /* Convergence test */
+	      if (fprintf(ofp, "\n")                                             < 0) ESL_EXCEPTION_SYS(eslEWRITE, "write failed");
+	      if (fprintf(ofp, "@@ New targets included:   %d\n", nnew_targets)  < 0) ESL_EXCEPTION_SYS(eslEWRITE, "write failed");
+	      if (fprintf(ofp, "@@ New alignment includes: %d subseqs (was %d), including original query\n",
+		  msa->nseq, prv_msa_nseq)                                   < 0) ESL_EXCEPTION_SYS(eslEWRITE, "write failed");
+	      if (nnew_targets == 0 && msa->nseq <= prv_msa_nseq) // no new targets found, search has converged
+	        {
+	          if (fprintf(ofp, "@@\n")                                       < 0) ESL_EXCEPTION_SYS(eslEWRITE, "write failed");
+	          if (fprintf(ofp, "@@ CONVERGED (in %d rounds). \n", iteration) < 0) ESL_EXCEPTION_SYS(eslEWRITE, "write failed");
+	          if (fprintf(ofp, "@@\n\n")                                     < 0) ESL_EXCEPTION_SYS(eslEWRITE, "write failed");
+	          converged = 1;
+	        }
+	      else { // build the hmm and command for next round
+          if (fprintf(ofp, "@@ Continuing to next round.\n\n")           < 0) ESL_EXCEPTION_SYS(eslEWRITE, "write failed");  
+                /* Throw away old model. Build new one. */
+          if(query_hmm){ // get rid of the old hmm because we're going to build a new one
+            p7_hmm_Destroy(query_hmm);
+          }
+	        status = p7_Builder(bld, msa, bg, &query_hmm, NULL, NULL, NULL, NULL);
+	        if      (status == eslENORESULT) p7_Die("Failed to construct new model from iteration %d results:\n%s", iteration, bld->errbuf);
+	        else if (status == eslEFORMAT)   p7_Die("Failed to construct new model from iteration %d results:\n%s", iteration, bld->errbuf);
+	        else if (status != eslOK)        p7_Die("Unexpected error constructing new model at iteration %d:",     iteration);
+
+          // need an accession field for the HMM, so copy in the query accession
+          char *hmm_accession;
+          ESL_ALLOC(hmm_accession, strlen("hmmclient")+1);
+          strcpy(hmm_accession, "hmmclient");
+          query_hmm->acc = hmm_accession;
+
+	        if (fprintf(ofp, "@@\n")                                             < 0) ESL_EXCEPTION_SYS(eslEWRITE, "write failed");
+	        if (fprintf(ofp, "@@ Round:                  %d\n", iteration)       < 0) ESL_EXCEPTION_SYS(eslEWRITE, "write failed");
+	        if (fprintf(ofp, "@@ Included in MSA:        %d subsequences (query + %d subseqs from %d targets)\n",
+			      msa->nseq, msa->nseq-1, kh->nkeys)                       < 0) ESL_EXCEPTION_SYS(eslEWRITE, "write failed");
+	        if (fprintf(ofp, "@@ Model size:             %d positions\n", query_hmm->M) < 0) ESL_EXCEPTION_SYS(eslEWRITE, "write failed");
+	        if (fprintf(ofp, "@@\n\n")                                           < 0) ESL_EXCEPTION_SYS(eslEWRITE, "write failed");
+
+	        prv_msa_nseq = msa->nseq;
+
+          //now, we need to build the new command object to send to the server.
+          char *ascii_hmm;
+          if(p7_hmmfile_WriteToString(&ascii_hmm, -1, query_hmm) != eslOK){  // -1 specifies default HMM format
+            p7_Die("Hmmclient was unable to construct the text HMM to send to the server for the next round of the search");
+          }
+          cmd[optslen] = '\0'; //shorten back to the options string
+          rem =cmdlen - optslen;
+          if(rem <= strlen(ascii_hmm)){
+            ESL_REALLOC(cmd, cmdlen+strlen(ascii_hmm)+1);
+            cmdlen += strlen(ascii_hmm)+1;
+            rem += strlen(ascii_hmm)+1;
+          }
+          strcat(cmd, ascii_hmm);
+          // should now have the full command, so clean up
+          free(ascii_hmm);
+
+        }
+      } 
+    }
+      if(qtr != NULL){
+        p7_trace_Destroy(qtr);
+        qtr = NULL; // Prevent next search from thinking we have a trace already
+      }
+      if(msa != NULL){
+        esl_msa_Destroy(msa);
+        msa=NULL; // Prevent next search from thinking we have an msa already
+      }
       if (tblfp)     p7_tophits_TabularTargets(tblfp,    query_name, query_accession, th, pli, 1);
       if (domtblfp)  p7_tophits_TabularDomains(domtblfp, query_name, query_accession, th, pli, 1);
       if (pfamtblfp) p7_tophits_TabularXfam(pfamtblfp, query_name, query_accession, th, pli);
@@ -570,12 +783,11 @@ main(int argc, char **argv)
   
       /* Output the results in an MSA (-A option) */
       if (afp) {
-	      ESL_MSA *msa = NULL;
 
 	      if (p7_tophits_Alignment(th, abc, NULL, NULL, 0, p7_ALL_CONSENSUS_COLS, &msa) == eslOK){
 	        esl_msa_SetName     (msa, query_name, -1);
 	        esl_msa_SetAccession(msa, query_accession,  -1);
-	        //esl_msa_SetDesc     (msa, hmm->desc, -1);
+	        esl_msa_SetDesc     (msa, query_desc, -1);
 	        esl_msa_FormatAuthor(msa, "hmmclient (HMMER %s)", HMMER_VERSION);
 
 	        if (textw > 0) esl_msafile_Write(afp, msa, eslMSAFILE_STOCKHOLM);
@@ -583,12 +795,12 @@ main(int argc, char **argv)
 	  
 	        if (fprintf(ofp, "# Alignment of %d hits satisfying inclusion thresholds saved to: %s\n", msa->nseq, esl_opt_GetString(go, "-A")) < 0) ESL_EXCEPTION_SYS(eslEWRITE, "write failed");
 	      } 
-      else { if (fprintf(ofp, "# No hits satisfy inclusion thresholds; no alignment saved\n") < 0) ESL_EXCEPTION_SYS(eslEWRITE, "write failed"); }
-	  
-	     esl_msa_Destroy(msa);
+        else { 
+          if (fprintf(ofp, "# No hits satisfy inclusion thresholds; no alignment saved\n") < 0) ESL_EXCEPTION_SYS(eslEWRITE, "write failed"); 
+        }
       }
       /* Terminate outputs... any last words?
-       */
+      */
       if (tblfp)    p7_tophits_TabularTail(tblfp,    "hmmclient", p7_SEARCH_SEQS, queryfile, search_db, go);
       if (domtblfp) p7_tophits_TabularTail(domtblfp, "hmmclient", p7_SEARCH_SEQS, queryfile, search_db, go);
       if (pfamtblfp) p7_tophits_TabularTail(pfamtblfp,"hmmclient", p7_SEARCH_SEQS, queryfile, search_db, go);
@@ -596,26 +808,31 @@ main(int argc, char **argv)
 
 
 
+      // Get ready for the next query object, if any
       // Note: queryfile doesn't need to be freed, it will point to a region of the stack
-      if(pli) p7_pipeline_Destroy(pli);
-      if(th) p7_tophits_Destroy(th);
-
-
+      if(pli) {
+        p7_pipeline_Destroy(pli);
+        pli=NULL;
+      }
+      if(th){
+        p7_tophits_Destroy(th);
+        th=NULL;
+      }
+      cmd[optslen] = '\0'; //shorten back to the options string
+      rem =cmdlen - optslen;
+      if(query_hmm){
+        p7_hmm_Destroy(query_hmm);
+        query_hmm = NULL;
+      }
+      if(query_seq){
+        esl_sq_Destroy(query_seq);
+        query_seq = NULL;
+      }
+      esl_keyhash_Reuse(kh);
+      if(esl_opt_GetInteger(go, "--jack") > 1){  //reset this so next query if any has the corrent value
+        num_rounds = esl_opt_GetInteger(go, "--jack");
+      } 
     }
-
-    // Get ready for the next query object, if any
-    cmd[optslen] = '\0'; //shorten back to the options string
-    rem =cmdlen - optslen;
-    if(query_hmm){
-      p7_hmm_Destroy(query_hmm);
-      query_hmm = NULL;
-    }
-    if(query_seq){
-      esl_sq_Destroy(query_seq);
-      query_seq = NULL;
-    }
-
-  }
 
   // Clean up memory to keep Valgrind happy.
   esl_stopwatch_Destroy(w);
@@ -629,8 +846,10 @@ main(int argc, char **argv)
   if (tblfp)         fclose(tblfp);
   if (domtblfp)      fclose(domtblfp);
   if (pfamtblfp)     fclose(pfamtblfp);
+  p7_builder_Destroy(bld);
   freeaddrinfo(info);  // Clean up that data structure
   esl_alphabet_Destroy(abc);
+  p7_bg_Destroy(bg);
   exit(0); // done now, so quit
 ERROR:  
     p7_Die("Unable to allocate memory in hmmclient\n");

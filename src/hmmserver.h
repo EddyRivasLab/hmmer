@@ -34,7 +34,11 @@ typedef struct p7_server_chunk_reply{
 #define DOMREPOPTS  "--domE,--domT,--cut_ga,--cut_nc,--cut_tc"
 #define INCOPTS     "--incE,--incT,--cut_ga,--cut_nc,--cut_tc"
 #define INCDOMOPTS  "--incdomE,--incdomT,--cut_ga,--cut_nc,--cut_tc"
+#define CONOPTS     "--fast,--hand"                                         // jackhmmer doesn't use these - but leave them for consistency 
 #define THRESHOPTS  "-E,-T,--domE,--domT,--incE,--incT,--incdomE,--incdomT,--cut_ga,--cut_nc,--cut_tc"
+#define WGTOPTS     "--wgsc,--wblosum,--wpb,--wnone"                        // Exclusive options for relative weighting                    
+#define EFFOPTS     "--eent,--eentexp,--eclust,--eset,--enone"              // Exclusive options for effective sequence number calculation 
+
 static ESL_OPTIONS server_Client_Options[] = {
   /* name           type      default  env  range     toggles   reqs   incomp              help                                                      docgroup*/
   { "-h",           eslARG_NONE,   FALSE, NULL, NULL,    NULL,  NULL,  NULL,            "show brief help on version and usage",                         1 },
@@ -45,12 +49,15 @@ static ESL_OPTIONS server_Client_Options[] = {
   // seqdb and hmmdb provided only for backward compatibility, will be removed
   { "--seqdb",           eslARG_INT,   "-1", NULL, NULL,    NULL,  NULL,  NULL,            "number of the database to search (default 1)",                         8 },
   { "--hmmdb",           eslARG_INT,   "-1", NULL, NULL,    NULL,  NULL,  NULL,            "number of the database to search (default 1)",                         8 },
+  { "--jack",       eslARG_INT,         "0", NULL, NULL,    NULL,  NULL,  NULL,         "number of rounds of jackhmmer search to perform (default 0).  Note that a one-round jackhmmer search is equivalent to a phmmer search and that this option is only allowed when the query object is one or more protein sequences", 8},
       /* Control of output */
   { "-o",           eslARG_OUTFILE, NULL, NULL, NULL,    NULL,  NULL,  NULL,            "direct output to file <f>, not stdout",                        2 },
   { "-A",           eslARG_OUTFILE, NULL, NULL, NULL,    NULL,  NULL,  NULL,            "save multiple alignment of all hits to file <f>",              2 },
   { "--tblout",     eslARG_OUTFILE, NULL, NULL, NULL,    NULL,  NULL,  NULL,            "save parseable table of per-sequence hits to file <f>",        2 },
   { "--domtblout",  eslARG_OUTFILE, NULL, NULL, NULL,    NULL,  NULL,  NULL,            "save parseable table of per-domain hits to file <f>",          2 },
   { "--pfamtblout", eslARG_OUTFILE, NULL, NULL, NULL,    NULL,  NULL,  NULL,            "save table of hits and domains to file, in Pfam format <f>",   2 },
+  { "--chkhmm",     eslARG_OUTFILE,      NULL, NULL, NULL,      NULL,    NULL,  NULL,            "save HMM checkpoints to files <f>-<iteration>.hmm",            2 },
+  { "--chkali",     eslARG_OUTFILE,      NULL, NULL, NULL,      NULL,    NULL,  NULL,            "save alignment checkpoints to files <f>-<iteration>.sto",      2 },
   { "--acc",        eslARG_NONE,   FALSE, NULL, NULL,    NULL,  NULL,  NULL,            "prefer accessions over names in output",                       2 },
   { "--noali",      eslARG_NONE,   FALSE, NULL, NULL,    NULL,  NULL,  NULL,            "don't output alignments, so output is smaller",                2 },
   { "--notextw",    eslARG_NONE,    NULL, NULL, NULL,    NULL,  NULL, "--textw",        "unlimit ASCII text output line width",                         2 },
@@ -80,6 +87,25 @@ static ESL_OPTIONS server_Client_Options[] = {
   { "--F2",         eslARG_REAL,  "1e-3", NULL, NULL,    NULL,  NULL, "--max",          "Stage 2 (Vit) threshold: promote hits w/ P <= F2",             7 },
   { "--F3",         eslARG_REAL,  "1e-5", NULL, NULL,    NULL,  NULL, "--max",          "Stage 3 (Fwd) threshold: promote hits w/ P <= F3",             7 },
   { "--nobias",     eslARG_NONE,   NULL,  NULL, NULL,    NULL,  NULL, "--max",          "turn off composition bias filter",                             7 },
+  /* Alternative relative sequence weighting strategies */
+  { "--wpb",        eslARG_NONE,    "default", NULL, NULL,   WGTOPTS,    NULL,  NULL,            "Henikoff position-based weights",                              9 },
+  { "--wgsc",       eslARG_NONE,         NULL, NULL, NULL,   WGTOPTS,    NULL,  NULL,            "Gerstein/Sonnhammer/Chothia tree weights",                     9 },
+  { "--wblosum",    eslARG_NONE,         NULL, NULL, NULL,   WGTOPTS,    NULL,  NULL,            "Henikoff simple filter weights",                               9 },
+  { "--wnone",      eslARG_NONE,         NULL, NULL, NULL,   WGTOPTS,    NULL,  NULL,            "don't do any relative weighting; set all to 1",                9 },
+  { "--wgiven",     eslARG_NONE,         NULL, NULL, NULL,   WGTOPTS,    NULL,  NULL,            "use weights as given in MSA file",                            99 }, /* unused/prohibited in jackhmmer */
+  { "--wid",        eslARG_REAL,       "0.62", NULL,"0<=x<=1", NULL,"--wblosum",NULL,            "for --wblosum: set identity cutoff",                           9 },
+/* Alternative effective sequence weighting strategies */
+  { "--eent",       eslARG_NONE,    "default", NULL, NULL,   EFFOPTS,    NULL,  NULL,            "adjust eff seq # to achieve relative entropy target",          10 },
+  { "--eentexp",    eslARG_NONE,     "default",NULL, NULL,    EFFOPTS,    NULL, NULL,            "adjust eff seq # to reach rel. ent. target using exp scaling", 10 },
+  { "--eclust",     eslARG_NONE,        FALSE, NULL, NULL,   EFFOPTS,    NULL,  NULL,            "eff seq # is # of single linkage clusters",                    10 },
+  { "--enone",      eslARG_NONE,        FALSE, NULL, NULL,   EFFOPTS,    NULL,  NULL,            "no effective seq # weighting: just use nseq",                  10 },
+  { "--eset",       eslARG_REAL,         NULL, NULL, NULL,   EFFOPTS,    NULL,  NULL,            "set eff seq # for all models to <x>",                          10 },
+  { "--ere",        eslARG_REAL,         NULL, NULL,"x>0",      NULL,    NULL, NULL,            "for --eent[exp]: set minimum rel entropy/position to <x>",      10 },
+  { "--esigma",     eslARG_REAL,       "45.0", NULL,"x>0",      NULL,    NULL, NULL,            "for --eent[exp]: set sigma param to <x>",                       10 },
+  { "--eid",        eslARG_REAL,       "0.62", NULL,"0<=x<=1",  NULL,"--eclust",NULL,            "for --eclust: set fractional identity cutoff to <x>",          10 },
+/* Alternative prior strategies */
+  { "--pnone",       eslARG_NONE,       FALSE, NULL, NULL,      NULL,    NULL,"--plaplace",      "don't use any prior; parameters are frequencies",             13 },
+  { "--plaplace",    eslARG_NONE,       FALSE, NULL, NULL,      NULL,    NULL,   "--pnone",      "use a Laplace +1 prior",                                      13 },
 /* Control of E-value calibration */
   { "--EmL",        eslARG_INT,         "200", NULL,"n>0",      NULL,  NULL,  NULL,              "length of sequences for MSV Gumbel mu fit",                   11 },   
   { "--EmN",        eslARG_INT,         "200", NULL,"n>0",      NULL,  NULL,  NULL,              "number of sequences for MSV Gumbel mu fit",                   11 },   
@@ -94,6 +120,11 @@ static ESL_OPTIONS server_Client_Options[] = {
   { "--domZ",       eslARG_REAL,   FALSE, NULL, "x>0",   NULL,  NULL,  NULL,            "set # of significant seqs, for domain E-value calculation",   12 },
   { "--seed",       eslARG_INT,    "42",  NULL, "n>=0",  NULL,  NULL,  NULL,            "set RNG seed to <n> (if 0: one-time arbitrary seed)",         12 },
   { "--qformat",    eslARG_STRING,      NULL, NULL, NULL,      NULL,  NULL,  NULL,              "assert query <seqfile> is in format <s>: no autodetection",   12 },
+  /* Alternative model construction strategies */
+  { "--fast",       eslARG_NONE,        FALSE, NULL, NULL,    CONOPTS,   NULL,  NULL,            "assign cols w/ >= symfrac residues as consensus",              99 }, // unused/prohibited in jackhmmer. Models must be --hand.
+  { "--hand",       eslARG_NONE,    "default", NULL, NULL,    CONOPTS,   NULL,  NULL,            "manual construction (requires reference annotation)",          99 },
+  { "--symfrac",    eslARG_REAL,        "0.5", NULL, "0<=x<=1", NULL,"--fast",  NULL,            "sets sym fraction controlling --fast construction",            99 },
+  { "--fragthresh", eslARG_REAL,        "0.5", NULL, "0<=x<=1", NULL,    NULL,  NULL,            "if L <= x*alen, tag sequence as a fragment",                   8 },
   {  0, 0, 0, 0, 0, 0, 0, 0, 0, 0 },
 };
 

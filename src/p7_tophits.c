@@ -1129,7 +1129,7 @@ p7_tophits_Targets(FILE *ofp, P7_TOPHITS *th, P7_PIPELINE *pli, int textw)
   if (pli->show_accessions) namew = ESL_MAX(8, p7_tophits_GetMaxShownLength(th));
   else                      namew = ESL_MAX(8, p7_tophits_GetMaxNameLength(th));
 
-
+  
   if (pli->long_targets) 
   {
       posw = ESL_MAX(6, p7_tophits_GetMaxPositionLength(th));
@@ -1152,6 +1152,7 @@ p7_tophits_Targets(FILE *ofp, P7_TOPHITS *th, P7_PIPELINE *pli, int textw)
       if (textw >  0)           descw = ESL_MAX(32, textw - namew - 61); /* 61 chars excluding desc is from the format: 2 + 22+2 +22+2 +8+2 +<name>+1 */
       else                      descw = 0;                               /* unlimited desc length is handled separately */
 
+      printf("textw = %d, namew = %d, descw = %d, pli->show_accessions = %d\n", textw, namew, descw, pli->show_accessions);
 
       /* The minimum width of the target table is 111 char: 47 from fields, 8 from min name, 32 from min desc, 13 spaces */
       if (fprintf(ofp, "Scores for complete sequence%s (score includes all domains):\n", pli->mode == p7_SEARCH_SEQS ? "s" : "") < 0) 
