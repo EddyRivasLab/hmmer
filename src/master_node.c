@@ -1221,8 +1221,7 @@ int process_search(P7_SERVER_MASTERNODE_STATE *masternode, P7_SERVER_QUEUE_DATA 
     free(hmmbuffer);
     return eslOK;
   ERROR:
-    p7_Fail("Unable to allocate memory in process_search"); 
-    return eslFAIL; // Silence compiler warning on Mac
+    p7_Die("Unable to allocate memory in process_search"); 
 #endif
 }
 
@@ -1379,7 +1378,7 @@ void p7_server_master_node_main(int argc, char ** argv, MPI_Datatype *server_mpi
       process_search(masternode, query, server_mpitypes); 
       break;
     case HMMD_CMD_SCAN:        
-     //process_scan(masternode, query, server_mpitypes);
+      process_search(masternode, query, server_mpitypes);
       break;
     case HMMD_CMD_SHUTDOWN:    
       process_shutdown(masternode, server_mpitypes);

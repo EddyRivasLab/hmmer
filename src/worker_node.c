@@ -995,7 +995,7 @@ void p7_server_workernode_main(int argc, char **argv, int my_rank, MPI_Datatype 
   for(c1 =0; c1< num_databases; c1++){
     database_names[c1] = esl_opt_GetArg(go, c1+1);  //esl_opt_GetArg is 1..num_args
   }
-  // FIXME: Support loading multiple databases once server UI specced out
+ 
   p7_server_workernode_Setup(num_databases, database_names, 1, 0, num_worker_cores, &workernode);
   workernode->my_rank = my_rank;
   free(database_names);
@@ -1040,7 +1040,7 @@ void p7_server_workernode_main(int argc, char **argv, int my_rank, MPI_Datatype 
         char *optsstring;
         ESL_ALLOC(optsstring, the_command.options_length);
         MPI_Bcast(optsstring, the_command.options_length, MPI_CHAR, 0, MPI_COMM_WORLD);
-printf("Worker saw optsstring of %s\n", optsstring);
+
         // Update getopts structure in workernode
         if (workernode->commandline_options != NULL){
           esl_getopts_Destroy(workernode->commandline_options);

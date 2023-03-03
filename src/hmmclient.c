@@ -680,7 +680,7 @@ main(int argc, char **argv)
         if(p7_hit_Deserialize(buf, &buf_offset, &(th->unsrt[i])) != eslOK){
           p7_Die("Unable to deserialize hit %d\n", i);
         }
-        th->hit[i] = &(th->unsrt[i]);  
+        th->hit[i] = &(th->unsrt[i]);
       }
       free(buf);
       p7_search_stats_Destroy(stats);
@@ -689,7 +689,7 @@ main(int argc, char **argv)
       if (fprintf(ofp, "Accession:   %s\n", query_accession)  < 0) ESL_EXCEPTION_SYS(eslEWRITE, "write failed"); 
       if (fprintf(ofp, "Description: %s\n", query_desc) < 0) ESL_EXCEPTION_SYS(eslEWRITE, "write failed"); 
       p7_tophits_SortBySortkey(th);
-      p7_tophits_Threshold(th, pli); 
+      //p7_tophits_Threshold(th, pli); 
       p7_tophits_Targets(ofp, th, pli, textw); if (fprintf(ofp, "\n\n") < 0) ESL_EXCEPTION_SYS(eslEWRITE, "write failed");
       p7_tophits_Domains(ofp, th, pli, textw); if (fprintf(ofp, "\n\n") < 0) ESL_EXCEPTION_SYS(eslEWRITE, "write failed");
 

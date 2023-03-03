@@ -987,13 +987,15 @@ p7_tophits_Threshold(P7_TOPHITS *th, P7_PIPELINE *pli)
   }
 
   /* Count the reported, included domains */
-  for (h = 0; h < th->N; h++)  
+  for (h = 0; h < th->N; h++){
+    th->hit[h]->nreported = 0;
+    th->hit[h]->nincluded = 0;
     for (d = 0; d < th->hit[h]->ndom; d++)
     {
         if (th->hit[h]->dcl[d].is_reported) th->hit[h]->nreported++;
         if (th->hit[h]->dcl[d].is_included) th->hit[h]->nincluded++;
     }
-
+  }
   workaround_bug_h74(th);  /* blech. This function is defined above; see commentary and crossreferences there. */
 
   return eslOK;
@@ -1152,7 +1154,6 @@ p7_tophits_Targets(FILE *ofp, P7_TOPHITS *th, P7_PIPELINE *pli, int textw)
       if (textw >  0)           descw = ESL_MAX(32, textw - namew - 61); /* 61 chars excluding desc is from the format: 2 + 22+2 +22+2 +8+2 +<name>+1 */
       else                      descw = 0;                               /* unlimited desc length is handled separately */
 
-      printf("textw = %d, namew = %d, descw = %d, pli->show_accessions = %d\n", textw, namew, descw, pli->show_accessions);
 
       /* The minimum width of the target table is 111 char: 47 from fields, 8 from min name, 32 from min desc, 13 spaces */
       if (fprintf(ofp, "Scores for complete sequence%s (score includes all domains):\n", pli->mode == p7_SEARCH_SEQS ? "s" : "") < 0) 
