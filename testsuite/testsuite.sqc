@@ -550,6 +550,7 @@
 3 valgrind  hmmstat               @src/hmmstat@    %MINIFAM.HMM% 
 3 valgrind  jackhmmer             @src/jackhmmer@  !tutorial/HBB_HUMAN! !tutorial/globins45.fa!
 3 valgrind  phmmer                @src/phmmer@     !tutorial/HBB_HUMAN! !tutorial/globins45.fa!
+3 valgrind  nhmmer                @src/nhmmer@     !tutorial/MADE1.hmm! !tutorial/dna_target.fa!
 
 # some derivatives of tmpfiles created by hmmpress, not sqc itself: clean up
 1 prep     minifam                rm -f %MINIFAM.HMM%.h3f %MINIFAM.HMM%.h3p %MINIFAM.HMM%.h3m %MINIFAM.HMM%.h3i 

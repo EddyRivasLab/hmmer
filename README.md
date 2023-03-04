@@ -24,7 +24,7 @@ depends on the Easel library, also at
 ```
    % wget http://eddylab.org/software/hmmer/hmmer.tar.gz
    % tar zxf hmmer.tar.gz
-   % cd hmmer-3.3
+   % cd hmmer-3.3.2
    % ./configure --prefix /your/install/path
    % make
    % make check                 # optional: run automated tests
@@ -40,7 +40,7 @@ Files to read in the source directory:
 
    * INSTALL - brief installation instructions.
    * Userguide.pdf - the HMMER User's Guide.
- 
+
 To get started after installation, see the Tutorial section in the
 HMMER User's Guide (Userguide.pdf).
 
@@ -86,4 +86,3 @@ to send us a pull request on GitHub, please base your changes on our
 
 Visit our
 [issues tracking page at github](https://github.com/EddyRivasLab/hmmer/issues).
-

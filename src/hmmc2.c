@@ -301,7 +301,6 @@ int main(int argc, char *argv[])
   seq[0] = 0;
   while (strncmp(seq, "//", 2) != 0) {
     int rem;
-    int total = 0;
 
     eod = 0;
     seq[0] = 0;
@@ -343,10 +342,12 @@ int main(int argc, char *argv[])
       }
 
       n = sizeof(sstatus);
-      total += n;
       if ((size = readn(sock, &sstatus, n)) == -1) {
-        if(errno == ECONNRESET || errno == 0){
-          // connection was reset, usually because server exited
+        //printf("MY ERRNO IS %d\n", errno);
+        if(errno == ECONNRESET || errno == ESRCH || errno == EPERM || errno == 0) {
+          // when daemon is shut down normally, the readn() is expected to fail - but w/ various errors, depending on OS, etc. 
+          // our design for this should be rethought - I added the ESRCH test to hack around a unit test failure. [SRE 7/25/20]
+          //   ... and EPERM, ditto, for OS/X Big Sur with MPI [SRE 4/19/21, xref H10/106]
           fprintf(stderr, "Daemon exited, shutting down\n");
           exit(0);
         }
@@ -357,7 +358,6 @@ int main(int argc, char *argv[])
       if (sstatus.status != eslOK) {
         char *ebuf;
         n = sstatus.msg_size;
-        total += n; 
         ebuf = malloc(n);
         if ((size = readn(sock, ebuf, n)) == -1) {
           fprintf(stderr, "[%s:%d] read error %d - %s\n", __FILE__, __LINE__, errno, strerror(errno));
@@ -417,8 +417,6 @@ int main(int argc, char *argv[])
       abc = esl_alphabet_Create(eslAMINO);
 
       if (status == eslOK) {
-        total = 0;
-
         /* Send the string to the server */ 
         n = strlen(seq);
         printf ("Sending data %" PRIu64 ":\n", n);
@@ -449,7 +447,6 @@ int main(int argc, char *argv[])
         if (sstatus.status != eslOK) {
           char *ebuf;
           n = sstatus.msg_size;
-          total += n; 
           ebuf = malloc(n);
           if ((size = readn(sock, ebuf, n)) == -1) {
             fprintf(stderr, "[%s:%d] read error %d - %s\n", __FILE__, __LINE__, errno, strerror(errno));

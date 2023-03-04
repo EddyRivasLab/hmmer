@@ -491,8 +491,8 @@ serial_master(ESL_GETOPTS *go, struct cfg_s *cfg)
     }
 #endif
 
-  infocnt = (ncpus == 0) ? 1 : ncpus;
-  ESL_ALLOC(info, sizeof(*info) * infocnt);
+  infocnt = (ncpus <= 0) ? 1 : ncpus;       // ncpus == 0 is better. ncpus can't be < 0, esl_getopts already validated args.
+  ESL_ALLOC(info, sizeof(*info) * infocnt); // but in some circumstances, an apparent bug in gcc 8.3.x throws overzealous warning here (iss#219)
 
   /* Show header output */
   output_header(ofp, go, cfg->qfile, cfg->dbfile);

@@ -46,6 +46,14 @@ CGTTTGTGTGTGAAACTGTTTTGATTTTTTTCGTGGGTGAATACTCATCCGTTTGACCTAAAATTTAACGCGTTTTGTCC
 ATTCACACAAGCACTTTCGTATATTTTTTGCACTCAAGCAAGGAGGCACGTCCATAAACGAATCACAAAAAGAAGATACGGGGAAGAAAAACCATAACGTTTTGTTTTCGGAAAACCGGTTTTGTTCACTCTCGGTCTGGGACTTACTACGACTTACTCCTTGGGTATTTTGGTCTGAAATTTTTACCAGACATTCGACAATGTGTCTATTGAGTTTCGGCTGAGGCTTGAGCCCCAGGT
 TCGGCCCACAAGAGTGGCAATAAATCTTTTATTCGTCAATGCCACGGCTGAAAGGAAGGT""", file=f) 
 
+# Make sure previous tests haven't left an indexed <tmppfx>.hmm file around, otherwise
+# those index files + this about-to-be-created .hmm file will cause errors.
+#
+for sfx in [ 'h3f', 'h3i', 'h3m', 'h3p' ]:
+    idxfile = '{0}.hmm.{1}'.format(tmppfx, sfx)
+    if os.path.exists(idxfile):
+        os.remove(idxfile)
+
 try:
     retcode = subprocess.call(['{}/src/hmmbuild'.format(builddir), '{}.hmm'.format(tmppfx), '{}.sto'.format(tmppfx)], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
 except:
@@ -55,8 +63,8 @@ if retcode != 0: sys.exit("FAIL: hmmbuild failed")
 try:
     retcode = subprocess.call(['{}/src/nhmmer'.format(builddir), '--crick', '--tblout', '{}.tbl'.format(tmppfx), '{}.hmm'.format(tmppfx), '{}.fa'.format(tmppfx)], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
 except:
-    sys.exit("FAIL: hmmbuild failed")
-if retcode != 0: sys.exit("FAIL: hmmbuild failed")
+    sys.exit("FAIL: nhmmer failed")
+if retcode != 0: sys.exit("FAIL: nhmmer failed")
 
 
 # From the .tbl output, extract a list of envelopes;

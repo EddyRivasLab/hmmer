@@ -740,7 +740,18 @@ ERROR:
  *
  * Throws:    <eslEMEM> on allocation failure.
  *
+ *            <eslETYPE> if <sq> is more than 100K long, which can
+ *            happen when someone uses hmmsearch/hmmscan instead of
+ *            nhmmer/nhmmscan on a genome DNA seq db.
+ *
  * Xref:      J4/25.
+ *
+ * Note:      Error handling needs improvement. The <eslETYPE> exception
+ *            was added as a late bugfix. It really should be an <eslEINVAL>
+ *            normal error (because it's a user error). But then we need
+ *            all our p7_Pipeline() calls to check their return status
+ *            and handle normal errors appropriately, which we haven't 
+ *            been careful enough about. [SRE H9/4]
  */
 int
 p7_Pipeline(P7_PIPELINE *pli, P7_OPROFILE *om, P7_BG *bg, const ESL_SQ *sq, const ESL_SQ *ntsq, P7_TOPHITS *hitlist, const P7_SCOREDATA *data)
@@ -760,6 +771,7 @@ p7_Pipeline(P7_PIPELINE *pli, P7_OPROFILE *om, P7_BG *bg, const ESL_SQ *sq, cons
   int              status;
 
   if (sq->n == 0) return eslOK;    /* silently skip length 0 seqs; they'd cause us all sorts of weird problems */
+  if (sq->n > 100000) ESL_EXCEPTION(eslETYPE, "Target sequence length > 100K, over comparison pipeline limit.\n(Did you mean to use nhmmer/nhmmscan?)");
 
   p7_omx_GrowTo(pli->oxf, om->M, 0, sq->n);    /* expand the one-row omx if needed */
 
@@ -1584,7 +1596,7 @@ p7_Pipeline_LongTarget(P7_PIPELINE *pli, P7_OPROFILE *om, P7_SCOREDATA *data,
    * short high-scoring regions.
    */
   if (fmf) // using an FM-index
-    p7_SSVFM_longlarget(om, 2.0, bg, pli->F1, fmf, fmb, fm_cfg, data, pli->strands, &msv_windowlist );
+    p7_SSVFM_longlarget(om, 2.0, bg, pli->F1, fmf, fmb, fm_cfg, data, pli->strands, pli->r, &msv_windowlist );
   else // compare directly to sequence
     p7_SSVFilter_longtarget(sq->dsq, sq->n, om, pli->oxf, data, bg, pli->F1, &msv_windowlist);
 
