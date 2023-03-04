@@ -170,8 +170,8 @@ static ESL_OPTIONS options[] = {
   { "--domT",       eslARG_REAL,        FALSE, NULL, NULL,    NULL,  NULL,  DOMREPOPTS,      "Not used",   99 },
   { "--incdomE",    eslARG_REAL,       "0.01", NULL, "x>0",   NULL,  NULL,  INCDOMOPTS,      "Not used",   99 },
   { "--incdomT",    eslARG_REAL,        FALSE, NULL, NULL,    NULL,  NULL,  INCDOMOPTS,      "Not used",   99 },
-  { "--notrans",    eslARG_NONE,        FALSE, NULL, NULL,    NULL,  NULL,  NULL,            "don't show the translated DNA sequence in domain alignment",  99 }, /*for hmmscant */
-  { "--vertcodon",  eslARG_NONE,        FALSE, NULL, NULL,    NULL,  NULL,  NULL,            "show the DNA vertically in domain alignment",                 99 }, /*for hmmscant */
+  { "--notrans",    eslARG_NONE,        FALSE, NULL, NULL,    NULL,  NULL,  NULL,            "don't show the translated DNA sequence in domain alignment",  99 }, /*for hmmscant - hide in nhmmer*/
+  { "--vertcodon",  eslARG_NONE,        FALSE, NULL, NULL,    NULL,  NULL,  NULL,            "show the DNA vertically in domain alignment",                 99 }, /*for hmmscant - hide in nhmmer */
 
 
 
@@ -392,7 +392,7 @@ main(int argc, char **argv)
    */
   cfg.queryfile  = NULL;
   cfg.dbfile     = NULL;
-  cfg.qfmt       = NHMMER_QFORMAT_UNKNOWN;
+  cfg.qfmt       = eslSQFILE_UNKNOWN;
 
   cfg.firstseq_key = NULL;
   cfg.n_targetseq  = -1;
