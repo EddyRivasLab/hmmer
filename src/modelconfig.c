@@ -318,7 +318,7 @@ utest_occupancy(P7_HMM *hmm)
   occ = malloc(sizeof(float) * (hmm->M+1));
   p7_hmm_CalculateOccupancy(hmm, occ, NULL);
   x = esl_vec_FSum(occ+1, hmm->M) / (float) hmm->M;
-  if (esl_FCompare(x, 0.6, 0.1) != eslOK)           esl_fatal(msg);
+  if (esl_FCompare_old(x, 0.6, 0.1) != eslOK)           esl_fatal(msg);
   free(occ);
   return;
 }

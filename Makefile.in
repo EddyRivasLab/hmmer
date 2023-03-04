@@ -1,5 +1,5 @@
 # Top level Makefile for HMMER3
-# 
+#
 # On most systems, to build H3 you should only need:
 #     % ./configure; make
 #
@@ -54,8 +54,9 @@ man1ext     = .1
 # Compiler configuration
 #
 CC             = @CC@
-CFLAGS         = @CFLAGS@ 
-PTHREAD_CFLAGS = @PTHREAD_CFLAGS@ 
+CFLAGS         = @CFLAGS@
+PTHREAD_CFLAGS = @PTHREAD_CFLAGS@
+NEON_CFLAGS    = @NEON_CFLAGS@
 SSE_CFLAGS     = @SSE_CFLAGS@
 VMX_CFLAGS     = @VMX_CFLAGS@
 LDFLAGS        = -static @LDFLAGS@
@@ -63,14 +64,14 @@ CPPFLAGS       = @CPPFLAGS@
 
 # Other tools
 #
-AR        = @AR@ 
+AR        = @AR@
 RANLIB    = @RANLIB@
 INSTALL   = @INSTALL@
 
-# beautification magic stolen from git 
+# beautification magic stolen from git
 #
 QUIET_SUBDIR0 = +${MAKE} -C #space separator after -c
-QUIET_SUBDIR1 = 
+QUIET_SUBDIR1 =
 ifndef V
 	QUIET         = @
 	QUIET_CC      = @echo '    ' CC $@;
@@ -81,12 +82,12 @@ ifndef V
 		        ${MAKE} -s -C $$subdir
 endif
 
-.PHONY: all dev check pdf install uninstall clean distclean TAGS
+.PHONY: all dev check pdf install install-strip uninstall clean distclean TAGS
 
 # all: Compile all documented executables.
 #      (Excludes test programs.)
 #
-all: 
+all:
 	${QUIET_SUBDIR0}${ESLDIR}     ${QUIET_SUBDIR1} all
 	${QUIET_SUBDIR0}${SADIR}      ${QUIET_SUBDIR1} all
 	${QUIET_SUBDIR0}src           ${QUIET_SUBDIR1} all
@@ -94,7 +95,7 @@ all:
 
 # dev: compile all executables, including drivers.
 #
-dev: 
+dev:
 	${QUIET_SUBDIR0}${ESLDIR}  ${QUIET_SUBDIR1} dev
 	${QUIET_SUBDIR0}${SADIR}   ${QUIET_SUBDIR1} all
 	${QUIET_SUBDIR0}src        ${QUIET_SUBDIR1} dev
@@ -111,7 +112,7 @@ tests:
 check:
 	@command -v python3 >/dev/null 2>&1 || { echo >&2 "python3 is required for 'make check', but is not in your PATH. Aborting."; exit 1; }
 	${QUIET_SUBDIR0}${ESLDIR}  ${QUIET_SUBDIR1} tests
-	${QUIET_SUBDIR0}${SADIR}   ${QUIET_SUBDIR1} all	
+	${QUIET_SUBDIR0}${SADIR}   ${QUIET_SUBDIR1} all
 	${QUIET_SUBDIR0}src        ${QUIET_SUBDIR1} tests
 	${QUIET_SUBDIR0}${ESLDIR}  ${QUIET_SUBDIR1} check
 	${QUIET_SUBDIR0}testsuite  ${QUIET_SUBDIR1} check
@@ -130,14 +131,22 @@ pdf:
 #
 #          Does not use quiet beautification magic; always verbose.
 install: all
-	${INSTALL} -d ${DESTDIR}${bindir}
-	${INSTALL} -d ${DESTDIR}${man1dir}
+	if [ ! -d ${DESTDIR}${bindir} ]; then ${INSTALL} -d ${DESTDIR}${bindir}; fi
+	if [ ! -d ${DESTDIR}${man1dir} ]; then ${INSTALL} -d ${DESTDIR}${man1dir}; fi
 	${MAKE} -C src install
+	${MAKE} -C documentation install
+
+# install-strip: same as install, but strip binaries
+#
+install-strip: all
+	if [ ! -d ${DESTDIR}${bindir} ]; then ${INSTALL} -d ${DESTDIR}${bindir}; fi
+	if [ ! -d ${DESTDIR}${man1dir} ]; then ${INSTALL} -d ${DESTDIR}${man1dir}; fi
+	${MAKE} -C src install-strip
 	${MAKE} -C documentation install
 
 # uninstall: reverses the steps of "make install".
 #
-uninstall: 
+uninstall:
 	${MAKE} -C src uninstall
 	${MAKE} -C documentation uninstall
 
@@ -164,7 +173,7 @@ distclean:
 	${QUIET_SUBDIR0}documentation ${QUIET_SUBDIR1} distclean
 	${QUIET_SUBDIR0}${ESLDIR}     ${QUIET_SUBDIR1} distclean
 	${QUIET_SUBDIR0}${SADIR}      ${QUIET_SUBDIR1} distclean
-	${QUIET}-rm config.log config.status
+	${QUIET}-rm -f config.log config.status
 	${QUIET}-rm -rf autom4te.cache
 	${QUIET}-rm -f *.o *~ Makefile.bak core TAGS TAGS.part gmon.out
 	${QUIET}-rm -f cscope.po.out cscope.out cscope.in.out cscope.files
@@ -176,6 +185,3 @@ endif
 
 TAGS:
 	./makeTAGS.sh
-
-
-

@@ -188,7 +188,7 @@ int buildAndWriteFMIndex (FM_METADATA *meta, uint32_t seq_offset, uint32_t ambig
 
   int num_freq_cnts_b  = 1+ceil((double)N/(meta->freq_cnt_b));
   int num_freq_cnts_sb = 1+ceil((double)N/meta->freq_cnt_sb);
-  int num_SA_samples   = floor((double)N/meta->freq_SA);
+  int num_SA_samples   = 1+floor((double)N/meta->freq_SA);
 
   if (SAsamp != NULL) {
     ESL_REALLOC ((*Tcompressed), compressed_bytes * sizeof(uint8_t));
@@ -221,8 +221,10 @@ int buildAndWriteFMIndex (FM_METADATA *meta, uint32_t seq_offset, uint32_t ambig
   cnts_sb[BWT[0]]++;
   cnts_b[BWT[0]]++;
 
-  if (SAsamp != NULL)
+  if (SAsamp != NULL) {
     SAsamp[0] = 0; // not used, since indexing is base-1. Set for the sake of consistency of output.
+    SAsamp[num_SA_samples-1] = 0; //this may sometimes not be filled below; set to avoid valgrind error in fwrite
+  }
 
   //Scan through SA to build the BWT and FM index structures
   for(j=1; j < N; ++j) {
@@ -421,7 +423,7 @@ main(int argc, char **argv)
 
   int            in_ambig_run = 0;
 
-  ESL_RANDOMNESS *r   = esl_randomness_CreateFast(42);
+  ESL_RANDOMNESS *r   = esl_randomness_Create(42);
 
 
 #if !defined (eslENABLE_SSE)
@@ -533,40 +535,33 @@ main(int argc, char **argv)
   esl_sqfile_SetDigital(sqfp, abc);
   block = esl_sq_CreateDigitalBlock(FM_BLOCK_COUNT, abc);
   block->complete = FALSE;
-  max_block_size = FM_BLOCK_OVERLAP+block_size+1  + block_size*.05; // +1 for the '$',  +5% of block size because that's the slop allowed by readwindow
+  max_block_size = FM_BLOCK_OVERLAP+block_size+1  + ceil(block_size*.05); // first +1 for the '$',  +5% of block size because that's the slop allowed by readwindow
 
   /* Allocate BWT, Text, SA, and FM-index data structures, allowing storage of maximally large sequence*/
   ESL_ALLOC(fm_data, sizeof(FM_DATA) );
-
-  if (fm_data == NULL) {
-    esl_fatal( "%s: Cannot allocate memory.\n", argv[0]);
-  }
+  fm_data->T          = NULL;
+  fm_data->BWT_mem    = NULL;
+  fm_data->BWT        = NULL;
+  fm_data->SA         = NULL;
+  fm_data->C          = NULL;
+  fm_data->occCnts_sb = NULL;
+  fm_data->occCnts_b  = NULL;
 
   ESL_ALLOC (fm_data->T, max_block_size * sizeof(uint8_t));
   ESL_ALLOC (fm_data->BWT_mem, max_block_size * sizeof(uint8_t));
-     fm_data->BWT = fm_data->BWT_mem;  // in SSE code, used to align memory. Here, doesn't matter
+  fm_data->BWT = fm_data->BWT_mem;  // in SSE code, used to align memory. Here, doesn't matter
   ESL_ALLOC (fm_data->SA, max_block_size * sizeof(int));
-  ESL_ALLOC (SAsamp,     (floor((double)max_block_size/meta->freq_SA) ) * sizeof(uint32_t));
-
+  ESL_ALLOC (SAsamp,     (1 + floor((double)max_block_size/meta->freq_SA) ) * sizeof(uint32_t));
   ESL_ALLOC (fm_data->occCnts_sb, (1+ceil((double)max_block_size/meta->freq_cnt_sb)) *  meta->alph_size * sizeof(uint32_t)); // every freq_cnt_sb positions, store an array of ints
   ESL_ALLOC (fm_data->occCnts_b,  ( 1+ceil((double)max_block_size/meta->freq_cnt_b)) *  meta->alph_size * sizeof(uint16_t)); // every freq_cnt_b positions, store an array of 8-byte ints
   ESL_ALLOC (cnts_sb,    meta->alph_size * sizeof(uint32_t));
   ESL_ALLOC (cnts_b,     meta->alph_size * sizeof(uint16_t));
 
-  if((fm_data->T == NULL)  || (fm_data->BWT == NULL)  || (fm_data->SA==NULL) ||
-      (fm_data->occCnts_b==NULL)  || (fm_data->occCnts_sb==NULL) ||
-      (SAsamp==NULL) || (cnts_b==NULL) || (cnts_sb==NULL)  ) {
-    esl_fatal( "%s: Cannot allocate memory.\n", argv[0]);
-  }
-
-
   // Open a temporary file, to which FM-index data will be written
   if (esl_tmpfile(tmp_filename, &fptmp) != eslOK) esl_fatal("unable to open fm-index tmpfile");
 
-
   /* Main loop: */
   while (status == eslOK ) {
-
     //reset block as an empty vessel
     for (i=0; i<block->count; i++){
       esl_sq_Reuse(block->list + i);  
@@ -657,6 +652,7 @@ main(int argc, char **argv)
       if (block->list[i].desc == NULL) meta->seq_data[numseqs].desc[0] = '\0';
           else  strcpy(meta->seq_data[numseqs].desc, block->list[i].desc );
 
+      meta->seq_data[numseqs].length = 0;
       for (j=1; j<=block->list[i].n; j++) {
         c = abc->sym[block->list[i].dsq[j]];
         if ( meta->alph_type == fm_DNA) {
@@ -792,7 +788,7 @@ main(int argc, char **argv)
     compressed_bytes =   ((chars_per_byte-1+block_length)/chars_per_byte);
     num_freq_cnts_b  = 1+ceil((double)block_length/meta->freq_cnt_b);
     num_freq_cnts_sb = 1+ceil((double)block_length/meta->freq_cnt_sb);
-    num_SA_samples   = floor((double)block_length/meta->freq_SA);
+    num_SA_samples   = 1+floor((double)block_length/meta->freq_SA);
 
 
     //j==0 test cause T and SA to be written only for forward sequence

@@ -1301,12 +1301,12 @@ sequence in a much more memory-efficient manner than
 The \mono{nhmmer} and \mono{nhmmscan} programs are designed for
 memory-efficient DNA profile searches of long DNA sequences. They were
 developed in concert with the Dfam database (\url{dfam.org}), which
-provides of alignments and profiles of many common DNA repeat elements
+provides alignments and profiles of DNA repeat elements
 for several important genomes.  The alignment
 \mono{tutorial/MADE1.sto} is a representative alignment of 100 human
 MADE1 transposable elements, a subset of the Dfam MADE1
 alignment. We'll use the MADE1 alignment to show how
-\mono{nhmmer}/\mono{nhmmscan} work; they work similarly to
+\mono{nhmmer}/\mono{nhmmscan} work; these are similar to
 \mono{hmmsearch}/\mono{hmmscan}.
 
 \subsection{Step 1: build a DNA profile with hmmbuild}
@@ -1350,14 +1350,13 @@ either a profile file as produced above by hmmbuild, or a file
 containing either one DNA sequence or an alignment of multiple DNA
 sequences.
 
+
 If a sequence or alignment is used as query input, \mono{nhmmer}
 internally produces the profile for that alignment\marginnote{Using
   default hmmbuild parameters; if you want more control, explicitly
   built the profile with hmmbuild.}, then searches with that
-profile. The profile produced in this way is automatically saved to
-disk, and the default file name is chosen by appending ``.hmm'' to the
-name of the sequence file name. This can be overridden with the
-\mono{-{}-hmmout} flag.
+profile. The profile produced in this way can be written to a file
+specified by the \mono{-{}-hmmout} flag.
 
 To search \mono{dna\_made1\_target.fa} with our \mono{MADE1.hmm} profile:
 

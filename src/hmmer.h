@@ -20,7 +20,7 @@
  *   17. P7_BUILDER:     configuration options for new HMM construction.
  *   18. Declaration of functions in HMMER's exposed API.
  *   
- * Also, see impl_{sse,vmx}/impl_{sse,vmx}.h for additional API
+ * Also, see impl_{sse,vmx,neon}/impl_{sse,vmx,neon}.h for additional API
  * specific to the acceleration layer; in particular, the P7_OPROFILE
  * structure for an optimized profile.
  */
@@ -174,7 +174,7 @@ typedef struct p7_hmm_s {
   char    *desc;                 /* brief (1-line) description of model   (optional: NULL) */ /* String, \0-terminated   */
   char    *rf;                   /* reference line from alignment 1..M    (p7H_RF)         */ /* String; 0=' ', M+1='\0' */
   char    *mm;                   /* model mask line from alignment 1..M   (p7H_MM)         */ /* String; 0=' ', M+1='\0' */
-  char    *consensus;		         /* consensus residue line        1..M    (p7H_CONS)       */ /* String; 0=' ', M+1='\0' */
+  char    *consensus;		 /* consensus residue line        1..M    (p7H_CONS)       */ /* String; 0=' ', M+1='\0' */
   char    *cs;                   /* consensus structure line      1..M    (p7H_CS)         */ /* String; 0=' ', M+1='\0' */
   char    *ca;	                 /* consensus accessibility line  1..M    (p7H_CA)         */ /* String; 0=' ', M+1='\0' */
 
@@ -826,7 +826,9 @@ typedef struct p7_hmm_window_list_s {
 /*****************************************************************
  * 14. Choice of vector implementation.
  *****************************************************************/
-#if   defined (eslENABLE_SSE)
+#if   defined (eslENABLE_NEON)
+#include "impl_neon/impl_neon.h"
+#elif defined (eslENABLE_SSE)
 #include "impl_sse/impl_sse.h"
 #elif defined (eslENABLE_VMX)
 #include "impl_vmx/impl_vmx.h"
@@ -1523,6 +1525,7 @@ extern int p7_Builder_MaxLength      (P7_HMM *hmm, double emit_thresh);
 /* p7_domain.c */
 extern P7_DOMAIN *p7_domain_Create_empty();
 extern void p7_domain_Destroy(P7_DOMAIN *obj);
+extern int p7_domain_Copy(const P7_DOMAIN *src, P7_DOMAIN *dst);
 extern int p7_domain_Serialize(const P7_DOMAIN *obj, uint8_t **buf, uint32_t *n, uint32_t *nalloc);
 extern int p7_domain_Deserialize(const uint8_t *buf, uint32_t *n, P7_DOMAIN *ret_obj);
 extern int p7_domain_TestSample(ESL_RAND64 *rng, P7_DOMAIN **ret_obj);
@@ -1555,6 +1558,7 @@ extern int     p7_gmx_DumpWindow(FILE *fp, P7_GMX *gx, int istart, int iend, int
 /* p7_hit.c */
 extern P7_HIT *p7_hit_Create_empty();
 extern void p7_hit_Destroy(P7_HIT *the_hit);
+extern int p7_hit_Copy(const P7_HIT *src, P7_HIT *dst);
 extern int p7_hit_Serialize(const P7_HIT *obj, uint8_t **buf, uint32_t *n, uint32_t *nalloc);
 extern int p7_hit_Deserialize(const uint8_t *buf, uint32_t *n, P7_HIT *ret_obj);
 extern int p7_hit_TestSample(ESL_RAND64 *rng, P7_HIT **ret_obj);
@@ -1700,6 +1704,7 @@ extern void    p7_spensemble_Destroy(P7_SPENSEMBLE *sp);
 /* p7_tophits.c */
 extern P7_TOPHITS *p7_tophits_Create(void);
 extern int         p7_tophits_Grow(P7_TOPHITS *h);
+extern P7_TOPHITS *p7_tophits_Clone(const P7_TOPHITS *h);
 extern int         p7_tophits_CreateNextHit(P7_TOPHITS *h, P7_HIT **ret_hit);
 extern int         p7_tophits_Add(P7_TOPHITS *h,
 				  char *name, char *acc, char *desc, 
@@ -1812,7 +1817,7 @@ extern int fm_initConfigGeneric( FM_CFG *cfg, ESL_GETOPTS *go);
 /* fm_ssv.c */
 extern int p7_SSVFM_longlarget( P7_OPROFILE *om, float nu, P7_BG *bg, double F1,
                       const FM_DATA *fmf, const FM_DATA *fmb, FM_CFG *fm_cfg, const P7_SCOREDATA *ssvdata,
-                      int strands, P7_HMM_WINDOWLIST *windowlist);
+                      int strands, ESL_RANDOMNESS *r, P7_HMM_WINDOWLIST *windowlist);
 
 
 /* fm_sse.c */

@@ -3,6 +3,7 @@ config.log
 config.status
 Makefile
 easel
+/TAGS
 *.o
 *.dSYM
 *.stamp
