@@ -325,7 +325,7 @@ utest_stotrace(ESL_GETOPTS *go, ESL_RANDOMNESS *r, ESL_ALPHABET *abc, P7_PROFILE
       if (sc > vsc) esl_fatal("sampled trace has score > optimal Viterbi path; not possible");
       p7_trace_Reuse(tr);
     }
-  if (esl_FCompare(maxsc, vsc, 0.001) != eslOK) esl_fatal("stochastic trace failed to sample the Viterbi path");
+  if (esl_FCompare_old(maxsc, vsc, 0.001) != eslOK) esl_fatal("stochastic trace failed to sample the Viterbi path");
 
   p7_trace_Destroy(tr);
   p7_gmx_Destroy(gx);

@@ -107,7 +107,6 @@ sleep 2;
 if ($?) { die "FAIL: hmmc2 returned non-zero exit code of $?";  }
 $daemon_active = 0;
 
-
 $in_data = 0;
 $nhits   = 0;
 foreach $line (@output)

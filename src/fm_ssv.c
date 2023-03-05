@@ -319,7 +319,6 @@ FM_Recurse( int depth, int Kp, int fm_direction,
             || ( dp_pairs[i].model_direction == fm_backward && k == 1 )                                             //can't extend anymore, 'cause we're at the beginning of the model, going backwards
             || (depth == dp_pairs[i].score_peak_len + fm_cfg->drop_max_len)                                        //too many consecutive positions with a negative total score contribution (sort of like Xdrop)
             || (depth > 4 && depth > consec_consensus && (float)sc/(float)depth < fm_cfg->score_density_req)       //score density is too low (don't bother checking in the first couple slots
-            || (depth >= 0.7*fm_cfg->max_depth && depth > consec_consensus &&  (float)sc/(float)depth < sc_threshFM/(float)(fm_cfg->max_depth))                      // if we're most of the way across the sequence, and score density is too low, abort -- if the density on the other side is high enough, I'll find it on the reverse sweep
             || (dp_pairs[i].max_consec_pos < fm_cfg->consec_pos_req  &&                                               //a seed is expected to have at least one run of positive-scoring matches at least length consec_pos_req;  if it hasn't,  (see Tue Nov 23 09:39:54 EST 2010)
                 (fm_cfg->consec_pos_req - positive_run) ==  (fm_cfg->max_depth - depth + 1)                 // if we're close to the end of the sequence, abort -- if that end does have sufficiently long all-positive run, I'll find it on the reverse sweep
                )
@@ -727,7 +726,7 @@ FM_extendSeed(FM_DIAG *diag, const FM_DATA *fm, const P7_SCOREDATA *ssvdata, FM_
 int
 p7_SSVFM_longlarget( P7_OPROFILE *om, float nu, P7_BG *bg, double F1,
          const FM_DATA *fmf, const FM_DATA *fmb, FM_CFG *fm_cfg, const P7_SCOREDATA *ssvdata,
-         int strands, P7_HMM_WINDOWLIST *windowlist)
+         int strands, ESL_RANDOMNESS *r, P7_HMM_WINDOWLIST *windowlist)
 {
   float sc_thresh, sc_threshFM;
   float invP;
@@ -755,8 +754,11 @@ p7_SSVFM_longlarget( P7_OPROFILE *om, float nu, P7_BG *bg, double F1,
 
   /* convert the consensus to a collection of ints, so I can test for runs of identity to the consensus */
   ESL_ALLOC(consensus, (om->M+1)*sizeof(uint8_t) );
-  for (i=1; i<=om->M; i++)
+  for (i=1; i<=om->M; i++) {
     consensus[i] = om->abc->inmap[(int)(om->consensus[i])];
+    if (consensus[i] > om->abc->K)
+          consensus[i] = esl_rnd_Roll(r,om->abc->K);
+  }
 
 
   /* Set false target length. This is a conservative estimate of the length of window that'll

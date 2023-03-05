@@ -410,7 +410,7 @@ p7_bg_NullOne(const P7_BG *bg, const ESL_DSQ *dsq, int L, float *ret_sc)
  *            fixed L=400 expectation, it's all wrong, it's not
  *            conditional on the target sequence length and length
  *            modeling's messed up!"), don't panic. It's set up as a
- *            conditional-on-L model that generates accordint to P(x |
+ *            conditional-on-L model that generates according to P(x |
  *            model, L) P(L); the P(L) term is added in
  *            p7_bg_FilterScore() below.
  *            

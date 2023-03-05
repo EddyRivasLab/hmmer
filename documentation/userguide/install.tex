@@ -46,10 +46,29 @@ directory.  For example:
   \user{\% cd hmmer-\HMMERversion{}}
   \vspace{1ex}
 
-To compile:
+Next you'll use \mono{./configure} to configure HMMER for your system,
+but first, decide where you want HMMER installed. By default, our
+\mono{configure} script will set things up to be installed under
+\mono{/usr/local}. HMMER programs are then installed in
+\mono{/usr/local/bin}, and HMMER man pages in
+\mono{/usr/local/share/man/man1/}.  These are the standard unix-y
+places to put things, but you may need root privileges to do it (so
+you might need something like \mono{sudo make install} when you get to
+that part below). If you want to install somewhere else, you want to
+set a different install directory prefix using \mono{./configure
+  {-}{-}prefix /your/install/path}, so programs and man pages will be
+installed in \mono{/your/install/path/bin}
+\mono{/your/install/path/share/man/man1/} respectively.\sidenote{These
+  directories will be created, if they didn't already exist.}  For
+example, you might do \mono{./configure {-}{-}prefix=\$\{HOME\}}, for
+installation in \mono{\$\{HOME\}/bin/} and
+\mono{\$\{HOME\}/share/man/man1} subdirectories in your own home
+directory.
+
+So, to configure and compile:
 
   \vspace{1ex}
-  \user{\% ./configure}\\ 
+  \user{\% ./configure {-}{-}prefix=/your/install/path}\\
   \user{\% make}
   \vspace{1ex}
 
@@ -67,24 +86,11 @@ Optionally, to compile and run a test suite\sidenote{The test suite
 The newly compiled binaries are now in the \mono{src} directory.  You
 can run them from there, or manually copy them wherever.  You don't
 have to install HMMER programs to run them. Optionally, to install the
-programs and man pages in standard locations on your system, do:
+programs and man pages, do:
 
   \vspace{1ex}
   \user{\% make install} 
   \vspace{1ex}
-
-By default, programs are installed in \mono{/usr/local/bin} and man
-pages in \mono{/usr/local/share/man/man1/}. You may need root
-privileges to do this, so you might need something like \mono{sudo
-  make install}.
-
-You can change the \mono{/usr/local} prefix to any directory you want
-when you do the \mono{./configure} step, using the \mono{./configure
-  {-}{-}prefix} option, as in \mono{./configure {-}{-}prefix
-  /the/directory/you/want}. For example, you might do
-\mono{./configure {-}{-}prefix=\$\{HOME\}}, for installation in
-\mono{bin/} and \mono{share/man/man1} subdirectories in your own home
-directory.
 
 Optionally, you can also install a set of additional small tools
 (``miniapps'') from our Easel library.  We don't do this by default,
@@ -128,8 +134,7 @@ don't guarantee that the two master branches are necessarily
 compatible at all times. It's possible that the Easel master branch
 has advanced in support of an Infernal release, for example. You might
 have to check out the Easel tag that corresponds to the more recent
-stable HMMER release. These Easel tags end in ``h'': for example,
-\mono{easel-0.45h}.
+stable HMMER release. 
 
 If you want to suggest changes to us by submitting a pull request on
 GitHub, please base your changes against our \mono{develop} branches.
@@ -249,7 +254,7 @@ Multithreaded HMMER programs use master/worker parallelization, with
 \mono{<n>} worker threads and one master thread. When HMMER is run on
 a machine with multiple available cores, the default number of worker
 threads is two\footnote{Set by a compile-time configuration option,
-  \mono{P7\_NCPU}, in \mono{src/p7\_config.h.in}.}. You can control the
+  \mono{p7\_NCPU}, in \mono{src/p7\_config.h.in}.}. You can control the
 number of cores each HMMER process will use for computation with the
 \mono{{-}{-}cpu <n>} command line option or the \mono{HMMER\_NCPU}
 environment variable.

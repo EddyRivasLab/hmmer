@@ -1003,7 +1003,7 @@ send_results(int fd, ESL_STOPWATCH *w, P7_TOPHITS *th, P7_PIPELINE *pli){
   uint8_t *buf2_ptr = NULL;
   uint32_t n = 0; // index within buffer of serialized data
   uint32_t nalloc = 0; // Size of serialized buffer
-
+  int i;
   // set up handles to buffers
   buf = &buf_ptr;
   buf2 = &buf2_ptr;
@@ -1041,7 +1041,7 @@ send_results(int fd, ESL_STOPWATCH *w, P7_TOPHITS *th, P7_PIPELINE *pli){
   }
 
   // and then the hits
-  for(int i =0; i< stats.nhits; i++){
+  for(i =0; i< stats.nhits; i++){
     if(p7_hit_Serialize(&(th->unsrt[i]), buf, &n, &nalloc) != eslOK){
       LOG_FATAL_MSG("Serializing P7_HIT failed", errno);
     }
