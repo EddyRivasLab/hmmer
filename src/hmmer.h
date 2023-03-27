@@ -124,6 +124,8 @@ enum p7_strands_e {    p7_STRAND_TOPONLY  = 0, p7_STRAND_BOTTOMONLY = 1,  p7_STR
 #define p7H_CHKSUM  (1<<15)   /* model has an alignment checksum                  */
 #define p7H_CONS    (1<<16)   /* consensus residue line available                 */
 #define p7H_MMASK   (1<<17)   /* #MM annotation available                        !*/
+#define p7H_COMLOG  (1<<18)   /* HMM has command line field */
+#define p7H_CTIME   (1<<19)   /* HMM (has creation time field)*/
 
 /* Indices of Plan7 main model state transitions, hmm->t[k][] */
 enum p7h_transitions_e {
@@ -1593,8 +1595,8 @@ extern int     p7_hmm_Compare(P7_HMM *h1, P7_HMM *h2, float tol);
 extern int     p7_hmm_Validate(P7_HMM *hmm, char *errbuf, float tol);
 /*      5. Other routines in the API */
 extern int     p7_hmm_CalculateOccupancy(const P7_HMM *hmm, float *mocc, float *iocc);
-
-
+extern int     p7_hmm_Serialize(const P7_HMM *hmm, uint8_t **buf, uint32_t *n, uint32_t *nalloc);
+extern int     p7_hmm_Deserialize(const uint8_t *buf, uint32_t *n, ESL_ALPHABET *abc, P7_HMM **ret_obj);
 
 /* p7_hmmfile.c */
 extern int  p7_hmmfile_OpenE    (const char *filename, char *env, P7_HMMFILE **ret_hfp, char *errbuf);

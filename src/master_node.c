@@ -616,12 +616,13 @@ clientside_loop(CLIENTSIDE_ARGS *data)
 
     
 
-    abc = esl_alphabet_Create(eslAMINO);
+ 
     seq = NULL;
     hmm = NULL;
 
     if (*ptr == '>') {
       /* try to parse the input buffer as a FASTA sequence */
+      abc = esl_alphabet_Create(eslAMINO);
       seq = esl_sq_CreateDigital(abc);
       bg = p7_bg_Create(abc);
       /* try to parse the input buffer as a FASTA sequence */
@@ -669,10 +670,22 @@ clientside_loop(CLIENTSIDE_ARGS *data)
         search_type = HMMD_CMD_SCAN;
       }
     }
-    else if (strncmp(ptr, "HMM", 3) == 0) {
+    else if (*ptr = '*'){ // parse query object as serialized HMM
+      if (data->masternode->database_shards[dbx-1]->data_type == HMM){
+        client_msg_longjmp(data->sock_fd, status, &jmp_env, "Database %d contains HMM data, and a HMM cannot be used to search a HMM database", dbx);
+      }
+      abc = esl_alphabet_Create(eslAMINO);
+      int start_pos = 0;
+      p7_hmm_Deserialize(ptr+1, &start_pos, abc, &hmm);  // Grab the serialized HMM and its alphabet
+      search_type = HMMD_CMD_SEARCH;
+
+    }
+    else if (strncmp(ptr, "HMM", 3) == 0) {  // parse query object as text-mode HMM, must be amino (protein) HMM
        if (data->masternode->database_shards[dbx-1]->data_type == HMM){
         client_msg_longjmp(data->sock_fd, status, &jmp_env, "Database %d contains HMM data, and a HMM cannot be used to search a HMM database", dbx);
       }
+      abc = esl_alphabet_Create(eslAMINO);
+
       search_type = HMMD_CMD_SEARCH;
       /* try to parse the buffer as an hmm */
       status = p7_hmmfile_OpenBuffer(ptr, strlen(ptr), &hfp);

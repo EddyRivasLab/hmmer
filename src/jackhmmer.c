@@ -622,7 +622,7 @@ serial_master(ESL_GETOPTS *go, struct cfg_s *cfg)
 	      prv_msa_nseq = msa->nseq;
 	      esl_msa_Destroy(msa);
 	    }
-
+    //fprintf(stderr, "Round %d:", iteration);
 	  /* HMM checkpoint output */
 	  if (esl_opt_IsOn(go, "--chkhmm")) {
 	    checkpoint_hmm(nquery, hmm, esl_opt_GetString(go, "--chkhmm"), iteration);

@@ -244,7 +244,7 @@ main(int argc, char **argv)
   ESL_ALLOC(buffer, MAX_READ_LEN);
   ESL_ALLOC(cmd, MAX_READ_LEN);
   int rem = MAX_READ_LEN;
-  int cmdlen = MAX_READ_LEN;
+  uint32_t cmdlen = MAX_READ_LEN;
   int eod = 0;
   int optslen;
   char *query_name=NULL, *query_accession=NULL, *query_obj=NULL, *query_desc=NULL;
@@ -550,6 +550,7 @@ main(int argc, char **argv)
     converged = 0;
     prv_msa_nseq = 0;
     int iteration=0;
+    int send_command_length = strlen(cmd); // First-round commands are always string-formatted.  Later ones aren't
     while(num_rounds > 0 && !converged){
       iteration++;
 	    if (esl_opt_IsOn(go, "--chkhmm") &&query_hmm != NULL) {
@@ -567,7 +568,7 @@ main(int argc, char **argv)
         th=NULL;
       }
       //printf("sending %s to server, length %d\n", cmd, strlen(cmd));
-      if (writen(sock, cmd, strlen(cmd)) != strlen(cmd)) {
+      if (writen(sock, cmd, send_command_length) != send_command_length) {
         p7_Die("[%s:%d] write (size %" PRIu64 ") error %d - %s\n", __FILE__, __LINE__, n, errno, strerror(errno));
       }
        // Get the status structure back from the server
@@ -747,21 +748,13 @@ main(int argc, char **argv)
 	        prv_msa_nseq = msa->nseq;
 
           //now, we need to build the new command object to send to the server.
-          char *ascii_hmm;
-          if(p7_hmmfile_WriteToString(&ascii_hmm, -1, query_hmm) != eslOK){  // -1 specifies default HMM format
-            p7_Die("Hmmclient was unable to construct the text HMM to send to the server for the next round of the search");
+          // serialize the hmm rather than sending it in text mode to preserve full accuracy
+          cmd[optslen] = '*';
+          rem =cmdlen - (optslen +1);
+          send_command_length = optslen+1;
+          if(p7_hmm_Serialize(query_hmm,(uint8_t **) &cmd, &send_command_length, &cmdlen) != eslOK){
+            p7_Die("Unable to send serialized HMM to server in jackhmmer-style search");
           }
-          cmd[optslen] = '\0'; //shorten back to the options string
-          rem =cmdlen - optslen;
-          if(rem <= strlen(ascii_hmm)){
-            ESL_REALLOC(cmd, cmdlen+strlen(ascii_hmm)+1);
-            cmdlen += strlen(ascii_hmm)+1;
-            rem += strlen(ascii_hmm)+1;
-          }
-          strcat(cmd, ascii_hmm);
-          // should now have the full command, so clean up
-          free(ascii_hmm);
-
         }
       } 
     }

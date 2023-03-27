@@ -743,10 +743,25 @@ extern int p7_Pipeline_Overthruster(P7_PIPELINE *pli, P7_OPROFILE *om, P7_BG *bg
       return eslFAIL;
   }
   pli->n_past_vit++;
-
+/*  for(int npc=0; npc < bg->fhmm->M; npc++){
+    fprintf(stderr, "%f, ", bg->fhmm->pi[npc]);
+  }
+  for(int npc0 = 0; npc0< (bg->fhmm->M * (bg->fhmm->M +1)); npc0++){
+    fprintf(stderr, "%f, ",bg->fhmm->t[npc0]);
+  } 
+  for(int npc1 = 0; npc1 < (bg->fhmm->M * bg->fhmm->abc->K); npc1++){
+    fprintf(stderr, "%f, ", bg->fhmm->e[npc1]);
+  }
+  for(int npc2 = 0; npc2 < (bg->fhmm->M * bg->fhmm->abc->Kp); npc2++){
+    fprintf(stderr, "%f, ", bg->fhmm->eo[npc2]);
+  }
+  fprintf(stderr, "%f\n", bg->p1);*/
+  //fprintf(stderr, "%d \n", sq->n);
   /* Parse it with Forward and obtain its real Forward score. */
   p7_ForwardParser(sq->dsq, sq->n, om, pli->oxf, &fwdsc);
   seq_score = (fwdsc - filtersc) / eslCONST_LOG2;
+ //fprintf(stderr, "%s, %f, %f, %f\n", sq->name, fwdsc, filtersc, nullsc);
+ //fprintf(stderr, "%f, %f\n", bg->p1, bg->omega);
   P = esl_exp_surv(seq_score, om->evparam[p7_FTAU], om->evparam[p7_FLAMBDA]);
   if (P > pli->F3)
     return eslFAIL;
