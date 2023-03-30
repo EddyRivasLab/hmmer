@@ -131,6 +131,65 @@ characters per line. The default is 120.
 
 
 
+.SH TRANSLATION OPTIONS
+
+.TP 
+.BI -l " <n>"
+Set minimum open reading frame length, default 20. 
+
+.TP 
+.B -m 
+Open Reading Frames must initiate with AUG.
+
+.TP
+.B -M
+ORFs must start with allowed initiation codon.
+
+.TP 
+.BI --informat " <s>"
+Specify the format of the input DNA sequence file. 
+
+
+.TP 
+.B --watson 
+Only search the top strand. By default both the query sequence
+and its reverse-complement are searched.
+
+.TP 
+.B --crick 
+Only search the bottom (reverse-complement) strand. By 
+default both the query sequence and its reverse-complement are searched.
+
+.TP 
+.BI -c " <n>"
+Use one of the standard NCBI genetic code tables
+using the NCBI identifier 
+.IR <n> .
+Options: 
+
+ id  description
+ --- -----------------------------------
+   1 Standard  [default]
+   2 Vertebrate mitochondrial
+   3 Yeast mitochondrial
+   4 Mold, protozoan, coelenterate mitochondrial; Mycoplasma/Spiroplasma
+   5 Invertebrate mitochondrial
+   6 Ciliate, dasycladacean, Hexamita nuclear
+   9 Echinoderm and flatworm mitochondrial
+  10 Euplotid nuclear
+  11 Bacterial, archaeal; and plant plastid
+  12 Alternative yeast
+  13 Ascidian mitochondrial
+  14 Alternative flatworm mitochondrial
+  16 Chlorophycean mitochondrial
+  21 Trematode mitochondrial
+  22 Scenedesmus obliquus mitochondrial
+  23 Thraustochytrium mitochondrial
+  24 Pterobranchia mitochondrial
+  25 Candidate Division SR1 and Gracilibacteria
+  
+
+
 .SH OPTIONS CONTROLLING REPORTING THRESHOLDS
 
 Reporting thresholds control which hits are reported in output files
@@ -181,7 +240,6 @@ have at least one homologous domain already).
 Instead of thresholding per-domain output on E-value, instead
 report domains with a bit score of >=
 .IR <x> .
-
 
 
 
@@ -321,62 +379,6 @@ bias filter, too many sequences may pass the filter with biased
 queries, leading to slower than expected performance as the
 computationally intensive Forward/Backward algorithms shoulder an
 abnormally heavy load.
-
-
-
-.SH TRANSLATION OPTIONS
-
-.TP 
-.BI -l " <n>"
-Set minimum open reading frame length, default 20. 
-
-.TP 
-.B -m 
-Open Reading Frames must initiate with AUG.
-
-.TP 
-.BI --informat " <s>"
-Specify the format of the input DNA sequence file. 
-
-
-.TP 
-.B --watson 
-Only search the top strand. By default both the query sequence
-and its reverse-complement are searched.
-
-.TP 
-.B --crick 
-Only search the bottom (reverse-complement) strand. By 
-default both the query sequence and its reverse-complement are searched.
-
-.TP 
-.BI --c " <n>"
-Use one of the standard NCBI genetic code tables
-using the NCBI identifier 
-.IR <n> .
-Options: 
-
-id  description
---- -----------------------------------
-  1 Standard  [default]
-  2 Vertebrate mitochondrial
-  3 Yeast mitochondrial
-  4 Mold, protozoan, coelenterate mitochondrial; Mycoplasma/Spiroplasma
-  5 Invertebrate mitochondrial
-  6 Ciliate, dasycladacean, Hexamita nuclear
-  9 Echinoderm and flatworm mitochondrial
- 10 Euplotid nuclear
- 11 Bacterial, archaeal; and plant plastid
- 12 Alternative yeast
- 13 Ascidian mitochondrial
- 14 Alternative flatworm mitochondrial
- 16 Chlorophycean mitochondrial
- 21 Trematode mitochondrial
- 22 Scenedesmus obliquus mitochondrial
- 23 Thraustochytrium mitochondrial
- 24 Pterobranchia mitochondrial
- 25 Candidate Division SR1 and Gracilibacteria
-  
 
 
 
