@@ -542,7 +542,7 @@ ERROR:
  * Throws:    Nothing
  */ 
 extern int p7_domain_Compare(P7_DOMAIN *first, P7_DOMAIN *second, double atol, double rtol){
-  int i;
+  
   // compare all the fixed-length fields
   if(first->ienv != second->ienv){
     return eslFAIL;
