@@ -1830,12 +1830,6 @@ p7_tophits_TabularTargets(FILE *ofp, char *qname, char *qacc, P7_TOPHITS *th, P7
   int orfw   = ESL_MAX(6, p7_tophits_GetMaxORFnameLength(th));
   int h,d;
 
-  int64_t sqfrom;
-  int64_t sqto;
-  int64_t lowest;
-  int64_t highest;
-  int i;
-  
   if (show_header)
   {
       if (pli->long_targets) 
@@ -1851,7 +1845,7 @@ p7_tophits_TabularTargets(FILE *ofp, char *qname, char *qacc, P7_TOPHITS *th, P7
       {
         if (pli->is_translated)
 	{
-          if (fprintf(ofp, "#%*s %22s %22s %33s\n", tnamew+qnamew+taccw+qaccw+orfw+4, "", "--- full sequence ----", "--- best 1 domain ----", "--- domain number estimation ----") < 0)
+          if (fprintf(ofp, "#%*s %22s %22s %33s\n", tnamew+qnamew+taccw+qaccw+orfw+3, "", "--- full sequence ----", "--- best 1 domain ----", "--- domain number estimation ----") < 0)
             ESL_EXCEPTION_SYS(eslEWRITE, "tabular per-sequence hit list: write failed");
           if (fprintf(ofp, "#%-*s %-*s %-*s %-*s %-*s %9s %6s %5s %9s %6s %5s %5s %3s %3s %3s %3s %3s %3s %3s %s\n",
             tnamew-1, " target name",        taccw, "accession",  qnamew, "query name",           qaccw, "accession",  orfw, "orf", "  E-value", " score", " bias", "  E-value", " score", " bias", "exp", "reg", "clu", " ov", "env", "dom", "rep", "inc", "description of target") < 0)
@@ -1984,14 +1978,14 @@ p7_tophits_TabularDomains(FILE *ofp, char *qname, char *qacc, P7_TOPHITS *th, P7
   int qaccw  = (qacc ? ESL_MAX(10, strlen(qacc)) : 10);
   int taccw  = ESL_MAX(10, p7_tophits_GetMaxAccessionLength(th));
   int orfw   = ESL_MAX(6, p7_tophits_GetMaxORFnameLength(th));
-  int tlen, qlen, orflen;
+  int tlen, qlen;
   int h,d,nd;
 
   if (show_header)
     {
       if (pli->is_translated)
       {
-         if (fprintf(ofp, "#%*s %22s %40s %11s %11s %11s %11s\n", tnamew+qnamew-1+15+taccw+qaccw+orfw, "",                                                      "--- full sequence ---",        "-------------- this domain -------------",                "hmm coord",      "ali coord",     "env coord",      "orf coord") < 0)
+         if (fprintf(ofp, "#%*s %22s %40s %11s %11s %11s %11s\n", tnamew+qnamew-1+15+taccw+qaccw+orfw+1, "",                                                      "--- full sequence ---",        "-------------- this domain -------------",                "hmm coord",      "ali coord",     "env coord",      "orf coord") < 0)
             ESL_EXCEPTION_SYS(eslEWRITE, "tabular per-domain hit list: write failed");
          if (fprintf(ofp, "#%-*s %-*s %5s %-*s %-*s %5s %-*s %9s %6s %5s %3s %3s %9s %9s %6s %5s %5s %5s %5s %5s %5s %5s %5s %5s %5s %4s %s\n",
             tnamew-1, " target name",        taccw, "accession",  "tlen",  qnamew, "query name",           qaccw, "accession",  "qlen", orfw, "orf",    "E-value",   "score",  "bias",  "#",   "of",  "c-Evalue",  "i-Evalue",  "score",  "bias",  "from",  "to",    "from",  "to",    "from",  "to",    "from",  "to",    "frame",  "acc",  "description of target") < 0)
