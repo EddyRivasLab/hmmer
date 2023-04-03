@@ -1197,26 +1197,17 @@ p7_hmm_Compare(P7_HMM *h1, P7_HMM *h2, float tol)
     }
 
   if (strcmp(h1->name,   h2->name)   != 0) return eslFAIL;
-  if (((h1->comlog != NULL) && (h2->comlog == NULL)) || ((h1->comlog == NULL) && (h2->comlog != NULL))){
-    // one HMM has comlog and the other doesn't, so not the same
-    return eslFAIL;
-  }
-  //after above check, we know that if h1 has a comlog, h2 does too
-  if ((h1->comlog != NULL) && (esl_strcmp(h1->comlog, h2->comlog) != 0)) return eslFAIL;
+
+  if (esl_strcmp(h1->comlog, h2->comlog) != 0) return eslFAIL;
  
-  if (((h1->ctime != NULL) && (h2->ctime == NULL)) || ((h1->ctime == NULL) && (h2->ctime != NULL))){
-    // one HMM has ctime and the other doesn't, so not the same
-    return eslFAIL;
-  }
-  //after above check, we know that if h1 has a ctime, h2 does too
-  if ((h1->ctime != NULL) && (esl_strcmp(h1->ctime, h2->ctime) != 0)) return eslFAIL;
+  if (esl_strcmp(h1->ctime, h2->ctime) != 0) return eslFAIL;
 
   if (h1->nseq     != h2->nseq)                                      return eslFAIL;
   if (esl_FCompare_old(h1->eff_nseq, h2->eff_nseq, tol) != eslOK)        return eslFAIL;
   if (h1->checksum != h2->checksum)        return eslFAIL;
 
-  if ((h1->flags & p7H_ACC) && esl_strcmp(h1->acc,  h2->acc)  != 0) return eslFAIL;
-  if ((h1->flags & p7H_DESC) && esl_strcmp(h1->desc, h2->desc) != 0) return eslFAIL;
+  if (esl_strcmp(h1->acc,  h2->acc)  != 0) return eslFAIL;
+  if (esl_strcmp(h1->desc, h2->desc) != 0) return eslFAIL;
 
   if ((h1->flags & p7H_RF)    && esl_strcmp(h1->rf,        h2->rf)           != 0) return eslFAIL;
   if ((h1->flags & p7H_MMASK) && esl_strcmp(h1->mm,        h2->mm)           != 0) return eslFAIL;

@@ -550,7 +550,7 @@ main(int argc, char **argv)
     converged = 0;
     prv_msa_nseq = 0;
     int iteration=0;
-    int send_command_length = strlen(cmd); // First-round commands are always string-formatted.  Later ones aren't
+    uint32_t send_command_length = strlen(cmd); // First-round commands are always string-formatted.  Later ones aren't
     while(num_rounds > 0 && !converged){
       iteration++;
 	    if (esl_opt_IsOn(go, "--chkhmm") &&query_hmm != NULL) {
@@ -567,7 +567,11 @@ main(int argc, char **argv)
         p7_tophits_Destroy(th);
         th=NULL;
       }
-      //printf("sending %s to server, length %d\n", cmd, strlen(cmd));
+      uint32_t serialized_send_command_length = esl_hton32(send_command_length);
+      if (writen(sock, &serialized_send_command_length, sizeof(uint32_t)) != sizeof(uint32_t)) {
+        p7_Die("[%s:%d] write (size %" PRIu64 ") error %d - %s\n", __FILE__, __LINE__, n, errno, strerror(errno));
+      }
+      printf("sending %s to server, length %d\n", cmd, send_command_length);
       if (writen(sock, cmd, send_command_length) != send_command_length) {
         p7_Die("[%s:%d] write (size %" PRIu64 ") error %d - %s\n", __FILE__, __LINE__, n, errno, strerror(errno));
       }
@@ -843,6 +847,8 @@ main(int argc, char **argv)
   freeaddrinfo(info);  // Clean up that data structure
   esl_alphabet_Destroy(abc);
   p7_bg_Destroy(bg);
+
+  close(sock);  // shut the socket down nicely
   exit(0); // done now, so quit
 ERROR:  
     p7_Die("Unable to allocate memory in hmmclient\n");

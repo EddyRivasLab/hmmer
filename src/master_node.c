@@ -477,53 +477,32 @@ clientside_loop(CLIENTSIDE_ARGS *data)
   char               timestamp[32];
   int search_type = -1;
   int slen;
-  buf_size = MAX_BUFFER;
-  if ((buffer  = malloc(buf_size))   == NULL) LOG_FATAL_MSG("malloc", errno);
-  ptr = buffer;
-  remaining = buf_size;
+
   amount = 0;
-
-  eod = 0;
-  while (!eod) {
-    int   l;
-    char *s;
-
-    /* Receive message from client */
-    if ((n = read(data->sock_fd, ptr, remaining)) < 0) {
-      p7_syslog(LOG_ERR,"[%s:%d] - reading %s error %d - %s\n", __FILE__, __LINE__, data->ip_addr, errno, strerror(errno));
-      return 1;
-    }
-    
-    if (n == 0) {
-      free(buffer);
-      return 1;
-    }
-    ptr += n;
-    amount += n;
-    remaining -= n;
-    printf("Received %d bytes, total so far is %d\n", n, amount);
-    /* scan backwards till we hit the start of the line */
-    l = amount;
-    s = ptr - 1;
-    while (l-- > 0 && (*s == '\n' || *s == '\r')) --s;
-    while (l-- > 0 && (*s != '\n' && *s != '\r')) --s;
-    eod = (amount > 1 && *(s + 1) == '/' && *(s + 2) == '/' );
-
-    /* if the buffer is full, make it larger */
-    if (!eod && remaining == 0) {
-      if ((buffer = realloc(buffer, buf_size * 2)) == NULL) LOG_FATAL_MSG("realloc", errno);
-      ptr = buffer + buf_size;
-      remaining = buf_size;
-      buf_size *= 2;
-    }
+  uint32_t serialized_command_length, command_length;
+  /* Receive message from client with size of command */
+  if ((n = read(data->sock_fd, &serialized_command_length, sizeof(uint32_t))) <0) {
+    p7_syslog(LOG_ERR,"[%s:%d] - reading %s error %d - %s\n", __FILE__, __LINE__, data->ip_addr, errno, strerror(errno));
+    return 0;
+  }
+  if(n ==0 ){ // zero-byte send indicates that socket was closed from the other end
+    printf("Master node detected socket close\n");
+    return 1;  // tell caller to stop listening
+  }
+  if (n  != sizeof(uint32_t)) {// Wrong number of bytes were setn
+    p7_syslog(LOG_ERR,"[%s:%d] - reading %s error %d - %s\n", __FILE__, __LINE__, data->ip_addr, errno, strerror(errno));
+    return 0;
+  }
+  command_length = esl_ntoh32(serialized_command_length);
+  ESL_ALLOC(buffer, command_length +1);  // add one so we can zero-terminate
+  // now get the command
+  if ((n = read(data->sock_fd, buffer, command_length)) != command_length) {
+    p7_syslog(LOG_ERR,"[%s:%d] - reading %s error %d - %s\n", __FILE__, __LINE__, data->ip_addr, errno, strerror(errno));
+    return 0;
   }
 
-  /* zero terminate the buffer */
-  if (remaining == 0) {
-    if ((buffer = realloc(buffer, buf_size + 1)) == NULL) LOG_FATAL_MSG("realloc", errno);
-    ptr = buffer + buf_size;
-  }
-  *ptr = 0;
+  // zero-terminate the command
+  *(buffer+command_length) = 0;
 
   /* skip all leading white spaces */
   ptr = buffer;
@@ -533,7 +512,8 @@ clientside_loop(CLIENTSIDE_ARGS *data)
     process_ServerCmd(ptr, data);
     free(buffer);
     return 0;
-  } else if (*ptr == '@') {
+  } 
+  else if (*ptr == '@') {
     char *s = ++ptr;
 
     /* skip to the end of the line */
@@ -562,12 +542,6 @@ clientside_loop(CLIENTSIDE_ARGS *data)
     while (*ptr && isspace(*ptr)) ++ptr;
   } else {
     client_msg(data->sock_fd, eslEFORMAT, "Missing options string");
-    free(buffer);
-    return 0;
-  }
-
-  if (strncmp(ptr, "//", 2) == 0) {
-    client_msg(data->sock_fd, eslEFORMAT, "Missing search sequence/hmm");
     free(buffer);
     return 0;
   }
@@ -670,7 +644,7 @@ clientside_loop(CLIENTSIDE_ARGS *data)
         search_type = HMMD_CMD_SCAN;
       }
     }
-    else if (*ptr = '*'){ // parse query object as serialized HMM
+    else if (*ptr == '*'){ // parse query object as serialized HMM
       if (data->masternode->database_shards[dbx-1]->data_type == HMM){
         client_msg_longjmp(data->sock_fd, status, &jmp_env, "Database %d contains HMM data, and a HMM cannot be used to search a HMM database", dbx);
       }
@@ -699,6 +673,7 @@ clientside_loop(CLIENTSIDE_ARGS *data)
       /* no idea what we are trying to parse */
       client_msg_longjmp(data->sock_fd, eslEFORMAT, &jmp_env, "Unknown query sequence/hmm format");
     }
+
   } else {
     /* an error occured some where, so try to clean up */
     if (opts != NULL) esl_getopts_Destroy(opts);
@@ -739,6 +714,10 @@ clientside_loop(CLIENTSIDE_ARGS *data)
   esl_stack_PPush(cmdstack, parms);
   free(buffer);
   return 0;
+
+  ERROR:
+  if(buffer) free(buffer);
+  return eslEMEM;
 }
 
 
