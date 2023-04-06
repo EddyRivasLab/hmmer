@@ -53,8 +53,7 @@ typedef struct p7_master_work_descriptor{
   //! object id of the end of the region of the shard remaining to search
   uint64_t end;
 
-  //! size of the work chunk to return for each request
-  uint64_t chunk_size;
+  struct p7_master_work_descriptor *next;
 
 } P7_MASTER_WORK_DESCRIPTOR;
 
@@ -71,8 +70,11 @@ typedef struct p7_server_masternode_state{
   //! array[num_databases] of pointers to the database shards loaded on this node
   P7_SHARD **database_shards;
 
-  //! array[num_shards] of descriptors showing how much work remains to be done on each shard
+  //! array[num_shards] of lists of descriptors showing how much work remains to be done on each shard
   P7_MASTER_WORK_DESCRIPTOR *work_queues;
+
+  //! amount of work (unit = HMM-sequence comparisons) to send in response to each worker node request
+  uint64_t chunk_size;
 
   // Hits found by the current search
   P7_TOPHITS *tophits;

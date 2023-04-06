@@ -142,18 +142,6 @@ process_commandline(int argc, char **argv, ESL_GETOPTS **ret_go, char **ret_quer
   if (esl_opt_IsUsed(go, "--db")) {
       dbx = esl_opt_GetInteger(go, "--db");
     } 
-  if (esl_opt_IsUsed(go, "--seqdb")) {
-      if(dbx != 0){
-        p7_Die("Error: exactly one of --db, --seqdb, and --hmmdb must be specified");
-      }
-      dbx = esl_opt_GetInteger(go, "--seqdb");
-     }
-  if (esl_opt_IsUsed(go, "--hmmdb")) {
-      if(dbx != 0){
-        p7_Die("Error: exactly one of --db, --seqdb, and --hmmdb must be specified");
-      }
-      dbx = esl_opt_GetInteger(go, "--hmmdb");
-  }
   if (dbx == 0){
     dbx = 1;  //Default to searching first database
   }

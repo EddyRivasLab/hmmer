@@ -37,11 +37,12 @@
 #include "esl_stack.h"
 #include "esl_stopwatch.h"
 #include "esl_threads.h"
+#include "esl_regexp.h"
 #include "hmmer.h"
 #include "hmmserver.h"
+#include "worker_node.h"
 #include "master_node.h"
 #include "shard.h"
-#include "worker_node.h"
 #include "hmmpgmd.h"
 #include "hmmpgmd_shard.h"
 
@@ -548,49 +549,41 @@ clientside_loop(CLIENTSIDE_ARGS *data)
 
   if (!setjmp(jmp_env)) {
     dbx = 0;
-  printf("received options string of: %s\n", opt_str);
-  if ((opts = esl_getopts_Create(server_Client_Options))       == NULL)  client_msg_longjmp(data->sock_fd, status, &jmp_env, "Failed to create search options object");
-  if ((status = esl_opt_ProcessSpoof(opts, opt_str)) != eslOK) client_msg_longjmp(data->sock_fd, status, &jmp_env, "Failed to parse options string: %s", opt_str);
-  if ((status = esl_opt_VerifyConfig(opts))         != eslOK) client_msg_longjmp(data->sock_fd, status, &jmp_env, "Failed to parse options string: %s", opt_str);
+    printf("received options string of: %s\n", opt_str);
+    if ((opts = esl_getopts_Create(server_Client_Options))       == NULL)  client_msg_longjmp(data->sock_fd, status, &jmp_env, "Failed to create search options object");
+    if ((status = esl_opt_ProcessSpoof(opts, opt_str)) != eslOK) client_msg_longjmp(data->sock_fd, status, &jmp_env, "Failed to parse options string: %s", opt_str);
+    if ((status = esl_opt_VerifyConfig(opts))         != eslOK) client_msg_longjmp(data->sock_fd, status, &jmp_env, "Failed to parse options string: %s", opt_str);
 
     if (esl_opt_IsUsed(opts, "--db")) {
       dbx = esl_opt_GetInteger(opts, "--db");
       if((dbx < 1) || (dbx > data->masternode->num_databases)){
         client_msg_longjmp(data->sock_fd, eslEINVAL, &jmp_env, "Nonexistent database %d specified.  Valid database ID's for this server range from 1 to %d\n", dbx, data->masternode->num_databases);
       }
-    } 
-     if (esl_opt_IsUsed(opts, "--seqdb")) {
-      if(dbx != 0){
-        client_msg_longjmp(data->sock_fd, eslEINVAL, &jmp_env, "Error: exactly one of --db, --seqdb, and --hmmdb must be specified");
-      }
-      dbx = esl_opt_GetInteger(opts, "--seqdb");
-      if((dbx < 1) || (dbx > data->masternode->num_databases)){
-        client_msg_longjmp(data->sock_fd, eslEINVAL, &jmp_env, "Nonexistent database %d specified.  Valid database ID's for this server range from 1 to %d\n", dbx, data->masternode->num_databases);
-      }
-      if (data->masternode->database_shards[dbx-1]->data_type != AMINO){
-        client_msg_longjmp(data->sock_fd, status, &jmp_env, "Database %d contains does not contain protein sequence data, but --seqdb was used to specify that a protein sequence database was to be searched.", dbx);
-      }
-     }
-     if (esl_opt_IsUsed(opts, "--hmmdb")) {
-      if(dbx != 0){
-        client_msg_longjmp(data->sock_fd, eslEINVAL, &jmp_env, "Error: exactly one of --db, --seqdb, and --hmmdb must be specified");
-      }
-      dbx = esl_opt_GetInteger(opts, "--hmmdb");
-      if((dbx < 1) || (dbx > data->masternode->num_databases)){
-        client_msg_longjmp(data->sock_fd, eslEINVAL, &jmp_env, "Nonexistent database %d specified.  Valid database ID's for this server range from 1 to %d\n", dbx, data->masternode->num_databases);
-      }
-      if (data->masternode->database_shards[dbx-1]->data_type != HMM){
-        client_msg_longjmp(data->sock_fd, status, &jmp_env, "Database %d does not contanin HMM data, but --hmmdb was used to specify that an HMM database was to be searched.", dbx);
-      }
-    } 
-    
+    }    
     if(dbx == 0) {
       client_msg_longjmp(data->sock_fd, eslEINVAL, &jmp_env, "No search database specified, --db <database #> is required");
     }
 
-    
 
- 
+    // check for correctly formated rangelist if one is specified so that we can complain to the sender
+    if (esl_opt_IsUsed(opts, "--db_ranges")){
+      char *range_string = esl_opt_GetString(opts, "--db_ranges");
+      char *range;
+      uint64_t min_index = data->masternode->database_shards[dbx-1]->directory[0].index;
+      uint64_t max_index = data->masternode->database_shards[dbx-1]->directory[data->masternode->database_shards[dbx-1]->num_objects -1].index;
+      printf("Min-index: %lu, max-index %lu\n", min_index, max_index);
+      while ((status = esl_strtok(&range_string, ",", &range) ) == eslOK){
+        uint64_t start, end;
+        status = esl_regexp_ParseCoordString(range, &start, &end);
+        // These errors should never occur, because we sanity check-the range when receiving the search command
+        if (status == eslESYNTAX) client_msg_longjmp(data->sock_fd, eslEINVAL, &jmp_env,"--db_ranges takes coords <from>..<to>; %s not recognized", range);
+        if (status == eslFAIL)    client_msg_longjmp(data->sock_fd, eslEINVAL, &jmp_env,"Failed to find <from> or <to> coord in %s", range);
+        if(start < min_index | start > max_index) client_msg_longjmp(data->sock_fd, eslEINVAL, &jmp_env,"Start of range %lu was outside of database index range %lu to %lu", start, min_index, max_index);
+        if(end < min_index | end > max_index) client_msg_longjmp(data->sock_fd, eslEINVAL, &jmp_env,"End of range %lu was outside of database index range %lu to %lu", end, min_index, max_index);
+        
+        printf("range found of %lu to %lu\n", start, end);
+      }
+    }
     seq = NULL;
     hmm = NULL;
 
@@ -866,9 +859,11 @@ P7_SERVER_MASTERNODE_STATE *p7_server_masternode_Create(uint32_t num_shards, int
   int i;
   
   // Initialize the work queues to empty (start == -1 means empty)
+  // Work queues should never be NULL, must always have one valid node in them so we can detect empty
   for(i = 0; i < num_shards; i++){
     the_node->work_queues[i].start = (uint64_t) -1;
     the_node->work_queues[i].end = 0;
+    the_node->work_queues[i].next = NULL;
   }
 
   // We start off with no hits reported
@@ -1095,123 +1090,149 @@ int process_search(P7_SERVER_MASTERNODE_STATE *masternode, P7_SERVER_QUEUE_DATA 
   masternode->hit_messages_received = 0;
   gettimeofday(&start, NULL);
   
-  uint64_t search_start, search_end, chunk_size;
-    
-    // For now_search the entire database
+  uint64_t search_start, search_end, chunk_size, search_length;
+  if (esl_opt_IsUsed(query->opts, "--db_ranges")){
+    for(int which_shard = 0; which_shard< masternode->num_shards; which_shard++){ // create work queue for each shard
+      char *range_string = esl_opt_GetString(query->opts, "--db_ranges");
+      char *range;
+      P7_MASTER_WORK_DESCRIPTOR *prev = NULL;
+      P7_MASTER_WORK_DESCRIPTOR *current = &(masternode->work_queues[which_shard]);
+      while ( (status = esl_strtok(&range_string, ",", &range) ) == eslOK){
+        uint64_t start, end;
+        status = esl_regexp_ParseCoordString(range, &start, &end);
+        // These errors should never occur, because we sanity check-the range when receiving the search command
+        if (status == eslESYNTAX) p7_Fail("--db_ranges takes coords <from>..<to>; %s not recognized", range);
+        if (status == eslFAIL)    p7_Fail("Failed to find <from> or <to> coord in %s", range);
+
+        if(current == NULL){
+          ESL_ALLOC(current, sizeof(P7_MASTER_WORK_DESCRIPTOR));
+          current->next = NULL;
+          if(prev != NULL){
+            prev->next = current;
+          }
+          else{
+            p7_Fail("Both current and prev were NULL when parsing db_ranges.  This should never happen\n");
+          }
+        }
+        current->start = start;
+        current->end = end;
+        prev=current;
+        current = current->next;
+      }
+    }
+  }
+  else{ // search the whole database
     search_start = database_shard->directory[0].index;
     search_end = database_shard->directory[database_shard->num_objects -1].index;
-    uint64_t search_length = (search_end - search_start) +1;
-
-    chunk_size = ((search_end - search_start) / (masternode->num_worker_nodes * 128 )) +1; // round this up to avoid small amount of leftover work at the end
-
+    search_length = (search_end - search_start) +1;
     // set up the work queues
-    int which_shard;
-    for(which_shard = 0; which_shard < masternode->num_shards; which_shard++){
+    for(int which_shard = 0; which_shard < masternode->num_shards; which_shard++){
       masternode->work_queues[which_shard].start = search_start;
       masternode->work_queues[which_shard].end = search_end;
-      masternode->work_queues[which_shard].chunk_size = chunk_size;
     }
+  }
+  masternode->chunk_size = (search_length / (masternode->num_worker_nodes * 128 )) +1; // round this up to avoid small amount of leftover work at the end
 
-    // Synchronize with the hit processing thread
-    while(pthread_mutex_trylock(&(masternode->hit_wait_lock))){  // Wait until hit thread is sitting at cond_wait
-    }
-    masternode->worker_nodes_done = 0;  // None of the workers are finished at search start time
-    masternode->worker_stats_received = 0; // and none have sent pipeline statistics
-    pthread_cond_broadcast(&(masternode->start)); // signal hit processing thread to start
-    pthread_mutex_unlock(&(masternode->hit_wait_lock));
 
-    // Get the HMM this search will compare against
-    gm = p7_profile_Create (query->hmm->M, query->abc);
-    P7_BG *bg = p7_bg_Create(gm->abc);
-    p7_ProfileConfig(query->hmm, bg, gm, 100, p7_LOCAL); /* 100 is a dummy length for now; and MSVFilter requires local mode */
+  // Synchronize with the hit processing thread
+  while(pthread_mutex_trylock(&(masternode->hit_wait_lock))){  // Wait until hit thread is sitting at cond_wait
+  }
+  masternode->worker_nodes_done = 0;  // None of the workers are finished at search start time
+  masternode->worker_stats_received = 0; // and none have sent pipeline statistics
+  pthread_cond_broadcast(&(masternode->start)); // signal hit processing thread to start
+  pthread_mutex_unlock(&(masternode->hit_wait_lock));
+
+  // Get the HMM this search will compare against
+  gm = p7_profile_Create (query->hmm->M, query->abc);
+  P7_BG *bg = p7_bg_Create(gm->abc);
+  p7_ProfileConfig(query->hmm, bg, gm, 100, p7_LOCAL); /* 100 is a dummy length for now; and MSVFilter requires local mode */
     
-    // Pack the HMM into a buffer for broadcast
-    p7_profile_MPIPackSize(gm, MPI_COMM_WORLD, &hmm_length); // get the length of the profile
-    the_command.compare_obj_length = hmm_length;
+  // Pack the HMM into a buffer for broadcast
+  p7_profile_MPIPackSize(gm, MPI_COMM_WORLD, &hmm_length); // get the length of the profile
+  the_command.compare_obj_length = hmm_length;
 
-    if(hmm_length > hmm_buffer_size){ // need to grow the send buffer
-      ESL_REALLOC(hmmbuffer, hmm_length); 
-    }
-    pack_position = 0; // initialize this to the start of the buffer 
+  if(hmm_length > hmm_buffer_size){ // need to grow the send buffer
+    ESL_REALLOC(hmmbuffer, hmm_length); 
+  }
+  pack_position = 0; // initialize this to the start of the buffer 
 
-    if(p7_profile_MPIPack    (gm, hmmbuffer, hmm_length, &pack_position, MPI_COMM_WORLD) != eslOK){
-      p7_Fail("Packing profile failed in process_search\n");
-    }    // pack the hmm for sending
+  if(p7_profile_MPIPack    (gm, hmmbuffer, hmm_length, &pack_position, MPI_COMM_WORLD) != eslOK){
+    p7_Fail("Packing profile failed in process_search\n");
+  }    // pack the hmm for sending
   
-    // Prep to send the options string to the workers
-    the_command.options_length = strlen(query->optsstring) +1;
-    // First, send the command to start the search
-    MPI_Bcast(&the_command, 1, server_mpitypes[P7_SERVER_COMMAND_MPITYPE], 0, MPI_COMM_WORLD);
+  // Prep to send the options string to the workers
+  the_command.options_length = strlen(query->optsstring) +1;
+  // First, send the command to start the search
+  MPI_Bcast(&the_command, 1, server_mpitypes[P7_SERVER_COMMAND_MPITYPE], 0, MPI_COMM_WORLD);
 
-    // Now, broadcast the HMM
-    MPI_Bcast(hmmbuffer, the_command.compare_obj_length, MPI_CHAR, 0, MPI_COMM_WORLD);
+  // Now, broadcast the HMM
+  MPI_Bcast(hmmbuffer, the_command.compare_obj_length, MPI_CHAR, 0, MPI_COMM_WORLD);
 
-    // and the options string
-    MPI_Bcast(query->optsstring, the_command.options_length, MPI_CHAR, 0, MPI_COMM_WORLD);
+  // and the options string
+  MPI_Bcast(query->optsstring, the_command.options_length, MPI_CHAR, 0, MPI_COMM_WORLD);
 
 
-    // loop here until all of the workers are done with the search
-    while((masternode->worker_nodes_done < masternode->num_worker_nodes) || (masternode->worker_stats_received < masternode->num_worker_nodes))
-    {
-      p7_masternode_message_handler(masternode, buffer_handle, server_mpitypes, query->opts);  //Poll for incoming messages
-    }
-    if(*buffer_handle != NULL){ // need to clean up that buffer
-     p7_server_message_Destroy(*buffer_handle); 
-    }
-    gettimeofday(&end, NULL);
-    double ncells = (double) gm->M * (double) database_shard->total_length;
-    double elapsed_time = ((double)((end.tv_sec * 1000000 + (end.tv_usec)) - (start.tv_sec * 1000000 + start.tv_usec)))/1000000.0;
-    double gcups = (ncells/elapsed_time) / 1.0e9;
-    printf("%s, %lf, %d, %lf\n", gm->name, elapsed_time, gm->M, gcups);
+  // loop here until all of the workers are done with the search
+  while((masternode->worker_nodes_done < masternode->num_worker_nodes) || (masternode->worker_stats_received < masternode->num_worker_nodes)){
+    p7_masternode_message_handler(masternode, buffer_handle, server_mpitypes, query->opts);  //Poll for incoming messages
+  }
+  if(*buffer_handle != NULL){ // need to clean up that buffer
+    p7_server_message_Destroy(*buffer_handle); 
+  }
+  gettimeofday(&end, NULL);
+  double ncells = (double) gm->M * (double) database_shard->total_length;
+  double elapsed_time = ((double)((end.tv_sec * 1000000 + (end.tv_usec)) - (start.tv_sec * 1000000 + start.tv_usec)))/1000000.0;
+  double gcups = (ncells/elapsed_time) / 1.0e9;
+  printf("%s, %lf, %d, %lf\n", gm->name, elapsed_time, gm->M, gcups);
     
 
-    //Send results back to client
-    results.nhits = masternode->tophits->N;
-    results.stats.nhits = masternode->tophits->N;
-    results.stats.hit_offsets = NULL;
-    if (results.nhits > 0){
-      ESL_ALLOC(results.hits, results.nhits *sizeof(P7_HIT *));
-    }
-    int counter;
-    for(counter = 0; counter <results.nhits; counter++){
-      results.hits[counter] =masternode->tophits->unsrt + counter;
-    }
+  //Send results back to client
+  results.nhits = masternode->tophits->N;
+  results.stats.nhits = masternode->tophits->N;
+  results.stats.hit_offsets = NULL;
+  if (results.nhits > 0){
+    ESL_ALLOC(results.hits, results.nhits *sizeof(P7_HIT *));
+  }
+  int counter;
+  for(counter = 0; counter <results.nhits; counter++){
+    results.hits[counter] =masternode->tophits->unsrt + counter;
+  }
 
-    //Put pipeline statistics in results
-    results.stats.elapsed = elapsed_time;
-    results.stats.user = 0;
-    results.stats.sys =0;
-    results.stats.Z = masternode->pipeline->Z;
-    results.stats.domZ = masternode->pipeline->domZ;
-    results.stats.Z_setby = masternode->pipeline->Z_setby;
-    results.stats.domZ_setby = masternode->pipeline->domZ_setby;
-    if(masternode->pipeline->mode == p7_SEARCH_SEQS){
-      results.stats.nmodels = 1;
-      results.stats.nnodes = gm->M;
-      results.stats.nseqs = masternode->pipeline->nseqs;
-      results.stats.nres = masternode->pipeline->nres;
-    }
-    else{
-      results.stats.nmodels = masternode->pipeline->nmodels;
-      results.stats.nnodes = masternode->pipeline->nnodes;
-      results.stats.nseqs = 1;
-      results.stats.nres = -1; /* Fix when support scan */
-    }
-    results.stats.n_past_msv = masternode->pipeline->n_past_msv;
-    results.stats.n_past_bias = masternode->pipeline->n_past_bias;
-    results.stats.n_past_vit = masternode->pipeline->n_past_vit;
-    results.stats.n_past_fwd = masternode->pipeline->n_past_fwd;
-    results.stats.nreported = masternode->tophits->nreported;
-    results.stats.nincluded = masternode->tophits->nincluded;
+  //Put pipeline statistics in results
+  results.stats.elapsed = elapsed_time;
+  results.stats.user = 0;
+  results.stats.sys =0;
+  results.stats.Z = masternode->pipeline->Z;
+  results.stats.domZ = masternode->pipeline->domZ;
+  results.stats.Z_setby = masternode->pipeline->Z_setby;
+  results.stats.domZ_setby = masternode->pipeline->domZ_setby;
+  if(masternode->pipeline->mode == p7_SEARCH_SEQS){
+    results.stats.nmodels = 1;
+    results.stats.nnodes = gm->M;
+    results.stats.nseqs = masternode->pipeline->nseqs;
+    results.stats.nres = masternode->pipeline->nres;
+  }
+  else{
+    results.stats.nmodels = masternode->pipeline->nmodels;
+    results.stats.nnodes = masternode->pipeline->nnodes;
+    results.stats.nseqs = 1;
+    results.stats.nres = -1; /* Fix when support scan */
+  }
+  results.stats.n_past_msv = masternode->pipeline->n_past_msv;
+  results.stats.n_past_bias = masternode->pipeline->n_past_bias;
+  results.stats.n_past_vit = masternode->pipeline->n_past_vit;
+  results.stats.n_past_fwd = masternode->pipeline->n_past_fwd;
+  results.stats.nreported = masternode->tophits->nreported;
+  results.stats.nincluded = masternode->tophits->nincluded;
 
-    forward_results(query, &results); 
-    p7_pipeline_Destroy(masternode->pipeline);
-    p7_tophits_Destroy(masternode->tophits); //Reset for next search
-    masternode->tophits = p7_tophits_Create();
-    p7_bg_Destroy(bg);
-    p7_profile_Destroy(gm);
-    free(hmmbuffer);
-    return eslOK;
+  forward_results(query, &results); 
+  p7_pipeline_Destroy(masternode->pipeline);
+  p7_tophits_Destroy(masternode->tophits); //Reset for next search
+  masternode->tophits = p7_tophits_Create();
+  p7_bg_Destroy(bg);
+  p7_profile_Destroy(gm);
+  free(hmmbuffer);
+  return eslOK;
   ERROR:
     p7_Die("Unable to allocate memory in process_search"); 
 #endif
@@ -1363,10 +1384,6 @@ void p7_server_master_node_main(int argc, char ** argv, MPI_Datatype *server_mpi
 
     switch(query->cmd_type) {
     case HMMD_CMD_SEARCH:
-/*      if (esl_opt_IsUsed(query->opts, "--seqdb_ranges")) {
-        ESL_ALLOC(worker_comm.range_list, sizeof(RANGE_LIST));
-        hmmpgmd_GetRanges(worker_comm.range_list, esl_opt_GetString(query->opts, "--seqdb_ranges"));
-      }*/
       process_search(masternode, query, server_mpitypes); 
       break;
     case HMMD_CMD_SCAN:        
@@ -1578,7 +1595,7 @@ void p7_masternode_message_handler(P7_SERVER_MASTERNODE_STATE *masternode, P7_SE
         if(masternode->work_queues[requester_shard].end > masternode->work_queues[requester_shard].start){
           // There's work left to give out, so grab a chunk
           the_reply.start = masternode->work_queues[requester_shard].start;
-          the_reply.end = the_reply.start + masternode->work_queues[requester_shard].chunk_size;
+          the_reply.end = the_reply.start + masternode->chunk_size;
       
           if(the_reply.end >= masternode->work_queues[requester_shard].end){
             // The chunk includes all of the remaining work, so shorten it if necessary and mark the queue empty

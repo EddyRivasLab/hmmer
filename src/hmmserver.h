@@ -41,14 +41,12 @@ typedef struct p7_server_chunk_reply{
 
 static ESL_OPTIONS server_Client_Options[] = {
   /* name           type      default  env  range     toggles   reqs   incomp              help                                                      docgroup*/
-  { "-h",           eslARG_NONE,   FALSE, NULL, NULL,    NULL,  NULL,  NULL,            "show brief help on version and usage",                         1 },
+  { "-h",           eslARG_NONE,   FALSE, NULL, NULL,    NULL,  NULL,  NULL,           "show brief help on version and usage",                         1 },
   /* Interface with server */
   { "-s",           eslARG_STRING,   "localhost", NULL, NULL,    NULL,  NULL,  NULL,            "name of the machine running hmmserver (default localhost)",                         8 },
   { "--cport",      eslARG_INT,     "51371",  NULL, "49151<n<65536",NULL,  NULL,  "--worker",      "port to use for client/server communication",                 12 },
   { "--db",           eslARG_INT,   "-1", NULL, NULL,    NULL,  NULL,  NULL,            "number of the database to search (default 1)",                         8 },
-  // seqdb and hmmdb provided only for backward compatibility, will be removed
-  { "--seqdb",           eslARG_INT,   "-1", NULL, NULL,    NULL,  NULL,  NULL,            "number of the database to search (default 1)",                         8 },
-  { "--hmmdb",           eslARG_INT,   "-1", NULL, NULL,    NULL,  NULL,  NULL,            "number of the database to search (default 1)",                         8 },
+  { "--db_ranges",eslARG_STRING,     NULL,  NULL,  NULL,   NULL, NULL, NULL,         "range(s) of sequences within database that will be searched",  12 },
   { "--jack",       eslARG_INT,         "0", NULL, NULL,    NULL,  NULL,  NULL,         "number of rounds of jackhmmer search to perform (default 0).  Note that a one-round jackhmmer search is equivalent to a phmmer search and that this option is only allowed when the query object is one or more protein sequences", 8},
       /* Control of output */
   { "-o",           eslARG_OUTFILE, NULL, NULL, NULL,    NULL,  NULL,  NULL,            "direct output to file <f>, not stdout",                        2 },
