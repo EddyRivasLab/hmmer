@@ -567,7 +567,10 @@ clientside_loop(CLIENTSIDE_ARGS *data)
 
     // check for correctly formated rangelist if one is specified so that we can complain to the sender
     if (esl_opt_IsUsed(opts, "--db_ranges")){
-      char *range_string = esl_opt_GetString(opts, "--db_ranges");
+      char *orig_range_string = esl_opt_GetString(opts, "--db_ranges");
+      char *range_string = NULL;
+      esl_strdup(orig_range_string, -1, &range_string);  // make copy becauese tokenizaton seems to modify the input string
+      char *range_string_base = range_string; // save this because we need to free it later
       char *range;
       uint64_t min_index = data->masternode->database_shards[dbx-1]->directory[0].index;
       uint64_t max_index = data->masternode->database_shards[dbx-1]->directory[data->masternode->database_shards[dbx-1]->num_objects -1].index;
@@ -583,6 +586,7 @@ clientside_loop(CLIENTSIDE_ARGS *data)
         
         printf("range found of %lu to %lu\n", start, end);
       }
+      free(range_string_base);
     }
     seq = NULL;
     hmm = NULL;
@@ -853,7 +857,7 @@ P7_SERVER_MASTERNODE_STATE *p7_server_masternode_Create(uint32_t num_shards, int
   ESL_ALLOC(the_node, sizeof(P7_SERVER_MASTERNODE_STATE));
   
   // allocate memory for the work queues, one work queue per shard
-  ESL_ALLOC(the_node->work_queues, num_shards * sizeof(P7_MASTER_WORK_DESCRIPTOR));
+  ESL_ALLOC(the_node->work_queues, num_shards * sizeof(P7_MASTER_WORK_DESCRIPTOR *));
 
   the_node->num_shards = num_shards;
   int i;
@@ -861,9 +865,10 @@ P7_SERVER_MASTERNODE_STATE *p7_server_masternode_Create(uint32_t num_shards, int
   // Initialize the work queues to empty (start == -1 means empty)
   // Work queues should never be NULL, must always have one valid node in them so we can detect empty
   for(i = 0; i < num_shards; i++){
-    the_node->work_queues[i].start = (uint64_t) -1;
-    the_node->work_queues[i].end = 0;
-    the_node->work_queues[i].next = NULL;
+    ESL_ALLOC(the_node->work_queues[i], sizeof(P7_MASTER_WORK_DESCRIPTOR));
+    the_node->work_queues[i]->start = (uint64_t) -1;
+    the_node->work_queues[i]->end = 0;
+    the_node->work_queues[i]->next = NULL;
   }
 
   // We start off with no hits reported
@@ -953,6 +958,9 @@ void p7_server_masternode_Destroy(P7_SERVER_MASTERNODE_STATE *masternode){
   pthread_mutex_destroy(&(masternode->full_hit_message_pool_lock));
   pthread_mutex_destroy(&(masternode->hit_wait_lock));
 
+  for(i =0; i< masternode->num_shards; i++){
+    free(masternode->work_queues[i]);
+  }
   free(masternode->work_queues);
   
   p7_tophits_Destroy(masternode->tophits);
@@ -1093,10 +1101,13 @@ int process_search(P7_SERVER_MASTERNODE_STATE *masternode, P7_SERVER_QUEUE_DATA 
   uint64_t search_start, search_end, chunk_size, search_length;
   if (esl_opt_IsUsed(query->opts, "--db_ranges")){
     for(int which_shard = 0; which_shard< masternode->num_shards; which_shard++){ // create work queue for each shard
-      char *range_string = esl_opt_GetString(query->opts, "--db_ranges");
+      char *orig_range_string = esl_opt_GetString(query->opts, "--db_ranges");
+      char *range_string = NULL;
+      esl_strdup(orig_range_string, -1, &range_string);  // make copy becauese tokenizaton seems to modify the input string
       char *range;
+      char *range_string_base = range_string;  // save this so we can free it later
       P7_MASTER_WORK_DESCRIPTOR *prev = NULL;
-      P7_MASTER_WORK_DESCRIPTOR *current = &(masternode->work_queues[which_shard]);
+      P7_MASTER_WORK_DESCRIPTOR *current = masternode->work_queues[which_shard];
       while ( (status = esl_strtok(&range_string, ",", &range) ) == eslOK){
         uint64_t start, end;
         status = esl_regexp_ParseCoordString(range, &start, &end);
@@ -1119,6 +1130,7 @@ int process_search(P7_SERVER_MASTERNODE_STATE *masternode, P7_SERVER_QUEUE_DATA 
         prev=current;
         current = current->next;
       }
+      free(range_string_base);
     }
   }
   else{ // search the whole database
@@ -1127,8 +1139,8 @@ int process_search(P7_SERVER_MASTERNODE_STATE *masternode, P7_SERVER_QUEUE_DATA 
     search_length = (search_end - search_start) +1;
     // set up the work queues
     for(int which_shard = 0; which_shard < masternode->num_shards; which_shard++){
-      masternode->work_queues[which_shard].start = search_start;
-      masternode->work_queues[which_shard].end = search_end;
+      masternode->work_queues[which_shard]->start = search_start;
+      masternode->work_queues[which_shard]->end = search_end;
     }
   }
   masternode->chunk_size = (search_length / (masternode->num_worker_nodes * 128 )) +1; // round this up to avoid small amount of leftover work at the end
@@ -1592,19 +1604,26 @@ void p7_masternode_message_handler(P7_SERVER_MASTERNODE_STATE *masternode, P7_SE
         }
 
         // Get some work out of the appropriate queue
-        if(masternode->work_queues[requester_shard].end > masternode->work_queues[requester_shard].start){
+        if(masternode->work_queues[requester_shard]->end > masternode->work_queues[requester_shard]->start){
           // There's work left to give out, so grab a chunk
-          the_reply.start = masternode->work_queues[requester_shard].start;
+          the_reply.start = masternode->work_queues[requester_shard]->start;
           the_reply.end = the_reply.start + masternode->chunk_size;
       
-          if(the_reply.end >= masternode->work_queues[requester_shard].end){
-            // The chunk includes all of the remaining work, so shorten it if necessary and mark the queue empty
-            the_reply.end = masternode->work_queues[requester_shard].end;
-            masternode->work_queues[requester_shard].start = -1;
+          if(the_reply.end >= masternode->work_queues[requester_shard]->end){
+            // The chunk includes all of the remaining work, so shorten it if necessary
+            the_reply.end = masternode->work_queues[requester_shard]->end;
+            if(masternode->work_queues[requester_shard]->next != NULL){ // There's another work chunk available
+              P7_MASTER_WORK_DESCRIPTOR *temp = masternode->work_queues[requester_shard]->next;
+              free(masternode->work_queues[requester_shard]);
+              masternode->work_queues[requester_shard] = temp;
+            }
+            else{ // This is the last/only work chunk, so mark it empty
+              masternode->work_queues[requester_shard]->start = -1;  // Start is a uint64_t, so -1 = all ones == max
+            }
           }
           else{
             // Change the start-of-queue value to reflect that we've taken a chunk off
-            masternode->work_queues[requester_shard].start = the_reply.end + 1;
+            masternode->work_queues[requester_shard]->start = the_reply.end + 1;
           }
         }
         else{

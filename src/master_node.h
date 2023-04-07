@@ -71,7 +71,7 @@ typedef struct p7_server_masternode_state{
   P7_SHARD **database_shards;
 
   //! array[num_shards] of lists of descriptors showing how much work remains to be done on each shard
-  P7_MASTER_WORK_DESCRIPTOR *work_queues;
+  P7_MASTER_WORK_DESCRIPTOR **work_queues;
 
   //! amount of work (unit = HMM-sequence comparisons) to send in response to each worker node request
   uint64_t chunk_size;
