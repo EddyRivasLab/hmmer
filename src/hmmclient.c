@@ -327,11 +327,9 @@ main(int argc, char **argv)
   else{//just need the starting @ symbol
     strcpy(cmd, "@");
     rem -=1;
-    strcat(cmd, search_db);
-    rem -= strlen(search_db);
-    optslen = 3 + strlen(search_db) + strlen(optsstring);
-    strcat(cmd, " ");
-    rem -= 2;
+    /*strcat(cmd, search_db);
+    rem -= strlen(search_db); */
+    optslen = 2 + strlen(optsstring);
   }
   if(esl_opt_GetInteger(go, "--jack") > 1){ // We're doing a jackhmmer search, so might have to change the 
   // --incE and --incdomE values to match jackhmmer
@@ -588,7 +586,6 @@ main(int argc, char **argv)
             p7_Die("[%s:%d] read error %d - %s\n", __FILE__, __LINE__, errno, strerror(errno));
           }   
         if(abc) esl_alphabet_Destroy(abc);
-        free(ebuf);
         p7_Die("ERROR (%d): %s\n", sstatus.status, ebuf);
       }
 
@@ -611,7 +608,18 @@ main(int argc, char **argv)
       if(p7_hmmd_search_stats_Deserialize(buf, &buf_offset, stats) != eslOK){
         p7_Die("Unable to deserialize search stats object \n");
       }
-
+      if (sstatus.status != eslOK) { // Something went wrong, display error message from server
+        char *ebuf;
+        int err_size = sstatus.msg_size;
+        ebuf = malloc(err_size);
+        if ((size = readn(sock, ebuf, n)) == -1) {
+          fprintf(stderr, "[%s:%d] read error %d - %s\n", __FILE__, __LINE__, errno, strerror(errno));
+          exit(1);
+        }
+        fprintf(stderr, "ERROR (%d): %s\n", sstatus.status, ebuf);
+        free(ebuf);
+        p7_Die("Terminating because server sent error message\n");
+      }
 
       if(sstatus.type == HMMD_CMD_SEARCH){
         // Create the structures we'll deserialize the hits into

@@ -574,7 +574,6 @@ clientside_loop(CLIENTSIDE_ARGS *data)
       char *range;
       uint64_t min_index = data->masternode->database_shards[dbx-1]->directory[0].index;
       uint64_t max_index = data->masternode->database_shards[dbx-1]->directory[data->masternode->database_shards[dbx-1]->num_objects -1].index;
-      printf("Min-index: %lu, max-index %lu\n", min_index, max_index);
       while ((status = esl_strtok(&range_string, ",", &range) ) == eslOK){
         uint64_t start, end;
         status = esl_regexp_ParseCoordString(range, &start, &end);
