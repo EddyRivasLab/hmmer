@@ -1985,13 +1985,13 @@ p7_tophits_TabularDomains(FILE *ofp, char *qname, char *qacc, P7_TOPHITS *th, P7
     {
       if (pli->is_translated)
       {
-         if (fprintf(ofp, "#%*s %22s %40s %11s %11s %11s %11s\n", tnamew+qnamew-1+15+taccw+qaccw+orfw+1, "",                                                      "--- full sequence ---",        "-------------- this domain -------------",                "hmm coord",      "ali coord",     "env coord",      "orf coord") < 0)
+         if (fprintf(ofp, "#%*s %22s %30s %11s %11s %11s %11s\n", tnamew+qnamew-1+15+taccw+qaccw+orfw+1, "",                                             "--- full sequence ---",    "--------- this domain --------",   "hmm coord",      "ali coord",     "env coord",      "orf coord") < 0)
             ESL_EXCEPTION_SYS(eslEWRITE, "tabular per-domain hit list: write failed");
-         if (fprintf(ofp, "#%-*s %-*s %5s %-*s %-*s %5s %-*s %9s %6s %5s %3s %3s %9s %9s %6s %5s %5s %5s %5s %5s %5s %5s %5s %5s %5s %4s %s\n",
-            tnamew-1, " target name",        taccw, "accession",  "tlen",  qnamew, "query name",           qaccw, "accession",  "qlen", orfw, "orf",    "E-value",   "score",  "bias",  "#",   "of",  "c-Evalue",  "i-Evalue",  "score",  "bias",  "from",  "to",    "from",  "to",    "from",  "to",    "from",  "to",    "frame",  "acc",  "description of target") < 0)
+         if (fprintf(ofp, "#%-*s %-*s %5s %-*s %-*s %5s %-*s %9s %6s %5s %3s %3s %9s %6s %5s %5s %5s %5s %5s %5s %5s %5s %5s %5s %4s %s\n",
+            tnamew-1, " target name",        taccw, "accession",  "tlen",  qnamew, "query name",           qaccw, "accession",  "qlen", orfw, "orf",    "E-value",   "score",  "bias",  "#",   "of",  "i-Evalue",  "score",  "bias",  "from",  "to",    "from",  "to",    "from",  "to",    "from",  "to",    "frame",  "acc",  "description of target") < 0)
             ESL_EXCEPTION_SYS(eslEWRITE, "tabular per-domain hit list: write failed");
-         if (fprintf(ofp, "#%*s %*s %5s %*s %*s %5s %*s %9s %6s %5s %3s %3s %9s %9s %6s %5s %5s %5s %5s %5s %5s %5s %5s %5s %5s %4s %s\n",
-           tnamew-1, "-------------------", taccw, "----------", "-----", qnamew, "--------------------", qaccw, "----------", "-----", orfw, "------", "---------", "------", "-----", "---", "---", "---------", "---------", "------", "-----", "-----", "-----", "-----", "-----", "-----", "-----", "-----", "-----", "-----",  "----", "---------------------") < 0)
+         if (fprintf(ofp, "#%*s %*s %5s %*s %*s %5s %*s %9s %6s %5s %3s %3s %9s %6s %5s %5s %5s %5s %5s %5s %5s %5s %5s %5s %4s %s\n",
+           tnamew-1, "-------------------", taccw, "----------", "-----", qnamew, "--------------------", qaccw, "----------", "-----", orfw, "------", "---------", "------", "-----", "---", "---", "---------", "------", "-----", "-----", "-----", "-----", "-----", "-----", "-----", "-----", "-----", "-----",  "----", "---------------------") < 0)
            ESL_EXCEPTION_SYS(eslEWRITE, "tabular per-domain hit list: write failed");
       }
       else
@@ -2029,7 +2029,7 @@ p7_tophits_TabularDomains(FILE *ofp, char *qname, char *qacc, P7_TOPHITS *th, P7
 
 		int frame = p7_tophits_frame(th->hit[h]->dcl[d].iorf, th->hit[h]->dcl[d].jorf);
                 
-		if (fprintf(ofp, "%-*s %-*s %5d %-*s %-*s %5d %-*s %9.2g %6.1f %5.1f %3d %3d %9.2g %9.2g %6.1f %5.1f %5d %5d %5" PRId64 " %5" PRId64 " %5" PRId64 " %5" PRId64 " %5" PRId64 " %5" PRId64 " %5d %4.2f %s\n",
+		if (fprintf(ofp, "%-*s %-*s %5d %-*s %-*s %5d %-*s %9.2g %6.1f %5.1f %3d %3d %9.2g %6.1f %5.1f %5d %5d %5" PRId64 " %5" PRId64 " %5" PRId64 " %5" PRId64 " %5" PRId64 " %5" PRId64 " %5d %4.2f %s\n",
                 tnamew, th->hit[h]->name,
                 taccw,  th->hit[h]->acc ? th->hit[h]->acc : "-",
                 tlen,
@@ -2042,7 +2042,6 @@ p7_tophits_TabularDomains(FILE *ofp, char *qname, char *qacc, P7_TOPHITS *th, P7
                 th->hit[h]->pre_score - th->hit[h]->score, /* bias correction */
                 nd,
                 th->hit[h]->nreported,
-                exp(th->hit[h]->dcl[d].lnP) * pli->domZ,
                 exp(th->hit[h]->dcl[d].lnP) * pli->Z,
                 th->hit[h]->dcl[d].bitscore,
                 th->hit[h]->dcl[d].dombias * eslCONST_LOG2R, /* NATS to BITS at last moment */
