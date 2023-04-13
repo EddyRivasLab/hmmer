@@ -405,7 +405,7 @@ serial_master(ESL_GETOPTS *go, struct cfg_s *cfg)
   infocnt = (ncpus == 0) ? 1 : ncpus;
   ESL_ALLOC(info, sizeof(*info) * infocnt);
 
-  
+
   /*the query sequence will be DNA but will be translated to amino acids */
   abcDNA   = esl_alphabet_Create(eslDNA); 
   abcAMINO = esl_alphabet_Create(eslAMINO); 
@@ -413,10 +413,11 @@ serial_master(ESL_GETOPTS *go, struct cfg_s *cfg)
 
   /* <abc> is not known 'til first HMM is read. */
   hstatus = p7_hmmfile_Read(hfp, &abc, &hmm);
-  if (abc->type != eslAMINO) p7_Fail("hmmsearcht only supports amino acid HMMs; %s uses a different alphabet", cfg->hmmfile);
 
   if (hstatus == eslOK)
   {
+      if (abc->type != eslAMINO) p7_Fail("hmmsearcht only supports amino acid HMMs; %s uses a different alphabet", cfg->hmmfile);
+
       /* One-time initializations after alphabet <abc> becomes known */
       output_header(ofp, go, cfg->hmmfile, cfg->dbfile);
       esl_sqfile_SetDigital(dbfp, abcDNA); //ReadBlock requires knowledge of the alphabet to decide how best to read blocks
