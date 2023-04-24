@@ -63,14 +63,13 @@ typedef struct p7_work_chunk{
 
 
 /*! Data structure that holds the arguments to a comparison that needs to be enqueued for processing by a back-end thread
- * \bug Currently only supports one-HMM many-sequence (hmmsearch-style) searches
   */
 typedef struct p7_backend_queue_entry{
-  	//! The sequence the backend should process, if we're doing a one-HMM, many-sequence comparison
+  	//! The sequence the backend should process
 	ESL_SQ *sequence;
     
-    //! Sequence length if we're doing a one-HMM, many-sequence comparison
-	int L;
+		//! The profile the sequence should be compared to
+	P7_OPROFILE *om;
 
 	//! The sequence or HMM's index in the appropriate database
 	uint64_t seq_id;
@@ -207,10 +206,10 @@ typedef struct p7_server_workernode_state{
 	P7_PROFILE * volatile compare_model;
 
 	//! Set to the sequence we're comparing against in a one-sequence many-HMM search.  Otherwise, set NULL
-	/*!Declared as ESL_DSQ volatile because the value of the pointer might change at any time, not the value of the
+	/*!Declared as ESL_SQ volatile because the value of the pointer might change at any time, not the value of the
 	  * object that's being pointed to.
 	  */
-	ESL_DSQ * volatile compare_sequence;
+	ESL_SQ * volatile compare_sequence;
 
 	//! Length of the sequence we're comparing against in a one-sequence many-HMM search.  Otherwise 0
 	volatile int64_t compare_L;
@@ -316,11 +315,11 @@ int p7_server_workernode_release_threads(P7_SERVER_WORKERNODE_STATE *workernode)
 // Starts a one-HMM many-sequence (hmmsearch-style) search
 int p7_server_workernode_start_hmm_vs_amino_db(P7_SERVER_WORKERNODE_STATE *workernode, uint32_t database, uint64_t start_object, uint64_t end_object, P7_PROFILE *compare_model);
 
-// Adds work to a one-HMM many-sequence (hmmsearch-style) search.  Used when a second or later work chunk arrives from the master node
-int p7_server_workernode_add_work_hmm_vs_amino_db(P7_SERVER_WORKERNODE_STATE *workernode, uint64_t start_object, uint64_t end_object);
+// Adds work to asearch.  Used when a second or later work chunk arrives from the master node
+int p7_server_workernode_add_work(P7_SERVER_WORKERNODE_STATE *workernode, uint64_t start_object, uint64_t end_object);
 
 // Starts a one-sequence many-HMM (hmmscan-style) search
-int p7_server_workernode_start_amino_vs_hmm_db(P7_SERVER_WORKERNODE_STATE *workernode, uint32_t database, uint64_t start_object, uint64_t end_object, ESL_DSQ *compare_sequence, int64_t compare_L);
+int p7_server_workernode_start_amino_vs_hmm_db(P7_SERVER_WORKERNODE_STATE *workernode, uint32_t database, uint64_t start_object, uint64_t end_object, ESL_SQ *compare_sequence);
 
 // Ends a search and resets the workernode state for the next search.
 void p7_server_workernode_end_search(P7_SERVER_WORKERNODE_STATE *workernode);

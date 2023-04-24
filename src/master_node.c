@@ -38,6 +38,7 @@
 #include "esl_stopwatch.h"
 #include "esl_threads.h"
 #include "esl_regexp.h"
+#include "esl_mpi.h"
 #include "hmmer.h"
 #include "hmmserver.h"
 #include "worker_node.h"
@@ -487,7 +488,6 @@ clientside_loop(CLIENTSIDE_ARGS *data)
     return 0;
   }
   if(n ==0 ){ // zero-byte send indicates that socket was closed from the other end
-    printf("Master node detected socket close\n");
     return 1;  // tell caller to stop listening
   }
   if (n  != sizeof(uint32_t)) {// Wrong number of bytes were setn
@@ -1073,7 +1073,49 @@ int process_search(P7_SERVER_MASTERNODE_STATE *masternode, P7_SERVER_QUEUE_DATA 
   uint64_t search_increment = 1;
   int status;
   P7_SERVER_COMMAND the_command;
-  the_command.type = P7_SERVER_HMM_VS_SEQUENCES;
+  char *query_buffer;
+  int query_length;
+  int pack_position;
+  // First, build the command that we'll send to the worker nodes telling them to start the search 
+  P7_BG *bg = NULL;
+  P7_PROFILE *gm;
+  if(query->cmd_type == HMMD_CMD_SEARCH){ // hmmsearch or phmmer search
+    the_command.type = P7_SERVER_HMM_VS_SEQUENCES;
+    masternode->pipeline =  p7_pipeline_Create(query->opts, 100, 100, FALSE, p7_SEARCH_SEQS);
+      // Get the HMM this search will compare against
+    gm = p7_profile_Create (query->hmm->M, query->abc);
+    bg = p7_bg_Create(gm->abc);
+    p7_ProfileConfig(query->hmm, bg, gm, 100, p7_LOCAL); /* 100 is a dummy length for now; and MSVFilter requires local mode */
+    
+    // Pack the HMM into a buffer for broadcast
+    p7_profile_MPIPackSize(gm, MPI_COMM_WORLD, &query_length); // get the length of the profile
+    ESL_ALLOC(query_buffer, query_length);
+    the_command.compare_obj_length = query_length;
+
+    pack_position = 0; // initialize this to the start of the buffer 
+
+    if(p7_profile_MPIPack(gm, query_buffer, query_length, &pack_position, MPI_COMM_WORLD) != eslOK){
+      p7_Die("Packing profile failed in process_search\n");
+    }    // pack the hmm for sending
+  
+  }
+  else{ //hmmscan operation
+    the_command.type = P7_SERVER_SEQUENCE_VS_HMMS;
+    masternode->pipeline =  p7_pipeline_Create(query->opts, 100, 100, FALSE, p7_SCAN_MODELS);
+
+    // clientside_loop already checked that we were sent a valid sequence, so don't need to here.
+    esl_sq_MPIPackSize(query->seq, MPI_COMM_WORLD, &query_length);
+
+    ESL_ALLOC(query_buffer, query_length);
+    the_command.compare_obj_length = query_length;
+
+    pack_position = 0; // initialize this to the start of the buffer 
+
+    if(esl_sq_MPIPack(query->seq, query_buffer, query_length, &pack_position, MPI_COMM_WORLD) != eslOK){
+      p7_Die("Packing query sequence failed in process_search\n");
+    }
+  }
+
   the_command.db = query->dbx;
   SEARCH_RESULTS results;
   P7_SERVER_MESSAGE *buffer, **buffer_handle; //Use this to avoid need to re-aquire message buffer
@@ -1081,19 +1123,9 @@ int process_search(P7_SERVER_MASTERNODE_STATE *masternode, P7_SERVER_QUEUE_DATA 
   buffer = NULL;
   buffer_handle = &(buffer);
   init_results(&results);
-  char *hmmbuffer;
-  ESL_ALLOC(hmmbuffer, 100000* sizeof(char));  // take a wild guess at a buffer that will hold most hmms
-  
-  int hmm_buffer_size;
-  hmm_buffer_size = 100000;
 
-  P7_PROFILE *gm;
-  int hmm_length, pack_position;
-
-  // For testing, search the entire database
   P7_SHARD *database_shard = masternode->database_shards[the_command.db];
 
-  masternode->pipeline =  p7_pipeline_Create(query->opts, 100, 100, FALSE, p7_SEARCH_SEQS);
   masternode->hit_messages_received = 0;
   gettimeofday(&start, NULL);
   
@@ -1153,31 +1185,14 @@ int process_search(P7_SERVER_MASTERNODE_STATE *masternode, P7_SERVER_QUEUE_DATA 
   pthread_cond_broadcast(&(masternode->start)); // signal hit processing thread to start
   pthread_mutex_unlock(&(masternode->hit_wait_lock));
 
-  // Get the HMM this search will compare against
-  gm = p7_profile_Create (query->hmm->M, query->abc);
-  P7_BG *bg = p7_bg_Create(gm->abc);
-  p7_ProfileConfig(query->hmm, bg, gm, 100, p7_LOCAL); /* 100 is a dummy length for now; and MSVFilter requires local mode */
-    
-  // Pack the HMM into a buffer for broadcast
-  p7_profile_MPIPackSize(gm, MPI_COMM_WORLD, &hmm_length); // get the length of the profile
-  the_command.compare_obj_length = hmm_length;
 
-  if(hmm_length > hmm_buffer_size){ // need to grow the send buffer
-    ESL_REALLOC(hmmbuffer, hmm_length); 
-  }
-  pack_position = 0; // initialize this to the start of the buffer 
-
-  if(p7_profile_MPIPack    (gm, hmmbuffer, hmm_length, &pack_position, MPI_COMM_WORLD) != eslOK){
-    p7_Fail("Packing profile failed in process_search\n");
-  }    // pack the hmm for sending
-  
   // Prep to send the options string to the workers
   the_command.options_length = strlen(query->optsstring) +1;
   // First, send the command to start the search
   MPI_Bcast(&the_command, 1, server_mpitypes[P7_SERVER_COMMAND_MPITYPE], 0, MPI_COMM_WORLD);
 
-  // Now, broadcast the HMM
-  MPI_Bcast(hmmbuffer, the_command.compare_obj_length, MPI_CHAR, 0, MPI_COMM_WORLD);
+  // Now, broadcast the query
+  MPI_Bcast(query_buffer, the_command.compare_obj_length, MPI_CHAR, 0, MPI_COMM_WORLD);
 
   // and the options string
   MPI_Bcast(query->optsstring, the_command.options_length, MPI_CHAR, 0, MPI_COMM_WORLD);
@@ -1191,11 +1206,17 @@ int process_search(P7_SERVER_MASTERNODE_STATE *masternode, P7_SERVER_QUEUE_DATA 
     p7_server_message_Destroy(*buffer_handle); 
   }
   gettimeofday(&end, NULL);
-  double ncells = (double) gm->M * (double) database_shard->total_length;
+  double ncells;
+  if(query->cmd_type == HMMD_CMD_SEARCH){
+    ncells = (double) gm->M * (double) database_shard->total_length;
+  }
+  else{
+    ncells = (double) query->seq->L * (double) database_shard->total_length;
+  }
   double elapsed_time = ((double)((end.tv_sec * 1000000 + (end.tv_usec)) - (start.tv_sec * 1000000 + start.tv_usec)))/1000000.0;
   double gcups = (ncells/elapsed_time) / 1.0e9;
   printf("%s, %lf, %d, %lf\n", gm->name, elapsed_time, gm->M, gcups);
-    
+  
 
   //Send results back to client
   results.nhits = masternode->tophits->N;
@@ -1240,9 +1261,15 @@ int process_search(P7_SERVER_MASTERNODE_STATE *masternode, P7_SERVER_QUEUE_DATA 
   p7_pipeline_Destroy(masternode->pipeline);
   p7_tophits_Destroy(masternode->tophits); //Reset for next search
   masternode->tophits = p7_tophits_Create();
-  p7_bg_Destroy(bg);
-  p7_profile_Destroy(gm);
-  free(hmmbuffer);
+  if(bg != NULL){
+    p7_bg_Destroy(bg);
+    bg = NULL;
+  }
+  if(gm != NULL){
+    p7_profile_Destroy(gm);
+    gm = NULL;
+  }
+  free(query_buffer);
   return eslOK;
   ERROR:
     p7_Die("Unable to allocate memory in process_search"); 
