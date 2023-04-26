@@ -33,6 +33,7 @@ static int32_t worker_thread_steal(P7_SERVER_WORKERNODE_STATE *workernode, uint3
 static void workernode_request_Work(uint32_t my_shard);
 static void workernode_wait_for_Work(P7_SERVER_CHUNK_REPLY *the_reply, MPI_Datatype *server_mpitypes);
 static int server_set_shard(P7_SERVER_WORKERNODE_STATE *workernode, P7_SHARD *the_shard, uint32_t database_id);
+static int workernode_perform_search_or_scan(P7_SERVER_WORKERNODE_STATE *workernode, P7_SERVER_COMMAND *the_command, ESL_ALPHABET *abc, MPI_Datatype *server_mpitypes);
 /* Tuning parameters */
 
 /*! WORK_REQUEST_THRESHOLD determines the minimum amount of work that can remain in the worker node's global queue without triggering
@@ -998,13 +999,15 @@ void p7_server_workernode_main(int argc, char **argv, int my_rank, MPI_Datatype 
     uint32_t works_received =0; // how many chunks of work have we received?
     switch(the_command.type){
       case P7_SERVER_HMM_VS_SEQUENCES: // Master node wants us to compare an HMM to a database of sequences
-
-        
+        if(workernode_perform_search_or_scan(workernode, &the_command, abc, server_mpitypes)!= eslOK){
+          p7_Die("Search failed in worker_node.c");
+        }
         break;
 
       case P7_SERVER_SEQUENCE_VS_HMMS: // hmmscan operation
-    
-
+        if(workernode_perform_search_or_scan(workernode, &the_command, abc, server_mpitypes)!= eslOK){
+          p7_Die("Scan failed in worker_node.c");
+        }
         break; 
       case P7_SERVER_SHUTDOWN_WORKERS:
       // master wants to shut down the workers.
@@ -1240,7 +1243,6 @@ static int worker_thread_front_end_search_loop(P7_SERVER_WORKERNODE_STATE *worke
             }
 
             // populate the fields
-
             the_entry->next = NULL;
             the_entry->fwdsc = fwdsc;
             the_entry->nullsc = nullsc;
@@ -1347,7 +1349,11 @@ static void worker_thread_back_end_sequence_search_loop(P7_SERVER_WORKERNODE_STA
   ESL_RED_BLACK_DOUBLEKEY *the_hit_entry;
   while(the_entry != NULL){
     // There's a sequence in the queue, so do the backend comparison 
-
+    if(workernode->search_type == SEQUENCE_SEARCH ||workernode->search_type == SEQUENCE_SEARCH_CONTINUE){
+      // operate on the worker thread's OM, not the one in the command, to prevent two threads from using the same 
+      // om structure simultaneously.  This isn't an issue during scans, because each om only gets examined once
+      the_entry->om = workernode->thread_state[my_id].om;
+    }
     // Configure the model and engine for this comparison
     p7_bg_SetLength(workernode->thread_state[my_id].bg, the_entry->sequence->L);           
     p7_oprofile_ReconfigLength(the_entry->om, the_entry->sequence->L);
