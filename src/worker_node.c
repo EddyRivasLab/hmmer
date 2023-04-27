@@ -899,8 +899,26 @@ void *p7_server_worker_thread(void *worker_argument){
       
       case HMM_SEARCH:
       case HMM_SEARCH_CONTINUE:
-       p7_Die("Hmmscan functionality disabled in this version\n");
-
+        if(workernode->thread_state[my_id].bg == NULL){
+          workernode->thread_state[my_id].bg = p7_bg_Create(workernode->compare_sequence->abc);
+          if(workernode->thread_state[my_id].bg == NULL){
+            p7_Die("Unable to allocate memory in p7_server_worker_thread\n");
+          }
+        }
+        stop = 0;
+        while(stop == 0){  // There's still some work left to do on the current search
+          switch(workernode->thread_state[my_id].mode){
+            case FRONTEND:
+              // process front-end searches until we either run out of work or are told to switch to back-end
+              stop = worker_thread_front_end_search_loop(workernode, my_id);
+              break;
+            case BACKEND:
+              // Call the back end search loop to process comparisons that require long searches until there aren't any
+              // left in the queue
+              worker_thread_back_end_sequence_search_loop(workernode, my_id);
+              break;
+          }
+        }
         break;
       case IDLE:
         p7_Die("Workernode told to start search of type IDLE");
