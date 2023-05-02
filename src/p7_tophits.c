@@ -2127,7 +2127,6 @@ p7_tophits_TabularXfam(FILE *ofp, char *qname, char *qacc, P7_TOPHITS *th, P7_PI
   int         tnamew     = ESL_MAX(20, p7_tophits_GetMaxNameLength(th));
   int         taccw      = ESL_MAX(20, p7_tophits_GetMaxAccessionLength(th));
   int         qnamew     = ESL_MAX(20, strlen(qname));
-  int         ndom       = 0;
   int         posw       = (pli->long_targets ? ESL_MAX(7, p7_tophits_GetMaxPositionLength(th)) : 0);
   int         h,d;
   int         status;
@@ -2191,10 +2190,6 @@ p7_tophits_TabularXfam(FILE *ofp, char *qname, char *qacc, P7_TOPHITS *th, P7_PI
           th->hit[h]->pre_score - th->hit[h]->score, /* bias correction */
           (th->hit[h]->desc == NULL ? "-" : th->hit[h]->desc)) < 0)
             ESL_XEXCEPTION_SYS(eslEWRITE, "xfam tabular output: write failed");
-
-          for (d = 0; d < th->hit[h]->ndom; d++)
-            if (th->hit[h]->dcl[d].is_reported)
-              ndom ++;
         }
       }
       if (fprintf(ofp, "\n") < 0) ESL_XEXCEPTION_SYS(eslEWRITE, "xfam tabular output: write failed");

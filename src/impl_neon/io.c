@@ -439,7 +439,6 @@ int
 p7_oprofile_ReadBlockMSV(P7_HMMFILE *hfp, ESL_ALPHABET **byp_abc, P7_OM_BLOCK *hmmBlock)
 {
   int     i;
-  int     size = 0;
   int     status = eslOK;
 
   hmmBlock->count = 0;
@@ -447,7 +446,6 @@ p7_oprofile_ReadBlockMSV(P7_HMMFILE *hfp, ESL_ALPHABET **byp_abc, P7_OM_BLOCK *h
     {
       status = p7_oprofile_ReadMSV(hfp, byp_abc, &hmmBlock->list[i]);
       if (status != eslOK) break;
-      size += hmmBlock->list[i]->M;
       ++hmmBlock->count;
     }
 
@@ -965,7 +963,6 @@ main(int argc, char **argv)
   FILE          *ffp     = NULL;
   FILE          *pfp     = NULL;
   int            nmodel  = 0;
-  uint64_t       totM    = 0;
   int            status;
   char           errbuf[eslERRBUFSIZE];
 
@@ -990,7 +987,6 @@ main(int argc, char **argv)
 
       if (esl_opt_GetBoolean(go, "-v")) printf("%s\n", hmm->name);
       nmodel++;
-      totM += hmm->M;
 
       gm = p7_profile_Create(hmm->M, abc);
       p7_ProfileConfig(hmm, bg, gm, 400, p7_LOCAL);
