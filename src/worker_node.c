@@ -523,8 +523,12 @@ if(workernode->global_queue == NULL){
   workernode->no_steal = 0;  // reset this to allow stealing work for the new search
 
   //Tell the worker node not to do any start-of-search work
-  workernode->search_type = SEQUENCE_SEARCH_CONTINUE;
-
+  if(workernode->search_type == SEQUENCE_SEARCH  || workernode->search_type == SEQUENCE_SEARCH_CONTINUE){
+    workernode->search_type = SEQUENCE_SEARCH_CONTINUE;
+  }
+  else{
+    workernode->search_type = HMM_SEARCH_CONTINUE;
+  }
   // recompute the amount of work that each worker thread should grab at a time
   workernode->chunk_size = ((end_object - start_object) / (workernode->num_threads) * 16);
   if(workernode->chunk_size < 1){
@@ -595,7 +599,6 @@ if(workernode->global_queue == NULL){
  */
 int p7_server_workernode_start_amino_vs_hmm_db(P7_SERVER_WORKERNODE_STATE *workernode, uint32_t database, uint64_t start_object, uint64_t end_object, ESL_SQ *compare_sequence){
 
-  printf("Calling workernode_start_amino_vs_hmm_db\n");
   if(workernode->search_type != IDLE){
     p7_Die("p7_server_workernode_start_amino_vs_hmm_db attempted to set up a new operation on a worker node while an old one was still in progress");
   }
@@ -639,43 +642,28 @@ int p7_server_workernode_start_amino_vs_hmm_db(P7_SERVER_WORKERNODE_STATE *worke
   uint64_t task_start = real_start;
   uint64_t task_end;
   // Set up the statistic pipelines
-  int i; 
-  for(i=0; i< workernode->num_threads; i++){
+
+  // decide how much work each worker thread should grab at a time.  This is definitely a parameter that could be tuned, but
+  // 16 chunks/thread seems to work well so far.
+  workernode->chunk_size = (real_end - real_start) / ((workernode->num_threads) * 16); 
+  if(workernode->chunk_size < 1){
+    workernode->chunk_size = 1;  // handle cases that round down to 0
+  }
+
+  //set up global queue.  Don't need to lock here because we only set up searches when the workernode is idle
+  workernode->global_queue->start = real_start;
+  workernode->global_queue->end = real_end;
+
+  // Set up thread state
+  for(int i = 0; i < workernode->num_threads; i++){
+    workernode->thread_state[i].mode = FRONTEND; // all threads start out processing front-end comparisons
+    workernode->thread_state[i].comparisons_queued = 0; // reset this
     workernode->thread_state[i].stats_pipeline = p7_pipeline_Create(workernode->commandline_options, 100, 100, FALSE, p7_SCAN_MODELS);
     if(workernode->thread_state[i].stats_pipeline == NULL){
       p7_Die("Unable to allocate memory in p7_server_workernode_start_amino_vs_hmm_db.\n");
     }
   }
-  uint64_t thread = 0;
-
-  while((thread < workernode->num_threads) && (task_start <= real_end)){
-
-    // compute end of current task
-    task_end = (task_start + task_size) -1;  // one thread's part of the work, because task_size includes the task at task_start
-    if(task_end > real_end){
-      task_end = real_end; 
-    }
-    else{
-      task_end = p7_shard_Find_Id_Nexthigh(the_shard, task_end);
-      // grab the id of the object in the database whose id is closest to task_end
-      // but not less
-    }
-
-    // don't need to lock here because we only start tasks when the worker is idle
-    workernode->work[thread].start = task_start;
-    workernode->work[thread].end = task_end;
-    task_start = p7_shard_Find_Id_Nexthigh(the_shard, task_end +1);
-    // if task_end+1 is greater than the highest id in the shard, find_id_nexthigh will return -1, which is the "empty queue"
-    // value for task_start
-    thread++;
-  }
-  while(thread < workernode->num_threads){
-    // cleanup loop if we didn't have work for some threads
-    workernode->work[thread].start = (uint64_t) -1;
-    workernode->work[thread].end = 0;
-    thread++;
-  }
-
+  workernode->num_backend_threads = 0;
   workernode->work_requested = 0; // no work has been requested thus far
   workernode->request_work = 0;
   workernode->master_queue_empty =0;
@@ -1049,29 +1037,7 @@ ERROR:
 }
 
 
-//p7_server_workernode_aggregate_stats
-/*! \brief Creates a P7_ENGINE_STATS objects whose contentts are the sum of the statistics gathered by each of the worker threads on a worker node
- *  \param [in] workernode The worker node's P7_SERVER_WORKERNODE_STATE object
- *  \returns The new P7_ENGINE_STATS object.  Calls p7_Die to crash the program if unable to allocate memory for this object.
- */
-/*
-P7_ENGINE_STATS *p7_server_workernode_aggregate_stats(P7_SERVER_WORKERNODE_STATE *workernode){
-  P7_ENGINE_STATS *combined_stats = p7_engine_stats_Create();
-  if(combined_stats == NULL){
-    p7_Die("Unable to allocate memory in p7_workernode_aggregate_stats\n");
-  }
-  int i;
-  for(i = 0; i < workernode->num_threads; i++){
-    combined_stats->n_past_ssv += workernode->thread_state[i].engine->stats->n_past_ssv;
-    combined_stats->n_past_bias += workernode->thread_state[i].engine->stats->n_past_bias;
-    combined_stats->n_ran_vit += workernode->thread_state[i].engine->stats->n_ran_vit;
-    combined_stats->n_past_vit += workernode->thread_state[i].engine->stats->n_past_vit;
-    combined_stats->n_past_fwd += workernode->thread_state[i].engine->stats->n_past_fwd;
-  }
 
-  return combined_stats;
-}
-*/
 
 /*************************************************************************************
  * 2: static functions that are used only within workernode.c
@@ -1099,7 +1065,6 @@ P7_ENGINE_STATS *p7_server_workernode_aggregate_stats(P7_SERVER_WORKERNODE_STATE
 static int worker_thread_front_end_search_loop(P7_SERVER_WORKERNODE_STATE *workernode, uint32_t my_id){
 
   uint64_t start,end;
-  char *search_object; // could be either a sequence or an oprofile depending on search type, will need to cast appropriately
   float nullsc, fwdsc;
   int status;
 
@@ -1195,21 +1160,28 @@ static int worker_thread_front_end_search_loop(P7_SERVER_WORKERNODE_STATE *worke
     if((start != -1) && (start <= end)){
       uint64_t chunk_end = end; // process sequences until we see a long operation or hit the end of the chunk
       // get pointer to first sequence to search
-      p7_shard_Find_Contents_Nexthigh(workernode->database_shards[workernode->compare_database], start, &search_object);
+      uint64_t search_object_index;
+      ESL_SQ *search_sequence=NULL;
+      P7_OPROFILE *search_om = NULL;
+      search_object_index = p7_shard_Find_Index_Nexthigh(workernode->database_shards[workernode->compare_database], start);
 
       while(start <= chunk_end){
 
 
         chunk_end = workernode->work[my_id].end; // update this to reduce redundant work.
         if((workernode->search_type == SEQUENCE_SEARCH) || (workernode->search_type == SEQUENCE_SEARCH_CONTINUE)){
-          p7_bg_SetLength(workernode->thread_state[my_id].bg, ((ESL_SQ*)search_object)->L);           
-          p7_oprofile_ReconfigLength(workernode->thread_state[my_id].om,((ESL_SQ*)search_object)->L);
-          p7_pli_NewSeq(workernode->thread_state[my_id].pipeline, (ESL_SQ*)search_object);
-          status = p7_Pipeline_Overthruster(workernode->thread_state[my_id].pipeline, workernode->thread_state[my_id].om, workernode->thread_state[my_id].bg, (ESL_SQ*)search_object, &fwdsc, &nullsc);
+          search_sequence = (ESL_SQ *) workernode->database_shards[workernode->compare_database]->contents[search_object_index];
+          p7_bg_SetLength(workernode->thread_state[my_id].bg, search_sequence->L);           
+          p7_oprofile_ReconfigLength(workernode->thread_state[my_id].om,search_sequence->L);
+          p7_pli_NewSeq(workernode->thread_state[my_id].pipeline, search_sequence);
+          status = p7_Pipeline_Overthruster(workernode->thread_state[my_id].pipeline, workernode->thread_state[my_id].om, workernode->thread_state[my_id].bg, search_sequence, &fwdsc, &nullsc);
         }
         else{
-          p7_oprofile_ReconfigLength((P7_OPROFILE *)search_object, workernode->compare_L);
-          status = p7_Pipeline_Overthruster(workernode->thread_state[my_id].pipeline, (P7_OPROFILE *) search_object, workernode->thread_state[my_id].bg, workernode->compare_sequence, &fwdsc, &nullsc);
+          search_om = (P7_OPROFILE *) workernode->database_shards[workernode->compare_database]->contents[search_object_index];
+          p7_pli_NewModel(workernode->thread_state[my_id].pipeline, search_om, workernode->thread_state[my_id].bg);
+          p7_oprofile_ReconfigLength(search_om, workernode->compare_L);
+          p7_bg_SetLength(workernode->thread_state[my_id].bg, workernode->compare_L);           
+          status = p7_Pipeline_Overthruster(workernode->thread_state[my_id].pipeline, search_om, workernode->thread_state[my_id].bg, workernode->compare_sequence, &fwdsc, &nullsc);
         }
 
         if (status == eslFAIL)
@@ -1248,7 +1220,7 @@ static int worker_thread_front_end_search_loop(P7_SERVER_WORKERNODE_STATE *worke
                 p7_Die("Unable to allocate memory in worker_thread_front_end_sequence_search_loop.\n");
               }
               p7_pli_NewModel(workernode->thread_state[my_id].pipeline, workernode->thread_state[my_id].om, workernode->thread_state[my_id].bg);
-              the_entry->sequence = (ESL_SQ *) search_object;
+              the_entry->sequence = search_sequence;
               the_entry->om = workernode->thread_state[my_id].om;
             }
             else{
@@ -1257,7 +1229,7 @@ static int worker_thread_front_end_search_loop(P7_SERVER_WORKERNODE_STATE *worke
               p7_Die("Unable to allocate memory in worker_thread_front_end_sequence_search_loop.\n");
               }
               the_entry->sequence = workernode->compare_sequence;
-              the_entry->om = (P7_OPROFILE *) search_object;
+              the_entry->om = search_om;
             }
 
             // populate the fields
@@ -1342,7 +1314,11 @@ static int worker_thread_front_end_search_loop(P7_SERVER_WORKERNODE_STATE *worke
 
         // if we get this far, we weren't switched to the backend, so go on to the next sequence or back to look for more work
         start += workernode->num_shards;
-        p7_shard_Find_Contents_Nexthigh(workernode->database_shards[workernode->compare_database], start, &search_object);
+        //p7_shard_Find_Contents_Nexthigh(workernode->database_shards[workernode->compare_database], start, &search_object);
+        search_object_index++;
+        search_sequence = (ESL_SQ *) workernode->database_shards[workernode->compare_database]->contents[search_object_index];
+        search_om = (P7_OPROFILE *) search_sequence;  // set both of these, only use the one that's appropriate for the search 
+        // type because it's faster than a conditional to see which one we need to set
         p7_pipeline_Reuse(workernode->thread_state[my_id].pipeline);
       }
     }
@@ -1372,13 +1348,14 @@ static void worker_thread_back_end_sequence_search_loop(P7_SERVER_WORKERNODE_STA
       // om structure simultaneously.  This isn't an issue during scans, because each om only gets examined once
       the_entry->om = workernode->thread_state[my_id].om;
     }
-    // Configure the model and engine for this comparison
-    p7_bg_SetLength(workernode->thread_state[my_id].bg, the_entry->sequence->L);           
-    p7_oprofile_ReconfigLength(the_entry->om, the_entry->sequence->L);
     P7_PIPELINE *temp_pipeline = the_entry->pipeline;
     the_entry->pipeline = NULL;
     workernode->thread_state[my_id].pipeline = temp_pipeline;
-    
+    // Configure the model and engine for this comparison
+    p7_pli_NewSeq(workernode->thread_state[my_id].pipeline, the_entry->sequence);
+    p7_pli_NewModel(workernode->thread_state[my_id].pipeline, the_entry->om, workernode->thread_state[my_id].bg);
+    p7_bg_SetLength(workernode->thread_state[my_id].bg, the_entry->sequence->L);           
+    p7_oprofile_ReconfigLength(the_entry->om, the_entry->sequence->L);
     while(pthread_mutex_trylock(&(workernode->thread_state[my_id].hits_lock))){
     // Need to acquire the lock on the hit list in case we find a hit
     }
@@ -1911,6 +1888,7 @@ static int workernode_perform_search_or_scan(P7_SERVER_WORKERNODE_STATE *workern
   // Wait to get an initial work range back from the master
   P7_SERVER_CHUNK_REPLY work_reply;
   workernode_wait_for_Work(&work_reply, server_mpitypes);
+  // printf("Workernode received initial chunk from %lu to %lu\n", work_reply.start, work_reply.end);
 
   // Ok, we've unpacked the hmm and built all of the profiles we need.  
   if(the_command->type == P7_SERVER_HMM_VS_SEQUENCES){
@@ -2020,7 +1998,7 @@ static int workernode_perform_search_or_scan(P7_SERVER_WORKERNODE_STATE *workern
       // Request sent, wait for more work.
       workernode_wait_for_Work(&work_reply, server_mpitypes);
       works_received++;
-
+      //printf("Workernode received chunk from %lu to %lu\n", work_reply.start, work_reply.end);
       while(pthread_mutex_trylock(&(workernode->work_request_lock))){ // grab the lock on the work request variables
       }
       workernode->work_requested = 0; // we've processed the outstanding request
@@ -2054,8 +2032,12 @@ static int workernode_perform_search_or_scan(P7_SERVER_WORKERNODE_STATE *workern
   int thread;
   P7_TOPHITS *hits;
   P7_PIPELINE *pli;
-  pli = p7_pipeline_Create(workernode->commandline_options, 100, 100, FALSE, p7_SEARCH_SEQS);
-
+  if(the_command->type == P7_SERVER_HMM_VS_SEQUENCES){
+    pli = p7_pipeline_Create(workernode->commandline_options, 100, 100, FALSE, p7_SEARCH_SEQS);
+  }
+  else{
+    pli = p7_pipeline_Create(workernode->commandline_options, 100, 100, FALSE, p7_SCAN_MODELS);
+  }
   for(thread = 0; thread < workernode->num_threads; thread++){
     p7_pipeline_Merge(pli, workernode->thread_state[thread].stats_pipeline);
     p7_pipeline_Destroy(workernode->thread_state[thread].stats_pipeline);
@@ -2077,7 +2059,7 @@ static int workernode_perform_search_or_scan(P7_SERVER_WORKERNODE_STATE *workern
     != eslOK){
     p7_Die("Failed to send hit messages to master\n");
   }
-
+  printf("Workernode sending pipeline with %lu models, %lu nodes\n", pli->nmodels, pli->nnodes);
   if(p7_pipeline_MPISend(pli, 0, HMMER_PIPELINE_STATE_MPI_TAG, MPI_COMM_WORLD, &send_buf, &send_buf_length) != eslOK){
     p7_Die("Failed to send pipeline state to master");
   }

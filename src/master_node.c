@@ -1078,7 +1078,7 @@ int process_search(P7_SERVER_MASTERNODE_STATE *masternode, P7_SERVER_QUEUE_DATA 
   int pack_position;
   // First, build the command that we'll send to the worker nodes telling them to start the search 
   P7_BG *bg = NULL;
-  P7_PROFILE *gm;
+  P7_PROFILE *gm = NULL;
   if(query->cmd_type == HMMD_CMD_SEARCH){ // hmmsearch or phmmer search
     the_command.type = P7_SERVER_HMM_VS_SEQUENCES;
     masternode->pipeline =  p7_pipeline_Create(query->opts, 100, 100, FALSE, p7_SEARCH_SEQS);
@@ -1215,9 +1215,12 @@ int process_search(P7_SERVER_MASTERNODE_STATE *masternode, P7_SERVER_QUEUE_DATA 
   }
   double elapsed_time = ((double)((end.tv_sec * 1000000 + (end.tv_usec)) - (start.tv_sec * 1000000 + start.tv_usec)))/1000000.0;
   double gcups = (ncells/elapsed_time) / 1.0e9;
-  printf("%s, %lf, %d, %lf\n", gm->name, elapsed_time, gm->M, gcups);
-  
-
+  if(query->cmd_type == HMMD_CMD_SEARCH){
+    printf("%s, %lf, %d, %lf\n", gm->name, elapsed_time, gm->M, gcups);
+  }
+  else{
+    printf("%s, %lf, %ld, %lf\n", query->seq->name, elapsed_time, query->seq->L, gcups);
+  }
   //Send results back to client
   results.nhits = masternode->tophits->N;
   results.stats.nhits = masternode->tophits->N;
@@ -1248,7 +1251,7 @@ int process_search(P7_SERVER_MASTERNODE_STATE *masternode, P7_SERVER_QUEUE_DATA 
     results.stats.nmodels = masternode->pipeline->nmodels;
     results.stats.nnodes = masternode->pipeline->nnodes;
     results.stats.nseqs = 1;
-    results.stats.nres = -1; /* Fix when support scan */
+    results.stats.nres = query->seq->L; /* Fix when support scan */
   }
   results.stats.n_past_msv = masternode->pipeline->n_past_msv;
   results.stats.n_past_bias = masternode->pipeline->n_past_bias;

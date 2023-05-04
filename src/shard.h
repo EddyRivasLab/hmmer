@@ -53,8 +53,8 @@ typedef struct p7_shard{
 	//! How many objects are there in the shard?
 	uint64_t num_objects;
 
-	//! Blob of memory that the shard contents go in.
-	char *contents;
+	//! Array of pointers to contents objects, which are either ESL_SQ or P7_OPROFILE
+	void **contents;
 
 	//! Separate blob for the descriptive data
 	void *descriptors;
@@ -79,11 +79,11 @@ P7_SHARD *p7_shard_Create_hmmfile(char *filename, uint32_t num_shards, uint32_t 
 
 // If the shard contains an object with the specified ID, places a pointer to the contents field of that object in ret_object and returns the ID
 // Otherwise, does the same with the object of the next higher ID
-int p7_shard_Find_Contents_Nexthigh(P7_SHARD *the_shard, uint64_t id, char **ret_object);
+int p7_shard_Find_Contents_Nexthigh(P7_SHARD *the_shard, uint64_t id, void **ret_object);
 
 // If the shard contains an object with the specified ID, places a pointer to the contents field of that object in ret_object and returns the ID
 // Otherwise, does the same with the object of the next lower ID
-int p7_shard_Find_Contents_Nextlow(P7_SHARD *the_shard, uint64_t id, char **ret_object);
+int p7_shard_Find_Contents_Nextlow(P7_SHARD *the_shard, uint64_t id, void **ret_object);
 
 // If the shard contains an object with the specified ID, returns a pointer to the descriptor field of that object in ret_object
 // Otherwise, returns a pointer to the contents field of the object with the next higher ID that is in the shard

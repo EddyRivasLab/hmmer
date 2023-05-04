@@ -211,7 +211,10 @@ P7_SHARD *p7_shard_Create_sqdata(char *filename, uint32_t num_shards, uint32_t m
   sequences->first_seqidx = 0;
   
   if(!masternode){
-    the_shard->contents = (char *) sequences->list;
+    ESL_ALLOC(the_shard->contents, my_sequences* sizeof(ESL_SQ *));
+    for(uint64_t i = 0; i < my_sequences; i++){
+      the_shard->contents[i] = &(sequences->list[i]);
+    }
     the_shard->descriptors = sequences; // Hack to save the full ESL_SQ_BLOCK object
   }
   else{
@@ -228,7 +231,7 @@ P7_SHARD *p7_shard_Create_sqdata(char *filename, uint32_t num_shards, uint32_t m
 
   for (uint64_t i=0; i < the_shard->num_objects; i++){
     the_shard->directory[i].index = (i * num_shards) + my_shard;
-    the_shard->directory[i].contents_offset = i * sizeof(ESL_SQ);
+    the_shard->directory[i].contents_offset = i * sizeof(ESL_SQ *);
     the_shard->directory[i].descriptor_offset = 0; // descriptors are folded into sequences
   }
   return(the_shard);
@@ -266,6 +269,7 @@ void p7_shard_Destroy(P7_SHARD *the_shard){
   else{ //Amino is the only other supported type now
 
     esl_sq_DestroyBlock((ESL_SQ_BLOCK *) the_shard->descriptors);
+    free(the_shard->contents); // This is just an array of pointers into the SQ_BLOCK that was stored in descriptors
   }
   free(the_shard->directory);
   
@@ -286,7 +290,7 @@ void p7_shard_Destroy(P7_SHARD *the_shard){
  * \returns eslOK if the requested ID is present in the shard, eslENORESULT if the requested ID is not present in the shard but there 
  * was at least one object with a smaller ID in the shard, and eslFAIL if the requested ID was less than the ID of any object in the shard.
  */ 
-int p7_shard_Find_Contents_Nextlow(P7_SHARD *the_shard, uint64_t id, char **ret_object){
+int p7_shard_Find_Contents_Nextlow(P7_SHARD *the_shard, uint64_t id, void **ret_object){
   /* binary search on id */
   uint64_t top, bottom, middle;
 
@@ -314,18 +318,18 @@ int p7_shard_Find_Contents_Nextlow(P7_SHARD *the_shard, uint64_t id, char **ret_
 
   if(the_shard->directory[middle].index == id){
     // we've found what we're looking for
-    *ret_object = the_shard->contents + the_shard->directory[middle].contents_offset;
+    *ret_object = the_shard->contents[middle];
     return eslOK;
   }
 
   // if we get here, we didn't find a match
   if(the_shard->directory[middle].index < id){
-    *ret_object = the_shard->contents + the_shard->directory[middle].contents_offset;
+    *ret_object = the_shard->contents[middle];
     return eslENORESULT;
   }
   else{
     if(the_shard->directory[middle-1].index < id){
-      *ret_object = the_shard->contents + the_shard->directory[middle-1].contents_offset;
+      *ret_object = the_shard->contents[middle-1];
       return eslENORESULT;
     }
     else{
@@ -402,7 +406,7 @@ uint64_t p7_shard_Find_Id_Nextlow(P7_SHARD *the_shard, uint64_t id){
  * \returns eslOK if the requested ID is present in the shard, eslENORESULT if the requested ID is not present in the shard but there 
  * was at least one object with a larger ID in the shard, and eslFAIL if the requested ID was greater than the ID of any object in the shard.
  */ 
-int p7_shard_Find_Contents_Nexthigh(P7_SHARD *the_shard, uint64_t id, char **ret_object){
+int p7_shard_Find_Contents_Nexthigh(P7_SHARD *the_shard, uint64_t id, void **ret_object){
   /* binary search on id */
   uint64_t top, bottom, middle;
 
@@ -430,18 +434,18 @@ int p7_shard_Find_Contents_Nexthigh(P7_SHARD *the_shard, uint64_t id, char **ret
   }
   if(the_shard->directory[middle].index == id){
     // we've found what we're looking for
-    *ret_object = the_shard->contents + the_shard->directory[middle].contents_offset;
+    *ret_object = the_shard->contents[middle];
     return eslOK;
   }
 
   // if we get here, we didn't find a match
   if(the_shard->directory[middle].index > id){
-    *ret_object = the_shard->contents + the_shard->directory[middle].contents_offset;
+    *ret_object = the_shard->contents[middle];
     return eslENORESULT;
   }
   else{
     if(the_shard->directory[middle+1].index > id){
-      *ret_object = the_shard->contents + the_shard->directory[middle+1].contents_offset;
+      *ret_object = the_shard->contents[middle+1];
       return eslENORESULT;
     }
     else{
