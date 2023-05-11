@@ -89,9 +89,9 @@ if os.path.exists(swissprot_dir):
     if not os.path.exists('uniprot_sprot.fasta'): os.symlink('{0}/uniprot_sprot.fasta'.format(swissprot_dir), 'uniprot_sprot.fasta')
     if not os.path.exists('relnotes.txt'):        os.symlink('{0}/relnotes.txt'.format(swissprot_dir),        'relnotes.txt')
 else:
-   subprocess.run('wget ftp://ftp.uniprot.org/pub/databases/uniprot/current_release/knowledgebase/complete/uniprot_sprot.fasta.gz', shell=True)
-   subprocess.run('wget ftp://ftp.uniprot.org/pub/databases/uniprot/current_release/relnotes.txt',                                  shell=True)
-   subprocess.run('gunzip -f uniprot_sprot.fasta.gz',  shell=True)
+    subprocess.run('wget ftp://ftp.uniprot.org/pub/databases/uniprot/current_release/knowledgebase/complete/uniprot_sprot.fasta.gz', shell=True)
+    subprocess.run('wget ftp://ftp.uniprot.org/pub/databases/uniprot/current_release/relnotes.txt',                                  shell=True)
+    subprocess.run('gunzip -f uniprot_sprot.fasta.gz',  shell=True)
 
 
 
