@@ -1060,7 +1060,8 @@ p7_alidisplay_Serialize_old(P7_ALIDISPLAY *ad)
   n = 1 + strlen(ad->sqname);   memcpy(ad->mem + pos, ad->sqname,  n); free(ad->sqname);  ad->sqname  = ad->mem+pos; pos += n;
   n = 1 + strlen(ad->sqacc);    memcpy(ad->mem + pos, ad->sqacc,   n); free(ad->sqacc);   ad->sqacc   = ad->mem+pos; pos += n;
   n = 1 + strlen(ad->sqdesc);   memcpy(ad->mem + pos, ad->sqdesc,  n); free(ad->sqdesc);  ad->sqdesc  = ad->mem+pos; pos += n;
-  
+  n = 1 + strlen(ad->orfname);  memcpy(ad->mem + pos, ad->orfname, n); free(ad->orfname); ad->orfname = ad->mem+pos; pos += n;
+
   return eslOK;
 
  ERROR:
@@ -1144,6 +1145,7 @@ p7_alidisplay_Deserialize_old(P7_ALIDISPLAY *ad)
 void
 p7_alidisplay_Destroy(P7_ALIDISPLAY *ad)
 {
+
   if (ad == NULL) return;
   if (ad->mem)
     {	/* serialized form */
@@ -2450,7 +2452,7 @@ utest_Backconvert(int be_verbose, ESL_RANDOMNESS *rng, ESL_ALPHABET *abc, int nt
   int            trial;
 
   for (trial = 0; trial < ntrials; trial++)
-    {
+    { 
       if ( p7_alidisplay_Sample(rng, N, &ad)                     != eslOK) esl_fatal(msg);
       if ( p7_alidisplay_Serialize_old(ad)                           != eslOK) esl_fatal(msg);
       if (be_verbose && p7_alidisplay_Dump(stdout, ad)           != eslOK) esl_fatal(msg);
@@ -2504,7 +2506,7 @@ main(int argc, char **argv)
   int             N          = esl_opt_GetInteger(go, "-N");
   int             L          = esl_opt_GetInteger(go, "-L");
   int             be_verbose = esl_opt_GetBoolean(go, "-v");
-
+  
   //utest_Serialize_old  (            rng,      N, L);
   utest_Serialize(rng, 100);
   utest_Backconvert(be_verbose, rng, abc, N, L);
