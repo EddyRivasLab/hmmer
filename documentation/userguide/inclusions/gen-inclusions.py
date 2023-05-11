@@ -648,7 +648,7 @@ def nhmmer_made1(deffp):
 
 
 
-def hmmsearcht_pkinase(deffp):
+def hmmsearcht_pkinase():
     print('running hmmbuild Pkinase.hmm Pkinase.sto')
 
     r = subprocess.run('hmmbuild Pkinase.hmm Pkinase.sto',
@@ -700,7 +700,7 @@ with open("inclusions.def", "w") as deffp:
     hmmalign_globins()
     hmmbuild_made1()
     nhmmer_made1(deffp)
-    hmmsearcht_pkinase(deffp)
+    hmmsearcht_pkinase()
 
 if not args.noclean:
     for fname in [ 'relnotes.txt', 'uniprot_sprot.fasta',
