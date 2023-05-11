@@ -298,6 +298,7 @@ p7_tophits_Add(P7_TOPHITS *h,
   h->unsrt[h->N].nincluded  = 0;
   h->unsrt[h->N].best_domain= 0;
   h->unsrt[h->N].dcl        = NULL;
+  h->unsrt[h->N].orfid      = NULL;
   h->N++;
 
   if (h->N >= 2) {
@@ -755,6 +756,7 @@ p7_tophits_Destroy(P7_TOPHITS *h)
       if (h->unsrt[i].acc   != NULL) free(h->unsrt[i].acc);
       if (h->unsrt[i].desc  != NULL) free(h->unsrt[i].desc);
       if (h->unsrt[i].orfid != NULL) free(h->unsrt[i].orfid);
+
       if (h->unsrt[i].dcl   != NULL) {
         for (j = 0; j < h->unsrt[i].ndom; j++) {
           if (h->unsrt[i].dcl[j].ad             != NULL) p7_alidisplay_Destroy(h->unsrt[i].dcl[j].ad);
@@ -2519,7 +2521,7 @@ main(int argc, char **argv)
   h1 = p7_tophits_Create();
   h2 = p7_tophits_Create();
   h3 = p7_tophits_Create();
-  
+ 
   for (i = 0; i < N; i++) 
   {
       key = esl_random(r);
@@ -2543,12 +2545,13 @@ main(int argc, char **argv)
   p7_tophits_Merge(h3, h1);
   if (strcmp(h3->hit[0]->name,     "first") != 0) esl_fatal("after merge 2, sort failed (top is %s = %f)", h3->hit[0]->name,     h3->hit[0]->sortkey);
   if (strcmp(h3->hit[3*N+1]->name, "last")  != 0) esl_fatal("after merge 2, sort failed (last is %s = %f)", h3->hit[3*N+1]->name,     h3->hit[3*N+1]->sortkey);
-  
+ 
   if (p7_tophits_GetMaxNameLength(h3) != strlen(name)) esl_fatal("GetMaxNameLength() failed");
 
   p7_tophits_Destroy(h1);
   p7_tophits_Destroy(h2);
   p7_tophits_Destroy(h3);
+
   esl_randomness_Destroy(r);
   esl_getopts_Destroy(go);
   return eslOK;
