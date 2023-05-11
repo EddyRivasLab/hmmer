@@ -382,7 +382,6 @@
 1 exercise  hmmscant/-l            @src/hmmscant@  -l -95                        !testsuite/2OG-FeII_Oxy_3.hmm! %TESTDB%
 1 exercise  hmmscant/-m            @src/hmmscant@  -m                            !testsuite/2OG-FeII_Oxy_3.hmm! %TESTDB%
 1 exercise  hmmscant/-M            @src/hmmscant@  -M                            !testsuite/2OG-FeII_Oxy_3.hmm! %TESTDB%
-1 exercise  hmmscant/--informat    @src/hmmscant@  --informat fasta              !testsuite/2OG-FeII_Oxy_3.hmm! %TESTDB%
 1 exercise  hmmscant/--watson      @src/hmmscant@  --watson                      !testsuite/2OG-FeII_Oxy_3.hmm! %TESTDB%
 1 exercise  hmmscant/--crick       @src/hmmscant@  --crick                       !testsuite/2OG-FeII_Oxy_3.hmm! %TESTDB%
 
@@ -425,7 +424,6 @@
 1 exercise  hmmsearcht/-l              @src/hmmsearcht@  -l -95                           !testsuite/2OG-FeII_Oxy_3.hmm! %TESTDB%
 1 exercise  hmmsearcht/-m              @src/hmmsearcht@  -m                               !testsuite/2OG-FeII_Oxy_3.hmm! %TESTDB%
 1 exercise  hmmsearcht/-M              @src/hmmsearcht@  -M                               !testsuite/2OG-FeII_Oxy_3.hmm! %TESTDB%
-1 exercise  hmmsearcht/--informat      @src/hmmsearcht@  --informat    fasta              !testsuite/2OG-FeII_Oxy_3.hmm! %TESTDB%
 1 exercise  hmmsearcht/--watson        @src/hmmsearcht@  --watson                         !testsuite/2OG-FeII_Oxy_3.hmm! %TESTDB%
 1 exercise  hmmsearcht/--crick         @src/hmmsearcht@  --crick                          !testsuite/2OG-FeII_Oxy_3.hmm! %TESTDB%
 
