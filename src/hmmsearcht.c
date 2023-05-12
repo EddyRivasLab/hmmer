@@ -59,7 +59,6 @@ static ESL_OPTIONS options[] = {
   { "-A",             eslARG_OUTFILE, NULL,   NULL,        NULL,       NULL,  NULL,  NULL,             "save multiple alignment of all hits to file <f>",             2 },
   { "--tblout",       eslARG_OUTFILE, NULL,   NULL,        NULL,       NULL,  NULL,  NULL,             "save parseable table of per-sequence hits to file <f>",       2 },
   { "--domtblout",    eslARG_OUTFILE, NULL,   NULL,        NULL,       NULL,  NULL,  NULL,             "save parseable table of per-domain hits to file <f>",         2 },
-  { "--pfamtblout",   eslARG_OUTFILE, NULL,   NULL,        NULL,       NULL,  NULL,  NULL,             "save table of hits and domains to file, in Pfam format <f>",  99 }, /* not for hmmsearcht */
   { "--acc",          eslARG_NONE,    FALSE,  NULL,        NULL,       NULL,  NULL,  NULL,             "prefer accessions over names in output",                      2 },
   { "--noali",        eslARG_NONE,    FALSE,  NULL,        NULL,       NULL,  NULL,  NULL,             "don't output alignments, so output is smaller",               2 },
   { "--notrans",      eslARG_NONE,    FALSE,  NULL,        NULL,       NULL,  NULL,  NULL,             "don't show the translated DNA sequence in domain alignment",  2 }, /*for hmmsearcht */
@@ -212,7 +211,6 @@ output_header(FILE *ofp, const ESL_GETOPTS *go, char *hmmfile, char *seqfile)
   if (esl_opt_IsUsed(go, "-A")           && fprintf(ofp, "# MSA of all hits saved to file:   %s\n",             esl_opt_GetString(go, "-A"))           < 0) ESL_EXCEPTION_SYS(eslEWRITE, "write failed");
   if (esl_opt_IsUsed(go, "--tblout")     && fprintf(ofp, "# per-seq hits tabular output:     %s\n",             esl_opt_GetString(go, "--tblout"))     < 0) ESL_EXCEPTION_SYS(eslEWRITE, "write failed");
   if (esl_opt_IsUsed(go, "--domtblout")  && fprintf(ofp, "# per-dom hits tabular output:     %s\n",             esl_opt_GetString(go, "--domtblout"))  < 0) ESL_EXCEPTION_SYS(eslEWRITE, "write failed");
-  if (esl_opt_IsUsed(go, "--pfamtblout") && fprintf(ofp, "# pfam-style tabular hit output:   %s\n",             esl_opt_GetString(go, "--pfamtblout")) < 0) ESL_EXCEPTION_SYS(eslEWRITE, "write failed");
   if (esl_opt_IsUsed(go, "--acc")        && fprintf(ofp, "# prefer accessions over names:    yes\n")                                                   < 0) ESL_EXCEPTION_SYS(eslEWRITE, "write failed");
   if (esl_opt_IsUsed(go, "--noali")      && fprintf(ofp, "# show alignments in output:       no\n")                                                    < 0) ESL_EXCEPTION_SYS(eslEWRITE, "write failed");
   if (esl_opt_IsUsed(go, "--notextw")    && fprintf(ofp, "# max ASCII text line length:      unlimited\n")                                             < 0) ESL_EXCEPTION_SYS(eslEWRITE, "write failed");
@@ -320,7 +318,6 @@ serial_master(ESL_GETOPTS *go, struct cfg_s *cfg)
   FILE            *afp      = NULL;              /* alignment output file (-A)                             */
   FILE            *tblfp    = NULL;              /* output stream for tabular per-seq (--tblout)           */
   FILE            *domtblfp = NULL;              /* output stream for tabular per-dom (--domtblout)        */
-  FILE            *pfamtblfp= NULL;              /* output stream for pfam tabular output (--pfamtblout)   */
 
   P7_HMMFILE      *hfp      = NULL;              /* open input HMM file                                    */
   ESL_SQFILE      *dbfp     = NULL;              /* open input sequence file                               */
@@ -384,7 +381,6 @@ serial_master(ESL_GETOPTS *go, struct cfg_s *cfg)
   if (esl_opt_IsOn(go, "-A"))          { if ((afp       = fopen(esl_opt_GetString(go, "-A"), "w"))           == NULL) p7_Fail("Failed to open alignment file %s for writing\n",                   esl_opt_GetString(go, "-A")); }
   if (esl_opt_IsOn(go, "--tblout"))    { if ((tblfp     = fopen(esl_opt_GetString(go, "--tblout"),    "w"))  == NULL) esl_fatal("Failed to open tabular per-seq output file %s for writing\n",    esl_opt_GetString(go, "--tblout")); }
   if (esl_opt_IsOn(go, "--domtblout")) { if ((domtblfp  = fopen(esl_opt_GetString(go, "--domtblout"), "w"))  == NULL) esl_fatal("Failed to open tabular per-dom output file %s for writing\n",    esl_opt_GetString(go, "--domtblout")); }
-  if (esl_opt_IsOn(go, "--pfamtblout")){ if ((pfamtblfp = fopen(esl_opt_GetString(go, "--pfamtblout"), "w")) == NULL) esl_fatal("Failed to open pfam-style tabular output file %s for writing\n", esl_opt_GetString(go, "--pfamtblout")); }
 
 #ifdef HMMER_THREADS
   /* initialize thread data */
@@ -564,7 +560,6 @@ serial_master(ESL_GETOPTS *go, struct cfg_s *cfg)
 
       if (tblfp)     p7_tophits_TabularTargets(tblfp,    hmm->name, hmm->acc, tophits_accumulator, pipelinehits_accumulator, (nquery == 1));
       if (domtblfp)  p7_tophits_TabularDomains(domtblfp, hmm->name, hmm->acc, tophits_accumulator, pipelinehits_accumulator, (nquery == 1));
-      if (pfamtblfp) p7_tophits_TabularXfam(pfamtblfp,   hmm->name, hmm->acc, tophits_accumulator, pipelinehits_accumulator);
 
       esl_stopwatch_Stop(w);
       p7_pli_Statistics(ofp, pipelinehits_accumulator, w);
@@ -608,7 +603,6 @@ serial_master(ESL_GETOPTS *go, struct cfg_s *cfg)
   /* Terminate outputs... any last words? */
   if (tblfp)    p7_tophits_TabularTail(tblfp,     "hmmsearcht", p7_SEARCH_SEQS, cfg->hmmfile, cfg->dbfile, go);
   if (domtblfp) p7_tophits_TabularTail(domtblfp,  "hmmsearcht", p7_SEARCH_SEQS, cfg->hmmfile, cfg->dbfile, go);
-  if (pfamtblfp) p7_tophits_TabularTail(pfamtblfp,"hmmsearcht", p7_SEARCH_SEQS, cfg->hmmfile, cfg->dbfile, go);
   if (ofp)      { if (fprintf(ofp, "[ok]\n") < 0) ESL_EXCEPTION_SYS(eslEWRITE, "write failed"); }
 
   /* Cleanup - prepare for exit */
@@ -644,7 +638,6 @@ serial_master(ESL_GETOPTS *go, struct cfg_s *cfg)
   if (afp)           fclose(afp);
   if (tblfp)         fclose(tblfp);
   if (domtblfp)      fclose(domtblfp);
-  if (pfamtblfp)     fclose(pfamtblfp);
 
   return eslOK;
 
