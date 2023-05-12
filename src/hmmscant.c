@@ -129,7 +129,7 @@ static void pipeline_thread(void *arg);
 /* process_commandline()
  * 
  * Processes the commandline, filling in fields in <cfg> and creating and returning
- * an <ESL_GETOPTS> options structure. The help page (hmmsearch -h) is formatted
+ * an <ESL_GETOPTS> options structure. The help page (hmmscant -h) is formatted
  * here.
  */
 static int
@@ -312,16 +312,16 @@ translate_sequence(ESL_GENCODE *gcode, ESL_GENCODE_WORKSTATE *wrk, ESL_SQ *sq)
 static int
 serial_master(ESL_GETOPTS *go, struct cfg_s *cfg)
 {
-  FILE            *ofp      = stdout;	         /* output file for results (default stdout)        */
-  FILE            *tblfp    = NULL;		 /* output stream for tabular per-seq (--tblout)    */
-  FILE            *domtblfp = NULL;	  	 /* output stream for tabular per-seq (--domtblout) */
+  FILE            *ofp      = stdout;	         /* output file for results (default stdout)                */
+  FILE            *tblfp    = NULL;		 /* output stream for tabular per-seq (--tblout)            */
+  FILE            *domtblfp = NULL;	  	 /* output stream for tabular per-seq (--domtblout)         */
   FILE            *pfamtblfp= NULL;              /* output stream for pfam tabular output (--pfamtblout)    */
-  int              seqfmt   = eslSQFILE_UNKNOWN; /* format of seqfile                               */
-  ESL_SQFILE      *sqfp     = NULL;              /* open seqfile                                    */
-  P7_HMMFILE      *hfp      = NULL;		 /* open HMM database file                          */
-  ESL_ALPHABET    *abc      = NULL;              /* sequence alphabet                               */
-  P7_OPROFILE     *om       = NULL;		 /* target profile                                  */
-  ESL_STOPWATCH   *w        = NULL;              /* timing                                          */
+  int              seqfmt   = eslSQFILE_UNKNOWN; /* format of seqfile                                       */
+  ESL_SQFILE      *sqfp     = NULL;              /* open seqfile                                            */
+  P7_HMMFILE      *hfp      = NULL;		 /* open HMM database file                                  */
+  ESL_ALPHABET    *abc      = NULL;              /* sequence alphabet                                       */
+  P7_OPROFILE     *om       = NULL;		 /* target profile                                          */
+  ESL_STOPWATCH   *w        = NULL;              /* timing                                                  */
   int              nquery   = 0;
   int              textw;
   int              status   = eslOK;
@@ -364,7 +364,6 @@ serial_master(ESL_GETOPTS *go, struct cfg_s *cfg)
   }
 
   /*the query sequence will be DNA but will be translated to amino acids */
-  /* TODO can we detect the type???? */
   abcDNA   = esl_alphabet_Create(eslDNA); 
   abcAMINO = esl_alphabet_Create(eslAMINO); 
   qsqDNA   = esl_sq_CreateDigital(abcDNA);
@@ -405,8 +404,7 @@ serial_master(ESL_GETOPTS *go, struct cfg_s *cfg)
   output_header(ofp, go, cfg->hmmfile, cfg->seqfile);
 
 
-  /* Set up the genetic code. Default = NCBI 1, the standard code; allow ORFs to start at any aa
-   */
+  /* Set up the genetic code. Default = NCBI 1, the standard code; allow ORFs to start at any Amino Acid */
   gcode = esl_gencode_Create(abcDNA, abcAMINO);
   esl_gencode_Set(gcode, esl_opt_GetInteger(go, "-c"));  // default = 1, the standard genetic code
 
@@ -573,16 +571,14 @@ serial_master(ESL_GETOPTS *go, struct cfg_s *cfg)
   else if (sstatus != eslEOF)     esl_fatal("Unexpected error %d reading sequence file %s",
 					    sstatus, sqfp->filename);
 
-  /* Terminate outputs - any last words?
-   */
+  /* Terminate outputs - any last words? */
   if (tblfp)     p7_tophits_TabularTail(tblfp,    "hmmscant", p7_SCAN_MODELS, cfg->seqfile, cfg->hmmfile, go);
   if (domtblfp)  p7_tophits_TabularTail(domtblfp, "hmmscant", p7_SCAN_MODELS, cfg->seqfile, cfg->hmmfile, go);
   if (pfamtblfp) p7_tophits_TabularTail(pfamtblfp,"hmmscant", p7_SCAN_MODELS, cfg->seqfile, cfg->hmmfile, go);
   if (ofp)       { if (fprintf(ofp, "[ok]\n") < 0) ESL_EXCEPTION_SYS(eslEWRITE, "write failed"); }
 
 
-  /* Cleanup - prepare for successful exit
-   */
+  /* Cleanup - prepare for successful exit */
   for (i = 0; i < infocnt; ++i) {
     p7_bg_Destroy(info[i].bg);
     esl_gencode_WorkstateDestroy(info[i].wrk);
@@ -632,7 +628,7 @@ serial_loop(WORKER_INFO *info, P7_HMMFILE *hfp)
   int            k;
   P7_OPROFILE   *om;
   ESL_ALPHABET  *abc = NULL;
-  ESL_SQ        *qsq_aa = NULL;      /* query sequence, amino acid                                 */
+  ESL_SQ        *qsq_aa = NULL;                  /* query sequence, amino acid                                 */
   ESL_SQ        *qsqDNATxt = esl_sq_Create();    /* DNA query sequence that will be in text mode for printing */
 
   /* copy and convert the DNA sequence to text so we can print it in the domain alignment display */
@@ -658,10 +654,8 @@ serial_loop(WORKER_INFO *info, P7_HMMFILE *hfp)
       {
           qsq_aa = &(info->wrk->orf_block->list[k]);
 
-          /*
-          use the name, accession, and description from the DNA sequence and
-          not from the ORF which is generated by gencode and only for internal use
-          */
+          /* use the name, accession, and description from the DNA sequence and not
+           * from the ORF which is generated by gencode and only for internal use */
           qsq_aa->idx = info->ntqsq->prev_n + k;
           sprintf(qsq_aa->orfid, "orf%" PRId64 "", qsq_aa->idx);
 
@@ -746,7 +740,7 @@ pipeline_thread(void *arg)
   ESL_THREADS   *obj;
   P7_OM_BLOCK   *block;
   void          *newBlock;
-  ESL_SQ        *qsq_aa = NULL;      /* query sequence, amino acid                                 */
+  ESL_SQ        *qsq_aa = NULL;       /* query sequence, amino acid                                */
   ESL_SQ        *qsqDNATxt = NULL;    /* DNA query sequence that will be in text mode for printing */
 
 
@@ -799,10 +793,8 @@ pipeline_thread(void *arg)
         {
           qsq_aa = &(info->wrk->orf_block->list[k]);
 
-          /*
-          use the name, accession, and description from the DNA sequence and
-          not from the ORF which is generated by gencode and only for internal use
-          */
+          /* use the name, accession, and description from the DNA sequence and not 
+           * from the ORF which is generated by gencode and only for internal use */
           qsq_aa->idx = info->ntqsq->prev_n + k;
           sprintf(qsq_aa->orfid, "orf%" PRId64 "", qsq_aa->idx);
 

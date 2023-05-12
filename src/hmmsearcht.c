@@ -1,6 +1,5 @@
-/* hmmsearcht: search profile HMM(s) against a sequence database.
- *
- */
+/* hmmsearcht: search profile HMM(s) against a sequence database.*/
+
 #include "p7_config.h"
 
 #include <stdio.h>
@@ -269,8 +268,7 @@ main(int argc, char **argv)
   impl_Init();                  /* processor specific initialization */
   p7_FLogsumInit();		/* we're going to use table-driven Logsum() approximations at times */
 
-  /* Initialize what we can in the config structure (without knowing the alphabet yet) 
-   */
+  /* Initialize what we can in the config structure (without knowing the alphabet yet) */
   cfg.hmmfile    = NULL;
   cfg.dbfile     = NULL;
 
@@ -318,17 +316,17 @@ translate_sequence(ESL_GENCODE *gcode, ESL_GENCODE_WORKSTATE *wrk, ESL_SQ *sq)
 static int
 serial_master(ESL_GETOPTS *go, struct cfg_s *cfg)
 {
-  FILE            *ofp      = stdout;            /* results output file (-o)                        */
-  FILE            *afp      = NULL;              /* alignment output file (-A)                      */
-  FILE            *tblfp    = NULL;              /* output stream for tabular per-seq (--tblout)    */
-  FILE            *domtblfp = NULL;              /* output stream for tabular per-dom (--domtblout) */
-  FILE            *pfamtblfp= NULL;              /* output stream for pfam tabular output (--pfamtblout)    */
+  FILE            *ofp      = stdout;            /* results output file (-o)                               */
+  FILE            *afp      = NULL;              /* alignment output file (-A)                             */
+  FILE            *tblfp    = NULL;              /* output stream for tabular per-seq (--tblout)           */
+  FILE            *domtblfp = NULL;              /* output stream for tabular per-dom (--domtblout)        */
+  FILE            *pfamtblfp= NULL;              /* output stream for pfam tabular output (--pfamtblout)   */
 
-  P7_HMMFILE      *hfp      = NULL;              /* open input HMM file                             */
-  ESL_SQFILE      *dbfp     = NULL;              /* open input sequence file                        */
-  P7_HMM          *hmm      = NULL;              /* one HMM query                                   */
-  ESL_ALPHABET    *abc      = NULL;              /* digital alphabet                                */
-  int              dbfmt    = eslSQFILE_UNKNOWN; /* format code for sequence database file          */
+  P7_HMMFILE      *hfp      = NULL;              /* open input HMM file                                    */
+  ESL_SQFILE      *dbfp     = NULL;              /* open input sequence file                               */
+  P7_HMM          *hmm      = NULL;              /* one HMM query                                          */
+  ESL_ALPHABET    *abc      = NULL;              /* digital alphabet                                       */
+  int              dbfmt    = eslSQFILE_UNKNOWN; /* format code for sequence database file                 */
   ESL_STOPWATCH   *w;
 
   int              textw    = 0;
@@ -350,11 +348,11 @@ serial_master(ESL_GETOPTS *go, struct cfg_s *cfg)
   char             errbuf[eslERRBUFSIZE];
 
   /* hmmsearcht */
-  P7_TOPHITS      *tophits_accumulator = NULL; /* to hold the top hits information from all 6 frame translations */
+  P7_TOPHITS      *tophits_accumulator = NULL;      /* to hold the top hits information from all 6 frame translations     */
   P7_PIPELINE     *pipelinehits_accumulator = NULL; /* to hold the pipeline hit information from all 6 frame translations */
-  ESL_ALPHABET    *abcDNA = NULL;       /* DNA sequence alphabet                               */
-  ESL_ALPHABET    *abcAMINO = NULL;       /* DNA sequence alphabet                               */
-  ESL_SQ          *qsqDNA = NULL;		 /* DNA query sequence                                  */
+  ESL_ALPHABET    *abcDNA = NULL;                   /* DNA sequence alphabet                                              */
+  ESL_ALPHABET    *abcAMINO = NULL;                 /* DNA sequence alphabet                                              */
+  ESL_SQ          *qsqDNA = NULL;		    /* DNA query sequence                                                 */
   ESL_GENCODE     *gcode       = NULL;
   /* end hmmsearcht */
 
@@ -440,7 +438,7 @@ serial_master(ESL_GETOPTS *go, struct cfg_s *cfg)
 #endif
   }
 
-  /* Set up the genetic code. Default = NCBI 1, the standard code; allow ORFs to start at any aa   */
+  /* Set up the genetic code. Default = NCBI 1, the standard code; allow ORFs to start at any Amino Acid   */
   gcode = esl_gencode_Create(abcDNA, abcAMINO);
   esl_gencode_Set(gcode, esl_opt_GetInteger(go, "-c"));  // default = 1, the standard genetic code
 
@@ -607,15 +605,13 @@ serial_master(ESL_GETOPTS *go, struct cfg_s *cfg)
   }
 
 
-  /* Terminate outputs... any last words?
-   */
+  /* Terminate outputs... any last words? */
   if (tblfp)    p7_tophits_TabularTail(tblfp,     "hmmsearcht", p7_SEARCH_SEQS, cfg->hmmfile, cfg->dbfile, go);
   if (domtblfp) p7_tophits_TabularTail(domtblfp,  "hmmsearcht", p7_SEARCH_SEQS, cfg->hmmfile, cfg->dbfile, go);
   if (pfamtblfp) p7_tophits_TabularTail(pfamtblfp,"hmmsearcht", p7_SEARCH_SEQS, cfg->hmmfile, cfg->dbfile, go);
   if (ofp)      { if (fprintf(ofp, "[ok]\n") < 0) ESL_EXCEPTION_SYS(eslEWRITE, "write failed"); }
 
-  /* Cleanup - prepare for exit
-   */
+  /* Cleanup - prepare for exit */
 #ifdef HMMER_THREADS
   if (ncpus > 0)
     {
@@ -667,8 +663,8 @@ serial_loop(WORKER_INFO *info, ESL_SQFILE *dbfp)
   uint64_t prev_char_cnt = 0;
   ESL_ALPHABET *abc         = esl_alphabet_Create(eslDNA);
   ESL_SQ       *dbsq_dna    = esl_sq_CreateDigital(abc);   /* (digital) nucleotide sequence, to be translated into ORFs  */
-  ESL_SQ_BLOCK *block       = NULL;   /* for translated ORFs */
-  ESL_SQ       *dbsq_aa     = NULL;   /* used to hold a current ORF  */
+  ESL_SQ_BLOCK *block       = NULL;                        /* for translated ORFs                                        */
+  ESL_SQ       *dbsq_aa     = NULL;                        /* used to hold a current ORF                                 */
   ESL_SQ       *dbsq_dnatxt = esl_sq_Create();
   
   dbsq_dnatxt->abc = abc;
@@ -718,12 +714,10 @@ serial_loop(WORKER_INFO *info, ESL_SQFILE *dbfp)
               }
           }
 
-          /*
-          Use the name, accession, and description from the DNA sequence and
-          not from the ORF which is generated by gencode and only for internal use.
-          Set the orfid to a number that will be uniq and consistent across threading
-          options
-          */
+          /* Use the name, accession, and description from the DNA sequence and not 
+           * from the ORF which is generated by gencode and only for internal use.
+           * Set the orfid to a number that will be uniq and consistent across 
+           * threading options */
           dbsq_aa->idx = prev_char_cnt+k;
           sprintf(dbsq_aa->orfid, "orf%" PRId64 "", dbsq_aa->idx);
           if ((sstatus = esl_sq_SetName     (dbsq_aa, info->ntqsq->name))   != eslOK)  ESL_EXCEPTION_SYS(eslEWRITE, "Set query sequence name failed");
@@ -801,12 +795,12 @@ thread_loop(WORKER_INFO *info, ESL_THREADS *obj, ESL_WORK_QUEUE *queue, ESL_SQFI
           if (eofCount < esl_threads_GetWorkerCount(obj)) sstatus = eslOK;
           ++eofCount;
       } else if (!block->complete ) {
-          // The final sequence on the block was an incomplete window of the active sequence,
-          // so our next read will need a copy of it to correctly deal with overlapping
-          // regions. We capture a copy of the sequence here before sending it off to the
-          // pipeline to avoid odd race conditions that can occur otherwise.
-          // Copying the entire sequence isn't really necessary, and is a bit heavy-
-          // handed. Could accelerate if this proves to have any notable impact on speed.
+          /* The final sequence on the block was an incomplete window of the active sequence,
+           * so our next read will need a copy of it to correctly deal with overlapping
+           * regions. We capture a copy of the sequence here before sending it off to the
+           * pipeline to avoid odd race conditions that can occur otherwise.
+           * Copying the entire sequence isn't really necessary, and is a bit heavy-
+           * handed. Could accelerate if this proves to have any notable impact on speed. */
           esl_sq_Copy(block->list + (block->count - 1) , tmpsq_dna);
       }
 
@@ -816,16 +810,16 @@ thread_loop(WORKER_INFO *info, ESL_THREADS *obj, ESL_WORK_QUEUE *queue, ESL_SQFI
           status = esl_workqueue_ReaderUpdate(queue, block, &newBlock);
           if (status != eslOK) esl_fatal("Work queue reader failed");
 
-          //newBlock needs all this information so the next ReadBlock call will know what to do
+          /* newBlock needs all this information so the next ReadBlock call will know what to do */
           ((ESL_SQ_BLOCK *)newBlock)->complete = block->complete;
           if (!block->complete) {
-              // Push the captured copy of the previously-read sequence into the new block,
-              // in preparation for ReadWindow  (double copy ... slower than necessary)
+              /* Push the captured copy of the previously-read sequence into the new block, 
+               * in preparation for ReadWindow  (double copy ... slower than necessary) */
               esl_sq_Copy(tmpsq_dna, ((ESL_SQ_BLOCK *)newBlock)->list);
               esl_sq_Reuse(tmpsq_dna);
 
               if (  ((ESL_SQ_BLOCK *)newBlock)->list->n < info->om->max_length ) {
-                //no reason to search the final partial sequence on the block, as the next block will search this whole chunk
+                /* no reason to search the final partial sequence on the block, as the next block will search this whole chunk */
                 ((ESL_SQ_BLOCK *)newBlock)->list->C = ((ESL_SQ_BLOCK *)newBlock)->list->n;
                 (((ESL_SQ_BLOCK *)newBlock)->count)--;
               } else {
@@ -916,12 +910,10 @@ pipeline_thread(void *arg)
                   continue; /* don't bother with an orf that showed up completely within a previous window */
 
 
-              /*
-              Use the name, accession, and description from the DNA sequence and
-              not from the ORF which is generated by gencode and only for internal use.
-              Set the orfid to a number that will be uniq and consistent across threading
-              options
-              */
+              /* Use the name, accession, and description from the DNA sequence and not 
+               * from the ORF which is generated by gencode and only for internal use. 
+               * Set the orfid to a number that will be uniq and consistent across 
+               * threading options */
               dbsq_aa->idx = dbsq_dna->prev_n+k;
               sprintf(dbsq_aa->orfid, "orf%" PRId64 "", dbsq_aa->idx);
               if ((status = esl_sq_SetName     (dbsq_aa, info->ntqsq->name))   != eslOK)  esl_fatal("Set query sequence name failed");
