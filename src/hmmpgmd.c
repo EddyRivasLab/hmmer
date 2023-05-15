@@ -33,7 +33,6 @@ static ESL_OPTIONS cmdlineOpts[] = {
   { "--pid",        eslARG_OUTFILE, NULL,     NULL, NULL,           NULL,  NULL,  NULL,            "file to write process id to",                                 12 },
   { "--seqdb",      eslARG_INFILE,  NULL,     NULL, NULL,           NULL,  NULL,  "--worker",      "protein database to cache for searches",                      12 },
   { "--hmmdb",      eslARG_INFILE,  NULL,     NULL, NULL,           NULL,  NULL,  "--worker",      "hmm database to cache for searches",                          12 },
-  { "--hmmscant",   eslARG_NONE,    NULL,     NULL, NULL,           NULL,  NULL, "--worker,--master", "search hmm database with a 6 frame translated DNA sequence", 12 } ,
   { "--cpu",        eslARG_INT,  p7_NCPU,"HMMER_NCPU","n>0",        NULL,  NULL,  "--master",      "number of parallel CPU workers to use for multithreads",      12 },
   {  0, 0, 0, 0, 0, 0, 0, 0, 0, 0 },
 

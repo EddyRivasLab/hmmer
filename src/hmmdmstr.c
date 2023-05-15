@@ -1203,7 +1203,6 @@ clientside_loop(CLIENTSIDE_ARGS *data)
       if (esl_opt_IsUsed(opts, "--hmmscant")) {
         abcDNA = esl_alphabet_Create(eslDNA);
         seq = esl_sq_CreateDigital(abcDNA);
-        if (abcDNA  != NULL) esl_alphabet_Destroy(abcDNA);
       }
       else {
         seq = esl_sq_CreateDigital(abc);
@@ -1212,6 +1211,7 @@ clientside_loop(CLIENTSIDE_ARGS *data)
       status = esl_sqio_Parse(ptr, strlen(ptr), seq, eslSQFILE_DAEMON);
       if (status != eslOK) client_msg_longjmp(data->sock_fd, status, &jmp_env, "Error parsing FASTA sequence");
       if (seq->n < 1) client_msg_longjmp(data->sock_fd, eslEFORMAT, &jmp_env, "Error zero length FASTA sequence");
+      if (abcDNA  != NULL) esl_alphabet_Destroy(abcDNA);
 
     } else if (strncmp(ptr, "HMM", 3) == 0) {
       if (esl_opt_IsUsed(opts, "--hmmdb")) {
