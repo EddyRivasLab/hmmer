@@ -39,6 +39,23 @@ typedef struct {
   ESL_GENCODE_WORKSTATE *wrk;    /* maintain state of nucleotide sequence in the midst of processing ORFs    */
 } WORKER_INFO;
 
+typedef struct {
+  int    id;         /* internal sequence ID  */
+  int    length;     /* length of sequence */
+} ID_LENGTH;
+
+typedef struct {
+  ID_LENGTH  *id_lengths;
+  int        count;
+  int        size;
+} ID_LENGTH_LIST;
+
+
+static ID_LENGTH_LIST* init_id_length( int size );
+static void            destroy_id_length( ID_LENGTH_LIST *list );
+static int             add_id_length(ID_LENGTH_LIST *list, int id, int L);
+static int             assign_Lengths(P7_TOPHITS *th, ID_LENGTH_LIST *id_length_list);
+
 /* set the max residue count to 1/4 meg when reading a block */
 #define HMMSEARCHT_MAX_RESIDUE_COUNT (1024 * 256)  /* 1/4 Mb */
 
@@ -124,12 +141,12 @@ struct cfg_s {
 };
 
 static int  serial_master(ESL_GETOPTS *go, struct cfg_s *cfg);
-static int  serial_loop  (WORKER_INFO *info, ESL_SQFILE *dbfp);
+static int  serial_loop  (WORKER_INFO *info, ID_LENGTH_LIST *id_length_list, ESL_SQFILE *dbfp);
 
 #ifdef HMMER_THREADS
 #define BLOCK_SIZE 1000
 
-static int  thread_loop(WORKER_INFO *info, ESL_THREADS *obj, ESL_WORK_QUEUE *queue, ESL_SQFILE *dbfp);
+static int  thread_loop(WORKER_INFO *info, ID_LENGTH_LIST *id_length_list, ESL_THREADS *obj, ESL_WORK_QUEUE *queue, ESL_SQFILE *dbfp);
 static void pipeline_thread(void *arg);
 #endif /*HMMER_THREADS*/
 
@@ -172,8 +189,11 @@ process_commandline(int argc, char **argv, ESL_GETOPTS **ret_go, char **ret_hmmf
 
       if (puts("\nOther expert options:")                                    < 0) ESL_XEXCEPTION_SYS(eslEWRITE, "write failed");
       esl_opt_DisplayHelp(stdout, go, 12, 2, 80); 
+ 
+      if (puts("\nAvailable NCBI genetic code tables (for -c <id>):")        < 0) ESL_XEXCEPTION_SYS(eslEWRITE, "write failed");
+      esl_gencode_DumpAltCodeTable(stdout); 
 
-	  exit(0);
+      exit(0);
     }
 
   if (esl_opt_ArgNumber(go)                  != 2)     { if (puts("Incorrect number of command line arguments.")      < 0) ESL_XEXCEPTION_SYS(eslEWRITE, "write failed"); goto FAILURE; }
@@ -332,6 +352,9 @@ serial_master(ESL_GETOPTS *go, struct cfg_s *cfg)
   int              hstatus  = eslOK;
   int              sstatus  = eslOK;
   int              i;
+
+  /* used to keep track of the lengths of the sequences that are processed */
+  ID_LENGTH_LIST  *id_length_list = NULL;
 
   int              ncpus    = 0;
 
@@ -515,12 +538,15 @@ serial_master(ESL_GETOPTS *go, struct cfg_s *cfg)
 #endif
       }
 
+      /* establish the id_lengths data structutre */
+      id_length_list = init_id_length(1000);
+
 #ifdef HMMER_THREADS
       if (ncpus > 0)
-          sstatus = thread_loop(info, threadObj, queue, dbfp);
+          sstatus = thread_loop(info, id_length_list, threadObj, queue, dbfp);
       else
 #endif
-      sstatus = serial_loop(info, dbfp);
+      sstatus = serial_loop(info, id_length_list, dbfp);
 
       switch(sstatus)
       {
@@ -546,9 +572,10 @@ serial_master(ESL_GETOPTS *go, struct cfg_s *cfg)
       }
 
       esl_sq_Reuse(qsqDNA);
-		 
+		
       /* Sort and remove duplicates */
       p7_tophits_SortBySeqidxAndAlipos(tophits_accumulator);
+      assign_Lengths(tophits_accumulator, id_length_list);
       p7_tophits_RemoveDuplicates(tophits_accumulator, pipelinehits_accumulator->use_bit_cutoffs);
 
 
@@ -587,7 +614,7 @@ serial_master(ESL_GETOPTS *go, struct cfg_s *cfg)
       p7_oprofile_Destroy(om);
       p7_profile_Destroy(gm);
       p7_hmm_Destroy(hmm);
-
+      destroy_id_length(id_length_list);
       hstatus = p7_hmmfile_Read(hfp, &abc, &hmm);
     } /* end outer loop over query HMMs */
 
@@ -647,7 +674,7 @@ serial_master(ESL_GETOPTS *go, struct cfg_s *cfg)
 
 
 static int
-serial_loop(WORKER_INFO *info, ESL_SQFILE *dbfp)
+serial_loop(WORKER_INFO *info, ID_LENGTH_LIST *id_length_list, ESL_SQFILE *dbfp)
 {
 
   int      k;
@@ -666,14 +693,14 @@ serial_loop(WORKER_INFO *info, ESL_SQFILE *dbfp)
 
   info->wrk->orf_block = esl_sq_CreateDigitalBlock(BLOCK_SIZE, info->om->abc);
   if (info->wrk->orf_block == NULL)          esl_fatal("Failed to allocate sequence block");
-
+  
   while (sstatus == eslOK  ) {
       dbsq_dna->idx = seq_id;
 
       /* copy and convert the DNA sequence to text so we can print it in the domain alignment display */
       esl_sq_Copy(dbsq_dna, dbsq_dnatxt);
       info->ntqsq = dbsq_dnatxt; // for printing the DNA target sequence in the domain hits display
-
+      
       /* translate DNA sequence to 6 frame ORFs */
       dbsq_dna->L = dbsq_dna->n; /* here, L is not the full length of the sequence in the db, just of the currently-active window;  required for esl_gencode machinations */
       esl_sq_ReuseBlock(info->wrk->orf_block);
@@ -720,7 +747,7 @@ serial_loop(WORKER_INFO *info, ESL_SQFILE *dbfp)
           p7_bg_SetLength(info->bg, dbsq_aa->n);
           p7_oprofile_ReconfigLength(info->om, dbsq_aa->n);
 
-          p7_Pipeline(info->pli, info->om, info->bg, dbsq_aa, info->ntqsq, info->th, NULL);
+          p7_Pipeline(info->pli, info->om, info->bg, dbsq_aa, info->ntqsq, info->th, info->pli->ndbseqs, NULL);
 
           esl_sq_Reuse(dbsq_aa);
           p7_pipeline_Reuse(info->pli);
@@ -731,8 +758,10 @@ serial_loop(WORKER_INFO *info, ESL_SQFILE *dbfp)
       /* "maxlength * 3" because we're looking for a protein of maxlength, and this is DNA */
       sstatus = esl_sqio_ReadWindow(dbfp, info->om->max_length * 3, info->pli->block_length, dbsq_dna);
 
-
       if (sstatus == eslEOD) { // no more left of this sequence ... move along to the next sequence.
+          add_id_length(id_length_list, dbsq_dna->idx, dbsq_dna->L); 
+          
+          info->pli->ndbseqs++;
           esl_sq_Reuse(dbsq_dna);
           sstatus = esl_sqio_ReadWindow(dbfp, 0, info->pli->block_length, dbsq_dna);
           seq_id++;
@@ -748,8 +777,9 @@ serial_loop(WORKER_INFO *info, ESL_SQFILE *dbfp)
 
 #ifdef HMMER_THREADS
 static int
-thread_loop(WORKER_INFO *info, ESL_THREADS *obj, ESL_WORK_QUEUE *queue, ESL_SQFILE *dbfp)
+thread_loop(WORKER_INFO *info, ID_LENGTH_LIST *id_length_list, ESL_THREADS *obj, ESL_WORK_QUEUE *queue, ESL_SQFILE *dbfp)
 {
+
   int      i;
   int      status        = eslOK;
   int      sstatus       = eslOK;
@@ -774,16 +804,21 @@ thread_loop(WORKER_INFO *info, ESL_THREADS *obj, ESL_WORK_QUEUE *queue, ESL_SQFI
       block = (ESL_SQ_BLOCK *) newBlock;
 
       sstatus = esl_sqio_ReadBlock(dbfp, block, info->pli->block_length, -1,  /*max_init_window=*/FALSE, TRUE);
-      block->first_seqidx = info->pli->nseqs;
+
+      block->first_seqidx = info->pli->ndbseqs;
       seqid = block->first_seqidx;
+      
       for (i=0; i<block->count; i++) {
         block->list[i].idx = seqid;
+        add_id_length(id_length_list, seqid, block->list[i].L);
+        seqid++;
+
         block->list[i].prev_n = prev_char_cnt;
         prev_char_cnt += block->list[i].n;
-        seqid++;
       }
-
-
+       
+      info->pli->ndbseqs += block->count  - (block->complete ? 0 : 1);
+      
       if (sstatus == eslEOF) {
           if (eofCount < esl_threads_GetWorkerCount(obj)) sstatus = eslOK;
           ++eofCount;
@@ -859,7 +894,9 @@ pipeline_thread(void *arg)
 
   obj = (ESL_THREADS *) arg;
   esl_threads_Started(obj, &workeridx);
+
   info = (WORKER_INFO *) esl_threads_GetData(obj, workeridx);
+
   status = esl_workqueue_WorkerUpdate(info->queue, NULL, &newBlock);
   if (status != eslOK) esl_fatal("Work queue worker failed");
 
@@ -869,7 +906,6 @@ pipeline_thread(void *arg)
 
   /* thread loops until all blocks have been processed */
   dnablock = (ESL_SQ_BLOCK *) newBlock; //block from threads
-
 
   while (dnablock->count > 0)
     {
@@ -892,7 +928,7 @@ pipeline_thread(void *arg)
           translate_sequence(info->gcode, info->wrk, dbsq_dna);
 
           orfblock =  info->wrk->orf_block;
-
+          
           /* Main loop: */
           for (k = 0; k < orfblock->count; ++k)
           {
@@ -932,7 +968,7 @@ pipeline_thread(void *arg)
               p7_bg_SetLength(info->bg, dbsq_aa->n);
               p7_oprofile_ReconfigLength(info->om, dbsq_aa->n);
 
-              p7_Pipeline(info->pli, info->om, info->bg, dbsq_aa, info->ntqsq, info->th, NULL);
+              p7_Pipeline(info->pli, info->om, info->bg, dbsq_aa, info->ntqsq, info->th, dnablock->first_seqidx + i, NULL);
 
               esl_sq_Reuse(dbsq_aa);
               p7_pipeline_Reuse(info->pli);
@@ -955,5 +991,77 @@ pipeline_thread(void *arg)
 }
 #endif   /* HMMER_THREADS */
  
+
+/* helper functions for tracking id_lengths */
+
+static ID_LENGTH_LIST *
+init_id_length( int size )
+{
+  int status;
+  ID_LENGTH_LIST *list;
+
+  ESL_ALLOC (list, sizeof(ID_LENGTH_LIST));
+  list->count = 0;
+  list->size  = size;
+  list->id_lengths = NULL;
+
+  ESL_ALLOC (list->id_lengths, size * sizeof(ID_LENGTH));
+
+  return list;
+
+ERROR:
+  return NULL;
+}
+
+static void
+destroy_id_length( ID_LENGTH_LIST *list )
+{
+
+  if (list != NULL) {
+    if (list->id_lengths != NULL) free (list->id_lengths);
+    free (list);
+  }
+
+}
+
+static int
+add_id_length(ID_LENGTH_LIST *list, int id, int L)
+{
+   int status;
+
+   if (list->count > 0 && list->id_lengths[list->count-1].id == id) {
+     // the last time this gets updated, it'll have the sequence's actual length
+     list->id_lengths[list->count-1].length = L;
+   } else {
+
+     if (list->count == list->size) {
+       list->size *= 10;
+       ESL_REALLOC(list->id_lengths, list->size * sizeof(ID_LENGTH));
+     }
+
+     list->id_lengths[list->count].id     = id;
+     list->id_lengths[list->count].length = L;
+
+     list->count++;
+   }
+   return eslOK;
+
+ERROR:
+   return status;
+}
+
+static int
+assign_Lengths(P7_TOPHITS *th, ID_LENGTH_LIST *id_length_list) {
+
+  int i,d;
+  int j = 0;
+  for (i=0; i<th->N; i++) {
+    while (th->hit[i]->seqidx != id_length_list->id_lengths[j].id) { j++; }
+    for(d=0; d<th->hit[i]->ndom; d++) {
+      th->hit[i]->dcl[d].ad->L = id_length_list->id_lengths[j].length;
+    }
+  }
+  return eslOK;
+}
 
 

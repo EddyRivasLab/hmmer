@@ -714,7 +714,7 @@ typedef struct p7_hit_s {
   char   *name;			/* name of the target               (mandatory)           */
   char   *acc;			/* accession of the target          (optional; else NULL) */
   char   *desc;			/* description of the target        (optional; else NULL) */
-  char   *orfid;    /* unique ORF identifier            (mandatory for translated search, not used otherwise)           */
+  char   *orfid;                /* unique ORF identifier            (mandatory for translated search, not used otherwise)           */
   int    window_length;         /* for later use in e-value computation, when splitting long sequences */
   double sortkey;		/* number to sort by; big is better                       */
 
@@ -1237,12 +1237,13 @@ typedef struct p7_pipeline_s {
   uint64_t      n_past_bias;	/* # comparisons that pass bias filter      */
   uint64_t      n_past_vit;	/* # comparisons that pass ViterbiFilter()  */
   uint64_t      n_past_fwd;	/* # comparisons that pass ForwardFilter()  */
-  uint64_t      n_output;	    /* # alignments that make it to the final output (used for nhmmer) */
+  uint64_t      n_output;	/* # alignments that make it to the final output (used for nhmmer) */
   uint64_t      pos_past_msv;	/* # positions that pass MSVFilter()  (used for nhmmer) */
   uint64_t      pos_past_bias;	/* # positions that pass bias filter  (used for nhmmer) */
   uint64_t      pos_past_vit;	/* # positions that pass ViterbiFilter()  (used for nhmmer) */
   uint64_t      pos_past_fwd;	/* # positions that pass ForwardFilter()  (used for nhmmer) */
-  uint64_t      pos_output;	    /* # positions that make it to the final output (used for nhmmer) */
+  uint64_t      pos_output;	/* # positions that make it to the final output (used for nhmmer) */
+  uint64_t      ndbseqs;        /* # number of DNA sequences in database for translated search */
 
   enum p7_pipemodes_e mode;    	/* p7_SCAN_MODELS | p7_SEARCH_SEQS          */
   int           long_targets;   /* TRUE if the target sequences are expected to be very long (e.g. dna chromosome search in nhmmer) */
@@ -1654,7 +1655,7 @@ extern int p7_pli_DomainIncludable  (P7_PIPELINE *pli, float dom_score, double l
 extern int p7_pli_NewModel          (P7_PIPELINE *pli, const P7_OPROFILE *om, P7_BG *bg);
 extern int p7_pli_NewModelThresholds(P7_PIPELINE *pli, const P7_OPROFILE *om);
 extern int p7_pli_NewSeq            (P7_PIPELINE *pli, const ESL_SQ *sq);
-extern int p7_Pipeline              (P7_PIPELINE *pli, P7_OPROFILE *om, P7_BG *bg, const ESL_SQ *sq, const ESL_SQ *ntsq, P7_TOPHITS *th, const P7_SCOREDATA *data);
+extern int p7_Pipeline              (P7_PIPELINE *pli, P7_OPROFILE *om, P7_BG *bg, const ESL_SQ *sq, const ESL_SQ *ntsq, P7_TOPHITS *th, int64_t seqidx, const P7_SCOREDATA *data);
 extern int p7_Pipeline_LongTarget   (P7_PIPELINE *pli, P7_OPROFILE *om, P7_SCOREDATA *data,
                                      P7_BG *bg, P7_TOPHITS *hitlist, int64_t seqidx,
                                      const ESL_SQ *sq, int complementarity,

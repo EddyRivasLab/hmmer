@@ -689,7 +689,7 @@ search_thread(void *arg)
 
         p7_bg_SetLength(bg, dbsq.n);
         p7_oprofile_ReconfigLength(om, dbsq.n);
-        p7_Pipeline(pli, om, bg, &dbsq, NULL, th, NULL);
+        p7_Pipeline(pli, om, bg, &dbsq, NULL, th, -1, NULL);
 
         p7_pipeline_Reuse(pli);
       }
@@ -782,7 +782,7 @@ scan_thread(void *arg)
       p7_bg_SetLength(bg, info->seq->n);
       p7_oprofile_ReconfigLength(*om, info->seq->n);
 
-      p7_Pipeline(pli, *om, bg, info->seq, NULL, th, NULL);
+      p7_Pipeline(pli, *om, bg, info->seq, NULL, th, -1, NULL);
       p7_pipeline_Reuse(pli);
     }
   }
@@ -944,7 +944,7 @@ scan_thread_translated(void *arg)
           p7_bg_SetLength(bg, qsq->n);
           p7_oprofile_ReconfigLength(*om, qsq->n);
 
-          p7_Pipeline(pli, *om, bg, qsq, qsqDNATxt, th, NULL);
+          p7_Pipeline(pli, *om, bg, qsq, qsqDNATxt, th, -1, NULL);
 
           /* we have a bunch of hits from one orf; merge with others */
           p7_tophits_Merge(tophits_accumulator, th);
