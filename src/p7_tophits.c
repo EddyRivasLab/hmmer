@@ -735,7 +735,7 @@ p7_tophits_GetMaxTargetLength(P7_TOPHITS *h, int mode)
       }
     } else {
       if (h->unsrt[i].nreported>0 && h->unsrt[i].dcl[0].ad->M > 0) {
-        n = sprintf (buffer, "%" PRId64 "", h->unsrt[i].dcl[0].ad->M);
+        n = sprintf (buffer, "%d", h->unsrt[i].dcl[0].ad->M);
         max = ESL_MAX(n, max);
       }
     }
@@ -770,7 +770,7 @@ p7_tophits_GetMaxQueryLength(P7_TOPHITS *h, int mode)
   for (i = 0; i < h->N; i++) {
     if(mode == p7_SEARCH_SEQS) {
       if (h->unsrt[i].nreported>0 && h->unsrt[i].dcl[0].ad->M > 0) {
-        n = sprintf (buffer, "%" PRId64 "", h->unsrt[i].dcl[0].ad->M);
+        n = sprintf (buffer, "%d", h->unsrt[i].dcl[0].ad->M);
         max = ESL_MAX(n, max);
       }
     } else {

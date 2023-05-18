@@ -1242,7 +1242,7 @@ typedef struct p7_pipeline_s {
   uint64_t      pos_past_bias;	/* # positions that pass bias filter  (used for nhmmer) */
   uint64_t      pos_past_vit;	/* # positions that pass ViterbiFilter()  (used for nhmmer) */
   uint64_t      pos_past_fwd;	/* # positions that pass ForwardFilter()  (used for nhmmer) */
-  uint64_t      pos_output;	/* # positions that make it to the final output (used for nhmmer) */
+  uint64_t      pos_output;     /* # positions that make it to the final output (used for nhmmer) */
   uint64_t      ndbseqs;        /* # number of DNA sequences in database for translated search */
 
   enum p7_pipemodes_e mode;    	/* p7_SCAN_MODELS | p7_SEARCH_SEQS          */
