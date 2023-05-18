@@ -702,6 +702,86 @@ p7_tophits_GetMaxShownLength(P7_TOPHITS *h)
   return max;
 }
 
+/* Function:  p7_tophits_GetMaxTargetLength()
+ * Synopsis:  Returns maximum length of a target sequence or model in hit list.
+ *
+ * Purpose:   Returns the length of the longest target sequence or model 
+ *            of all the registered hits, in chars. This is useful when
+ *            deciding how to format output.
+ *
+ *            The maximum is taken over all registered hits. This
+ *            opens a possible side effect: caller might print only
+ *            the top hits, and the max length in these top hits
+ *            may be different than the max length over all the hits.
+ *
+ *            Used specifically for translated search.
+ *
+ *            If there are no hits in <h>, returns 0.
+ */
+int
+p7_tophits_GetMaxTargetLength(P7_TOPHITS *h, int mode)
+{
+  int64_t i;
+  int max = 0;
+  int n;
+  char buffer [13];
+
+  for (i = 0; i < h->N; i++) {
+    if(mode == p7_SEARCH_SEQS) {
+      
+      if (h->unsrt[i].nreported>0 && h->unsrt[i].dcl[0].ad->L > 0) {
+        n = sprintf (buffer, "%" PRId64 "", h->unsrt[i].dcl[0].ad->L);
+        max = ESL_MAX(n, max);
+      }
+    } else {
+      if (h->unsrt[i].nreported>0 && h->unsrt[i].dcl[0].ad->M > 0) {
+        n = sprintf (buffer, "%d", h->unsrt[i].dcl[0].ad->M);
+        max = ESL_MAX(n, max);
+      }
+    }
+  }
+  return max;
+}
+
+/* Function:  p7_tophits_GetMaxQueryLength()
+ * Synopsis:  Returns maximum length of a query sequence or model in hit list.
+ *
+ * Purpose:   Returns the length of the longest query sequence or model 
+ *            of all the registered hits, in chars. This is useful when
+ *            deciding how to format output.
+ *
+ *            The maximum is taken over all registered hits. This
+ *            opens a possible side effect: caller might print only
+ *            the top hits, and the max length in these top hits
+ *            may be different than the max length over all the hits.
+ *
+ *            Used specifically for translated search.
+ *
+ *            If there are no hits in <h>, returns 0.
+ */
+int
+p7_tophits_GetMaxQueryLength(P7_TOPHITS *h, int mode)
+{
+  int64_t i;
+  int max = 0;
+  int n;
+  char buffer [13];
+
+  for (i = 0; i < h->N; i++) {
+    if(mode == p7_SEARCH_SEQS) {
+      if (h->unsrt[i].nreported>0 && h->unsrt[i].dcl[0].ad->M > 0) {
+        n = sprintf (buffer, "%d", h->unsrt[i].dcl[0].ad->M);
+        max = ESL_MAX(n, max);
+      }
+    } else {
+      if (h->unsrt[i].nreported>0 && h->unsrt[i].dcl[0].ad->L > 0) {
+        n = sprintf (buffer, "%" PRId64 "", h->unsrt[i].dcl[0].ad->L);
+        max = ESL_MAX(n, max);
+      }
+    }
+  }
+  return max;
+}
 
 /* Function:  p7_tophits_Reuse()
  * Synopsis:  Reuse a hit list, freeing internals.
@@ -1829,7 +1909,7 @@ p7_tophits_TabularTargets(FILE *ofp, char *qname, char *qacc, P7_TOPHITS *th, P7
   int qaccw  = ((qacc != NULL) ? ESL_MAX(10, strlen(qacc)) : 10);
   int taccw  = ESL_MAX(10, p7_tophits_GetMaxAccessionLength(th));
   int posw   = (pli->long_targets ? ESL_MAX(7, p7_tophits_GetMaxPositionLength(th)) : 0);
-  int orfw   = ESL_MAX(6, p7_tophits_GetMaxORFnameLength(th));
+  int orfw   = ESL_MAX(12, p7_tophits_GetMaxORFnameLength(th));
   int h,d;
 
   if (show_header)
@@ -1852,15 +1932,17 @@ p7_tophits_TabularTargets(FILE *ofp, char *qname, char *qacc, P7_TOPHITS *th, P7
           if (fprintf(ofp, "#%-*s %-*s %-*s %-*s %-*s %9s %6s %5s %9s %6s %5s %5s %3s %3s %3s %3s %3s %3s %3s %s\n",
             tnamew-1, " target name",        taccw, "accession",  qnamew, "query name",           qaccw, "accession",  orfw, "orf", "  E-value", " score", " bias", "  E-value", " score", " bias", "exp", "reg", "clu", " ov", "env", "dom", "rep", "inc", "description of target") < 0)
             ESL_EXCEPTION_SYS(eslEWRITE, "tabular per-sequence hit list: write failed");
-          if (fprintf(ofp, "#%*s %*s %*s %*s %*s %9s %6s %5s %9s %6s %5s %5s %3s %3s %3s %3s %3s %3s %3s %s\n",
-            tnamew-1, "-------------------", taccw, "----------", qnamew, "--------------------", qaccw, "----------", orfw, "------", "---------", "------", "-----", "---------", "------", "-----", "---", "---", "---", "---", "---", "---", "---", "---", "---------------------") < 0)
+          if (fprintf(ofp, "#%*s %*s %*s %*s %.*s %9s %6s %5s %9s %6s %5s %5s %3s %3s %3s %3s %3s %3s %3s %s\n",
+            tnamew-1, "-------------------", taccw, "----------", qnamew, "--------------------", qaccw, "----------", orfw, "-------------", "---------", "------", "-----", "---------", "------", "-----", "---", "---", "---", "---", "---", "---", "---", "---", "---------------------") < 0)
             ESL_EXCEPTION_SYS(eslEWRITE, "tabular per-sequence hit list: write failed");
+
         }
         else
         {
  
           if (fprintf(ofp, "#%*s %22s %22s %33s\n", tnamew+qnamew+taccw+qaccw+2, "", "--- full sequence ----", "--- best 1 domain ----", "--- domain number estimation ----") < 0)
             ESL_EXCEPTION_SYS(eslEWRITE, "tabular per-sequence hit list: write failed");
+
           if (fprintf(ofp, "#%-*s %-*s %-*s %-*s %9s %6s %5s %9s %6s %5s %5s %3s %3s %3s %3s %3s %3s %3s %s\n",
             tnamew-1, " target name",        taccw, "accession",  qnamew, "query name",           qaccw, "accession",  "  E-value", " score", " bias", "  E-value", " score", " bias", "exp", "reg", "clu", " ov", "env", "dom", "rep", "inc", "description of target") < 0)
             ESL_EXCEPTION_SYS(eslEWRITE, "tabular per-sequence hit list: write failed");
@@ -1979,21 +2061,25 @@ p7_tophits_TabularDomains(FILE *ofp, char *qname, char *qacc, P7_TOPHITS *th, P7
   int tnamew = ESL_MAX(20, p7_tophits_GetMaxNameLength(th));
   int qaccw  = (qacc ? ESL_MAX(10, strlen(qacc)) : 10);
   int taccw  = ESL_MAX(10, p7_tophits_GetMaxAccessionLength(th));
-  int orfw   = ESL_MAX(6, p7_tophits_GetMaxORFnameLength(th));
+  int tlenw  = (pli->is_translated ? ESL_MAX(10, p7_tophits_GetMaxTargetLength(th, pli->mode)) : 0);
+  int qlenw  = (pli->is_translated ? ESL_MAX(10, p7_tophits_GetMaxQueryLength(th, pli->mode)) : 0);
+  int orfw   = ESL_MAX(13, p7_tophits_GetMaxORFnameLength(th));
+  int posw   = (pli->is_translated ? ESL_MAX(6, p7_tophits_GetMaxPositionLength(th)) : 0);
   int tlen, qlen;
   int h,d,nd;
 
   if (show_header)
     {
       if (pli->is_translated)
-      {
-         if (fprintf(ofp, "#%*s %22s %30s %11s %11s %11s %11s\n", tnamew+qnamew-1+15+taccw+qaccw+orfw+1, "",                                             "--- full sequence ---",    "--------- this domain --------",   "hmm coord",      "ali coord",     "env coord",      "orf coord") < 0)
+      { 
+         if (fprintf(ofp, "#%*s %22s %30s %11s %*s %*s %*s\n", tnamew+qnamew+taccw+qaccw+tlenw+qlenw+orfw+6, "",                                                      "--- full sequence ---",        "--------- this domain --------",             "hmm coord", (posw*2)+1, "ali coord",               (posw*2)+1, "env coord",                 (posw*2)+1, "orf coord") < 0)
             ESL_EXCEPTION_SYS(eslEWRITE, "tabular per-domain hit list: write failed");
-         if (fprintf(ofp, "#%-*s %-*s %5s %-*s %-*s %5s %-*s %9s %6s %5s %3s %3s %9s %6s %5s %5s %5s %5s %5s %5s %5s %5s %5s %5s %4s %s\n",
-            tnamew-1, " target name",        taccw, "accession",  "tlen",  qnamew, "query name",           qaccw, "accession",  "qlen", orfw, "orf",    "E-value",   "score",  "bias",  "#",   "of",  "i-Evalue",  "score",  "bias",  "from",  "to",    "from",  "to",    "from",  "to",    "from",  "to",    "frame",  "acc",  "description of target") < 0)
+         if (fprintf(ofp, "#%-*s %-*s %*s %-*s %-*s %*s %-*s %9s %6s %5s %3s %3s %9s %6s %5s %5s %5s %*s %*s %*s %*s %*s %*s %5s %4s %s\n",
+            tnamew-1, " target name",        taccw, "accession", tlenw, "tlen",       qnamew, "query name",           qaccw, "accession",  qlenw, "qlen",       orfw, "orf",           "E-value",   "score",  "bias",  "#",   "of",  "i-Evalue",  "score",  "bias",  "from",  "to",     posw, "from",      posw, "to",          posw, "from",       posw, "to",         posw, "from",       posw, "to",         "frame",  "acc",  "description of target") < 0)
             ESL_EXCEPTION_SYS(eslEWRITE, "tabular per-domain hit list: write failed");
-         if (fprintf(ofp, "#%*s %*s %5s %*s %*s %5s %*s %9s %6s %5s %3s %3s %9s %6s %5s %5s %5s %5s %5s %5s %5s %5s %5s %5s %4s %s\n",
-           tnamew-1, "-------------------", taccw, "----------", "-----", qnamew, "--------------------", qaccw, "----------", "-----", orfw, "------", "---------", "------", "-----", "---", "---", "---------", "------", "-----", "-----", "-----", "-----", "-----", "-----", "-----", "-----", "-----", "-----",  "----", "---------------------") < 0)
+         if (fprintf(ofp, "#%*s %*s %.*s %*s %*s %.*s %.*s %9s %6s %5s %3s %3s %9s %6s %5s %5s %5s %.*s %.*s %.*s %.*s %.*s %.*s %5s %4s %s\n",
+           tnamew-1, "-------------------", taccw, "----------", tlenw, "----------", qnamew, "--------------------", qaccw, "----------", qlenw, "----------", orfw, "-------------", "---------", "------", "-----", "---", "---", "---------", "------", "-----", "-----", "-----",  posw, "----------", posw, "----------", posw, "----------", posw, "----------", posw, "----------", posw, "----------", "-----",  "----", "---------------------") < 0)
+
            ESL_EXCEPTION_SYS(eslEWRITE, "tabular per-domain hit list: write failed");
       }
       else
@@ -2031,13 +2117,13 @@ p7_tophits_TabularDomains(FILE *ofp, char *qname, char *qacc, P7_TOPHITS *th, P7
 
 		int frame = p7_tophits_frame(th->hit[h]->dcl[d].iorf, th->hit[h]->dcl[d].jorf);
                 
-		if (fprintf(ofp, "%-*s %-*s %5d %-*s %-*s %5d %-*s %9.2g %6.1f %5.1f %3d %3d %9.2g %6.1f %5.1f %5d %5d %5" PRId64 " %5" PRId64 " %5" PRId64 " %5" PRId64 " %5" PRId64 " %5" PRId64 " %5d %4.2f %s\n",
+		if (fprintf(ofp, "%-*s %-*s %*d %-*s %-*s %*d %-*s %9.2g %6.1f %5.1f %3d %3d %9.2g %6.1f %5.1f %5d %5d %*" PRId64 " %*" PRId64 " %*" PRId64 " %*" PRId64 " %*" PRId64 " %*" PRId64 " %5d %4.2f %s\n",
                 tnamew, th->hit[h]->name,
                 taccw,  th->hit[h]->acc ? th->hit[h]->acc : "-",
-                tlen,
+                tlenw, tlen,
                 qnamew, qname,
                 qaccw,  ( (qacc != NULL && qacc[0] != '\0') ? qacc : "-"),
-                qlen,
+                qlenw, qlen,
 		orfw, th->hit[h]->orfid,			
                 exp(th->hit[h]->lnP) * pli->Z,
                 th->hit[h]->score,
@@ -2049,12 +2135,12 @@ p7_tophits_TabularDomains(FILE *ofp, char *qname, char *qacc, P7_TOPHITS *th, P7
                 th->hit[h]->dcl[d].dombias * eslCONST_LOG2R, /* NATS to BITS at last moment */
                 th->hit[h]->dcl[d].ad->hmmfrom,
                 th->hit[h]->dcl[d].ad->hmmto,
-                th->hit[h]->dcl[d].ad->sqfrom,
-                th->hit[h]->dcl[d].ad->sqto,
-                th->hit[h]->dcl[d].ienv,
-                th->hit[h]->dcl[d].jenv,
-                th->hit[h]->dcl[d].iorf,
-                th->hit[h]->dcl[d].jorf,
+                posw, th->hit[h]->dcl[d].ad->sqfrom,
+                posw, th->hit[h]->dcl[d].ad->sqto,
+                posw, th->hit[h]->dcl[d].ienv,
+                posw, th->hit[h]->dcl[d].jenv,
+                posw, th->hit[h]->dcl[d].iorf,
+                posw, th->hit[h]->dcl[d].jorf,
                 frame,
                 (th->hit[h]->dcl[d].oasc / (1.0 + fabs((float) (th->hit[h]->dcl[d].jenv - th->hit[h]->dcl[d].ienv)))),
                 (th->hit[h]->desc ?  th->hit[h]->desc : "-")) < 0)

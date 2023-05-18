@@ -243,6 +243,7 @@ p7_pipeline_Create(const ESL_GETOPTS *go, int M_hint, int L_hint, int long_targe
   pli->pos_past_bias   = 0;
   pli->pos_past_vit    = 0;
   pli->pos_past_fwd    = 0;
+  pli->ndbseqs         = 0;
   pli->mode            = mode;
   pli->show_accessions = (go && esl_opt_GetBoolean(go, "--acc")   ? TRUE  : FALSE);
   pli->show_alignments = (go && esl_opt_GetBoolean(go, "--noali") ? FALSE : TRUE);
@@ -627,6 +628,8 @@ p7_pipeline_Merge(P7_PIPELINE *p1, P7_PIPELINE *p2)
   p1->pos_past_fwd  += p2->pos_past_fwd;
   p1->pos_output    += p2->pos_output;
 
+  p1->ndbseqs += p2->ndbseqs;
+
   if (p1->Z_setby == p7_ZSETBY_NTARGETS)
     {
       p1->Z += (p1->mode == p7_SCAN_MODELS) ? p2->nmodels : p2->nseqs;
@@ -922,7 +925,8 @@ p7_Pipeline(P7_PIPELINE *pli, P7_OPROFILE *om, P7_BG *bg, const ESL_SQ *sq, cons
         if ((status  = esl_strdup(om->desc, -1, &(hit->desc)))  != eslOK) esl_fatal("allocation failure");
         if ((status  = esl_strdup(sq->orfid, -1, &(hit->orfid)))!= eslOK) esl_fatal("allocation failure");
 
-      } 
+      }
+      
       hit->seqidx     = sq->idx;
       hit->ndom       = pli->ddef->ndom;
       hit->nexpected  = pli->ddef->nexpected;
