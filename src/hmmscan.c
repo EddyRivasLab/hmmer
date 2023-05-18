@@ -1083,7 +1083,7 @@ mpi_worker(ESL_GETOPTS *go, struct cfg_s *cfg)
 	      p7_bg_SetLength(bg, qsq->n);
 	      p7_oprofile_ReconfigLength(om, qsq->n);
 	      
-	      p7_Pipeline(pli, om, bg, qsq, NULL, th, -1, NULL);
+	      p7_Pipeline(pli, om, bg, qsq, NULL, th, NULL);
 	      
 	      p7_oprofile_Destroy(om);
 	      p7_pipeline_Reuse(pli);
@@ -1169,7 +1169,7 @@ serial_loop(WORKER_INFO *info, P7_HMMFILE *hfp)
       p7_bg_SetLength(info->bg, info->qsq->n);
       p7_oprofile_ReconfigLength(om, info->qsq->n);
 
-      status = p7_Pipeline(info->pli, om, info->bg, info->qsq, NULL, info->th, -1, NULL);
+      status = p7_Pipeline(info->pli, om, info->bg, info->qsq, NULL, info->th, NULL);
       if (status == eslEINVAL) p7_Fail(info->pli->errbuf);
 
       p7_oprofile_Destroy(om);
@@ -1264,7 +1264,7 @@ pipeline_thread(void *arg)
       p7_bg_SetLength(info->bg, info->qsq->n);
       p7_oprofile_ReconfigLength(om, info->qsq->n);
 
-      status = p7_Pipeline(info->pli, om, info->bg, info->qsq, NULL, info->th, -1, NULL);
+      status = p7_Pipeline(info->pli, om, info->bg, info->qsq, NULL, info->th, NULL);
       if (status == eslEINVAL) p7_Fail(info->pli->errbuf);
 
       p7_oprofile_Destroy(om);

@@ -684,11 +684,13 @@ serial_loop(WORKER_INFO *info, ID_LENGTH_LIST *id_length_list, P7_HMMFILE *hfp)
           if ((status = esl_sq_SetAccession(qsq_aa, info->ntqsq->acc))    != eslOK)  ESL_EXCEPTION_SYS(eslEWRITE, "Set query sequence accession failed");
           if ((status = esl_sq_SetDesc     (qsq_aa, info->ntqsq->desc))   != eslOK)  ESL_EXCEPTION_SYS(eslEWRITE, "Set query sequence description failed");
 
+          qsq_aa->idx = info->ntqsq->idx;
+
           p7_bg_SetLength(info->bg, qsq_aa->n);
 
           p7_oprofile_ReconfigLength(om, qsq_aa->n);
 
-          p7_Pipeline(info->pli, om, info->bg, qsq_aa, qsqDNATxt, info->th, info->ntqsq->idx, NULL);
+          p7_Pipeline(info->pli, om, info->bg, qsq_aa, qsqDNATxt, info->th, NULL);
           p7_pipeline_Reuse(info->pli);
 
       }
@@ -715,7 +717,7 @@ thread_loop(ESL_THREADS *obj, ESL_WORK_QUEUE *queue, ID_LENGTH_LIST *id_length_l
   WORKER_INFO   *info;
 
   add_id_length(id_length_list, seqidx, seqL);  
-
+  
   esl_workqueue_Reset(queue);
   esl_threads_WaitForStart(obj);
 
@@ -824,12 +826,13 @@ pipeline_thread(void *arg)
           if ((status = esl_sq_SetName     (qsq_aa, info->ntqsq->name))   != eslOK)  esl_fatal("Set query sequence name failed");
           if ((status = esl_sq_SetAccession(qsq_aa, info->ntqsq->acc))    != eslOK)  esl_fatal("Set query sequence accession failed");
           if ((status = esl_sq_SetDesc     (qsq_aa, info->ntqsq->desc))   != eslOK)  esl_fatal("Set query sequence description failed");
-
+          qsq_aa->idx = info->ntqsq->idx; 
+          //printf("name %s ntqsq idx %d qsqDNAtxt idx %d\n", info->ntqsq->name, info->ntqsq->idx, qsqDNATxt->idx);
           p7_bg_SetLength(info->bg, qsq_aa->n);
 
           p7_oprofile_ReconfigLength(om, qsq_aa->n);
 
-          p7_Pipeline(info->pli, om, info->bg, qsq_aa, qsqDNATxt, info->th, info->ntqsq->idx, NULL);
+          p7_Pipeline(info->pli, om, info->bg, qsq_aa, qsqDNATxt, info->th, NULL);
           p7_pipeline_Reuse(info->pli);
 
         }

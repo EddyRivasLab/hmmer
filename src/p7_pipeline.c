@@ -757,7 +757,7 @@ ERROR:
  *            been careful enough about. [SRE H9/4]
  */
 int
-p7_Pipeline(P7_PIPELINE *pli, P7_OPROFILE *om, P7_BG *bg, const ESL_SQ *sq, const ESL_SQ *ntsq, P7_TOPHITS *hitlist, int64_t seqidx, const P7_SCOREDATA *data)
+p7_Pipeline(P7_PIPELINE *pli, P7_OPROFILE *om, P7_BG *bg, const ESL_SQ *sq, const ESL_SQ *ntsq, P7_TOPHITS *hitlist, const P7_SCOREDATA *data)
 {
   P7_HIT          *hit     = NULL;     /* ptr to the current hit output data      */
   float            usc, vfsc, fwdsc;   /* filter scores                           */
@@ -925,8 +925,9 @@ p7_Pipeline(P7_PIPELINE *pli, P7_OPROFILE *om, P7_BG *bg, const ESL_SQ *sq, cons
         if ((status  = esl_strdup(om->desc, -1, &(hit->desc)))  != eslOK) esl_fatal("allocation failure");
         if ((status  = esl_strdup(sq->orfid, -1, &(hit->orfid)))!= eslOK) esl_fatal("allocation failure");
 
-      } 
-      hit->seqidx     = (pli->is_translated ? seqidx : sq->idx);
+      }
+      
+      hit->seqidx     = sq->idx;
       hit->ndom       = pli->ddef->ndom;
       hit->nexpected  = pli->ddef->nexpected;
       hit->nregions   = pli->ddef->nregions;

@@ -1492,7 +1492,7 @@ mpi_worker(ESL_GETOPTS *go, struct cfg_s *cfg)
 		  p7_bg_SetLength(bg, dbsq->n);
 		  p7_oprofile_ReconfigLength(om, dbsq->n);
       
-		  p7_Pipeline(pli, om, bg, dbsq, NULL, th, -1, NULL);
+		  p7_Pipeline(pli, om, bg, dbsq, NULL, th, NULL);
 
 		  esl_sq_Reuse(dbsq);
 		  p7_pipeline_Reuse(pli);
@@ -1617,7 +1617,7 @@ serial_loop(WORKER_INFO *info, ESL_SQFILE *dbfp)
       p7_bg_SetLength(info->bg, dbsq->n);
       p7_oprofile_ReconfigLength(info->om, dbsq->n);
       
-      p7_Pipeline(info->pli, info->om, info->bg, dbsq, NULL, info->th, -1, NULL);
+      p7_Pipeline(info->pli, info->om, info->bg, dbsq, NULL, info->th, NULL);
 
       esl_sq_Reuse(dbsq);
       p7_pipeline_Reuse(info->pli);
@@ -1711,7 +1711,7 @@ pipeline_thread(void *arg)
 	  p7_bg_SetLength(info->bg, dbsq->n);
 	  p7_oprofile_ReconfigLength(info->om, dbsq->n);
 
-	  p7_Pipeline(info->pli, info->om, info->bg, dbsq, NULL, info->th, -1, NULL);
+	  p7_Pipeline(info->pli, info->om, info->bg, dbsq, NULL, info->th, NULL);
 
 	  esl_sq_Reuse(dbsq);
 	  p7_pipeline_Reuse(info->pli);
