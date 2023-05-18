@@ -2064,7 +2064,7 @@ p7_tophits_TabularDomains(FILE *ofp, char *qname, char *qacc, P7_TOPHITS *th, P7
   int tlenw  = (pli->is_translated ? ESL_MAX(10, p7_tophits_GetMaxTargetLength(th, pli->mode)) : 0);
   int qlenw  = (pli->is_translated ? ESL_MAX(10, p7_tophits_GetMaxQueryLength(th, pli->mode)) : 0);
   int orfw   = ESL_MAX(13, p7_tophits_GetMaxORFnameLength(th));
-  int posw   = (pli->is_translated ? ESL_MAX(10, p7_tophits_GetMaxPositionLength(th)) : 0);
+  int posw   = (pli->is_translated ? ESL_MAX(6, p7_tophits_GetMaxPositionLength(th)) : 0);
   int tlen, qlen;
   int h,d,nd;
 
@@ -2072,7 +2072,7 @@ p7_tophits_TabularDomains(FILE *ofp, char *qname, char *qacc, P7_TOPHITS *th, P7
     {
       if (pli->is_translated)
       { 
-         if (fprintf(ofp, "#%*s %22s %30s %11s %*s %*s %*s\n", tnamew+qnamew-1+5+taccw+qaccw+tlenw+qlenw+orfw+1, "",                                                      "--- full sequence ---",        "--------- this domain --------",             "hmm coord", (posw*2)+1, "ali coord",               (posw*2)+1, "env coord",                 (posw*2)+1, "orf coord") < 0)
+         if (fprintf(ofp, "#%*s %22s %30s %11s %*s %*s %*s\n", tnamew+qnamew+taccw+qaccw+tlenw+qlenw+orfw+6, "",                                                      "--- full sequence ---",        "--------- this domain --------",             "hmm coord", (posw*2)+1, "ali coord",               (posw*2)+1, "env coord",                 (posw*2)+1, "orf coord") < 0)
             ESL_EXCEPTION_SYS(eslEWRITE, "tabular per-domain hit list: write failed");
          if (fprintf(ofp, "#%-*s %-*s %*s %-*s %-*s %*s %-*s %9s %6s %5s %3s %3s %9s %6s %5s %5s %5s %*s %*s %*s %*s %*s %*s %5s %4s %s\n",
             tnamew-1, " target name",        taccw, "accession", tlenw, "tlen",       qnamew, "query name",           qaccw, "accession",  qlenw, "qlen",       orfw, "orf",           "E-value",   "score",  "bias",  "#",   "of",  "i-Evalue",  "score",  "bias",  "from",  "to",     posw, "from",      posw, "to",          posw, "from",       posw, "to",         posw, "from",       posw, "to",         "frame",  "acc",  "description of target") < 0)
