@@ -29,7 +29,7 @@
 1 exercise generic_msv        @src/generic_msv_utest@
 1 exercise generic_stotrace   @src/generic_stotrace_utest@
 1 exercise generic_viterbi    @src/generic_viterbi_utest@
-1 exercise hmmd_search_status    @src/hmmd_search_status_utest@
+1 exercise hmmd_search_status @src/hmmd_search_status_utest@
 1 exercise logsum             @src/logsum_utest@
 1 exercise modelconfig        @src/modelconfig_utest@
 1 exercise seqmodel           @src/seqmodel_utest@
@@ -55,7 +55,8 @@
 1 exercise optacc             @src/impl/optacc_utest@
 1 exercise stotrace           @src/impl/stotrace_utest@
 1 exercise vitfilter          @src/impl/vitfilter_utest@
-1 exercise  hmmpgmd2msa               @src/hmmpgmd2msa_utest@     !testsuite/Caudal_act.hmm!
+1 exercise  hmmpgmd2msa       @src/hmmpgmd2msa_utest@     !testsuite/Caudal_act.hmm!
+
 # Still to come, unit tests for
 #   emit.c
 #   errors.c

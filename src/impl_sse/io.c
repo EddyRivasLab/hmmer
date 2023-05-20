@@ -297,15 +297,15 @@ p7_oprofile_ReadMSV(P7_HMMFILE *hfp, ESL_ALPHABET **byp_abc, P7_OPROFILE **ret_o
   if (magic != v3f_fmagic)                                           ESL_XFAIL(eslEFORMAT, hfp->errbuf, "bad sentinel magic; .h3f file corrupted?");
 
   /* keep track of the ending offset of the MSV model */
-  om->eoff = ftello(hfp->ffp) - 1;;
+  om->eoff = ftello(hfp->ffp) - 1;
 
   if (byp_abc != NULL) *byp_abc = abc;  /* pass alphabet (whether new or not) back to caller, if caller wanted it */
   *ret_om = om;
   return eslOK;
 
  ERROR:
-  if (abc != NULL && (byp_abc == NULL || *byp_abc == NULL)) esl_alphabet_Destroy(abc); /* destroy alphabet if we created it here */
-  if (om != NULL) p7_oprofile_Destroy(om);
+  if (abc && (byp_abc == NULL || *byp_abc == NULL)) esl_alphabet_Destroy(abc); /* destroy alphabet if we created it here */
+  p7_oprofile_Destroy(om);
   *ret_om = NULL;
   return status;
 }
