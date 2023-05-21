@@ -358,7 +358,7 @@ serial_master(ESL_GETOPTS *go, struct cfg_s *cfg)
   }
 
   /* Open the target profile database to get the sequence alphabet */
-  status = p7_hmmfile_OpenE(cfg->hmmfile, p7_HMMDBENV, &hfp, errbuf);
+  status = p7_hmmfile_Open(cfg->hmmfile, p7_HMMDBENV, &hfp, errbuf);
   if      (status == eslENOTFOUND) p7_Fail("File existence/permissions problem in trying to open HMM file %s.\n%s\n", cfg->hmmfile, errbuf);
   else if (status == eslEFORMAT)   p7_Fail("File format problem, trying to open HMM file %s.\n%s\n",                  cfg->hmmfile, errbuf);
   else if (status != eslOK)        p7_Fail("Unexpected error %d in opening HMM file %s.\n%s\n",               status, cfg->hmmfile, errbuf);  
@@ -427,7 +427,7 @@ serial_master(ESL_GETOPTS *go, struct cfg_s *cfg)
       esl_stopwatch_Start(w);	                          
 
       /* Open the target profile database */
-      status = p7_hmmfile_OpenE(cfg->hmmfile, p7_HMMDBENV, &hfp, NULL);
+      status = p7_hmmfile_Open(cfg->hmmfile, p7_HMMDBENV, &hfp, NULL);
       if (status != eslOK)        p7_Fail("Unexpected error %d in opening hmm file %s.\n",           status, cfg->hmmfile);  
   
 #ifdef HMMER_THREADS
@@ -757,7 +757,7 @@ mpi_master(ESL_GETOPTS *go, struct cfg_s *cfg)
   }
 
   /* Open the target profile database to get the sequence alphabet */
-  status = p7_hmmfile_OpenE(cfg->hmmfile, p7_HMMDBENV, &hfp, errbuf);
+  status = p7_hmmfile_Open(cfg->hmmfile, p7_HMMDBENV, &hfp, errbuf);
   if      (status == eslENOTFOUND) mpi_failure("File existence/permissions problem in trying to open HMM file %s.\n%s\n", cfg->hmmfile, errbuf);
   else if (status == eslEFORMAT)   mpi_failure("File format problem, trying to open HMM file %s.\n%s\n",                  cfg->hmmfile, errbuf);
   else if (status != eslOK)        mpi_failure("Unexpected error %d in opening HMM file %s.\n%s\n",               status, cfg->hmmfile, errbuf);  
@@ -813,7 +813,7 @@ mpi_master(ESL_GETOPTS *go, struct cfg_s *cfg)
       if (nquery > 1) list->current = 0;
 
       /* Open the target profile database */
-      status = p7_hmmfile_OpenE(cfg->hmmfile, p7_HMMDBENV, &hfp, NULL);
+      status = p7_hmmfile_Open(cfg->hmmfile, p7_HMMDBENV, &hfp, NULL);
       if (status != eslOK) mpi_failure("Unexpected error %d in opening hmm file %s.\n", status, cfg->hmmfile);  
   
       if (fprintf(ofp, "Query:       %s  [L=%ld]\n", qsq->name, (long) qsq->n) < 0) ESL_EXCEPTION_SYS(eslEWRITE, "write failed");
@@ -1014,7 +1014,7 @@ mpi_worker(ESL_GETOPTS *go, struct cfg_s *cfg)
   w = esl_stopwatch_Create();
 
   /* Open the target profile database to get the sequence alphabet */
-  status = p7_hmmfile_OpenE(cfg->hmmfile, p7_HMMDBENV, &hfp, errbuf);
+  status = p7_hmmfile_Open(cfg->hmmfile, p7_HMMDBENV, &hfp, errbuf);
   if      (status == eslENOTFOUND) mpi_failure("File existence/permissions problem in trying to open HMM file %s.\n%s\n", cfg->hmmfile, errbuf);
   else if (status == eslEFORMAT)   mpi_failure("File format problem in trying to open HMM file %s.\n%s\n",                cfg->hmmfile, errbuf);
   else if (status != eslOK)        mpi_failure("Unexpected error %d in opening HMM file %s.\n%s\n",               status, cfg->hmmfile, errbuf);  
@@ -1052,7 +1052,7 @@ mpi_worker(ESL_GETOPTS *go, struct cfg_s *cfg)
       MPI_Send(&status, 1, MPI_INT, 0, HMMER_READY_TAG, MPI_COMM_WORLD);
 
       /* Open the target profile database */
-      status = p7_hmmfile_OpenE(cfg->hmmfile, p7_HMMDBENV, &hfp, NULL);
+      status = p7_hmmfile_Open(cfg->hmmfile, p7_HMMDBENV, &hfp, NULL);
       if (status != eslOK) mpi_failure("Unexpected error %d in opening hmm file %s.\n", status, cfg->hmmfile);  
   
       /* Create processing pipeline and hit list */

@@ -1548,7 +1548,7 @@ p7_Pipeline_LongTarget(P7_PIPELINE *pli, P7_OPROFILE *om, P7_SCOREDATA *data,
 
     p7_oprofile_GetFwdEmissionArray(om, bg, pli_tmp->fwd_emissions_arr);
 
-    if (data->prefix_lengths == NULL)  //otherwise, already filled in
+    if (data->prefix_lengths == NULL)  // otherwise, already filled in
       p7_hmm_ScoreDataComputeRest(om, data);
 
     p7_pli_ExtendAndMergeWindows (om, data, &msv_windowlist, 0);
@@ -1850,8 +1850,8 @@ main(int argc, char **argv)
   p7_FLogsumInit();
 
   /* Read in one HMM */
-  if (p7_hmmfile_OpenE(hmmfile, NULL, &hfp, NULL) != eslOK) p7_Fail("Failed to open HMM file %s", hmmfile);
-  if (p7_hmmfile_Read(hfp, &abc, &hmm)            != eslOK) p7_Fail("Failed to read HMM");
+  if (p7_hmmfile_Open(hmmfile, NULL, &hfp, NULL) != eslOK) p7_Fail("Failed to open HMM file %s", hmmfile);
+  if (p7_hmmfile_Read(hfp, &abc, &hmm)           != eslOK) p7_Fail("Failed to read HMM");
   p7_hmmfile_Close(hfp);
 
   /* Open a sequence file */
@@ -1995,7 +1995,7 @@ main(int argc, char **argv)
   esl_sqfile_Close(sqfp);
 
   /* Open the HMM db */
-  if (p7_hmmfile_OpenE(hmmfile, NULL, &hfp, NULL) != eslOK) p7_Fail("Failed to open HMM file %s", hmmfile);
+  if (p7_hmmfile_Open(hmmfile, NULL, &hfp, NULL) != eslOK) p7_Fail("Failed to open HMM file %s", hmmfile);
 
   /* Create a pipeline for the query sequence in scan mode */
   pli      = p7_pipeline_Create(go, 100, sq->n, FALSE, p7_SCAN_MODELS);

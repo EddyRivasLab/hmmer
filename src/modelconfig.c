@@ -482,7 +482,7 @@ main(int argc, char **argv)
     {	/* Read the HMM (and get alphabet from it) */
       P7_HMMFILE      *hfp     = NULL;
 
-      status = p7_hmmfile_OpenE(hmmfile, NULL, &hfp, errbuf);
+      status = p7_hmmfile_Open(hmmfile, NULL, &hfp, errbuf);
       if      (status == eslENOTFOUND) p7_Fail("File existence/permissions problem in trying to open HMM file %s.\n%s\n", hmmfile, errbuf);
       else if (status == eslEFORMAT)   p7_Fail("File format problem in trying to open HMM file %s.\n%s\n",                hmmfile, errbuf);
       else if (status != eslOK)        p7_Fail("Unexpected error %d in opening HMM file %s.\n%s\n",               status, hmmfile, errbuf);  

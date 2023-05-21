@@ -434,7 +434,7 @@ main(int argc, char **argv)
 
 static int
 nhmmer_open_hmm_file(struct cfg_s *cfg,  P7_HMMFILE **hfp, char *errbuf, ESL_ALPHABET **abc, P7_HMM **hmm   ) {
-    int status = p7_hmmfile_OpenE(cfg->queryfile, NULL, hfp, errbuf);
+    int status = p7_hmmfile_Open(cfg->queryfile, NULL, hfp, errbuf);
 
     if (status == eslENOTFOUND) {
         p7_Fail("File existence/permissions problem in trying to open query file %s.\n%s\n", cfg->queryfile, errbuf);

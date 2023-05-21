@@ -65,11 +65,12 @@ p7_hmmcache_Open(char *hmmfile, P7_HMMCACHE **ret_cache, char *errbuf)
   if ( ( status = esl_strdup(hmmfile, -1, &cache->name) != eslOK)) goto ERROR; 
   ESL_ALLOC(cache->list, sizeof(P7_OPROFILE *) * cache->lalloc);
 
-  if ( (status = p7_hmmfile_OpenE(hmmfile, NULL, &hfp, errbuf)) != eslOK) goto ERROR;  // eslENOTFOUND | eslEFORMAT 
+  if ( (status = p7_hmmfile_Open(hmmfile, NULL, &hfp, errbuf)) != eslOK) goto ERROR;  // eslENOTFOUND | eslEFORMAT 
 
   while ((status = p7_oprofile_ReadMSV(hfp, &(cache->abc), &om)) == eslOK) /* eslEFORMAT | eslEINCOMPAT */
     {
-      if (( status = p7_oprofile_ReadRest(hfp, om)) != eslOK) break; /* eslEFORMAT */
+      if (( status = p7_oprofile_ReadRest(hfp, om)) != eslOK)
+        { strncpy(errbuf, hfp->rr_errbuf, eslERRBUFSIZE); goto ERROR; }
 
       if (cache->n >= cache->lalloc) {
 	ESL_REALLOC(cache->list, sizeof(char *) * cache->lalloc * 2);

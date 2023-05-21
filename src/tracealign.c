@@ -1213,7 +1213,7 @@ main(int argc, char **argv)
 
   /* Read one HMM, and make sure there's only one.
    */
-  status = p7_hmmfile_OpenE(hmmfile, NULL, &hfp, errbuf);
+  status = p7_hmmfile_Open(hmmfile, NULL, &hfp, errbuf);
   if      (status == eslENOTFOUND) p7_Fail("File existence/permissions problem in trying to open HMM file %s.\n%s\n", hmmfile, errbuf);
   else if (status == eslEFORMAT)   p7_Fail("File format problem in trying to open HMM file %s.\n%s\n",                hmmfile, errbuf);
   else if (status != eslOK)        p7_Fail("Unexpected error %d in opening HMM file %s.\n%s\n",                       status, hmmfile, errbuf);

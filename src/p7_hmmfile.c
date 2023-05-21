@@ -65,16 +65,10 @@ static float h2ascii2prob(char *s, float null);
  * 1. The P7_HMMFILE object for reading HMMs.
  *****************************************************************/
 
-/* Historical note:
- * p7_hmmfile_Open() is deprecated;
- * p7_hmmfile_OpenE() is the newer replacement, which includes
- * better error reporting through a <errbuf>.
- */
-
 static int open_engine(const char *filename, char *env, P7_HMMFILE **ret_hfp, int do_ascii_only, char *errbuf);
 
 
-/* Function:  p7_hmmfile_OpenE()
+/* Function:  p7_hmmfile_Open()
  * Synopsis:  Open an HMM file <filename>. 
  *
  * Purpose:   Open an HMM file <filename>, and prepare to read the first
@@ -117,91 +111,46 @@ static int open_engine(const char *filename, char *env, P7_HMMFILE **ret_hfp, in
  *            <eslEFORMAT> if <filename> is not in a recognized HMMER
  *            HMM file format.
  *            
- *            On either type of error, if a non-NULL <errbuf> was provided,
+ *            On all types of error, if a non-NULL <errbuf> was provided,
  *            a useful user error message is left in it.
  *
  * Throws:    <eslEMEM> on allocation failure.
  */
 int
-p7_hmmfile_OpenE(const char *filename, char *env, P7_HMMFILE **ret_hfp, char *errbuf)
+p7_hmmfile_Open(const char *filename, char *env, P7_HMMFILE **ret_hfp, char *errbuf)
 {
-  return open_engine(filename, env, ret_hfp, FALSE, errbuf);
+  return open_engine(filename, env, ret_hfp, /*do_ascii_only=*/FALSE, errbuf);
 }
-
-
-/* Function:  p7_hmmfile_Open()
- * Synopsis:  Open an HMM file. (Deprecated version with less error handling)
- *
- * Purpose:   Same as <p7_hmmfile_OpenE()>, above, but without the <errbuf>.
- *            This older version is now deprecated. Use <p7_hmmfile_OpenE()>.
- *            
- *            When we have squashed out all usage of legacy <p7_hmmfile_Open()>,
- *            <OpenE()> will become <Open()>.
- */
-int
-p7_hmmfile_Open(const char *filename, char *env, P7_HMMFILE **ret_hfp)
-{
-  return open_engine(filename, env, ret_hfp, FALSE, NULL);
-}
-
-/* Function:  p7_hmmfile_OpenENoDB()
- * Synopsis:  Open only an HMM flatfile, even if pressed db exists.
- *
- * Purpose:   Same as <p7_hmmfile_OpenE()> except that if a pressed
- *            database exists for <filename>, it is ignored. Only
- *            <filename> itself is opened.
- *            
- *            hmmpress needs this call. Otherwise, it opens a press'ed
- *            database that it may be about to overwrite.
- */
-int
-p7_hmmfile_OpenENoDB(const char *filename, char *env, P7_HMMFILE **ret_hfp, char *errbuf)
-{
-  return open_engine(filename, env, ret_hfp, TRUE, errbuf);
-}
-
 
 
 /* Function:  p7_hmmfile_OpenNoDB()
- * Synopsis:  Open only an HMM flatfile, even if pressed db exists. (Deprecated)
+ * Synopsis:  Open only an HMM flatfile, even if pressed db exists. 
  *
- * Purpose:   Same as <p7_hmmfile_OpenENoDB()>, 
+ * Purpose:   Same as <p7_hmmfile_Open()>, except that if a pressed 
  *            database exists for <filename>, it is ignored. Only
  *            <filename> itself is opened.
  *            
- *            hmmpress needs this call. Otherwise, it opens a press'ed
- *            database that it may be about to overwrite.
+ *            hmmpress needs this call. Otherwise, it would open a
+ *            press'ed database that it may be about to overwrite.
  */
 int
-p7_hmmfile_OpenNoDB(const char *filename, char *env, P7_HMMFILE **ret_hfp)
+p7_hmmfile_OpenNoDB(const char *filename, char *env, P7_HMMFILE **ret_hfp, char *errbuf)
 {
-  return open_engine(filename, env, ret_hfp, TRUE, NULL);
+  return open_engine(filename, env, ret_hfp, /*do_ascii_only=*/TRUE, errbuf);
 }
 
 
 /* Function:  p7_hmmfile_OpenBuffer()
  *
- * Purpose:   Perparse a buffer containing an ascii HMM for parsing.
+ * Purpose:   Like p7_hmmfile_Open(), but we're going to parse 
+ *            a buffer containing ASCII HMM file format.
  *            
- *            As another special case, if <filename> ends in a <.gz>
- *            suffix, the file is assumed to be compressed by GNU
- *            <gzip>, and it is opened for reading from a pipe with
- *            <gunzip -dc>. This feature is only available on
- *            POSIX-compliant systems that have a <popen()> call, and
- *            <HAVE_POPEN> is defined by the configure script at
- *            compile time. 
- *            
- * Args:      filename - HMM file to open; or "-" for <stdin>
- *            env      - list of paths to look for <hmmfile> in, in 
- *                       addition to current working dir; or <NULL>
+ * Args:      buffer   - buffer to "open". Not necessarily NUL-terminated.
+ *            size     - length of buffer in chars
  *            ret_hfp  - RETURN: opened <P7_HMMFILE>.
  *
  * Returns:   <eslOK> on success, and the open <ESL_HMMFILE> is returned
  *            in <*ret_hfp>.
- *            
- *            <eslENOTFOUND> if <filename> can't be opened for
- *            reading, even after the list of directories in <env> (if
- *            any) is checked.
  *            
  *            <eslEFORMAT> if <filename> is not in a recognized HMMER
  *            HMM file format.
@@ -232,6 +181,7 @@ p7_hmmfile_OpenBuffer(const char *buffer, int size, P7_HMMFILE **ret_hfp)
   hfp->pfp          = NULL;
   hfp->ssi          = NULL;
   hfp->errbuf[0]    = '\0';
+  hfp->rr_errbuf[0] = '\0';
 
   if ((hfp->efp = esl_fileparser_CreateMapped(buffer, size))         == NULL)   { status = eslEMEM; goto ERROR; }
   if ((status = esl_fileparser_SetCommentChar(hfp->efp, '#'))        != eslOK)  goto ERROR;
@@ -261,9 +211,8 @@ p7_hmmfile_OpenBuffer(const char *buffer, int size, P7_HMMFILE **ret_hfp)
 
 /* open_engine()
  *
- * Implements all of the file opening functions:
- * <p7_hmmfile_Open()>, <p7_hmmfile_OpenE()>, <p7_hmmfile_OpenNoDB()>, 
- * and <p7_OpenENoDB()>.
+ * Implements the meat of the file opening functions
+ * <p7_hmmfile_Open()> and <p7_hmmfile_OpenNoDB()>.
  * See their comments above.
  * 
  * Only returns three types of errors: 
@@ -281,7 +230,7 @@ open_engine(const char *filename, char *env, P7_HMMFILE **ret_hfp, int do_ascii_
   char       *dbfile   = NULL;  /* constructed name of an index or binary db file */
   char       *cmd      = NULL;  /* constructed gzip -dc pipe command              */
   int         status;
-  int         n       = strlen(filename);
+  int         n        = strlen(filename);
   union { char c[4]; uint32_t n; } magic;
   char       *tok;
   int         toklen;
@@ -302,6 +251,7 @@ open_engine(const char *filename, char *env, P7_HMMFILE **ret_hfp, int do_ascii_
   hfp->pfp          = NULL;
   hfp->ssi          = NULL;
   hfp->errbuf[0]    = '\0';
+  hfp->rr_errbuf[0] = '\0';
 
   /* 1. There's two special reading modes that have limited indexing
    *    and optimization capability: reading from standard input, and 
@@ -318,7 +268,7 @@ open_engine(const char *filename, char *env, P7_HMMFILE **ret_hfp, int do_ascii_
 #ifdef HAVE_POPEN
   else if (n > 3 && strcmp(filename+n-3, ".gz") == 0) /* a <*.gz> filename means read via gunzip pipe */
   {
-    if (! esl_FileExists(filename))                                    ESL_XFAIL(eslENOTFOUND, errbuf, ".gz file %s not found or not readable", filename);
+    if (! esl_FileExists(filename))                                     ESL_XFAIL(eslENOTFOUND, errbuf, ".gz file %s not found or not readable", filename);
     if ((status = esl_sprintf(&cmd, "gzip -dc %s", filename)) != eslOK) ESL_XFAIL(status,       errbuf, "when setting up .gz pipe: esl_sprintf() failed");
     if ((hfp->f = popen(cmd, "r")) == NULL)                             ESL_XFAIL(eslENOTFOUND, errbuf, "gzip -dc %s failed; gzip not installed or not in PATH?", filename);
     if ((status = esl_strdup(filename, n, &(hfp->fname))) != eslOK)     ESL_XFAIL(status,       errbuf, "esl_strdup() failed, shouldn't happen");
@@ -1308,7 +1258,8 @@ read_asc30hmm(P7_HMMFILE *hfp, ESL_ALPHABET **ret_abc, P7_HMM **opt_hmm)
   int           status;
   uint32_t      statstracker = 0;
 
-  hfp->errbuf[0] = '\0';
+  hfp->errbuf[0]    = '\0';
+  hfp->rr_errbuf[0] = '\0';
 
   if (hfp->newly_opened)
     {
@@ -1324,16 +1275,16 @@ read_asc30hmm(P7_HMMFILE *hfp, ESL_ALPHABET **ret_abc, P7_HMM **opt_hmm)
       if ((status = esl_fileparser_NextLine(hfp->efp))                   != eslOK)  goto ERROR;  /* EOF here is normal; could also be a thrown EMEM */
       if ((status = esl_fileparser_GetTokenOnLine(hfp->efp, &tag, NULL)) != eslOK)  ESL_XFAIL(status,     hfp->errbuf, "unexpected absence of tokens on data line");
 
-      if      (hfp->format == p7_HMMFILE_3f) { if (strcmp(tag, "HMMER3/f") != 0)     ESL_XFAIL(eslEFORMAT, hfp->errbuf, "Didn't find HMMER3/f tag: bad format or not a HMMER save file?"); }
-      else if (hfp->format == p7_HMMFILE_3e) { if (strcmp(tag, "HMMER3/e") != 0)     ESL_XFAIL(eslEFORMAT, hfp->errbuf, "Didn't find HMMER3/e tag: bad format or not a HMMER save file?"); }
-      else if (hfp->format == p7_HMMFILE_3d) { if (strcmp(tag, "HMMER3/d") != 0)     ESL_XFAIL(eslEFORMAT, hfp->errbuf, "Didn't find HMMER3/d tag: bad format or not a HMMER save file?"); }
-      else if (hfp->format == p7_HMMFILE_3c) { if (strcmp(tag, "HMMER3/c") != 0)     ESL_XFAIL(eslEFORMAT, hfp->errbuf, "Didn't find HMMER3/c tag: bad format or not a HMMER save file?"); }
-      else if (hfp->format == p7_HMMFILE_3b) { if (strcmp(tag, "HMMER3/b") != 0)     ESL_XFAIL(eslEFORMAT, hfp->errbuf, "Didn't find HMMER3/b tag: bad format or not a HMMER save file?"); }
-      else if (hfp->format == p7_HMMFILE_3a) { if (strcmp(tag, "HMMER3/a") != 0)     ESL_XFAIL(eslEFORMAT, hfp->errbuf, "Didn't find HMMER3/a tag: bad format or not a HMMER save file?"); }
-      else                                                                           ESL_XFAIL(eslEFORMAT, hfp->errbuf, "No such HMM file format code: this shouldn't happen");
+      if      (hfp->format == p7_HMMFILE_3f) { if (strcmp(tag, "HMMER3/f") != 0)    ESL_XFAIL(eslEFORMAT, hfp->errbuf, "Didn't find HMMER3/f tag: bad format or not a HMMER save file?"); }
+      else if (hfp->format == p7_HMMFILE_3e) { if (strcmp(tag, "HMMER3/e") != 0)    ESL_XFAIL(eslEFORMAT, hfp->errbuf, "Didn't find HMMER3/e tag: bad format or not a HMMER save file?"); }
+      else if (hfp->format == p7_HMMFILE_3d) { if (strcmp(tag, "HMMER3/d") != 0)    ESL_XFAIL(eslEFORMAT, hfp->errbuf, "Didn't find HMMER3/d tag: bad format or not a HMMER save file?"); }
+      else if (hfp->format == p7_HMMFILE_3c) { if (strcmp(tag, "HMMER3/c") != 0)    ESL_XFAIL(eslEFORMAT, hfp->errbuf, "Didn't find HMMER3/c tag: bad format or not a HMMER save file?"); }
+      else if (hfp->format == p7_HMMFILE_3b) { if (strcmp(tag, "HMMER3/b") != 0)    ESL_XFAIL(eslEFORMAT, hfp->errbuf, "Didn't find HMMER3/b tag: bad format or not a HMMER save file?"); }
+      else if (hfp->format == p7_HMMFILE_3a) { if (strcmp(tag, "HMMER3/a") != 0)    ESL_XFAIL(eslEFORMAT, hfp->errbuf, "Didn't find HMMER3/a tag: bad format or not a HMMER save file?"); }
+      else                                                                          ESL_XFAIL(eslEFORMAT, hfp->errbuf, "No such HMM file format code: this shouldn't happen");
     }
 
-  if ((hmm = p7_hmm_CreateShell())                                   == NULL)   ESL_XFAIL(eslEMEM,    hfp->errbuf, "allocation failure, HMM shell");
+  if ((hmm = p7_hmm_CreateShell()) == NULL)   ESL_XFAIL(eslEMEM, hfp->errbuf, "allocation failure, HMM shell");
   hmm->offset = offset;
 
   /* Header section */
@@ -1357,12 +1308,12 @@ read_asc30hmm(P7_HMMFILE *hfp, ESL_ALPHABET **ret_abc, P7_HMM **opt_hmm)
       } 
 
       else if (strcmp(tag, "LENG") == 0) {
-	if ((status = esl_fileparser_GetTokenOnLine(hfp->efp, &tok1, NULL))  != eslOK)   ESL_XFAIL(status,    hfp->errbuf, "No model length found on LENG line");
+	if ((status = esl_fileparser_GetTokenOnLine(hfp->efp, &tok1, NULL))  != eslOK) ESL_XFAIL(status,    hfp->errbuf, "No model length found on LENG line");
 	if ((hmm->M = atoi(tok1))                                            == 0)     ESL_XFAIL(status,    hfp->errbuf, "Invalid model length %s on LENG line", tok1);
       }  
 
       else if (hfp->format >= p7_HMMFILE_3c && strcmp(tag, "MAXL") == 0) {
-	if ((status = esl_fileparser_GetTokenOnLine(hfp->efp, &tok1, NULL))  != eslOK)   ESL_XFAIL(status,    hfp->errbuf, "No max length found on MAXL line");
+	if ((status = esl_fileparser_GetTokenOnLine(hfp->efp, &tok1, NULL))  != eslOK) ESL_XFAIL(status,    hfp->errbuf, "No max length found on MAXL line");
 	if ((hmm->max_length = atoi(tok1))                                   == 0)     ESL_XFAIL(status,    hfp->errbuf, "Invalid max length %s on MAXL line", tok1);
       }
 
@@ -1370,9 +1321,9 @@ read_asc30hmm(P7_HMMFILE *hfp, ESL_ALPHABET **ret_abc, P7_HMM **opt_hmm)
 	if ((status = esl_fileparser_GetTokenOnLine(hfp->efp, &tok1, NULL))  != eslOK)   ESL_XFAIL(status,    hfp->errbuf, "No alphabet type found on ALPH");
 	if ((alphatype = esl_abc_EncodeType(tok1))                        == eslUNKNOWN) ESL_XFAIL(status,    hfp->errbuf, "Unrecognized alphabet type %s", tok1);
 	if (*ret_abc == NULL) {
-	  if ((abc = esl_alphabet_Create(alphatype))                        == NULL)    ESL_XFAIL(eslEMEM,   hfp->errbuf, "Failed to create alphabet");
+	  if ((abc = esl_alphabet_Create(alphatype))                        == NULL)     ESL_XFAIL(eslEMEM,   hfp->errbuf, "Failed to create alphabet");
 	} else {
-	  if ((*ret_abc)->type != alphatype)                                           ESL_XFAIL(eslEINCOMPAT,hfp->errbuf,"Alphabet type mismatch: was %s, but current HMM says %s", esl_abc_DecodeType( (*ret_abc)->type), tok1);
+	  if ((*ret_abc)->type != alphatype)                                             ESL_XFAIL(eslEINCOMPAT,hfp->errbuf,"Alphabet type mismatch: was %s, but current HMM says %s", esl_abc_DecodeType( (*ret_abc)->type), tok1);
 	  abc = *ret_abc;
 	}
       } 
@@ -1642,8 +1593,9 @@ read_bin30hmm(P7_HMMFILE *hfp, ESL_ALPHABET **ret_abc, P7_HMM **opt_hmm)
   off_t         offset = 0;
   int           status;
 
-  hfp->errbuf[0] = '\0';
-  if (feof(hfp->f))                                             { status = eslEOF;       goto ERROR; }
+  hfp->errbuf[0]    = '\0';
+  hfp->rr_errbuf[0] = '\0';
+  if (feof(hfp->f))  { status = eslEOF; goto ERROR; }
 
   if (hfp->newly_opened) 
     {
@@ -1768,7 +1720,8 @@ read_asc20hmm(P7_HMMFILE *hfp, ESL_ALPHABET **ret_abc, P7_HMM **opt_hmm)
   off_t         offset = 0;
   int           status;
  
-  hfp->errbuf[0] = '\0';
+  hfp->errbuf[0]    = '\0';
+  hfp->rr_errbuf[0] = '\0';
 
   if (hfp->newly_opened)
     {
@@ -1798,7 +1751,7 @@ read_asc20hmm(P7_HMMFILE *hfp, ESL_ALPHABET **ret_abc, P7_HMM **opt_hmm)
    */
   while ((status = esl_fileparser_NextLine(hfp->efp)) == eslOK)
     {
-      if ((status = esl_fileparser_GetTokenOnLine(hfp->efp, &tag, NULL))     != eslOK)   ESL_XFAIL(status,    hfp->errbuf, "Premature end of line");
+      if ((status = esl_fileparser_GetTokenOnLine(hfp->efp, &tag, NULL)) != eslOK)   ESL_XFAIL(status,    hfp->errbuf, "Premature end of line");
 
       if (strcmp(tag, "NAME") == 0) {
   if ((status = esl_fileparser_GetTokenOnLine(hfp->efp, &tok1, NULL))  != eslOK)   ESL_XFAIL(status,    hfp->errbuf, "No name found on NAME line");
@@ -1816,7 +1769,7 @@ read_asc20hmm(P7_HMMFILE *hfp, ESL_ALPHABET **ret_abc, P7_HMM **opt_hmm)
       } 
 
       else if (strcmp(tag, "LENG") == 0) {
-  if ((status = esl_fileparser_GetTokenOnLine(hfp->efp, &tok1, NULL))  != eslOK)   ESL_XFAIL(status,    hfp->errbuf, "No model length found on LENG line");
+  if ((status = esl_fileparser_GetTokenOnLine(hfp->efp, &tok1, NULL))  != eslOK) ESL_XFAIL(status,    hfp->errbuf, "No model length found on LENG line");
   if ((hmm->M = atoi(tok1))                                            == 0)     ESL_XFAIL(status,    hfp->errbuf, "Invalid model length %s on LENG line", tok1);
       }  
 
@@ -1830,7 +1783,7 @@ read_asc20hmm(P7_HMMFILE *hfp, ESL_ALPHABET **ret_abc, P7_HMM **opt_hmm)
   else    ESL_XFAIL(status,    hfp->errbuf, "Unrecognized alphabet type %s", tok1);
 
   if (*ret_abc == NULL) {
-    if ((abc = esl_alphabet_Create(alphatype))                        == NULL)    ESL_XFAIL(eslEMEM,   hfp->errbuf, "Failed to create alphabet");
+    if ((abc = esl_alphabet_Create(alphatype))                        == NULL)  ESL_XFAIL(eslEMEM,   hfp->errbuf, "Failed to create alphabet");
   } else {
     if ((*ret_abc)->type != alphatype)                                           ESL_XFAIL(eslEINCOMPAT,hfp->errbuf,"Alphabet type mismatch: was %s, but current HMM says %s", esl_abc_DecodeType( (*ret_abc)->type), tok1);
     abc = *ret_abc;
@@ -2297,7 +2250,7 @@ main(int argc, char **argv)
 
   esl_stopwatch_Start(w);
 
-  status = p7_hmmfile_OpenE(hmmfile, NULL, &hfp, errbuf);
+  status = p7_hmmfile_Open(hmmfile, NULL, &hfp, errbuf);
   if      (status == eslENOTFOUND) p7_Fail("File existence/permissions problem in trying to open HMM file %s.\n%s\n", hmmfile, errbuf);
   else if (status == eslEFORMAT)   p7_Fail("File format problem in trying to open HMM file %s.\n%s\n",                hmmfile, errbuf);
   else if (status != eslOK)        p7_Fail("Unexpected error %d in opening HMM file %s.\n%s\n",               status, hmmfile, errbuf);  
@@ -2375,8 +2328,8 @@ utest_io_30(char *tmpfile, int format, P7_HMM *hmm)
   fclose(fp);
   
   /* Read it back */
-  if (p7_hmmfile_OpenE(tmpfile, NULL, &hfp, NULL) != eslOK)  esl_fatal(msg);
-  if (p7_hmmfile_Read(hfp, &newabc, &new)         != eslOK)  esl_fatal(msg);
+  if (p7_hmmfile_Open(tmpfile, NULL, &hfp, NULL) != eslOK)  esl_fatal(msg);
+  if (p7_hmmfile_Read(hfp, &newabc, &new)        != eslOK)  esl_fatal(msg);
   
   /* It should have determined the right file format */
   if (format == -1) { if (hfp->format != p7_HMMFILE_3f) esl_fatal(msg); }
@@ -2392,13 +2345,13 @@ utest_io_30(char *tmpfile, int format, P7_HMM *hmm)
   p7_hmmfile_Close(hfp);
 
   /* Do it all again, but with binary format */
-  if ((fp = fopen(tmpfile, "w"))                  == NULL)   esl_fatal(msg);
-  if (p7_hmmfile_WriteBinary(fp, format, hmm)     != eslOK)  esl_fatal(msg);
+  if ((fp = fopen(tmpfile, "w"))                 == NULL)   esl_fatal(msg);
+  if (p7_hmmfile_WriteBinary(fp, format, hmm)    != eslOK)  esl_fatal(msg);
   fclose(fp);
-  if (p7_hmmfile_OpenE(tmpfile, NULL, &hfp, NULL) != eslOK)  esl_fatal(msg);
-  if (p7_hmmfile_Read(hfp, &newabc, &new)         != eslOK)  esl_fatal(msg);
+  if (p7_hmmfile_Open(tmpfile, NULL, &hfp, NULL) != eslOK)  esl_fatal(msg);
+  if (p7_hmmfile_Read(hfp, &newabc, &new)        != eslOK)  esl_fatal(msg);
   if (format < p7_HMMFILE_3e) { strcpy(new->consensus, hmm->consensus); }
-  if (p7_hmm_Compare(hmm, new, 0.0001)            != eslOK)  esl_fatal(msg);
+  if (p7_hmm_Compare(hmm, new, 0.0001)           != eslOK)  esl_fatal(msg);
 
   if (format == -1) { if (hfp->format != p7_HMMFILE_3f)      esl_fatal(msg); }
   else              { if (hfp->format != format)             esl_fatal(msg); } 
@@ -2512,7 +2465,7 @@ main(int argc, char **argv)
 /*****************************************************************
  * 9. Example.
  *****************************************************************/
-/* On using the example to test error messages from p7_hmmfile_OpenE():
+/* On using the example to test error messages from p7_hmmfile_Open():
  *    Message
  *  --------------
  *  .gz file missing/not readable     \rm test.hmm.gz; touch test.hmm.gz; src/p7_hmmfile_example test.hmm.gz
@@ -2547,7 +2500,7 @@ main(int argc, char **argv)
   int           status;
   
   /* An example of reading a single HMM from a file, and checking that it is the only one. */
-  status = p7_hmmfile_OpenE(hmmfile, NULL, &hfp, errbuf);
+  status = p7_hmmfile_Open(hmmfile, NULL, &hfp, errbuf);
   if      (status == eslENOTFOUND) p7_Fail("File existence/permissions problem in trying to open HMM file %s.\n%s\n", hmmfile, errbuf);
   else if (status == eslEFORMAT)   p7_Fail("File format problem in trying to open HMM file %s.\n%s\n",                hmmfile, errbuf);
   else if (status != eslOK)        p7_Fail("Unexpected error %d in opening HMM file %s.\n%s\n",               status, hmmfile, errbuf);  
