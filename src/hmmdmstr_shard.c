@@ -933,7 +933,7 @@ forward_results(QUEUE_DATA_SHARD *query, SEARCH_RESULTS *results)
     p7_syslog(LOG_ERR,"[%s:%d] - writing %s error %d - %s\n", __FILE__, __LINE__, query->ip_addr, errno, strerror(errno));
     goto CLEAR;
   }
-  printf("%p\n", results->hits[1]);
+  //printf("%p\n", results->hits[1]);
   // and finally the hits 
   n=buf_offset;
 
