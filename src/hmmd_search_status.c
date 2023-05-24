@@ -341,6 +341,10 @@ static void utest_Serialize(int ntrials){
   int status;
   char msg[] = "utest_Serialize failed";
 
+  if(ntrials <=0){
+    esl_fatal("utest_Serialize requires that ntrials be >= 1\n");
+  }
+
   ESL_ALLOC(buf, sizeof(uint8_t *));
   *buf = NULL;
   n = 0; 
