@@ -327,6 +327,7 @@ static void utest_Deserialize_error_conditions(){
 
   free(deserial);
   free(sampled);
+  free(buf);
   esl_rand64_Destroy(rng);
   return;
 }
