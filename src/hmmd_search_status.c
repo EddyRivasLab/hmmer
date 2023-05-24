@@ -382,7 +382,7 @@ static void utest_Serialize(int ntrials){
   }
   free(serial);
   free(deserial);
-
+  esl_rand64_Destroy(rng);
   return;
 
   ERROR:
