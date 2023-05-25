@@ -85,14 +85,13 @@ hmmpgmd2msa(void *data, P7_HMM *hmm, ESL_SQ *qsq, int *incl, int incl_size, int 
   HMMD_SEARCH_STATS *stats   = NULL;              /* pointer to a single stats object, at the beginning of data */
 
   /* vars used in msa construction */
-  P7_TOPHITS         th;
+  P7_TOPHITS         *th;
   ESL_MSA           *msa   = NULL;
 
   char              *p     = (char*)data;        /*pointer used to walk along data, must be char* to allow pointer arithmetic */
 
-  th.N = 0;
-  th.unsrt = NULL;
-  th.hit   = NULL;
+  
+  th = p7_tophits_Create();
   ESL_ALLOC(stats, sizeof(HMMD_SEARCH_STATS));
   stats->hit_offsets = NULL; // we don't use hit_offsets for this test
   /* optionally build a faux trace for the query sequence: relative to core model (B->M_1..M_L->E) */
@@ -129,27 +128,28 @@ hmmpgmd2msa(void *data, P7_HMM *hmm, ESL_SQ *qsq, int *incl, int incl_size, int 
   }
 
   /* ok, it looks legitimate */
-  /* create a tophits object, to be passed to p7_tophits_Alignment() */
-  ESL_ALLOC( th.unsrt, sizeof(P7_HIT) * stats->nhits);
+  while(stats->nhits > th->Nalloc){ // make sure we have enough space in the tophits structure
+    p7_tophits_Grow(th);
+  }
+
   // deserialize all the hits
   for (i = 0; i < stats->nhits; ++i) {
     // set all internal pointers of the hit to NULL before deserializing into it
-    th.unsrt[i].name = NULL;
-    th.unsrt[i].acc = NULL;
-    th.unsrt[i].desc = NULL;
-    th.unsrt[i].dcl = NULL;
+    th->unsrt[i].name = NULL;
+    th->unsrt[i].acc = NULL;
+    th->unsrt[i].desc = NULL;
+    th->unsrt[i].dcl = NULL;
 
-    if(p7_hit_Deserialize((uint8_t *) p, &n, &(th.unsrt[i])) != eslOK){
+    if(p7_hit_Deserialize((uint8_t *) p, &n, &(th->unsrt[i])) != eslOK){
       printf("Unable to deserialize hit %d\n", i);
       exit(0);
     }  
   }
 
-  ESL_ALLOC( th.hit, sizeof(P7_HIT*) * stats->nhits);
   for (i=0; i<stats->nhits; i++) {
-    th.hit[i] = &(th.unsrt[i]);
-    if (   th.hit[i]->ndom > 10000
-        || th.hit[i]->flags >  p7_IS_INCLUDED + p7_IS_REPORTED + p7_IS_NEW + p7_IS_DROPPED + p7_IS_DUPLICATE
+    th->hit[i] = &(th->unsrt[i]);
+    if (   th->hit[i]->ndom > 10000
+        || th->hit[i]->flags >  p7_IS_INCLUDED + p7_IS_REPORTED + p7_IS_NEW + p7_IS_DROPPED + p7_IS_DUPLICATE
     ) {
       status = eslFAIL;
       goto ERROR;
@@ -157,31 +157,31 @@ hmmpgmd2msa(void *data, P7_HMM *hmm, ESL_SQ *qsq, int *incl, int incl_size, int 
   }
 
 //  th.unsrt     = NULL;
-  th.N         = stats->nhits;
-  th.nreported = 0;
-  th.nincluded = 0;
-  th.is_sorted_by_sortkey = 0;
-  th.is_sorted_by_seqidx  = 0;
+  th->N         = stats->nhits;
+  th->nreported = 0;
+  th->nincluded = 0;
+  th->is_sorted_by_sortkey = 0;
+  th->is_sorted_by_seqidx  = 0;
 
   /* jackhmmer (hmmer web) - allow all hits to be unchecked */
   if(excl_all){
-    for (i = 0; i < th.N; i++) {
+    for (i = 0; i < th->N; i++) {
       /* Go through the hits and set all to be excluded */
-      if(th.hit[i]->flags & p7_IS_INCLUDED){
-        th.hit[i]->flags = p7_IS_DROPPED;
-        th.hit[i]->nincluded = 0;
+      if(th->hit[i]->flags & p7_IS_INCLUDED){
+        th->hit[i]->flags = p7_IS_DROPPED;
+        th->hit[i]->nincluded = 0;
       }
     }
   }
 
-  for (i = 0; i < th.N; i++) {
+  for (i = 0; i < th->N; i++) {
     /* Go through the hits and set to be excluded or included as necessary */
-    if(th.hit[i]->flags & p7_IS_INCLUDED){
+    if(th->hit[i]->flags & p7_IS_INCLUDED){
       if(excl_size > 0){
         for( c = 0; c < excl_size; c++){
-          if(excl[c] == (long)(th.hit[i]->name) ){
-            th.hit[i]->flags = p7_IS_DROPPED;
-            th.hit[i]->nincluded = 0;
+          if(excl[c] == (long)(th->hit[i]->name) ){
+            th->hit[i]->flags = p7_IS_DROPPED;
+            th->hit[i]->nincluded = 0;
             break;
           }
         }
@@ -189,8 +189,8 @@ hmmpgmd2msa(void *data, P7_HMM *hmm, ESL_SQ *qsq, int *incl, int incl_size, int 
     }else{
       if(incl_size > 0){
     	for( c = 0; c < incl_size; c++){
-          if(incl[c] == (long)th.hit[i]->name ){
-            th.hit[i]->flags = p7_IS_INCLUDED;
+          if(incl[c] == (long)th->hit[i]->name ){
+            th->hit[i]->flags = p7_IS_INCLUDED;
           }
         }
       }
@@ -199,7 +199,7 @@ hmmpgmd2msa(void *data, P7_HMM *hmm, ESL_SQ *qsq, int *incl, int incl_size, int 
 
 
   /* use the tophits and trace info above to produce an alignment */
-  if ( (status = p7_tophits_Alignment(&th, hmm->abc, &qsq, &qtr, extra_sqcnt, p7_ALL_CONSENSUS_COLS, &msa)) != eslOK) goto ERROR;
+  if ( (status = p7_tophits_Alignment(th, hmm->abc, &qsq, &qtr, extra_sqcnt, p7_ALL_CONSENSUS_COLS, &msa)) != eslOK) goto ERROR;
   esl_msa_SetName     (msa, hmm->name, -1);
   esl_msa_SetAccession(msa, hmm->acc,  -1);
   esl_msa_SetDesc     (msa, hmm->desc, -1);
@@ -207,14 +207,8 @@ hmmpgmd2msa(void *data, P7_HMM *hmm, ESL_SQ *qsq, int *incl, int incl_size, int 
 
   /* free memory */
   if (qtr != NULL) free(qtr);
-  for (i = 0; i < th.N; i++) {
-    for (j=0; j < th.hit[i]->ndom; j++)
-      p7_alidisplay_Destroy(th.hit[i]->dcl[j].ad);
+  p7_tophits_Destroy(th);
 
-    if (th.hit[i]->dcl != NULL) free (th.hit[i]->dcl);
-  }
-  if (th.unsrt != NULL) free (th.unsrt);
-  if (th.hit != NULL) free (th.hit);
   free(stats);
   *ret_msa = msa;
   return eslOK;
@@ -222,15 +216,7 @@ hmmpgmd2msa(void *data, P7_HMM *hmm, ESL_SQ *qsq, int *incl, int incl_size, int 
 ERROR:
   /* free memory */
   if (qtr != NULL) free(qtr);
-
-  for (i = 0; i < th.N; i++) {
-    for (j=0; j < th.hit[i]->ndom; j++)
-      p7_alidisplay_Destroy(th.hit[i]->dcl[j].ad);
-
-    if (th.hit[i]->dcl != NULL) free (th.hit[i]->dcl);
-  }
-  if (th.unsrt != NULL) free (th.unsrt);
-  if (th.hit != NULL) free (th.hit);
+  p7_tophits_Destroy(th);
   if(stats != NULL) free(stats);
   return status;
 }
