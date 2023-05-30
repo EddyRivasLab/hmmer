@@ -192,20 +192,12 @@ case $enable_debugging in
      *)  AC_MSG_ERROR([Unknown argument to --enable-debugging: $enable_debugging]);;
 esac
 
-# --enable-fortify=x      - set FORTIFY_SOURCE at level x to check bounds of array
-# accesses
-AC_ARG_ENABLE(fortify,
-  [
-    AS_HELP_STRING([--enable-fortify=x],[pass -D_FORTIFY_SOURCE=x to compiler to check for buffer overflows])
-  ],
-  enable_fortify=$enableval,
-  enable_fortify=no)
-
 
 AC_ARG_ENABLE(gcov,    [AS_HELP_STRING([--enable-gcov],    [compile for code coverage testing])],        enable_gcov=$enableval,    enable_gcov=no)
 AC_ARG_ENABLE(gprof,   [AS_HELP_STRING([--enable-gprof],   [compile for gcc code profiling])],           enable_gprof=$enableval,   enable_gprof=no)
-AC_ARG_ENABLE(sanitize-address, [AS_HELP_STRING([--enable-sanitize-address], [compile with address sanitizer]) ], enable_sanitize_address=yes, enable_sanitize_address=no)
-AC_ARG_ENABLE(sanitize-thread, [AS_HELP_STRING([--enable-sanitize-thread], [compile with thread sanitizer]) ], enable_sanitize_thread=yes, enable_sanitize_thread=no)
+AC_ARG_ENABLE(asan,    [AS_HELP_STRING([--enable-asan],    [compile with address sanitizer]) ],          enable_asan=$enableval,    enable_asan=no)
+AC_ARG_ENABLE(tsan,    [AS_HELP_STRING([--enable-tsan],    [compile with thread sanitizer]) ],           enable_tsan=$enableval,    enable_tsan=no)
+AC_ARG_ENABLE(fortify, [AS_HELP_STRING([--enable-fortify=x],[compile with -D_FORTIFY_SOURCE=x]) ],       enable_fortify=$enableval, enable_fortify=no)
 
 AC_ARG_ENABLE(neon,    [AS_HELP_STRING([--enable-neon],    [enable our ARM Neon vector code])],          enable_neon=$enableval,    enable_neon=check)
 AC_ARG_ENABLE(sse,     [AS_HELP_STRING([--enable-sse],     [enable our SSE vector code])],               enable_sse=$enableval,     enable_sse=check)
@@ -300,6 +292,23 @@ fi
 if test "$enable_fortify" != "no"; then
   CFLAGS="${CFLAGS} -D_FORTIFY_SOURCE=$enable_fortify"
 fi
+
+
+# Turn on a sanitizer, if asked.
+#
+if test "$enable_asan" = "yes"; then
+  CFLAGS="$CFLAGS -fsanitize=address"
+  LDFLAGS="$LDFLAGS -fsanitize=address"
+fi
+if test "$enable_tsan" = "yes"; then
+  if test "$enable_asan" = "yes"; then  
+    AC_MSG_FAILURE([The address and thread sanitizers are incompatible. Use only one of --enable-asan and --enable-tsan])
+  fi
+  CFLAGS="$CFLAGS -fsanitize=threads"
+  LDFLAGS="$LDFLAGS -fsanitize=threads"
+fi
+
+
 # PIC (position-independent code) for shared library support
 #
 if test "$enable_pic" = "yes"; then
@@ -660,25 +669,9 @@ AC_FUNC_FSEEKO
 AC_SYS_LARGEFILE
 
 
-#################################################################
-# 14. Configure sanitizers
-#################################################################
-if test "$enable_sanitize_address" = "yes"; then
-  CFLAGS="$CFLAGS -fsanitize=address"
-  LDFLAGS="$LDFLAGS -fsanitize=address"
-fi
-if test "$enable_sanitize_thread" = "yes"; then
-  if test "$enable_sanitize_address" = "yes"; then  
-    AC_MSG_FAILURE([The address and thread sanitizers are incompatible.  Please use at most one of --enable-sanitize-address and --enable-sanitize-thread])
-  fi
-  CFLAGS="$CFLAGS -fsanitize=thread"
-  LDFLAGS="$LDFLAGS -fsanitize=thread"
-fi
-AC_SUBST(LDFLAGS)
-
 
 ################################################################
-# 15. Config subdirs and files
+# 13. Config subdirs and files
 ################################################################
 
 # HMMER Makefiles.
@@ -778,7 +771,7 @@ AC_CONFIG_LINKS([src/impl:${ac_top_build_prefix}src/impl_${impl_choice}])
 
 
 ################################################################
-# 16. AC_OUTPUT
+# 14. AC_OUTPUT
 ################################################################
 AC_OUTPUT
 
