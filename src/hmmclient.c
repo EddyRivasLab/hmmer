@@ -142,13 +142,24 @@ process_commandline(int argc, char **argv, ESL_GETOPTS **ret_go, char **ret_quer
   if (esl_opt_IsUsed(go, "--db")) {
       dbx = esl_opt_GetInteger(go, "--db");
     } 
-  if (dbx == 0){
+  if (dbx <= 0){
     dbx = 1;  //Default to searching first database
   }
-  ESL_ALLOC(*ret_db, (int)log10(dbx) +2); // +2 for end-of-string character and because most logs are non-integer
-  // and round down6
+  // Figure out how many bytes we need for the string that contains the number of the database to search.
+  // Could probably just make this 20 or so and never have an issue, but ...
+  int db_str_size = 1; // 1 byte for the end-of-string character
+  int temp_db = dbx;
+  while(temp_db > 0){
+    db_str_size+=1;
+    temp_db = temp_db/10;
+  }
+  ESL_ALLOC(*ret_db, db_str_size); 
 
-  sprintf(*ret_db, "%d", esl_opt_GetInteger (go, "--db"));
+  int printed_bytes = snprintf(*ret_db, db_str_size, "%d", dbx);
+  if(printed_bytes >=db_str_size){
+    //we didn't allocate enough space
+    p7_Die("Failed to allocate enough space for the database string in process_commandline().\n");
+  }
   *ret_go = go;
   return eslOK;
   

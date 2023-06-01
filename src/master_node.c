@@ -413,6 +413,7 @@ process_ServerCmd(char *ptr, CLIENTSIDE_ARGS *data)
   s = strsep(&ptr, " \t");
   if (strcmp(s, "shutdown") == 0) 
     {
+      printf("Master node saw shutdown command\n");
       if ((cmd = malloc(sizeof(HMMD_HEADER))) == NULL) LOG_FATAL_MSG("malloc", errno);
       memset(cmd, 0, sizeof(HMMD_HEADER)); /* avoid uninit bytes & valgrind bitching. Remove, if we ever serialize structs correctly. */
       cmd->hdr.length  = 0;
@@ -1286,6 +1287,7 @@ void process_shutdown(P7_SERVER_MASTERNODE_STATE *masternode, MPI_Datatype *serv
 #endif
 
 #ifdef HAVE_MPI
+  printf("Master node procecssing shutdown\n");
   MPI_Bcast(&the_command, 1, server_mpitypes[P7_SERVER_COMMAND_MPITYPE], 0, MPI_COMM_WORLD);
   pthread_mutex_lock(&(masternode->hit_wait_lock));
   masternode->shutdown = 1;
@@ -1295,7 +1297,7 @@ void process_shutdown(P7_SERVER_MASTERNODE_STATE *masternode, MPI_Datatype *serv
 
   // spurious barrier for testing so that master doesn't exit immediately
   MPI_Barrier(MPI_COMM_WORLD);
-
+  printf("Master node shutting down\n");
   // Clean up memory
   MPI_Finalize(); // Tell MPI we're done
   p7_server_masternode_Destroy(masternode);

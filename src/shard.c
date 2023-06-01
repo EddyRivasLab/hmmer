@@ -57,7 +57,7 @@ P7_SHARD *p7_shard_Create_hmmfile(char *filename, uint32_t num_shards, uint32_t 
   P7_PROFILE     *gm      = NULL;
   P7_OPROFILE    *om      = NULL;
 
-  if (p7_hmmfile_OpenE(filename, NULL, &hfp, NULL) != eslOK) p7_Fail("Failed to open HMM file %s", filename);
+  if (p7_hmmfile_Open(filename, NULL, &hfp, NULL) != eslOK) p7_Fail("Failed to open HMM file %s", filename);
 
   // iterate through the HMMs in the file
   while(p7_hmmfile_Read(hfp, &abc, &hmm) == eslOK){

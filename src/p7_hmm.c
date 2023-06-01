@@ -2002,7 +2002,7 @@ utest_synchronize(ESL_GETOPTS *go, ESL_RANDOMNESS *r, ESL_ALPHABET *abc)
   if ((hmm_filename= esl_opt_GetArg(go, 1)) == NULL)  { 
     esl_fatal(msg);
   }
-  if (p7_hmmfile_OpenE(hmm_filename, NULL, &hfp, errbuf) != eslOK){
+  if (p7_hmmfile_Open(hmm_filename, NULL, &hfp, errbuf) != eslOK){
     printf("%s\n", errbuf);
     esl_fatal(msg);
   }

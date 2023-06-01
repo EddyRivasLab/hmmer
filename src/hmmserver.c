@@ -20,18 +20,18 @@
 #ifdef HAVE_MPI
 static ESL_OPTIONS options[] = {
   /* name           type      default  env  range     toggles   reqs   incomp              help                                                      docgroup*/
-  { "-h",           eslARG_NONE,   FALSE, NULL, NULL,    NULL,  NULL,  NULL,            "show brief help on version and usage",                         1 },
+  { "-h",           eslARG_NONE,   FALSE, NULL, NULL,    NULL,  NULL,  NULL, "show brief help on version and usage",                         1 },
   /* Interface with server */
-  { "--cport",      eslARG_INT,     "51371",  NULL, "49151<n<65536",NULL,  NULL,  "--worker",      "port to use for client/server communication",                 12 },
-  { "--ccncts",     eslARG_INT,     "16",     NULL, "n>0",          NULL,  NULL,  "--worker",      "maximum number of client side connections to accept",         12 },
-  { "--num_dbs",		eslARG_INT,					"1", NULL, NULL,	NULL, NULL, NULL,								"number of databases to load into RAM (default 1)",						8 }, 
+  { "--cport",      eslARG_INT,     "51371",  NULL, "49151<n<65536",NULL,  NULL,  "--worker", "port to use for client/server communication",                 12 },
+  { "--ccncts",     eslARG_INT,     "16",     NULL, "n>0",          NULL,  NULL,  "--worker", "maximum number of client side connections to accept",         12 },
+  { "--num_dbs",		eslARG_INT,					"1", NULL, NULL,	NULL, NULL, NULL, "number of databases to load into RAM (default 1)",						8 }, 
   { "--num_shards",     eslARG_INT,                 "1", NULL, NULL,    NULL, NULL,
   NULL,                               "number of shards to divide each database into (default 1)"},
-  { "--cpu",       eslARG_INT,    "0",  NULL, "n>=0",  NULL,  NULL,  NULL,            "Number of compute threads to run per worker node. 0 = max possible (default)",         12 },
-  { "--stall", 			eslARG_NONE,   FALSE, NULL, NULL,    NULL,  NULL,  NULL,            "Stall after start untill debugger says to resume (debugging option)"},
+ { "--cpu",       eslARG_INT,    "0",  NULL, "n>=0",  NULL,  NULL,  NULL,            "# of compute threads per worker. 0 = max possible (default)",         12 },
+ { "--stall", 			eslARG_NONE,   FALSE, NULL, NULL,    NULL,  NULL,  NULL,      "Stall after start (debugging option)", 12}, 
   {  0, 0, 0, 0, 0, 0, 0, 0, 0, 0 },
 };
-static char usage[]  = "[-options] <seqence database>";
+static char usage[]  = "[-options] <sequence database>";
 static char banner[] = "hmmserver, the server version of HMMER 3";
 #endif
  
