@@ -299,6 +299,7 @@ fi
 if test "$enable_asan" = "yes"; then
   CFLAGS="$CFLAGS -fsanitize=address"
   LDFLAGS="$LDFLAGS -fsanitize=address"
+  AC_DEFINE(eslENABLE_ASAN, 1, [Using address sanitizer])
 fi
 if test "$enable_tsan" = "yes"; then
   if test "$enable_asan" = "yes"; then  
@@ -306,6 +307,7 @@ if test "$enable_tsan" = "yes"; then
   fi
   CFLAGS="$CFLAGS -fsanitize=threads"
   LDFLAGS="$LDFLAGS -fsanitize=threads"
+  AC_DEFINE(eslENABLE_TSAN, 1, [Using threads sanitizer])
 fi
 
 
