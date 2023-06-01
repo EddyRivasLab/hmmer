@@ -72,23 +72,18 @@
  *
  */
 int
-hmmpgmd2msa(void *data, P7_HMM *hmm, ESL_SQ *qsq, int *incl, int incl_size, int *excl, int excl_size, int excl_all, ESL_MSA **ret_msa) {
-  int i, j;
-  int c;
-  int status;
-  uint32_t n = 0;
-  /* trace of the query sequence with N residues onto model with N match states */
-  P7_TRACE          *qtr         = NULL;
+hmmpgmd2msa(void *data, P7_HMM *hmm, ESL_SQ *qsq, int *incl, int incl_size, int *excl, int excl_size, int excl_all, ESL_MSA **ret_msa)
+{
+  HMMD_SEARCH_STATS *stats       = NULL;         // pointer to a single stats object, at the beginning of data 
+  P7_TRACE          *qtr         = NULL;         // trace of the query sequence with N residues onto model with N match states 
+  P7_TOPHITS         *th         = NULL;
+  ESL_MSA           *msa         = NULL;
+  char              *p           = (char*)data;  // pointer used to walk along data, must be char* to allow pointer arithmetic 
   int                extra_sqcnt = 0;
-
-  /* vars used to read from the binary data */
-  HMMD_SEARCH_STATS *stats   = NULL;              /* pointer to a single stats object, at the beginning of data */
-
-  /* vars used in msa construction */
-  P7_TOPHITS         *th;
-  ESL_MSA           *msa   = NULL;
-
-  char              *p     = (char*)data;        /*pointer used to walk along data, must be char* to allow pointer arithmetic */
+  uint32_t n = 0;
+  int      i;
+  int      c;
+  int      status;
 
   
   th = p7_tophits_Create();
@@ -205,7 +200,6 @@ hmmpgmd2msa(void *data, P7_HMM *hmm, ESL_SQ *qsq, int *incl, int incl_size, int 
   esl_msa_SetDesc     (msa, hmm->desc, -1);
   esl_msa_FormatAuthor(msa, "hmmpgmd (HMMER %s)", HMMER_VERSION);
 
-  /* free memory */
   if (qtr != NULL) free(qtr);
   p7_tophits_Destroy(th);
 
@@ -214,7 +208,6 @@ hmmpgmd2msa(void *data, P7_HMM *hmm, ESL_SQ *qsq, int *incl, int incl_size, int 
   return eslOK;
 
 ERROR:
-  /* free memory */
   if (qtr != NULL) free(qtr);
   p7_tophits_Destroy(th);
   if(stats != NULL) free(stats);
