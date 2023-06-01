@@ -1178,8 +1178,7 @@ int process_search(P7_SERVER_MASTERNODE_STATE *masternode, P7_SERVER_QUEUE_DATA 
 
 
   // Synchronize with the hit processing thread
-  while(pthread_mutex_trylock(&(masternode->hit_wait_lock))){  // Wait until hit thread is sitting at cond_wait
-  }
+  pthread_mutex_lock(&(masternode->hit_wait_lock));
   masternode->worker_nodes_done = 0;  // None of the workers are finished at search start time
   masternode->worker_stats_received = 0; // and none have sent pipeline statistics
   pthread_cond_broadcast(&(masternode->start)); // signal hit processing thread to start
@@ -1288,8 +1287,7 @@ void process_shutdown(P7_SERVER_MASTERNODE_STATE *masternode, MPI_Datatype *serv
 
 #ifdef HAVE_MPI
   MPI_Bcast(&the_command, 1, server_mpitypes[P7_SERVER_COMMAND_MPITYPE], 0, MPI_COMM_WORLD);
-  while(pthread_mutex_trylock(&(masternode->hit_wait_lock))){  // Acquire this to prevent races
-  }
+  pthread_mutex_lock(&(masternode->hit_wait_lock));
   masternode->shutdown = 1;
   pthread_mutex_unlock(&(masternode->hit_wait_lock));
 
@@ -1337,7 +1335,7 @@ void p7_server_master_node_main(int argc, char ** argv, MPI_Datatype *server_mpi
   freeaddrinfo(info);
 
   // For now, we only use one shard.  This will change in the future
-  int num_shards = 1; // Change this to calculate number of shards based on database size
+  int num_shards = esl_opt_GetInteger(go, "--num_shards");
   int num_dbs = esl_opt_GetInteger(go, "--num_dbs"); 
 
 
@@ -1364,6 +1362,8 @@ void p7_server_master_node_main(int argc, char ** argv, MPI_Datatype *server_mpi
   if(num_nodes < 2){
     p7_Fail("Found 0 worker ranks.  Please re-run with at least 2 MPI ranks so that there can be a master and at least one worker rank.");
   }
+  // Tell all of the workers how many shards we're using so that they can start loading the databases
+  MPI_Bcast(&num_shards, 1, MPI_INT, 0, MPI_COMM_WORLD);
 
   // Set up the masternode state object for this node
   P7_SERVER_MASTERNODE_STATE *masternode;
@@ -1375,9 +1375,6 @@ void p7_server_master_node_main(int argc, char ** argv, MPI_Datatype *server_mpi
   p7_server_masternode_Setup(num_shards, num_dbs, database_names, masternode);
 
   free(database_names);
-
-  // Tell all of the workers how many shards we're using
-  MPI_Bcast(&num_shards, 1, MPI_INT, 0, MPI_COMM_WORLD);
 
   // Create hit processing thread
   P7_SERVER_MASTERNODE_HIT_THREAD_ARGUMENT hit_argument;
@@ -1467,8 +1464,8 @@ void *p7_server_master_hit_thread(void *argument){
   the_argument = (P7_SERVER_MASTERNODE_HIT_THREAD_ARGUMENT *) argument;
   P7_SERVER_MASTERNODE_STATE *masternode = the_argument->masternode;
 
-  while(pthread_mutex_trylock(&(masternode->hit_wait_lock))){  // Acquire this lock to prevent race on first go signal
-    }
+  pthread_mutex_lock(&(masternode->hit_wait_lock));
+
 
 
   masternode->hit_thread_ready = 1; // tell main thread we're ready to go
@@ -1488,10 +1485,8 @@ void *p7_server_master_hit_thread(void *argument){
         // There's at least one message of hits for us to handle
         P7_SERVER_MESSAGE *the_message, *prev;
         prev = NULL;
-        while(pthread_mutex_trylock(&(masternode->full_hit_message_pool_lock))){
-          // spin to acquire the lock
-        }
-
+        pthread_mutex_lock(&(masternode->full_hit_message_pool_lock));
+        
         the_message = (P7_SERVER_MESSAGE *) masternode->full_hit_message_pool;
         // Go through the pool of hit messages to find the last one in the chain, which is the first one that was received
         while(the_message->next != NULL){
@@ -1517,9 +1512,7 @@ void *p7_server_master_hit_thread(void *argument){
         }
 
         // Put the message back on the empty list now that we've dealt with it.
-        while(pthread_mutex_trylock(&(masternode->empty_hit_message_pool_lock))){
-          // spin to acquire the lock
-        } 
+        pthread_mutex_lock(&(masternode->empty_hit_message_pool_lock));
         the_message->next = (P7_SERVER_MESSAGE *) masternode->empty_hit_message_pool;
         masternode->empty_hit_message_pool = the_message;
 
@@ -1562,9 +1555,7 @@ void p7_masternode_message_handler(P7_SERVER_MASTERNODE_STATE *masternode, P7_SE
   P7_PIPELINE *temp_pipeline;
   if(*buffer_handle == NULL){
     //Try to grab a message buffer from the empty message pool
-    while(pthread_mutex_trylock(&(masternode->empty_hit_message_pool_lock))){
-        // spin to acquire the lock
-      }
+    pthread_mutex_lock(&(masternode->empty_hit_message_pool_lock));
     if(masternode->empty_hit_message_pool != NULL){
       (*buffer_handle) = (P7_SERVER_MESSAGE *) masternode->empty_hit_message_pool;
       masternode->empty_hit_message_pool = (*buffer_handle)->next;
@@ -1609,10 +1600,7 @@ void p7_masternode_message_handler(P7_SERVER_MASTERNODE_STATE *masternode, P7_SE
       p7_tophits_MPIRecv((*buffer_handle)->status.MPI_SOURCE, (*buffer_handle)->status.MPI_TAG, MPI_COMM_WORLD, &((*buffer_handle)->buffer), &((*buffer_handle)->buffer_alloc), &((*buffer_handle)->tophits));
 
       // Put the message in the list for the hit thread to process
-      while (pthread_mutex_trylock(&(masternode->full_hit_message_pool_lock)))
-      {
-        // spin to acquire the lock
-        }
+      pthread_mutex_lock(&(masternode->full_hit_message_pool_lock));
 
         (*buffer_handle)->next = (P7_SERVER_MESSAGE *) masternode->full_hit_message_pool;
         masternode->full_hit_message_pool = *buffer_handle;
