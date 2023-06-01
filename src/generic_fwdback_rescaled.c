@@ -67,7 +67,7 @@ main(int argc, char **argv)
 
 
   /* Open the HMM file */
-  if (p7_hmmfile_OpenE(hmmfile, NULL, &hfp, NULL) != eslOK) p7_Fail("Failed to open HMM file %s", hmmfile);
+  if (p7_hmmfile_Open(hmmfile, NULL, &hfp, NULL) != eslOK) p7_Fail("Failed to open HMM file %s", hmmfile);
  
   while ( (status = p7_hmmfile_Read(hfp, &abc, &hmm)) != eslEOF)
     {

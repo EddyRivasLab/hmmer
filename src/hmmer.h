@@ -435,6 +435,7 @@ typedef struct p7_hmmfile_s {
 #endif
 
   char          errbuf[eslERRBUFSIZE];
+  char          rr_errbuf[eslERRBUFSIZE];  // p7_oprofile_ReadRest() uses this instead of errbuf, as a workaround for a thread race issue. See notes there.
 } P7_HMMFILE;
 
 /* note on <fname>, above:
@@ -1599,10 +1600,8 @@ extern int     p7_hmm_Serialize(const P7_HMM *hmm, uint8_t **buf, uint32_t *n, u
 extern int     p7_hmm_Deserialize(const uint8_t *buf, uint32_t *n, ESL_ALPHABET *abc, P7_HMM **ret_obj);
 
 /* p7_hmmfile.c */
-extern int  p7_hmmfile_OpenE    (const char *filename, char *env, P7_HMMFILE **ret_hfp, char *errbuf);
-extern int  p7_hmmfile_OpenENoDB(const char *filename, char *env, P7_HMMFILE **ret_hfp, char *errbuf);
-extern int  p7_hmmfile_Open     (const char *filename, char *env, P7_HMMFILE **ret_hfp); /* deprecated */
-extern int  p7_hmmfile_OpenNoDB (const char *filename, char *env, P7_HMMFILE **ret_hfp); /* deprecated */
+extern int  p7_hmmfile_Open      (const char *filename, char *env, P7_HMMFILE **ret_hfp, char *errbuf);
+extern int  p7_hmmfile_OpenNoDB  (const char *filename, char *env, P7_HMMFILE **ret_hfp, char *errbuf);
 extern int  p7_hmmfile_OpenBuffer(const char *buffer, int size, P7_HMMFILE **ret_hfp);
 extern void p7_hmmfile_Close(P7_HMMFILE *hfp);
 #ifdef HMMER_THREADS

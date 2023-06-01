@@ -415,7 +415,8 @@ utest_GrowTo(void)
   M = 179;   L = 55;    p7_gmx_GrowTo(gx, M, L);  gmx_testpattern(gx, M, L);
   M = 87;    L = 57;    p7_gmx_GrowTo(gx, M, L);  gmx_testpattern(gx, M, L);
 
-  /* and this exercises iss#176. Only do this on 64-bit systems, and only if a large alloc is possible (we need 8.6G to exercise the bug!) */
+  /* and this exercises iss#176. Only do this if a large alloc is possible (we need 8.6G to exercise the bug!) */
+  // I've seen ThreadSanitizer fail here in a Linux VM, for example, because of the large alloc.
   M = 71582; L = 10000;
   nbytes = (int64_t) (M+1) * (int64_t) (L+1) * (int64_t) p7G_NSCELLS * (int64_t) sizeof(float);
   if ( nbytes < SIZE_MAX / 2)

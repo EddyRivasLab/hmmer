@@ -473,8 +473,8 @@ main(int argc, char **argv)
 
   r  = esl_randomness_CreateFast(0);
   tr = p7_trace_Create();
-  if (p7_hmmfile_OpenE(hmmfile, NULL, &hfp, NULL) != eslOK) p7_Fail("failed to open %s", hmmfile);
-  if (p7_hmmfile_Read(hfp, &abc, &hmm)            != eslOK) p7_Fail("failed to read HMM");
+  if (p7_hmmfile_Open(hmmfile, NULL, &hfp, NULL) != eslOK) p7_Fail("failed to open %s", hmmfile);
+  if (p7_hmmfile_Read(hfp, &abc, &hmm)           != eslOK) p7_Fail("failed to read HMM");
   sq = esl_sq_CreateDigital(abc);
   bg = p7_bg_Create(abc);
   gm = p7_profile_Create(hmm->M, abc);
@@ -557,7 +557,7 @@ main(int argc, char **argv)
   int             i;
   int             status;
 
-  status = p7_hmmfile_OpenE(hmmfile, NULL, &hfp, errbuf);
+  status = p7_hmmfile_Open(hmmfile, NULL, &hfp, errbuf);
   if      (status == eslENOTFOUND) p7_Fail("File existence/permissions problem in trying to open HMM file %s.\n%s\n", hmmfile, errbuf);
   else if (status == eslEFORMAT)   p7_Fail("File format problem in trying to open HMM file %s.\n%s\n",                hmmfile, errbuf);
   else if (status != eslOK)        p7_Fail("Unexpected error %d in opening HMM file %s.\n%s\n",                       status, hmmfile, errbuf);  
