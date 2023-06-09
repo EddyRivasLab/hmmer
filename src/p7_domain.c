@@ -542,7 +542,8 @@ ERROR:
  * Throws:    Nothing
  */ 
 extern int p7_domain_Compare(P7_DOMAIN *first, P7_DOMAIN *second, double atol, double rtol){
-  
+  int i; 
+ 
   // compare all the fixed-length fields
   if(first->ienv != second->ienv){
     return eslFAIL;
@@ -602,7 +603,7 @@ extern int p7_domain_Compare(P7_DOMAIN *first, P7_DOMAIN *second, double atol, d
       return eslFAIL;  // can't be the same if the two domains contain scores_per_pos arrays of different length
     }
 
-    for(int i = 0; i < first->ad->N; i++){
+    for(i = 0; i < first->ad->N; i++){
       if(esl_FCompare(first->scores_per_pos[i], second->scores_per_pos[i], (float) atol, (float) rtol) != eslOK){
         return eslFAIL; // fail if any of the scores_per_pos array values mismatch
       }
