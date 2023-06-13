@@ -594,7 +594,7 @@ p7_tophits_GetMaxORFposLength(P7_TOPHITS *h)
   int64_t i;
   int max = 0;
   int n;
-  char buffer [13];
+  char buffer [26];
 
   for (i = 0; i < h->N; i++) {
     if (h->unsrt[i].nreported>0 && h->unsrt[i].dcl[0].iorf > 0) {
@@ -724,7 +724,7 @@ p7_tophits_GetMaxTargetLength(P7_TOPHITS *h, int mode)
   int64_t i;
   int max = 0;
   int n;
-  char buffer [13];
+  char buffer [26];
 
   for (i = 0; i < h->N; i++) {
     if(mode == p7_SEARCH_SEQS) {
@@ -765,7 +765,7 @@ p7_tophits_GetMaxQueryLength(P7_TOPHITS *h, int mode)
   int64_t i;
   int max = 0;
   int n;
-  char buffer [13];
+  char buffer [26];
 
   for (i = 0; i < h->N; i++) {
     if(mode == p7_SEARCH_SEQS) {

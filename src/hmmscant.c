@@ -714,7 +714,6 @@ thread_loop(ESL_THREADS *obj, ESL_WORK_QUEUE *queue, ID_LENGTH_LIST *id_length_l
   P7_OM_BLOCK   *block;
   ESL_ALPHABET  *abc = NULL;
   void          *newBlock;
-  WORKER_INFO   *info;
 
   add_id_length(id_length_list, seqidx, seqL);  
   
