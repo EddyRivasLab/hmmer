@@ -391,7 +391,7 @@ serial_master(ESL_GETOPTS *go, struct cfg_s *cfg)
 
 
   /* Open the target profile database to get the sequence alphabet */
-  status = p7_hmmfile_OpenE(cfg->hmmfile, p7_HMMDBENV, &hfp, errbuf);
+  status = p7_hmmfile_Open(cfg->hmmfile, p7_HMMDBENV, &hfp, errbuf);
   if      (status == eslENOTFOUND)  p7_Fail("File existence/permissions problem in trying to open HMM file %s.\n%s\n", cfg->hmmfile, errbuf);
   else if (status == eslEFORMAT)    p7_Fail("File format problem, trying to open HMM file %s.\n%s\n",                  cfg->hmmfile, errbuf);
   else if (status != eslOK)         p7_Fail("Unexpected error %d in opening HMM file %s.\n%s\n",               status, cfg->hmmfile, errbuf);  
@@ -489,7 +489,7 @@ serial_master(ESL_GETOPTS *go, struct cfg_s *cfg)
 
 
      /* Open the target profile database */
-     status = p7_hmmfile_OpenE(cfg->hmmfile, p7_HMMDBENV, &hfp, NULL);
+     status = p7_hmmfile_Open(cfg->hmmfile, p7_HMMDBENV, &hfp, NULL);
      if (status != eslOK)        p7_Fail("Unexpected error %d in opening hmm file %s.\n",           status, cfg->hmmfile);
   
 #ifdef HMMER_THREADS
@@ -770,6 +770,7 @@ pipeline_thread(void *arg)
 
 
   impl_Init();
+
 
   obj = (ESL_THREADS *) arg;
   esl_threads_Started(obj, &workeridx);
