@@ -534,7 +534,7 @@ main(int argc, char **argv)
   else if (esl_opt_GetBoolean(go, "--fwdonly") == TRUE) { do_msv = FALSE; do_vit = FALSE; do_fwd =  TRUE; }
   else                                                  { do_msv =  TRUE; do_vit =  TRUE; do_fwd =  TRUE; }
 
-  if (p7_hmmfile_OpenE(hmmfile, NULL, &hfp, NULL) != eslOK) p7_Fail("Failed to open HMM file %s", hmmfile);
+  if (p7_hmmfile_Open(hmmfile, NULL, &hfp, NULL) != eslOK) p7_Fail("Failed to open HMM file %s", hmmfile);
   while ((status = p7_hmmfile_Read(hfp, &abc, &hmm)) != eslEOF) 
     {
       if (bg == NULL) bg = p7_bg_Create(abc);
@@ -618,8 +618,8 @@ main(int argc, char **argv)
   P7_HMMFILE     *hfp     = NULL;
   P7_HMM         *hmm     = NULL;
 
-  if (p7_hmmfile_OpenE(hmmfile, NULL, &hfp, NULL) != eslOK) p7_Fail("Failed to open HMM file %s", hmmfile);
-  if (p7_hmmfile_Read(hfp, &abc, &hmm)            != eslOK) p7_Fail("Failed to read HMM");
+  if (p7_hmmfile_Open(hmmfile, NULL, &hfp, NULL) != eslOK) p7_Fail("Failed to open HMM file %s", hmmfile);
+  if (p7_hmmfile_Read(hfp, &abc, &hmm)           != eslOK) p7_Fail("Failed to read HMM");
   p7_hmmfile_Close(hfp);
 
   esl_stopwatch_Start(w);

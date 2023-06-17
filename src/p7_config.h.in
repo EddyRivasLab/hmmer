@@ -132,5 +132,10 @@
  */
 #undef HAVE_FLUSH_ZERO_MODE
 
+/* Sanitizer use, during development/debugging.
+ */
+#undef eslENABLE_ASAN
+#undef eslENABLE_TSAN
+
 #endif /*P7_CONFIGH_INCLUDED*/
 

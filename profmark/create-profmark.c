@@ -1169,6 +1169,7 @@ remove_fragments(const ESL_MSA *msa, float fragthresh, int *V, int *ret_nV)
   *ret_nV = nV;
 }
 
+#if eslDEBUGLEVEL >= 1   // validate_split is expensive, and only compiled & used when debugging code
 /* validate_split()
  * 
  * Check the result of splitting <msa> into training and test sets <S>
@@ -1226,6 +1227,7 @@ validate_split(PM_CONFIG *cfg, const ESL_MSA *msa, const int *S, int nS, const i
                     msa->name, pid, S[i], S[j], msa->sqname[S[i]], msa->sqname[S[j]]);
       }
 }
+#endif //eslDEBUGLEVEL >= 1
 
 
 /* write_msa_subset()

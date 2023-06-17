@@ -939,14 +939,15 @@ p7_tophits_frame(int nuc_from, int nuc_to)
 /* Function:  p7_tophits_ComputeNhmmerEvalues()
  * Synopsis:  Compute e-values based on pvalues and window sizes.
  *
- * Purpose:   After nhmmer pipeline has completed, the th object contains
- *               hits where the p-values haven't yet been converted to
- *               e-values. That modification depends on an established
- *               number of sequences. In nhmmer, this is computed as N/W,
- *               for a database of N residues, where W is some standardized
- *               window length (nhmmer passes om->max_length). E-values are
- *               set here based on that formula. We also set the sortkey so
- *               the output will be sorted correctly.
+ * Purpose:   After nhmmer pipeline has completed, the <th> object
+ *            contains hits where the P-values haven't yet been
+ *            converted to E-values. That modification depends on an
+ *            established number of sequences. In nhmmer, this is
+ *            computed as N/W, for a database of N residues, where W
+ *            is some standardized window length (nhmmer passes
+ *            om->max_length). E-values are set here based on that
+ *            formula. We also set the sortkey so the output will be
+ *            sorted correctly.
  *
  * Returns:   <eslOK> on success.
  */

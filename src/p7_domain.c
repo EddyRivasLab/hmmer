@@ -758,7 +758,7 @@ static void utest_Deserialize_error_conditions(){
     esl_fatal(msg);
   }
   //printf("Test 3 passed\n");
-
+  free(buf);
   p7_domain_Destroy(deserial);
   p7_domain_Destroy(sampled);
   return;
@@ -808,7 +808,8 @@ static void utest_Serialize(int ntrials){
     if(p7_domain_Compare(serial[i], deserial, 1e-4, 1e-4) != eslOK){ // deserialized structure didn't match serialized
       esl_fatal(msg);
     }
-
+    p7_domain_Destroy(deserial);
+    deserial = p7_domain_Create_empty();
   }
   // haven't failed yet, so we've succeeded.  Clean up and exit
   free(*buf);
@@ -818,6 +819,7 @@ static void utest_Serialize(int ntrials){
   }
   free(serial);
   p7_domain_Destroy(deserial);
+  esl_rand64_Destroy(rng);
 
   return;
 
