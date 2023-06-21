@@ -109,15 +109,19 @@ typedef struct p7_server_masternode_state{
   //! Lock on the full hit message pool
   pthread_mutex_t full_hit_message_pool_lock;
 
-  //! Lock used in conjunction with the start pthreads conditional
+  //! Lock used to tell the hit wait thread that a new search has started
   pthread_mutex_t hit_wait_lock;
-  
+
+  //! Lock used to wait until the hit thread has started
+  pthread_mutex_t hit_thread_start_lock;
+
   //! Linked list of empty P7_SERVER_MESSAGE structures, used to reduce malloc/free overhead
   volatile P7_SERVER_MESSAGE *empty_hit_message_pool;  
   
   //! Linked list (LIFO ordered) of P7_SERVER_MESSAGE structures containing messages of hits that have arrived but not been processed
   volatile P7_SERVER_MESSAGE *full_hit_message_pool;
   
+ 
   //! Signal used to tell the hit thread when to start processing hits
   pthread_cond_t start;
   

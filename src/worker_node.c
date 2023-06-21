@@ -748,7 +748,8 @@ int p7_server_workernode_release_threads(P7_SERVER_WORKERNODE_STATE *workernode)
 */
 void p7_server_workernode_end_search(P7_SERVER_WORKERNODE_STATE *workernode){
 
-// It is an error to call this thread while the worker threads are working, so don't need to lock anything
+  pthread_mutex_lock(&(workernode->wait_lock)); //prevent race condition between
+  // worker threads reading and us destroying structures
 
 //check code that verifies that all sequences were processed.  Will only work in a configuration with one worker node
 #ifdef TEST_SEQUENCES   
@@ -782,6 +783,7 @@ void p7_server_workernode_end_search(P7_SERVER_WORKERNODE_STATE *workernode){
 
   p7_tophits_Destroy(workernode->tophits);
   workernode->tophits = p7_tophits_Create(); // Create new tophits for next search
+  pthread_mutex_unlock(&(workernode->wait_lock)); 
 }
 
 
@@ -814,14 +816,14 @@ void *p7_server_worker_thread(void *worker_argument){
   }
 
   // Tell the master thread that we're awake and ready to go
-  if(pthread_mutex_lock(&(workernode->wait_lock))){  // Use blocking lock here because we may be waiting a while
+  if(pthread_mutex_lock(&(workernode->wait_lock))){
     p7_Die("Couldn't acquire wait_lock mutex in p7_server_worker_thread");
   }
 
   workernode->num_waiting +=1;  //mark that we're now waiting for the go signal
-
-  pthread_cond_wait(&(workernode->start), &(workernode->wait_lock)); // wait until master tells us to go
-
+  while(workernode->num_waiting >0){ // catch spurious wakeup
+    pthread_cond_wait(&(workernode->start), &(workernode->wait_lock)); // wait until master tells us to go
+  }
   pthread_mutex_unlock(&(workernode->wait_lock));  // We come out of pthread_cond_wait holding the lock,
   // need to release it to let the next thread go
 
@@ -906,11 +908,12 @@ void *p7_server_worker_thread(void *worker_argument){
         p7_Die("Workernode told to start search of type IDLE");
         break;
     }
+
     pthread_mutex_lock(&(workernode->wait_lock));
-
     workernode->num_waiting +=1;  //mark that we're now waiting for the go signal
-    pthread_cond_wait(&(workernode->start), &(workernode->wait_lock)); // wait until master tells us to go
-
+    while(workernode->num_waiting > 0){ // catch spurious wakeup
+      pthread_cond_wait(&(workernode->start), &(workernode->wait_lock)); // wait until master tells us to go
+    }
     pthread_mutex_unlock(&(workernode->wait_lock));  // We come out of pthread_cond_wait holding the lock
   }
 
@@ -1010,8 +1013,6 @@ void p7_server_workernode_main(int argc, char **argv, int my_rank, MPI_Datatype 
       case P7_SERVER_SHUTDOWN_WORKERS:
       // master wants to shut down the workers.
 
-        // spurious barrier for testing so that master doesn't exit immediately
-        MPI_Barrier(MPI_COMM_WORLD);
         workernode->shutdown = 1; // tell threads to shut down
         p7_server_workernode_release_threads(workernode); // release any waiting threads to process the shutdown
         p7_server_workernode_Destroy(workernode);
@@ -1623,16 +1624,16 @@ static uint64_t worker_thread_get_chunk(P7_SERVER_WORKERNODE_STATE *workernode, 
       queue_depth += 1;
     }
   }
+  pthread_mutex_lock(&(workernode->work_request_lock));
   if(need_more_work && !workernode->work_requested && !workernode->master_queue_empty && !workernode->request_work){
     // We need more work and nobody else has requested some
-    pthread_mutex_lock(&(workernode->work_request_lock));
+  
     if(!workernode->work_requested && !workernode->master_queue_empty && !workernode->request_work){
       // re-check whether we should send a request once we've locked the request variable lock to avoid race conditions
       workernode->request_work = 1;
     }
-    pthread_mutex_unlock(&(workernode->work_request_lock));
   }
-
+  pthread_mutex_unlock(&(workernode->work_request_lock));
   // Return the start and end of the grabbed work chunk through start, end
   *start = my_start;
   *end = my_end;
@@ -1668,7 +1669,7 @@ int32_t worker_thread_steal(P7_SERVER_WORKERNODE_STATE *workernode, uint32_t my_
   int64_t stealable_work = 0;
 
   for(i = 0; i < workernode->num_threads; i++){
-     if((workernode->work[i].start != -1) && (workernode->work[i].start < workernode->work[i].end) && (workernode->thread_state[i].mode == FRONTEND)){ 
+    if((workernode->work[i].start != -1) && (workernode->work[i].start < workernode->work[i].end) && (workernode->thread_state[i].mode == FRONTEND)){ 
     // There's some stealable work in the potential victim's queue.
       stealable_work = workernode->work[i].end - workernode->work[i].start;
       if(stealable_work > most_work){
@@ -1676,6 +1677,7 @@ int32_t worker_thread_steal(P7_SERVER_WORKERNODE_STATE *workernode, uint32_t my_
         victim_id = i;
       }
     }
+
   }
 
   if(victim_id == -1){
@@ -1886,8 +1888,8 @@ static int workernode_perform_search_or_scan(P7_SERVER_WORKERNODE_STATE *workern
           else{
             workernode->master_queue_empty = 1;  // The master is out of work to give
           }
-          pthread_mutex_lock(&(workernode->work_request_lock));
-       
+
+          pthread_mutex_lock(&(workernode->work_request_lock));       
           workernode->work_requested = 0; // no more pending work
           pthread_mutex_unlock(&(workernode->work_request_lock));
   

@@ -555,12 +555,11 @@ clientside_loop(CLIENTSIDE_ARGS *data)
     if ((status = esl_opt_ProcessSpoof(opts, opt_str)) != eslOK) client_msg_longjmp(data->sock_fd, status, &jmp_env, "Failed to parse options string: %s", opt_str);
     if ((status = esl_opt_VerifyConfig(opts))         != eslOK) client_msg_longjmp(data->sock_fd, status, &jmp_env, "Failed to parse options string: %s", opt_str);
 
-    if (esl_opt_IsUsed(opts, "--db")) {
-      dbx = esl_opt_GetInteger(opts, "--db");
-      if((dbx < 1) || (dbx > data->masternode->num_databases)){
-        client_msg_longjmp(data->sock_fd, eslEINVAL, &jmp_env, "Nonexistent database %d specified.  Valid database ID's for this server range from 1 to %d\n", dbx, data->masternode->num_databases);
+    dbx = esl_opt_GetInteger(opts, "--db");
+    if((dbx < 1) || (dbx > data->masternode->num_databases)){
+      client_msg_longjmp(data->sock_fd, eslEINVAL, &jmp_env, "Nonexistent database %d specified.  Valid database ID's for this server range from 1 to %d\n", dbx, data->masternode->num_databases);
       }
-    }    
+       
     if(dbx == 0) {
       client_msg_longjmp(data->sock_fd, eslEINVAL, &jmp_env, "No search database specified, --db <database #> is required");
     }
@@ -907,11 +906,13 @@ P7_SERVER_MASTERNODE_STATE *p7_server_masternode_Create(uint32_t num_shards, int
       p7_Fail("Unable to create mutex in p7_server_masternode_Create");
     }
 
-  // Hit thread starts out not ready.
-  the_node->hit_thread_ready = 0;
+  if(pthread_mutex_init(&(the_node->hit_thread_start_lock), NULL)){
+      p7_Fail("Unable to create mutex in p7_server_masternode_Create");
+  }
 
   // init the start contition variable
   pthread_cond_init(&(the_node->start), NULL);
+
   the_node->shutdown = 0; // Don't shutdown immediately
   return(the_node);
 
@@ -1279,7 +1280,7 @@ int process_search(P7_SERVER_MASTERNODE_STATE *masternode, P7_SERVER_QUEUE_DATA 
 #endif
 }
 
-void process_shutdown(P7_SERVER_MASTERNODE_STATE *masternode, MPI_Datatype *server_mpitypes){
+void process_shutdown(P7_SERVER_MASTERNODE_STATE *masternode, P7_SERVER_QUEUE_DATA *query, MPI_Datatype *server_mpitypes){
   P7_SERVER_COMMAND the_command;
   the_command.type = P7_SERVER_SHUTDOWN_WORKERS;
 #ifndef HAVE_MPI
@@ -1295,12 +1296,41 @@ void process_shutdown(P7_SERVER_MASTERNODE_STATE *masternode, MPI_Datatype *serv
 
   pthread_cond_broadcast(&(masternode->start));
 
+  HMMD_SEARCH_STATUS sstatus;
+  sstatus.status = eslOK;
+  sstatus.type = HMMD_CMD_SHUTDOWN;
+  sstatus.msg_size = 0; // no follow-on data for a search
+  uint8_t **buf, *buf_ptr;
+  buf_ptr = NULL;
+  buf = &(buf_ptr);
+  uint32_t buf_offset = 0;
+  uint32_t nalloc = 0;
+  int fd = query->sock;
+  if(hmmd_search_status_Serialize(&(sstatus), buf, &buf_offset, &nalloc) != eslOK){
+    LOG_FATAL_MSG("Serializing HMMD_SEARCH_STATUS failed", errno);
+  }
+
+  // Now, send the buffers in the reverse of the order they were built
+  /* send back a successful status message */
+  int n = buf_offset;
+
+  if (writen(fd, buf_ptr, n) != n) {
+    p7_syslog(LOG_ERR,"[%s:%d] - writing %s error %d - %s\n", __FILE__, __LINE__, query->ip_addr, errno, strerror(errno));
+    goto CLEAR;
+  }
+  if(buf_ptr != NULL){
+    free(buf_ptr);
+  }
   // spurious barrier for testing so that master doesn't exit immediately
-  MPI_Barrier(MPI_COMM_WORLD);
   printf("Master node shutting down\n");
   // Clean up memory
-  MPI_Finalize(); // Tell MPI we're done
   p7_server_masternode_Destroy(masternode);
+  return;
+  CLEAR:
+    if(buf_ptr!= NULL){
+      free(buf_ptr);
+    }
+    return;
 #endif
 }
 // p7_master_node_main
@@ -1390,6 +1420,7 @@ void p7_server_master_node_main(int argc, char ** argv, MPI_Datatype *server_mpi
   if(pthread_attr_init(&attr)){
     p7_Fail("Couldn't create pthread attr structure in master_node_main");
   }
+
   if(pthread_create(&(masternode->hit_thread_object), &attr, p7_server_master_hit_thread, (void *) &hit_argument)){
     p7_Fail("Unable to create hit thread in master_node_main");
   }
@@ -1397,9 +1428,15 @@ void p7_server_master_node_main(int argc, char ** argv, MPI_Datatype *server_mpi
     p7_Fail("Couldn't destroy pthread attr structure in master_node_main");
   }
 
-  while(!masternode->hit_thread_ready){
-    // wait for the hit thread to start up;
+  int hit_thread_running =0;
+  while(!hit_thread_running){ // This is overkill, but makes the thread sanitizer happy and only happens once on startup
+    pthread_mutex_lock(&(masternode->hit_thread_start_lock));
+    if(masternode->hit_thread_ready){
+      hit_thread_running =1;
+    }
+    pthread_mutex_unlock(&(masternode->hit_thread_start_lock));
   }
+
   struct timeval start, end;
 
     /* initialize the search stack, set it up for interthread communication  */
@@ -1416,31 +1453,37 @@ void p7_server_master_node_main(int argc, char ** argv, MPI_Datatype *server_mpi
 
   int shutdown = 0;
   P7_SERVER_QUEUE_DATA     *query      = NULL;
-  while (!shutdown &&  esl_stack_PPop(cmdstack, (void **) &query) == eslOK) {
-    printf("Processing command %d from %s\n", query->cmd_type, query->ip_addr);
-    fflush(stdout);
+  while (!shutdown){
 
-    //worker_comm.range_list = NULL;
+    if(esl_stack_PPop(cmdstack, (void **) &query) == eslOK) {
+      printf("Processing command %d from %s\n", query->cmd_type, query->ip_addr);
+      fflush(stdout);
 
-    switch(query->cmd_type) {
-    case HMMD_CMD_SEARCH:
-      process_search(masternode, query, server_mpitypes); 
-      break;
-    case HMMD_CMD_SCAN:        
-      process_search(masternode, query, server_mpitypes);
-      break;
-    case HMMD_CMD_SHUTDOWN:    
-      process_shutdown(masternode, server_mpitypes);
-      p7_syslog(LOG_ERR,"[%s:%d] - shutting down...\n", __FILE__, __LINE__);
-      shutdown = 1;
-      break;
-    default:
-      p7_syslog(LOG_ERR,"[%s:%d] - unknown command %d from %s\n", __FILE__, __LINE__, query->cmd_type, query->ip_addr);
-      break;
+      //worker_comm.range_list = NULL;
+
+      switch(query->cmd_type) {
+      case HMMD_CMD_SEARCH:
+        process_search(masternode, query, server_mpitypes); 
+        break;
+      case HMMD_CMD_SCAN:        
+        process_search(masternode, query, server_mpitypes);
+        break;
+      case HMMD_CMD_SHUTDOWN:    
+        process_shutdown(masternode, query, server_mpitypes);
+        p7_syslog(LOG_ERR,"[%s:%d] - shutting down...\n", __FILE__, __LINE__);
+        shutdown = 1;
+        break;
+      default:
+        p7_syslog(LOG_ERR,"[%s:%d] - unknown command %d from %s\n", __FILE__, __LINE__, query->cmd_type, query->ip_addr);
+        break;
+      }
+      p7_server_queue_data_Destroy(query);
     }
-    p7_server_queue_data_Destroy(query);
   }
-
+  if(shutdown == 0){
+    p7_Die("Bad result from esl_stack_PPop\n");
+  }
+  MPI_Finalize();
   exit(0);
   // GOTO target used to catch error cases from ESL_ALLOC
   ERROR:
@@ -1467,10 +1510,11 @@ void *p7_server_master_hit_thread(void *argument){
   P7_SERVER_MASTERNODE_STATE *masternode = the_argument->masternode;
 
   pthread_mutex_lock(&(masternode->hit_wait_lock));
+  pthread_mutex_lock(&(masternode->hit_thread_start_lock)); // This lock/unlock is unnecessary because only one thread ever
+  // writes this value, but it makes sanitize-threads happy
+  masternode->hit_thread_ready = 1;
+  pthread_mutex_unlock(&(masternode->hit_thread_start_lock));
 
-
-
-  masternode->hit_thread_ready = 1; // tell main thread we're ready to go
 
   while(1){ // loop until master tells us to exit
     pthread_cond_wait(&(masternode->start), &(masternode->hit_wait_lock)); // wait until master tells us to go

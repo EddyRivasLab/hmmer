@@ -30,6 +30,7 @@ typedef struct p7_server_chunk_reply{
 } P7_SERVER_CHUNK_REPLY;
 
 //Define the command-line options for all the server and client programs here to keep them synchronized
+#define SERVOPTS    "-s,--cport,--db,--db_ranges,--jack,--shutdown"
 #define REPOPTS     "-E,-T,--cut_ga,--cut_nc,--cut_tc"
 #define DOMREPOPTS  "--domE,--domT,--cut_ga,--cut_nc,--cut_tc"
 #define INCOPTS     "--incE,--incT,--cut_ga,--cut_nc,--cut_tc"
@@ -43,11 +44,12 @@ static ESL_OPTIONS server_Client_Options[] = {
   /* name           type      default  env  range     toggles   reqs   incomp              help                                                      docgroup*/
   { "-h",           eslARG_NONE,   FALSE, NULL, NULL,    NULL,  NULL,  NULL,           "show brief help on version and usage",                         1 },
   /* Interface with server */
-  { "-s",           eslARG_STRING,   "localhost", NULL, NULL,    NULL,  NULL,  NULL,            "name of the machine running hmmserver (default localhost)",                         8 },
-  { "--cport",      eslARG_INT,     "51371",  NULL, "49151<n<65536",NULL,  NULL,  "--worker",      "port to use for client/server communication",                 12 },
-  { "--db",           eslARG_INT,   "-1", NULL, NULL,    NULL,  NULL,  NULL,            "number of the database to search (default 1)",                         8 },
-  { "--db_ranges",eslARG_STRING,     NULL,  NULL,  NULL,   NULL, NULL, NULL,         "range(s) of sequences within database that will be searched",  12 },
-  { "--jack",       eslARG_INT,         "0", NULL, NULL,    NULL,  NULL,  NULL,         "number of rounds of jackhmmer search to perform (default 0).  Note that a one-round jackhmmer search is equivalent to a phmmer search and that this option is only allowed when the query object is one or more protein sequences", 8},
+  { "-s",           eslARG_STRING,   "localhost", NULL, NULL,    NULL,  NULL,  NULL,            "name of the server to connect to",                         42 },
+ { "--cport",      eslARG_INT,     "51371",  NULL, "49151<n<65536",NULL,  NULL,  "--worker",      "port to use for client/server communication",                 42 },
+  { "--db",           eslARG_INT,   "1", NULL, NULL,    NULL,  NULL,  NULL,            "number of the database to search",                         42 },
+  { "--db_ranges",eslARG_STRING,     NULL,  NULL,  NULL,   NULL, NULL, NULL,         "range(s) of sequences within database that will be searched",  42 },
+  { "--jack",     eslARG_INT, "1",  NULL,  NULL,   NULL, NULL, NULL,         "number of rounds of jackhmmer search to perform",  42},
+  { "--shutdown",eslARG_STRING,     "",  NULL,  NULL,   NULL, NULL, NULL,         "send shutdown command to server with password",  42 },
       /* Control of output */
   { "-o",           eslARG_OUTFILE, NULL, NULL, NULL,    NULL,  NULL,  NULL,            "direct output to file <f>, not stdout",                        2 },
   { "-A",           eslARG_OUTFILE, NULL, NULL, NULL,    NULL,  NULL,  NULL,            "save multiple alignment of all hits to file <f>",              2 },

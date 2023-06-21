@@ -116,7 +116,8 @@ process_commandline(int argc, char **argv, ESL_GETOPTS **ret_go, char **ret_quer
       esl_usage(stdout, argv[0], usage);
       if (puts("\nBasic options:")                                           < 0) ESL_XEXCEPTION_SYS(eslEWRITE, "write failed");
       esl_opt_DisplayHelp(stdout, go, 1, 2, 80); /* 1= group; 2 = indentation; 80=textwidth*/
-
+      if (puts("\nOptions that affect communication with the server:")< 0) ESL_XEXCEPTION_SYS(eslEWRITE, "write failed");
+      esl_opt_DisplayHelp(stdout, go, 42, 2, 80);
       if (puts("\nOptions directing output:")                                < 0) ESL_XEXCEPTION_SYS(eslEWRITE, "write failed");
       esl_opt_DisplayHelp(stdout, go, 2, 2, 80); 
 
@@ -136,29 +137,34 @@ process_commandline(int argc, char **argv, ESL_GETOPTS **ret_go, char **ret_quer
       esl_opt_DisplayHelp(stdout, go, 12, 2, 80); 
       exit(0);
     }
-
-  if (esl_opt_ArgNumber(go)                  != 1)     { if (puts("Incorrect number of command line arguments.")      < 0) ESL_XEXCEPTION_SYS(eslEWRITE, "write failed"); goto FAILURE; }
-  if ((*ret_query= esl_opt_GetArg(go, 1)) == NULL)  { if (puts("Failed to get <queryfile> argument on command line") < 0) ESL_XEXCEPTION_SYS(eslEWRITE, "write failed"); goto FAILURE; }
-  if (esl_opt_IsUsed(go, "--db")) {
+  if(!esl_opt_IsUsed(go, "--shutdown")){ // Normal search
+    if (esl_opt_ArgNumber(go) != 1 )     { if (puts("Incorrect number of command line arguments.")      < 0) ESL_XEXCEPTION_SYS(eslEWRITE, "write failed"); goto FAILURE; }
+    if ((*ret_query= esl_opt_GetArg(go, 1)) == NULL)  { if (puts("Failed to get <queryfile> argument on command line") < 0) ESL_XEXCEPTION_SYS(eslEWRITE, "write failed"); goto FAILURE; }
+    if (esl_opt_IsUsed(go, "--db")) {
       dbx = esl_opt_GetInteger(go, "--db");
     } 
-  if (dbx <= 0){
-    dbx = 1;  //Default to searching first database
-  }
+    if (dbx <= 0){
+      dbx = 1;  //Default to searching first database
+    }
   // Figure out how many bytes we need for the string that contains the number of the database to search.
   // Could probably just make this 20 or so and never have an issue, but ...
-  int db_str_size = 1; // 1 byte for the end-of-string character
-  int temp_db = dbx;
-  while(temp_db > 0){
-    db_str_size+=1;
-    temp_db = temp_db/10;
-  }
-  ESL_ALLOC(*ret_db, db_str_size); 
+    int db_str_size = 1; // 1 byte for the end-of-string character
+    int temp_db = dbx;
+    while(temp_db > 0){
+      db_str_size+=1;
+      temp_db = temp_db/10;
+    }
+    ESL_ALLOC(*ret_db, db_str_size); 
 
-  int printed_bytes = snprintf(*ret_db, db_str_size, "%d", dbx);
-  if(printed_bytes >=db_str_size){
-    //we didn't allocate enough space
-    p7_Die("Failed to allocate enough space for the database string in process_commandline().\n");
+    int printed_bytes = snprintf(*ret_db, db_str_size, "%d", dbx);
+    if(printed_bytes >=db_str_size){
+      //we didn't allocate enough space
+      p7_Die("Failed to allocate enough space for the database string in process_commandline().\n");
+    }
+  }
+  else{
+    *ret_db = NULL;  // No database for shutdown command
+    *ret_query = NULL;  // Ditto
   }
   *ret_go = go;
   return eslOK;
@@ -322,6 +328,43 @@ main(int argc, char **argv)
   /* Establish the connection to the server */
   if (connect(sock, (struct sockaddr *) &serv_addr, sizeof(serv_addr)) < 0) {
     p7_Die("[%s:%d] connect error %d - %s\n", __FILE__, __LINE__, errno, strerror(errno));
+  }
+
+  // If we're sending a shutdown command, do that
+  if(esl_opt_IsUsed(go, "--shutdown")){
+    if(rem < (14 + strlen(esl_opt_GetString(go, "--shutdown")))){ // Should never happen, but just to be safe
+      ESL_REALLOC(cmd, 14+ strlen(esl_opt_GetString(go, "--shutdown")));
+    }
+    strcpy(cmd, "!shutdown ");
+    strcat(cmd, esl_opt_GetString(go, "--shutdown"));
+    strcat(cmd, "\n//");
+    uint32_t send_command_length = strlen(cmd);
+    uint32_t serialized_send_command_length = esl_hton32(send_command_length);
+      if (writen(sock, &serialized_send_command_length, sizeof(uint32_t)) != sizeof(uint32_t)) {
+        p7_Die("[%s:%d] write (size %" PRIu64 ") error %d - %s\n", __FILE__, __LINE__, n, errno, strerror(errno));
+      }
+      printf("sending %s to server, length %d\n", cmd, send_command_length);
+      if (writen(sock, cmd, send_command_length) != send_command_length) {
+        p7_Die("[%s:%d] write (size %" PRIu64 ") error %d - %s\n", __FILE__, __LINE__, n, errno, strerror(errno));
+      }
+    free(cmd);
+
+    // Get the status structure back from the server
+    char *buf = malloc(HMMD_SEARCH_STATUS_SERIAL_SIZE);
+    buf_offset = 0;
+    int n = HMMD_SEARCH_STATUS_SERIAL_SIZE;
+    int size;
+    if(buf == NULL){
+      p7_Die("Unable to allocate memory for search status structure\n");
+    }
+
+    if ((size = readn(sock, buf, n)) == -1) {
+      p7_Die("[%s:%d] read error %d - %s\n", __FILE__, __LINE__, errno, strerror(errno));
+    }
+    printf("Server acknowleged shutdown command\n");
+    esl_getopts_Destroy(go);
+    close(sock);
+    exit(0);
   }
 
   if(qf == NULL){
