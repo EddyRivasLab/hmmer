@@ -370,7 +370,6 @@ serial_master(ESL_GETOPTS *go, struct cfg_s *cfg)
   ESL_SQ          *qsqDNA                    = NULL; /* DNA query sequence                                                 */
 
   ESL_GENCODE     *gcode                     = NULL;
-  ESL_GENCODE_WORKSTATE *wrk                 = NULL;
   /* end hmmscant */
 
   w = esl_stopwatch_Create();
@@ -551,6 +550,7 @@ serial_master(ESL_GETOPTS *go, struct cfg_s *cfg)
 
        p7_pipeline_Destroy(info[i].pli);
        p7_tophits_Destroy(info[i].th);
+       esl_gencode_WorkstateDestroy(info[i].wrk);
      }
 
      p7_hmmfile_Close(hfp);
@@ -582,9 +582,6 @@ serial_master(ESL_GETOPTS *go, struct cfg_s *cfg)
 
      prev_char_cnt += qsqDNA->n;
      esl_sq_Reuse(qsqDNA);
-
-     for (i = 0; i < infocnt; ++i)
-       esl_sq_ReuseBlock(info[i].wrk->orf_block);
      
 
   } /*end hmmscant while loop */
@@ -601,10 +598,9 @@ serial_master(ESL_GETOPTS *go, struct cfg_s *cfg)
 
 
   /* Cleanup - prepare for successful exit */
-  for (i = 0; i < infocnt; ++i) {
+  for (i = 0; i < infocnt; ++i) 
     p7_bg_Destroy(info[i].bg);
-    esl_gencode_WorkstateDestroy(info[i].wrk);
-  }
+    
 
 
 #ifdef HMMER_THREADS
@@ -620,7 +616,6 @@ serial_master(ESL_GETOPTS *go, struct cfg_s *cfg)
 
   free(info);
 
-  esl_gencode_WorkstateDestroy(wrk);
   esl_gencode_Destroy(gcode);
 
   esl_sq_Destroy(qsqDNA); 
