@@ -115,6 +115,9 @@ typedef struct p7_server_masternode_state{
   //! Lock used to wait until the hit thread has started
   pthread_mutex_t hit_thread_start_lock;
 
+  //! Lock on the masternode's main tophits object
+  pthread_mutex_t master_tophits_lock;
+
   //! Linked list of empty P7_SERVER_MESSAGE structures, used to reduce malloc/free overhead
   volatile P7_SERVER_MESSAGE *empty_hit_message_pool;  
   

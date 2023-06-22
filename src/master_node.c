@@ -1,6 +1,6 @@
 //! functions that run on the master node of a server
 #include "p7_config.h"
-
+ 
 #include <stdio.h>
 #include <string.h>
 #include <sys/time.h>
@@ -92,6 +92,7 @@ static P7_SERVER_QUEUE_DATA * p7_server_queue_data_Create(){
 
 ERROR:
   p7_Die("Unable to allocate memory in p7_server_queue_data_Create()\n");
+  return NULL; // Never get here, but silences compiler warning
 }
 
 
@@ -451,17 +452,13 @@ process_ServerCmd(char *ptr, CLIENTSIDE_ARGS *data)
 static int
 clientside_loop(CLIENTSIDE_ARGS *data)
 {
-  int                status;
+  int                status = eslOK;
 
   char              *ptr;
   char              *buffer;
   char              *opt_str;
 
   int                dbx;
-  int                buf_size;
-  int                remaining;
-  int                amount;
-  int                eod;
   int                n;
 
   P7_HMM            *hmm     = NULL;     /* query HMM                      */
@@ -480,8 +477,7 @@ clientside_loop(CLIENTSIDE_ARGS *data)
   char               timestamp[32];
   int search_type = -1;
   int slen;
-
-  amount = 0;
+  
   uint32_t serialized_command_length, command_length;
   /* Receive message from client with size of command */
   if ((n = read(data->sock_fd, &serialized_command_length, sizeof(uint32_t))) <0) {
@@ -575,13 +571,13 @@ clientside_loop(CLIENTSIDE_ARGS *data)
       uint64_t min_index = data->masternode->database_shards[dbx-1]->directory[0].index;
       uint64_t max_index = data->masternode->database_shards[dbx-1]->directory[data->masternode->database_shards[dbx-1]->num_objects -1].index;
       while ((status = esl_strtok(&range_string, ",", &range) ) == eslOK){
-        uint64_t start, end;
+        int64_t start, end;
         status = esl_regexp_ParseCoordString(range, &start, &end);
         // These errors should never occur, because we sanity check-the range when receiving the search command
         if (status == eslESYNTAX) client_msg_longjmp(data->sock_fd, eslEINVAL, &jmp_env,"--db_ranges takes coords <from>..<to>; %s not recognized", range);
         if (status == eslFAIL)    client_msg_longjmp(data->sock_fd, eslEINVAL, &jmp_env,"Failed to find <from> or <to> coord in %s", range);
-        if(start < min_index | start > max_index) client_msg_longjmp(data->sock_fd, eslEINVAL, &jmp_env,"Start of range %lu was outside of database index range %lu to %lu", start, min_index, max_index);
-        if(end < min_index | end > max_index) client_msg_longjmp(data->sock_fd, eslEINVAL, &jmp_env,"End of range %lu was outside of database index range %lu to %lu", end, min_index, max_index);
+        if((start < min_index) | (start > max_index)) client_msg_longjmp(data->sock_fd, eslEINVAL, &jmp_env,"Start of range %lu was outside of database index range %lu to %lu", start, min_index, max_index);
+        if((end < min_index) | (end > max_index)) client_msg_longjmp(data->sock_fd, eslEINVAL, &jmp_env,"End of range %lu was outside of database index range %lu to %lu", end, min_index, max_index);
         
         printf("range found of %lu to %lu\n", start, end);
       }
@@ -645,8 +641,8 @@ clientside_loop(CLIENTSIDE_ARGS *data)
         client_msg_longjmp(data->sock_fd, status, &jmp_env, "Database %d contains HMM data, and a HMM cannot be used to search a HMM database", dbx);
       }
       abc = esl_alphabet_Create(eslAMINO);
-      int start_pos = 0;
-      p7_hmm_Deserialize(ptr+1, &start_pos, abc, &hmm);  // Grab the serialized HMM and its alphabet
+      uint32_t start_pos = 0;
+      p7_hmm_Deserialize((const uint8_t *) ptr+1, &start_pos, abc, &hmm);  // Grab the serialized HMM and its alphabet
       search_type = HMMD_CMD_SEARCH;
 
     }
@@ -740,8 +736,7 @@ discard_function(void *elemp, void *args)
 }
 
 
-static void *
-clientside_thread(void *arg)
+static void *clientside_thread(void *arg)
 {
   int              eof;
   CLIENTSIDE_ARGS *data = (CLIENTSIDE_ARGS *)arg;
@@ -759,11 +754,10 @@ clientside_thread(void *arg)
 
   close(data->sock_fd);
   free(data);
-
+  pthread_exit(NULL);
 }
 
-static void *
-client_comm_thread(void *arg)
+static void *client_comm_thread(void *arg)
 {
   int                  n;
   int                  fd;
@@ -909,6 +903,9 @@ P7_SERVER_MASTERNODE_STATE *p7_server_masternode_Create(uint32_t num_shards, int
   if(pthread_mutex_init(&(the_node->hit_thread_start_lock), NULL)){
       p7_Fail("Unable to create mutex in p7_server_masternode_Create");
   }
+  if(pthread_mutex_init(&(the_node->master_tophits_lock), NULL)){
+      p7_Fail("Unable to create mutex in p7_server_masternode_Create");
+  }
 
   // init the start contition variable
   pthread_cond_init(&(the_node->start), NULL);
@@ -994,8 +991,10 @@ void p7_server_masternode_Setup(uint32_t num_shards, uint32_t num_databases, cha
     P7_SHARD *current_shard;
 
     datafile = fopen(database_names[i], "r");
-    int silence_warning;
-    silence_warning = fread(id_string, 13, 1, datafile); //grab the first 13 characters of the file to determine the type of database it holds
+   
+    if(fread(id_string, 13, 1, datafile)!=1){
+      p7_Die("p7_server_masternode_Setup couldn't read the first 13 characters of file %s\n", database_names[i]);
+    }//grab the first 13 characters of the file to determine the type of database it holds
     fclose(datafile);
         
     if(!strncmp(id_string, "HMMER3", 5)){
@@ -1023,7 +1022,7 @@ void p7_server_masternode_Setup(uint32_t num_shards, uint32_t num_databases, cha
       masternode->database_shards[i] = current_shard;
     }
 
-  }
+    }
   return;
 
 ERROR:
@@ -1072,7 +1071,6 @@ int process_search(P7_SERVER_MASTERNODE_STATE *masternode, P7_SERVER_QUEUE_DATA 
 
 #ifdef HAVE_MPI
   struct timeval start, end;
-  uint64_t search_increment = 1;
   int status;
   P7_SERVER_COMMAND the_command;
   char *query_buffer;
@@ -1131,7 +1129,7 @@ int process_search(P7_SERVER_MASTERNODE_STATE *masternode, P7_SERVER_QUEUE_DATA 
   masternode->hit_messages_received = 0;
   gettimeofday(&start, NULL);
   
-  uint64_t search_start, search_end, chunk_size, search_length;
+  uint64_t search_start, search_end, search_length;
   if (esl_opt_IsUsed(query->opts, "--db_ranges")){
     for(int which_shard = 0; which_shard< masternode->num_shards; which_shard++){ // create work queue for each shard
       char *orig_range_string = esl_opt_GetString(query->opts, "--db_ranges");
@@ -1142,7 +1140,7 @@ int process_search(P7_SERVER_MASTERNODE_STATE *masternode, P7_SERVER_QUEUE_DATA 
       P7_MASTER_WORK_DESCRIPTOR *prev = NULL;
       P7_MASTER_WORK_DESCRIPTOR *current = masternode->work_queues[which_shard];
       while ( (status = esl_strtok(&range_string, ",", &range) ) == eslOK){
-        uint64_t start, end;
+        int64_t start, end;
         status = esl_regexp_ParseCoordString(range, &start, &end);
         // These errors should never occur, because we sanity check-the range when receiving the search command
         if (status == eslESYNTAX) p7_Fail("--db_ranges takes coords <from>..<to>; %s not recognized", range);
@@ -1263,8 +1261,10 @@ int process_search(P7_SERVER_MASTERNODE_STATE *masternode, P7_SERVER_QUEUE_DATA 
 
   forward_results(query, &results); 
   p7_pipeline_Destroy(masternode->pipeline);
-  p7_tophits_Destroy(masternode->tophits); //Reset for next search
+  pthread_mutex_lock(&(masternode->master_tophits_lock));
+  p7_tophits_Destroy(masternode->tophits);
   masternode->tophits = p7_tophits_Create();
+  pthread_mutex_unlock(&(masternode->master_tophits_lock));
   if(bg != NULL){
     p7_bg_Destroy(bg);
     bg = NULL;
@@ -1276,7 +1276,8 @@ int process_search(P7_SERVER_MASTERNODE_STATE *masternode, P7_SERVER_QUEUE_DATA 
   free(query_buffer);
   return eslOK;
   ERROR:
-    p7_Die("Unable to allocate memory in process_search"); 
+    p7_Die("Unable to allocate memory in process_search");
+    return eslFAIL; //silence compiler warning
 #endif
 }
 
@@ -1370,9 +1371,6 @@ void p7_server_master_node_main(int argc, char ** argv, MPI_Datatype *server_mpi
   int num_shards = esl_opt_GetInteger(go, "--num_shards");
   int num_dbs = esl_opt_GetInteger(go, "--num_dbs"); 
 
-
-
-  ESL_ALPHABET   *abc     = NULL;
   int status; // return code from ESL routines
 
   // For performance tests, we only use two databases.  That will become a command-line argument
@@ -1436,8 +1434,6 @@ void p7_server_master_node_main(int argc, char ** argv, MPI_Datatype *server_mpi
     }
     pthread_mutex_unlock(&(masternode->hit_thread_start_lock));
   }
-
-  struct timeval start, end;
 
     /* initialize the search stack, set it up for interthread communication  */
   ESL_STACK *cmdstack = esl_stack_PCreate();
@@ -1549,7 +1545,9 @@ void *p7_server_master_hit_thread(void *argument){
         }
 
         pthread_mutex_unlock(&(masternode->full_hit_message_pool_lock));
+	pthread_mutex_lock(&(masternode->master_tophits_lock));
         p7_tophits_Merge(masternode->tophits, the_message->tophits);
+	pthread_mutex_unlock(&(masternode->master_tophits_lock));
         p7_tophits_Destroy(the_message->tophits);
         the_message->tophits = NULL;
         if(the_message->status.MPI_TAG == HMMER_HIT_FINAL_MPI_TAG){
@@ -1596,8 +1594,6 @@ void p7_masternode_message_handler(P7_SERVER_MASTERNODE_STATE *masternode, P7_SE
 #endif
 
 #ifdef HAVE_MPI
-  int status; // return code from ESL_*ALLOC
-  int hit_messages_received = 0;
   P7_PIPELINE *temp_pipeline;
   if(*buffer_handle == NULL){
     //Try to grab a message buffer from the empty message pool
@@ -1617,17 +1613,15 @@ void p7_masternode_message_handler(P7_SERVER_MASTERNODE_STATE *masternode, P7_SE
 
   //Now, we have a buffer to potentially receive the message into
   int found_message = 0;
-  MPI_Status temp_status;
   if(MPI_Iprobe(MPI_ANY_SOURCE, MPI_ANY_TAG, MPI_COMM_WORLD, &found_message, &((*buffer_handle)->status)) != MPI_SUCCESS){
     p7_Fail("MPI_Iprobe failed in p7_masternode_message_handler\n");
   }
-
-  int message_length;
+  
   uint32_t requester_shard;
   P7_SERVER_CHUNK_REPLY the_reply;
   
   if(found_message){
-    //printf("Masternode received message\n");
+    printf("Masternode received message\n");
     // Do different things for each message type
     switch((*buffer_handle)->status.MPI_TAG){
     case HMMER_PIPELINE_STATE_MPI_TAG:
@@ -1638,9 +1632,9 @@ void p7_masternode_message_handler(P7_SERVER_MASTERNODE_STATE *masternode, P7_SE
 
       break;
     case HMMER_HIT_FINAL_MPI_TAG:
-    //  printf("HMMER_HIT_FINAL_MPI_TAG message received\n");
+      printf("HMMER_HIT_FINAL_MPI_TAG message received\n");
     case HMMER_HIT_MPI_TAG:
-    //  printf("HMMER_HIT_MPI_TAG message received\n");
+      printf("HMMER_HIT_MPI_TAG message received\n");
       // The message was a set of hits from a worker node, so copy it into the buffer and queue the buffer for processing by the hit thread
       masternode->hit_messages_received++;
       p7_tophits_MPIRecv((*buffer_handle)->status.MPI_SOURCE, (*buffer_handle)->status.MPI_TAG, MPI_COMM_WORLD, &((*buffer_handle)->buffer), &((*buffer_handle)->buffer_alloc), &((*buffer_handle)->tophits));
@@ -1706,9 +1700,8 @@ void p7_masternode_message_handler(P7_SERVER_MASTERNODE_STATE *masternode, P7_SE
   }
 
   return;
-  ERROR:  // handle errors in ESL_REALLOC
-    p7_Fail("Couldn't realloc memory in p7_masternode_message_handler");  
-    return;
+
 #endif    
 }
+
 

@@ -348,7 +348,9 @@ int p7_server_workernode_Setup(uint32_t num_databases, char **database_names, ui
     P7_SHARD *current_shard;
 
     datafile = fopen(database_names[i], "r");
-    size_t fres = fread(id_string, 13, 1, datafile); //grab the first 13 characters of the file to determine the type of database it holds
+    if(fread(id_string, 13, 1, datafile)!=1){ //grab the first 13 characters of the file to determine the type of database it holds
+      p7_Die("P7_server_workernode_Setup couldn't read the initial 13 characters of file %s.\n", database_names[i]);
+    }
     //printf("%s\n", id_string);
     fclose(datafile);
     if (!strncmp(id_string, "HMMER3", 6))
@@ -634,11 +636,6 @@ int p7_server_workernode_start_amino_vs_hmm_db(P7_SERVER_WORKERNODE_STATE *worke
   real_end = p7_shard_Find_Id_Nextlow(the_shard, end_object);
   // grab the id of the object in the database whose id is closest to end_object, but not 
   // greater 
-
-  uint64_t task_size = ((real_end - real_start)/workernode->num_threads) + 1; // +1 to not lose some objects due to round-off error
-  uint64_t task_start = real_start;
-  uint64_t task_end;
-  // Set up the statistic pipelines
 
   // decide how much work each worker thread should grab at a time.  This is definitely a parameter that could be tuned, but
   // 16 chunks/thread seems to work well so far.
@@ -988,16 +985,9 @@ void p7_server_workernode_main(int argc, char **argv, int my_rank, MPI_Datatype 
   while(MPI_Bcast(&the_command, 1, server_mpitypes[P7_SERVER_COMMAND_MPITYPE], 0, MPI_COMM_WORLD) == 
       MPI_SUCCESS){
         // We have a command to process, which gets read into the_command
-
-    int temp_pos = 0;
   
-    P7_HMM         *hmm     = NULL;
     ESL_ALPHABET   *abc     = esl_alphabet_Create(eslAMINO);
 
-    P7_PROFILE     *gm      = NULL;
-    int stop = 0;
-    uint32_t works_requested =0; // how many chunks of work have we requested?  Used for self-checks
-    uint32_t works_received =0; // how many chunks of work have we received?
     switch(the_command.type){
       case P7_SERVER_HMM_VS_SEQUENCES: // Master node wants us to compare an HMM to a database of sequences
         if(workernode_perform_search_or_scan(workernode, &the_command, abc, server_mpitypes)!= eslOK){
@@ -1318,7 +1308,6 @@ static void worker_thread_back_end_sequence_search_loop(P7_SERVER_WORKERNODE_STA
   // Grab a sequence to work on
   P7_BACKEND_QUEUE_ENTRY *the_entry = workernode_get_backend_queue_entry_from_queue(workernode);
 
-  ESL_RED_BLACK_DOUBLEKEY *the_hit_entry;
   while(the_entry != NULL){
     // There's a sequence in the queue, so do the backend comparison 
     if(workernode->search_type == SEQUENCE_SEARCH ||workernode->search_type == SEQUENCE_SEARCH_CONTINUE){
