@@ -188,8 +188,6 @@ output_header(FILE *ofp, const ESL_GETOPTS *go, char *hmmfile, char *seqfile)
 {
   p7_banner(ofp, go->argv[0], banner);
   
-  if (fprintf(ofp, "# query HMM file:                  %s\n", hmmfile)                                                                                 < 0) ESL_EXCEPTION_SYS(eslEWRITE, "write failed");
-  if (fprintf(ofp, "# target sequence database:        %s\n", seqfile)                                                                                 < 0) ESL_EXCEPTION_SYS(eslEWRITE, "write failed");
   if (esl_opt_IsUsed(go, "-o")           && fprintf(ofp, "# output directed to file:         %s\n",             esl_opt_GetString(go, "-o"))           < 0) ESL_EXCEPTION_SYS(eslEWRITE, "write failed");
   if (esl_opt_IsUsed(go, "-A")           && fprintf(ofp, "# MSA of all hits saved to file:   %s\n",             esl_opt_GetString(go, "-A"))           < 0) ESL_EXCEPTION_SYS(eslEWRITE, "write failed");
   if (esl_opt_IsUsed(go, "--tblout")     && fprintf(ofp, "# per-seq hits tabular output:     %s\n",             esl_opt_GetString(go, "--tblout"))     < 0) ESL_EXCEPTION_SYS(eslEWRITE, "write failed");
@@ -215,9 +213,6 @@ output_header(FILE *ofp, const ESL_GETOPTS *go, char *hmmfile, char *seqfile)
   if (esl_opt_IsUsed(go, "--F2")         && fprintf(ofp, "# Vit filter P threshold:       <= %g\n",             esl_opt_GetReal(go, "--F2"))           < 0) ESL_EXCEPTION_SYS(eslEWRITE, "write failed");
   if (esl_opt_IsUsed(go, "--F3")         && fprintf(ofp, "# Fwd filter P threshold:       <= %g\n",             esl_opt_GetReal(go, "--F3"))           < 0) ESL_EXCEPTION_SYS(eslEWRITE, "write failed");
   if (esl_opt_IsUsed(go, "--nobias")     && fprintf(ofp, "# biased composition HMM filter:   off\n")                                                   < 0) ESL_EXCEPTION_SYS(eslEWRITE, "write failed");
-  if (esl_opt_IsUsed(go, "--restrictdb_stkey") && fprintf(ofp, "# Restrict db to start at seq key: %s\n",            esl_opt_GetString(go, "--restrictdb_stkey"))  < 0) ESL_EXCEPTION_SYS(eslEWRITE, "write failed");
-  if (esl_opt_IsUsed(go, "--restrictdb_n")     && fprintf(ofp, "# Restrict db to # target seqs:    %d\n",            esl_opt_GetInteger(go, "--restrictdb_n")) < 0) ESL_EXCEPTION_SYS(eslEWRITE, "write failed");
-  if (esl_opt_IsUsed(go, "--ssifile")          && fprintf(ofp, "# Override ssi file to:            %s\n",            esl_opt_GetString(go, "--ssifile"))       < 0) ESL_EXCEPTION_SYS(eslEWRITE, "write failed");
 
   if (esl_opt_IsUsed(go, "--nonull2")    && fprintf(ofp, "# null2 bias corrections:          off\n")                                                   < 0) ESL_EXCEPTION_SYS(eslEWRITE, "write failed");
   if (esl_opt_IsUsed(go, "-Z")           && fprintf(ofp, "# sequence search space set to:    %.0f\n",           esl_opt_GetReal(go, "-Z"))             < 0) ESL_EXCEPTION_SYS(eslEWRITE, "write failed");
@@ -226,7 +221,6 @@ output_header(FILE *ofp, const ESL_GETOPTS *go, char *hmmfile, char *seqfile)
     if (esl_opt_GetInteger(go, "--seed") == 0 && fprintf(ofp, "# random number seed:              one-time arbitrary\n")                               < 0) ESL_EXCEPTION_SYS(eslEWRITE, "write failed");
     else if (                               fprintf(ofp, "# random number seed set to:       %d\n",             esl_opt_GetInteger(go, "--seed"))      < 0) ESL_EXCEPTION_SYS(eslEWRITE, "write failed");
   }
-  if (esl_opt_IsUsed(go, "--tformat")    && fprintf(ofp, "# targ <seqfile> format asserted:  %s\n",             esl_opt_GetString(go, "--tformat"))    < 0) ESL_EXCEPTION_SYS(eslEWRITE, "write failed");
 
   if (fprintf(ofp, "# - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -\n\n")                                                    < 0) ESL_EXCEPTION_SYS(eslEWRITE, "write failed");
   return eslOK;
@@ -250,7 +244,6 @@ main(int argc, char **argv)
   ESL_ALLOC(cmd, MAX_READ_LEN);
   int rem = MAX_READ_LEN;
   uint32_t cmdlen = MAX_READ_LEN;
-  int eod = 0;
   int optslen;
   char *query_name=NULL, *query_accession=NULL, *query_obj=NULL, *query_desc=NULL;
   P7_HMM *query_hmm=NULL;
@@ -260,7 +253,8 @@ main(int argc, char **argv)
   P7_PIPELINE     *pli     = NULL;
   P7_TOPHITS      *th      = NULL;
   FILE *qf = fopen(queryfile, "r"); 
-  int                  sock, n;
+  int                  sock;
+  int n =0;
   unsigned short       serv_port;
   HMMD_SEARCH_STATS   *stats;
   HMMD_SEARCH_STATUS   sstatus;
@@ -271,9 +265,7 @@ main(int argc, char **argv)
   ESL_STOPWATCH   *w;
   ESL_MSA *msa = NULL;
   ESL_KEYHASH     *kh       = NULL;		  /* hash of previous top hits' ranks                */
-  query_type qt;
   int query_len=0;
-  char *query_start = NULL;
   P7_BG           *bg       = NULL;		  /* null model */
   P7_TRACE   *qtr=NULL;
   w = esl_stopwatch_Create();
@@ -740,6 +732,7 @@ main(int argc, char **argv)
       free(buf);
       p7_search_stats_Destroy(stats);
       // ok, we've received all the hits.  Now, display them.
+      output_header(ofp, go, query_name, NULL);
       if (fprintf(ofp, "Query:       %s  \n", query_name)  < 0) ESL_EXCEPTION_SYS(eslEWRITE, "write failed");
       if (fprintf(ofp, "Accession:   %s\n", query_accession)  < 0) ESL_EXCEPTION_SYS(eslEWRITE, "write failed"); 
       if (fprintf(ofp, "Description: %s\n", query_desc) < 0) ESL_EXCEPTION_SYS(eslEWRITE, "write failed"); 

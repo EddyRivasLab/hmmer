@@ -86,10 +86,10 @@ typedef struct p7_server_masternode_state{
   int num_worker_nodes; 
 
   //! Number of worker nodes that have finished their parts of the current search
-  volatile int worker_nodes_done; 
+  int worker_nodes_done; 
 
   //! Number of worker nodes that have returned their pipeline statistics
-  volatile int worker_stats_received;
+  int worker_stats_received;
   //! Pthread object for the hit sorter thread
   pthread_t hit_thread_object;
 
@@ -98,7 +98,7 @@ typedef struct p7_server_masternode_state{
    *  otherwise, the hit thread can miss the initial assertion of the start pthreads conditional.  If the main thread asserts
    *  start before the hit thread is waiting for it, the hit thread will miss that assertion and the system will deadlock.
    */
-  volatile int hit_thread_ready;
+  int hit_thread_ready;
   
   //! How many messages of hits have we received from worker nodes?
   int hit_messages_received;
@@ -119,11 +119,11 @@ typedef struct p7_server_masternode_state{
   pthread_mutex_t master_tophits_lock;
 
   //! Linked list of empty P7_SERVER_MESSAGE structures, used to reduce malloc/free overhead
-  volatile P7_SERVER_MESSAGE *empty_hit_message_pool;  
+  P7_SERVER_MESSAGE *empty_hit_message_pool;  
   
   //! Linked list (LIFO ordered) of P7_SERVER_MESSAGE structures containing messages of hits that have arrived but not been processed
-  volatile P7_SERVER_MESSAGE *full_hit_message_pool;
-  
+  P7_SERVER_MESSAGE *full_hit_message_pool;
+
  
   //! Signal used to tell the hit thread when to start processing hits
   pthread_cond_t start;

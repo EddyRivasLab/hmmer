@@ -136,12 +136,17 @@ P7_SERVER_WORKERNODE_STATE *p7_server_workernode_Create(uint32_t num_databases, 
   // start out with no threads waiting, 
   workernode->num_waiting = 0;
 
+// initialize the waiter lock
+  if(pthread_mutex_init(&(workernode->steal_lock), NULL)){
+    p7_Die("Unable to create mutex in p7_server_workernode_Create");
+  }
   // Stealing starts out allowed, becomes not allowed once amount of work remaining on a block gets too small
   workernode->no_steal = 0;
     
   // init the go contition variable
   pthread_cond_init(&(workernode->start), NULL);
 
+  workernode->num_releases = 0;
   // Don't tell threads to shutdown at start.
   workernode->shutdown = 0;
 
@@ -197,7 +202,9 @@ P7_SERVER_WORKERNODE_STATE *p7_server_workernode_Create(uint32_t num_databases, 
   if(pthread_mutex_init(&(workernode->backend_threads_lock), NULL)){
     p7_Die("Unable to create mutex in p7_server_workernode_Create");
   }
-
+  if(pthread_mutex_init(&(workernode->search_definition_lock), NULL)){
+    p7_Die("Unable to create mutex in p7_server_workernode_Create");
+  }
   // Create a base pool of backend queue entries
   workernode->backend_pool = workernode_backend_pool_Create(workernode->num_threads *10, workernode->commandline_options);
   
@@ -214,6 +221,8 @@ P7_SERVER_WORKERNODE_STATE *p7_server_workernode_Create(uint32_t num_databases, 
   if(pthread_mutex_init(&(workernode->work_request_lock), NULL)){
     p7_Die("Unable to create mutex in p7_server_workernode_Create");
   }
+
+  workernode->ready_to_start = 0;
   return(workernode); // If we make it this far, we've succeeeded
 
   // GOTO target used to catch error cases from ESL_ALLOC
@@ -279,6 +288,7 @@ void p7_server_workernode_Destroy(P7_SERVER_WORKERNODE_STATE *workernode){
   pthread_mutex_destroy(&(workernode->wait_lock));
 
   // Clean up the model we're comparing to, if it exists
+  pthread_mutex_lock(&(workernode->search_definition_lock));
   if(workernode->compare_model != NULL){
     P7_PROFILE *the_model = workernode->compare_model;
     p7_profile_Destroy(the_model);
@@ -288,6 +298,7 @@ void p7_server_workernode_Destroy(P7_SERVER_WORKERNODE_STATE *workernode){
   if(workernode->compare_sequence){
     free(workernode->compare_sequence);
   }
+  pthread_mutex_unlock(&(workernode->search_definition_lock));
   free(workernode->global_queue);
   p7_tophits_Destroy(workernode->tophits);
   //finally, free the workernode structure itself
@@ -387,6 +398,17 @@ int p7_server_workernode_Setup(uint32_t num_databases, char **database_names, ui
     p7_Die("Failed to start threads in p7_server_workernode_Start");
   }
 
+
+  //Wait for the worker threads to be ready
+  pthread_mutex_lock(&((*workernode)->wait_lock));
+  while((*workernode)->num_waiting != (*workernode)->num_threads){  // This unlock-lock in a loop is really painful, but seems to be the pthreads-approved way
+  // of waiting for a counter to reach a value.  Fortunately, we only do it once, at server startup, so the overall impact is small
+    pthread_mutex_unlock(&((*workernode)->wait_lock));
+    pthread_mutex_lock(&((*workernode)->wait_lock));
+  }
+  (*workernode)->ready_to_start =1;
+  p7_server_workernode_release_threads(*workernode);
+  pthread_mutex_unlock(&((*workernode)->wait_lock));
   return eslOK;  // if we get this far, everything went ok.
 }
 
@@ -415,14 +437,18 @@ int p7_server_workernode_Setup(uint32_t num_databases, char **database_names, ui
  *  Note that this implies that some other function must check the validity of any user inputs before passing them to this function
 */
 int p7_server_workernode_start_hmm_vs_amino_db(P7_SERVER_WORKERNODE_STATE *workernode, uint32_t database, uint64_t start_object, uint64_t end_object, P7_PROFILE *compare_model){
-
+  pthread_mutex_lock(&(workernode->search_definition_lock));
   if(workernode->search_type != IDLE){
     p7_Die("p7_server_workernode_start_hmm_vs_amino_db attempted to set up a new operation on a worker node while an old one was still in progress");
   }
-  int i;
+  pthread_mutex_unlock(&(workernode->search_definition_lock));   // unlock here to guarantee no lock cycles
 
+  int i;
+  pthread_mutex_lock(&(workernode->steal_lock));
   workernode->no_steal = 0;  // reset this to allow stealing work for the new search
-  
+  pthread_mutex_unlock(&(workernode->steal_lock));
+
+  pthread_mutex_lock(&(workernode->search_definition_lock));
   //install the model we'll be comparing against
   workernode->compare_model = compare_model;
   workernode->search_type = SEQUENCE_SEARCH;
@@ -436,7 +462,7 @@ int p7_server_workernode_start_hmm_vs_amino_db(P7_SERVER_WORKERNODE_STATE *worke
     p7_Die("Attempt to set up amino acid comparision against non-amino database in p7_server_workernode_start_hmm_vs_amino_db");
   }
   workernode->compare_database = database;
-
+  pthread_mutex_unlock(&(workernode->search_definition_lock));
   // Grab this to avoid multiple re-indexing
   P7_SHARD *the_shard = workernode->database_shards[database];
 
@@ -514,14 +540,16 @@ int p7_server_workernode_start_hmm_vs_amino_db(P7_SERVER_WORKERNODE_STATE *worke
  */
 
 int p7_server_workernode_add_work(P7_SERVER_WORKERNODE_STATE *workernode, uint64_t start_object, uint64_t end_object){
-if(workernode->global_queue == NULL){
+  pthread_mutex_lock(&(workernode->global_queue_lock));
+ 
+  if(workernode->global_queue == NULL){
     printf("Found NULL global queue in p7_server_workernode_add_work_hmm_vs_amino_db\n");
   }
   int i;
-  pthread_mutex_lock(&(workernode->global_queue_lock));
-
+  pthread_mutex_lock(&(workernode->steal_lock));
   workernode->no_steal = 0;  // reset this to allow stealing work for the new search
-
+  pthread_mutex_unlock(&(workernode->steal_lock));
+  pthread_mutex_lock(&(workernode->search_definition_lock));
   //Tell the worker node not to do any start-of-search work
   if(workernode->search_type == SEQUENCE_SEARCH  || workernode->search_type == SEQUENCE_SEARCH_CONTINUE){
     workernode->search_type = SEQUENCE_SEARCH_CONTINUE;
@@ -529,6 +557,7 @@ if(workernode->global_queue == NULL){
   else{
     workernode->search_type = HMM_SEARCH_CONTINUE;
   }
+  pthread_mutex_unlock(&(workernode->search_definition_lock));
   // recompute the amount of work that each worker thread should grab at a time
   workernode->chunk_size = ((end_object - start_object) / (workernode->num_threads) * 16);
   if(workernode->chunk_size < 1){
@@ -597,12 +626,15 @@ if(workernode->global_queue == NULL){
  * if it fails.
  */
 int p7_server_workernode_start_amino_vs_hmm_db(P7_SERVER_WORKERNODE_STATE *workernode, uint32_t database, uint64_t start_object, uint64_t end_object, ESL_SQ *compare_sequence){
-
+  pthread_mutex_lock(&(workernode->search_definition_lock));
   if(workernode->search_type != IDLE){
     p7_Die("p7_server_workernode_start_amino_vs_hmm_db attempted to set up a new operation on a worker node while an old one was still in progress");
   }
-
+  pthread_mutex_unlock(&(workernode->search_definition_lock));
+  pthread_mutex_lock(&(workernode->steal_lock));
   workernode->no_steal = 0;  // reset this to allow stealing work for the new search
+  pthread_mutex_unlock(&(workernode->steal_lock));
+  pthread_mutex_lock(&(workernode->search_definition_lock));
   //install the model we'll be comparing against
   workernode->compare_sequence = compare_sequence;
   workernode->compare_L = compare_sequence->L;
@@ -616,7 +648,7 @@ int p7_server_workernode_start_amino_vs_hmm_db(P7_SERVER_WORKERNODE_STATE *worke
     p7_Die("Attempt to set up amino acid comparision against non-HMM database in p7_server_workernode_start_amino_vs_hmm_db");
   }
   workernode->compare_database = database;
-
+  pthread_mutex_unlock(&(workernode->search_definition_lock));
   // Grab this to avoid multiple re-indexing
   P7_SHARD *the_shard = workernode->database_shards[database];
 
@@ -713,7 +745,7 @@ ERROR:
 
 
 //p7_server_workernode_release_threads
-/*! \brief Releases the worer threads to begin processing a request
+/*! \brief Releases the worker threads to begin processing a request
  *  \details Sets the number of worker threads who are waiting to begin work to 0 and then asserts the workernode->start 
  *  signal to wake those threads up.
  *  \param [in,out] workernode The worker node's P7_SERVER_WORKERNODE_STATE object, which is modified during execution.
@@ -723,16 +755,14 @@ ERROR:
  *  workernode->num_threads.  This was done because there are some cases, like when a new chunk of work arrives from the master node,
  *  where we want to wake up any waiting threads without stalling until all threads are waiting.
  */
+
+/*  NOTE:  The function that calls this thread must lock workernode->wait_lock before calling  it.  Making the caller acquire
+    the lock means that the caller can continuously hold that lock from the point wheen it checks workernode->num_waiting to determine that all threads 
+    are waiting and the call of this function */
 int p7_server_workernode_release_threads(P7_SERVER_WORKERNODE_STATE *workernode){
-  pthread_mutex_lock(&(workernode->wait_lock));
-
-  // ok, lock acquired
   workernode->num_waiting = 0;  // reset this since the threads are about to start working
+  workernode->num_releases +=1;  
   pthread_cond_broadcast(&(workernode->start)); // signal all threads to start
-
-  if(pthread_mutex_unlock(&(workernode->wait_lock))){
-    p7_Die("Couldn't unlock wait_lock mutex in p7_server_release_threads;");
-  }
 
   return eslOK;
 }
@@ -769,7 +799,7 @@ void p7_server_workernode_end_search(P7_SERVER_WORKERNODE_STATE *workernode){
     workernode->thread_state[i].bg = NULL;
 
   }
-
+  pthread_mutex_lock(&(workernode->search_definition_lock));
   if(workernode->compare_model != NULL){
     esl_alphabet_Destroy((ESL_ALPHABET *) workernode->compare_model->abc);
     p7_profile_Destroy(workernode->compare_model);
@@ -777,7 +807,7 @@ void p7_server_workernode_end_search(P7_SERVER_WORKERNODE_STATE *workernode){
   }
   // First, mark the node idle
   workernode->search_type = IDLE;
-
+  pthread_mutex_unlock(&(workernode->search_definition_lock));
   p7_tophits_Destroy(workernode->tophits);
   workernode->tophits = p7_tophits_Create(); // Create new tophits for next search
   pthread_mutex_unlock(&(workernode->wait_lock)); 
@@ -789,11 +819,7 @@ void p7_server_workernode_end_search(P7_SERVER_WORKERNODE_STATE *workernode){
  * \details The worker node's main thread should spawn one instance of p7_server_worker_thread for each worker thread on the node.
  * Before spawning the worker threads, the worker node must call p7_server_workernode_Setup to create the worker node's 
  * P7_SERVER_WORKERNODE_STATE object.  
- * 
- * After creating the worker threads, the main thread must wait until all of the worker threads have finished initialization 
- * before calling p7_server_workernode_release_threads() to have them start work.  When a worker thread finishes initialization, it 
- * increments workernode->num_waiting,  so the masternode needs to wait until workernode->num_waiting = workernode->num_threads
- * before calling p7_servere_workernode_release_threads() the first time
+
  * \param [in,out] worker_argument A data structure containing packed arguments to the thread, which is modified during execution.
  * \returns Nothing.  Calls p7_Die to crash the program with an error message if it is unable to complete correctly.
 */
@@ -803,6 +829,8 @@ void *p7_server_worker_thread(void *worker_argument){
   P7_SERVER_WORKER_ARGUMENT *my_argument = (P7_SERVER_WORKER_ARGUMENT *) worker_argument;
   uint32_t my_id = my_argument->my_id;
   P7_SERVER_WORKERNODE_STATE *workernode = my_argument->workernode;
+  uint64_t my_releases = 1; // This starts at one instead of zero because release_threads() is called once during setup, so 
+  // we don't want to try to do real work until the second call 
 
   // create the engine object we'll use 
   ESL_ALPHABET *temp_abc = esl_alphabet_Create(eslAMINO); // All we use the alphabet for in engine_Create is setting the size of the
@@ -818,20 +846,34 @@ void *p7_server_worker_thread(void *worker_argument){
   }
 
   workernode->num_waiting +=1;  //mark that we're now waiting for the go signal
-  while(workernode->num_waiting >0){ // catch spurious wakeup
-    pthread_cond_wait(&(workernode->start), &(workernode->wait_lock)); // wait until master tells us to go
+  while(workernode->ready_to_start ==0){ // catch spurious wakeup
+    pthread_cond_wait(&(workernode->start), &(workernode->wait_lock));
   }
-  pthread_mutex_unlock(&(workernode->wait_lock));  // We come out of pthread_cond_wait holding the lock,
-  // need to release it to let the next thread go
+  
+  pthread_mutex_unlock(&(workernode->wait_lock));
 
   struct timeval start_time;
-    
+  printf("Worker %d starting main work loop\n", my_id);
   // Main work loop.  The thread remains in this loop until it is told to terminate.
   while(!workernode->shutdown){
     
     int stop;
-    gettimeofday(&start_time, NULL);
 
+    /* Doing a cond_wait on workernode->start after we just did one before entering this loop looks a little strange,
+       but we do it because the first call uses workernode->start to pause until all the worker threads are ready during startup.
+       Once startup is over, we use workernode->start to signal that a new search or new work assignment has arrived */
+    pthread_mutex_lock(&(workernode->wait_lock));
+    workernode->num_waiting +=1;  //mark that we're now waiting for the go signal
+    while(workernode->num_releases <= my_releases){ // catch spurious wakeup
+      pthread_cond_wait(&(workernode->start), &(workernode->wait_lock)); // wait until master tells us to go
+    }
+    my_releases = workernode->num_releases;  // Copy global value instead of incrementing ours because we're 
+    // allowed to miss some release signals, for example if more work arrives from master node while the worker thread is busy
+
+    pthread_mutex_unlock(&(workernode->wait_lock));  // We come out of pthread_cond_wait holding the lock
+    gettimeofday(&start_time, NULL);
+    pthread_mutex_lock(&(workernode->search_definition_lock));
+    printf("Worker thread %d started search with type %d\n", my_id, workernode->search_type);
     switch(workernode->search_type){ // do the right thing for each search type
       case SEQUENCE_SEARCH:
       case SEQUENCE_SEARCH_CONTINUE:     
@@ -851,6 +893,7 @@ void *p7_server_worker_thread(void *worker_argument){
           }
           p7_profile_Copy(workernode->compare_model, workernode->thread_state[my_id].gm);
         }
+        pthread_mutex_unlock(&(workernode->search_definition_lock));
         if(workernode->thread_state[my_id].om == NULL){
           workernode->thread_state[my_id].om = p7_oprofile_Create(workernode->thread_state[my_id].gm->M, workernode->thread_state[my_id].gm->abc);      
           if(workernode->thread_state[my_id].om == NULL){
@@ -886,6 +929,7 @@ void *p7_server_worker_thread(void *worker_argument){
             p7_Die("Unable to allocate memory in p7_server_worker_thread\n");
           }
         }
+        pthread_mutex_unlock(&(workernode->search_definition_lock));
         stop = 0;
         while(stop == 0){  // There's still some work left to do on the current search
           switch(workernode->thread_state[my_id].mode){
@@ -905,13 +949,6 @@ void *p7_server_worker_thread(void *worker_argument){
         p7_Die("Workernode told to start search of type IDLE");
         break;
     }
-
-    pthread_mutex_lock(&(workernode->wait_lock));
-    workernode->num_waiting +=1;  //mark that we're now waiting for the go signal
-    while(workernode->num_waiting > 0){ // catch spurious wakeup
-      pthread_cond_wait(&(workernode->start), &(workernode->wait_lock)); // wait until master tells us to go
-    }
-    pthread_mutex_unlock(&(workernode->wait_lock));  // We come out of pthread_cond_wait holding the lock
   }
 
   esl_alphabet_Destroy(temp_abc);
@@ -1002,9 +1039,10 @@ void p7_server_workernode_main(int argc, char **argv, int my_rank, MPI_Datatype 
         break; 
       case P7_SERVER_SHUTDOWN_WORKERS:
       // master wants to shut down the workers.
-
+        pthread_mutex_lock(&(workernode->wait_lock));
         workernode->shutdown = 1; // tell threads to shut down
         p7_server_workernode_release_threads(workernode); // release any waiting threads to process the shutdown
+        pthread_mutex_unlock(&(workernode->wait_lock));
         p7_server_workernode_Destroy(workernode);
         MPI_Finalize();
         exit(0);
@@ -1051,9 +1089,15 @@ static int worker_thread_front_end_search_loop(P7_SERVER_WORKERNODE_STATE *worke
   float nullsc, fwdsc;
   int status;
 
+  int64_t compare_L;
+  ESL_SQ* compare_sequence;
+  uint32_t compare_database;
+  P7_SEARCH_TYPE search_type;
+
   if ((workernode->thread_state[my_id].pipeline != NULL)){
     p7_Die("Illegal state at start of worker_thread_front_end_search_loop");
   }
+  pthread_mutex_lock(&(workernode->search_definition_lock));
   if((workernode->search_type == SEQUENCE_SEARCH) || (workernode->search_type == SEQUENCE_SEARCH_CONTINUE)){
     workernode->thread_state[my_id].pipeline = p7_pipeline_Create(workernode->commandline_options, 100, 100, FALSE, p7_SEARCH_SEQS);
     if(workernode->thread_state[my_id].pipeline == NULL){
@@ -1069,6 +1113,11 @@ static int worker_thread_front_end_search_loop(P7_SERVER_WORKERNODE_STATE *worke
     p7_bg_SetLength(workernode->thread_state[my_id].bg, workernode->compare_L);           
     p7_pli_NewSeq(workernode->thread_state[my_id].pipeline, workernode->compare_sequence);
   }
+  compare_L = workernode->compare_L; // make local copies of these, since they don't change during the search
+  compare_sequence = workernode->compare_sequence;
+  compare_database = workernode->compare_database;
+  search_type = workernode->search_type;
+  pthread_mutex_unlock(&(workernode->search_definition_lock));
   while(1){ // Iterate forever, we'll return from the function rather than exiting this loop
  
 
@@ -1138,25 +1187,27 @@ static int worker_thread_front_end_search_loop(P7_SERVER_WORKERNODE_STATE *worke
       uint64_t search_object_index;
       ESL_SQ *search_sequence=NULL;
       P7_OPROFILE *search_om = NULL;
-      search_object_index = p7_shard_Find_Index_Nexthigh(workernode->database_shards[workernode->compare_database], start);
+      search_object_index = p7_shard_Find_Index_Nexthigh(workernode->database_shards[compare_database], start);
 
       while(start <= chunk_end){
 
-
+        pthread_mutex_lock(&(workernode->work[my_id].lock));
         chunk_end = workernode->work[my_id].end; // update this to reduce redundant work.
-        if((workernode->search_type == SEQUENCE_SEARCH) || (workernode->search_type == SEQUENCE_SEARCH_CONTINUE)){
-          search_sequence = (ESL_SQ *) workernode->database_shards[workernode->compare_database]->contents[search_object_index];
+        pthread_mutex_unlock(&(workernode->work[my_id].lock));
+
+        if((search_type == SEQUENCE_SEARCH) || (search_type == SEQUENCE_SEARCH_CONTINUE)){
+          search_sequence = (ESL_SQ *) workernode->database_shards[compare_database]->contents[search_object_index];
           p7_bg_SetLength(workernode->thread_state[my_id].bg, search_sequence->L);           
           p7_oprofile_ReconfigLength(workernode->thread_state[my_id].om,search_sequence->L);
           p7_pli_NewSeq(workernode->thread_state[my_id].pipeline, search_sequence);
           status = p7_Pipeline_Overthruster(workernode->thread_state[my_id].pipeline, workernode->thread_state[my_id].om, workernode->thread_state[my_id].bg, search_sequence, &fwdsc, &nullsc);
         }
         else{
-          search_om = (P7_OPROFILE *) workernode->database_shards[workernode->compare_database]->contents[search_object_index];
+          search_om = (P7_OPROFILE *) workernode->database_shards[compare_database]->contents[search_object_index];
           p7_pli_NewModel(workernode->thread_state[my_id].pipeline, search_om, workernode->thread_state[my_id].bg);
-          p7_oprofile_ReconfigLength(search_om, workernode->compare_L);
-          p7_bg_SetLength(workernode->thread_state[my_id].bg, workernode->compare_L);           
-          status = p7_Pipeline_Overthruster(workernode->thread_state[my_id].pipeline, search_om, workernode->thread_state[my_id].bg, workernode->compare_sequence, &fwdsc, &nullsc);
+          p7_oprofile_ReconfigLength(search_om, compare_L);
+          p7_bg_SetLength(workernode->thread_state[my_id].bg, compare_L);           
+          status = p7_Pipeline_Overthruster(workernode->thread_state[my_id].pipeline, search_om, workernode->thread_state[my_id].bg, compare_sequence, &fwdsc, &nullsc);
         }
 
         if (status == eslFAIL)
@@ -1187,7 +1238,7 @@ static int worker_thread_front_end_search_loop(P7_SERVER_WORKERNODE_STATE *worke
             p7_pipeline_Merge(workernode->thread_state[my_id].stats_pipeline, workernode->thread_state[my_id].pipeline);
             //swap our pipeline with the one in the entry
             the_entry->pipeline = workernode->thread_state[my_id].pipeline;
-            if((workernode->search_type == SEQUENCE_SEARCH) || (workernode->search_type == SEQUENCE_SEARCH_CONTINUE)){
+            if((search_type == SEQUENCE_SEARCH) || (search_type == SEQUENCE_SEARCH_CONTINUE)){
               workernode->thread_state[my_id].pipeline = p7_pipeline_Create(workernode->commandline_options, 100, 100, FALSE, p7_SEARCH_SEQS);
               if(workernode->thread_state[my_id].pipeline == NULL){
                 p7_Die("Unable to allocate memory in worker_thread_front_end_sequence_search_loop.\n");
@@ -1201,7 +1252,7 @@ static int worker_thread_front_end_search_loop(P7_SERVER_WORKERNODE_STATE *worke
               if(workernode->thread_state[my_id].pipeline == NULL){
               p7_Die("Unable to allocate memory in worker_thread_front_end_sequence_search_loop.\n");
               }
-              the_entry->sequence = workernode->compare_sequence;
+              the_entry->sequence = compare_sequence;
               the_entry->om = search_om;
             }
 
@@ -1265,7 +1316,7 @@ static int worker_thread_front_end_search_loop(P7_SERVER_WORKERNODE_STATE *worke
             workernode->global_queue = temp;
 
             // Fill in the chunk's start, end pointers
-            workernode->global_queue->start = p7_shard_Find_Index_Nexthigh(workernode->database_shards[workernode->compare_database], start + 1);
+            workernode->global_queue->start = p7_shard_Find_Index_Nexthigh(workernode->database_shards[compare_database], start + 1);
             workernode->global_queue->end = end;
 
             pthread_mutex_unlock(&(workernode->global_queue_lock)); // release lock  
@@ -1282,9 +1333,8 @@ static int worker_thread_front_end_search_loop(P7_SERVER_WORKERNODE_STATE *worke
 
         // if we get this far, we weren't switched to the backend, so go on to the next sequence or back to look for more work
         start += workernode->num_shards;
-        //p7_shard_Find_Contents_Nexthigh(workernode->database_shards[workernode->compare_database], start, &search_object);
         search_object_index++;
-        search_sequence = (ESL_SQ *) workernode->database_shards[workernode->compare_database]->contents[search_object_index];
+        search_sequence = (ESL_SQ *) workernode->database_shards[compare_database]->contents[search_object_index];
         search_om = (P7_OPROFILE *) search_sequence;  // set both of these, only use the one that's appropriate for the search 
         // type because it's faster than a conditional to see which one we need to set
         p7_pipeline_Reuse(workernode->thread_state[my_id].pipeline);
@@ -1309,12 +1359,14 @@ static void worker_thread_back_end_sequence_search_loop(P7_SERVER_WORKERNODE_STA
   P7_BACKEND_QUEUE_ENTRY *the_entry = workernode_get_backend_queue_entry_from_queue(workernode);
 
   while(the_entry != NULL){
+    pthread_mutex_lock(&(workernode->search_definition_lock));
     // There's a sequence in the queue, so do the backend comparison 
     if(workernode->search_type == SEQUENCE_SEARCH ||workernode->search_type == SEQUENCE_SEARCH_CONTINUE){
       // operate on the worker thread's OM, not the one in the command, to prevent two threads from using the same 
       // om structure simultaneously.  This isn't an issue during scans, because each om only gets examined once
       the_entry->om = workernode->thread_state[my_id].om;
     }
+    pthread_mutex_unlock(&(workernode->search_definition_lock));
     P7_PIPELINE *temp_pipeline = the_entry->pipeline;
     the_entry->pipeline = NULL;
     workernode->thread_state[my_id].pipeline = temp_pipeline;
@@ -1534,7 +1586,7 @@ static void workernode_put_backend_queue_entry_in_queue(P7_SERVER_WORKERNODE_STA
  *  \returns 1 if there was a chunk of work to get, 0 otherwise.  Calls p7_Die() to exit the program if unable to complete.
  */
 static uint64_t worker_thread_get_chunk(P7_SERVER_WORKERNODE_STATE *workernode, uint32_t my_id, volatile uint64_t *start, volatile uint64_t *end){
- pthread_mutex_lock(&(workernode->global_queue_lock));
+  pthread_mutex_lock(&(workernode->global_queue_lock));
 
   // sanity check
   if(workernode->global_queue == NULL){
@@ -1557,18 +1609,15 @@ static uint64_t worker_thread_get_chunk(P7_SERVER_WORKERNODE_STATE *workernode, 
     else{
       // work queue is empty
       pthread_mutex_unlock(&(workernode->global_queue_lock));
+      pthread_mutex_lock(&(workernode->work_request_lock));
 
       if(!workernode->work_requested && !workernode->master_queue_empty && !workernode->request_work){
         // We aren't waiting for the master node to send work, the master node hasn't told us it's out of work, and nobody else has set 
         // the flag telling the main thread to request work, so we should set the work request flag.
+        workernode->request_work = 1;
 
-        pthread_mutex_lock(&(workernode->work_request_lock));
-        if(!workernode->work_requested && !workernode->master_queue_empty && !workernode->request_work){
-          // re-check whether we should send a request once we've locked the request variable lock to avoid race conditions
-          workernode->request_work = 1;
-        }
-        pthread_mutex_unlock(&(workernode->work_request_lock));
       }
+      pthread_mutex_unlock(&(workernode->work_request_lock));
       return(0);
     }
   }
@@ -1578,8 +1627,10 @@ static uint64_t worker_thread_get_chunk(P7_SERVER_WORKERNODE_STATE *workernode, 
   my_start = workernode->global_queue->start;
   if(my_start+ workernode->chunk_size < workernode->global_queue->end){
     // there's more than one chunk of work left in the global queue, so grab one and advance the start pointer
+    pthread_mutex_lock(&(workernode->search_definition_lock));
     my_end  = p7_shard_Find_Index_Nexthigh(workernode->database_shards[workernode->compare_database], my_start+ workernode->chunk_size);
     workernode->global_queue->start = p7_shard_Find_Index_Nexthigh(workernode->database_shards[workernode->compare_database], my_end+1);
+    pthread_mutex_unlock(&(workernode->search_definition_lock));
   }
   else{
     // one chunk or less left to grab, so take all the work and pop the head work chunk off of the list;
@@ -1649,15 +1700,17 @@ int32_t worker_thread_steal(P7_SERVER_WORKERNODE_STATE *workernode, uint32_t my_
   if(workernode->work[my_id].start <= workernode->work[my_id].end){
     p7_Die("Thread %d tried to steal when it still had work on its queue\n", my_id);
   }
-
+  pthread_mutex_lock(&(workernode->steal_lock));
   if(workernode->no_steal){
+    pthread_mutex_unlock(&(workernode->steal_lock));
     return 0;  // check this and abort at start to avoid extra searches, locking, unlocking when many threads finish at same time
   }
-
+  pthread_mutex_unlock(&(workernode->steal_lock));
   int64_t most_work = 0;
   int64_t stealable_work = 0;
 
   for(i = 0; i < workernode->num_threads; i++){
+    pthread_mutex_lock(&(workernode->work[i].lock));
     if((workernode->work[i].start != -1) && (workernode->work[i].start < workernode->work[i].end) && (workernode->thread_state[i].mode == FRONTEND)){ 
     // There's some stealable work in the potential victim's queue.
       stealable_work = workernode->work[i].end - workernode->work[i].start;
@@ -1666,12 +1719,14 @@ int32_t worker_thread_steal(P7_SERVER_WORKERNODE_STATE *workernode, uint32_t my_
         victim_id = i;
       }
     }
-
+  pthread_mutex_unlock(&(workernode->work[i].lock));
   }
 
   if(victim_id == -1){
     // we didn't find a good target to steal from
+    pthread_mutex_lock(&(workernode->steal_lock));
     workernode->no_steal = 1;  // don't need to lock this because it only makes a 0->1 transition during each search
+    pthread_mutex_unlock(&(workernode->steal_lock));
     return 0;
   }
 
@@ -1712,8 +1767,9 @@ int32_t worker_thread_steal(P7_SERVER_WORKERNODE_STATE *workernode, uint32_t my_
   }
 
   // Now, update my work queue with the stolen work
+  pthread_mutex_lock(&(workernode->search_definition_lock));
   uint64_t my_new_start = p7_shard_Find_Id_Nexthigh(workernode->database_shards[workernode->compare_database], new_victim_end+1);
-
+  pthread_mutex_unlock(&(workernode->search_definition_lock));
   pthread_mutex_lock(&(workernode->work[my_id].lock));
 
   workernode->work[my_id].start = my_new_start;
@@ -1839,19 +1895,20 @@ static int workernode_perform_search_or_scan(P7_SERVER_WORKERNODE_STATE *workern
   else{
     p7_server_workernode_start_amino_vs_hmm_db(workernode, the_command->db, work_reply.start, work_reply.end, seq);
   }
-  while(workernode->num_waiting != workernode->num_threads){
-    // spin until al worker threads are ready to go 
-  }
 
-  // tell the threads to start work
+  pthread_mutex_lock(&(workernode->wait_lock));
   p7_server_workernode_release_threads(workernode);
+  pthread_mutex_unlock(&(workernode->wait_lock));
 
   while(stop == 0){ //there's still work to do on this search
-
+    pthread_mutex_lock(&(workernode->wait_lock));  // Yes, we just unlocked this on first entry to loop, but need to lock it on subsequent iterations
     while(workernode->num_waiting != workernode->num_threads){ 
     // at least one worker thread is still working, so go through the tasks
     // the main thread is responsible for
-
+      if(pthread_mutex_trylock(&(workernode->wait_lock)) == 0){
+        printf("Huh?\n");
+      }
+      pthread_mutex_unlock(&(workernode->wait_lock));
       int thread;
             
       // Task 1: check for incoming work from the master node
@@ -1872,7 +1929,9 @@ static int workernode_perform_search_or_scan(P7_SERVER_WORKERNODE_STATE *workern
           if(work_reply.start != -1){
           //We got more work from the master node, add it to the global queue
             p7_server_workernode_add_work(workernode, work_reply.start, work_reply.end);
+            pthread_mutex_lock(&(workernode->wait_lock));
             p7_server_workernode_release_threads(workernode); // tell any paused threads to start up again
+            pthread_mutex_unlock(&(workernode->wait_lock));
           }
           else{
             workernode->master_queue_empty = 1;  // The master is out of work to give
@@ -1886,16 +1945,17 @@ static int workernode_perform_search_or_scan(P7_SERVER_WORKERNODE_STATE *workern
       }
 
       // Task 2: Request more work from the master node when necessary
+      pthread_mutex_lock(&(workernode->work_request_lock));
       if(workernode->request_work && !workernode->master_queue_empty){ // Our queue is low, so request work
               
         workernode_request_Work(workernode->my_shard);
         works_requested++;
-        pthread_mutex_lock(&(workernode->work_request_lock));
+
               
         workernode->request_work = 0;  // We've requested work
         workernode->work_requested = 1; // flag so that we check for incoming work
-        pthread_mutex_unlock(&(workernode->work_request_lock));
       }
+      pthread_mutex_unlock(&(workernode->work_request_lock));
 
       // Task 3: Move any hits that the worker threads have found into the node's hit list and send them to the master if we 
       // have enough to make that worthwhile
@@ -1923,7 +1983,10 @@ static int workernode_perform_search_or_scan(P7_SERVER_WORKERNODE_STATE *workern
         workernode->tophits = p7_tophits_Create();            
 
       }
+    pthread_mutex_lock(&(workernode->wait_lock)); // lock this because we read workernode->num_waiting to decide whether loop terminates
     }
+
+    pthread_mutex_unlock(&(workernode->wait_lock));  // Yes, we just locked this, but we need to have the lock at the start of the loop.
 
     // When we get here, all of the worker nodes have run out of work to do, so request more work unless the master node has told us its
     // out of work or we've already sent a request 
@@ -1946,7 +2009,9 @@ static int workernode_perform_search_or_scan(P7_SERVER_WORKERNODE_STATE *workern
       if(work_reply.start != -1){
         //We got more work from the master node
         p7_server_workernode_add_work(workernode, work_reply.start, work_reply.end);
+        pthread_mutex_lock(&(workernode->wait_lock));
         p7_server_workernode_release_threads(workernode); // tell any paused threads to go
+        pthread_mutex_unlock(&(workernode->wait_lock));
       }
       else{
         // Master has no work left, we're done

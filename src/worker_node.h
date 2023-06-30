@@ -37,10 +37,10 @@ typedef enum p7_search_type{IDLE, SEQUENCE_SEARCH, SEQUENCE_SEARCH_CONTINUE, HMM
 //! Structure that describes the region of the database that a worker thread is currently processing, consisting of sequences start--end (inclusive) in the database
 typedef struct p7_work_descriptor{
 	//! Database object id of the start of this block of work
-	volatile uint64_t start;
+	uint64_t start;
 
 	//! Database object id of the end of this block of work
-	volatile uint64_t end;
+	uint64_t end;
 
 	//! Lock for this descriptor, used for work-stealing
 	pthread_mutex_t lock;
@@ -157,7 +157,6 @@ typedef struct p7_server_workernode_state{
 	P7_SERVER_WORKER_THREAD_STATE *thread_state;
 
 
-	// fields below here are written once multithreaded execution begins, so do have to be volatile
 	// State used to control work stealing and synchronization
 
 	//! array[num_threads] of work descriptors showing what work each thread is responsible for
@@ -166,11 +165,15 @@ typedef struct p7_server_workernode_state{
 	//! lock on the variable that counts the number of threads that are waiting to start
 	pthread_mutex_t wait_lock;
 
+	//! Count of the number of times that the worker threads have been released to do work.
+	//  Only check/change this count if you have locked wait_lock (except during setup)
+	uint64_t num_releases;
+
 	//! How much work should the global queue hand out at a time?  
 	uint64_t chunk_size; 
 
 	//! Number of threads waiting for the go signal
-	volatile uint32_t num_waiting;
+	uint32_t num_waiting;
 
 	//! Pthread conditional used to release worker threads to process a request. 
 	/*! Wait_lock is the associated mutex.
@@ -188,34 +191,41 @@ typedef struct p7_server_workernode_state{
 	*/ 
 	pthread_cond_t start;
 	
+	// Flag that is used to coordinate startup
+	uint32_t ready_to_start;
 	//! Flag signaling that it's not worth stealing any more until the next block
-	volatile uint32_t no_steal;
+	uint32_t no_steal;
+
+	pthread_mutex_t steal_lock;
 
 	//! flag that tells all the worker threads to exit when they finish what they're currently doing
-	volatile uint32_t shutdown;
+	uint32_t shutdown;
 
 	// State used in searches.
 
+	pthread_mutex_t search_definition_lock;  // acquire this before touching search_type, compare_model, compare_sequence, compare_L, or compare_database
+	// it is ok to make local copies of these values, as they will only change when the search changes
+
 	//! What type of search are we doing now?
-	volatile P7_SEARCH_TYPE search_type;
+	P7_SEARCH_TYPE search_type;
 
 	//! Set to the base model of the HMM in a one-HMM many-sequence search.  Otherwise, set NULL
 	/*! In a one-HMM many-sequence search, each thread must make its own copy of this data structure
 	 Declared as P7_PROFILE * volatile because the value of the pointer might change out from under us.
 	 The contents of the P7_PROFILE should not change unexpectedly */
-	P7_PROFILE * volatile compare_model;
+	P7_PROFILE *compare_model;
 
 	//! Set to the sequence we're comparing against in a one-sequence many-HMM search.  Otherwise, set NULL
 	/*!Declared as ESL_SQ volatile because the value of the pointer might change at any time, not the value of the
 	  * object that's being pointed to.
 	  */
-	ESL_SQ * volatile compare_sequence;
+	ESL_SQ *compare_sequence;
 
 	//! Length of the sequence we're comparing against in a one-sequence many-HMM search.  Otherwise 0
-	volatile int64_t compare_L;
+	int64_t compare_L;
 
 	//! which database are we comparing to?
-	volatile uint32_t compare_database;
+	uint32_t compare_database;
 
 	//! lock on the list of hits this node has found
 	pthread_mutex_t hit_list_lock;

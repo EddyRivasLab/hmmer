@@ -1522,12 +1522,12 @@ void *p7_server_master_hit_thread(void *argument){
     
     // If we weren't told to exit, we're doing a search, so loop until all of the worker nodes are done with the search
     while(masternode->worker_nodes_done < masternode->num_worker_nodes){
+      pthread_mutex_lock(&(masternode->full_hit_message_pool_lock));
 
       if(masternode->full_hit_message_pool != NULL){
         // There's at least one message of hits for us to handle
         P7_SERVER_MESSAGE *the_message, *prev;
         prev = NULL;
-        pthread_mutex_lock(&(masternode->full_hit_message_pool_lock));
         
         the_message = (P7_SERVER_MESSAGE *) masternode->full_hit_message_pool;
         // Go through the pool of hit messages to find the last one in the chain, which is the first one that was received
@@ -1545,9 +1545,9 @@ void *p7_server_master_hit_thread(void *argument){
         }
 
         pthread_mutex_unlock(&(masternode->full_hit_message_pool_lock));
-	pthread_mutex_lock(&(masternode->master_tophits_lock));
+	      pthread_mutex_lock(&(masternode->master_tophits_lock));
         p7_tophits_Merge(masternode->tophits, the_message->tophits);
-	pthread_mutex_unlock(&(masternode->master_tophits_lock));
+	      pthread_mutex_unlock(&(masternode->master_tophits_lock));
         p7_tophits_Destroy(the_message->tophits);
         the_message->tophits = NULL;
         if(the_message->status.MPI_TAG == HMMER_HIT_FINAL_MPI_TAG){
@@ -1561,6 +1561,9 @@ void *p7_server_master_hit_thread(void *argument){
         masternode->empty_hit_message_pool = the_message;
 
         pthread_mutex_unlock(&(masternode->empty_hit_message_pool_lock));
+      }
+      else{
+        pthread_mutex_unlock(&(masternode->full_hit_message_pool_lock));
       }
     }
   }
