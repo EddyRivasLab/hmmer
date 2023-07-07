@@ -96,6 +96,9 @@ typedef struct p7_worker_thread_state{
 	//! Pipeline that stores statistics because we swap pipelines a lot
 	P7_PIPELINE *stats_pipeline;
 	
+	//! lock that controls access to the thread's mode
+	pthread_mutex_t mode_lock; 
+
 	//! Is the thread processing front-end or back-end comparisons
 	P7_THREAD_MODE mode;
 
@@ -111,6 +114,8 @@ typedef struct p7_worker_thread_state{
 	// lock that controls access to the tophiits object
 	pthread_mutex_t hits_lock;
 
+	// lock that controls access to the stats_pipeline object
+	pthread_mutex_t pipeline_lock;
 	//! hits that this thread has found
 	P7_TOPHITS *tophits;
 
@@ -149,10 +154,8 @@ typedef struct p7_server_workernode_state{
 	//! array[num_threads] of pthread objects, one for each worker thread
 	pthread_t *thread_objs;
 
-	// fields above here are set at startup, before any threads start, so don't have to be volatile
 
 	/*! Thread-local state, represented as array[num_threads] of P7_WORKER_THREAD_STATE objects.  
-	 * \details doesn't require synchronization or volatile because each thread only touches its own state object
 	 */
 	P7_SERVER_WORKER_THREAD_STATE *thread_state;
 
@@ -211,14 +214,10 @@ typedef struct p7_server_workernode_state{
 
 	//! Set to the base model of the HMM in a one-HMM many-sequence search.  Otherwise, set NULL
 	/*! In a one-HMM many-sequence search, each thread must make its own copy of this data structure
-	 Declared as P7_PROFILE * volatile because the value of the pointer might change out from under us.
 	 The contents of the P7_PROFILE should not change unexpectedly */
 	P7_PROFILE *compare_model;
 
 	//! Set to the sequence we're comparing against in a one-sequence many-HMM search.  Otherwise, set NULL
-	/*!Declared as ESL_SQ volatile because the value of the pointer might change at any time, not the value of the
-	  * object that's being pointed to.
-	  */
 	ESL_SQ *compare_sequence;
 
 	//! Length of the sequence we're comparing against in a one-sequence many-HMM search.  Otherwise 0
@@ -250,19 +249,19 @@ typedef struct p7_server_workernode_state{
   	//! Flag indicating that the main thread should request more work from the master node
   	/*!  \details When a worker thread sees that the amount of work in the global queue has dropped below the request threshold,
   	 *  it sets this flag unless work_requested is set */
-	volatile int request_work;
+		int request_work;
 
 	//! Flag set between the time when the main thread requests more work from the master node and the time when that work arrives.
 	/*! \details The main thread sets this flag when it requests more work from the master node, so that only one work request goes out for 
 	 * each time that the amount of work in the global work queue drops below the work request threshold.  This keeps the system from issuing 
 	 * large amounts of work to one node if it takes the master node a while to respond to the first work request message from that node.
 	 */
-  	volatile int work_requested; 
+  	int work_requested; 
   	
   	//! Flag set when the master node responds to a work request by saying that it has no more work to issue.
   	/*! \details Once this flag is set, the worker node will not send any more work requests until the current search completes.  This flag is reset
   	 * as part of starting a new search */
-  	volatile int master_queue_empty;
+  	int master_queue_empty;
 
   	//! lock that synchronizes access to the queue of comparisons that need to be processed by back-end threads
   	pthread_mutex_t backend_queue_lock;

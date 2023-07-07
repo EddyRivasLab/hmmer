@@ -906,7 +906,9 @@ P7_SERVER_MASTERNODE_STATE *p7_server_masternode_Create(uint32_t num_shards, int
   if(pthread_mutex_init(&(the_node->master_tophits_lock), NULL)){
       p7_Fail("Unable to create mutex in p7_server_masternode_Create");
   }
-
+ if(pthread_mutex_init(&(the_node->worker_nodes_done_lock), NULL)){
+      p7_Fail("Unable to create mutex in p7_server_masternode_Create");
+  }
   // init the start contition variable
   pthread_cond_init(&(the_node->start), NULL);
 
@@ -955,7 +957,7 @@ void p7_server_masternode_Destroy(P7_SERVER_MASTERNODE_STATE *masternode){
   pthread_mutex_destroy(&(masternode->empty_hit_message_pool_lock));
   pthread_mutex_destroy(&(masternode->full_hit_message_pool_lock));
   pthread_mutex_destroy(&(masternode->hit_wait_lock));
-
+  pthread_mutex_destroy(&(masternode->worker_nodes_done_lock));
   for(i =0; i< masternode->num_shards; i++){
     free(masternode->work_queues[i]);
   }
@@ -1179,7 +1181,9 @@ int process_search(P7_SERVER_MASTERNODE_STATE *masternode, P7_SERVER_QUEUE_DATA 
 
   // Synchronize with the hit processing thread
   pthread_mutex_lock(&(masternode->hit_wait_lock));
+  pthread_mutex_lock(&(masternode->worker_nodes_done_lock));
   masternode->worker_nodes_done = 0;  // None of the workers are finished at search start time
+  pthread_mutex_unlock(&(masternode->worker_nodes_done_lock));
   masternode->worker_stats_received = 0; // and none have sent pipeline statistics
   pthread_cond_broadcast(&(masternode->start)); // signal hit processing thread to start
   pthread_mutex_unlock(&(masternode->hit_wait_lock));
@@ -1198,9 +1202,13 @@ int process_search(P7_SERVER_MASTERNODE_STATE *masternode, P7_SERVER_QUEUE_DATA 
 
 
   // loop here until all of the workers are done with the search
+  pthread_mutex_lock(&(masternode->worker_nodes_done_lock));
   while((masternode->worker_nodes_done < masternode->num_worker_nodes) || (masternode->worker_stats_received < masternode->num_worker_nodes)){
+    pthread_mutex_unlock(&(masternode->worker_nodes_done_lock));
     p7_masternode_message_handler(masternode, buffer_handle, server_mpitypes, query->opts);  //Poll for incoming messages
+    pthread_mutex_lock(&(masternode->worker_nodes_done_lock));
   }
+  pthread_mutex_unlock(&(masternode->worker_nodes_done_lock));
   if(*buffer_handle != NULL){ // need to clean up that buffer
     p7_server_message_Destroy(*buffer_handle); 
   }
@@ -1521,7 +1529,9 @@ void *p7_server_master_hit_thread(void *argument){
     }
     
     // If we weren't told to exit, we're doing a search, so loop until all of the worker nodes are done with the search
+    pthread_mutex_lock(&(masternode->worker_nodes_done_lock));
     while(masternode->worker_nodes_done < masternode->num_worker_nodes){
+      pthread_mutex_unlock(&(masternode->worker_nodes_done_lock));
       pthread_mutex_lock(&(masternode->full_hit_message_pool_lock));
 
       if(masternode->full_hit_message_pool != NULL){
@@ -1552,7 +1562,9 @@ void *p7_server_master_hit_thread(void *argument){
         the_message->tophits = NULL;
         if(the_message->status.MPI_TAG == HMMER_HIT_FINAL_MPI_TAG){
           //this hit message was the last one from a thread, so increment the number of threads that have finished
+          pthread_mutex_lock(&(masternode->worker_nodes_done_lock));
           masternode->worker_nodes_done++; //we're the only thread that changes this during a search, so no need to lock
+          pthread_mutex_unlock(&(masternode->worker_nodes_done_lock));
         }
 
         // Put the message back on the empty list now that we've dealt with it.
@@ -1565,7 +1577,9 @@ void *p7_server_master_hit_thread(void *argument){
       else{
         pthread_mutex_unlock(&(masternode->full_hit_message_pool_lock));
       }
+    pthread_mutex_lock(&(masternode->worker_nodes_done_lock));
     }
+    pthread_mutex_unlock(&(masternode->worker_nodes_done_lock));
   }
   p7_Fail("Master node hit thread somehow reached unreachable end point\n");
   #endif

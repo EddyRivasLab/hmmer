@@ -85,6 +85,8 @@ typedef struct p7_server_masternode_state{
   //! Number of worker nodes, typicaly one less than the total number of nodes
   int num_worker_nodes; 
 
+  //! lock controlling access to worker_nodes_done
+  pthread_mutex_t worker_nodes_done_lock;
   //! Number of worker nodes that have finished their parts of the current search
   int worker_nodes_done; 
 

@@ -126,6 +126,12 @@ P7_SERVER_WORKERNODE_STATE *p7_server_workernode_Create(uint32_t num_databases, 
     if(pthread_mutex_init(&(workernode->thread_state[i].hits_lock), NULL)){
       p7_Die("Unable to create mutex in p7_server_workernode_Create");
     }
+    if(pthread_mutex_init(&(workernode->thread_state[i].pipeline_lock), NULL)){
+      p7_Die("Unable to create mutex in p7_server_workernode_Create");
+    }
+    if(pthread_mutex_init(&(workernode->thread_state[i].mode_lock), NULL)){
+      p7_Die("Unable to create mutex in p7_server_workernode_Create");
+    }
   }
 
   // initialize the waiter lock
@@ -143,7 +149,7 @@ P7_SERVER_WORKERNODE_STATE *p7_server_workernode_Create(uint32_t num_databases, 
   // Stealing starts out allowed, becomes not allowed once amount of work remaining on a block gets too small
   workernode->no_steal = 0;
     
-  // init the go contition variable
+  // init the go condition variable
   pthread_cond_init(&(workernode->start), NULL);
 
   workernode->num_releases = 0;
@@ -279,6 +285,8 @@ void p7_server_workernode_Destroy(P7_SERVER_WORKERNODE_STATE *workernode){
       p7_bg_Destroy(workernode->thread_state[i].bg);
     }
     p7_tophits_Destroy(workernode->thread_state[i].tophits);
+    pthread_mutex_destroy(&(workernode->thread_state[i].hits_lock));
+    pthread_mutex_destroy(&(workernode->thread_state[i].pipeline_lock));
     pthread_join(workernode->thread_objs[i], NULL); 
   }
   free(workernode->thread_state);
@@ -303,6 +311,12 @@ void p7_server_workernode_Destroy(P7_SERVER_WORKERNODE_STATE *workernode){
   p7_tophits_Destroy(workernode->tophits);
   //finally, free the workernode structure itself
   esl_getopts_Destroy(workernode->commandline_options);
+  pthread_mutex_destroy(&(workernode->search_definition_lock));
+  pthread_mutex_destroy(&(workernode->backend_threads_lock));
+  pthread_mutex_destroy(&(workernode->hit_list_lock));
+  pthread_mutex_destroy(&(workernode->global_queue_lock));
+  pthread_mutex_destroy(&(workernode->work_request_lock));
+  pthread_mutex_destroy(&(workernode->backend_queue_lock));
   free(workernode);
 }
 
@@ -495,7 +509,9 @@ int p7_server_workernode_start_hmm_vs_amino_db(P7_SERVER_WORKERNODE_STATE *worke
 
   // Set up thread state
   for(i = 0; i < workernode->num_threads; i++){
+    pthread_mutex_lock(&(workernode->thread_state[i].mode_lock));
     workernode->thread_state[i].mode = FRONTEND; // all threads start out processing front-end comparisons
+    pthread_mutex_unlock(&(workernode->thread_state[i].mode_lock));
     workernode->thread_state[i].comparisons_queued = 0; // reset this
     workernode->thread_state[i].stats_pipeline = p7_pipeline_Create(workernode->commandline_options, 100, 100, FALSE, p7_SEARCH_SEQS);
     if(workernode->thread_state[i].stats_pipeline == NULL){
@@ -516,10 +532,11 @@ int p7_server_workernode_start_hmm_vs_amino_db(P7_SERVER_WORKERNODE_STATE *worke
   
   // At start of search, we haven't requested any more work from the master node, shouldn't request any more work, and haven't been told that the
   // master node is out of work
+  pthread_mutex_lock(&(workernode->work_request_lock));
   workernode->work_requested = 0; 
   workernode->request_work = 0;
   workernode->master_queue_empty =0;
-  
+  pthread_mutex_unlock(&(workernode->work_request_lock));
   // if we get this far, we have failed to fail, and have therefore succeeded
   return (eslOK);
 }
@@ -682,7 +699,9 @@ int p7_server_workernode_start_amino_vs_hmm_db(P7_SERVER_WORKERNODE_STATE *worke
 
   // Set up thread state
   for(int i = 0; i < workernode->num_threads; i++){
+    pthread_mutex_lock(&(workernode->thread_state[i].mode_lock));
     workernode->thread_state[i].mode = FRONTEND; // all threads start out processing front-end comparisons
+    pthread_mutex_unlock(&(workernode->thread_state[i].mode_lock));
     workernode->thread_state[i].comparisons_queued = 0; // reset this
     workernode->thread_state[i].stats_pipeline = p7_pipeline_Create(workernode->commandline_options, 100, 100, FALSE, p7_SCAN_MODELS);
     if(workernode->thread_state[i].stats_pipeline == NULL){
@@ -690,9 +709,11 @@ int p7_server_workernode_start_amino_vs_hmm_db(P7_SERVER_WORKERNODE_STATE *worke
     }
   }
   workernode->num_backend_threads = 0;
+  pthread_mutex_lock(&(workernode->work_request_lock));
   workernode->work_requested = 0; // no work has been requested thus far
   workernode->request_work = 0;
   workernode->master_queue_empty =0;
+  pthread_mutex_unlock(&(workernode->work_request_lock));
   return (eslOK);
 }
 
@@ -761,6 +782,7 @@ ERROR:
     are waiting and the call of this function */
 int p7_server_workernode_release_threads(P7_SERVER_WORKERNODE_STATE *workernode){
   workernode->num_waiting = 0;  // reset this since the threads are about to start working
+  printf("Release_threads set num_waiting to zero\n");
   workernode->num_releases +=1;  
   pthread_cond_broadcast(&(workernode->start)); // signal all threads to start
 
@@ -789,6 +811,7 @@ void p7_server_workernode_end_search(P7_SERVER_WORKERNODE_STATE *workernode){
   free(workernode->sequences_processed);
 #endif
   int i;
+  pthread_mutex_lock(&(workernode->search_definition_lock));
   // Destroy or recycle models
   for(i = 0; i < workernode->num_threads; i++){
     p7_profile_Destroy(workernode->thread_state[i].gm);
@@ -799,7 +822,6 @@ void p7_server_workernode_end_search(P7_SERVER_WORKERNODE_STATE *workernode){
     workernode->thread_state[i].bg = NULL;
 
   }
-  pthread_mutex_lock(&(workernode->search_definition_lock));
   if(workernode->compare_model != NULL){
     esl_alphabet_Destroy((ESL_ALPHABET *) workernode->compare_model->abc);
     p7_profile_Destroy(workernode->compare_model);
@@ -864,11 +886,11 @@ void *p7_server_worker_thread(void *worker_argument){
        Once startup is over, we use workernode->start to signal that a new search or new work assignment has arrived */
     pthread_mutex_lock(&(workernode->wait_lock));
     workernode->num_waiting +=1;  //mark that we're now waiting for the go signal
+    printf("Worker %d incremented num_waiting to %d, workernode->num_releases was %d, my_releases was %d\n", my_id, workernode->num_waiting, workernode->num_releases, my_releases);
+    my_releases = workernode->num_releases; // Grab the global release count so we can wait for the next one, since we may miss releases if we're busy with work
     while(workernode->num_releases <= my_releases){ // catch spurious wakeup
       pthread_cond_wait(&(workernode->start), &(workernode->wait_lock)); // wait until master tells us to go
-    }
-    my_releases = workernode->num_releases;  // Copy global value instead of incrementing ours because we're 
-    // allowed to miss some release signals, for example if more work arrives from master node while the worker thread is busy
+    }  
 
     pthread_mutex_unlock(&(workernode->wait_lock));  // We come out of pthread_cond_wait holding the lock
     gettimeofday(&start_time, NULL);
@@ -906,12 +928,15 @@ void *p7_server_worker_thread(void *worker_argument){
 
         stop = 0;
         while(stop == 0){  // There's still some work left to do on the current search
+          pthread_mutex_lock(&(workernode->thread_state[my_id].mode_lock));
           switch(workernode->thread_state[my_id].mode){
             case FRONTEND:
+              pthread_mutex_unlock(&(workernode->thread_state[my_id].mode_lock));
               // process front-end searches until we either run out of work or are told to switch to back-end
               stop = worker_thread_front_end_search_loop(workernode, my_id);
               break;
             case BACKEND:
+              pthread_mutex_unlock(&(workernode->thread_state[my_id].mode_lock));
               // Call the back end search loop to process comparisons that require long searches until there aren't any
               // left in the queue
               worker_thread_back_end_sequence_search_loop(workernode, my_id);
@@ -932,12 +957,15 @@ void *p7_server_worker_thread(void *worker_argument){
         pthread_mutex_unlock(&(workernode->search_definition_lock));
         stop = 0;
         while(stop == 0){  // There's still some work left to do on the current search
+          pthread_mutex_lock(&(workernode->thread_state[my_id].mode_lock));
           switch(workernode->thread_state[my_id].mode){
             case FRONTEND:
+              pthread_mutex_unlock(&(workernode->thread_state[my_id].mode_lock));
               // process front-end searches until we either run out of work or are told to switch to back-end
               stop = worker_thread_front_end_search_loop(workernode, my_id);
               break;
             case BACKEND:
+              pthread_mutex_unlock(&(workernode->thread_state[my_id].mode_lock));
               // Call the back end search loop to process comparisons that require long searches until there aren't any
               // left in the queue
               worker_thread_back_end_sequence_search_loop(workernode, my_id);
@@ -1145,9 +1173,10 @@ static int worker_thread_front_end_search_loop(P7_SERVER_WORKERNODE_STATE *worke
         // There are also no backend queue entries to process
           if(workernode->thread_state[my_id].pipeline != NULL){
             //Merge stats into running list and clean up the current pipeline
+            pthread_mutex_lock(&(workernode->thread_state[my_id].pipeline_lock));
             p7_pipeline_Merge(workernode->thread_state[my_id].stats_pipeline, workernode->thread_state[my_id].pipeline);
-
             p7_pipeline_Destroy(workernode->thread_state[my_id].pipeline); // scrub the engine for next time
+            pthread_mutex_unlock(&(workernode->thread_state[my_id].pipeline_lock));  
             workernode->thread_state[my_id].pipeline = NULL;
           }        
         return 1;
@@ -1155,11 +1184,13 @@ static int worker_thread_front_end_search_loop(P7_SERVER_WORKERNODE_STATE *worke
         else{
           // there are backend queue entries to process, switch to backend mode to handle them
           pthread_mutex_lock(&(workernode->backend_threads_lock));
+          pthread_mutex_lock(&(workernode->thread_state[my_id].mode_lock));
           if(workernode->thread_state[my_id].mode == FRONTEND){
             // someone hasn't already set me to BACKEND
             workernode->num_backend_threads += 1;
             workernode->thread_state[my_id].mode = BACKEND;
           }
+          pthread_mutex_unlock(&(workernode->thread_state[my_id].mode_lock));
           pthread_mutex_unlock(&(workernode->backend_threads_lock));
           if(workernode->thread_state[my_id].pipeline != NULL){
             //Merge stats into running list and clean up the current pipeline
@@ -1260,13 +1291,22 @@ static int worker_thread_front_end_search_loop(P7_SERVER_WORKERNODE_STATE *worke
             the_entry->next = NULL;
             the_entry->fwdsc = fwdsc;
             the_entry->nullsc = nullsc;
+            pthread_mutex_lock(&(workernode->thread_state[my_id].mode_lock));
             workernode->thread_state[my_id].comparisons_queued += 1;
+            pthread_mutex_unlock(&(workernode->thread_state[my_id].mode_lock));
             // put the entry in the queue
             workernode_put_backend_queue_entry_in_queue(workernode, the_entry);
-
+            pthread_mutex_lock(&(workernode->backend_threads_lock));
+            pthread_mutex_lock(&(workernode->backend_queue_lock));
             if (workernode->backend_queue_depth > (workernode->num_backend_threads << BACKEND_INCREMENT_FACTOR)){
+              pthread_mutex_unlock(&(workernode->backend_queue_lock));
+              pthread_mutex_unlock(&(workernode->backend_threads_lock));
               // There are too many back-end comparisons waiting in the queue, so switch a thread from frontend to backend
               workernode_increase_backend_threads(workernode);
+            }
+            else{
+              pthread_mutex_unlock(&(workernode->backend_queue_lock));
+              pthread_mutex_unlock(&(workernode->backend_threads_lock));
             }
           }
           else{
@@ -1276,7 +1316,9 @@ static int worker_thread_front_end_search_loop(P7_SERVER_WORKERNODE_STATE *worke
         }
 
         // Done with the current sequence, check if we've been switched to backend mode before proceeding to the next one
+        pthread_mutex_lock(&(workernode->thread_state[my_id].mode_lock));
         if(workernode->thread_state[my_id].mode == BACKEND){
+          pthread_mutex_unlock(&(workernode->thread_state[my_id].mode_lock));
         // need to switch modes.
  
           // Put our current work chunk back on the work queue
@@ -1330,7 +1372,7 @@ static int worker_thread_front_end_search_loop(P7_SERVER_WORKERNODE_STATE *worke
           workernode->thread_state[my_id].pipeline = NULL;
           return(0);
         }
-
+        pthread_mutex_unlock(&(workernode->thread_state[my_id].mode_lock));
         // if we get this far, we weren't switched to the backend, so go on to the next sequence or back to look for more work
         start += workernode->num_shards;
         search_object_index++;
@@ -1395,8 +1437,9 @@ static void worker_thread_back_end_sequence_search_loop(P7_SERVER_WORKERNODE_STA
   if(workernode->backend_queue == NULL){  // Check this while we have the lock to prevent a race condition between 
     // enqueuing an entry in an empty backend queue and the last backend thread deciding there's no front-end work to do.
     // If we don't switch to front-end mode, we'll just call this function again immediately
-
+    pthread_mutex_lock(&(workernode->thread_state[my_id].mode_lock));
     workernode->thread_state[my_id].mode = FRONTEND; // change my mode to frontend
+    pthread_mutex_unlock(&(workernode->thread_state[my_id].mode_lock));
     workernode->num_backend_threads -= 1;
     }
 
@@ -1422,15 +1465,19 @@ static void workernode_increase_backend_threads(P7_SERVER_WORKERNODE_STATE *work
   uint32_t fewest_hits_thread = -1;
 
   for(which_thread = 0; which_thread < workernode->num_threads; which_thread++){
+    pthread_mutex_lock(&(workernode->thread_state[which_thread].mode_lock));
     if((workernode->thread_state[which_thread].mode == FRONTEND) &&(workernode->thread_state[which_thread].comparisons_queued < fewest_hits)){
       // this thread is processing front-end queries and has queued fewer hits than any other front-end thread
       fewest_hits_thread = which_thread;
       fewest_hits = workernode->thread_state[which_thread].comparisons_queued;
     }
+    pthread_mutex_unlock(&(workernode->thread_state[which_thread].mode_lock));
   }
   if(fewest_hits_thread != -1){
     // We found a thread to switch to
+    pthread_mutex_lock(&(workernode->thread_state[fewest_hits_thread].mode_lock));
     workernode->thread_state[fewest_hits_thread].mode = BACKEND;
+    pthread_mutex_unlock(&(workernode->thread_state[fewest_hits_thread].mode_lock));
     workernode->num_backend_threads +=1;
   }
   // If we didn't find a thread to switch to, all worker threads must be in back-end mode or about to change to back-end mode
@@ -1711,6 +1758,7 @@ int32_t worker_thread_steal(P7_SERVER_WORKERNODE_STATE *workernode, uint32_t my_
 
   for(i = 0; i < workernode->num_threads; i++){
     pthread_mutex_lock(&(workernode->work[i].lock));
+    pthread_mutex_lock(&(workernode->thread_state[i].mode_lock));
     if((workernode->work[i].start != -1) && (workernode->work[i].start < workernode->work[i].end) && (workernode->thread_state[i].mode == FRONTEND)){ 
     // There's some stealable work in the potential victim's queue.
       stealable_work = workernode->work[i].end - workernode->work[i].start;
@@ -1719,7 +1767,8 @@ int32_t worker_thread_steal(P7_SERVER_WORKERNODE_STATE *workernode, uint32_t my_
         victim_id = i;
       }
     }
-  pthread_mutex_unlock(&(workernode->work[i].lock));
+    pthread_mutex_unlock(&(workernode->thread_state[i].mode_lock));
+    pthread_mutex_unlock(&(workernode->work[i].lock));
   }
 
   if(victim_id == -1){
@@ -1912,8 +1961,9 @@ static int workernode_perform_search_or_scan(P7_SERVER_WORKERNODE_STATE *workern
       int thread;
             
       // Task 1: check for incoming work from the master node
+      pthread_mutex_lock(&(workernode->work_request_lock));
       if(workernode->work_requested){ // We've asked for work, see if it's arrived
-
+        pthread_mutex_unlock(&(workernode->work_request_lock));
         int found_message = 0;
         MPI_Status temp_status;
             
@@ -1934,7 +1984,9 @@ static int workernode_perform_search_or_scan(P7_SERVER_WORKERNODE_STATE *workern
             pthread_mutex_unlock(&(workernode->wait_lock));
           }
           else{
+            pthread_mutex_lock(&(workernode->work_request_lock));
             workernode->master_queue_empty = 1;  // The master is out of work to give
+            pthread_mutex_unlock(&(workernode->work_request_lock));
           }
 
           pthread_mutex_lock(&(workernode->work_request_lock));       
@@ -1942,6 +1994,9 @@ static int workernode_perform_search_or_scan(P7_SERVER_WORKERNODE_STATE *workern
           pthread_mutex_unlock(&(workernode->work_request_lock));
   
         }          
+      }
+      else{
+        pthread_mutex_unlock(&(workernode->work_request_lock));
       }
 
       // Task 2: Request more work from the master node when necessary
@@ -1961,15 +2016,19 @@ static int workernode_perform_search_or_scan(P7_SERVER_WORKERNODE_STATE *workern
       // have enough to make that worthwhile
       P7_TOPHITS *hits;
       for(thread = 0; thread < workernode->num_threads; thread++){
+        pthread_mutex_lock(&(workernode->thread_state[thread].hits_lock));
         if(workernode->thread_state[thread].tophits->N > 50){
           // This thread has enough hits that we should merge them into the node tree
-          pthread_mutex_lock(&(workernode->thread_state[thread].hits_lock));
+          
           // grab the hits out of the worker thread
           hits = workernode->thread_state[thread].tophits;
           workernode->thread_state[thread].tophits= p7_tophits_Create();
           pthread_mutex_unlock(&(workernode->thread_state[thread].hits_lock));
           p7_tophits_Merge(workernode->tophits, hits);
           p7_tophits_Destroy(hits); // tophits_Merge mangles the second tophits
+        }
+        else{
+          pthread_mutex_unlock(&(workernode->thread_state[thread].hits_lock));
         }
       }
       if(workernode->tophits->N > 1000){ // Arbitrary number, but seems to work fine
@@ -1990,13 +2049,14 @@ static int workernode_perform_search_or_scan(P7_SERVER_WORKERNODE_STATE *workern
 
     // When we get here, all of the worker nodes have run out of work to do, so request more work unless the master node has told us its
     // out of work or we've already sent a request 
+    pthread_mutex_lock(&(workernode->work_request_lock));
     if(!workernode->master_queue_empty){
       if(!workernode->work_requested){
         // nobody has sent a request already, so send one
         workernode_request_Work(workernode->my_shard);
         works_requested++;
       }
-
+      pthread_mutex_unlock(&(workernode->work_request_lock));
       // Request sent, wait for more work.
       workernode_wait_for_Work(&work_reply, server_mpitypes);
       works_received++;
@@ -2019,6 +2079,7 @@ static int workernode_perform_search_or_scan(P7_SERVER_WORKERNODE_STATE *workern
       }
     }
     else{ // we're out of work and the master queue is empty, so we're done
+      pthread_mutex_unlock(&(workernode->work_request_lock));
       stop = 1;
     }
   }
@@ -2027,10 +2088,11 @@ static int workernode_perform_search_or_scan(P7_SERVER_WORKERNODE_STATE *workern
   if(works_requested != works_received){
     p7_Die("Rank %d had work request/receive mis-match %u vs. %u\n", workernode->my_rank, works_requested, works_received);
   }
+  pthread_mutex_lock(&(workernode->work_request_lock));
   if(workernode->work_requested){
     p7_Die("Rank %d had work request outstanding at end of search\n", workernode->my_rank);
   }
-
+  pthread_mutex_unlock(&(workernode->work_request_lock));
 
   // At this point, we've completed the search, so send any hits that are still on this node to the master
   int thread;
@@ -2043,8 +2105,10 @@ static int workernode_perform_search_or_scan(P7_SERVER_WORKERNODE_STATE *workern
     pli = p7_pipeline_Create(workernode->commandline_options, 100, 100, FALSE, p7_SCAN_MODELS);
   }
   for(thread = 0; thread < workernode->num_threads; thread++){
+    pthread_mutex_lock(&(workernode->thread_state[thread].pipeline_lock));
     p7_pipeline_Merge(pli, workernode->thread_state[thread].stats_pipeline);
     p7_pipeline_Destroy(workernode->thread_state[thread].stats_pipeline);
+    pthread_mutex_unlock(&(workernode->thread_state[thread].pipeline_lock));
     workernode->thread_state[thread].stats_pipeline=NULL;
     if(workernode->thread_state[thread].tophits->N > 0){
       // This thread has hits that we need to put in the tree
