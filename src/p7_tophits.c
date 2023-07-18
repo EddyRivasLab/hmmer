@@ -988,12 +988,15 @@ p7_tophits_Threshold(P7_TOPHITS *th, P7_PIPELINE *pli)
   }
 
   /* Count the reported, included domains */
-  for (h = 0; h < th->N; h++)  
+  for (h = 0; h < th->N; h++) {
+    th->hit[h]->nreported = 0;
+    th->hit[h]->nincluded = 0;
     for (d = 0; d < th->hit[h]->ndom; d++)
     {
         if (th->hit[h]->dcl[d].is_reported) th->hit[h]->nreported++;
         if (th->hit[h]->dcl[d].is_included) th->hit[h]->nincluded++;
     }
+  }
 
   workaround_bug_h74(th);  /* blech. This function is defined above; see commentary and crossreferences there. */
 
