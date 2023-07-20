@@ -1638,7 +1638,6 @@ void p7_masternode_message_handler(P7_SERVER_MASTERNODE_STATE *masternode, P7_SE
   P7_SERVER_CHUNK_REPLY the_reply;
   
   if(found_message){
-    printf("Masternode received message\n");
     // Do different things for each message type
     switch((*buffer_handle)->status.MPI_TAG){
     case HMMER_PIPELINE_STATE_MPI_TAG:
@@ -1674,7 +1673,7 @@ void p7_masternode_message_handler(P7_SERVER_MASTERNODE_STATE *masternode, P7_SE
 
         if(requester_shard >= masternode->num_shards){
           // The requestor asked for a non-existent shard
-          p7_Fail("Out-of-range shard %d sent in work request", requester_shard);
+          p7_Die("Out-of-range shard %d sent in work request", requester_shard);
         }
 
         // Get some work out of the appropriate queue

@@ -782,7 +782,6 @@ ERROR:
     are waiting and the call of this function */
 int p7_server_workernode_release_threads(P7_SERVER_WORKERNODE_STATE *workernode){
   workernode->num_waiting = 0;  // reset this since the threads are about to start working
-  printf("Release_threads set num_waiting to zero\n");
   workernode->num_releases +=1;  
   pthread_cond_broadcast(&(workernode->start)); // signal all threads to start
 
@@ -875,7 +874,6 @@ void *p7_server_worker_thread(void *worker_argument){
   pthread_mutex_unlock(&(workernode->wait_lock));
 
   struct timeval start_time;
-  printf("Worker %d starting main work loop\n", my_id);
   // Main work loop.  The thread remains in this loop until it is told to terminate.
   while(!workernode->shutdown){
     
@@ -886,7 +884,6 @@ void *p7_server_worker_thread(void *worker_argument){
        Once startup is over, we use workernode->start to signal that a new search or new work assignment has arrived */
     pthread_mutex_lock(&(workernode->wait_lock));
     workernode->num_waiting +=1;  //mark that we're now waiting for the go signal
-    printf("Worker %d incremented num_waiting to %d, workernode->num_releases was %d, my_releases was %d\n", my_id, workernode->num_waiting, workernode->num_releases, my_releases);
     my_releases = workernode->num_releases; // Grab the global release count so we can wait for the next one, since we may miss releases if we're busy with work
     while(workernode->num_releases <= my_releases){ // catch spurious wakeup
       pthread_cond_wait(&(workernode->start), &(workernode->wait_lock)); // wait until master tells us to go
@@ -895,7 +892,6 @@ void *p7_server_worker_thread(void *worker_argument){
     pthread_mutex_unlock(&(workernode->wait_lock));  // We come out of pthread_cond_wait holding the lock
     gettimeofday(&start_time, NULL);
     pthread_mutex_lock(&(workernode->search_definition_lock));
-    printf("Worker thread %d started search with type %d\n", my_id, workernode->search_type);
     switch(workernode->search_type){ // do the right thing for each search type
       case SEQUENCE_SEARCH:
       case SEQUENCE_SEARCH_CONTINUE:     
@@ -1215,11 +1211,15 @@ static int worker_thread_front_end_search_loop(P7_SERVER_WORKERNODE_STATE *worke
     if((start != -1) && (start <= end)){
       uint64_t chunk_end = end; // process sequences until we see a long operation or hit the end of the chunk
       // get pointer to first sequence to search
-      uint64_t search_object_index;
+      uint64_t search_object_location_in_shard;
       ESL_SQ *search_sequence=NULL;
       P7_OPROFILE *search_om = NULL;
-      search_object_index = p7_shard_Find_Index_Nexthigh(workernode->database_shards[compare_database], start);
-
+      search_object_location_in_shard = p7_shard_Find_Index_Nexthigh(workernode->database_shards[compare_database], start);
+      if(workernode->database_shards[compare_database]->directory[search_object_location_in_shard].index > end){
+        // The first item in our shard with an index >= start also has an index > end, so there are no valid sequences to search in this range
+        start = chunk_end +1; // Force next loop to not happen
+      }
+      printf("Worker %d from rank %d got chunk ranging from %lu to %lu\n", my_id, workernode->my_rank, start, end);
       while(start <= chunk_end){
 
         pthread_mutex_lock(&(workernode->work[my_id].lock));
@@ -1227,14 +1227,14 @@ static int worker_thread_front_end_search_loop(P7_SERVER_WORKERNODE_STATE *worke
         pthread_mutex_unlock(&(workernode->work[my_id].lock));
 
         if((search_type == SEQUENCE_SEARCH) || (search_type == SEQUENCE_SEARCH_CONTINUE)){
-          search_sequence = (ESL_SQ *) workernode->database_shards[compare_database]->contents[search_object_index];
+          search_sequence = (ESL_SQ *) workernode->database_shards[compare_database]->contents[search_object_location_in_shard];
           p7_bg_SetLength(workernode->thread_state[my_id].bg, search_sequence->L);           
           p7_oprofile_ReconfigLength(workernode->thread_state[my_id].om,search_sequence->L);
           p7_pli_NewSeq(workernode->thread_state[my_id].pipeline, search_sequence);
           status = p7_Pipeline_Overthruster(workernode->thread_state[my_id].pipeline, workernode->thread_state[my_id].om, workernode->thread_state[my_id].bg, search_sequence, &fwdsc, &nullsc);
         }
         else{
-          search_om = (P7_OPROFILE *) workernode->database_shards[compare_database]->contents[search_object_index];
+          search_om = (P7_OPROFILE *) workernode->database_shards[compare_database]->contents[search_object_location_in_shard];
           p7_pli_NewModel(workernode->thread_state[my_id].pipeline, search_om, workernode->thread_state[my_id].bg);
           p7_oprofile_ReconfigLength(search_om, compare_L);
           p7_bg_SetLength(workernode->thread_state[my_id].bg, compare_L);           
@@ -1253,7 +1253,7 @@ static int worker_thread_front_end_search_loop(P7_SERVER_WORKERNODE_STATE *worke
           pthread_mutex_lock(&(workernode->work[my_id].lock));
           
           // grab the start and end pointers from our work queue
-          workernode->work[my_id].start = start + workernode->num_shards;
+          workernode->work[my_id].start = start + workernode->num_shards;  // update this to reduce amount of redundant work done during steals
           end = workernode->work[my_id].end;
           
           pthread_mutex_unlock(&(workernode->work[my_id].lock)); // release lock
@@ -1275,6 +1275,7 @@ static int worker_thread_front_end_search_loop(P7_SERVER_WORKERNODE_STATE *worke
                 p7_Die("Unable to allocate memory in worker_thread_front_end_sequence_search_loop.\n");
               }
               p7_pli_NewModel(workernode->thread_state[my_id].pipeline, workernode->thread_state[my_id].om, workernode->thread_state[my_id].bg);
+              printf("Worker %d from rank %d sending sequence %s to backend, search_object_location_in_shard was %lu\n", my_id, workernode->my_rank, search_sequence->name, search_object_location_in_shard);
               the_entry->sequence = search_sequence;
               the_entry->om = workernode->thread_state[my_id].om;
             }
@@ -1314,7 +1315,7 @@ static int worker_thread_front_end_search_loop(P7_SERVER_WORKERNODE_STATE *worke
                                     //chunk to force a steal
           }
         }
-
+        start += workernode->num_shards;  // Increment this here to avoid pushing the comparison we just did back on the global queue if we switch modes
         // Done with the current sequence, check if we've been switched to backend mode before proceeding to the next one
         pthread_mutex_lock(&(workernode->thread_state[my_id].mode_lock));
         if(workernode->thread_state[my_id].mode == BACKEND){
@@ -1358,7 +1359,7 @@ static int worker_thread_front_end_search_loop(P7_SERVER_WORKERNODE_STATE *worke
             workernode->global_queue = temp;
 
             // Fill in the chunk's start, end pointers
-            workernode->global_queue->start = p7_shard_Find_Index_Nexthigh(workernode->database_shards[compare_database], start + 1);
+            workernode->global_queue->start = start;
             workernode->global_queue->end = end;
 
             pthread_mutex_unlock(&(workernode->global_queue_lock)); // release lock  
@@ -1374,9 +1375,8 @@ static int worker_thread_front_end_search_loop(P7_SERVER_WORKERNODE_STATE *worke
         }
         pthread_mutex_unlock(&(workernode->thread_state[my_id].mode_lock));
         // if we get this far, we weren't switched to the backend, so go on to the next sequence or back to look for more work
-        start += workernode->num_shards;
-        search_object_index++;
-        search_sequence = (ESL_SQ *) workernode->database_shards[compare_database]->contents[search_object_index];
+        search_object_location_in_shard++;
+        search_sequence = (ESL_SQ *) workernode->database_shards[compare_database]->contents[search_object_location_in_shard];
         search_om = (P7_OPROFILE *) search_sequence;  // set both of these, only use the one that's appropriate for the search 
         // type because it's faster than a conditional to see which one we need to set
         p7_pipeline_Reuse(workernode->thread_state[my_id].pipeline);
@@ -1935,7 +1935,7 @@ static int workernode_perform_search_or_scan(P7_SERVER_WORKERNODE_STATE *workern
   // Wait to get an initial work range back from the master
   P7_SERVER_CHUNK_REPLY work_reply;
   workernode_wait_for_Work(&work_reply, server_mpitypes);
-  // printf("Workernode received initial chunk from %lu to %lu\n", work_reply.start, work_reply.end);
+  printf("Workernode %d received initial chunk from %lu to %lu\n", workernode->my_rank, work_reply.start, work_reply.end);
 
   // Ok, we've unpacked the hmm and built all of the profiles we need.  
   if(the_command->type == P7_SERVER_HMM_VS_SEQUENCES){
@@ -1978,6 +1978,7 @@ static int workernode_perform_search_or_scan(P7_SERVER_WORKERNODE_STATE *workern
 
           if(work_reply.start != -1){
           //We got more work from the master node, add it to the global queue
+            printf("Workernode %d received chunk from %lu to %lu\n", workernode->my_rank, work_reply.start, work_reply.end);
             p7_server_workernode_add_work(workernode, work_reply.start, work_reply.end);
             pthread_mutex_lock(&(workernode->wait_lock));
             p7_server_workernode_release_threads(workernode); // tell any paused threads to start up again
