@@ -1402,7 +1402,7 @@ static void worker_thread_back_end_sequence_search_loop(P7_SERVER_WORKERNODE_STA
 
   while(the_entry != NULL){
     pthread_mutex_lock(&(workernode->search_definition_lock));
-    // There's a sequence in the queue, so do the backend comparison 
+    // There's a comparison in the queue, so do the backend comparison 
     if(workernode->search_type == SEQUENCE_SEARCH ||workernode->search_type == SEQUENCE_SEARCH_CONTINUE){
       // operate on the worker thread's OM, not the one in the command, to prevent two threads from using the same 
       // om structure simultaneously.  This isn't an issue during scans, because each om only gets examined once

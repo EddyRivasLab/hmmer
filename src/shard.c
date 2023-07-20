@@ -152,7 +152,6 @@ P7_SHARD *p7_shard_Create_sqdata(char *filename, uint32_t num_shards, uint32_t m
   //! return value used to tell if many esl routines completed successfully
   int status;
 
-  int i;
   ESL_SQFILE *dbfp = NULL; /* open input sequence file                        */
   int dbfmt = eslSQFILE_UNKNOWN; /* format code for sequence database file          */
 
@@ -202,6 +201,9 @@ P7_SHARD *p7_shard_Create_sqdata(char *filename, uint32_t num_shards, uint32_t m
               }
             }
           }
+      }
+      else{
+        esl_sq_Reuse(&(sequences->list[sequence_index])); // Clean up the sequence we just read so that we don't get multiple sequences crammed into one field.
       }
         sequence_count++;
     }
