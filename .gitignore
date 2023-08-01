@@ -1,3 +1,4 @@
+build-*
 configure
 config.log
 config.status
