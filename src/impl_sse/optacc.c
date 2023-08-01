@@ -43,7 +43,7 @@
  *            <om->M> by <L> comparison. The routine fills this in
  *            with OA scores.
  *  
- * Args:      gm    - query profile      
+ * Args:      om    - query profile      
  *            pp    - posterior decoding matrix created by <p7_GPosteriorDecoding()>
  *            gx    - RESULT: caller provided DP matrix for <gm->M> by <L> 
  *            ret_e - RETURN: expected number of correctly decoded positions 

@@ -445,7 +445,7 @@ forward_engine(int do_full, const ESL_DSQ *dsq, int L, const P7_OPROFILE *om, P7
       ox->xmx[i*p7X_NXCELLS+p7X_C] = xC;
 
 #if eslDEBUGLEVEL > 0
-      if (ox->debugging) p7_omx_DumpFBRow(ox, TRUE, i, 9, 5, xE, xN, xJ, xB, xC);	/* logify=TRUE, <rowi>=i, width=8, precision=5*/
+      if (ox->debugging) p7_omx_DumpFBRow(ox, TRUE, i, 9, 5, xE, xN, xJ, xB, xC);	/* logify=TRUE, <rowi>=i, width=9, precision=5*/
 #endif
     } /* end loop over sequence residues 1..L */
 
