@@ -147,26 +147,25 @@ Our master branches are for stable releases.
 \subsection{System requirements}
 
 \paragraph{Operating system:} HMMER is designed for
-POSIX-compatible platforms, including UNIX, Linux, and Mac OS/X. The
-POSIX standard essentially includes all operating systems except
-Microsoft Windows.\sidenote{Windows 10 includes a Linux subsystem that
-  allows you to install a Linux OS inside Windows, with a bash command
-  shell, and this should work fine. For older Windows, there are
-  add-on products available for making Windows more POSIX-compliant
-  and more compatible with GNU-ish configures and builds. One such
-  product is Cygwin, \href{http://www.cygwin.com}{www.cygwin.com},
-  which is freely available.}  We develop primarily on Apple OS/X and
-x86\_64/Linux (both Intel and AMD), and we test releases on a wider
-range of platforms.\sidenote{Thanks to the GCC Compile Farm Project,
-  especially its Toulouse and Oregon data centers, for providing
-  access to some of the platforms that we use for testing.}
+POSIX-compatible platforms, including Linux, Mac OS/X, and various
+UNIX OS's. The POSIX standard essentially includes all operating
+systems except Microsoft Windows.\sidenote{Windows 10 includes a Linux
+  subsystem that allows you to install a Linux OS inside Windows, with
+  a bash command shell, and this should work fine. For older Windows,
+  there are add-on products available for making Windows more
+  POSIX-compliant and more compatible with GNU-ish configures and
+  builds. One such product is Cygwin,
+  \href{http://www.cygwin.com}{www.cygwin.com}, which is freely
+  available.}  We develop primarily on Mac OS/X and x86\_64/Linux
+(both Intel and AMD), and we test releases on a wider range of
+platforms.\sidenote{Many thanks to the GCC Compile Farm Project for
+  providing access to some of the platforms that we use for testing.}
   
-
 \paragraph{Processor:} HMMER depends on vector parallelization methods
-that are processor-specific. H3 requires either an x86-compatible
-(Intel/AMD) processor that supports the SSE2 vector instruction set,
-and on 32-bit ``powerpc'' or 64-bit ``ppc64'' PowerPC systems that
-support the Altivec/VMX instruction set in big-endian mode.
+that are processor-specific. H3 supports three types of processors:
+x86-compatible (Intel/AMD) processors (SSE2 and AVX instruction sets),
+ARM processors such as new Macs (NEON instructions), and some PowerPC
+systems (Altivec/VMX instructions, big-endian mode only).
 
 SSE2 is supported on Intel processors from Pentium 4 on, and AMD
 processors from K8 (Athlon 64) on. This includes almost all Intel
@@ -197,9 +196,19 @@ H3.
 C99 and POSIX standards. It should compile with any ANSI C99 compliant
 compiler, including the freely available GNU C compiler \mono{gcc}.
 We test the code most frequently using the GNU \mono{gcc}, Apple
-\mono{llvm/clang}, and Intel \mono{icc} compilers.\sidenote{On OS/X,
-  if you're compiling the source, make sure you have XCode installed
-  so that you have a C compiler.}
+\mono{llvm/clang}, and Intel \mono{icc} and \mono{icx}
+compilers.\sidenote{On OS/X, if you're compiling the source, make sure
+  you have XCode installed so that you have a C compiler.}
+
+We depend on IEEE754-compliant floating point math.\sidenote{With one
+  highly technical exception; on x86-compatible CPUs, we deliberately
+  turn on a CPU mode called FTZ (flush-to-zero).}  Most C compilers,
+including gcc and clang, are IEEE754-compliant by default. \textbf{Do
+  not use their \mono{\-\-fast-math} option.} The Intel compiler icc/icx
+defaults to using an unsafe ``fast-math'' mode. If you want to use an
+Intel compiler, you must turn on IEEE754 compliance with an option
+such as \mono{-fp-model strict}; for example, you could configure for
+Intel icx with \mono{./configure CC=icx CFLAGS='-O3 -fp-model=strict'}.
 
 
 \paragraph{Libraries and other installation requirements:}
@@ -469,8 +478,8 @@ names with incompatible HMMER3 programs: \mono{hmmalign},
 and \mono{hmmsearch}.
 
 One workaround is to install the two packages each in their own
-hierarchy, as above: \mono{./configure --prefix=somewhere/hmmer-\HMMERversion{}}
-for HMMER3, and \mono{./configure --prefix=somewhere/hmmer-2.3.2} for
+hierarchy, as above: \mono{./configure \-\-prefix=somewhere/hmmer-\HMMERversion{}}
+for HMMER3, and \mono{./configure \-\-prefix=somewhere/hmmer-2.3.2} for
 HMMER2. One set of programs could be in your \mono{PATH}, and you
 could call the others using full pathnames.
 
