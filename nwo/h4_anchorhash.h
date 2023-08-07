@@ -65,7 +65,7 @@
 #ifndef h4ANCHORHASH_INCLUDED
 #define h4ANCHORHASH_INCLUDED
 
-#include "h4_config.h"
+#include <h4_config.h>
 
 #include "h4_anchorset.h"
 

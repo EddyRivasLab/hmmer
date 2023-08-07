@@ -9,7 +9,7 @@
  * See also:
  *   h4_profile : the profile itself; "model-dependent" parameters and metadata.
  */
-#include "h4_config.h"
+#include <h4_config.h>
 
 #include "easel.h"
 

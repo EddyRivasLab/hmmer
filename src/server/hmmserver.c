@@ -4,7 +4,7 @@
 #include <fcntl.h>
 #include <sys/resource.h>
 #include <signal.h>
-#include "p7_config.h"
+#include <p7_config.h>
 #ifdef HAVE_MPI
 #include <mpi.h>
 #include "esl_mpi.h"

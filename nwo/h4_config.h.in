@@ -1,6 +1,6 @@
 #ifndef H4_CONFIGH_INCLUDED
 #define H4_CONFIGH_INCLUDED
-#include "esl_config.h"
+#include <esl_config.h>
 
 #undef HMMER_VERSION
 #undef HMMER_DATE

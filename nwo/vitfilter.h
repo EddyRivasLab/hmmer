@@ -1,6 +1,6 @@
 #ifndef h4VITFILTER_INCLUDED
 #define h4VITFILTER_INCLUDED
-#include "h4_config.h"
+#include <h4_config.h>
 
 #include "easel.h"
 

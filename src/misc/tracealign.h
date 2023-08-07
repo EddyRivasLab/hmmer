@@ -1,7 +1,7 @@
 #ifndef p7TRACEALIGN_INCLUDED
 #define p7TRACEALIGN_INCLUDED
 
-#include "p7_config.h"
+#include <p7_config.h>
 
 #include "easel.h"
 #include "esl_msa.h"

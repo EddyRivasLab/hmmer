@@ -7,7 +7,7 @@
  *    5. Unit tests
  *    6. Test driver
  */
-#include "h4_config.h"
+#include <h4_config.h>
 
 #include "easel.h"
 #include "esl_alloc.h"

@@ -10,7 +10,7 @@
  * See fwdfilter.md for notes, and fwdfilter_sse.c, the "primary"
  * vector implementation, for more fully commented code.
  */
-#include "p7_config.h"
+#include <p7_config.h>
 
 #include "easel.h"
 #include "esl_vectorops.h"

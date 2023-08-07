@@ -2,7 +2,7 @@
 
 #ifndef p7HITLIST_INCLUDED
 #define p7HITLIST_INCLUDED
-#include "p7_config.h"
+#include <p7_config.h>
 #include "base/p7_tophits.h"
 #include "esl_red_black.h"
 // This is a hack to get the code to compile if we aren't building with MPI support

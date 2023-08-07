@@ -1,6 +1,6 @@
 #ifndef h4REFERENCE_ENVELOPES_INCLUDED
 #define h4REFERENCE_ENVELOPES_INCLUDED
-#include "h4_config.h"
+#include <h4_config.h>
 
 #include "easel.h"
 #include "h4_profile.h"

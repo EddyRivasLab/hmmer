@@ -7,7 +7,7 @@
  *    4. Test driver
  *    5. Example
  */
-#include "p7_config.h"
+#include <p7_config.h>
 
 #include "easel.h"
 
@@ -393,7 +393,7 @@ utest_consistency(ESL_RANDOMNESS *rng, int alphatype, int M, int L, int N)
 #ifdef p7TRACE_METRICS_TESTDRIVE
 
 
-#include "p7_config.h"
+#include <p7_config.h>
 
 #include "easel.h"
 #include "esl_getopts.h"
@@ -439,7 +439,7 @@ main(int argc, char **argv)
  * 5. Example.
  *****************************************************************/
 #ifdef p7TRACE_METRICS_EXAMPLE
-#include "p7_config.h"
+#include <p7_config.h>
 
 #include "easel.h"
 #include "esl_alphabet.h"

@@ -27,7 +27,7 @@
  *      in ReadRest().
  *    
  */
-#include "p7_config.h"
+#include <p7_config.h>
 
 #include <stdio.h>
 #include <stdlib.h>
@@ -709,7 +709,7 @@ p7_oprofile_Position(P7_HMMFILE *hfp, off_t offset)
   ./benchmark-io Pfam.hmm
   [.hmm file must be hmmpress'ed first]
  */
-#include "p7_config.h"
+#include <p7_config.h>
 
 #include <stdlib.h>
 #include <stdio.h>
@@ -868,7 +868,7 @@ utest_ReadWrite(P7_HMM *hmm, P7_OPROFILE *om)
  * 5. Test driver
  *****************************************************************/
 #ifdef p7IO_TESTDRIVE
-#include "p7_config.h"
+#include <p7_config.h>
 
 #include "easel.h"
 #include "esl_alphabet.h"
@@ -933,7 +933,7 @@ main(int argc, char **argv)
 /* gcc -g -Wall -Dp7IO_EXAMPLE -I.. -I../../easel -L.. -L../../easel -o io_example io.c -lhmmer -leasel -lm
  * ./io_example <hmmfile>
  */
-#include "p7_config.h"
+#include <p7_config.h>
 
 #include <stdlib.h>
 #include <stdio.h>

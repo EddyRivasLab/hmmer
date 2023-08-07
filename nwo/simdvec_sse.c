@@ -9,7 +9,7 @@
  *
  * See simdvec.c, simdvec.md for further explanations.
  */
-#include "h4_config.h"
+#include <h4_config.h>
 
 #include "simdvec.h"
 

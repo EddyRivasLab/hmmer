@@ -1,7 +1,7 @@
 #ifndef p7H2_IO_INCLUDED
 #define p7H2_IO_INCLUDED
 
-#include "p7_config.h"
+#include <p7_config.h>
 
 #include <stdio.h>
 

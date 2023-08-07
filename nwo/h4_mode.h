@@ -6,7 +6,7 @@
 #ifndef h4MODE_INCLUDED
 #define h4MODE_INCLUDED
 
-#include "h4_config.h"
+#include <h4_config.h>
 
 /* Constants defining fixed sizes.
  * (These are to avoid cryptic bare numbers like '5' in the code.) 

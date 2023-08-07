@@ -1,7 +1,7 @@
 #ifndef p7_COORDS2_INCLUDED
 #define p7_COORDS2_INCLUDED
 
-#include "p7_config.h"
+#include <p7_config.h>
 
 #include "base/p7_trace.h"
 

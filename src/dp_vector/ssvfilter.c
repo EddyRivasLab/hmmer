@@ -15,7 +15,7 @@
  *   5. Test driver.
  *   4. Example.
  */
-#include "p7_config.h"
+#include <p7_config.h>
 
 #include "easel.h"
 #include "esl_cpu.h"
@@ -133,7 +133,7 @@ ssvfilter_dispatcher(const ESL_DSQ *dsq, int L, const P7_OPROFILE *om, float *re
  * For using -x, you probably also want to limit the number of
  * generated target sequences, using -N10 or -N100 for example.
  */
-#include "p7_config.h"
+#include <p7_config.h>
 
 #include "easel.h"
 #include "esl_alphabet.h"
@@ -333,7 +333,7 @@ utest_comparison(ESL_RANDOMNESS *r, ESL_ALPHABET *abc, P7_BG *bg, int M, int L, 
  * 4. Test driver
  *****************************************************************/
 #ifdef p7SSVFILTER_TESTDRIVE
-#include "p7_config.h"
+#include <p7_config.h>
 
 #include "easel.h"
 #include "esl_alphabet.h"
@@ -406,7 +406,7 @@ main(int argc, char **argv)
  *****************************************************************/
 #ifdef p7SSVFILTER_EXAMPLE
 
-#include "p7_config.h"
+#include <p7_config.h>
 
 #include "easel.h"
 #include "esl_alphabet.h"

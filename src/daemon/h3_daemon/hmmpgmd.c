@@ -1,6 +1,6 @@
 /* HMMER search daemon
  */
-#include "p7_config.h"
+#include <p7_config.h>
 
 #include <stdio.h>
 #include <stdlib.h>

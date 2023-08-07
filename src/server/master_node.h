@@ -1,7 +1,7 @@
 /*! \file Header file for functions and datatypes used by the master node of a server */
 #include "esl_red_black.h"
 #include "shard.h"
-#include "p7_config.h"
+#include <p7_config.h>
 
 // This is a hack to get the code to compile if we aren't building with MPI support
 // Without this, functions that have MPI parameters cause errors

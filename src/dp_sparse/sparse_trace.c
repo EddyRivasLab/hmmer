@@ -9,7 +9,7 @@
  *   4. Exposed API, wrappers around the engine
  *   5. Example
  */
-#include "p7_config.h"
+#include <p7_config.h>
 
 #include "easel.h"
 #include "esl_random.h"
@@ -753,7 +753,7 @@ p7_sparse_trace_StochasticSeg(ESL_RANDOMNESS *rng, float **wrk_byp, const P7_PRO
  *****************************************************************/
 #ifdef p7SPARSE_TRACE_EXAMPLE
 
-#include "p7_config.h"
+#include <p7_config.h>
 
 #include "easel.h"
 #include "esl_alphabet.h"

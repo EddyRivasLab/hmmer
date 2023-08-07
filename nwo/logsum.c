@@ -8,7 +8,7 @@
  *    5. Test driver
  *    6. Example
  */
-#include "h4_config.h"
+#include <h4_config.h>
 
 #include <math.h>
 
@@ -363,7 +363,7 @@ utest_bounds(void)
  * 6. Test driver.
  *****************************************************************/
 #ifdef h4LOGSUM_TESTDRIVE
-#include "h4_config.h"
+#include <h4_config.h>
 
 #include <stdio.h>
 #include <math.h>
@@ -413,7 +413,7 @@ main(int argc, char **argv)
  *****************************************************************/
 #ifdef h4LOGSUM_EXAMPLE
 
-#include "h4_config.h"
+#include <h4_config.h>
 
 #include "easel.h"
 

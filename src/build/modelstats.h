@@ -1,7 +1,7 @@
 #ifndef p7MODELSTATS_INCLUDED
 #define p7MODELSTATS_INCLUDED
 
-#include "p7_config.h"
+#include <p7_config.h>
 
 #include "base/p7_bg.h"
 #include "base/p7_hmm.h"

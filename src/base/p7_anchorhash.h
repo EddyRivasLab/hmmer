@@ -69,7 +69,7 @@
 #ifndef p7ANCHORHASH_INCLUDED
 #define p7ANCHORHASH_INCLUDED
 
-#include "p7_config.h"
+#include <p7_config.h>
 
 #include "base/p7_anchors.h"
 

@@ -21,7 +21,7 @@
  *    5. Example.
  */
 
-#include "p7_config.h"
+#include <p7_config.h>
 
 #include <string.h>
 
@@ -547,7 +547,7 @@ utest_fragments(void)
  *****************************************************************/
 
 #ifdef p7BUILD_TESTDRIVE
-#include "p7_config.h"
+#include <p7_config.h>
 
 #include "easel.h"
 
@@ -585,7 +585,7 @@ main(int argc, char **argv)
  * 5. Example.
  ******************************************************************************/ 
 #ifdef p7BUILD_EXAMPLE
-#include "p7_config.h"
+#include <p7_config.h>
 
 #include "easel.h"
 #include "esl_alphabet.h"

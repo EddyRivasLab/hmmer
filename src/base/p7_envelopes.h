@@ -13,7 +13,7 @@
 #ifndef p7ENVELOPES_INCLUDED
 #define p7ENVELOPES_INCLUDED
 
-#include "p7_config.h"
+#include <p7_config.h>
 
 #include "easel.h"       // Needed for int32_t
 

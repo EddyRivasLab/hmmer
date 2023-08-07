@@ -12,7 +12,7 @@
 #ifndef p7ANCHORS_INCLUDED
 #define p7ANCHORS_INCLUDED
 
-#include "p7_config.h"
+#include <p7_config.h>
 
 #include "base/p7_trace.h"
 

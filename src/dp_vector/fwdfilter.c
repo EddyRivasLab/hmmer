@@ -11,7 +11,7 @@
  *    6. Test driver.
  *    7. Example.
  */
-#include "p7_config.h"
+#include <p7_config.h>
 
 #include "easel.h"
 #include "esl_cpu.h"
@@ -237,7 +237,7 @@ bckfilter_dispatcher(const ESL_DSQ *dsq, int L, const P7_OPROFILE *om, P7_CHECKP
  * refine that strategy.
  */
 #ifdef p7FWDFILTER_STATS
-#include "p7_config.h"
+#include <p7_config.h>
 
 #include "easel.h"
 #include "esl_alphabet.h"
@@ -384,7 +384,7 @@ main(int argc, char **argv)
  *****************************************************************/
 
 #ifdef p7FWDFILTER_BENCHMARK
-#include "p7_config.h"
+#include <p7_config.h>
 
 #include "easel.h"
 #include "esl_alphabet.h"
@@ -651,7 +651,7 @@ utest_scores(ESL_RANDOMNESS *r, ESL_ALPHABET *abc, P7_BG *bg, int M, int L, int 
  *****************************************************************/
 #ifdef p7FWDFILTER_TESTDRIVE
 
-#include "p7_config.h"
+#include <p7_config.h>
 
 #include "easel.h"
 #include "esl_alphabet.h"
@@ -725,7 +725,7 @@ main(int argc, char **argv)
  *****************************************************************/
 #ifdef p7FWDFILTER_EXAMPLE
 
-#include "p7_config.h"
+#include <p7_config.h>
 
 #include "easel.h"
 #include "esl_alphabet.h"

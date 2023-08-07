@@ -3,7 +3,7 @@
 #ifndef h4PRIOR_INCLUDED
 #define h4PRIOR_INCLUDED
 
-#include "h4_config.h"
+#include <h4_config.h>
 
 #include "easel.h"
 #include "esl_alphabet.h"

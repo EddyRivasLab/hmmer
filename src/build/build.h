@@ -1,7 +1,7 @@
 #ifndef p7BUILD_INCLUDED
 #define p7BUILD_INCLUDED
 
-#include "p7_config.h"
+#include <p7_config.h>
 
 #include "easel.h"
 #include "esl_msa.h"

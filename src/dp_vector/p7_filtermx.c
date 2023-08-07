@@ -5,7 +5,7 @@
  *   1. The P7_FILTERMX object
  *   2. Debugging and development routines
  */
-#include "p7_config.h"
+#include <p7_config.h>
 
 #include <stdlib.h>
 #include <stdio.h>

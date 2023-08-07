@@ -3,7 +3,7 @@
 #ifndef p7HMM_INCLUDED
 #define p7HMM_INCLUDED
 
-#include "p7_config.h"
+#include <p7_config.h>
 
 #include <stdio.h>
 

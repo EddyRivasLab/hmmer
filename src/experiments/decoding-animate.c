@@ -1,7 +1,7 @@
 /* Created an animated gif figure, showing how sampled suboptimal
  * traces fill in to become the decoding matrix.
  */
-#include "p7_config.h"
+#include <p7_config.h>
 
 #include "easel.h"
 #include "esl_alphabet.h"

@@ -5,7 +5,7 @@
  *   1. The H4_FILTERMX object
  *   2. Debugging and development routines
  */
-#include "h4_config.h"
+#include <h4_config.h>
 
 #include <stdlib.h>
 #include <stdio.h>

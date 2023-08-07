@@ -4,7 +4,7 @@
 #ifndef p7ENGINE_INCLUDED
 #define p7ENGINE_INCLUDED
 
-#include "p7_config.h"
+#include <p7_config.h>
 
 #include "easel.h"
 #include "esl_alphabet.h"

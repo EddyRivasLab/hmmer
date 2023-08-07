@@ -4,7 +4,7 @@
  */
 #ifndef p7FILTERMX_INCLUDED
 #define p7FILTERMX_INCLUDED
-#include "p7_config.h"
+#include <p7_config.h>
 
 #include <stdio.h>
 

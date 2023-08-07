@@ -5,7 +5,7 @@
  */
 #ifndef p7CHECKPTMX_INCLUDED
 #define p7CHECKPTMX_INCLUDED
-#include "p7_config.h"
+#include <p7_config.h>
 
 #include <stdio.h>
 

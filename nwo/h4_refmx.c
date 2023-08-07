@@ -8,7 +8,7 @@
  * See also: 
  *   reference_dp.c
  */
-#include "h4_config.h"
+#include <h4_config.h>
 
 #include <stdio.h>
 

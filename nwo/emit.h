@@ -2,7 +2,7 @@
  */
 #ifndef h4EMIT_INCLUDED
 #define h4EMIT_INCLUDED
-#include "h4_config.h"
+#include <h4_config.h>
 
 #include "easel.h"
 #include "esl_random.h"

@@ -1,7 +1,7 @@
 /* Viterbi filter implementation, ARM NEON version.
  * See vitfilter_sse.c for more detailed commentary.
  */
-#include "p7_config.h"
+#include <p7_config.h>
 
 #include <stdio.h>
 #include <math.h>

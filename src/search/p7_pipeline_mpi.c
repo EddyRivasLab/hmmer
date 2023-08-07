@@ -15,7 +15,7 @@
  *    2. Unit tests.
  *    3. Test driver.
  */
-#include "p7_config.h"		
+#include <p7_config.h>		
 
 #ifdef HAVE_MPI
 
@@ -378,7 +378,7 @@ utest_SendRecv(ESL_RANDOMNESS *rng, int my_rank, int nproc)
  * 3. Test driver
  *****************************************************************/
 #ifdef p7PIPELINE_MPI_TESTDRIVE
-#include "p7_config.h"
+#include <p7_config.h>
 
 #include "easel.h"
 #include "esl_getopts.h"

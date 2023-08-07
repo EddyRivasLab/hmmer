@@ -5,7 +5,7 @@
  *    1. P7_ENVELOPE structure (one envelope)
  *    2. P7_ENVELOPES object (array of envelopes)
  */
-#include "p7_config.h"
+#include <p7_config.h>
 
 #include <stdlib.h>
 

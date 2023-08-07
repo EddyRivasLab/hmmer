@@ -1,7 +1,7 @@
 /* hmmc2: example client that connects to an hmmpgmd daemon
  */
 
-#include "p7_config.h"
+#include <p7_config.h>
 #include "time.h"
 
 #ifdef HAVE_PTHREAD

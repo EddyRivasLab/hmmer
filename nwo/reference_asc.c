@@ -19,7 +19,7 @@
  *   5. Test driver
  *   6. Example
  */
-#include "h4_config.h"
+#include <h4_config.h>
 
 #include "easel.h"
 
@@ -41,31 +41,22 @@
  *
  * Purpose:   The anchor-set-constrained (ASC) Forward
  *            algorithm. Compare digital sequence <dsq> of length <L>
- *            to profile <hmm> in mode <mo>, constrained to sum only
- *            over those paths that have <D> domains that use the
- *            anchor set <anch>. Return the ASC Forward raw score, in
- *            bits, in <*opt_sc>.
+ *            to profile <hmm> in mode <mo>, constrained by anchor set
+ *            <anch>. Fill in ASC UP/DOWN matrices <mxu/mxd>, and
+ *            optionally return the ASC Forward raw score, in bits, in
+ *            <*opt_sc>.
  *
- *            Caller provides two reference DP matrices <mxu> and
- *            <mxd>. They can be of any allocated size; they will be
- *            reallocated here as needed. Upon return, <mxu> and <mxd>
- *            contain the ASC Forward UP and DOWN matrices,
- *            respectively. In domain analysis, they will be needed
- *            later for posterior decoding.
+ *            DP matrices <mxu> and <mxd> can be provided as any
+ *            allocated size; reused and reallocated here as needed.
  *
- * Args:      input:
- *            dsq     - digital sequence, 1..L
+ * Args:      dsq     - digital sequence, 1..L
  *            L       - length of dsq
  *            hmm     - profile HMM
  *            mo      - comparison mode, with length set
  *            anch    - anchorset
- *
- *            output (allocated object provided):
- *            mxu     - ASC UP matrix
- *            mxd     - ASC DOWN matrix
- *
- *            output:
- *            opt_sc  - ASC raw fwd score, in bits
+ *            mxu     - RESULT: ASC UP matrix (reused/reallocated as needed)
+ *            mxd     - RESULT: ASC DOWN matrix (ditto)
+ *            opt_sc  - optRETURN: ASC raw fwd score, in bits
  *
  * Returns:   <eslOK> on success
  *
@@ -1509,7 +1500,7 @@ main(int argc, char **argv)
  *****************************************************************/
 #ifdef h4REFERENCE_ASC_EXAMPLE
 
-#include "h4_config.h"
+#include <h4_config.h>
 
 #include "easel.h"
 #include "esl_alphabet.h"

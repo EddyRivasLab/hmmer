@@ -14,7 +14,7 @@
 #ifndef P7_CONFIGH_INCLUDED
 #define P7_CONFIGH_INCLUDED
 
-#include "esl_config.h"
+#include <esl_config.h>
 
 /*****************************************************************
  * 1. Default parameters.

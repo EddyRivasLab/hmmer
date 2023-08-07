@@ -1,7 +1,7 @@
 #ifndef p7GENERAL_INCLUDED
 #define p7GENERAL_INCLUDED
 
-#include "p7_config.h"
+#include <p7_config.h>
 #include "esl_getopts.h"
 
 /* Search modes. */

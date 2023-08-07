@@ -8,7 +8,7 @@
  *    x. _experiment2:    compare old vs. new fragment marking
  * 
  */
-#include "h4_config.h"
+#include <h4_config.h>
 
 #include "easel.h"
 #include "esl_alphabet.h"
@@ -464,7 +464,7 @@ h4_build_config_Destroy(H4_BUILD_CONFIG *cfg)
  * x. _experiment: save counts files for training priors
  *****************************************************************/
 #ifdef h4BUILD_EXPERIMENT
-#include "h4_config.h"
+#include <h4_config.h>
 
 #include <stdlib.h>
 #include <stdio.h>
@@ -585,7 +585,7 @@ main(int argc, char **argv)
  *****************************************************************/
 
 #ifdef h4BUILD_EXPERIMENT2
-#include "h4_config.h"
+#include <h4_config.h>
 
 #include "easel.h"
 #include "esl_alphabet.h"

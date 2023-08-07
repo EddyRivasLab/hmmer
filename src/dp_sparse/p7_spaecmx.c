@@ -7,7 +7,7 @@
  *     AEC, anchor/envelope constrained : p7_spaecmx.[ch]
  * and this module provides stuff for the AEC part.
  */
-#include "p7_config.h"
+#include <p7_config.h>
 
 #include <stdio.h>
 

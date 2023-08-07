@@ -1,6 +1,6 @@
 #ifndef p7IO_INCLUDED
 #define p7IO_INCLUDED
-#include "p7_config.h"
+#include <p7_config.h>
 
 #include <stdio.h>
 

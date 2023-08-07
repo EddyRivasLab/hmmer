@@ -1,7 +1,7 @@
 /* Processor-specific initialization of SIMD vector environment.
  * Called by h4_Init() whenever a new thread or process starts.
  */
-#include "h4_config.h"
+#include <h4_config.h>
 
 #include "easel.h"
 #include "esl_cpu.h"

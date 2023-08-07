@@ -1,6 +1,6 @@
 /* Sparse dynamic programming: Viterbi implementation.
  */
-#include "p7_config.h"
+#include <p7_config.h>
 
 #include "easel.h"
 

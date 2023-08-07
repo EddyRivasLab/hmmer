@@ -3,7 +3,7 @@
 #ifndef p7TOPHITS_INCLUDED
 #define p7TOPHITS_INCLUDED
 
-#include "p7_config.h"
+#include <p7_config.h>
 
 #include <stdio.h>
 

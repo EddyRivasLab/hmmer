@@ -1,4 +1,4 @@
-#include "p7_config.h"
+#include <p7_config.h>
 
 #include "easel.h"
 #include "esl_random.h"
@@ -115,7 +115,7 @@ p7_ReferenceMPLSearch(ESL_RANDOMNESS *rng, const ESL_DSQ *dsq, int L, const P7_P
  *****************************************************************/
 #ifdef p7REFERENCE_MPL_EXAMPLE
 
-#include "p7_config.h"
+#include <p7_config.h>
 
 #include "easel.h"
 #include "esl_alphabet.h"

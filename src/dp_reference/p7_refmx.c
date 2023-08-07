@@ -8,7 +8,7 @@
  *   2. Debugging aids
  *   3. Validation 
  */
-#include "p7_config.h"
+#include <p7_config.h>
 
 #include <stdio.h>
 

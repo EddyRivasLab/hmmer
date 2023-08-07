@@ -9,7 +9,7 @@
  * implementations.
  * 
  */
-#include "p7_config.h"
+#include <p7_config.h>
 
 #include "base/p7_anchors.h"
 #include "base/p7_trace.h"

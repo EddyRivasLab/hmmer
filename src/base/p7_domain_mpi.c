@@ -12,7 +12,7 @@
  *    2. Unit tests
  *    3. Test driver
  */
-#include "p7_config.h"
+#include <p7_config.h>
 #ifdef HAVE_MPI
 #include <mpi.h>
 
@@ -258,7 +258,7 @@ utest_PackUnpack(ESL_RANDOMNESS *rng)
  * 3. Test driver
  *****************************************************************/
 #ifdef p7DOMAIN_MPI_TESTDRIVE
-#include "p7_config.h"
+#include <p7_config.h>
 
 #include "easel.h"
 #include "esl_getopts.h"

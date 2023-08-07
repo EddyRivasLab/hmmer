@@ -5,7 +5,7 @@
  */
 #ifndef h4MPAS_INCLUDED
 #define h4MPAS_INCLUDED
-#include "h4_config.h"
+#include <h4_config.h>
 
 #include <stdio.h>
 

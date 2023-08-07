@@ -9,7 +9,7 @@
  *    2. Internal functions: inlined recursions.
  *    3. Internal debugging tools.
  */
-#include "p7_config.h"
+#include <p7_config.h>
 
 #include <float.h>
 #include "easel.h"

@@ -8,7 +8,7 @@
  */
 #ifndef h4SIMDVEC_INCLUDED
 #define h4SIMDVEC_INCLUDED
-#include "h4_config.h"
+#include <h4_config.h>
 
 #include "easel.h"
 

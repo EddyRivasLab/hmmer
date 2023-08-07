@@ -11,7 +11,7 @@
  *   5. Benchmark driver
  *   6. Example
  */
-#include "p7_config.h"
+#include <p7_config.h>
 
 #include <stdio.h>
 #include <stdlib.h>
@@ -1272,7 +1272,7 @@ p7_oprofile_Compare(const P7_OPROFILE *om1, const P7_OPROFILE *om2, float tol, c
 /* Timing profile conversion.
    ./benchmark-sse <hmmfile>      
  */
-#include "p7_config.h"
+#include <p7_config.h>
 
 #include "easel.h"
 #include "esl_alphabet.h"
@@ -1346,7 +1346,7 @@ main(int argc, char **argv)
 /* 
  * ./p7_oprofile_example <hmmfile>
  */
-#include "p7_config.h"
+#include <p7_config.h>
 
 #include <stdlib.h>
 

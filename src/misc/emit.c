@@ -10,7 +10,7 @@
  *    6. Example
  */
 
-#include "p7_config.h"
+#include <p7_config.h>
 
 #include "easel.h"
 #include "esl_random.h"
@@ -529,7 +529,7 @@ sample_endpoints(ESL_RANDOMNESS *r, const P7_PROFILE *gm, int *ret_kstart, int *
 /* A small driver providing a testbed for sequence-emission related development testing.
  */
 #ifdef p7EMIT_STATS
-#include "p7_config.h"
+#include <p7_config.h>
 
 #include <stdio.h>
 
@@ -658,7 +658,7 @@ utest_profile_emit(ESL_RANDOMNESS *rng, P7_HMM *hmm, P7_PROFILE *gm, P7_BG *bg, 
  *****************************************************************/
 #ifdef p7EMIT_TESTDRIVE
 
-#include "p7_config.h"
+#include <p7_config.h>
 
 #include "easel.h"
 #include "esl_alphabet.h"
@@ -720,7 +720,7 @@ main(int argc, char **argv)
  *****************************************************************/
 #ifdef p7EMIT_EXAMPLE
 
-#include "p7_config.h"
+#include <p7_config.h>
 
 #include "easel.h"
 #include "esl_alphabet.h"

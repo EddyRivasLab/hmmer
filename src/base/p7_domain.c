@@ -11,7 +11,7 @@
  *    1. P7_DOMAIN object (arrays of)
  *    2. Debugging and development tools
  */
-#include "p7_config.h"
+#include <p7_config.h>
 
 #include "easel.h"
 #include "esl_random.h"

@@ -20,7 +20,7 @@
  * Comparisons are done with an absolute floating point tolerance, not relative;
  * see h4_refmx_Compare() for additional explanation.
  */
-#include "h4_config.h"
+#include <h4_config.h>
 
 #include <math.h>
 

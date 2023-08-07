@@ -7,7 +7,7 @@
  *    3. Statistics collection driver
  *    4. Example
  */
-#include "p7_config.h"
+#include <p7_config.h>
 
 #include "easel.h"
 #include "esl_random.h"
@@ -411,7 +411,7 @@ p7_reference_anchors_SetFromTrace(const P7_REFMX *pp, const P7_TRACE *tr, P7_ANC
  * 3. Statistics collection driver.
  *****************************************************************/
 #ifdef p7REFERENCE_ANCHORS_STATS
-#include "p7_config.h"
+#include <p7_config.h>
 
 #include "easel.h"
 #include "esl_alphabet.h"
@@ -627,7 +627,7 @@ main(int argc, char **argv)
  * 4. Example
  *****************************************************************/
 #ifdef p7REFERENCE_ANCHORS_EXAMPLE
-#include "p7_config.h"
+#include <p7_config.h>
 
 #include "easel.h"
 #include "esl_alphabet.h"

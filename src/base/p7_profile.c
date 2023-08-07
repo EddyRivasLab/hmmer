@@ -10,7 +10,7 @@
  * See also: 
  *   modelconfig.c : routines that configure a profile given an HMM
  */
-#include "p7_config.h"
+#include <p7_config.h>
 
 #include <stdio.h>
 #include <string.h>
@@ -947,7 +947,7 @@ main(int argc, char **argv)
  *****************************************************************/
 #ifdef p7PROFILE_EXAMPLE
 
-#include "p7_config.h"
+#include <p7_config.h>
 
 #include "easel.h"
 #include "esl_alphabet.h"

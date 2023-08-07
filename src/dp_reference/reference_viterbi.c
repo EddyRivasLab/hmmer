@@ -15,7 +15,7 @@
  *   4. Test driver.
  *   5. Example.
  */
-#include "p7_config.h"
+#include <p7_config.h>
 
 #include "easel.h"
 #include "esl_vectorops.h"
@@ -199,7 +199,7 @@ p7_ReferenceViterbi(const ESL_DSQ *dsq, int L, const P7_PROFILE *gm, P7_REFMX *r
  */
 #ifdef p7REFERENCE_VITERBI_STATS
 
-#include "p7_config.h"
+#include <p7_config.h>
 
 #include "easel.h"
 #include "esl_alphabet.h"
@@ -476,7 +476,7 @@ utest_generation(ESL_RANDOMNESS *rng, P7_HMM *hmm, P7_PROFILE *gm, P7_BG *bg, in
  *****************************************************************/
 #ifdef p7REFERENCE_VITERBI_TESTDRIVE
 
-#include "p7_config.h"
+#include <p7_config.h>
 
 #include "easel.h"
 #include "esl_alphabet.h"
@@ -537,7 +537,7 @@ main(int argc, char **argv)
  * 5. Example
  *****************************************************************/
 #ifdef p7REFERENCE_VITERBI_EXAMPLE
-#include "p7_config.h"
+#include <p7_config.h>
 
 #include "easel.h"
 #include "esl_alphabet.h"

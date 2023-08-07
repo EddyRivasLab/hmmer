@@ -4,7 +4,7 @@
  * sequence in one stage, and these windows are passed on to a
  * later stage of the pipeline.
  */
-#include "p7_config.h"
+#include <p7_config.h>
 
 #include "easel.h"
 

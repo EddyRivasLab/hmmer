@@ -11,7 +11,7 @@
  *   3. Test driver.
  *   4. Example.
  */
-#include "p7_config.h"
+#include <p7_config.h>
 
 #include <math.h>
 
@@ -720,7 +720,7 @@ utest_mute_partial_cycle(void)
  * 3. Test driver
  *****************************************************************/
 #ifdef p7REFERENCE_DECODING_TESTDRIVE
-#include "p7_config.h"
+#include <p7_config.h>
 
 #include "easel.h"
 #include "esl_alphabet.h"
@@ -781,7 +781,7 @@ main(int argc, char **argv)
  *****************************************************************/
 #ifdef p7REFERENCE_DECODING_EXAMPLE
 
-#include "p7_config.h"
+#include <p7_config.h>
 
 #include "easel.h"
 #include "esl_alphabet.h"

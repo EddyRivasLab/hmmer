@@ -11,7 +11,7 @@
  *    3. Test driver
  */
 
-#include "p7_config.h"
+#include <p7_config.h>
 
 #include "easel.h"
 
@@ -1415,7 +1415,7 @@ utest_multimulti(FILE *diagfp, ESL_RANDOMNESS *rng, int M, const ESL_ALPHABET *a
  *****************************************************************/
 #ifdef p7REFERENCE_ASC_DECODING_TESTDRIVE
 
-#include "p7_config.h"
+#include <p7_config.h>
 
 #include <stdio.h>
 #include <string.h>

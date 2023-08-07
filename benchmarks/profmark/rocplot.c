@@ -43,7 +43,7 @@
  *   
  * SRE, Wed Jun 18 13:37:31 2008 [Janelia]
  */
-#include "esl_config.h"
+#include <esl_config.h>
 
 #include <stdlib.h>
 #include <stdio.h>

@@ -4,7 +4,7 @@
  */
 #ifndef h4FILTERMX_INCLUDED
 #define h4FILTERMX_INCLUDED
-#include "h4_config.h"
+#include <h4_config.h>
 
 #include <stdio.h>
 

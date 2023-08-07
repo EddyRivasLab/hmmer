@@ -4,7 +4,7 @@
  *
  * Also serves as an overview of the package's source code.
  */
-#include "p7_config.h"
+#include <p7_config.h>
 
 /* 'base' subdir: contains code for many of HMMER's data structures                                                             */
 #include "base/general.h"	     /* Widely used definitions, error handling, initialization                                  */

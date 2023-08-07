@@ -10,7 +10,7 @@
  *    5. Test driver
  *    6. Example
  */
-#include "h4_config.h"
+#include <h4_config.h>
 
 #include <stdio.h>
 #include <stdlib.h>

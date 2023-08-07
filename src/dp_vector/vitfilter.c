@@ -17,7 +17,7 @@
  *   5. Test driver.
  *   6. Example.
  */
-#include "p7_config.h"
+#include <p7_config.h>
 
 #include "easel.h"
 #include "esl_cpu.h"
@@ -134,7 +134,7 @@ vitfilter_dispatcher(const ESL_DSQ *dsq, int L, const P7_OPROFILE *om, P7_FILTER
  * 3. Benchmark driver.
  *****************************************************************/
 #ifdef p7VITFILTER_BENCHMARK
-#include "p7_config.h"
+#include <p7_config.h>
 
 #include "easel.h"
 #include "esl_alphabet.h"
@@ -341,7 +341,7 @@ utest_comparison(ESL_RANDOMNESS *r, ESL_ALPHABET *abc, P7_BG *bg, int M, int L, 
  * 5. Test driver
  *****************************************************************/
 #ifdef p7VITFILTER_TESTDRIVE
-#include "p7_config.h"
+#include <p7_config.h>
 
 #include "easel.h"
 #include "esl_alphabet.h"
@@ -421,7 +421,7 @@ main(int argc, char **argv)
    Also useful for debugging on small HMMs and sequences.
    ./vitfilter_example <hmmfile> <seqfile>
  */ 
-#include "p7_config.h"
+#include <p7_config.h>
 
 #include "easel.h"
 #include "esl_alphabet.h"

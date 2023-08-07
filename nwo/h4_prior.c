@@ -4,7 +4,7 @@
  *    1. H4_PRIOR : mixture Dirichlet priors for a profile HMM
  *    2. internal functions for creating default priors
  */
-#include "h4_config.h"
+#include <h4_config.h>
 
 #include "easel.h"
 #include "esl_alphabet.h"

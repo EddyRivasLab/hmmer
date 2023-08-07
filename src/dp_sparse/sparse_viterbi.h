@@ -1,7 +1,7 @@
 #ifndef p7SPARSE_VITERBI_INCLUDED
 #define p7SPARSE_VITERBI_INCLUDED
 
-#include "p7_config.h"
+#include <p7_config.h>
 
 #include "easel.h"
 

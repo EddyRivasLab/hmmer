@@ -1,5 +1,5 @@
 //! functions that run on the master node of a server
-#include "p7_config.h"
+#include <p7_config.h>
 
 #include <stdio.h>
 #include <string.h>

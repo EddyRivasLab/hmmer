@@ -13,7 +13,7 @@
  *    7. Test driver
  *    8. Example
  */
-#include "h4_config.h"
+#include <h4_config.h>
 
 #include "esl_dirichlet.h"
 #include "esl_matrixops.h"

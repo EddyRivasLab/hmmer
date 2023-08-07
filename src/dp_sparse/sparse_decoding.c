@@ -5,7 +5,7 @@
  *   2. Unit tests
  *   3. Test driver
  */
-#include "p7_config.h"
+#include <p7_config.h>
 
 #include <math.h>
 
@@ -536,7 +536,7 @@ utest_approx_decoding(ESL_RANDOMNESS *rng, ESL_ALPHABET *abc, P7_BG *bg, int M, 
  * 3. Test driver
  *****************************************************************/
 #ifdef p7SPARSE_DECODING_TESTDRIVE
-#include "p7_config.h"
+#include <p7_config.h>
 
 #include "easel.h"
 #include "esl_alphabet.h"

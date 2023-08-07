@@ -4,7 +4,7 @@
  *   1. h4_seqmodel()
  *   2. Example.
  */
-#include "h4_config.h"
+#include <h4_config.h>
 
 #include "easel.h"
 #include "esl_alphabet.h"

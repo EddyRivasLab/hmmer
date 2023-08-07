@@ -15,7 +15,7 @@
  * Stylistic note: elements in a trace path are usually indexed by z.
  */
 
-#include "p7_config.h"
+#include <p7_config.h>
 
 #include <stdlib.h>
 #include <stdio.h>
@@ -2341,7 +2341,7 @@ utest_faux_tracealign(ESL_MSA *msa, int *matassign, int M)
  * 9. Test driver
  *****************************************************************/			 
 #ifdef p7TRACE_TESTDRIVE
-#include "p7_config.h"
+#include <p7_config.h>
 
 #include "easel.h"
 #include "esl_getopts.h"
@@ -2402,7 +2402,7 @@ main(int argc, char **argv)
 /* To run:     ./p7_trace_example foo.sto
  * The foo.sto alignment must have a RF annotation line marking consensus columns.
  */
-#include "p7_config.h"
+#include <p7_config.h>
 
 #include "easel.h"
 #include "esl_alphabet.h"

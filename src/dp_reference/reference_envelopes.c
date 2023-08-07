@@ -21,7 +21,7 @@
  *    5. Test driver.
  *    6. Example.
  */
-#include "p7_config.h"
+#include <p7_config.h>
 
 #include "easel.h"
 
@@ -800,7 +800,7 @@ utest_singlemulti(ESL_RANDOMNESS *rng, int M, const ESL_ALPHABET *abc, int N)
  *****************************************************************/
 #ifdef p7REFERENCE_ENVELOPES_TESTDRIVE
 
-#include "p7_config.h"
+#include <p7_config.h>
 
 #include "easel.h"
 #include "esl_alphabet.h"
@@ -846,7 +846,7 @@ main(int argc, char **argv)
  * 6. Example
  *****************************************************************/
 #ifdef p7REFERENCE_ENVELOPES_EXAMPLE
-#include "p7_config.h"
+#include <p7_config.h>
 
 #include "easel.h"
 #include "esl_alphabet.h"

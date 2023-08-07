@@ -4,7 +4,7 @@
  *   1. P7_HMMCACHE : a daemon's cached profile database.
  *   2. Benchmark driver.
  */
-#include "p7_config.h"
+#include <p7_config.h>
 
 #include <stdlib.h>
 #include <string.h>
@@ -225,7 +225,7 @@ p7_hmmcache_Close(P7_HMMCACHE *cache)
  *****************************************************************/
 #ifdef p7HMMCACHE_BENCHMARK
 
-#include "p7_config.h"
+#include <p7_config.h>
 
 #include "easel.h"
 #include "esl_getopts.h"

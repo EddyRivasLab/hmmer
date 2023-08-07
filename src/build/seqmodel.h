@@ -1,7 +1,7 @@
 #ifndef p7SEQMODEL_INCLUDED
 #define p7SEQMODEL_INCLUDED
 
-#include "p7_config.h"
+#include <p7_config.h>
 
 #include "easel.h"
 #include "esl_alphabet.h"

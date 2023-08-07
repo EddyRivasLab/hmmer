@@ -1,7 +1,7 @@
 #ifndef p7EWEIGHT_INCLUDED
 #define p7EWEIGHT_INCLUDED
 
-#include "p7_config.h"
+#include <p7_config.h>
 
 #include "base/p7_hmm.h"
 #include "base/p7_bg.h"

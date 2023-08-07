@@ -1,7 +1,7 @@
 #ifndef p7SPARSE_NULL2_INCLUDED
 #define p7SPARSE_NULL2_INCLUDED
 
-#include "p7_config.h"
+#include <p7_config.h>
 
 #include "easel.h"
 #include "base/p7_envelopes.h"

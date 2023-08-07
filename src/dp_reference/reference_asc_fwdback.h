@@ -1,7 +1,7 @@
 #ifndef p7REFERENCE_ASC_FWDBACK_INCLUDED
 #define p7REFERENCE_ASC_FWDBACK_INCLUDED
 
-#include "p7_config.h"
+#include <p7_config.h>
 
 #include "easel.h"
 

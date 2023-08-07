@@ -1,7 +1,7 @@
 #ifndef h4ENVSET_INCLUDED
 #define h4ENVSET_INCLUDED
 
-#include "h4_config.h"
+#include <h4_config.h>
 
 #include "h4_anchorset.h"
 

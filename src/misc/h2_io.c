@@ -1,7 +1,7 @@
 /* Input/output of HMMER3 HMMs in HMMER2 save file formats:
  * for backwards compatibility.
  */
-#include "p7_config.h"
+#include <p7_config.h>
 
 #include <stdlib.h>
 #include <stdio.h>

@@ -1,7 +1,7 @@
 /* Processor-specific initialization of SIMD vector environment.
  * Called by p7_Init() whenever a new thread or process starts.
  */
-#include "p7_config.h"
+#include <p7_config.h>
 
 #include "easel.h"
 #include "esl_cpu.h"

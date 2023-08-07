@@ -15,7 +15,7 @@
  *   1. MPL Forward.
  */
 
-#include "p7_config.h"
+#include <p7_config.h>
 
 #include "easel.h"
 
@@ -311,7 +311,7 @@ p7_ReferenceMPLForward(const ESL_DSQ *dsq, int L, const P7_PROFILE *gm,
  * x. Example
  *****************************************************************/
 #ifdef p7REFERENCE_MPL_FWD_EXAMPLE
-#include "p7_config.h"
+#include <p7_config.h>
 
 #include "easel.h"
 #include "esl_alphabet.h"

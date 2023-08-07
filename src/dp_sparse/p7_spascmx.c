@@ -56,7 +56,7 @@
  *    2. Debugging and development tools.
  *    3. Debugging and dev: Validation routine.
  */
-#include "p7_config.h"
+#include <p7_config.h>
 
 #include <stdio.h>
 #include <stdlib.h>
@@ -1294,7 +1294,7 @@ p7_spascmx_Validate(const P7_SPARSEMX *asx, const P7_ANCHOR *anch, int D, char *
  * x. Statistics collection driver.
  *****************************************************************/
 #ifdef p7SPASCMX_STATS
-#include "p7_config.h"
+#include <p7_config.h>
 
 #include "easel.h"
 #include "esl_alphabet.h"

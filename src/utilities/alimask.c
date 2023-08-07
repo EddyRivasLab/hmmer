@@ -3,7 +3,7 @@
  * range in the model that would be produced using the alignment
  * and the same set of flags in hmmbuild
  */
-#include "p7_config.h"
+#include <p7_config.h>
 
 #include <stdio.h>
 #include <stdlib.h>

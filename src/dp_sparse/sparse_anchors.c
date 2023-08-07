@@ -9,7 +9,7 @@
  *     5. Statistics driver
  *     6. Example
  */
-#include "p7_config.h"
+#include <p7_config.h>
 
 #include "easel.h"
 #include "esl_random.h"
@@ -1043,7 +1043,7 @@ segment_forward_score(const P7_PROFILE *gm, const P7_SPARSEMX *sxf, int g, float
  *****************************************************************/
 #ifdef p7SPARSE_ANCHORS_STATS
 
-#include "p7_config.h"
+#include <p7_config.h>
 
 #include <time.h>
 
@@ -1211,7 +1211,7 @@ main(int argc, char **argv)
  * 6. Example
  *****************************************************************/
 #ifdef p7SPARSE_ANCHORS_EXAMPLE
-#include "p7_config.h"
+#include <p7_config.h>
 
 #include "easel.h"
 #include "esl_alphabet.h"

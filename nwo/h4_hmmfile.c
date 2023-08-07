@@ -8,7 +8,7 @@
  *   5. Test driver
  *   6. Example
  */
-#include "h4_config.h"
+#include <h4_config.h>
 
 #include <stdio.h>
 #include <string.h>
@@ -551,7 +551,7 @@ utest_readwrite(const char *tmpfile, const H4_PROFILE *hmm)
  *****************************************************************/  
 #ifdef h4HMMFILE_TESTDRIVE
 
-#include "h4_config.h"
+#include <h4_config.h>
 
 #include <stdio.h>
 #include <string.h>

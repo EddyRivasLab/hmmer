@@ -1,7 +1,7 @@
 #ifndef p7LOGSUM_INCLUDED
 #define p7LOGSUM_INCLUDED
 
-#include "p7_config.h"
+#include <p7_config.h>
 
 
 extern int   p7_FLogsumInit(void);

@@ -1,6 +1,6 @@
 #ifndef h4LOGSUM_INCLUDED
 #define h4LOGSUM_INCLUDED
-#include "h4_config.h"
+#include <h4_config.h>
 
 extern int   h4_logsum_Init(void);
 extern int   h4_logsum_Reinit(void);

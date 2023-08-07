@@ -5,7 +5,7 @@
 #ifndef h4PROFILE_INCLUDED
 #define h4PROFILE_INCLUDED
 
-#include "h4_config.h"
+#include <h4_config.h>
 
 #include "esl_alphabet.h"
 

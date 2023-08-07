@@ -2,7 +2,7 @@
  */
 #ifndef h4SPARSEMX_INCLUDED
 #define h4SPARSEMX_INCLUDED
-#include "h4_config.h"
+#include <h4_config.h>
 
 #include "h4_refmx.h"
 #include "h4_sparsemask.h"

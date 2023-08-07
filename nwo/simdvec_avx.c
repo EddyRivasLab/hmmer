@@ -5,7 +5,7 @@
  * implementation. See simdvec_sse.c, simdvec.c, and simdvec.md for
  * more explanation.
  */
-#include "h4_config.h"
+#include <h4_config.h>
 
 #include "simdvec.h"
 

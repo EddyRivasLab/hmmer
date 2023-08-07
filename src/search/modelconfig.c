@@ -8,7 +8,7 @@
  *   4. Test driver
  *   5. References
  */
-#include "p7_config.h"
+#include <p7_config.h>
 
 #include <math.h>
 #include <float.h>
@@ -458,7 +458,7 @@ utest_occupancy(P7_HMM *hmm)
  * 4. Test driver
  *****************************************************************/
 #ifdef p7MODELCONFIG_TESTDRIVE
-#include "p7_config.h"
+#include <p7_config.h>
 
 #include "easel.h"
 #include "esl_getopts.h"

@@ -17,7 +17,7 @@
  *
  * See reference_envelopes.md for notes.  
  */
-#include "h4_config.h"
+#include <h4_config.h>
 
 #include "easel.h"
 
@@ -528,7 +528,7 @@ main(int argc, char **argv)
  * 5. Example
  *****************************************************************/
 #ifdef h4REFERENCE_ENVELOPES_EXAMPLE
-#include "h4_config.h"
+#include <h4_config.h>
 
 #include "easel.h"
 #include "esl_alphabet.h"

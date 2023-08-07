@@ -10,7 +10,7 @@
  *    reference_mpas.* : reference implementation of MPAS, used for testing
  *    sparse_mpas.*    : sparse DP implementation of MPAS, used in production code
  */
-#include "h4_config.h"
+#include <h4_config.h>
 
 #include <stdio.h>
 

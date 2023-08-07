@@ -3,7 +3,7 @@
 #ifndef p7PROFILE_INCLUDED
 #define p7PROFILE_INCLUDED
 
-#include "p7_config.h"
+#include <p7_config.h>
 
 #include <stdio.h>
 

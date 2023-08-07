@@ -5,7 +5,7 @@
  *
  * This file is conditionally compiled when eslENABLE_SSE4 is defined.
  */
-#include "h4_config.h"
+#include <h4_config.h>
 
 #include <stdio.h>
 #include <math.h>

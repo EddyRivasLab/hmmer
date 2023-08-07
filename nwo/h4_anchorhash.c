@@ -14,7 +14,7 @@
  *   4. Unit tests
  *   5. Test driver
  */
-#include "h4_config.h"
+#include <h4_config.h>
 
 #include <stdlib.h>
 #include <limits.h>  // for INT32_MAX

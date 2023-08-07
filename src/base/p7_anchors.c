@@ -8,7 +8,7 @@
  *   4. Unit tests
  *   5. Test driver
  */
-#include "p7_config.h"
+#include <p7_config.h>
 
 #include <stdlib.h>
 
@@ -495,7 +495,7 @@ utest_sampling(ESL_RANDOMNESS *rng)
  *****************************************************************/
 
 #ifdef p7ANCHORS_TESTDRIVE
-#include "p7_config.h"
+#include <p7_config.h>
 
 #include "easel.h"
 #include "esl_alphabet.h"

@@ -4,7 +4,7 @@
  *   1. the H4_ENVSET object: a set of envelopes
  * 
  */
-#include "h4_config.h"
+#include <h4_config.h>
 
 #include "easel.h"
 

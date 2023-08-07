@@ -10,7 +10,7 @@
  */
 #ifndef h4COUNTS_INCLUDED
 #define h4COUNTS_INCLUDED
-#include "h4_config.h"
+#include <h4_config.h>
 
 #include "esl_alphabet.h"
 

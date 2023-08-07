@@ -5,7 +5,7 @@
  * p7_oprofile_Sample(), which we use for testing, depends on more of
  * the code.
  */
-#include "p7_config.h"
+#include <p7_config.h>
 
 #include "easel.h"
 #include "esl_alphabet.h"

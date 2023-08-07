@@ -14,7 +14,7 @@
  *   7. Test driver.
  *   8. Example driver.
  */
-#include "p7_config.h"
+#include <p7_config.h>
 
 #include "easel.h"
 #include "esl_dirichlet.h"
@@ -2053,7 +2053,7 @@ utest_anchored_multi(ESL_RANDOMNESS *rng, int M, const ESL_ALPHABET *abc)
  *****************************************************************/
 #ifdef p7MODELSAMPLE_TESTDRIVE
 
-#include "p7_config.h"
+#include <p7_config.h>
 
 #include "easel.h"
 #include "esl_alphabet.h"
@@ -2114,7 +2114,7 @@ main(int argc, char **argv)
  *****************************************************************/
 #ifdef p7MODELSAMPLE_EXAMPLE
 
-#include "p7_config.h"
+#include <p7_config.h>
 
 #include "easel.h"
 #include "esl_alphabet.h"

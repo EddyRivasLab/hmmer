@@ -1,7 +1,7 @@
 #ifndef p7HMMWINDOW_INCLUDED
 #define p7HMMWINDOW_INCLUDED
 
-#include "p7_config.h"
+#include <p7_config.h>
 #include "easel.h"		/* Easel handles portable declaration of int32_t, etc. */
 
 typedef struct p7_hmm_window_s {

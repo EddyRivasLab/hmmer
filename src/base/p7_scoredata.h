@@ -6,7 +6,7 @@
 #ifndef p7SCOREDATA_INCLUDED
 #define p7SCOREDATA_INCLUDED
 
-#include "p7_config.h"
+#include <p7_config.h>
 
 #include "p7_hmmwindow.h"
 #include "dp_vector/p7_oprofile.h"

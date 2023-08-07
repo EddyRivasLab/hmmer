@@ -1,6 +1,6 @@
 #ifndef h4ASCMX_INCLUDED
 #define h4ASCMX_INCLUDED
-#include "h4_config.h"
+#include <h4_config.h>
 
 #include "h4_anchorset.h"
 #include "h4_refmx.h"

@@ -3,7 +3,7 @@
  * See vitfilter_sse.c for comparison. It's more heavily commented.
  * Other vector implementations derive from it.
  */
-#include "p7_config.h"
+#include <p7_config.h>
 
 #include <stdio.h>
 #include <math.h>

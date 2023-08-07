@@ -14,7 +14,7 @@
  */          
 #ifndef h4REFMX_INCLUDED
 #define h4REFMX_INCLUDED
-#include "h4_config.h"
+#include <h4_config.h>
 
 #include "h4_path.h"
 

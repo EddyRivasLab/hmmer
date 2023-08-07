@@ -4,7 +4,7 @@
  *   1. Miscellaneous functions for H3
  *   2. Error handling (Die, Fail)
  */
-#include "p7_config.h"
+#include <p7_config.h>
 
 
 #include <math.h>

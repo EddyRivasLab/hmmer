@@ -18,7 +18,7 @@
  *    1. Envelope definition API call   
  *    2. Example driver
  */ 
-#include "p7_config.h"
+#include <p7_config.h>
 
 #include "easel.h"
 
@@ -230,7 +230,7 @@ p7_sparse_Envelopes(const ESL_DSQ *dsq, int L, const P7_PROFILE *gm,
  *****************************************************************/
 #ifdef p7SPARSE_ENVELOPES_EXAMPLE
 
-#include "p7_config.h"
+#include <p7_config.h>
 
 #include "easel.h"
 #include "esl_alphabet.h"

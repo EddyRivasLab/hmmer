@@ -26,7 +26,7 @@
  *   5. Test driver
  *   6. Example
  */
-#include "p7_config.h"
+#include <p7_config.h>
 
 #include <stdio.h>
 
@@ -887,7 +887,7 @@ utest_zeroed_emissions(ESL_RANDOMNESS *rng, ESL_ALPHABET *abc, P7_BG *bg, int M,
  * 5. Test driver
  *****************************************************************/
 #ifdef p7SPARSE_ENVSCORE_TESTDRIVE
-#include "p7_config.h"
+#include <p7_config.h>
 
 #include "easel.h"
 #include "esl_alphabet.h"
@@ -949,7 +949,7 @@ main(int argc, char **argv)
  *****************************************************************/
 #ifdef p7SPARSE_ENVSCORE_EXAMPLE
 
-#include "p7_config.h"
+#include <p7_config.h>
 
 #include "easel.h"
 #include "esl_alphabet.h"

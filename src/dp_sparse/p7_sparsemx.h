@@ -12,7 +12,7 @@
  */
 #ifndef p7SPARSEMX_INCLUDED
 #define p7SPARSEMX_INCLUDED
-#include "p7_config.h"
+#include <p7_config.h>
 
 #include "esl_random.h"
 

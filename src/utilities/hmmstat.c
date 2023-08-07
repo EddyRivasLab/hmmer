@@ -5,7 +5,7 @@
  *  
  * SRE, Thu May 24 11:18:20 2007
  */
-#include "p7_config.h"
+#include <p7_config.h>
 
 #include <stdio.h>
 #include <stdlib.h>

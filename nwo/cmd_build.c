@@ -1,4 +1,4 @@
-#include "h4_config.h"
+#include <h4_config.h>
 
 #include <stdio.h>
 #include <string.h>

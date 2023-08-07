@@ -32,7 +32,7 @@
  *    5. Test driver
  *    6. Example
  */
-#include "h4_config.h"
+#include <h4_config.h>
 
 #include "easel.h"
 #include "esl_cpu.h"
@@ -166,7 +166,7 @@ bckfilter_dispatcher(const ESL_DSQ *dsq, int L, const H4_PROFILE *hmm, const H4_
  * 3. Benchmark driver
  *****************************************************************/
 #ifdef h4FBFILTER_BENCHMARK
-#include "h4_config.h"
+#include <h4_config.h>
 
 #include "easel.h"
 #include "esl_alphabet.h"

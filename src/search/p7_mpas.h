@@ -5,7 +5,7 @@
  */
 #ifndef p7MPAS_INCLUDED
 #define p7MPAS_INCLUDED
-#include "p7_config.h"
+#include <p7_config.h>
 
 #include <stdio.h>
 

@@ -4,7 +4,7 @@
  *    L. Steven Johnson, "Remote Protein Homology Detection Using Hidden Markov Models",
  *    Ph.D. thesis, Washington University School of Medicine, 2006.
  */
-#include "p7_config.h"
+#include <p7_config.h>
 
 #include "easel.h"
 #include "esl_rootfinder.h"

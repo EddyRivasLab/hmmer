@@ -9,7 +9,7 @@
  * high-scoring hit worth examining more closely anyway.  It will not
  * underflow, in local alignment mode.
  */
-#include "h4_config.h"
+#include <h4_config.h>
 
 #include <stdio.h>
 #include <math.h>

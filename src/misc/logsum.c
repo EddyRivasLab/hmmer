@@ -44,7 +44,7 @@
  * implement an efficient log-space SIMD vector implementation of
  * Forward.
  */
-#include "p7_config.h"
+#include <p7_config.h>
 
 #include <math.h>
 
@@ -281,7 +281,7 @@ p7_logsum_exact(float a, float b)
  * based on default 1e8 iterations (-N 100000000).
  * Clocks based on 2.26GHz = 2.26 clocks/nsec
  */
-#include "p7_config.h"
+#include <p7_config.h>
 
 #include <math.h>
 
@@ -440,7 +440,7 @@ utest_FLogsumSpecials(void)
  * 6. Test driver.
  *****************************************************************/
 #ifdef p7LOGSUM_TESTDRIVE
-#include "p7_config.h"
+#include <p7_config.h>
 
 #include <stdio.h>
 #include <math.h>
@@ -493,7 +493,7 @@ main(int argc, char **argv)
 #ifdef p7LOGSUM_EXAMPLE
 /* ./example -0.5 -0.5
  */
-#include "p7_config.h"
+#include <p7_config.h>
 #include "easel.h"
 #include "hmmer.h"
 

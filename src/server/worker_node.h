@@ -3,7 +3,7 @@
 #define WORKER_NODE_INCLUDED
 
 #include <pthread.h>
-#include "p7_config.h"
+#include <p7_config.h>
 #include "easel.h"
 #include "esl_red_black.h"
 #include "esl_dsqdata.h"

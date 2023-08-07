@@ -2,7 +2,7 @@
  */
 #ifndef h4MODELSAMPLE_INCLUDED
 #define h4MODELSAMPLE_INCLUDED
-#include "h4_config.h"
+#include <h4_config.h>
 
 #include "esl_alphabet.h"
 #include "esl_random.h"

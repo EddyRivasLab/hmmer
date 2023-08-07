@@ -9,7 +9,7 @@
  *    2. Internal functions: inlined recursions.
  *    3. Internal debugging tools.
  */
-#include "h4_config.h"
+#include <h4_config.h>
 
 #include "easel.h"
 #include "esl_vectorops.h"

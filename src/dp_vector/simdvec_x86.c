@@ -1,4 +1,4 @@
-#include "p7_config.h"
+#include <p7_config.h>
 #if defined eslENABLE_SSE4 || eslENABLE_AVX || eslENABLE_AVX512
 
 #ifdef HAVE_FLUSH_ZERO_MODE

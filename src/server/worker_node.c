@@ -6,7 +6,7 @@
 #include "easel.h"
 #include "esl_threads.h"
 #include "esl_dsqdata.h"
-#include "p7_config.h"
+#include <p7_config.h>
 #include "base/general.h"
 #include "hmmer.h"
 #include "dp_sparse/p7_engine.h" 

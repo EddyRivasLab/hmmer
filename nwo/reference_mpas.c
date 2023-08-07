@@ -18,7 +18,7 @@
  *     h4_mpas.*        Data structures shared between reference, sparse MPAS
  *     reference_asc.*  Reference ASC dynamic programming
  */
-#include "h4_config.h"
+#include <h4_config.h>
 
 #include "easel.h"
 #include "esl_random.h"
@@ -366,7 +366,7 @@ anchorset_from_path(const H4_PATH *pi, const H4_REFMX *rxd, H4_ANCHORSET *anch)
  * 4. Example
  *****************************************************************/
 #ifdef h4REFERENCE_MPAS_EXAMPLE
-#include "h4_config.h"
+#include <h4_config.h>
 
 #include "easel.h"
 #include "esl_alphabet.h"

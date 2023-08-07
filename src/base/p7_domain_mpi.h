@@ -1,7 +1,7 @@
 #ifndef p7DOMAIN_MPI_INCLUDED
 #define p7DOMAIN_MPI_INCLUDED
 
-#include "p7_config.h"
+#include <p7_config.h>
 
 #ifdef HAVE_MPI
 #include <mpi.h>

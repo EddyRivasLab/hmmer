@@ -5,7 +5,7 @@
 #ifndef p7TRACE_METRICS_INCLUDED
 #define p7TRACE_METRICS_INCLUDED
 
-#include "p7_config.h"
+#include <p7_config.h>
 
 #include <stdio.h>
 

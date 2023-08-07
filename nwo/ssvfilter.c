@@ -19,7 +19,7 @@
  *    5. Test driver
  *    6. Example
  */
-#include "h4_config.h"
+#include <h4_config.h>
 
 #include "easel.h"
 #include "esl_cpu.h"
@@ -127,7 +127,7 @@ ssvfilter_dispatcher(const ESL_DSQ *dsq, int L, const H4_PROFILE *hmm, float *re
  * 3. Benchmark driver
  *****************************************************************/
 #ifdef h4SSVFILTER_BENCHMARK
-#include "h4_config.h"
+#include <h4_config.h>
 
 #include "easel.h"
 #include "esl_alphabet.h"
@@ -364,7 +364,7 @@ main(int argc, char **argv)
  * 6. Example
  *****************************************************************/
 #ifdef h4SSVFILTER_EXAMPLE
-#include "h4_config.h"
+#include <h4_config.h>
 
 #include "easel.h"
 #include "esl_alphabet.h"

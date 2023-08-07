@@ -11,7 +11,7 @@
  *   4. Debugging and development, for P7_COORDS2_HASH
  *   5. Example driver
  */
-#include "p7_config.h"
+#include <p7_config.h>
 
 #include <stdlib.h>
 #include <limits.h> 		/* INT_MAX */
@@ -697,7 +697,7 @@ p7_coords2_hash_Dump(FILE *ofp, const P7_COORDS2_HASH *ch)
  *****************************************************************/
 #ifdef p7COORDS2_EXAMPLE
 
-#include "p7_config.h"
+#include <p7_config.h>
 
 #include "easel.h"
 #include "esl_getopts.h"

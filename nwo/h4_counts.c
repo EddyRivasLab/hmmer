@@ -4,7 +4,7 @@
  *    1. H4_COUNTS structure
  *    2. Debugging and development tools
  */
-#include "h4_config.h"
+#include <h4_config.h>
 
 #include <stdio.h>
 

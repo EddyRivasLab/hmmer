@@ -1,7 +1,7 @@
 #ifndef p7REFERENCE_AEC_ALIGN_INCLUDED
 #define p7REFERENCE_AEC_ALIGN_INCLUDED
 
-#include "p7_config.h"
+#include <p7_config.h>
 
 #include "base/p7_profile.h"
 #include "base/p7_envelopes.h"

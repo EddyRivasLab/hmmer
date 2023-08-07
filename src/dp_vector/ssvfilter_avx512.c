@@ -6,7 +6,7 @@
  *
  * This file is conditionally compiled when eslENABLE_AVX512 is defined.
  */
-#include "p7_config.h"
+#include <p7_config.h>
 
 #include <math.h>
 

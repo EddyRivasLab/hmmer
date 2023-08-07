@@ -1,7 +1,7 @@
 #ifndef p7REFERENCE_TRACE_INCLUDED
 #define p7REFERENCE_TRACE_INCLUDED
 
-#include "p7_config.h"
+#include <p7_config.h>
 
 #include "easel.h"
 #include "esl_random.h"

@@ -2,7 +2,7 @@
  * as opposed to optimal alignment; search a sequence database with
  * one profile, collect various statistics.
  */
-#include "p7_config.h"
+#include <p7_config.h>
 
 #include "easel.h"
 #include "esl_alphabet.h"

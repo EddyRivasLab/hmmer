@@ -6,7 +6,7 @@
  *   3. Test driver
  *   4. Example
  */
-#include "h4_config.h"
+#include <h4_config.h>
 
 #include <string.h>
 
@@ -392,7 +392,7 @@ main(int argc, char **argv)
  * 4. Example
  *****************************************************************/
 #ifdef h4ZIGAR_EXAMPLE
-#include "h4_config.h"
+#include <h4_config.h>
 
 #include "easel.h"
 #include "esl_random.h"

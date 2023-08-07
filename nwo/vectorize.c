@@ -7,7 +7,7 @@
  *    VF:  <rwv>, <twv>  16-bit ints
  *    FB:  <rfv>, <tfv>  32-bit floats
  */
-#include "h4_config.h"
+#include <h4_config.h>
 
 #include "simdvec.h"
 #include "h4_profile.h"

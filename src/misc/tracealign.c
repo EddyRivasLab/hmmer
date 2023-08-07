@@ -5,7 +5,7 @@
  *   2. Internal functions used by the API
  *   3. Example
  */
-#include "p7_config.h"
+#include <p7_config.h>
 
 #include "easel.h"
 #include "esl_alphabet.h"
@@ -1071,7 +1071,7 @@ mark_fragments_text(ESL_MSA *msa, P7_TRACE **tr)
   ./p7_tracealign_example ../tutorial/SNORD96.hmm ../tutorial/SNORD96.sto
 */
 
-#include "p7_config.h"
+#include <p7_config.h>
 
 #include <stdio.h>
 #include <stdlib.h>

@@ -1,7 +1,7 @@
 #ifndef p7SPARSE_MASSTRACE_INCLUDED
 #define p7SPARSE_MASSTRACE_INCLUDED
 
-#include "p7_config.h"
+#include <p7_config.h>
 
 #include "easel.h"
 

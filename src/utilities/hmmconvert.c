@@ -1,6 +1,6 @@
 /* hmmconvert: converting profile HMM files to HMMER3 HMM format.
  */
-#include "p7_config.h"
+#include <p7_config.h>
 
 #include <stdio.h>
 #include <stdlib.h>

@@ -22,7 +22,7 @@
 #ifndef p7BG_INCLUDED
 #define p7BG_INCLUDED
 
-#include "p7_config.h"
+#include <p7_config.h>
 
 #include <stdio.h>
 

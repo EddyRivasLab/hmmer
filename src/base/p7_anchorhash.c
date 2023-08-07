@@ -13,7 +13,7 @@
  *   3. Unit tests
  *   4. Test driver
  */
-#include "p7_config.h"
+#include <p7_config.h>
 
 #include <stdlib.h>
 #include <limits.h>  // for INT32_MAX
@@ -578,7 +578,7 @@ utest_sampling(ESL_RANDOMNESS *rng)
  *****************************************************************/
 
 #ifdef p7ANCHORHASH_TESTDRIVE
-#include "p7_config.h"
+#include <p7_config.h>
 
 #include "easel.h"
 #include "esl_alphabet.h"
@@ -622,7 +622,7 @@ main(int argc, char **argv)
  *****************************************************************/
 #ifdef p7ANCHORHASH_EXAMPLE
 
-#include "p7_config.h"
+#include <p7_config.h>
 
 #include "easel.h"
 #include "esl_getopts.h"

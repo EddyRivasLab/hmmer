@@ -11,7 +11,7 @@
  *   5. Test driver
  *   6. Example
  */
-#include "h4_config.h"
+#include <h4_config.h>
 
 #include "easel.h"
 #include "esl_vectorops.h"
@@ -592,7 +592,7 @@ main(int argc, char **argv)
  * 6. Example
  *****************************************************************/
 #ifdef h4REFERENCE_AEC_EXAMPLE
-#include "h4_config.h"
+#include <h4_config.h>
 
 #include "easel.h"
 #include "esl_alphabet.h"

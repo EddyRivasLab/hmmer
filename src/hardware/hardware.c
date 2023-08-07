@@ -4,7 +4,7 @@
 
 #include "hardware.h"
 #include "easel.h"
-#include "p7_config.h"
+#include <p7_config.h>
 
 // SSE detection code.  Based on https://software.intel.com/en-us/articles/using-cpuid-to-detect-the-presence-of-sse-41-and-sse-42-instruction-sets
 void get_cpuid_info (CPUIDinfo *Info, uint32_t eax, uint32_t ecx)

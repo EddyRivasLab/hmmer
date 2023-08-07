@@ -1,7 +1,7 @@
 /* Miscellaneous summary statistics calculated for HMMs and profiles.
  */
 
-#include "p7_config.h"
+#include <p7_config.h>
 
 #include "easel.h"
 #include "esl_random.h"

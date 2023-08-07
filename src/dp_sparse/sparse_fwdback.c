@@ -8,7 +8,7 @@
  *   5. Test driver
  *   6. Example 
  */
-#include "p7_config.h"
+#include <p7_config.h>
 
 #include <string.h>
 
@@ -385,7 +385,7 @@ p7_SparseBackward(const ESL_DSQ *dsq, int L, const P7_PROFILE *gm, const P7_SPAR
  * # Sparse Decoding:     11.3 Mc/s
  * # Sparse Viterbi:      64.3 Mc/s
  */
-#include "p7_config.h"
+#include <p7_config.h>
 
 #include "easel.h"
 #include "esl_alphabet.h"
@@ -1150,7 +1150,7 @@ utest_internal_glocal_exit(void)
  *****************************************************************/
 #ifdef p7SPARSE_FWDBACK_TESTDRIVE
 
-#include "p7_config.h"
+#include <p7_config.h>
 
 #include "easel.h"
 #include "esl_alphabet.h"
@@ -1210,7 +1210,7 @@ main(int argc, char **argv)
  *****************************************************************/
 #ifdef p7SPARSE_FWDBACK_EXAMPLE
 
-#include "p7_config.h"
+#include <p7_config.h>
 
 #include "easel.h"
 #include "esl_alphabet.h"

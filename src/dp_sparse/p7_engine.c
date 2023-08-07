@@ -1,4 +1,4 @@
-#include "p7_config.h"
+#include <p7_config.h>
 
 /* SIMD-vectorized acceleration filters, local only: */
 #include "dp_vector/ssvfilter.h"          // SSV primary acceleration filter
@@ -481,7 +481,7 @@ int p7_engine_Compare_Sequence_HMM(P7_ENGINE *eng, ESL_DSQ *dsq, int L, P7_PROFI
  *****************************************************************/
 #ifdef p7ENGINE_EXAMPLE
 
-#include "p7_config.h"
+#include <p7_config.h>
 
 #include "easel.h"
 #include "esl_alphabet.h"

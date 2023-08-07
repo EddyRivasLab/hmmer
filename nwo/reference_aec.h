@@ -1,7 +1,7 @@
 #ifndef h4REFERENCE_AEC_INCLUDED
 #define h4REFERENCE_AEC_INCLUDED
 
-#include "h4_config.h"
+#include <h4_config.h>
 
 #include "h4_envset.h"
 #include "h4_path.h"

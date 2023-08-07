@@ -12,7 +12,7 @@
  *    9. Example
  */
 
-#include "h4_config.h"
+#include <h4_config.h>
 
 #include <stdlib.h>
 #include <string.h>
@@ -1533,7 +1533,7 @@ utest_counting(void)
  *****************************************************************/
 #ifdef h4PATH_TESTDRIVE
 
-#include "h4_config.h"
+#include <h4_config.h>
 
 #include "easel.h"
 #include "esl_getopts.h"

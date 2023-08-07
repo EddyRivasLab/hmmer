@@ -6,7 +6,7 @@
  */
 #ifndef h4CHECKPTMX_INCLUDED
 #define h4CHECKPTMX_INCLUDED
-#include "h4_config.h"
+#include <h4_config.h>
 
 
 #if eslDEBUGLEVEL > 0

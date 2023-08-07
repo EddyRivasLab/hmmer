@@ -9,7 +9,7 @@
  *   3. Traceback engine
  *   4. Exposed API, wrappers around the engine
  */
-#include "p7_config.h"
+#include <p7_config.h>
 
 #include "easel.h"
 #include "esl_random.h"

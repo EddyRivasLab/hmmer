@@ -1,6 +1,6 @@
 #ifndef p7VITFILTER_INCLUDED
 #define p7VITFILTER_INCLUDED
-#include "p7_config.h"
+#include <p7_config.h>
 
 #include "easel.h"
 

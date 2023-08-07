@@ -11,7 +11,7 @@
  *     8. Test driver.
  *     9. Example.
  */
-#include "p7_config.h"
+#include <p7_config.h>
 
 #include <stdlib.h>
 #include <stdio.h>
@@ -2261,7 +2261,7 @@ h2ascii2prob(char *s, float null)
  * 6. Benchmark driver.
  *****************************************************************/
 #ifdef p7HMMFILE_BENCHMARK
-#include "p7_config.h"
+#include <p7_config.h>
 
 #include <stdlib.h>
 #include <stdio.h>
@@ -2463,7 +2463,7 @@ utest_io_3a(char *tmpfile, P7_HMM *hmm)
  *****************************************************************/
 
 #ifdef p7HMMFILE_TESTDRIVE
-#include "p7_config.h"
+#include <p7_config.h>
 
 #include "easel.h"
 #include "esl_alphabet.h"
@@ -2545,7 +2545,7 @@ main(int argc, char **argv)
  */
 
 #ifdef p7HMMFILE_EXAMPLE
-#include "p7_config.h"
+#include <p7_config.h>
 
 #include "easel.h"
 #include "esl_alphabet.h"

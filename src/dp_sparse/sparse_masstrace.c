@@ -9,7 +9,7 @@
  *   5. Test driver
  *   6. Example
  */
-#include "p7_config.h"
+#include <p7_config.h>
 
 #include "easel.h"
 #include "esl_vectorops.h"
@@ -641,7 +641,7 @@ utest_approx_masstrace(ESL_RANDOMNESS *rng, ESL_ALPHABET *abc, P7_BG *bg, int M,
  *****************************************************************/
 #ifdef p7SPARSE_MASSTRACE_TESTDRIVE
 
-#include "p7_config.h"
+#include <p7_config.h>
 
 #include "easel.h"
 #include "esl_alphabet.h"
@@ -696,7 +696,7 @@ main(int argc, char **argv)
  * 6. Example
  *****************************************************************/
 #ifdef p7SPARSE_MASSTRACE_EXAMPLE
-#include "p7_config.h"
+#include <p7_config.h>
 
 #include "easel.h"
 #include "esl_alphabet.h"

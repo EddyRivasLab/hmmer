@@ -5,7 +5,7 @@
  *    only have a master, no workers. See Infernal commit r3972 on the
  *    same point; and same note in hmmsearch.c's to do list.
  */
-#include "p7_config.h"
+#include <p7_config.h>
 
 #include <stdio.h>
 #include <stdlib.h>

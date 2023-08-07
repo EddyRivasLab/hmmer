@@ -2,7 +2,7 @@
  */
 #ifndef h4SPARSEMASK_INCLUDED
 #define h4SPARSEMASK_INCLUDED
-#include "h4_config.h"
+#include <h4_config.h>
 
 #include "esl_random.h"
 
@@ -12,7 +12,7 @@
 
 struct h4_sparsemask_seg_s {
     int ia;                // <seg[s]> = ia,ib pairs for each segment <s>, s=1..nseg. 
-    int ib;                //    also, seg[0] and seg[S+1] contain sentinel values. 
+    int ib;                //    also, seg[0] and seg[S+1] contain sentinel values: ia[0]=ib[0] = -1; ia[S+1]=ib[S+1] = L+2.
 };
 
 typedef struct {

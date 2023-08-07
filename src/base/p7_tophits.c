@@ -7,7 +7,7 @@
  *    4. Benchmark driver.
  *    5. Test driver.
  */
-#include "p7_config.h"
+#include <p7_config.h>
 
 #include <stdlib.h>
 #include <stdio.h>
@@ -888,7 +888,7 @@ p7_hit_Compare(const P7_HIT *h1, const P7_HIT *h2, float tol)
   
   If needed, we do have opportunity for optimization, however - especially in memory handling.
  */
-#include "p7_config.h"
+#include <p7_config.h>
 
 #include "easel.h"
 #include "esl_getopts.h"
@@ -987,7 +987,7 @@ main(int argc, char **argv)
  *****************************************************************/
 
 #ifdef p7TOPHITS_TESTDRIVE
-#include "p7_config.h"
+#include <p7_config.h>
 
 #include "easel.h"
 #include "esl_getopts.h"

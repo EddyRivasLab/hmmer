@@ -2,7 +2,7 @@
 #define p7PROFILE_MPI_INCLUDED
 #ifdef  HAVE_MPI
 
-#include "p7_config.h"
+#include <p7_config.h>
 
 #include <mpi.h>
 

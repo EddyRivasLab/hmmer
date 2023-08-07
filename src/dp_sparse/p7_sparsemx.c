@@ -36,7 +36,7 @@
  *  [2] on phases of construction of P7_SPARSEMASK: why k[], i[] aren't set until the end
  *  [3] on sorting striped indices: why V (four) "slots" are used, then contiguated
  */
-#include "p7_config.h"
+#include <p7_config.h>
 
 #include <stdio.h>
 #include <stdlib.h>

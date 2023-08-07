@@ -4,7 +4,7 @@
  *   1. logo value functions
  *   2. hmmlogo application
  */
-#include "p7_config.h"
+#include <p7_config.h>
 
 #include "hmmer.h"
 

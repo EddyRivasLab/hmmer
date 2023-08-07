@@ -1,7 +1,7 @@
 #ifndef p7SPARSE_TRACE_INCLUDED
 #define p7SPARSE_TRACE_INCLUDED
 
-#include "p7_config.h"
+#include <p7_config.h>
 
 #include "esl_random.h"
 

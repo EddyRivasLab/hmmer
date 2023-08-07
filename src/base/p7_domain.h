@@ -1,7 +1,7 @@
 #ifndef p7DOMAIN_INCLUDED
 #define p7DOMAIN_INCLUDED
 
-#include "p7_config.h"
+#include <p7_config.h>
 
 #include "base/p7_alidisplay.h"
 

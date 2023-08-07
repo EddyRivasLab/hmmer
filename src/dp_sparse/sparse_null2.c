@@ -5,7 +5,7 @@
  *   1. Null2 calculation routine.
  *   2. Example
  */
-#include "p7_config.h"
+#include <p7_config.h>
 
 #include "easel.h"
 #include "esl_vectorops.h"
@@ -407,7 +407,7 @@ p7_sparse_Null2ByExpectation(const P7_PROFILE *gm, const P7_SPARSEMX *sxd,
  *****************************************************************/
 #ifdef p7SPARSE_NULL2_EXAMPLE
 
-#include "p7_config.h"
+#include <p7_config.h>
 
 #include "easel.h"
 #include "esl_alphabet.h"

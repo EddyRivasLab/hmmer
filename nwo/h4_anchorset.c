@@ -4,7 +4,7 @@
  *   1. H4_ANCHORSET object
  *   2. Debugging, development tools
  */
-#include "h4_config.h"
+#include <h4_config.h>
 
 #include <stdio.h>
 #include <stdlib.h>

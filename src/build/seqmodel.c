@@ -8,7 +8,7 @@
  *   5. Example.
  */
 
-#include "p7_config.h"
+#include <p7_config.h>
 
 #include "easel.h"
 #include "esl_alphabet.h"
@@ -125,7 +125,7 @@ p7_Seqmodel(const ESL_ALPHABET *abc, ESL_DSQ *dsq, int M, char *name,
  * gcc -o seq2hmm -g -Wall -Dp7EXP_J2_1 -L../easel -I ../easel -L. -I. seqmodel.c -lhmmer -leasel -lm 
  * ./seq2hmm <hmmfile> <seqfile>
  */
-#include "p7_config.h"
+#include <p7_config.h>
 
 #include "easel.h"
 #include "esl_getopts.h"
@@ -287,7 +287,7 @@ utest_normalization(ESL_GETOPTS *go)
  * 4. Test driver
  *****************************************************************/
 #ifdef p7SEQMODEL_TESTDRIVE
-#include "p7_config.h"
+#include <p7_config.h>
 
 #include "easel.h"
 
@@ -323,7 +323,7 @@ main(int argc, char **argv)
  * 5. Example
  *****************************************************************/
 #ifdef p7SEQMODEL_EXAMPLE
-#include "p7_config.h"
+#include <p7_config.h>
 
 #include "easel.h"
 #include "esl_alphabet.h"

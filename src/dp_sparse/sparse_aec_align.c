@@ -27,7 +27,7 @@
  *   7. Test driver.
  *   8. Example.
  */
-#include "p7_config.h"
+#include <p7_config.h>
 
 #include "easel.h"
 #include "esl_vectorops.h"
@@ -984,7 +984,7 @@ utest_singlemulti(ESL_RANDOMNESS *rng, int M, const ESL_ALPHABET *abc, int N, in
  * 7. Test driver
  *****************************************************************/
 #ifdef p7SPARSE_AEC_ALIGN_TESTDRIVE
-#include "p7_config.h"
+#include <p7_config.h>
 
 #include "easel.h"
 #include "esl_alphabet.h"
@@ -1033,7 +1033,7 @@ main(int argc, char **argv)
  *****************************************************************/
 #ifdef p7SPARSE_AEC_ALIGN_EXAMPLE
 
-#include "p7_config.h"
+#include <p7_config.h>
 
 #include "easel.h"
 #include "esl_alphabet.h"

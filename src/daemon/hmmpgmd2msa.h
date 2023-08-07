@@ -1,7 +1,7 @@
 #ifndef p7HMMPGMD2MSA_INCLUDED
 #define p7HMMPGMD2MSA_INCLUDED
 
-#include "p7_config.h"
+#include <p7_config.h>
 
 #include "esl_msa.h"
 

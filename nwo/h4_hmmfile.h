@@ -2,7 +2,7 @@
  */
 #ifndef h4HMMFILE_INCLUDED
 #define h4HMMFILE_INCLUDED
-#include "h4_config.h"
+#include <h4_config.h>
 
 #include <stdio.h>
 

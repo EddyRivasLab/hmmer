@@ -1,6 +1,6 @@
 #ifndef h4EWEIGHT_INCLUDED
 #define h4EWEIGHT_INCLUDED
-#include "h4_config.h"
+#include <h4_config.h>
 
 #include "h4_counts.h"
 #include "h4_prior.h"
