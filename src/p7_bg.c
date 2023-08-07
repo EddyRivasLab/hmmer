@@ -10,7 +10,7 @@
  *     7. Test driver.
  *     8. Examples.
  */
-#include "p7_config.h"
+#include <p7_config.h>
 
 #include <string.h>
 
@@ -492,7 +492,7 @@ p7_bg_FilterScore(P7_BG *bg, const ESL_DSQ *dsq, int L, float *ret_sc)
    gcc -O2 -Wall -msse2 -std=gnu99 -o p7_bg_benchmark -I. -L. -I../easel -L../easel -Dp7BG_BENCHMARK p7_bg.c -lhmmer -leasel -lm
    ./p7_bg_benchmark <hmmfile>
  */ 
-#include "p7_config.h"
+#include <p7_config.h>
 
 #include "easel.h"
 #include "esl_alphabet.h"
@@ -595,7 +595,7 @@ utest_ReadWrite(ESL_RANDOMNESS *rng)
  *****************************************************************/
 
 #ifdef p7BG_TESTDRIVE
-#include "esl_config.h"
+#include <esl_config.h>
 
 #include <stdio.h>
 
@@ -641,7 +641,7 @@ main(int argc, char **argv)
    gcc -O2 -Wall -msse2 -std=gnu99 -o p7_bg_example -I. -L. -I../easel -L../easel -Dp7BG_EXAMPLE p7_bg.c -lhmmer -leasel -lm
    ./p7_bg_example <hmmfile> <seqfile>
  */ 
-#include "p7_config.h"
+#include <p7_config.h>
 
 #include "easel.h"
 #include "esl_alphabet.h"

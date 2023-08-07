@@ -1,6 +1,6 @@
 /* hmmstat: display summary statistics for an HMM database.
  */
-#include "p7_config.h"
+#include <p7_config.h>
 
 #include <stdio.h>
 #include <stdlib.h>

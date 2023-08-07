@@ -20,7 +20,7 @@
  *
  * SRE, Sun Aug  3 13:10:24 2008 [St. Louis]
  */
-#include "p7_config.h"
+#include <p7_config.h>
 
 #include <stdio.h>
 #include <math.h>
@@ -227,7 +227,7 @@ p7_ViterbiScore(const ESL_DSQ *dsq, int L, const P7_OPROFILE *om, P7_OMX *ox, fl
   ./benchmark-vitscore -N100 -c <hmmfile>   compare scores to generic impl
   ./benchmark-vitscore -N100 -x <hmmfile>   equate scores to exact emulation
  */
-#include "p7_config.h"
+#include <p7_config.h>
 
 #include "easel.h"
 #include "esl_alphabet.h"
@@ -386,7 +386,7 @@ utest_viterbi_score(ESL_RANDOMNESS *r, ESL_ALPHABET *abc, P7_BG *bg, int M, int 
  *****************************************************************/
 #ifdef p7VITSCORE_TESTDRIVE
 
-#include "p7_config.h"
+#include <p7_config.h>
 
 #include "easel.h"
 #include "esl_alphabet.h"
@@ -458,7 +458,7 @@ main(int argc, char **argv)
    
    ./example <hmmfile> <seqfile>
  */
-#include "p7_config.h"
+#include <p7_config.h>
 
 #include "easel.h"
 #include "esl_alphabet.h"

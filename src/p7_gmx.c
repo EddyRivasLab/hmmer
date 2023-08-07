@@ -6,7 +6,7 @@
  *   3. Unit tests
  *   4. Test driver
  */
-#include "p7_config.h"
+#include <p7_config.h>
 
 #include "hmmer.h"
 
@@ -468,7 +468,7 @@ utest_Compare(ESL_RANDOMNESS *r, P7_PROFILE *gm, P7_BG *bg, int L, float toleran
   gcc -o p7_gmx_utest -msse2 -g -Wall -I. -L. -I../easel -L../easel -Dp7GMX_TESTDRIVE p7_gmx.c -lhmmer -leasel -lm
   ./p7_gmx_utest
  */
-#include "p7_config.h"
+#include <p7_config.h>
 
 #include <stdio.h>
 #include <math.h>

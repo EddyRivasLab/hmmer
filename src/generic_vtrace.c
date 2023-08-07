@@ -6,7 +6,7 @@
  *   
  * SRE, Fri Aug 15 09:17:11 2008 [Janelia]
  */
-#include "p7_config.h"
+#include <p7_config.h>
 
 #include "easel.h"
 #include "esl_alphabet.h"
@@ -171,7 +171,7 @@ p7_GTrace(const ESL_DSQ *dsq, int L, const P7_PROFILE *gm, const P7_GMX *gx, P7_
 /* 
    gcc -g -O2 -Dp7GENERIC_VTRACE_EXAMPLE -I. -I../easel -L. -L../easel -o generic_vtrace_example generic_vtrace.c -lhmmer -leasel -lm
  */
-#include "p7_config.h"
+#include <p7_config.h>
 
 #include "easel.h"
 #include "esl_alphabet.h"

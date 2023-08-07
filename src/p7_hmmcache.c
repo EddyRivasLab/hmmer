@@ -5,7 +5,7 @@
  *   2. Benchmark driver.
  *   3. Unit tests.
  */
-#include "p7_config.h"
+#include <p7_config.h>
 
 #include <stdlib.h>
 #include <string.h>
@@ -171,7 +171,7 @@ p7_hmmcache_Close(P7_HMMCACHE *cache)
  *****************************************************************/
 #ifdef p7HMMCACHE_BENCHMARK
 
-#include "p7_config.h"
+#include <p7_config.h>
 
 #include "easel.h"
 #include "esl_getopts.h"

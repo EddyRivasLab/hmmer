@@ -5,7 +5,7 @@
  *    2. Standardized model construction API.
  *    3. Internal functions.
  */   
-#include "p7_config.h"
+#include <p7_config.h>
 
 #include <stdlib.h>
 #include <stdio.h>

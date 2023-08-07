@@ -8,7 +8,7 @@
  *
  * SRE, Mon Aug 18 08:31:11 2008 [Janelia]
  */
-#include "p7_config.h"
+#include <p7_config.h>
 
 #include <stdlib.h>
 #include <string.h>
@@ -234,7 +234,7 @@ p7_Null2_ByTrace(const P7_OPROFILE *om, const P7_TRACE *tr, int zstart, int zend
     -t  21 Aug 2008  30.50u  (47 Mc/s)    44.96u  (61 Mc/s)  32.03u*10 ( 72 Mc/s)
 
  */
-#include "p7_config.h"
+#include <p7_config.h>
 
 #include "easel.h"
 #include "esl_alphabet.h"
@@ -438,7 +438,7 @@ utest_null2_expectation(ESL_RANDOMNESS *r, ESL_ALPHABET *abc, P7_BG *bg, int M, 
 /*
    ./null2_utest
  */
-#include "p7_config.h"
+#include <p7_config.h>
 
 #include "easel.h"
 #include "esl_alphabet.h"

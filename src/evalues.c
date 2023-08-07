@@ -8,7 +8,7 @@
  * 
  * SRE, Mon Aug  6 13:00:06 2007
  */
-#include "p7_config.h"
+#include <p7_config.h>
 
 #include "easel.h"
 #include "esl_gumbel.h"
@@ -469,7 +469,7 @@ p7_Tau(ESL_RANDOMNESS *r, P7_OPROFILE *om, P7_BG *bg, int L, int N, double lambd
 /* The J1/135 experiment determining precision of mu, tau estimates can be done with this driver by setting Z=1000 or so. 
  * There used to be a separate script, tagged p7EXP_J1_135, to specifically run that experiment.
  */
-#include "p7_config.h"
+#include <p7_config.h>
 
 #include "easel.h"
 #include "esl_getopts.h"
@@ -589,7 +589,7 @@ main(int argc, char **argv)
  *  27 Dec 08 on wanderoo: 24 msec per RRM_1 calibration; 37 msec for Caudal_act
  *  profiling shows 75% in Forward; 12% esl_random(); <3% in MSVFilter.
  */
-#include "p7_config.h"
+#include <p7_config.h>
 
 #include "easel.h"
 #include "esl_alphabet.h"

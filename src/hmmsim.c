@@ -3,7 +3,7 @@
  * Main testbed for exploring the statistical behavior of HMMER3
  * scores on random sequences.
  */
-#include "p7_config.h"
+#include <p7_config.h>
 
 #include <stdio.h>
 #include <stdlib.h>

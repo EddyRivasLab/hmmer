@@ -9,7 +9,7 @@
  *    6. Unit tests.
  *    7. Test driver.
  */
-#include "p7_config.h"		
+#include <p7_config.h>		
 
 #ifdef HMMER_MPI
 #include <stdlib.h>
@@ -1501,7 +1501,7 @@ p7_dcl_MPIRecv(int source, int tag, MPI_Comm comm, char **buf, int *nalloc, P7_D
   qsub -N benchmark-mpi -j y -R y -b y -cwd -V -pe lam-mpi-tight 2 'mpirun C ./benchmark-mpi  ~/notebook/1227-msp-statistics/Pfam.hmm > bench.out'
   qsub -N benchmark-mpi -j y -R y -b y -cwd -V -pe lam-mpi-tight 2 'mpirun C ./benchmark-mpi -b ~/notebook/1227-msp-statistics/Pfam.hmm > bench.out'
  */
-#include "p7_config.h"
+#include <p7_config.h>
 
 #include <string.h>
 #include <math.h>

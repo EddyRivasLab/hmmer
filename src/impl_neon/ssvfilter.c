@@ -405,7 +405,7 @@
  *
  */
 
-#include "p7_config.h"
+#include <p7_config.h>
 
 #include <math.h>
 
@@ -918,7 +918,7 @@ p7_SSVFilter(const ESL_DSQ *dsq, int L, const P7_OPROFILE *om, float *ret_sc)
 
 #ifdef p7SSVFILTER_BENCHMARK
 
-#include "p7_config.h"
+#include <p7_config.h>
 
 #include "easel.h"
 #include "esl_alphabet.h"

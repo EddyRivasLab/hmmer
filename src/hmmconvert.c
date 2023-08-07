@@ -2,7 +2,7 @@
  * 
  * SRE, Thu Oct 16 08:57:43 2008 [janelia] [Enigma MCMXC a.D.]
  */
-#include "p7_config.h"
+#include <p7_config.h>
 
 #include <stdio.h>
 #include <stdlib.h>

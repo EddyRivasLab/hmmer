@@ -11,7 +11,7 @@
  *   7. Test driver.
  *   8. Example.
  */
-#include "p7_config.h"
+#include <p7_config.h>
 
 #include <stdio.h>
 #include <string.h>
@@ -2004,7 +2004,7 @@ p7_profile_SameAsVF(const P7_OPROFILE *om, P7_PROFILE *gm)
 
 #ifdef p7OPROFILE_BENCHMARK
 
-#include "p7_config.h"
+#include <p7_config.h>
 
 #include "easel.h"
 #include "esl_alphabet.h"
@@ -2103,7 +2103,7 @@ main(int argc, char **argv)
 /* gcc -std=gnu99 -g -Wall -Dp7OPROFILE_EXAMPLE -I.. -I../../easel -L.. -L../../easel -o p7_oprofile_example p7_oprofile.c -lhmmer -leasel -lm
  * ./p7_oprofile_example <hmmfile>
  */
-#include "p7_config.h"
+#include <p7_config.h>
 #include <stdlib.h>
 #include "easel.h"
 #include "hmmer.h"

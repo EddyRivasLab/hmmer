@@ -9,7 +9,7 @@
  *
  * SRE, Sun Nov 25 11:26:48 2007 [Casa de Gatos]
  */
-#include "p7_config.h"
+#include <p7_config.h>
 
 #include <stdio.h>
 #include <math.h>

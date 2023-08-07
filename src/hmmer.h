@@ -26,7 +26,7 @@
  */
 #ifndef P7_HMMERH_INCLUDED
 #define P7_HMMERH_INCLUDED
-#include "p7_config.h"
+#include <p7_config.h>
 
 #include <stdio.h>		
 #include <stddef.h>             // ptrdiff_t 

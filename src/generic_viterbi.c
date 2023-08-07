@@ -21,7 +21,7 @@
  *    4. Test driver.
  *    5. Example.
  */
-#include "p7_config.h"
+#include <p7_config.h>
 
 #include "easel.h"
 #include "esl_alphabet.h"
@@ -330,7 +330,7 @@ p7_GViterbi_longtarget(const ESL_DSQ *dsq, int L, const P7_PROFILE *gm, P7_GMX *
  *        MSV  = 55.9 Mc/s
  * (gcc -g -O2, 3.2GHz Xeon, N=50K, L=400, M=72 RRM_1 model)
  */
-#include "p7_config.h"
+#include <p7_config.h>
 
 #include "easel.h"
 #include "esl_alphabet.h"
@@ -555,7 +555,7 @@ utest_viterbi(ESL_GETOPTS *go, ESL_RANDOMNESS *r, ESL_ALPHABET *abc, P7_BG *bg, 
 #include "esl_getopts.h"
 #include "esl_msa.h"
 
-#include "p7_config.h"
+#include <p7_config.h>
 #include "hmmer.h"
 
 static ESL_OPTIONS options[] = {
@@ -616,7 +616,7 @@ main(int argc, char **argv)
 /* 
    gcc -g -O2 -Dp7GENERIC_VITERBI_EXAMPLE -I. -I../easel -L. -L../easel -o generic_viterbi_example generic_viterbi.c -lhmmer -leasel -lm
  */
-#include "p7_config.h"
+#include <p7_config.h>
 
 #include "easel.h"
 #include "esl_alphabet.h"

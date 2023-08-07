@@ -13,7 +13,7 @@
  *
  * SRE, Wed Jul 30 11:00:04 2008 [Janelia]
  */
-#include "p7_config.h"
+#include <p7_config.h>
 
 #include <stdio.h>
 #include <string.h>
@@ -1931,7 +1931,7 @@ p7_profile_SameAsVF(const P7_OPROFILE *om, P7_PROFILE *gm)
    icc -o benchmark-oprofile -O3 -static -I.. -L.. -I../../easel -L../../easel -Dp7OPROFILE_BENCHMARK p7_oprofile.c -lhmmer -leasel -lm
    ./benchmark-vmx <hmmfile>         runs benchmark
  */
-#include "p7_config.h"
+#include <p7_config.h>
 
 #include "easel.h"
 #include "esl_alphabet.h"
@@ -2030,7 +2030,7 @@ main(int argc, char **argv)
 /* gcc -std=gnu99 -g -Wall -Dp7OPROFILE_EXAMPLE -I.. -I../../easel -L.. -L../../easel -o p7_oprofile_example p7_oprofile.c -lhmmer -leasel -lm
  * ./p7_oprofile_example <hmmfile>
  */
-#include "p7_config.h"
+#include <p7_config.h>
 #include <stdlib.h>
 #include "easel.h"
 #include "hmmer.h"

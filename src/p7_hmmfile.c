@@ -11,7 +11,7 @@
  *     8. Test driver.
  *     9. Example.
  */
-#include "p7_config.h"
+#include <p7_config.h>
 
 #include <stdlib.h>
 #include <stdio.h>
@@ -2210,7 +2210,7 @@ h2ascii2prob(char *s, float null)
   icc  -O3 -static -o p7_hmmfile_benchmark -I. -L. -I../easel -L../easel -Dp7HMMFILE_BENCHMARK p7_hmmfile.c -lhmmer -leasel -lm 
   ./p7_hmmfile_benchmark Pfam.hmm
  */
-#include "p7_config.h"
+#include <p7_config.h>
 
 #include <stdlib.h>
 #include <stdio.h>
@@ -2415,7 +2415,7 @@ utest_io_3a(char *tmpfile, P7_HMM *hmm)
 #ifdef p7HMMFILE_TESTDRIVE
 /* gcc -g -Wall -Dp7HMMFILE_TESTDRIVE -I. -I../easel -L. -L../easel -o p7_hmmfile_test p7_hmmfile.c -lhmmer -leasel -lm
  */
-#include "p7_config.h"
+#include <p7_config.h>
 
 #include "easel.h"
 #include "esl_alphabet.h"
@@ -2482,7 +2482,7 @@ main(int argc, char **argv)
 #ifdef p7HMMFILE_EXAMPLE
 /* gcc -g -Wall -Dp7HMMFILE_EXAMPLE -I. -I../easel -L. -L../easel -o p7_hmmfile_example p7_hmmfile.c -lhmmer -leasel -lm
  */
-#include "p7_config.h"
+#include <p7_config.h>
 
 #include "easel.h"
 #include "esl_alphabet.h"

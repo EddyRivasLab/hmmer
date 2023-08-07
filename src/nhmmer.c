@@ -1,6 +1,6 @@
 /* nhmmer: search profile HMM(s) against a nucleotide sequence database.
  */
-#include "p7_config.h"
+#include <p7_config.h>
 
 #include <stdio.h>
 #include <stdlib.h>

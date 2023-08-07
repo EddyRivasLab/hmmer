@@ -6,7 +6,7 @@
 #ifndef P7_IMPL_NEON_INCLUDED
 #define P7_IMPL_NEON_INCLUDED
 
-#include "p7_config.h"
+#include <p7_config.h>
 
 #include "esl_alphabet.h"
 #include "esl_neon.h"

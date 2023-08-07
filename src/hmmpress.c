@@ -1,6 +1,6 @@
 /* hmmpress: prepare an HMM database for faster hmmscan searches.
  */
-#include "p7_config.h"
+#include <p7_config.h>
 
 #include <stdio.h>
 #include <stdlib.h>

@@ -32,7 +32,7 @@
  *   
  * SRE, Thu Jan 24 09:28:01 2008 [Janelia]
  */
-#include "p7_config.h"
+#include <p7_config.h>
 
 #include <math.h>
 #include <string.h>
@@ -993,7 +993,7 @@ rescore_isolated_domain(P7_DOMAINDEF *ddef, P7_OPROFILE *om, const ESL_SQ *sq, c
  */
 
 
-#include "p7_config.h"
+#include <p7_config.h>
 
 #include <stdio.h>
 #include <stdlib.h>
@@ -1132,7 +1132,7 @@ main(int argc, char **argv)
 /* gcc -o domaindef_example2 -g -Wall -I../easel -L../easel -I. -L. -Dp7DOMAINDEF_EXAMPLE2 p7_domaindef.c -lhmmer -leasel -lm
  * ./domaindef_example2 <hmmfile> 
  */
-#include "p7_config.h"
+#include <p7_config.h>
 
 #include <stdio.h>
 #include <stdlib.h>

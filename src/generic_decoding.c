@@ -7,7 +7,7 @@
  *   4. Test driver.
  *   5. Example.
  */
-#include "p7_config.h"
+#include <p7_config.h>
 
 #include <math.h>
 #include "easel.h"
@@ -240,7 +240,7 @@ p7_GDomainDecoding(const P7_PROFILE *gm, const P7_GMX *fwd, const P7_GMX *bck, P
                  -----------------    ------------------     -------------------
    21 Aug 08      6.62u (21.8 Mc/s)    12.52u (21.7 Mc/s)     106.27u (21.7 Mc/s)
  */
-#include "p7_config.h"
+#include <p7_config.h>
 
 #include "easel.h"
 #include "esl_alphabet.h"
@@ -354,7 +354,7 @@ main(int argc, char **argv)
  *****************************************************************/
 #ifdef p7GENERIC_DECODING_EXAMPLE
 
-#include "p7_config.h"
+#include <p7_config.h>
 
 #include "easel.h"
 #include "esl_alphabet.h"

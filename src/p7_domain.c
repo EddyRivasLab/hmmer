@@ -4,7 +4,7 @@
  * NPC 2/8/19 [Mother Russia]
  */
 
-#include "p7_config.h"
+#include <p7_config.h>
 
 #include <stdlib.h>
 #include <stdio.h>

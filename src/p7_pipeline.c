@@ -6,7 +6,7 @@
  *   3. Example 1: search mode (in a sequence db)
  *   4. Example 2: scan mode (in an HMM db)
  */
-#include "p7_config.h"
+#include <p7_config.h>
 
 #include <stdlib.h>
 #include <stdio.h>
@@ -1810,7 +1810,7 @@ p7_pli_Statistics(FILE *ofp, P7_PIPELINE *pli, ESL_STOPWATCH *w)
  * ./pipeline_example <hmmfile> <sqfile>
  */
 
-#include "p7_config.h"
+#include <p7_config.h>
 
 #include "easel.h"
 #include "esl_getopts.h"
@@ -1949,7 +1949,7 @@ main(int argc, char **argv)
  * ./pipeline_example2 <hmmdb> <sqfile>
  */
 
-#include "p7_config.h"
+#include <p7_config.h>
 
 #include "easel.h"
 #include "esl_getopts.h"

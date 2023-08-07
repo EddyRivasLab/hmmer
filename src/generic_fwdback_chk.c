@@ -7,7 +7,7 @@
  *    4. Example main().
  *    5. References.
  */
-#include "p7_config.h"
+#include <p7_config.h>
 
 #include "easel.h"
 
@@ -439,7 +439,7 @@ posterior_decode_row(int rowi, float *fwd, float *bck, int M, float overall_sc, 
    icc -O3 -static -o generic_fwdback_chk_benchmark -I. -L. -I../easel -L../easel -Dp7GENERIC_FWDBACK_CHK_BENCHMARK generic_fwdback_chk.c -lhmmer -leasel -lm
    ./generic_fwdback_chk_benchmark <hmmfile>
  */
-#include "p7_config.h"
+#include <p7_config.h>
 
 #include "easel.h"
 #include "esl_alphabet.h"
@@ -629,7 +629,7 @@ utest_emitseq(ESL_RANDOMNESS *rng, ESL_ALPHABET *abc,
  *****************************************************************/
 #ifdef p7GENERIC_FWDBACK_CHK_TESTDRIVE
 
-#include "p7_config.h"
+#include <p7_config.h>
 #include "easel.h"
 #include "esl_getopts.h"
 
@@ -695,7 +695,7 @@ main(int argc, char **argv)
 /* 
    gcc -g -O2 -o generic_fwdback_chk_example -Dp7GENERIC_FWDBACK_CHK_EXAMPLE -I. -I../easel -L. -L../easel generic_fwdback_chk.c -lhmmer -leasel -lm
  */
-#include "p7_config.h"
+#include <p7_config.h>
 
 #include "easel.h"
 #include "esl_alphabet.h"

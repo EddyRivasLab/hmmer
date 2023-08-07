@@ -7,7 +7,7 @@
  * 
  * SRE, Tue Oct 21 19:38:19 2008 [Casa de Gatos]
  */
-#include "p7_config.h"
+#include <p7_config.h>
 
 #include "easel.h"
 #include "esl_vectorops.h"
@@ -1091,7 +1091,7 @@ rejustify_insertions_text(const ESL_ALPHABET *abc, ESL_MSA *msa, const int *inse
   ./p7_tracealign_tracestats_test ../tutorial/SNORD96.hmm ../tutorial/SNORD96.sto
 */
 
-#include "p7_config.h"
+#include <p7_config.h>
 
 #include <stdio.h>
 #include <stdlib.h>

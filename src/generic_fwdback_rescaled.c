@@ -2,7 +2,7 @@
  *  gcc -o generic_fwdback_rescaled_example -mssse3 -I. -I../easel -L../easel -L. generic_fwdback_rescaled.c  -lhmmer -leasel
  */
 
-#include "p7_config.h"
+#include <p7_config.h>
 
 #include <string.h>
 

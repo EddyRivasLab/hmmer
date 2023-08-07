@@ -5,7 +5,7 @@
  *           4) Test Driver
  * NPC 2/20/19 [Sparta]
  */
-#include "p7_config.h"
+#include <p7_config.h>
 
 #include <stdlib.h>
 #include <stdio.h>

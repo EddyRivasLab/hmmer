@@ -16,7 +16,7 @@
  *   4. Test driver.
  *   5. Example.
  */
-#include "p7_config.h"
+#include <p7_config.h>
 
 #include <stdio.h>
 #include <math.h>
@@ -499,7 +499,7 @@ p7_ViterbiFilter_longtarget(const ESL_DSQ *dsq, int L, const P7_OPROFILE *om, P7
    ./benchmark-vitfilter -N100 -c <hmmfile> compare scores to generic impl
    ./benchmark-vitfilter -N100 -x <hmmfile> compare scores to exact emulation
  */
-#include "p7_config.h"
+#include <p7_config.h>
 
 #include "easel.h"
 #include "esl_alphabet.h"
@@ -687,7 +687,7 @@ utest_viterbi_filter(ESL_RANDOMNESS *r, ESL_ALPHABET *abc, P7_BG *bg, int M, int
  * 4. Test driver
  *****************************************************************/
 #ifdef p7VITFILTER_TESTDRIVE
-#include "p7_config.h"
+#include <p7_config.h>
 
 #include "easel.h"
 #include "esl_alphabet.h"
@@ -763,7 +763,7 @@ main(int argc, char **argv)
    Also useful for debugging on small HMMs and sequences.
    ./vitfilter_example <hmmfile> <seqfile>
  */
-#include "p7_config.h"
+#include <p7_config.h>
 
 #include "easel.h"
 #include "esl_alphabet.h"

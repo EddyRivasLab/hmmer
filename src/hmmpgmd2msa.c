@@ -4,7 +4,7 @@
  *    1. The <esl_msa_hmmpgmd2msa> function
  *    2. Test driver
  */
-#include "p7_config.h"
+#include <p7_config.h>
 
 #include <stdlib.h>
 #include <stdio.h>

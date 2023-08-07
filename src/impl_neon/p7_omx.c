@@ -6,7 +6,7 @@
  *
  * ML, Fri Mar 12 10:26:31 2021 [Heidelberg]
  */
-#include "p7_config.h"
+#include <p7_config.h>
 
 #include <stdio.h>
 #include <math.h>

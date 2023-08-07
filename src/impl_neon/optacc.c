@@ -10,7 +10,7 @@
  *
  * SRE, Mon Aug 18 20:01:01 2008 [Casa de Gatos]
  */
-#include "p7_config.h"
+#include <p7_config.h>
 
 #include <float.h>
 
@@ -439,7 +439,7 @@ select_b(const P7_OPROFILE *om, const P7_OMX *ox, int i)
    20 Aug 08:     13.11u (110 Mc/s)     23.39u (116 Mc/s)    332.62u (69 Mc/s)
 
  */
-#include "p7_config.h"
+#include <p7_config.h>
 
 #include "easel.h"
 #include "esl_alphabet.h"
@@ -757,7 +757,7 @@ utest_optacc(ESL_GETOPTS *go, ESL_RANDOMNESS *r, ESL_ALPHABET *abc, P7_BG *bg, i
 /*
      ./optacc_utest
  */
-#include "p7_config.h"
+#include <p7_config.h>
 
 #include "easel.h"
 #include "esl_alphabet.h"
@@ -830,7 +830,7 @@ main(int argc, char **argv)
    gcc -g -Wall -o optacc_example -Dp7OPTACC_EXAMPLE -I.. -I../../easel -L.. -L../../easel optacc.c -lhmmer -leasel -lm
    ./optacc_example <hmmfile> <seqfile>
 */
-#include "p7_config.h"
+#include <p7_config.h>
 
 #include "easel.h"
 #include "esl_alphabet.h"

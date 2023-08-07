@@ -3,7 +3,7 @@
  * 
  * SRE, Wed Jan  9 07:26:34 2008 [Janelia]
  */
-#include "p7_config.h"
+#include <p7_config.h>
 #include "easel.h"
 #include "esl_cluster.h"
 #include "esl_vectorops.h"
@@ -464,7 +464,7 @@ p7_spensemble_Destroy(P7_SPENSEMBLE *sp)
 /* 
    gcc -g -I. -L. -I ../easel -L ../easel -Dp7SPENSEMBLE_EXAMPLE -o example p7_spensemble.c -lhmmer -leasel -lm
  */
-#include "p7_config.h"
+#include <p7_config.h>
 
 #include <stdio.h>
 #include <stdlib.h>

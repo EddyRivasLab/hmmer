@@ -1,6 +1,6 @@
 /* phmmer: search a protein sequence against a protein database
  */
-#include "p7_config.h"
+#include <p7_config.h>
 
 #include <stdio.h>
 #include <stdlib.h>

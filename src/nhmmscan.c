@@ -1,6 +1,6 @@
 /* nhmmscan: search sequence(s) against a profile HMM database, using nhmmer pipeline
  */
-#include "p7_config.h"
+#include <p7_config.h>
 
 #include <stdio.h>
 #include <stdlib.h>

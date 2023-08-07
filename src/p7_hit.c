@@ -4,7 +4,7 @@
  *           3) Test Driver
  * NPC 2/13/19 [The soothing whir of the air filter]
  */
-#include "p7_config.h"
+#include <p7_config.h>
 
 #include <stdlib.h>
 #include <stdio.h>
