@@ -1,4 +1,4 @@
-#! /usr/bin/env python
+#! /usr/bin/env python3
 
 # gen-inclusions.py : generate .tex inclusions for user guide
 #
