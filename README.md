@@ -1,6 +1,5 @@
 ## HMMER - biological sequence analysis using profile HMMs
 
-[![](https://travis-ci.org/EddyRivasLab/hmmer.svg?branch=develop)](https://travis-ci.org/EddyRivasLab/hmmer)
 ![](http://img.shields.io/badge/license-BSD-brightgreen.svg)
 
 [HMMER](http://hmmer.org) searches biological sequence databases for
@@ -8,14 +7,14 @@ homologous sequences, using either single sequences or multiple
 sequence alignments as queries. HMMER implements a technology called
 "profile hidden Markov models" (profile HMMs). HMMER is used by many
 protein family domain databases and large-scale annotation pipelines,
-including [Pfam](http://pfam.xfam.org) and other members of the
-[InterPro Consortium](http://www.ebi.ac.uk/interpro/).
+including many members of the
+[InterPro Consortium](http://ebi.ac.uk/interpro/).
 
-To obtain HMMER releases, please visit [hmmer.org](http://hmmer.org).
+To obtain HMMER releases, visit [hmmer.org](http://hmmer.org).
 
 To participate in HMMER development, visit us at
 [github](https://github.com/EddyRivasLab/hmmer).  HMMER development
-depends on the Easel library, also at
+also depends on the lab's Easel library, at
 [github](https://github.com/EddyRivasLab/easel).
 
 
@@ -24,12 +23,12 @@ depends on the Easel library, also at
 ```
    % wget http://eddylab.org/software/hmmer/hmmer.tar.gz
    % tar zxf hmmer.tar.gz
-   % cd hmmer-3.3.2
-   % ./configure --prefix /your/install/path
+   % cd hmmer-3.4
+   % ./configure --prefix /your/install/path   # replace /your/install/path with what you want, obv 
    % make
-   % make check                 # optional: run automated tests
-   % make install               # optional: install HMMER programs, man pages
-   % (cd easel; make install)   # optional: install Easel tools
+   % make check                                # optional: run automated tests
+   % make install                              # optional: install HMMER programs, man pages
+   % (cd easel; make install)                  # optional: install Easel tools
 ``` 
 
 Executable programs will be installed in `/your/install/path/bin`. If
