@@ -1,6 +1,6 @@
 /* worker side of the hmmer daemon
  */
-#include "p7_config.h"
+#include <p7_config.h>
 
 #ifdef HMMER_THREADS
 
@@ -120,7 +120,7 @@ print_timings(int i, double elapsed, P7_PIPELINE *pli)
   m  = (int) (elapsed / 60.) - h * 60;
   s  = (int) (elapsed) - h * 3600 - m * 60;
   hs = (int) (elapsed * 100.) - h * 360000 - m * 6000 - s * 100;
-  sprintf(buf1, "%02d:%02d.%02d", m,s,hs);
+  snprintf(buf1, 16, "%02d:%02d.%02d", m,s,hs);
 
   fprintf (stdout, "%2d %9" PRId64 " %9" PRId64 " %7" PRId64 " %7" PRId64 " %6" PRId64 " %5" PRId64 " %s\n",
            i, pli->nseqs, pli->nres, pli->n_past_msv, pli->n_past_bias, pli->n_past_vit, pli->n_past_fwd, buf1);
@@ -810,7 +810,7 @@ send_results(int fd, ESL_STOPWATCH *w, P7_TOPHITS *th, P7_PIPELINE *pli){
   uint8_t *buf2_ptr = NULL;
   uint32_t n = 0; // index within buffer of serialized data
   uint32_t nalloc = 0; // Size of serialized buffer
-
+  int i;
   // set up handles to buffers
   buf = &buf_ptr;
   buf2 = &buf2_ptr;
@@ -849,7 +849,7 @@ send_results(int fd, ESL_STOPWATCH *w, P7_TOPHITS *th, P7_PIPELINE *pli){
   }
 
   // and then the hits
-  for(int i =0; i< stats.nhits; i++){
+  for(i =0; i< stats.nhits; i++){
     if(p7_hit_Serialize(&(th->unsrt[i]), buf, &n, &nalloc) != eslOK){
       LOG_FATAL_MSG("Serializing P7_HIT failed", errno);
     }

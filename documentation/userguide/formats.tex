@@ -134,6 +134,15 @@ In general, HMMER programs and Easel miniapps can also read \mono{.gz}
 compressed files; they will uncompress them on the fly. You need to
 have \mono{gunzip} installed on your system for this to work.
 
+A significant exception is \mono{jackhmmer}, which needs to do
+multiple iterations over the same input sequence database. Because it
+needs to rewind and read the same target database more than once,
+\mono{jackhmmer} won't accept a standard input stream as the database
+argument (unlike most other programs); and because we treat compressed
+files as standard input streams, by opening a pipe from an external
+decompression program, \mono{jackhmmer} won't accept a compressed seq
+database file either. If a program can't accept stdin or a .gz file,
+it'll tell you, by failing with an informative error message.
 
 
 

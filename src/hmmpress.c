@@ -1,6 +1,6 @@
 /* hmmpress: prepare an HMM database for faster hmmscan searches.
  */
-#include "p7_config.h"
+#include <p7_config.h>
 
 #include <stdio.h>
 #include <stdlib.h>
@@ -53,13 +53,12 @@ main(int argc, char **argv)
   struct dbfiles *dbf     = NULL;
   uint16_t        fh      = 0;
   int             nmodel  = 0;
-  uint64_t        totM    = 0;
   int             status;
   char            errbuf[eslERRBUFSIZE];
 
   if (strcmp(hmmfile, "-") == 0) p7_Fail("Can't use - for <hmmfile> argument: can't index standard input\n");
 
-  status = p7_hmmfile_OpenENoDB(hmmfile, NULL, &hfp, errbuf);
+  status = p7_hmmfile_OpenNoDB(hmmfile, NULL, &hfp, errbuf);
   if      (status == eslENOTFOUND) p7_Fail("File existence/permissions problem in trying to open HMM file %s.\n%s\n", hmmfile, errbuf);
   else if (status == eslEFORMAT)   p7_Fail("File format problem in trying to open HMM file %s.\n%s\n",                hmmfile, errbuf);
   else if (status != eslOK)        p7_Fail("Unexpected error %d in opening HMM file %s.\n%s\n",                       status, hmmfile, errbuf);  
@@ -84,7 +83,6 @@ main(int argc, char **argv)
       }
 
       nmodel++;
-      totM += hmm->M;
 
       gm = p7_profile_Create(hmm->M, abc);
       p7_ProfileConfig(hmm, bg, gm, 400, p7_LOCAL);

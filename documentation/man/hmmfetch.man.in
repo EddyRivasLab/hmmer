@@ -144,9 +144,27 @@ instead of to standard output.
 
 .TP
 .B \-O
-Output HMM(s) to individual file(s) named
-.I key
-instead of standard output.
+Output one retrieved HMM (by
+.IR key )
+to a file named
+.IR key .
+This is a convenience for saving some typing:
+instead of 
+.nf
+ \fB% hmmfetch \-o RRM_1 hmmfile RRM_1\fR
+.fi
+you can just type
+.nf
+ \fB% hmmfetch \-O hmmfile RRM_1\fR
+.fi
+The
+.B \-O 
+option only works if you're retrieving a
+single profile; it is incompatible with 
+.B \-f.
+
+
+
 
 .TP
 .B \-\-index

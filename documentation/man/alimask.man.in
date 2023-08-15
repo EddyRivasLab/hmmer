@@ -103,21 +103,43 @@ Supply the given range(s) in model coordinates.
 Supply the given range(s) in alignment coordinates. 
 
 .TP
-.B \-\-apendmask 
+.B \-\-appendmask 
 Add to the existing mask found with the alignment.
 The default is to overwrite any existing mask. 
 
 .TP
 .BI \-\-model2ali " <s>"
-Rather than actually produce the masked alignment, simply
-print model range(s) corresponding to input alignment 
-range(s).
+Print model range(s) and the corresponding alignment range(s).
+No masked alignment is produced.
+The output is a single line for each input range, of the form
+.nf
+   i..j -> m..n
+.fi
+with i & j representing model range values, and m & n
+representing alignment range values.
 
 .TP
 .BI \-\-ali2model " <s>"
-Rather than actually produce the masked alignment, simply
-print alignment range(s) corresponding to input model 
-range(s).
+Print alignment range(s) and the corresponding model range(s).
+No masked alignment is produced.
+Because some alignment positions may not map to model positions,
+the range(s) produced will begin with the first alignment
+position between <from> and <to> (inclusive) that maps to a
+model position, and end with the final alignment position in
+that range that maps to a model position.
+The output is a single line for each input range, of
+the form
+.nf
+  i..j -> m..n
+.fi
+with i & j representing alignment range values, and m & n
+representing model range values.
+If no alignment positions in the range <from>..<to> map
+to a model position, the output prints the input <from>
+and <to> mapping to nothing, with the format:
+.nf
+ i..j  ->   \-..\-  (no map) .
+.fi
 
 
 .SH OPTIONS FOR SPECIFYING THE ALPHABET
@@ -219,7 +241,7 @@ al, J. Mol. Biol. 235:1067, 1994].
 .TP 
 .B \-\-wblosum
 Use the same clustering scheme that was used to weight data in
-calculating BLOSUM subsitution matrices [Henikoff and Henikoff,
+calculating BLOSUM substitution matrices [Henikoff and Henikoff,
 Proc. Natl. Acad. Sci 89:10915, 1992]. Sequences are single-linkage
 clustered at an identity threshold (default 0.62; see
 .BR \-\-wid )

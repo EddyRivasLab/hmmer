@@ -29,7 +29,7 @@
  * 
  * SRE, Thu Jul 31 08:43:20 2008 [Janelia]
  */
-#include "p7_config.h"
+#include <p7_config.h>
 
 #include <stdio.h>
 #include <math.h>
@@ -302,9 +302,9 @@ forward_engine(int do_full, const ESL_DSQ *dsq, int L, const P7_OPROFILE *om, P7
       xBv   = _mm_set1_ps(xB);
 
       /* Right shifts by 4 bytes. 4,8,12,x becomes x,4,8,12.  Shift zeros on. */
-      mpv   = esl_sse_rightshift_ps(MMO(dpp,Q-1), zerov);
-      dpv   = esl_sse_rightshift_ps(DMO(dpp,Q-1), zerov);
-      ipv   = esl_sse_rightshift_ps(IMO(dpp,Q-1), zerov);
+      mpv   = esl_sse_rightshiftz_float(MMO(dpp,Q-1));
+      dpv   = esl_sse_rightshiftz_float(DMO(dpp,Q-1));
+      ipv   = esl_sse_rightshiftz_float(IMO(dpp,Q-1));
       
       for (q = 0; q < Q; q++)
 	{
@@ -346,7 +346,7 @@ forward_engine(int do_full, const ESL_DSQ *dsq, int L, const P7_OPROFILE *om, P7
       /* We're almost certainly're obligated to do at least one complete 
        * DD path to be sure: 
        */
-      dcv        = esl_sse_rightshift_ps(dcv, zerov);
+      dcv        = esl_sse_rightshiftz_float(dcv);
       DMO(dpc,0) = zerov;
       tp         = om->tfv + 7*Q;	/* set tp to start of the DD's */
       for (q = 0; q < Q; q++) 
@@ -367,7 +367,7 @@ forward_engine(int do_full, const ESL_DSQ *dsq, int L, const P7_OPROFILE *om, P7
 	{			/* Fully serialized version */
 	  for (j = 1; j < 4; j++)
 	    {
-	      dcv = esl_sse_rightshift_ps(dcv, zerov);
+	      dcv = esl_sse_rightshiftz_float(dcv);
 	      tp  = om->tfv + 7*Q;	/* set tp to start of the DD's */
 	      for (q = 0; q < Q; q++) 
 		{ /* note, extend dcv, not DMO(q); only adding DD paths now */
@@ -382,7 +382,7 @@ forward_engine(int do_full, const ESL_DSQ *dsq, int L, const P7_OPROFILE *om, P7
 	    {
 	      register __m128 cv;	/* keeps track of whether any DD's change DMO(q) */
 
-	      dcv = esl_sse_rightshift_ps(dcv, zerov);
+	      dcv = esl_sse_rightshiftz_float(dcv);
 	      tp  = om->tfv + 7*Q;	/* set tp to start of the DD's */
 	      cv  = zerov;
 	      for (q = 0; q < Q; q++) 
@@ -445,7 +445,7 @@ forward_engine(int do_full, const ESL_DSQ *dsq, int L, const P7_OPROFILE *om, P7
       ox->xmx[i*p7X_NXCELLS+p7X_C] = xC;
 
 #if eslDEBUGLEVEL > 0
-      if (ox->debugging) p7_omx_DumpFBRow(ox, TRUE, i, 9, 5, xE, xN, xJ, xB, xC);	/* logify=TRUE, <rowi>=i, width=8, precision=5*/
+      if (ox->debugging) p7_omx_DumpFBRow(ox, TRUE, i, 9, 5, xE, xN, xJ, xB, xC);	/* logify=TRUE, <rowi>=i, width=9, precision=5*/
 #endif
     } /* end loop over sequence residues 1..L */
 
@@ -749,7 +749,7 @@ backward_engine(int do_full, const ESL_DSQ *dsq, int L, const P7_OPROFILE *om, c
    ./fwdback_benchmark -c -N100 <hmmfile>  compare scores of SSE to generic impl
    ./fwdback_benchmark -x -N100 <hmmfile>  test that scores match trusted implementation.
  */
-#include "p7_config.h"
+#include <p7_config.h>
 
 #include "easel.h"
 #include "esl_alphabet.h"
@@ -803,8 +803,8 @@ main(int argc, char **argv)
 
   p7_FLogsumInit();
 
-  if (p7_hmmfile_OpenE(hmmfile, NULL, &hfp, NULL) != eslOK) p7_Fail("Failed to open HMM file %s", hmmfile);
-  if (p7_hmmfile_Read(hfp, &abc, &hmm)            != eslOK) p7_Fail("Failed to read HMM");
+  if (p7_hmmfile_Open(hmmfile, NULL, &hfp, NULL) != eslOK) p7_Fail("Failed to open HMM file %s", hmmfile);
+  if (p7_hmmfile_Read(hfp, &abc, &hmm)           != eslOK) p7_Fail("Failed to read HMM");
 
   bg = p7_bg_Create(abc);
   p7_bg_SetLength(bg, L);
@@ -958,7 +958,7 @@ utest_fwdback(ESL_RANDOMNESS *r, ESL_ALPHABET *abc, P7_BG *bg, int M, int L, int
    gcc -g -Wall -msse2 -std=gnu99 -o fwdback_utest -I.. -L.. -I../../easel -L../../easel -Dp7FWDBACK_TESTDRIVE fwdback.c -lhmmer -leasel -lm
    ./fwdback_utest
  */
-#include "p7_config.h"
+#include <p7_config.h>
 
 #include "easel.h"
 #include "esl_alphabet.h"
@@ -1033,7 +1033,7 @@ main(int argc, char **argv)
    gcc -g -Wall -msse2 -std=gnu99 -o fwdback_example -I.. -L.. -I../../easel -L../../easel -Dp7FWDBACK_EXAMPLE fwdback.c -lhmmer -leasel -lm
    ./fwdback_example <hmmfile> <seqfile>
  */ 
-#include "p7_config.h"
+#include <p7_config.h>
 
 #include "easel.h"
 #include "esl_alphabet.h"
@@ -1085,8 +1085,8 @@ main(int argc, char **argv)
   int             status;
 
   /* Read in one HMM */
-  if (p7_hmmfile_OpenE(hmmfile, NULL, &hfp, NULL) != eslOK) p7_Fail("Failed to open HMM file %s", hmmfile);
-  if (p7_hmmfile_Read(hfp, &abc, &hmm)            != eslOK) p7_Fail("Failed to read HMM");
+  if (p7_hmmfile_Open(hmmfile, NULL, &hfp, NULL) != eslOK) p7_Fail("Failed to open HMM file %s", hmmfile);
+  if (p7_hmmfile_Read(hfp, &abc, &hmm)           != eslOK) p7_Fail("Failed to read HMM");
 
   /* Open sequence file for reading */
   sq     = esl_sq_CreateDigital(abc);

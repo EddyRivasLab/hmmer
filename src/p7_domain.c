@@ -4,7 +4,7 @@
  * NPC 2/8/19 [Mother Russia]
  */
 
-#include "p7_config.h"
+#include <p7_config.h>
 
 #include <stdlib.h>
 #include <stdio.h>
@@ -13,6 +13,8 @@
 #include <string.h>
 
 #include "easel.h"
+#include "esl_vectorops.h"
+
 #include "hmmer.h"
 
 /* Function: p7_domain_Create_empty
@@ -84,6 +86,41 @@ extern void p7_domain_Destroy(P7_DOMAIN *obj){
   return;
 }
 
+/* Function: p7_domain_Copy()
+ * Synopsis: Copy a domain.
+ *
+ * Purpose:  Copies domain <src> to hit <dst>, where <dst> has already been
+ *           allocated.
+ *
+ * Returns:   <eslOK> on success.
+ *
+ * Throws:    <eslEMEM> on allocation error.
+ */
+extern int p7_domain_Copy(const P7_DOMAIN *src, P7_DOMAIN *dst){
+  int status = eslOK;
+  P7_ALIDISPLAY* ad = NULL;
+  float* scores_per_pos = NULL;
+
+  // allocate everything before editing <dst>
+  if (src->ad != NULL) {
+    if ((ad = p7_alidisplay_Clone(src->ad)) == NULL) ESL_XEXCEPTION(eslEMEM, "allocation failure");
+    if (src->scores_per_pos != NULL) {
+      ESL_ALLOC(scores_per_pos, sizeof(float) * src->ad->N);
+      esl_vec_FCopy(src->scores_per_pos, src->ad->N, scores_per_pos);
+    }
+  }
+
+  // allocation succeeded so we can update <dst>
+  memcpy(dst, src, sizeof(P7_DOMAIN));
+  dst->ad = ad;
+  dst->scores_per_pos = scores_per_pos;
+  return status;
+
+ERROR:
+  free(ad);
+  free(scores_per_pos);
+  return status;
+}
 
 /* Function:  p7_domain_Serialize
  * Synopsis:  Serializes a P7_DOMAIN object into a stream of bytes
@@ -123,8 +160,8 @@ extern int p7_domain_Serialize(const P7_DOMAIN *obj, uint8_t **buf, uint32_t *n,
   uint8_t *ptr; // current position within the buffer
   uint32_t network_32bit; // hold 32-bit fields after conversion to network order
   uint64_t network_64bit; // hold 64-bit fields after conversion to network order
- 
-  // check to make sure we were passed a valid pointer 
+  int i;
+  // check to make sure we were passed a valid pointer
   if(obj == NULL || buf == NULL || n == NULL){ // no object to serialize or nowhere to put a buffer pointer
     return(eslEINVAL);
   }
@@ -242,7 +279,7 @@ extern int p7_domain_Serialize(const P7_DOMAIN *obj, uint8_t **buf, uint32_t *n,
     memcpy(ptr, &network_32bit, sizeof(int32_t));
     ptr += sizeof(int32_t);
 
-    for(int i = 0; i < scores_per_pos_length; i++){ // serialise the array itself
+    for(i = 0; i < scores_per_pos_length; i++){ // serialise the array itself
       network_32bit = esl_hton32(*((uint32_t *) &(obj->scores_per_pos[i])));
       memcpy(ptr, &network_32bit, sizeof(int32_t));
       ptr += sizeof(int32_t);
@@ -292,6 +329,7 @@ extern int p7_domain_Deserialize(const uint8_t *buf, uint32_t *n, P7_DOMAIN *ret
   uint32_t host_32bit; //variable to hold 64-bit values after conversion to host order
   uint32_t obj_size; // How much space does the variable-length portion of the serialized object take up?
   int status; 
+  int i;
 
   if(ret_obj == NULL || buf == NULL || n == NULL){
     return eslEINVAL;
@@ -392,7 +430,7 @@ extern int p7_domain_Deserialize(const uint8_t *buf, uint32_t *n, P7_DOMAIN *ret
     }
     ESL_ALLOC(ret_obj->scores_per_pos, scores_per_pos_length * sizeof(float));
 
-    for(int i = 0; i < scores_per_pos_length; i++){
+    for(i = 0; i < scores_per_pos_length; i++){
       memcpy(&network_32bit, ptr, sizeof(uint32_t)); // Grab the bytes out of the buffer
       host_32bit = esl_ntoh32(network_32bit);
       ret_obj->scores_per_pos[i] = *((float *) &host_32bit);
@@ -436,8 +474,9 @@ ERROR:
  */ 
 extern int p7_domain_TestSample(ESL_RAND64 *rng, P7_DOMAIN **ret_obj){
   int status;
-
-  if(ret_obj == NULL){
+  int i;
+  if (ret_obj == NULL)
+  {
     return eslEINVAL;
   }
   if(*ret_obj == NULL){
@@ -472,7 +511,7 @@ extern int p7_domain_TestSample(ESL_RAND64 *rng, P7_DOMAIN **ret_obj){
 
   if(esl_rand64_Roll(rng, 1)){ // 50% chance of having a scores_per_pos array
     ESL_ALLOC(the_domain->scores_per_pos, the_domain->ad->N * sizeof(float));
-    for(int i = 0; i < the_domain->ad->N; i++){
+    for(i = 0; i < the_domain->ad->N; i++){
       the_domain->scores_per_pos[i] = esl_rand64_double(rng);
     }
   }
@@ -503,6 +542,7 @@ ERROR:
  * Throws:    Nothing
  */ 
 extern int p7_domain_Compare(P7_DOMAIN *first, P7_DOMAIN *second, double atol, double rtol){
+  int i;
   // compare all the fixed-length fields
   if(first->ienv != second->ienv){
     return eslFAIL;
@@ -522,22 +562,22 @@ extern int p7_domain_Compare(P7_DOMAIN *first, P7_DOMAIN *second, double atol, d
   if(first->jorf != second->jorf){
     return eslFAIL;
   }
-  if(esl_FCompareNew(first->envsc, second->envsc, (float) atol, (float) rtol) != eslOK){
+  if(esl_FCompare(first->envsc, second->envsc, (float) atol, (float) rtol) != eslOK){
     return eslFAIL;
   }
- if(esl_FCompareNew(first->domcorrection, second->domcorrection, (float) atol, (float) rtol) != eslOK){
+ if(esl_FCompare(first->domcorrection, second->domcorrection, (float) atol, (float) rtol) != eslOK){
     return eslFAIL;
   }
- if(esl_FCompareNew(first->dombias, second->dombias, (float) atol, (float) rtol) != eslOK){
+ if(esl_FCompare(first->dombias, second->dombias, (float) atol, (float) rtol) != eslOK){
     return eslFAIL;
   }
-  if(esl_FCompareNew(first->oasc, second->oasc, (float) atol, (float) rtol) != eslOK){
+  if(esl_FCompare(first->oasc, second->oasc, (float) atol, (float) rtol) != eslOK){
     return eslFAIL;
   }
-  if(esl_FCompareNew(first->bitscore, second->bitscore, (float) atol, (float) rtol) != eslOK){
+  if(esl_FCompare(first->bitscore, second->bitscore, (float) atol, (float) rtol) != eslOK){
     return eslFAIL;
   }
- if(esl_DCompareNew(first->lnP, second->lnP, atol, rtol) != eslOK){
+ if(esl_DCompare(first->lnP, second->lnP, atol, rtol) != eslOK){
     return eslFAIL;
   }
   if(first->lnP != second->lnP){
@@ -562,8 +602,8 @@ extern int p7_domain_Compare(P7_DOMAIN *first, P7_DOMAIN *second, double atol, d
       return eslFAIL;  // can't be the same if the two domains contain scores_per_pos arrays of different length
     }
 
-    for(int i = 0; i < first->ad->N; i++){
-    if(esl_FCompareNew(first->scores_per_pos[i], second->scores_per_pos[i], (float) atol, (float) rtol) != eslOK){
+    for(i = 0; i < first->ad->N; i++){
+    if(esl_FCompare(first->scores_per_pos[i], second->scores_per_pos[i], (float) atol, (float) rtol) != eslOK){
         return eslFAIL; // fail if any of the scores_per_pos array values mismatch
       }
     }
@@ -717,7 +757,7 @@ static void utest_Deserialize_error_conditions(){
     esl_fatal(msg);
   }
   //printf("Test 3 passed\n");
-
+  free(buf);
   p7_domain_Destroy(deserial);
   p7_domain_Destroy(sampled);
   return;
@@ -767,7 +807,8 @@ static void utest_Serialize(int ntrials){
     if(p7_domain_Compare(serial[i], deserial, 1e-4, 1e-4) != eslOK){ // deserialized structure didn't match serialized
       esl_fatal(msg);
     }
-
+    p7_domain_Destroy(deserial);
+    deserial = p7_domain_Create_empty();
   }
   // haven't failed yet, so we've succeeded.  Clean up and exit
   free(*buf);
@@ -777,6 +818,7 @@ static void utest_Serialize(int ntrials){
   }
   free(serial);
   p7_domain_Destroy(deserial);
+  esl_rand64_Destroy(rng);
 
   return;
 

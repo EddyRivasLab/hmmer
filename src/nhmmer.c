@@ -1,6 +1,6 @@
 /* nhmmer: search profile HMM(s) against a nucleotide sequence database.
  */
-#include "p7_config.h"
+#include <p7_config.h>
 
 #include <stdio.h>
 #include <stdlib.h>
@@ -121,13 +121,13 @@ static ESL_OPTIONS options[] = {
 #if defined (eslENABLE_SSE)
   /* Control of FM pruning/extension */
   { "--seed_max_depth",    eslARG_INT,          "15", NULL, NULL,    NULL,  NULL, NULL,          "seed length at which bit threshold must be met",             9 },
-  { "--seed_sc_thresh",    eslARG_REAL,         "15", NULL, NULL,    NULL,  NULL, NULL,          "Default req. score for FM seed (bits)",                      9 },
-  { "--seed_sc_density",   eslARG_REAL,        "0.8", NULL, NULL,    NULL,  NULL, NULL,          "seed must maintain this bit density from one of two ends",   9 },
+  { "--seed_sc_thresh",    eslARG_REAL,         "14", NULL, NULL,    NULL,  NULL, NULL,          "Default req. score for FM seed (bits)",                      9 },
+  { "--seed_sc_density",   eslARG_REAL,       "0.75", NULL, NULL,    NULL,  NULL, NULL,          "seed must maintain this bit density from one of two ends",   9 },
   { "--seed_drop_max_len", eslARG_INT,           "4", NULL, NULL,    NULL,  NULL, NULL,          "maximum run length with score under (max - [fm_drop_lim])",  9 },
   { "--seed_drop_lim",     eslARG_REAL,        "0.3", NULL, NULL,    NULL,  NULL, NULL,          "in seed, max drop in a run of length [fm_drop_max_len]",     9 },
   { "--seed_req_pos",      eslARG_INT,           "5", NULL, NULL,    NULL,  NULL, NULL,          "minimum number consecutive positive scores in seed" ,        9 },
   { "--seed_consens_match", eslARG_INT,         "11", NULL, NULL,    NULL,  NULL, NULL,          "<n> consecutive matches to consensus will override score threshold" , 9 },
-  { "--seed_ssv_length",   eslARG_INT,          "70", NULL, NULL,    NULL,  NULL, NULL,          "length of window around FM seed to get full SSV diagonal",   9 },
+  { "--seed_ssv_length",   eslARG_INT,         "100", NULL, NULL,    NULL,  NULL, NULL,          "length of window around FM seed to get full SSV diagonal",   9 },
 #endif
 
 /* Other options */
@@ -343,7 +343,7 @@ output_header(FILE *ofp, const ESL_GETOPTS *go, char *queryfile, char *seqfile, 
 
 #if defined (eslENABLE_SSE)
   if (esl_opt_IsUsed(go, "--seed_max_depth")    && fprintf(ofp, "# FM Seed length:                  %d\n",             esl_opt_GetInteger(go, "--seed_max_depth"))    < 0) ESL_EXCEPTION_SYS(eslEWRITE, "write failed");
-  if (esl_opt_IsUsed(go, "--seed_sc_thresh")    && fprintf(ofp, "# FM score threshhold (bits):      %g\n",             esl_opt_GetReal(go, "--seed_sc_thresh"))    < 0) ESL_EXCEPTION_SYS(eslEWRITE, "write failed");
+  if (esl_opt_IsUsed(go, "--seed_sc_thresh")    && fprintf(ofp, "# FM score threshold (bits):       %g\n",             esl_opt_GetReal(go, "--seed_sc_thresh"))    < 0) ESL_EXCEPTION_SYS(eslEWRITE, "write failed");
   if (esl_opt_IsUsed(go, "--seed_sc_density")   && fprintf(ofp, "# FM score density (bits/pos):     %g\n",             esl_opt_GetReal(go, "--seed_sc_density"))        < 0) ESL_EXCEPTION_SYS(eslEWRITE, "write failed");
   if (esl_opt_IsUsed(go, "--seed_drop_max_len") && fprintf(ofp, "# FM max neg-growth length:        %d\n",             esl_opt_GetInteger(go, "--seed_drop_max_len")) < 0) ESL_EXCEPTION_SYS(eslEWRITE, "write failed");
   if (esl_opt_IsUsed(go, "--seed_drop_lim")     && fprintf(ofp, "# FM max run drop:                 %g\n",             esl_opt_GetReal(go, "--seed_drop_lim"))        < 0) ESL_EXCEPTION_SYS(eslEWRITE, "write failed");
@@ -434,7 +434,7 @@ main(int argc, char **argv)
 
 static int
 nhmmer_open_hmm_file(struct cfg_s *cfg,  P7_HMMFILE **hfp, char *errbuf, ESL_ALPHABET **abc, P7_HMM **hmm   ) {
-    int status = p7_hmmfile_OpenE(cfg->queryfile, NULL, hfp, errbuf);
+    int status = p7_hmmfile_Open(cfg->queryfile, NULL, hfp, errbuf);
 
     if (status == eslENOTFOUND) {
         p7_Fail("File existence/permissions problem in trying to open query file %s.\n%s\n", cfg->queryfile, errbuf);
@@ -563,21 +563,16 @@ serial_master(ESL_GETOPTS *go, struct cfg_s *cfg)
   int               msas_named  = 0;
   int               force_single = ( esl_opt_IsOn(go, "--singlemx") ? TRUE : FALSE );
 
-
-  if (esl_opt_IsUsed(go, "--w_beta")) { if (  ( window_beta   = esl_opt_GetReal(go, "--w_beta") )  < 0 || window_beta > 1  ) esl_fatal("Invalid window-length beta value\n"); }
-  if (esl_opt_IsUsed(go, "--w_length")) { if (( window_length = esl_opt_GetInteger(go, "--w_length")) < 4  ) esl_fatal("Invalid window length value\n"); }
+  if (esl_opt_IsUsed(go, "--w_beta"))   { if (( window_beta   = esl_opt_GetReal   (go, "--w_beta") )  < 0 || window_beta > 1  ) esl_fatal("Invalid window-length beta value\n"); }
+  if (esl_opt_IsUsed(go, "--w_length")) { if (( window_length = esl_opt_GetInteger(go, "--w_length")) < 4  )                    esl_fatal("Invalid window length value\n"); }
 
   w = esl_stopwatch_Create();
 
   if (esl_opt_GetBoolean(go, "--notextw")) textw = 0;
   else                                     textw = esl_opt_GetInteger(go, "--textw");
 
-
-
-  if ( esl_opt_IsOn(go, "--dna") )
-    abc     = esl_alphabet_Create(eslDNA);
-  else if ( esl_opt_IsOn(go, "--rna") )
-    abc     = esl_alphabet_Create(eslRNA);
+  if      ( esl_opt_IsOn(go, "--dna")) abc = esl_alphabet_Create(eslDNA);
+  else if ( esl_opt_IsOn(go, "--rna")) abc = esl_alphabet_Create(eslRNA);
 
 
   /* nhmmer accepts _query_ files that are either (i) hmm(s), (2) msa(s), or (3) sequence(s).
@@ -700,10 +695,21 @@ serial_master(ESL_GETOPTS *go, struct cfg_s *cfg)
     else if (status == eslEINVAL)    p7_Fail("Can't autodetect format of a stdin or .gz seqfile");
     else if (status != eslOK)        p7_Fail("Unexpected error %d opening target sequence database file %s\n", status, cfg->dbfile);
     else {
+      /* We assume the query is the guide for alphabet type, allowing it to override
+       * guesser uncertainty;  but if the guesser is certain that the target sequence
+       * is a protein (or something else non-nucleotide), we fail with an error. */
       int q_type = eslUNKNOWN;
-      status = esl_sqfile_GuessAlphabet(dbfp, &q_type);
-      if (! (q_type == eslDNA || q_type == eslRNA))
-          p7_Fail("Invalid alphabet type in target for nhmmer. Expect DNA or RNA.\n");
+      if ( esl_opt_IsOn(go, "--dna") )
+          q_type     = eslDNA;
+      else if ( esl_opt_IsOn(go, "--rna") )
+          q_type     = eslRNA;
+      else {
+          status = esl_sqfile_GuessAlphabet(dbfp, &q_type);
+          if (status != eslOK)
+              p7_Fail("Unable to guess alphabet for target sequence database file %s\n",   cfg->dbfile);
+      }
+      if (! (q_type == eslDNA || q_type == eslRNA || q_type == eslUNKNOWN))
+        p7_Fail("Invalid alphabet type in target for nhmmer. Expect DNA or RNA.\n");
 
       /*success; move forward with other necessary steps*/
       if (esl_opt_IsUsed(go, "--restrictdb_stkey") || esl_opt_IsUsed(go, "--restrictdb_n")) {
@@ -815,7 +821,7 @@ serial_master(ESL_GETOPTS *go, struct cfg_s *cfg)
   }
 
   infocnt = (ncpus == 0) ? 1 : ncpus;
-  ESL_ALLOC(info, sizeof(*info) * infocnt);
+  ESL_ALLOC(info, (ptrdiff_t) sizeof(*info) * infocnt);
 
   if (status == eslOK) {
       /* One-time initializations after alphabet <abc> becomes known */
@@ -1008,7 +1014,7 @@ serial_master(ESL_GETOPTS *go, struct cfg_s *cfg)
       for (i = 0; i < infocnt; ++i) {
           /* Create processing pipeline and hit list */
           info[i].th  = p7_tophits_Create();
-          info[i].om = p7_oprofile_Copy(om);
+          info[i].om  = p7_oprofile_Copy(om);
           info[i].pli = p7_pipeline_Create(go, om->M, 100, TRUE, p7_SEARCH_SEQS); /* L_hint = 100 is just a dummy for now */
 
           //set method specific --F1, if it wasn't set at command line
@@ -1029,13 +1035,9 @@ serial_master(ESL_GETOPTS *go, struct cfg_s *cfg)
 
           info[i].pli->do_alignment_score_calc = esl_opt_IsOn(go, "--aliscoresout") ;
 
-          if (  esl_opt_IsUsed(go, "--watson") )
-            info[i].pli->strands = p7_STRAND_TOPONLY;
-          else if (  esl_opt_IsUsed(go, "--crick") )
-            info[i].pli->strands = p7_STRAND_BOTTOMONLY;
-          else
-            info[i].pli->strands = p7_STRAND_BOTH;
-
+          if      ( esl_opt_IsUsed(go, "--watson")) info[i].pli->strands = p7_STRAND_TOPONLY;
+          else if ( esl_opt_IsUsed(go, "--crick"))  info[i].pli->strands = p7_STRAND_BOTTOMONLY;
+          else                                      info[i].pli->strands = p7_STRAND_BOTH;
 
           if (dbformat != eslSQFILE_FMINDEX) {
             if (  esl_opt_IsUsed(go, "--block_length") )
@@ -1273,8 +1275,6 @@ serial_master(ESL_GETOPTS *go, struct cfg_s *cfg)
 
   free(info);
 
-
-
   if (hfp)     p7_hmmfile_Close(hfp);
   if (qfp_msa) esl_msafile_Close(qfp_msa);
   if (qfp_sq)  esl_sqfile_Close(qfp_sq);
@@ -1293,7 +1293,6 @@ serial_master(ESL_GETOPTS *go, struct cfg_s *cfg)
   }
 #endif
 
-
   if (ofp != stdout) fclose(ofp);
   if (afp)           fclose(afp);
   if (tblfp)         fclose(tblfp);
@@ -1306,7 +1305,6 @@ serial_master(ESL_GETOPTS *go, struct cfg_s *cfg)
    if (hfp)     p7_hmmfile_Close(hfp);
    if (qfp_msa) esl_msafile_Close(qfp_msa);
    if (qfp_sq)  esl_sqfile_Close(qfp_sq);
-
    if (builder) p7_builder_Destroy(builder);
    if (qsq)     esl_sq_Destroy(qsq);
 
@@ -1331,14 +1329,13 @@ serial_master(ESL_GETOPTS *go, struct cfg_s *cfg)
 static int
 serial_loop(WORKER_INFO *info, ID_LENGTH_LIST *id_length_list, ESL_SQFILE *dbfp, char *firstseq_key, int n_targetseqs)
 {
-
-  int      wstatus = eslOK;
-  int seq_id = 0;
-  ESL_SQ   *dbsq   =  esl_sq_CreateDigital(info->om->abc);
+  ESL_SQ   *dbsq   = esl_sq_CreateDigital(info->om->abc);
   ESL_SQ   *dbsq_revcmp;
+  int      wstatus = eslOK;
+  int      seq_id  = 0;
 
-  if (dbsq->abc->complement != NULL)
-    dbsq_revcmp =  esl_sq_CreateDigital(info->om->abc);
+  if (dbsq->abc->complement)
+    dbsq_revcmp = esl_sq_CreateDigital(info->om->abc);
 
   wstatus = esl_sqio_ReadWindow(dbfp, 0, info->pli->block_length, dbsq);
 

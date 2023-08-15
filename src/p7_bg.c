@@ -10,7 +10,7 @@
  *     7. Test driver.
  *     8. Examples.
  */
-#include "p7_config.h"
+#include <p7_config.h>
 
 #include <string.h>
 
@@ -293,7 +293,7 @@ p7_bg_Read(char *bgfile, P7_BG *bg, char *errbuf)
 
   if ( n != bg->abc->K) 
     ESL_XFAIL(eslEFORMAT, errbuf, "expected %d residue frequencies, but found %d in bgfile %s", bg->abc->K, n, bgfile);
-  if ( esl_FCompare(esl_vec_FSum(fq, bg->abc->K), 1.0, 0.001) != eslOK) 
+  if ( esl_FCompare_old(esl_vec_FSum(fq, bg->abc->K), 1.0, 0.001) != eslOK) 
     ESL_XFAIL(eslEFORMAT, errbuf, "residue frequencies do not sum to 1.0 in bgfile %s", bgfile);
   
   /* all checking complete. no more error cases. overwrite bg with the new frequencies */
@@ -410,7 +410,7 @@ p7_bg_NullOne(const P7_BG *bg, const ESL_DSQ *dsq, int L, float *ret_sc)
  *            fixed L=400 expectation, it's all wrong, it's not
  *            conditional on the target sequence length and length
  *            modeling's messed up!"), don't panic. It's set up as a
- *            conditional-on-L model that generates accordint to P(x |
+ *            conditional-on-L model that generates according to P(x |
  *            model, L) P(L); the P(L) term is added in
  *            p7_bg_FilterScore() below.
  *            
@@ -492,7 +492,7 @@ p7_bg_FilterScore(P7_BG *bg, const ESL_DSQ *dsq, int L, float *ret_sc)
    gcc -O2 -Wall -msse2 -std=gnu99 -o p7_bg_benchmark -I. -L. -I../easel -L../easel -Dp7BG_BENCHMARK p7_bg.c -lhmmer -leasel -lm
    ./p7_bg_benchmark <hmmfile>
  */ 
-#include "p7_config.h"
+#include <p7_config.h>
 
 #include "easel.h"
 #include "esl_alphabet.h"
@@ -527,8 +527,8 @@ main(int argc, char **argv)
   int             i;
  
   /* Read one HMM from <hmmfile> */
-  if (p7_hmmfile_OpenE(hmmfile, NULL, &hfp, NULL) != eslOK) p7_Fail("Failed to open HMM file %s", hmmfile);
-  if (p7_hmmfile_Read(hfp, &abc, &hmm)            != eslOK) p7_Fail("Failed to read HMM");
+  if (p7_hmmfile_Open(hmmfile, NULL, &hfp, NULL) != eslOK) p7_Fail("Failed to open HMM file %s", hmmfile);
+  if (p7_hmmfile_Read(hfp, &abc, &hmm)           != eslOK) p7_Fail("Failed to read HMM");
   p7_hmmfile_Close(hfp);
 
   bg = p7_bg_Create(abc);
@@ -595,7 +595,7 @@ utest_ReadWrite(ESL_RANDOMNESS *rng)
  *****************************************************************/
 
 #ifdef p7BG_TESTDRIVE
-#include "esl_config.h"
+#include <esl_config.h>
 
 #include <stdio.h>
 
@@ -641,7 +641,7 @@ main(int argc, char **argv)
    gcc -O2 -Wall -msse2 -std=gnu99 -o p7_bg_example -I. -L. -I../easel -L../easel -Dp7BG_EXAMPLE p7_bg.c -lhmmer -leasel -lm
    ./p7_bg_example <hmmfile> <seqfile>
  */ 
-#include "p7_config.h"
+#include <p7_config.h>
 
 #include "easel.h"
 #include "esl_alphabet.h"
@@ -676,8 +676,8 @@ main(int argc, char **argv)
   int             status;
  
   /* Read one HMM from <hmmfile> */
-  if (p7_hmmfile_OpenE(hmmfile, NULL, &hfp, NULL) != eslOK) p7_Fail("Failed to open HMM file %s", hmmfile);
-  if (p7_hmmfile_Read(hfp, &abc, &hmm)            != eslOK) p7_Fail("Failed to read HMM");
+  if (p7_hmmfile_Open(hmmfile, NULL, &hfp, NULL) != eslOK) p7_Fail("Failed to open HMM file %s", hmmfile);
+  if (p7_hmmfile_Read(hfp, &abc, &hmm)           != eslOK) p7_Fail("Failed to read HMM");
   p7_hmmfile_Close(hfp);
 
   /* Open <seqfile> for reading */

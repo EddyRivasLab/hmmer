@@ -13,7 +13,7 @@
  * Stylistic note: elements in a trace path are usually indexed by z.
  */
 
-#include "p7_config.h"
+#include <p7_config.h>
 
 #include <stdlib.h>
 #include <stdio.h>
@@ -793,7 +793,7 @@ p7_trace_Dump(FILE *fp, const P7_TRACE *tr, const P7_PROFILE *gm, const ESL_DSQ 
  *            are identical, <eslFAIL> if not.
  *            
  *            If posterior probability annotation is present in 
- *            both traces, they are compared using <esl_FCompare()>
+ *            both traces, they are compared using <esl_FCompare_old()>
  *            and a relative tolerance of <pptol>.
  *            
  *            If domain indices are present in both traces,
@@ -822,7 +822,7 @@ p7_trace_Compare(P7_TRACE *tr1, P7_TRACE *tr2, float pptol)
       for (z = 0; z < tr1->N; z++)
 	if (tr1->i[z] != 0) 	/* an emission: has a nonzero posterior prob*/
 	  {
-	    if (esl_FCompare(tr1->pp[z], tr2->pp[z], pptol) != eslOK) esl_fatal("FAIL");
+	    if (esl_FCompare_old(tr1->pp[z], tr2->pp[z], pptol) != eslOK) esl_fatal("FAIL");
 	  }
 	else
 	  {
@@ -1605,7 +1605,7 @@ utest_faux(ESL_MSA *msa, int *matassign, int M)
   gcc -o p7_trace_utest -msse2 -std=gnu99 -g -O2 -I. -L. -I../easel -L../easel -Dp7TRACE_TESTDRIVE p7_trace.c -lhmmer -leasel -lm 
   ./p7_trace_utest
 */
-#include "p7_config.h"
+#include <p7_config.h>
 
 #include "easel.h"
 #include "esl_getopts.h"

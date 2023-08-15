@@ -7,7 +7,7 @@
  *   3. Functions related to the original sequence
  *   4. FM data initialization, configuration, and reading from file
  */
-#include "p7_config.h"
+#include <p7_config.h>
 
 #include "easel.h"
 #include "esl_getopts.h"
@@ -521,7 +521,7 @@ fm_FM_read( FM_DATA *fm, FM_METADATA *meta, int getAll )
   compressed_bytes =   ((chars_per_byte-1+fm->N)/chars_per_byte);
   num_freq_cnts_b  = 1+ceil((double)fm->N/meta->freq_cnt_b);
   num_freq_cnts_sb = 1+ceil((double)fm->N/meta->freq_cnt_sb);
-  num_SA_samples   = floor((double)fm->N/meta->freq_SA);
+  num_SA_samples   = 1+floor((double)fm->N/meta->freq_SA);
 
   // allocate space, then read the data
   if (getAll) ESL_ALLOC (fm->T, sizeof(uint8_t) * compressed_bytes );

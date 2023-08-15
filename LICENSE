@@ -1,9 +1,9 @@
 HMMER - Biological sequence analysis with profile hidden Markov models
-Copyright (C) 1992-2020 Sean R. Eddy
-Copyright (C) 2000-2020 Howard Hughes Medical Institute
-Copyright (C) 2015-2020 President and Fellows of Harvard College
-Copyright (C) 1992-2004 Washington University School of Medicine
-Copyright (C) 1992-1994 MRC Laboratory of Molecular Biology
+Copyright (C) 1992-2023 Sean R. Eddy
+Copyright (C) 2015-2023 President and Fellows of Harvard College
+Copyright (C) 2000-2023 Howard Hughes Medical Institute
+Copyright (C) 1995-2006 Washington University School of Medicine
+Copyright (C) 1992-1995 MRC Laboratory of Molecular Biology
 -----------------------------------------------------------------------
 
 The code includes contributions and input from current and past
@@ -21,10 +21,12 @@ sources, including:
    Ian Holmes        
    Bjarne Knudsen    
    Diana Kolbe       
+   Martin Larralde
    Erik Lindahl      
    Graeme Mitchison  
    Eric Nawrocki     
    Lee Newberg       
+   Sam Petti
    Elena Rivas        
    Walt Shands  
    Travis Wheeler    

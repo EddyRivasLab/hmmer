@@ -147,26 +147,25 @@ Our master branches are for stable releases.
 \subsection{System requirements}
 
 \paragraph{Operating system:} HMMER is designed for
-POSIX-compatible platforms, including UNIX, Linux, and Mac OS/X. The
-POSIX standard essentially includes all operating systems except
-Microsoft Windows.\sidenote{Windows 10 includes a Linux subsystem that
-  allows you to install a Linux OS inside Windows, with a bash command
-  shell, and this should work fine. For older Windows, there are
-  add-on products available for making Windows more POSIX-compliant
-  and more compatible with GNU-ish configures and builds. One such
-  product is Cygwin, \href{http://www.cygwin.com}{www.cygwin.com},
-  which is freely available.}  We develop primarily on Apple OS/X and
-x86\_64/Linux (both Intel and AMD), and we test releases on a wider
-range of platforms.\sidenote{Thanks to the GCC Compile Farm Project,
-  especially its Toulouse and Oregon data centers, for providing
-  access to some of the platforms that we use for testing.}
+POSIX-compatible platforms, including Linux, Mac OS/X, and various
+UNIX OS's. The POSIX standard essentially includes all operating
+systems except Microsoft Windows.\sidenote{Windows 10 includes a Linux
+  subsystem that allows you to install a Linux OS inside Windows, with
+  a bash command shell, and this should work fine. For older Windows,
+  there are add-on products available for making Windows more
+  POSIX-compliant and more compatible with GNU-ish configures and
+  builds. One such product is Cygwin,
+  \href{http://www.cygwin.com}{www.cygwin.com}, which is freely
+  available.}  We develop primarily on Mac OS/X and x86\_64/Linux
+(both Intel and AMD), and we test releases on a wider range of
+platforms.\sidenote{Many thanks to the GCC Compile Farm Project for
+  providing access to some of the platforms that we use for testing.}
   
-
 \paragraph{Processor:} HMMER depends on vector parallelization methods
-that are processor-specific. H3 requires either an x86-compatible
-(Intel/AMD) processor that supports the SSE2 vector instruction set,
-and on 32-bit ``powerpc'' or 64-bit ``ppc64'' PowerPC systems that
-support the Altivec/VMX instruction set in big-endian mode.
+that are processor-specific. H3 supports three types of processors:
+x86-compatible (Intel/AMD) processors (SSE2 and AVX instruction sets),
+ARM processors such as new Macs (NEON instructions), and some PowerPC
+systems (Altivec/VMX instructions, big-endian mode only).
 
 SSE2 is supported on Intel processors from Pentium 4 on, and AMD
 processors from K8 (Athlon 64) on. This includes almost all Intel
@@ -197,9 +196,19 @@ H3.
 C99 and POSIX standards. It should compile with any ANSI C99 compliant
 compiler, including the freely available GNU C compiler \mono{gcc}.
 We test the code most frequently using the GNU \mono{gcc}, Apple
-\mono{llvm/clang}, and Intel \mono{icc} compilers.\sidenote{On OS/X,
-  if you're compiling the source, make sure you have XCode installed
-  so that you have a C compiler.}
+\mono{llvm/clang}, and Intel \mono{icc} and \mono{icx}
+compilers.\sidenote{On OS/X, if you're compiling the source, make sure
+  you have XCode installed so that you have a C compiler.}
+
+We depend on IEEE754-compliant floating point math.\sidenote{With one
+  highly technical exception; on x86-compatible CPUs, we deliberately
+  turn on a CPU mode called FTZ (flush-to-zero).}  Most C compilers,
+including gcc and clang, are IEEE754-compliant by default. \textbf{Do
+  not use their \mono{\-\-fast-math} option.} The Intel compiler icc/icx
+defaults to using an unsafe ``fast-math'' mode. If you want to use an
+Intel compiler, you must turn on IEEE754 compliance with an option
+such as \mono{-fp-model strict}; for example, you could configure for
+Intel icx with \mono{./configure CC=icx CFLAGS='-O3 -fp-model=strict'}.
 
 
 \paragraph{Libraries and other installation requirements:}
@@ -240,36 +249,40 @@ additional tools to be installed, including \mono{rman} and some extra
 \LaTeX\ packages, described below.
 
 
-\subsection{Multicore parallelization is default}
+\subsection{Multicore parallelization is (almost always) default}
 
-HMMER supports multicore parallelization using POSIX threads. By
-default, the configure script will identify whether your platform
-supports POSIX threads (almost all platforms do), and it will
-automatically compile in multithreading support.
+The HMMER programs that are compute intensive all support multicore
+parallelization using POSIX threads. By default, the configure script
+will identify whether your platform supports POSIX threads (and almost
+all platforms do), and it will automatically compile in multithreading
+support.
 
 To disable multithreading at compile time, compile from source with
 the \mono{{-}{-}disable-threads} flag to \mono{./configure}.
 
 Multithreaded HMMER programs use master/worker parallelization, with
-\mono{<n>} worker threads and one master thread. When HMMER is run on
-a machine with multiple available cores, the default number of worker
-threads is two\footnote{Set by a compile-time configuration option,
-  \mono{P7\_NCPU}, in \mono{src/p7\_config.h.in}.}. You can control the
-number of cores each HMMER process will use for computation with the
-\mono{{-}{-}cpu <n>} command line option or the \mono{HMMER\_NCPU}
-environment variable.
+\mono{<n>} worker compute threads and one master thread.  The default
+number of worker threads is usually two\footnote{Set by a compile-time
+configuration option, \mono{p7\_NCPU}, in
+\mono{src/p7\_config.h.in}.}. You can control the number of worker
+threads you use with the \mono{{-}{-}cpu <n>} command line option or
+the \mono{HMMER\_NCPU} environment variable. You can also turn off
+multithreading, using \mono{{-}{-}cpu 0}.
 
-If you specify \mono{{-}{-}cpu 0}, a HMMER search program will run in
-serial-only mode, with no threading. We use this in debugging when we
-suspect something is awry with the parallel implementation, but it's
-not something you'd generally want to do in your work.  Even with a
-single worker thread (\mono{{-}{-}cpu 1}), HMMER will be faster than
-serial-only mode, because the master thread handles input and output.
+\mono{hmmscan} and \mono{nhmmscan} are exceptions; for these two
+programs, we have multithreaded parallelization turned off by
+default. It typically takes the scan programs longer to read their
+profile data from a file on disk than it does to compute
+profile/sequence comparisons, so they are typically faster without the
+added overhead of multithreading.  If you happen to have some sort of
+lightning fast disk i/o, you might find that you can get higher
+performance using multithreading with \mono{{-}{-}cpu <n>}.
 
 If you are running HMMER on a cluster that enforces policy on the
 number of cores a process can use, you may need to count both the
 workers and the master: you may need to tell your cluster management
-software that HMMER needs \mono{<n>}+1 cores.
+software that HMMER needs \mono{<n>}+1 cores, while telling HMMER
+\mono{{-}{-}cpu <n>}.
 
 
 \subsection{MPI cluster parallelization is optional}
@@ -465,8 +478,8 @@ names with incompatible HMMER3 programs: \mono{hmmalign},
 and \mono{hmmsearch}.
 
 One workaround is to install the two packages each in their own
-hierarchy, as above: \mono{./configure --prefix=somewhere/hmmer-\HMMERversion{}}
-for HMMER3, and \mono{./configure --prefix=somewhere/hmmer-2.3.2} for
+hierarchy, as above: \mono{./configure \-\-prefix=somewhere/hmmer-\HMMERversion{}}
+for HMMER3, and \mono{./configure \-\-prefix=somewhere/hmmer-2.3.2} for
 HMMER2. One set of programs could be in your \mono{PATH}, and you
 could call the others using full pathnames.
 

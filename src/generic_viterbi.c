@@ -21,7 +21,7 @@
  *    4. Test driver.
  *    5. Example.
  */
-#include "p7_config.h"
+#include <p7_config.h>
 
 #include "easel.h"
 #include "esl_alphabet.h"
@@ -330,7 +330,7 @@ p7_GViterbi_longtarget(const ESL_DSQ *dsq, int L, const P7_PROFILE *gm, P7_GMX *
  *        MSV  = 55.9 Mc/s
  * (gcc -g -O2, 3.2GHz Xeon, N=50K, L=400, M=72 RRM_1 model)
  */
-#include "p7_config.h"
+#include <p7_config.h>
 
 #include "easel.h"
 #include "esl_alphabet.h"
@@ -372,8 +372,8 @@ main(int argc, char **argv)
   float           sc;
   double          base_time, bench_time, Mcs;
 
-  if (p7_hmmfile_OpenE(hmmfile, NULL, &hfp, NULL) != eslOK) p7_Fail("Failed to open HMM file %s", hmmfile);
-  if (p7_hmmfile_Read(hfp, &abc, &hmm)            != eslOK) p7_Fail("Failed to read HMM");
+  if (p7_hmmfile_Open(hmmfile, NULL, &hfp, NULL) != eslOK) p7_Fail("Failed to open HMM file %s", hmmfile);
+  if (p7_hmmfile_Read(hfp, &abc, &hmm)           != eslOK) p7_Fail("Failed to read HMM");
 
   bg = p7_bg_Create(abc);
   p7_bg_SetLength(bg, L);
@@ -474,7 +474,7 @@ utest_basic(ESL_GETOPTS *go)
   p7_trace_Score(tr, dsq, gm, &vsc2);
   if (esl_opt_GetBoolean(go, "-v")) p7_trace_Dump(stdout, tr, gm, dsq);
   
-  if (esl_FCompare(vsc, vsc2, 1e-5) != eslOK)  esl_fatal("trace score and Viterbi score don't agree.");
+  if (esl_FCompare_old(vsc, vsc2, 1e-5) != eslOK)  esl_fatal("trace score and Viterbi score don't agree.");
 
   p7_GForward   (dsq, L, gm, gx, &fsc);
   if (esl_opt_GetBoolean(go, "-v")) printf("Forward score: %.4f\n", fsc);
@@ -521,7 +521,7 @@ utest_viterbi(ESL_GETOPTS *go, ESL_RANDOMNESS *r, ESL_ALPHABET *abc, P7_BG *bg, 
       if (p7_GTrace  (dsq, L, gm, gx, tr)         != eslOK) esl_fatal("trace failed");
       if (p7_trace_Validate(tr, abc, dsq, errbuf) != eslOK) esl_fatal("trace invalid:\n%s", errbuf);
       if (p7_trace_Score(tr, dsq, gm, &sc2)       != eslOK) esl_fatal("trace score failed");
-      if (esl_FCompare(sc1, sc2, 1e-6)            != eslOK) esl_fatal("Trace score != Viterbi score"); 
+      if (esl_FCompare_old(sc1, sc2, 1e-6)            != eslOK) esl_fatal("Trace score != Viterbi score"); 
       if (p7_bg_NullOne(bg, dsq, L, &sc2)         != eslOK) esl_fatal("null score failed");
 
       avg_sc += (sc1 - sc2);
@@ -555,7 +555,7 @@ utest_viterbi(ESL_GETOPTS *go, ESL_RANDOMNESS *r, ESL_ALPHABET *abc, P7_BG *bg, 
 #include "esl_getopts.h"
 #include "esl_msa.h"
 
-#include "p7_config.h"
+#include <p7_config.h>
 #include "hmmer.h"
 
 static ESL_OPTIONS options[] = {
@@ -616,7 +616,7 @@ main(int argc, char **argv)
 /* 
    gcc -g -O2 -Dp7GENERIC_VITERBI_EXAMPLE -I. -I../easel -L. -L../easel -o generic_viterbi_example generic_viterbi.c -lhmmer -leasel -lm
  */
-#include "p7_config.h"
+#include <p7_config.h>
 
 #include "easel.h"
 #include "esl_alphabet.h"
@@ -657,8 +657,8 @@ main(int argc, char **argv)
   int             status;
 
   /* Read in one HMM */
-  if (p7_hmmfile_OpenE(hmmfile, NULL, &hfp, NULL) != eslOK) p7_Fail("Failed to open HMM file %s", hmmfile);
-  if (p7_hmmfile_Read(hfp, &abc, &hmm)            != eslOK) p7_Fail("Failed to read HMM");
+  if (p7_hmmfile_Open(hmmfile, NULL, &hfp, NULL) != eslOK) p7_Fail("Failed to open HMM file %s", hmmfile);
+  if (p7_hmmfile_Read(hfp, &abc, &hmm)           != eslOK) p7_Fail("Failed to read HMM");
   p7_hmmfile_Close(hfp);
  
   /* Read in one sequence */

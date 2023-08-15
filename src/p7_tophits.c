@@ -7,7 +7,7 @@
  *    4. Benchmark driver.
  *    5. Test driver.
  */
-#include "p7_config.h"
+#include <p7_config.h>
 
 #include <stdlib.h>
 #include <string.h>
@@ -52,6 +52,60 @@ p7_tophits_Create(void)
 
  ERROR:
   p7_tophits_Destroy(h);
+  return NULL;
+}
+
+
+/* Function:  p7_tophits_Clone()
+ * Synopsis:  Create a duplicate of an existing <P7_TOPHITS> object.
+ *
+ * Purpose:   Creates a duplicate of the existing <P7_TOPHITS> object <h>.
+ *
+ * Returns:   ptr to the duplicate <P7_TOPHITS> object.
+ *
+ * Throws:    <NULL> on allocation failure.
+ */
+P7_TOPHITS *
+p7_tophits_Clone(const P7_TOPHITS *h)
+{
+  P7_TOPHITS *h2 = NULL;
+  int i;
+  int status;
+
+  ESL_ALLOC(h2, sizeof(P7_TOPHITS));
+  
+  h2->nreported = h->nreported;
+  h2->nincluded = h->nincluded;
+  h2->is_sorted_by_sortkey = h->is_sorted_by_sortkey;
+  h2->is_sorted_by_seqidx = h->is_sorted_by_seqidx;
+  
+  h2->N = h->N;
+  h2->Nalloc = h->N;
+  
+  h2->hit = NULL;
+  h2->unsrt = NULL;
+  
+  ESL_ALLOC(h2->hit,   sizeof(P7_HIT *) * h2->N);
+  ESL_ALLOC(h2->unsrt, sizeof(P7_HIT)   * h2->N);
+  
+  // set NULL pointers everywhere before allocating to avoid double free on error
+  for (i = 0; i < h2->N; i++) {
+    h2->unsrt[i].name = NULL;
+    h2->unsrt[i].acc = NULL;
+    h2->unsrt[i].desc = NULL;
+    h2->unsrt[i].dcl = NULL;
+  }
+  
+  // copy domains and update offsets in the sorted hit array
+  for (i = 0; i < h2->N; i++) {
+    if ((status = p7_hit_Copy(&(h->unsrt[i]), &(h2->unsrt[i]))) != eslOK) goto ERROR;
+    h2->hit[i] = h2->unsrt + (h->hit[i] - h->unsrt);
+  }
+  
+  return h2;
+
+ ERROR:
+  p7_tophits_Destroy(h2);
   return NULL;
 }
 
@@ -504,9 +558,9 @@ p7_tophits_GetMaxPositionLength(P7_TOPHITS *h)
 
   for (i = 0; i < h->N; i++) {
     if (h->unsrt[i].dcl[0].iali > 0) {
-      n = sprintf (buffer, "%" PRId64 "", h->unsrt[i].dcl[0].iali);
+      n = snprintf (buffer, 26, "%" PRId64 "", h->unsrt[i].dcl[0].iali); // 26 matches buffer[26] allocation
       max = ESL_MAX(n, max);
-      n = sprintf (buffer, "%" PRId64 "", h->unsrt[i].dcl[0].jali);
+      n = snprintf (buffer, 26, "%" PRId64 "", h->unsrt[i].dcl[0].jali);
       max = ESL_MAX(n, max);
     }
   }
@@ -726,14 +780,15 @@ workaround_bug_h74(P7_TOPHITS *th)
 /* Function:  p7_tophits_ComputeNhmmerEvalues()
  * Synopsis:  Compute e-values based on pvalues and window sizes.
  *
- * Purpose:   After nhmmer pipeline has completed, the th object contains
- *               hits where the p-values haven't yet been converted to
- *               e-values. That modification depends on an established
- *               number of sequences. In nhmmer, this is computed as N/W,
- *               for a database of N residues, where W is some standardized
- *               window length (nhmmer passes om->max_length). E-values are
- *               set here based on that formula. We also set the sortkey so
- *               the output will be sorted correctly.
+ * Purpose:   After nhmmer pipeline has completed, the <th> object
+ *            contains hits where the P-values haven't yet been
+ *            converted to E-values. That modification depends on an
+ *            established number of sequences. In nhmmer, this is
+ *            computed as N/W, for a database of N residues, where W
+ *            is some standardized window length (nhmmer passes
+ *            om->max_length). E-values are set here based on that
+ *            formula. We also set the sortkey so the output will be
+ *            sorted correctly.
  *
  * Returns:   <eslOK> on success.
  */
@@ -933,12 +988,15 @@ p7_tophits_Threshold(P7_TOPHITS *th, P7_PIPELINE *pli)
   }
 
   /* Count the reported, included domains */
-  for (h = 0; h < th->N; h++)  
+  for (h = 0; h < th->N; h++) {
+    th->hit[h]->nreported = 0;
+    th->hit[h]->nincluded = 0;
     for (d = 0; d < th->hit[h]->ndom; d++)
     {
         if (th->hit[h]->dcl[d].is_reported) th->hit[h]->nreported++;
         if (th->hit[h]->dcl[d].is_included) th->hit[h]->nincluded++;
     }
+  }
 
   workaround_bug_h74(th);  /* blech. This function is defined above; see commentary and crossreferences there. */
 
@@ -1761,7 +1819,6 @@ p7_tophits_TabularXfam(FILE *ofp, char *qname, char *qacc, P7_TOPHITS *th, P7_PI
   int         tnamew     = ESL_MAX(20, p7_tophits_GetMaxNameLength(th));
   int         taccw      = ESL_MAX(20, p7_tophits_GetMaxAccessionLength(th));
   int         qnamew     = ESL_MAX(20, strlen(qname));
-  int         ndom       = 0;
   int         posw       = (pli->long_targets ? ESL_MAX(7, p7_tophits_GetMaxPositionLength(th)) : 0);
   int         h,d;
   int         status;
@@ -1825,10 +1882,6 @@ p7_tophits_TabularXfam(FILE *ofp, char *qname, char *qacc, P7_TOPHITS *th, P7_PI
           th->hit[h]->pre_score - th->hit[h]->score, /* bias correction */
           (th->hit[h]->desc == NULL ? "-" : th->hit[h]->desc)) < 0)
             ESL_XEXCEPTION_SYS(eslEWRITE, "xfam tabular output: write failed");
-
-          for (d = 0; d < th->hit[h]->ndom; d++)
-            if (th->hit[h]->dcl[d].is_reported)
-              ndom ++;
         }
       }
       if (fprintf(ofp, "\n") < 0) ESL_XEXCEPTION_SYS(eslEWRITE, "xfam tabular output: write failed");
@@ -2033,7 +2086,7 @@ p7_tophits_TabularTail(FILE *ofp, const char *progname, enum p7_pipemodes_e pipe
   
   If needed, we do have opportunity for optimization, however - especially in memory handling.
  */
-#include "p7_config.h"
+#include <p7_config.h>
 
 #include "easel.h"
 #include "esl_getopts.h"
@@ -2120,7 +2173,7 @@ main(int argc, char **argv)
   gcc -o tophits_utest -std=gnu99 -g -O2 -I. -L. -I../easel -L../easel -Dp7TOPHITS_TESTDRIVE p7_tophits.c -lhmmer -leasel -lm 
   ./tophits_test
 */
-#include "p7_config.h"
+#include <p7_config.h>
 
 #include "easel.h"
 #include "esl_getopts.h"

@@ -509,7 +509,7 @@ an msa format. For example, if the input is in aligned
 .BR stockholm
 format, the
 .BR \-\-qsingle_seqs
- flag will cause each sequence in that alignment to be used as a seperate query sequence.
+ flag will cause each sequence in that alignment to be used as a separate query sequence.
 
 .TP
 .BI \-\-tformat " <s>"
@@ -524,7 +524,6 @@ include:
 .BR fasta ,
 .BR embl ,
 .BR genbank ,
-.BR ncbi ,
 .BR fmindex .
 Alignment formats also work;
 common choices include:
@@ -539,10 +538,6 @@ see main documentation.
 The string
 .I <s>
 is case-insensitive (\fBfasta\fR or \fBFASTA\fR both work).
-The format
-.B ncbi
-indicates that the database file is a binary file produced using
-.BR makeblastdb .
 The format
 .B fmindex
 indicates that the database file is a binary file produced using

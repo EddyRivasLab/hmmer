@@ -1,6 +1,6 @@
 /* phmmer: search a protein sequence against a protein database
  */
-#include "p7_config.h"
+#include <p7_config.h>
 
 #include <stdio.h>
 #include <stdlib.h>
@@ -488,8 +488,8 @@ serial_master(ESL_GETOPTS *go, struct cfg_s *cfg)
     }
 #endif
 
-  infocnt = (ncpus == 0) ? 1 : ncpus;
-  ESL_ALLOC(info, sizeof(*info) * infocnt);
+  infocnt = (ncpus <= 0) ? 1 : ncpus;    
+  ESL_ALLOC(info, (ptrdiff_t) sizeof(*info) * infocnt); 
 
   /* Show header output */
   output_header(ofp, go, cfg->qfile, cfg->dbfile);

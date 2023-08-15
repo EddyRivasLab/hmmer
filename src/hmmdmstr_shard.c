@@ -1,7 +1,7 @@
 /* master side of the hmmpgmd daemon
  * MSF, Thu Aug 12, 2010 [Janelia]
  */
-#include "p7_config.h"
+#include <p7_config.h>
 
 #ifdef HMMER_THREADS
 
@@ -729,8 +729,8 @@ gather_results(QUEUE_DATA_SHARD *query, WORKERSIDE_ARGS *comm, SEARCH_RESULTS *r
 {
   int cnt;
   int n;
-
-  WORKER_DATA        *worker;
+  int i0, i1;
+  WORKER_DATA *worker;
 
   /* allocate spaces to hold all the hits */
   cnt = results->nhits + MAX_WORKERS;
@@ -769,7 +769,7 @@ gather_results(QUEUE_DATA_SHARD *query, WORKERSIDE_ARGS *comm, SEARCH_RESULTS *r
        }
 
        // copy this worker's hits into the global list
-        for(int i0 = 0, i1 = previous_hits; i1 < results->stats.nhits; i0++, i1++){
+        for(i0 = 0, i1 = previous_hits; i1 < results->stats.nhits; i0++, i1++){
           results->hits[i1] = worker->hits[i0];
        }
 
@@ -815,7 +815,7 @@ forward_results(QUEUE_DATA_SHARD *query, SEARCH_RESULTS *results)
   P7_DOMAIN         **dcl   = NULL;
   P7_HIT             *hits  = NULL;
   int fd;
-  int n;
+  int n, i;
   uint8_t **buf, **buf2, **buf3, *buf_ptr, *buf2_ptr, *buf3_ptr;
   uint32_t nalloc, nalloc2, nalloc3, buf_offset, buf_offset2, buf_offset3;
   enum p7_pipemodes_e mode;
@@ -888,7 +888,7 @@ forward_results(QUEUE_DATA_SHARD *query, SEARCH_RESULTS *results)
   buf_offset = 0;
 
   // First, the buffer of hits
-  for(int i =0; i< results->stats.nhits; i++){
+  for(i =0; i< results->stats.nhits; i++){
    
     results->stats.hit_offsets[i] = buf_offset;
     if(p7_hit_Serialize(results->hits[i], buf, &buf_offset, &nalloc) != eslOK){
@@ -933,7 +933,7 @@ forward_results(QUEUE_DATA_SHARD *query, SEARCH_RESULTS *results)
     p7_syslog(LOG_ERR,"[%s:%d] - writing %s error %d - %s\n", __FILE__, __LINE__, query->ip_addr, errno, strerror(errno));
     goto CLEAR;
   }
-  printf("%p\n", results->hits[1]);
+  //printf("%p\n", results->hits[1]);
   // and finally the hits 
   n=buf_offset;
 
@@ -947,7 +947,7 @@ forward_results(QUEUE_DATA_SHARD *query, SEARCH_RESULTS *results)
 
  CLEAR:
   /* free all the data */
-  for(int i = 0; i < results->stats.nhits; i++){
+  for(i = 0; i < results->stats.nhits; i++){
     p7_hit_Destroy(results->hits[i]);
   }
 
@@ -976,10 +976,12 @@ forward_results(QUEUE_DATA_SHARD *query, SEARCH_RESULTS *results)
 static void
 destroy_worker(WORKER_DATA *worker)
 {
-  if (worker == NULL) {
+  int i;
+  if (worker == NULL)
+  {
     if (worker->err_buf  != NULL) free(worker->err_buf);
     if (worker->hits != NULL){
-      for(int i = 0; i < worker->allocated_hits; i++){
+      for(i = 0; i < worker->allocated_hits; i++){
         p7_hit_Destroy(worker->hits[i]);
       }
       free(worker->hits);
@@ -1006,7 +1008,7 @@ clear_results(WORKERSIDE_ARGS *args, SEARCH_RESULTS *results)
   while (worker != NULL) {
     if (worker->err_buf  != NULL) free(worker->err_buf);
     if(worker->hits != NULL){
-      for(int i =0; i < worker->allocated_hits; i++){
+      for(i =0; i < worker->allocated_hits; i++){
         p7_hit_Destroy(worker->hits[i]);
       }
       free(worker->hits);
@@ -1512,7 +1514,7 @@ workerside_loop(WORKERSIDE_ARGS *data, WORKER_DATA *worker)
   ESL_STOPWATCH      *w     = NULL;
   HMMD_SEARCH_STATS  *stats = NULL;
   HMMD_COMMAND_SHARD        cmd;
-  int    n;
+  int    n, i;
   int    size;
   int    total;
   char  *ptr;
@@ -1649,7 +1651,7 @@ workerside_loop(WORKERSIDE_ARGS *data, WORKER_DATA *worker)
         }
         worker->allocated_hits = stats->nhits;  // Need this if we have to destroy the worker because of an error
         /* read in the hits */
-        for(int i = 0; i < stats->nhits; i++){
+        for(i = 0; i < stats->nhits; i++){
           worker->hits[i] = p7_hit_Create_empty();
           if(worker->hits[i] == NULL){
             LOG_FATAL_MSG("malloc", errno);

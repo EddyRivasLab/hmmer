@@ -10,7 +10,7 @@
  * 
  * SRE, Mon Aug 18 20:01:01 2008 [Casa de Gatos]
  */
-#include "p7_config.h"
+#include <p7_config.h>
 
 #include <float.h>
 
@@ -449,7 +449,7 @@ select_b(const P7_OPROFILE *om, const P7_OMX *ox, int i)
    20 Aug 08:     13.11u (110 Mc/s)     23.39u (116 Mc/s)    332.62u (69 Mc/s)
 
  */
-#include "p7_config.h"
+#include <p7_config.h>
 
 #include "easel.h"
 #include "esl_alphabet.h"
@@ -503,8 +503,8 @@ main(int argc, char **argv)
 
   p7_FLogsumInit();
 
-  if (p7_hmmfile_OpenE(hmmfile, NULL, &hfp, NULL) != eslOK) p7_Fail("Failed to open HMM file %s", hmmfile);
-  if (p7_hmmfile_Read(hfp, &abc, &hmm)            != eslOK) p7_Fail("Failed to read HMM");
+  if (p7_hmmfile_Open(hmmfile, NULL, &hfp, NULL) != eslOK) p7_Fail("Failed to open HMM file %s", hmmfile);
+  if (p7_hmmfile_Read(hfp, &abc, &hmm)           != eslOK) p7_Fail("Failed to read HMM");
 
   bg = p7_bg_Create(abc);                 p7_bg_SetLength(bg, L);
   gm = p7_profile_Create(hmm->M, abc);    p7_ProfileConfig(hmm, bg, gm, L, p7_LOCAL);
@@ -685,11 +685,11 @@ utest_optacc(ESL_GETOPTS *go, ESL_RANDOMNESS *r, ESL_ALPHABET *abc, P7_BG *bg, i
       printf("%f %f %f %f\n", accscore, accscore_g, accscore_g2, accscore_o);
 #endif
 
-      if (esl_FCompare(fsc,        bsc,         sctol)    != eslOK) esl_fatal(msg);
-      if (esl_FCompare(fsc_g,      bsc_g,       gtol)     != eslOK) esl_fatal(msg);
-      if (esl_FCompare(fsc,        fsc_g,       gtol)     != eslOK) esl_fatal(msg);
-      if (esl_FCompare(accscore,   accscore_g,  gtol)     != eslOK) esl_fatal(msg);
-      if (esl_FCompare(accscore_g, accscore_g2, gtol)     != eslOK) esl_fatal(msg);
+      if (esl_FCompare_old(fsc,        bsc,         sctol)    != eslOK) esl_fatal(msg);
+      if (esl_FCompare_old(fsc_g,      bsc_g,       gtol)     != eslOK) esl_fatal(msg);
+      if (esl_FCompare_old(fsc,        fsc_g,       gtol)     != eslOK) esl_fatal(msg);
+      if (esl_FCompare_old(accscore,   accscore_g,  gtol)     != eslOK) esl_fatal(msg);
+      if (esl_FCompare_old(accscore_g, accscore_g2, gtol)     != eslOK) esl_fatal(msg);
       if (accscore_g2 < accscore_o)                                 esl_fatal(msg);
       /* the above deserves explanation:
        *  - accscore_o is the accuracy of the originally emitted trace, according
@@ -768,7 +768,7 @@ utest_optacc(ESL_GETOPTS *go, ESL_RANDOMNESS *r, ESL_ALPHABET *abc, P7_BG *bg, i
    gcc -g -Wall -maltivec -std=gnu99 -o optacc_utest -I.. -L.. -I../../easel -L../../easel -Dp7OPTACC_TESTDRIVE optacc.c -lhmmer -leasel -lm
    ./optacc_utest
  */
-#include "p7_config.h"
+#include <p7_config.h>
 
 #include "easel.h"
 #include "esl_alphabet.h"
@@ -841,7 +841,7 @@ main(int argc, char **argv)
    gcc -g -Wall -o optacc_example -Dp7OPTACC_EXAMPLE -I.. -I../../easel -L.. -L../../easel optacc.c -lhmmer -leasel -lm
    ./optacc_example <hmmfile> <seqfile>
 */
-#include "p7_config.h"
+#include <p7_config.h>
 
 #include "easel.h"
 #include "esl_alphabet.h"
@@ -887,8 +887,8 @@ main(int argc, char **argv)
   int             status;
 
   /* Read in one HMM */
-  if (p7_hmmfile_OpenE(hmmfile, NULL, &hfp, NULL) != eslOK) p7_Fail("Failed to open HMM file %s", hmmfile);
-  if (p7_hmmfile_Read(hfp, &abc, &hmm)            != eslOK) p7_Fail("Failed to read HMM");
+  if (p7_hmmfile_Open(hmmfile, NULL, &hfp, NULL) != eslOK) p7_Fail("Failed to open HMM file %s", hmmfile);
+  if (p7_hmmfile_Read(hfp, &abc, &hmm)           != eslOK) p7_Fail("Failed to read HMM");
   p7_hmmfile_Close(hfp);
  
   /* Read in one sequence */

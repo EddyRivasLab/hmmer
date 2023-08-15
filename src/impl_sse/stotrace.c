@@ -11,7 +11,7 @@
  *    
  * SRE, Fri Aug 15 08:02:43 2008 [Janelia]
  */   
-#include "p7_config.h"
+#include <p7_config.h>
 
 #include <stdio.h>
 #include <math.h>
@@ -129,7 +129,6 @@ select_m(ESL_RANDOMNESS *rng, const P7_OPROFILE *om, const P7_OMX *ox, int i, in
   int     r     = (k-1) / Q;
   __m128 *tp    = om->tfv + 7*q;       	/* *tp now at start of transitions to cur cell M(i,k) */
   __m128  xBv   = _mm_set1_ps(ox->xmx[(i-1)*p7X_NXCELLS+p7X_B]);
-  __m128  zerov = _mm_setzero_ps();
   __m128  mpv, dpv, ipv;
   union { __m128 v; float p[4]; } u;
   float   path[4];
@@ -140,9 +139,9 @@ select_m(ESL_RANDOMNESS *rng, const P7_OPROFILE *om, const P7_OMX *ox, int i, in
     dpv = ox->dpf[i-1][(q-1)*3 + p7X_D];
     ipv = ox->dpf[i-1][(q-1)*3 + p7X_I];
   } else {
-    mpv = esl_sse_rightshift_ps(ox->dpf[i-1][(Q-1)*3 + p7X_M], zerov);
-    dpv = esl_sse_rightshift_ps(ox->dpf[i-1][(Q-1)*3 + p7X_D], zerov);
-    ipv = esl_sse_rightshift_ps(ox->dpf[i-1][(Q-1)*3 + p7X_I], zerov);
+    mpv = esl_sse_rightshiftz_float(ox->dpf[i-1][(Q-1)*3 + p7X_M]);
+    dpv = esl_sse_rightshiftz_float(ox->dpf[i-1][(Q-1)*3 + p7X_D]);
+    ipv = esl_sse_rightshiftz_float(ox->dpf[i-1][(Q-1)*3 + p7X_I]);
   }	  
   
   u.v = _mm_mul_ps(xBv, *tp); tp++;  path[0] = u.p[r];
@@ -160,7 +159,6 @@ select_d(ESL_RANDOMNESS *rng, const P7_OPROFILE *om, const P7_OMX *ox, int i, in
   int     Q     = p7O_NQF(ox->M);
   int     q     = (k-1) % Q;		/* (q,r) is position of the current DP cell D(i,k) */
   int     r     = (k-1) / Q;
-  __m128  zerov = _mm_setzero_ps();
   __m128  mpv, dpv;
   __m128  tmdv, tddv;
   union { __m128 v; float p[4]; } u;
@@ -173,10 +171,10 @@ select_d(ESL_RANDOMNESS *rng, const P7_OPROFILE *om, const P7_OMX *ox, int i, in
     tmdv = om->tfv[7*(q-1) + p7O_MD];
     tddv = om->tfv[7*Q + (q-1)];
   } else {
-    mpv  = esl_sse_rightshift_ps(ox->dpf[i][(Q-1)*3 + p7X_M], zerov);
-    dpv  = esl_sse_rightshift_ps(ox->dpf[i][(Q-1)*3 + p7X_D], zerov);
-    tmdv = esl_sse_rightshift_ps(om->tfv[7*(Q-1) + p7O_MD],   zerov);
-    tddv = esl_sse_rightshift_ps(om->tfv[8*Q-1],              zerov);
+    mpv  = esl_sse_rightshiftz_float(ox->dpf[i][(Q-1)*3 + p7X_M]);
+    dpv  = esl_sse_rightshiftz_float(ox->dpf[i][(Q-1)*3 + p7X_D]);
+    tmdv = esl_sse_rightshiftz_float(om->tfv[7*(Q-1) + p7O_MD]);
+    tddv = esl_sse_rightshiftz_float(om->tfv[8*Q-1]);
   }	  
 
   u.v = _mm_mul_ps(mpv, tmdv); path[0] = u.p[r];
@@ -301,7 +299,7 @@ select_b(ESL_RANDOMNESS *rng, const P7_OPROFILE *om, const P7_OMX *ox, int i)
    icc -O3 -static -o stotrace_benchmark -I.. -L.. -I../../easel -L../../easel -Dp7STOTRACE_BENCHMARK stotrace.c -lhmmer -leasel -lm
    ./stotrace_benchmark <hmmfile>
  */
-#include "p7_config.h"
+#include <p7_config.h>
 
 #include "easel.h"
 #include "esl_alphabet.h"
@@ -346,8 +344,8 @@ main(int argc, char **argv)
   float           sc, fsc, vsc;
   float           bestsc  = -eslINFINITY;
   
-  if (p7_hmmfile_OpenE(hmmfile, NULL, &hfp, NULL) != eslOK) p7_Fail("Failed to open HMM file %s", hmmfile);
-  if (p7_hmmfile_Read(hfp, &abc, &hmm)            != eslOK) p7_Fail("Failed to read HMM");
+  if (p7_hmmfile_Open(hmmfile, NULL, &hfp, NULL) != eslOK) p7_Fail("Failed to open HMM file %s", hmmfile);
+  if (p7_hmmfile_Read(hfp, &abc, &hmm)           != eslOK) p7_Fail("Failed to read HMM");
 
   bg = p7_bg_Create(abc);                p7_bg_SetLength(bg, L);
   gm = p7_profile_Create(hmm->M, abc);   p7_ProfileConfig(hmm, bg, gm, L, p7_UNILOCAL);
@@ -443,7 +441,7 @@ utest_stotrace(ESL_GETOPTS *go, ESL_RANDOMNESS *rng, ESL_ALPHABET *abc, P7_PROFI
       }
       p7_trace_Reuse(tr);
     }
-  if (esl_FCompare(maxsc, vsc, 0.1) != eslOK) esl_fatal("stochastic trace failed to sample the Viterbi path");
+  if (esl_FCompare_old(maxsc, vsc, 0.1) != eslOK) esl_fatal("stochastic trace failed to sample the Viterbi path");
   
   p7_trace_Destroy(tr);
   p7_trace_Destroy(vtr);
@@ -465,7 +463,7 @@ utest_stotrace(ESL_GETOPTS *go, ESL_RANDOMNESS *rng, ESL_ALPHABET *abc, P7_PROFI
 #include "esl_getopts.h"
 #include "esl_randomseq.h"
 
-#include "p7_config.h"
+#include <p7_config.h>
 #include "hmmer.h"
 
 static ESL_OPTIONS options[] = {
@@ -537,7 +535,7 @@ main(int argc, char **argv)
    ./example <hmmfile> <seqfile>
  */ 
 
-#include "p7_config.h"
+#include <p7_config.h>
 
 #include "easel.h"
 #include "esl_alphabet.h"
@@ -587,8 +585,8 @@ main(int argc, char **argv)
   int             status;
 
   /* Read in one HMM */
-  if (p7_hmmfile_OpenE(hmmfile, NULL, &hfp, NULL) != eslOK) p7_Fail("Failed to open HMM file %s", hmmfile);
-  if (p7_hmmfile_Read(hfp, &abc, &hmm)            != eslOK) p7_Fail("Failed to read HMM");
+  if (p7_hmmfile_Open(hmmfile, NULL, &hfp, NULL) != eslOK) p7_Fail("Failed to open HMM file %s", hmmfile);
+  if (p7_hmmfile_Read(hfp, &abc, &hmm)           != eslOK) p7_Fail("Failed to read HMM");
 
   /* Read in one sequence */
   sq     = esl_sq_CreateDigital(abc);
