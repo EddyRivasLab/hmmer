@@ -83,7 +83,7 @@ p7_omx_Create(int allocM, int allocL, int allocXL)
   ox->ncells   = (int64_t) ox->allocR * (int64_t) ox->allocQ4 * 4;      /* # of DP cells allocated, where 1 cell contains MDI */
 
   /* floats always dominate; +15 for alignment */
-  ESL_ALLOC(ox->dp_mem, sizeof(vector float) * (int64_t) * ox->allocR * (int64_t) ox->allocQ4 * p7X_NSCELLS + 15);
+  ESL_ALLOC(ox->dp_mem, sizeof(vector float) * (int64_t) ox->allocR * (int64_t) ox->allocQ4 * p7X_NSCELLS + 15);
   ESL_ALLOC(ox->dpb,    sizeof(vector unsigned char *) * ox->allocR);
   ESL_ALLOC(ox->dpw,    sizeof(vector signed short *)  * ox->allocR);
   ESL_ALLOC(ox->dpf,    sizeof(vector float *)         * ox->allocR);
