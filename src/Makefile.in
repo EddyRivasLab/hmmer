@@ -65,7 +65,7 @@ PROGS = alimask\
 	phmmer\
 	nhmmer\
 	nhmmscan\
-	makehmmerdb
+	makehmmerdb\
 
 # "auxprogs" are built but not installed.
 AUXPROGS = \
@@ -90,7 +90,17 @@ PROGOBJS =\
 	phmmer.o\
 	nhmmer.o\
 	nhmmscan.o\
-	makehmmerdb.o
+	makehmmerdb.o\
+	e1_bg.o\
+	e1_model.o\
+	e1_rate.o\
+	e1_emit.o\
+	e1_goodness.o\
+	e1_simulate.o\
+	e2_profilesq.o\
+	ratematrix.o\
+	ratebuilder.o\
+
 
 AUXPROGOBJS = \
 	hmmc2.o \
@@ -101,7 +111,13 @@ HDRS =  hmmer.h \
 	p7_gbands.h \
 	p7_gmxb.h \
 	p7_gmxchk.h \
-	p7_hmmcache.h
+	p7_hmmcache.h\
+	e1_model.h\
+	e1_rate.h\
+	e2.h\
+	evohmmer.h\
+	ratematrix.h\
+
 
 OBJS =  build.o\
 	cachedb.o\
@@ -162,8 +178,11 @@ OBJS =  build.o\
 	fm_alphabet.o\
 	fm_general.o\
 	fm_sse.o\
-	fm_ssv.o
+	fm_ssv.o\
+	evohmmer.o\
+	ratematrix.o\
 #	island.o\
+
 
 STATS = \
 	evalues_stats
