@@ -66,6 +66,12 @@ PROGS = alimask\
 	nhmmer\
 	nhmmscan\
 	makehmmerdb\
+	ehmmemit\
+	ehmmscan\
+	ehmmsearch\
+	ejackhmmer\
+	ephmmer\
+
 
 # "auxprogs" are built but not installed.
 AUXPROGS = \
@@ -116,6 +122,8 @@ HDRS =  hmmer.h \
 	e1_rate.h\
 	e2.h\
 	evohmmer.h\
+	minimize.h\
+	p7_evopipeline.h\
 	ratematrix.h\
 
 
@@ -180,6 +188,8 @@ OBJS =  build.o\
 	fm_sse.o\
 	fm_ssv.o\
 	evohmmer.o\
+	minimize.o\
+	p7_evopipeline.o\
 	ratematrix.o\
 #	island.o\
 
