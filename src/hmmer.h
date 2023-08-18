@@ -723,6 +723,8 @@ typedef struct p7_hit_s {
   double pre_lnP;		/* log(P-value) of the pre_score           */
   double sum_lnP;		/* log(P-value) of the sum_score           */
 
+  double time;                  /* the evolutionary time at which the score was calculated */
+
   float  nexpected;     /* posterior expected number of domains in the sequence (from posterior arrays) */
   int    nregions;	/* number of regions evaluated */
   int    nclustered;	/* number of regions evaluated by clustering ensemble of tracebacks */

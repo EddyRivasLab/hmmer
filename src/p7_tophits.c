@@ -193,6 +193,8 @@ p7_tophits_CreateNextHit(P7_TOPHITS *h, P7_HIT **ret_hit)
   hit->lnP          = 0.0;
   hit->pre_lnP      = 0.0;
   hit->sum_lnP      = 0.0;
+  
+  hit->time         = -1.0;
 
   hit->ndom         = 0;
   hit->nexpected    = 0.0;
@@ -285,6 +287,7 @@ p7_tophits_Add(P7_TOPHITS *h,
   h->unsrt[h->N].lnP        = lnP;
   h->unsrt[h->N].pre_lnP    = 0.0;
   h->unsrt[h->N].sum_lnP    = 0.0;
+  h->unsrt[h->N].time       = -1.0;
   h->unsrt[h->N].nexpected  = 0;
   h->unsrt[h->N].nregions   = 0;
   h->unsrt[h->N].nclustered = 0;

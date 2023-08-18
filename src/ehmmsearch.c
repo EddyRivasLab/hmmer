@@ -33,6 +33,13 @@
 
 #include "hmmer.h"
 
+#include "e2_config.h"
+#include "e1_rate.h"
+#include "evohmmer.h"
+#include "p7_evopipeline.h"
+#include "p7_etophits_output_tabular.h"
+#include "ratematrix.h"
+
 typedef struct {
 #ifdef HMMER_THREADS
   ESL_WORK_QUEUE   *queue;
@@ -40,7 +47,14 @@ typedef struct {
   P7_BG            *bg;	         /* null model                              */
   P7_PIPELINE      *pli;         /* work pipeline                           */
   P7_TOPHITS       *th;          /* top hit results                         */
+  P7_PROFILE       *gm;          /* query profile                           */
   P7_OPROFILE      *om;          /* optimized query profile                 */
+  P7_HMM           *hmm;         /* the hmm                                     */
+  P7_RATE          *R;           /* the hmm rate                                */
+  int               noevo;       /* if TRUE do not evolve; behaves as hmmsearch */
+  double            fixtime;     /* if >= 0, do not optimize time               */
+  double            tol;
+
 } WORKER_INFO;
 
 #define REPOPTS     "-E,-T,--cut_ga,--cut_nc,--cut_tc"
@@ -367,6 +381,12 @@ serial_master(ESL_GETOPTS *go, struct cfg_s *cfg)
   int              sstatus  = eslOK;
   int              i;
 
+  EMRATE          *emR      = NULL;
+  EVOM             evomodel;
+  float            betainf;
+  double           tol = 1e-5;
+  FILE            *statfp   = NULL;	          /* stats output stream                     */
+
   int              ncpus    = 0;
 
   int              infocnt  = 0;
@@ -441,9 +461,15 @@ serial_master(ESL_GETOPTS *go, struct cfg_s *cfg)
 
       for (i = 0; i < infocnt; ++i)
 	{
-	  info[i].bg    = p7_bg_Create(abc);
+	  info[i].bg      = p7_bg_Create(abc);
 #ifdef HMMER_THREADS
-	  info[i].queue = queue;
+	  info[i].queue   = queue;
+	  info[i].tol     = tol;
+	  info[i].R       = NULL;
+	  info[i].hmm     = NULL;
+	  info[i].bg      = p7_bg_Create(abc);
+	  info[i].noevo   = esl_opt_GetBoolean(go, "--noevo");
+	  info[i].fixtime = esl_opt_IsOn(go, "--fixtime")? esl_opt_GetReal(go, "--fixtime") : -1.0;
 #endif
 	}
 
@@ -459,15 +485,38 @@ serial_master(ESL_GETOPTS *go, struct cfg_s *cfg)
 #endif
     }
 
+  /* read the substitution matrix */
+  if (!esl_opt_IsOn(go, "--noevo")) {
+    emR = ratematrix_emrate_Create(abc, 1);
+
+    if (esl_opt_IsOn(go, "--mx")) {
+      ratematrix_emrate_Set(esl_opt_GetString(go, "--mx"), NULL, (double *)(info[0].bg->f), emR, TRUE, info[0].tol, errbuf, FALSE);
+    }
+    else if (esl_opt_IsOn(go, "--mxfile")) {
+      /* TODO: read mx from a file */
+    }
+    else {
+      ratematrix_emrate_Set("BLOSUM62", NULL, (double *)(info[0].bg->f), emR, TRUE, info[0].tol, errbuf, FALSE);
+    }
+  }
+  
   /* Outer loop: over each query HMM in <hmmfile>. */
   while (hstatus == eslOK) 
     {
+      P7_RATE         *R       = NULL;
       P7_PROFILE      *gm      = NULL;
       P7_OPROFILE     *om      = NULL;       /* optimized query profile                  */
 
       nquery++;
       esl_stopwatch_Start(w);
 
+      /* Calculate the hmm rate 
+       * this should be part of hmmbuild
+       */
+      if (!esl_opt_IsOn(go, "--noevo") && 
+	  p7_RateCalculate(statfp, hmm, info[0].bg, emR, NULL, &R, evomodel, betainf, (float)info[0].fixtime, 0.001, errbuf, FALSE) != eslOK)  
+	esl_fatal("%s", errbuf);      
+      
       /* seqfile may need to be rewound (multiquery mode) */
       if (nquery > 1)
       {
@@ -496,12 +545,18 @@ serial_master(ESL_GETOPTS *go, struct cfg_s *cfg)
 
       for (i = 0; i < infocnt; ++i)
       {
+	if (!esl_opt_IsOn(go, "--noevo")) {
+	  info[i].R   = p7_RateClone(R);
+	  info[i].hmm = p7_hmm_Clone(hmm);
+	}
+	
         /* Create processing pipeline and hit list */
-        info[i].th  = p7_tophits_Create();
-        info[i].om  = p7_oprofile_Clone(om);
+        info[i].th      = p7_tophits_Create();
+	info[i].gm      = p7_profile_Clone(gm);
+	info[i].om      = p7_oprofile_Clone(om);
         info[i].pli = p7_pipeline_Create(go, om->M, 100, FALSE, p7_SEARCH_SEQS); /* L_hint = 100 is just a dummy for now */
-        status = p7_pli_NewModel(info[i].pli, info[i].om, info[i].bg);
-        if (status == eslEINVAL) p7_Fail(info->pli->errbuf);
+	status = p7_pli_NewModel(info[i].pli, info[i].om, info[i].bg);
+	if (status == eslEINVAL) p7_Fail(info->pli->errbuf);
 
 #ifdef HMMER_THREADS
         if (ncpus > 0) esl_threads_AddThread(threadObj, &info[i]);
@@ -514,7 +569,8 @@ serial_master(ESL_GETOPTS *go, struct cfg_s *cfg)
 #else
       sstatus = serial_loop(info, dbfp, cfg->n_targetseq);
 #endif
-      switch(sstatus)
+
+     switch(sstatus)
       {
       case eslEFORMAT:
         esl_fatal("Parse failed (sequence file %s):\n%s\n",
@@ -573,12 +629,16 @@ serial_master(ESL_GETOPTS *go, struct cfg_s *cfg)
 	esl_msa_Destroy(msa);
       }
 
+      if (info->R)   p7_RateDestroy(info->R);
+      if (info->hmm) p7_hmm_Destroy(info->hmm);
       p7_pipeline_Destroy(info->pli);
       p7_tophits_Destroy(info->th);
       p7_oprofile_Destroy(info->om);
       p7_oprofile_Destroy(om);
       p7_profile_Destroy(gm);
       p7_hmm_Destroy(hmm);
+      if (R)   p7_RateDestroy(R);
+      if (emR) ratematrix_emrate_Destroy(emR, 1);
 
       hstatus = p7_hmmfile_Read(hfp, &abc, &hmm);
     } /* end outer loop over query HMMs */
@@ -828,6 +888,10 @@ mpi_master(ESL_GETOPTS *go, struct cfg_s *cfg)
   BLOCK_LIST      *list     = NULL;
   SEQ_BLOCK        block;
 
+  EMRATE          *emR      = NULL;
+  EVOM             evomodel;
+  float            betainf;
+  
   int              i;
   int              size;
   MPI_Status       mpistatus;
@@ -1145,6 +1209,11 @@ mpi_worker(ESL_GETOPTS *go, struct cfg_s *cfg)
   int              hstatus  = eslOK;
   int              sstatus  = eslOK;
 
+  EMRATE          *emR      = NULL;
+  EVOM             evomodel;
+  float            betainf;
+  FILE            *statfip = NULL;
+
   char            *mpi_buf  = NULL;              /* buffer used to pack/unpack structures           */
   int              mpi_size = 0;                 /* size of the allocated buffer                    */
 
@@ -1188,6 +1257,16 @@ mpi_worker(ESL_GETOPTS *go, struct cfg_s *cfg)
 
       esl_stopwatch_Start(w);
 
+      /* Calculate the hmm rate 
+       * this should be part of hmmbuild
+       */
+      betainf  = esl_opt_GetReal(go,   "--betainf");
+      if (esl_opt_IsUsed(go, "-R")) {
+	emR = ratematrix_emrate_Create(abc);
+	ratematrix_emrate_Set(esl_opt_GetString(go, "--rmx"), (const double *)bg->f, emR, info[0].tol, errbuf, FALSE);
+      }
+      if (!esl_opt_IsOn(go, "--noevo") && p7_RateCalculate(statfp, hmm, bg, emR, NULL, &R, evomodel, betainf, 0.001, errbuf, FALSE) != eslOK)  esl_fatal("%s", errbuf);
+      
       status = 0;
       MPI_Send(&status, 1, MPI_INT, 0, HMMER_READY_TAG, MPI_COMM_WORLD);
 
@@ -1301,7 +1380,10 @@ serial_loop(WORKER_INFO *info, ESL_SQFILE *dbfp, int n_targetseqs)
       p7_bg_SetLength(info->bg, dbsq->n);
       p7_oprofile_ReconfigLength(info->om, dbsq->n);
       
-      p7_Pipeline(info->pli, info->om, info->bg, dbsq, NULL, info->th);
+      if (p7_EvoPipeline(info->pli, /*emR=*/NULL, info->R, info->hmm, info->gm, info->om, info->bg, dbsq, NULL, info->th, info->noevo, (float)info->fixtime) != eslOK) {
+	printf("error in p7_EvoPipeline\n");
+	exit(1);
+      }
 
       seq_cnt++;
       esl_sq_Reuse(dbsq);
@@ -1407,7 +1489,11 @@ pipeline_thread(void *arg)
 	  p7_bg_SetLength(info->bg, dbsq->n);
 	  p7_oprofile_ReconfigLength(info->om, dbsq->n);
 	  
-	  p7_Pipeline(info->pli, info->om, info->bg, dbsq, NULL, info->th);
+	  if (p7_EvoPipeline(info->pli, /*emR=*/NULL, info->R, info->hmm, info->gm, info->om, info->bg, dbsq, NULL, info->th, info->noevo, (float)info->fixtime) != eslOK) {
+	    printf("error in p7_EvoPipeline\n");
+	    exit(1);
+	  }
+
 	  
 	  esl_sq_Reuse(dbsq);
 	  p7_pipeline_Reuse(info->pli);

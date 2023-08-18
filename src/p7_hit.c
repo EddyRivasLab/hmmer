@@ -51,6 +51,7 @@ extern P7_HIT *p7_hit_Create_empty(){
   the_hit->lnP = 0.0;
   the_hit->pre_lnP = 0.0;
   the_hit->sum_lnP = 0.0;
+  the_hit->time = -1.0;
   the_hit->nexpected = 0.0;
   the_hit->nregions = 0;
   the_hit->nclustered = 0;
@@ -318,6 +319,11 @@ extern int p7_hit_Serialize(const P7_HIT *obj, uint8_t **buf, uint32_t *n, uint3
   memcpy((void *) ptr, (void *) &network_64bit, sizeof(obj->sum_lnP));
   ptr += sizeof(obj->sum_lnP);
 
+  // Field : time
+  network_64bit = esl_hton64(*((uint64_t *) &(obj->time)));  
+  memcpy((void *) ptr, (void *) &network_64bit, sizeof(obj->time));
+  ptr += sizeof(obj->time);
+
   // Field 10: nexpected
   network_32bit = esl_hton32(*((uint32_t *) &(obj->nexpected)));  
   memcpy((void *) ptr, (void *) &network_32bit, sizeof(obj->nexpected));
@@ -505,6 +511,12 @@ extern int p7_hit_Deserialize(const uint8_t *buf, uint32_t *n, P7_HIT *ret_obj){
   memcpy(&network_64bit, ptr, sizeof(double)); // Grab the bytes out of the buffer
   host_64bit = esl_ntoh64(network_64bit);
   ret_obj->sum_lnP = *((double *) &host_64bit);
+  ptr += sizeof(double);
+
+  //Field : time
+  memcpy(&network_64bit, ptr, sizeof(double)); // Grab the bytes out of the buffer
+  host_64bit = esl_ntoh64(network_64bit);
+  ret_obj->time = *((double *) &host_64bit);
   ptr += sizeof(double);
 
   //Field 10: nexpected
@@ -719,6 +731,7 @@ extern int p7_hit_TestSample(ESL_RAND64 *rng, P7_HIT **ret_obj){
   the_obj->lnP = esl_rand64_double(rng);
   the_obj->pre_lnP = esl_rand64_double(rng);
   the_obj->sum_lnP = esl_rand64_double(rng);
+  the_obj->time    = esl_rand64_double(rng);
   the_obj->nexpected = (float) esl_rand64_double(rng);
   the_obj->nregions = (int) esl_rand64(rng);
   the_obj->nclustered = (int) esl_rand64(rng);
@@ -823,6 +836,10 @@ extern int p7_hit_Compare(P7_HIT *first, P7_HIT *second, double atol, double rto
   }
 
  if(esl_DCompare(first->sum_lnP, second->sum_lnP, atol, rtol) != eslOK){
+    return eslFAIL;
+  }
+
+ if(esl_DCompare(first->time, second->time, atol, rtol) != eslOK){
     return eslFAIL;
   }
 
