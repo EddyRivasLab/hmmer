@@ -66,6 +66,11 @@ PROGS = alimask\
 	nhmmer\
 	nhmmscan\
 	makehmmerdb\
+	hmmemit\
+	hmmscan\
+	hmmsearch\
+	jackhmmer\
+	phmmer\
 	ehmmemit\
 	ehmmscan\
 	ehmmsearch\

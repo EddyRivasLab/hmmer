@@ -1,7 +1,6 @@
 /* e2_emit.c
  * 
  */
-
 #include <string.h>
 
 #include "easel.h"
@@ -16,7 +15,6 @@
 #include "e2.h"
 #include "e1_emit.h"
 #include "e2_profilesq.h"
-#include "msatree.h"
 
 static int e1_generate_root(ESL_RANDOMNESS *r, E1_BG *bg, int L, ESL_MSA *msa, int *ret_idx, int *nidx, char *errbuf, int verbose);
 static int e1_evolve_root(ESL_RANDOMNESS *r, ESL_TREE *T, int nr, E1_RATE **R, E1_BG *bg, ESL_MSA *msa, int *ret_idx, int *nidx, double tol, char *errbuf, int verbose);
