@@ -38,8 +38,8 @@
 #define THRESHOPTS  "-E,-T,--domE,--domT,--incE,--incT,--incdomE,--incdomT,--cut_ga,--cut_nc,--cut_tc"
 
 static ESL_OPTIONS searchOpts[] = {
-      /* name           type          default  env  range toggles  reqs   incomp                         help                                           docgroup*/
-    /* Control of output */
+  /* name           type          default  env  range toggles  reqs   incomp                         help                                           docgroup*/
+  /* Control of output */
   { "--acc",        eslARG_NONE,        FALSE, NULL, NULL,    NULL,  NULL,  NULL,            "prefer accessions over names in output",                       2 },
   { "--noali",      eslARG_NONE,        FALSE, NULL, NULL,    NULL,  NULL,  NULL,            "don't output alignments, so output is smaller",                2 },
   { "--notextw",    eslARG_NONE,         NULL, NULL, NULL,    NULL,  NULL, "--textw",        "unlimit ASCII text output line width",                         2 },
@@ -168,6 +168,7 @@ usage(char *pgm)
   if (fprintf(stderr, "Usage: %s [-i addr] [-p port] [-A] [-S]\n", pgm)                     < 0) ESL_EXCEPTION_SYS(eslEWRITE, "write failed");
   if (fprintf(stderr, "    -S      : print sequence scores\n")                              < 0) ESL_EXCEPTION_SYS(eslEWRITE, "write failed");
   if (fprintf(stderr, "    -A      : print sequence alignments\n")                          < 0) ESL_EXCEPTION_SYS(eslEWRITE, "write failed");
+  if (fprintf(stderr, "    -F      : print flattened hit alignment\n")                          < 0) ESL_EXCEPTION_SYS(eslEWRITE, "write failed");
   if (fprintf(stderr, "    -i addr : ip address running daemon (default: 127.0.0.1)\n")     < 0) ESL_EXCEPTION_SYS(eslEWRITE, "write failed");
   if (fprintf(stderr, "    -p port : port daemon listens to clients on (default: 51371)\n") < 0) ESL_EXCEPTION_SYS(eslEWRITE, "write failed");
   exit(1);
@@ -184,6 +185,7 @@ int main(int argc, char *argv[])
   char             opts[MAX_READ_LEN];
   int              seqlen;
 
+  int              msa;
   int              ali;
   int              scores;
 
@@ -215,6 +217,7 @@ int main(int argc, char *argv[])
   serv_port = SERVER_PORT;
   scores = 0;
   ali = 0;
+  msa = 0;
 
   i = 1;
   while (i < argc) {
@@ -243,6 +246,9 @@ int main(int argc, char *argv[])
       break;
     case 'S':
       scores = 1;
+      break;
+    case 'F':
+      msa = 1;
       break;
     default:
       usage(argv[0]);
@@ -530,11 +536,30 @@ int main(int argc, char *argv[])
         /* adjust the reported and included hits */
         //th->is_sorted = FALSE;
         //p7_tophits_Sort(th);
-		
+    
         /* Print the results.  */
         if (scores) { p7_tophits_Targets(stdout, th, pli, 120); fprintf(stdout, "\n\n"); }
         if (ali)    { p7_tophits_Domains(stdout, th, pli, 120); fprintf(stdout, "\n\n"); }
-        p7_pli_Statistics(stdout, pli, w);  
+
+        if (msa) {
+          ESL_MSA *msa = NULL;
+          // code taken from -A output routine of hmmsearch.c - JBP
+
+          if (p7_tophits_Alignment(th, abc, NULL, NULL, 0, p7_ALL_CONSENSUS_COLS, &msa) == eslOK)
+          {
+            // TODO insert query name in alignment
+            esl_msa_SetName     (msa, "seqName", -1); // hmm->name, -1);
+            //        esl_msa_SetAccession(msa, hmm->acc,  -1); // hmm->acc,  -1);
+            //esl_msa_SetDesc     (msa, hmm->desc, -1); // hmm->desc, -1);
+            esl_msa_FormatAuthor(msa, "hmmsearch (HMMER %s)", HMMER_VERSION);
+
+            // write to stdout
+            esl_msafile_Write(stdout, msa, eslMSAFILE_STOCKHOLM); // could be pfam here instead
+          }    
+          esl_msa_Destroy(msa);
+        }
+        
+        p7_pli_Statistics(stdout, pli, w);
 
         p7_pipeline_Destroy(pli); 
         p7_tophits_Destroy(th);
@@ -552,7 +577,7 @@ int main(int argc, char *argv[])
       if (hmm) p7_hmm_Destroy(hmm);
       if (sq)  esl_sq_Destroy(sq);
 
-	  }
+    }
   }
 
   free(seq);
