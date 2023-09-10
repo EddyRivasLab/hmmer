@@ -1307,18 +1307,18 @@ read_asc30hmm(P7_HMMFILE *hfp, ESL_ALPHABET **ret_abc, P7_HMM **opt_hmm)
       } 
 
       else if (strcmp(tag, "LENG") == 0) {
-	if ((status = esl_fileparser_GetTokenOnLine(hfp->efp, &tok1, NULL))  != eslOK) ESL_XFAIL(status,    hfp->errbuf, "No model length found on LENG line");
-	if ((hmm->M = atoi(tok1))                                            == 0)     ESL_XFAIL(status,    hfp->errbuf, "Invalid model length %s on LENG line", tok1);
+	if ((status = esl_fileparser_GetTokenOnLine(hfp->efp, &tok1, NULL))  != eslOK) ESL_XFAIL(status,     hfp->errbuf, "No model length found on LENG line");
+	if ((hmm->M = atoi(tok1))                                            == 0)     ESL_XFAIL(eslEFORMAT, hfp->errbuf, "Invalid model length %s on LENG line", tok1);
       }  
 
       else if (hfp->format >= p7_HMMFILE_3c && strcmp(tag, "MAXL") == 0) {
-	if ((status = esl_fileparser_GetTokenOnLine(hfp->efp, &tok1, NULL))  != eslOK) ESL_XFAIL(status,    hfp->errbuf, "No max length found on MAXL line");
-	if ((hmm->max_length = atoi(tok1))                                   == 0)     ESL_XFAIL(status,    hfp->errbuf, "Invalid max length %s on MAXL line", tok1);
+	if ((status = esl_fileparser_GetTokenOnLine(hfp->efp, &tok1, NULL))  != eslOK) ESL_XFAIL(status,     hfp->errbuf, "No max length found on MAXL line");
+	if ((hmm->max_length = atoi(tok1))                                   == 0)     ESL_XFAIL(eslEFORMAT, hfp->errbuf, "Invalid max length %s on MAXL line", tok1);
       }
 
       else if (strcmp(tag, "ALPH") == 0) {
-	if ((status = esl_fileparser_GetTokenOnLine(hfp->efp, &tok1, NULL))  != eslOK)   ESL_XFAIL(status,    hfp->errbuf, "No alphabet type found on ALPH");
-	if ((alphatype = esl_abc_EncodeType(tok1))                        == eslUNKNOWN) ESL_XFAIL(status,    hfp->errbuf, "Unrecognized alphabet type %s", tok1);
+	if ((status = esl_fileparser_GetTokenOnLine(hfp->efp, &tok1, NULL))  != eslOK)   ESL_XFAIL(status,     hfp->errbuf, "No alphabet type found on ALPH");
+	if ((alphatype = esl_abc_EncodeType(tok1))                        == eslUNKNOWN) ESL_XFAIL(eslEFORMAT, hfp->errbuf, "Unrecognized alphabet type %s", tok1);
 	if (*ret_abc == NULL) {
 	  if ((abc = esl_alphabet_Create(alphatype))                        == NULL)     ESL_XFAIL(eslEMEM,   hfp->errbuf, "Failed to create alphabet");
 	} else {
@@ -1487,9 +1487,8 @@ read_asc30hmm(P7_HMMFILE *hfp, ESL_ALPHABET **ret_abc, P7_HMM **opt_hmm)
     }
     hmm->flags |= p7H_COMPO;
     if ((status = esl_fileparser_NextLine(hfp->efp))                          != eslOK)  ESL_XFAIL(status,     hfp->errbuf, "Premature end of data after COMPO line");  
-    if ((esl_fileparser_GetTokenOnLine(hfp->efp, &tok1, NULL))                != eslOK)  ESL_XFAIL(status,     hfp->errbuf, "Premature end of data after COMPO line");  
+    if ((esl_fileparser_GetTokenOnLine(hfp->efp, &tok1, NULL))                != eslOK)  ESL_XFAIL(eslEFORMAT, hfp->errbuf, "Premature end of data after COMPO line");  
   }
-
   /* First two lines are node 0: insert emissions, then transitions from node 0 (begin) */
 
   hmm->ins[0][0] = (*tok1 == '*' ? 0.0 : expf(-1.0 *atof(tok1)));
@@ -1768,8 +1767,8 @@ read_asc20hmm(P7_HMMFILE *hfp, ESL_ALPHABET **ret_abc, P7_HMM **opt_hmm)
       } 
 
       else if (strcmp(tag, "LENG") == 0) {
-  if ((status = esl_fileparser_GetTokenOnLine(hfp->efp, &tok1, NULL))  != eslOK) ESL_XFAIL(status,    hfp->errbuf, "No model length found on LENG line");
-  if ((hmm->M = atoi(tok1))                                            == 0)     ESL_XFAIL(status,    hfp->errbuf, "Invalid model length %s on LENG line", tok1);
+  if ((status = esl_fileparser_GetTokenOnLine(hfp->efp, &tok1, NULL))  != eslOK) ESL_XFAIL(status,     hfp->errbuf, "No model length found on LENG line");
+  if ((hmm->M = atoi(tok1))                                            == 0)     ESL_XFAIL(eslEFORMAT, hfp->errbuf, "Invalid model length %s on LENG line", tok1);
       }  
 
       else if (strcmp(tag, "ALPH") == 0) {
