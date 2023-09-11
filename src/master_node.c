@@ -203,9 +203,10 @@ forward_results(P7_SERVER_QUEUE_DATA *query, SEARCH_RESULTS *results)
     th.is_sorted_by_seqidx  = 0;
       
     pli = p7_pipeline_Create(query->opts, 100, 100, FALSE, mode);
-    pli->nmodels     = results->stats.nmodels;
+    pli->nmodels = results->stats.nmodels; 
+    pli->nseqs = results->stats.nseqs;
+
     pli->nnodes      = results->stats.nnodes;
-    pli->nseqs       = results->stats.nseqs;
     pli->nres        = results->stats.nres;
     pli->n_past_msv  = results->stats.n_past_msv;
     pli->n_past_bias = results->stats.n_past_bias;
@@ -477,6 +478,7 @@ clientside_loop(CLIENTSIDE_ARGS *data)
   char               timestamp[32];
   int search_type = -1;
   int slen;
+  uint64_t search_length=0;
   
   uint32_t serialized_command_length, command_length;
   /* Receive message from client with size of command */
@@ -576,13 +578,20 @@ clientside_loop(CLIENTSIDE_ARGS *data)
         // These errors should never occur, because we sanity check-the range when receiving the search command
         if (status == eslESYNTAX) client_msg_longjmp(data->sock_fd, eslEINVAL, &jmp_env,"--db_ranges takes coords <from>..<to>; %s not recognized", range);
         if (status == eslFAIL)    client_msg_longjmp(data->sock_fd, eslEINVAL, &jmp_env,"Failed to find <from> or <to> coord in %s", range);
+        if (start > end){
+          client_msg_longjmp(data->sock_fd, eslEINVAL, &jmp_env,"Illegal range from %lu to %lu found in --db_ranges", start, end);
+        }
         if((start < min_index) | (start > max_index)) client_msg_longjmp(data->sock_fd, eslEINVAL, &jmp_env,"Start of range %lu was outside of database index range %lu to %lu", start, min_index, max_index);
         if((end < min_index) | (end > max_index)) client_msg_longjmp(data->sock_fd, eslEINVAL, &jmp_env,"End of range %lu was outside of database index range %lu to %lu", end, min_index, max_index);
         
         printf("range found of %lu to %lu\n", start, end);
+        search_length +=(end-start)+1;
       }
       free(range_string_base);
     }
+    else{
+        search_length = data->masternode->database_shards[dbx-1]->num_objects;  // We're searching the entire shard, so get the length from the shard
+      }
     seq = NULL;
     hmm = NULL;
 
@@ -686,11 +695,12 @@ clientside_loop(CLIENTSIDE_ARGS *data)
   parms->opts = opts;
   parms->dbx  = dbx - 1;
   parms->optsstring = opt_str;
+  parms->cnt = search_length;
   strcpy(parms->ip_addr, data->ip_addr);
   parms->sock       = data->sock_fd;
   parms->cmd_type   = search_type;
   parms->query_type = (seq != NULL) ? HMMD_SEQUENCE : HMMD_HMM;
-
+  parms->cnt = search_length;
 
   date = time(NULL);
   ctime_r(&date, timestamp);
@@ -1167,13 +1177,18 @@ int process_search(P7_SERVER_MASTERNODE_STATE *masternode, P7_SERVER_QUEUE_DATA 
     }
   }
   else{ // search the whole database
-    search_start = database_shard->directory[0].index;
-    search_end = database_shard->directory[database_shard->num_objects -1].index;
-    search_length = (search_end - search_start) +1;
+    search_end = database_shard->num_objects -1; // ditto
+    search_length = database_shard->num_objects;
     // set up the work queues
     for(int which_shard = 0; which_shard < masternode->num_shards; which_shard++){
-      masternode->work_queues[which_shard]->start = search_start;
-      masternode->work_queues[which_shard]->end = search_end;
+      masternode->work_queues[which_shard]->start = 0;
+      if(which_shard < (database_shard->num_objects % masternode->num_shards)){
+        masternode->work_queues[which_shard]->end = search_end/masternode->num_shards;
+      }
+      else{
+        masternode->work_queues[which_shard]->end = (search_end/masternode->num_shards)-1;
+      }
+      printf("Masternode created queue for shard %d with search range %lu to %lu, search length was %lu\n", which_shard, masternode->work_queues[which_shard]->start, masternode->work_queues[which_shard]->end, search_length);
     }
   }
   masternode->chunk_size = (search_length / (masternode->num_worker_nodes * 128 )) +1; // round this up to avoid small amount of leftover work at the end
@@ -1642,6 +1657,7 @@ void p7_masternode_message_handler(P7_SERVER_MASTERNODE_STATE *masternode, P7_SE
     switch((*buffer_handle)->status.MPI_TAG){
     case HMMER_PIPELINE_STATE_MPI_TAG:
       p7_pipeline_MPIRecv((*buffer_handle)->status.MPI_SOURCE, (*buffer_handle)->status.MPI_TAG, MPI_COMM_WORLD, &((*buffer_handle)->buffer), &((*buffer_handle)->buffer_alloc), query_opts, &temp_pipeline);
+      printf("Received pipeline with %lu sequences\n", temp_pipeline->nseqs);
       p7_pipeline_Merge(masternode->pipeline, temp_pipeline);
       p7_pipeline_Destroy(temp_pipeline);
       masternode->worker_stats_received++;
@@ -1670,14 +1686,14 @@ void p7_masternode_message_handler(P7_SERVER_MASTERNODE_STATE *masternode, P7_SE
         if(MPI_Recv(&requester_shard, 1, MPI_UNSIGNED, (*buffer_handle)->status.MPI_SOURCE, (*buffer_handle)->status.MPI_TAG, MPI_COMM_WORLD, &((*buffer_handle)->status)) != MPI_SUCCESS){
           p7_Fail("MPI_Recv failed in p7_masternode_message_handler\n");
         }
-
+        printf("Masternode saw work request for shard %d\n", requester_shard);
         if(requester_shard >= masternode->num_shards){
           // The requestor asked for a non-existent shard
           p7_Die("Out-of-range shard %d sent in work request", requester_shard);
         }
 
         // Get some work out of the appropriate queue
-        if(masternode->work_queues[requester_shard]->end > masternode->work_queues[requester_shard]->start){
+        if(masternode->work_queues[requester_shard]->end >= masternode->work_queues[requester_shard]->start){
           // There's work left to give out, so grab a chunk
           the_reply.start = masternode->work_queues[requester_shard]->start;
           the_reply.end = the_reply.start + masternode->chunk_size;

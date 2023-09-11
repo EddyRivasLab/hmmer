@@ -25,7 +25,7 @@ typedef struct p7_server_queue_data_s {
 
   int            dbx;         /* database index to search       */
   int            inx;         /* sequence index to start search */
-  int            cnt;         /* number of sequences to search  */
+  uint64_t            cnt;         /* number of sequences to search  */
   char           *optsstring; /* Options string used to create the search-specific options*/
 } P7_SERVER_QUEUE_DATA;
 

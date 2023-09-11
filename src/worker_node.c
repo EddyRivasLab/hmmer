@@ -479,8 +479,6 @@ int p7_server_workernode_start_hmm_vs_amino_db(P7_SERVER_WORKERNODE_STATE *worke
   pthread_mutex_unlock(&(workernode->search_definition_lock));
   // Grab this to avoid multiple re-indexing
   P7_SHARD *the_shard = workernode->database_shards[database];
-
-  uint64_t real_start, real_end;
  
   //bounds-check the start and end parameters
   if((start_object > the_shard->directory[the_shard->num_objects -1].index) || (end_object > the_shard->directory[the_shard->num_objects-1].index)){
@@ -489,23 +487,19 @@ int p7_server_workernode_start_hmm_vs_amino_db(P7_SERVER_WORKERNODE_STATE *worke
   if(start_object > end_object){
     p7_Die("Attempt to create search with start id greater than end id in p7_server_workernode_start_hmm_vs_amino_db");
   }
-
-  // figure out where to start and end the search
-  real_start = p7_shard_Find_Id_Nexthigh(the_shard, start_object);
-  real_end = p7_shard_Find_Id_Nextlow(the_shard, end_object);
   
 
 
   // decide how much work each worker thread should grab at a time.  This is definitely a parameter that could be tuned, but
   // 16 chunks/thread seems to work well so far.
-  workernode->chunk_size = (real_end - real_start) / ((workernode->num_threads) * 16); 
+  workernode->chunk_size = (end_object - start_object) / ((workernode->num_threads) * 16); 
   if(workernode->chunk_size < 1){
     workernode->chunk_size = 1;  // handle cases that round down to 0
   }
 
   //set up global queue.  Don't need to lock here because we only set up searches when the workernode is idle
-  workernode->global_queue->start = real_start;
-  workernode->global_queue->end = real_end;
+  workernode->global_queue->start = start_object;
+  workernode->global_queue->end = end_object;
 
   // Set up thread state
   for(i = 0; i < workernode->num_threads; i++){
@@ -558,14 +552,11 @@ int p7_server_workernode_start_hmm_vs_amino_db(P7_SERVER_WORKERNODE_STATE *worke
 
 int p7_server_workernode_add_work(P7_SERVER_WORKERNODE_STATE *workernode, uint64_t start_object, uint64_t end_object){
   pthread_mutex_lock(&(workernode->global_queue_lock));
- 
+  
   if(workernode->global_queue == NULL){
     printf("Found NULL global queue in p7_server_workernode_add_work_hmm_vs_amino_db\n");
   }
   int i;
-  pthread_mutex_lock(&(workernode->steal_lock));
-  workernode->no_steal = 0;  // reset this to allow stealing work for the new search
-  pthread_mutex_unlock(&(workernode->steal_lock));
   pthread_mutex_lock(&(workernode->search_definition_lock));
   //Tell the worker node not to do any start-of-search work
   if(workernode->search_type == SEQUENCE_SEARCH  || workernode->search_type == SEQUENCE_SEARCH_CONTINUE){
@@ -574,6 +565,7 @@ int p7_server_workernode_add_work(P7_SERVER_WORKERNODE_STATE *workernode, uint64
   else{
     workernode->search_type = HMM_SEARCH_CONTINUE;
   }
+  
   pthread_mutex_unlock(&(workernode->search_definition_lock));
   // recompute the amount of work that each worker thread should grab at a time
   workernode->chunk_size = ((end_object - start_object) / (workernode->num_threads) * 16);
@@ -618,7 +610,9 @@ int p7_server_workernode_add_work(P7_SERVER_WORKERNODE_STATE *workernode, uint64
     workernode->global_queue->end = end_object;
   }
   pthread_mutex_unlock(&(workernode->global_queue_lock)); // release lock
-        
+  pthread_mutex_lock(&(workernode->steal_lock));
+  workernode->no_steal = 0;  // reset this to allow stealing work for the new search
+  pthread_mutex_unlock(&(workernode->steal_lock));
   return (eslOK);
 }
 
@@ -633,10 +627,8 @@ int p7_server_workernode_add_work(P7_SERVER_WORKERNODE_STATE *workernode, uint64
  * \author Nick Carter
  * \date Spring 2017
  * \param [in,out] workernode The node's P7_SERVER_WORKERNODE_STATE object, which is modified during execution.
- * \param [in] start_object The index of the first object in the initial work chunk of the search.  This is rounded up to the next-highest valid item if 
- * start_object is not part of the shard that the node is responsible for.
- * \param [in] end_object The index of the last object in the initial work chunk of the search.  This is rounded up to the next-highest valid item if 
- * end_object is not part of the shard that the node is responsible for.
+ * \param [in] start_object The index of the first object in the initial work chunk of the search.  
+ * \param [in] end_object The index of the last object in the initial work chunk of the search.  
  * \param compare_sequence The sequence that the HMMs in the specified database will be compared against.
  * \param compare_L The length of compare_sequence, in residues
  * \returns ESL_OK if adding the new chunk of work to the work queue succeeds.  Calls p7_Die to crash the program with an error message
@@ -669,7 +661,6 @@ int p7_server_workernode_start_amino_vs_hmm_db(P7_SERVER_WORKERNODE_STATE *worke
   // Grab this to avoid multiple re-indexing
   P7_SHARD *the_shard = workernode->database_shards[database];
 
-  uint64_t real_start, real_end;
   //bounds-check the start and end parameters
   if((start_object >= the_shard->directory[the_shard->num_objects -1].index) || (end_object >= the_shard->directory[the_shard->num_objects-1].index)){
     p7_Die("Attempt to reference out-of-bound object id in p7_server_workernode_start_amino_vs_hmm_db");
@@ -678,24 +669,16 @@ int p7_server_workernode_start_amino_vs_hmm_db(P7_SERVER_WORKERNODE_STATE *worke
     p7_Die("Attempt to create search with start id greater than end id in p7_server_workernode_start_amino_vs_hmm_db");
   }
 
-  // figure out where to start and end the search
-  real_start = p7_shard_Find_Id_Nexthigh(the_shard, start_object);
-      // grab the id of the object in the database whose id is equal to or next greater than
-      // start_object
-  real_end = p7_shard_Find_Id_Nextlow(the_shard, end_object);
-  // grab the id of the object in the database whose id is closest to end_object, but not 
-  // greater 
-
   // decide how much work each worker thread should grab at a time.  This is definitely a parameter that could be tuned, but
   // 16 chunks/thread seems to work well so far.
-  workernode->chunk_size = (real_end - real_start) / ((workernode->num_threads) * 16); 
+  workernode->chunk_size = (end_object - start_object) / ((workernode->num_threads) * 16); 
   if(workernode->chunk_size < 1){
     workernode->chunk_size = 1;  // handle cases that round down to 0
   }
 
   //set up global queue.  Don't need to lock here because we only set up searches when the workernode is idle
-  workernode->global_queue->start = real_start;
-  workernode->global_queue->end = real_end;
+  workernode->global_queue->start = start_object;
+  workernode->global_queue->end = end_object;
 
   // Set up thread state
   for(int i = 0; i < workernode->num_threads; i++){
@@ -1032,8 +1015,10 @@ void p7_server_workernode_main(int argc, char **argv, int my_rank, MPI_Datatype 
   for(c1 =0; c1< num_databases; c1++){
     database_names[c1] = esl_opt_GetArg(go, c1+1);  //esl_opt_GetArg is 1..num_args
   }
- 
-  p7_server_workernode_Setup(num_databases, database_names, num_shards, my_rank%num_shards, num_worker_cores, &workernode);
+  
+  // set my_shard to (my_rank -1)% num_shards so that worker n gets shard n if we have as many workers as shards, makes keeping things straight
+  // in my head during debugging easier
+  p7_server_workernode_Setup(num_databases, database_names, num_shards, (my_rank -1)%num_shards, num_worker_cores, &workernode);
   workernode->my_rank = my_rank;
   free(database_names);
   // block until all nodes ready
@@ -1211,30 +1196,22 @@ static int worker_thread_front_end_search_loop(P7_SERVER_WORKERNODE_STATE *worke
     if((start != -1) && (start <= end)){
       uint64_t chunk_end = end; // process sequences until we see a long operation or hit the end of the chunk
       // get pointer to first sequence to search
-      uint64_t search_object_location_in_shard;
       ESL_SQ *search_sequence=NULL;
       P7_OPROFILE *search_om = NULL;
-      search_object_location_in_shard = p7_shard_Find_Index_Nexthigh(workernode->database_shards[compare_database], start);
-      if(workernode->database_shards[compare_database]->directory[search_object_location_in_shard].index > end){
-        // The first item in our shard with an index >= start also has an index > end, so there are no valid sequences to search in this range
-        start = chunk_end +1; // Force next loop to not happen
-      }
-      printf("Worker %d from rank %d got chunk ranging from %lu to %lu\n", my_id, workernode->my_rank, start, end);
+
+      //printf("Worker %d from rank %d got chunk ranging from %lu to %lu\n", my_id, workernode->my_rank, start, end);
       while(start <= chunk_end){
 
-        pthread_mutex_lock(&(workernode->work[my_id].lock));
-        chunk_end = workernode->work[my_id].end; // update this to reduce redundant work.
-        pthread_mutex_unlock(&(workernode->work[my_id].lock));
-
         if((search_type == SEQUENCE_SEARCH) || (search_type == SEQUENCE_SEARCH_CONTINUE)){
-          search_sequence = (ESL_SQ *) workernode->database_shards[compare_database]->contents[search_object_location_in_shard];
+          search_sequence = (ESL_SQ *) workernode->database_shards[compare_database]->contents[start];
           p7_bg_SetLength(workernode->thread_state[my_id].bg, search_sequence->L);           
           p7_oprofile_ReconfigLength(workernode->thread_state[my_id].om,search_sequence->L);
           p7_pli_NewSeq(workernode->thread_state[my_id].pipeline, search_sequence);
+          printf("Worker %d from node %d front-end searched sequence %s with index %lu\n", my_id, workernode->my_rank, search_sequence->name, start);
           status = p7_Pipeline_Overthruster(workernode->thread_state[my_id].pipeline, workernode->thread_state[my_id].om, workernode->thread_state[my_id].bg, search_sequence, &fwdsc, &nullsc);
         }
         else{
-          search_om = (P7_OPROFILE *) workernode->database_shards[compare_database]->contents[search_object_location_in_shard];
+          search_om = (P7_OPROFILE *) workernode->database_shards[compare_database]->contents[start];
           p7_pli_NewModel(workernode->thread_state[my_id].pipeline, search_om, workernode->thread_state[my_id].bg);
           p7_oprofile_ReconfigLength(search_om, compare_L);
           p7_bg_SetLength(workernode->thread_state[my_id].bg, compare_L);           
@@ -1253,7 +1230,7 @@ static int worker_thread_front_end_search_loop(P7_SERVER_WORKERNODE_STATE *worke
           pthread_mutex_lock(&(workernode->work[my_id].lock));
           
           // grab the start and end pointers from our work queue
-          workernode->work[my_id].start = start + workernode->num_shards;  // update this to reduce amount of redundant work done during steals
+          workernode->work[my_id].start = start+1;  // update this to reduce amount of redundant work done during steals, remember that we're working in shard index space
           end = workernode->work[my_id].end;
           
           pthread_mutex_unlock(&(workernode->work[my_id].lock)); // release lock
@@ -1275,7 +1252,7 @@ static int worker_thread_front_end_search_loop(P7_SERVER_WORKERNODE_STATE *worke
                 p7_Die("Unable to allocate memory in worker_thread_front_end_sequence_search_loop.\n");
               }
               p7_pli_NewModel(workernode->thread_state[my_id].pipeline, workernode->thread_state[my_id].om, workernode->thread_state[my_id].bg);
-              printf("Worker %d from rank %d sending sequence %s to backend, search_object_location_in_shard was %lu\n", my_id, workernode->my_rank, search_sequence->name, search_object_location_in_shard);
+              printf("Worker %d from node %d sending sequence %s to backend, index was %lu\n", my_id, workernode->my_rank, search_sequence->name, start);
               the_entry->sequence = search_sequence;
               the_entry->om = workernode->thread_state[my_id].om;
             }
@@ -1315,13 +1292,13 @@ static int worker_thread_front_end_search_loop(P7_SERVER_WORKERNODE_STATE *worke
                                     //chunk to force a steal
           }
         }
-        start += workernode->num_shards;  // Increment this here to avoid pushing the comparison we just did back on the global queue if we switch modes
+        start +=1;  // Increment this here to avoid pushing the comparison we just did back on the global queue if we switch modes
         // Done with the current sequence, check if we've been switched to backend mode before proceeding to the next one
         pthread_mutex_lock(&(workernode->thread_state[my_id].mode_lock));
         if(workernode->thread_state[my_id].mode == BACKEND){
           pthread_mutex_unlock(&(workernode->thread_state[my_id].mode_lock));
         // need to switch modes.
- 
+          printf("Worker %d from node %d switching to back-end\n", my_id, workernode->my_rank);
           // Put our current work chunk back on the work queue
 
           // Synchronize so that we have the most up-to-date info on how much work is left on our local queue
@@ -1374,15 +1351,19 @@ static int worker_thread_front_end_search_loop(P7_SERVER_WORKERNODE_STATE *worke
           return(0);
         }
         pthread_mutex_unlock(&(workernode->thread_state[my_id].mode_lock));
+      /* believe these are now redundant
         // if we get this far, we weren't switched to the backend, so go on to the next sequence or back to look for more work
-        search_object_location_in_shard++;
-        search_sequence = (ESL_SQ *) workernode->database_shards[compare_database]->contents[search_object_location_in_shard];
+        search_sequence = (ESL_SQ *) workernode->database_shards[compare_database]->contents[start];
         search_om = (P7_OPROFILE *) search_sequence;  // set both of these, only use the one that's appropriate for the search 
         // type because it's faster than a conditional to see which one we need to set
+      */
         p7_pipeline_Reuse(workernode->thread_state[my_id].pipeline);
+        pthread_mutex_lock(&(workernode->work[my_id].lock));
+        chunk_end = workernode->work[my_id].end; // update this to reduce redundant work.
+        workernode->work[my_id].start = start; // ditto
+        pthread_mutex_unlock(&(workernode->work[my_id].lock));
       }
     }
-
   }
 }
 
@@ -1438,6 +1419,7 @@ static void worker_thread_back_end_sequence_search_loop(P7_SERVER_WORKERNODE_STA
     // enqueuing an entry in an empty backend queue and the last backend thread deciding there's no front-end work to do.
     // If we don't switch to front-end mode, we'll just call this function again immediately
     pthread_mutex_lock(&(workernode->thread_state[my_id].mode_lock));
+    printf("Worker %d from node %d switching to front-end\n", my_id, workernode->my_rank);
     workernode->thread_state[my_id].mode = FRONTEND; // change my mode to frontend
     pthread_mutex_unlock(&(workernode->thread_state[my_id].mode_lock));
     workernode->num_backend_threads -= 1;
@@ -1675,8 +1657,8 @@ static uint64_t worker_thread_get_chunk(P7_SERVER_WORKERNODE_STATE *workernode, 
   if(my_start+ workernode->chunk_size < workernode->global_queue->end){
     // there's more than one chunk of work left in the global queue, so grab one and advance the start pointer
     pthread_mutex_lock(&(workernode->search_definition_lock));
-    my_end  = p7_shard_Find_Index_Nexthigh(workernode->database_shards[workernode->compare_database], my_start+ workernode->chunk_size);
-    workernode->global_queue->start = p7_shard_Find_Index_Nexthigh(workernode->database_shards[workernode->compare_database], my_end+1);
+    my_end  = my_start+ workernode->chunk_size;
+    workernode->global_queue->start = my_end+1;
     pthread_mutex_unlock(&(workernode->search_definition_lock));
   }
   else{
@@ -1817,7 +1799,7 @@ int32_t worker_thread_steal(P7_SERVER_WORKERNODE_STATE *workernode, uint32_t my_
 
   // Now, update my work queue with the stolen work
   pthread_mutex_lock(&(workernode->search_definition_lock));
-  uint64_t my_new_start = p7_shard_Find_Id_Nexthigh(workernode->database_shards[workernode->compare_database], new_victim_end+1);
+  uint64_t my_new_start = new_victim_end;
   pthread_mutex_unlock(&(workernode->search_definition_lock));
   pthread_mutex_lock(&(workernode->work[my_id].lock));
 
@@ -1985,6 +1967,7 @@ static int workernode_perform_search_or_scan(P7_SERVER_WORKERNODE_STATE *workern
             pthread_mutex_unlock(&(workernode->wait_lock));
           }
           else{
+            printf("Workernode %d received message that masternode was out of work\n", workernode->my_rank); 
             pthread_mutex_lock(&(workernode->work_request_lock));
             workernode->master_queue_empty = 1;  // The master is out of work to give
             pthread_mutex_unlock(&(workernode->work_request_lock));
@@ -2070,6 +2053,7 @@ static int workernode_perform_search_or_scan(P7_SERVER_WORKERNODE_STATE *workern
       if(work_reply.start != -1){
         //We got more work from the master node
         p7_server_workernode_add_work(workernode, work_reply.start, work_reply.end);
+        printf("Workernode %d received chunk from %lu to %lu\n", workernode->my_rank, work_reply.start, work_reply.end);
         pthread_mutex_lock(&(workernode->wait_lock));
         p7_server_workernode_release_threads(workernode); // tell any paused threads to go
         pthread_mutex_unlock(&(workernode->wait_lock));
@@ -2077,6 +2061,8 @@ static int workernode_perform_search_or_scan(P7_SERVER_WORKERNODE_STATE *workern
       else{
         // Master has no work left, we're done
         stop = 1;
+        printf("Workernode %d received message that masternode was out of work\n", workernode->my_rank); 
+
       }
     }
     else{ // we're out of work and the master queue is empty, so we're done

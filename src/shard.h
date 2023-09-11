@@ -77,29 +77,6 @@ P7_SHARD *p7_shard_Create_sqdata(char *filename, uint32_t num_shards, uint32_t m
 // Creates a shard whose contents are the specified fraction of the HMM file specified in filename
 P7_SHARD *p7_shard_Create_hmmfile(char *filename, uint32_t num_shards, uint32_t my_shard, int masternode);
 
-// If the shard contains an object with the specified ID, places a pointer to the contents field of that object in ret_object and returns the ID
-// Otherwise, does the same with the object of the next higher ID
-int p7_shard_Find_Contents_Nexthigh(P7_SHARD *the_shard, uint64_t id, void **ret_object);
-
-// If the shard contains an object with the specified ID, places a pointer to the contents field of that object in ret_object and returns the ID
-// Otherwise, does the same with the object of the next lower ID
-int p7_shard_Find_Contents_Nextlow(P7_SHARD *the_shard, uint64_t id, void **ret_object);
-
-// If the shard contains an object with the specified ID, returns a pointer to the descriptor field of that object in ret_object
-// Otherwise, returns a pointer to the contents field of the object with the next higher ID that is in the shard
-int p7_shard_Find_Descriptor_Nexthigh(P7_SHARD *the_shard, uint64_t id, char **ret_object);
-
-// If the shard contains an object with the specified ID, returns that object. 
-// If not, returns the ID of the object with the next higher id that is in the shard
-uint64_t p7_shard_Find_Id_Nexthigh(P7_SHARD *the_shard, uint64_t id);
-
-// If the shard contains an object with the specified ID, returns that object. 
-// If not, returns the ID of the object with the next lower id that is in the shard
-uint64_t p7_shard_Find_Id_Nextlow(P7_SHARD *the_shard, uint64_t id);
-
-// If the shard contains an object with the specified ID, returns the index of that object in the shard's directory.
-// If not, returns the index of the object with the next higher ID.
-uint64_t p7_shard_Find_Index_Nexthigh(P7_SHARD *the_shard, uint64_t id);
 
 // Frees the shard and its enclosed data structures
 void p7_shard_Destroy(P7_SHARD *the_shard);
