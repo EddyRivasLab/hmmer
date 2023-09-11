@@ -224,7 +224,7 @@
 1 exercise  j/--textw           @src/jackhmmer@  --textw 256               --EmL 10 --EvL 10 --EfL 10 !tutorial/HBB_HUMAN! %RNDDB%
 1 exercise  j/--popen           @src/jackhmmer@  --popen 0.4               --EmL 10 --EvL 10 --EfL 10 !tutorial/HBB_HUMAN! %RNDDB%
 1 exercise  j/--pextend         @src/jackhmmer@  --pextend 0.6             --EmL 10 --EvL 10 --EfL 10 !tutorial/HBB_HUMAN! %RNDDB%
-1 exercise  j/--mxfile          @src/jackhmmer@  --mxfile !easel/formats/BLOSUM62! --EmL 10 --EvL 10 --EfL 10 !tutorial/HBB_HUMAN! %RNDDB%
+1 exercise  j/--mxfile          @src/jackhmmer@  --mxfile !testsuite/BLOSUM62! --EmL 10 --EvL 10 --EfL 10 !tutorial/HBB_HUMAN! %RNDDB%
 1 exercise  j/-E                @src/jackhmmer@  -E 0.01                   --EmL 10 --EvL 10 --EfL 10 !tutorial/HBB_HUMAN! %RNDDB%
 1 exercise  j/-T                @src/jackhmmer@  -T 20                     --EmL 10 --EvL 10 --EfL 10 !tutorial/HBB_HUMAN! %RNDDB%
 1 exercise  j/--domE            @src/jackhmmer@  --domE 0.01               --EmL 10 --EvL 10 --EfL 10 !tutorial/HBB_HUMAN! %RNDDB%
@@ -271,7 +271,7 @@
 1 exercise  phmmer/--textw       @src/phmmer@  --textw 256                --EmL 10 --EvL 10 --EfL 10 !tutorial/HBB_HUMAN! %RNDDB%
 1 exercise  phmmer/--popen       @src/phmmer@  --popen 0.4                --EmL 10 --EvL 10 --EfL 10 !tutorial/HBB_HUMAN! %RNDDB%
 1 exercise  phmmer/--pextend     @src/phmmer@  --pextend 0.6              --EmL 10 --EvL 10 --EfL 10 !tutorial/HBB_HUMAN! %RNDDB%
-1 exercise  phmmer/--mxfile      @src/phmmer@  --mxfile !easel/formats/BLOSUM62! --EmL 10 --EvL 10 --EfL 10 !tutorial/HBB_HUMAN! %RNDDB%
+1 exercise  phmmer/--mxfile      @src/phmmer@  --mxfile !testsuite/BLOSUM62! --EmL 10 --EvL 10 --EfL 10 !tutorial/HBB_HUMAN! %RNDDB%
 1 exercise  phmmer/-E            @src/phmmer@  -E 0.01                    --EmL 10 --EvL 10 --EfL 10 !tutorial/HBB_HUMAN! %RNDDB%
 1 exercise  phmmer/-T            @src/phmmer@  -T 20                      --EmL 10 --EvL 10 --EfL 10 !tutorial/HBB_HUMAN! %RNDDB%
 1 exercise  phmmer/--domE        @src/phmmer@  --domE 0.01                --EmL 10 --EvL 10 --EfL 10 !tutorial/HBB_HUMAN! %RNDDB%
