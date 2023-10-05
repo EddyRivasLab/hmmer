@@ -1141,7 +1141,7 @@ int process_search(P7_SERVER_MASTERNODE_STATE *masternode, P7_SERVER_QUEUE_DATA 
   masternode->hit_messages_received = 0;
   gettimeofday(&start, NULL);
   
-  uint64_t search_start, search_end, search_length;
+  uint64_t search_length;
   if (esl_opt_IsUsed(query->opts, "--db_ranges")){
     for(int which_shard = 0; which_shard< masternode->num_shards; which_shard++){ // create work queue for each shard
       char *orig_range_string = esl_opt_GetString(query->opts, "--db_ranges");
@@ -1152,14 +1152,36 @@ int process_search(P7_SERVER_MASTERNODE_STATE *masternode, P7_SERVER_QUEUE_DATA 
       P7_MASTER_WORK_DESCRIPTOR *prev = NULL;
       P7_MASTER_WORK_DESCRIPTOR *current = masternode->work_queues[which_shard];
       while ( (status = esl_strtok(&range_string, ",", &range) ) == eslOK){
-        int64_t start, end;
-        status = esl_regexp_ParseCoordString(range, &start, &end);
+        int64_t db_start, db_end, shard_start, shard_end;
+        status = esl_regexp_ParseCoordString(range, &db_start, &db_end);
         // These errors should never occur, because we sanity check-the range when receiving the search command
         if (status == eslESYNTAX) p7_Fail("--db_ranges takes coords <from>..<to>; %s not recognized", range);
         if (status == eslFAIL)    p7_Fail("Failed to find <from> or <to> coord in %s", range);
+        if(db_end < db_start){
+          p7_Fail("Error: search range from %ld to %ld has negative length\n", db_start, db_end);
+        }
+
+        /* The rangelist specifies the start and end of each range as positions within the overall database.  
+           Need to convert those into iindices within each shard's fraction of th edatabase */
+        
+        if (which_shard < db_start % masternode->num_shards){
+          shard_start = (db_start / masternode->num_shards) +1;
+         }
+        else{
+          shard_start = db_start / masternode->num_shards;
+        }
+
+        if (which_shard <= db_end % masternode->num_shards){
+          shard_end = db_end / masternode->num_shards;
+        }
+        else{
+          shard_end = (db_end /masternode->num_shards) - 1;
+        }
 
         if(current == NULL){
           ESL_ALLOC(current, sizeof(P7_MASTER_WORK_DESCRIPTOR));
+          current->start = -1;
+          current->end = -1;
           current->next = NULL;
           if(prev != NULL){
             prev->next = current;
@@ -1168,25 +1190,39 @@ int process_search(P7_SERVER_MASTERNODE_STATE *masternode, P7_SERVER_QUEUE_DATA 
             p7_Fail("Both current and prev were NULL when parsing db_ranges.  This should never happen\n");
           }
         }
-        current->start = start;
-        current->end = end;
+
+        current->start = shard_start;
+        current->end = shard_end;
         prev=current;
         current = current->next;
+        printf("Shard %d gets range from %ld to %ld\n", which_shard, shard_start, shard_end);
       }
       free(range_string_base);
     }
   }
   else{ // search the whole database
-    search_end = database_shard->num_objects -1; // ditto
     search_length = database_shard->num_objects;
     // set up the work queues
     for(int which_shard = 0; which_shard < masternode->num_shards; which_shard++){
-      masternode->work_queues[which_shard]->start = 0;
-      if(which_shard < (database_shard->num_objects % masternode->num_shards)){
-        masternode->work_queues[which_shard]->end = search_end/masternode->num_shards;
+      if(search_length >= masternode->num_shards){ // Common case
+        masternode->work_queues[which_shard]->start = 0;
+        if(which_shard < (database_shard->num_objects % masternode->num_shards)){
+          masternode->work_queues[which_shard]->end = search_length/masternode->num_shards;
+        }
+        else{
+          masternode->work_queues[which_shard]->end = (search_length/masternode->num_shards)-1;
+        }
       }
-      else{
-        masternode->work_queues[which_shard]->end = (search_end/masternode->num_shards)-1;
+      else{ // search length smaller than number of shards, need to special-case
+        if(which_shard < search_length){ // search a sequence in this shard
+          masternode->work_queues[which_shard]->start = 0;
+          masternode->work_queues[which_shard]->end = 0;
+        }
+        else{ // no sequences to search in this shard
+          masternode->work_queues[which_shard]->start = -1;
+          masternode->work_queues[which_shard]->end = 0;
+        }
+
       }
       printf("Masternode created queue for shard %d with search range %lu to %lu, search length was %lu\n", which_shard, masternode->work_queues[which_shard]->start, masternode->work_queues[which_shard]->end, search_length);
     }

@@ -213,11 +213,13 @@ P7_SHARD *p7_shard_Create_sqdata(char *filename, uint32_t num_shards, uint32_t m
   sequences->first_seqidx = 0;
   
   if(!masternode){
-    ESL_ALLOC(the_shard->contents, my_sequences* sizeof(ESL_SQ *));
-    for(uint64_t i = 0; i < my_sequences; i++){
-      the_shard->contents[i] = &(sequences->list[i]);
+    if(my_sequences >0){ // Check for probably-never-happens case where database has fewer sequences than there are shards
+      ESL_ALLOC(the_shard->contents, my_sequences* sizeof(ESL_SQ *));
+      for(uint64_t i = 0; i < my_sequences; i++){
+        the_shard->contents[i] = &(sequences->list[i]);
+      }
+      the_shard->descriptors = sequences; // Hack to save the full ESL_SQ_BLOCK object
     }
-    the_shard->descriptors = sequences; // Hack to save the full ESL_SQ_BLOCK object
   }
   else{
     the_shard->contents = NULL; // Don't use either of these on master node
@@ -229,12 +231,14 @@ P7_SHARD *p7_shard_Create_sqdata(char *filename, uint32_t num_shards, uint32_t m
 
   the_shard->num_objects = my_sequences;
   // now, build the directory
-  ESL_ALLOC(the_shard->directory, (my_sequences * sizeof(P7_SHARD_DIRECTORY_ENTRY)));
+  if(my_sequences >0){ // Check for probably-never-happens case where database has fewer sequences than there are shards
+    ESL_ALLOC(the_shard->directory, (my_sequences * sizeof(P7_SHARD_DIRECTORY_ENTRY)));
 
-  for (uint64_t i=0; i < the_shard->num_objects; i++){
-    the_shard->directory[i].index = (i * num_shards) + my_shard;
-    the_shard->directory[i].contents_offset = i * sizeof(ESL_SQ *);
-    the_shard->directory[i].descriptor_offset = 0; // descriptors are folded into sequences
+    for (uint64_t i=0; i < the_shard->num_objects; i++){
+      the_shard->directory[i].index = (i * num_shards) + my_shard;
+      the_shard->directory[i].contents_offset = i * sizeof(ESL_SQ *);
+      the_shard->directory[i].descriptor_offset = 0; // descriptors are folded into sequences
+    }
   }
   return(the_shard);
 

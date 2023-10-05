@@ -1150,7 +1150,9 @@ static int worker_thread_front_end_search_loop(P7_SERVER_WORKERNODE_STATE *worke
     // there was no work on the global queue, so try to steal
       if(!worker_thread_steal(workernode, my_id)){
         // no more work, stop looping
+        pthread_mutex_lock(&(workernode->backend_queue_lock));
         if(workernode->backend_queue_depth == 0){
+            pthread_mutex_unlock(&(workernode->backend_queue_lock));
         // There are also no backend queue entries to process
           if(workernode->thread_state[my_id].pipeline != NULL){
             //Merge stats into running list and clean up the current pipeline
@@ -1159,10 +1161,11 @@ static int worker_thread_front_end_search_loop(P7_SERVER_WORKERNODE_STATE *worke
             p7_pipeline_Destroy(workernode->thread_state[my_id].pipeline); // scrub the engine for next time
             pthread_mutex_unlock(&(workernode->thread_state[my_id].pipeline_lock));  
             workernode->thread_state[my_id].pipeline = NULL;
-          }        
+          }      
         return 1;
         }
         else{
+          pthread_mutex_unlock(&(workernode->backend_queue_lock));
           // there are backend queue entries to process, switch to backend mode to handle them
           pthread_mutex_lock(&(workernode->backend_threads_lock));
           pthread_mutex_lock(&(workernode->thread_state[my_id].mode_lock));
@@ -1194,13 +1197,17 @@ static int worker_thread_front_end_search_loop(P7_SERVER_WORKERNODE_STATE *worke
     }
           
     if((start != -1) && (start <= end)){
-      uint64_t chunk_end = end; // process sequences until we see a long operation or hit the end of the chunk
-      // get pointer to first sequence to search
       ESL_SQ *search_sequence=NULL;
       P7_OPROFILE *search_om = NULL;
 
       //printf("Worker %d from rank %d got chunk ranging from %lu to %lu\n", my_id, workernode->my_rank, start, end);
-      while(start <= chunk_end){
+      
+      pthread_mutex_lock(&(workernode->work[my_id].lock));
+      while(workernode->work[my_id].start<= workernode->work[my_id].end){
+
+        start = workernode->work[my_id].start;
+        workernode->work[my_id].start = start+1;
+        pthread_mutex_unlock(&(workernode->work[my_id].lock));
 
         if((search_type == SEQUENCE_SEARCH) || (search_type == SEQUENCE_SEARCH_CONTINUE)){
           search_sequence = (ESL_SQ *) workernode->database_shards[compare_database]->contents[start];
@@ -1287,26 +1294,20 @@ static int worker_thread_front_end_search_loop(P7_SERVER_WORKERNODE_STATE *worke
               pthread_mutex_unlock(&(workernode->backend_threads_lock));
             }
           }
-          else{
-            start = chunk_end +1;  // someone has stolen all our work, so advance past the end of the 
-                                    //chunk to force a steal
-          }
         }
-        start +=1;  // Increment this here to avoid pushing the comparison we just did back on the global queue if we switch modes
-        // Done with the current sequence, check if we've been switched to backend mode before proceeding to the next one
+        pthread_mutex_lock(&(workernode->work[my_id].lock)); //Lock this here to preserve invariant that threads can't 
+        //acquire work[id].lock while holding thread_state[id].mode.mode_lock
         pthread_mutex_lock(&(workernode->thread_state[my_id].mode_lock));
         if(workernode->thread_state[my_id].mode == BACKEND){
-          pthread_mutex_unlock(&(workernode->thread_state[my_id].mode_lock));
         // need to switch modes.
           printf("Worker %d from node %d switching to back-end\n", my_id, workernode->my_rank);
           // Put our current work chunk back on the work queue
 
           // Synchronize so that we have the most up-to-date info on how much work is left on our local queue
-          pthread_mutex_lock(&(workernode->work[my_id].lock));
+
           end = workernode->work[my_id].end;
           workernode->work[my_id].start = -1;  // update this so other threads don't try to steal the work we're putting on the 
           // global queue
-          pthread_mutex_unlock(&(workernode->work[my_id].lock)); // release lock
 
           if(start <= end){
             // there was still work left on our queue, so push it back on the global queue
@@ -1351,6 +1352,7 @@ static int worker_thread_front_end_search_loop(P7_SERVER_WORKERNODE_STATE *worke
           return(0);
         }
         pthread_mutex_unlock(&(workernode->thread_state[my_id].mode_lock));
+        pthread_mutex_unlock(&(workernode->work[my_id].lock));
       /* believe these are now redundant
         // if we get this far, we weren't switched to the backend, so go on to the next sequence or back to look for more work
         search_sequence = (ESL_SQ *) workernode->database_shards[compare_database]->contents[start];
@@ -1359,11 +1361,12 @@ static int worker_thread_front_end_search_loop(P7_SERVER_WORKERNODE_STATE *worke
       */
         p7_pipeline_Reuse(workernode->thread_state[my_id].pipeline);
         pthread_mutex_lock(&(workernode->work[my_id].lock));
-        chunk_end = workernode->work[my_id].end; // update this to reduce redundant work.
+        /*chunk_end = workernode->work[my_id].end; // update this to reduce redundant work.
         workernode->work[my_id].start = start; // ditto
-        pthread_mutex_unlock(&(workernode->work[my_id].lock));
+        pthread_mutex_unlock(&(workernode->work[my_id].lock)); */
       }
     }
+    pthread_mutex_unlock(&(workernode->work[my_id].lock));
   }
 }
 
@@ -1415,6 +1418,7 @@ static void worker_thread_back_end_sequence_search_loop(P7_SERVER_WORKERNODE_STA
 
   //If we get here, the queue of backend entries is empty, so switch back to processing frontend entries
   pthread_mutex_lock(&(workernode->backend_threads_lock));
+  pthread_mutex_lock(&(workernode->backend_queue_lock));
   if(workernode->backend_queue == NULL){  // Check this while we have the lock to prevent a race condition between 
     // enqueuing an entry in an empty backend queue and the last backend thread deciding there's no front-end work to do.
     // If we don't switch to front-end mode, we'll just call this function again immediately
@@ -1424,7 +1428,7 @@ static void worker_thread_back_end_sequence_search_loop(P7_SERVER_WORKERNODE_STA
     pthread_mutex_unlock(&(workernode->thread_state[my_id].mode_lock));
     workernode->num_backend_threads -= 1;
     }
-
+  pthread_mutex_unlock(&(workernode->backend_queue_lock));
   pthread_mutex_unlock(&(workernode->backend_threads_lock));
   return;
 }
@@ -1707,7 +1711,7 @@ static uint64_t worker_thread_get_chunk(P7_SERVER_WORKERNODE_STATE *workernode, 
   *start = my_start;
   *end = my_end;
   pthread_mutex_unlock(&(workernode->global_queue_lock));
-
+  printf("Worker %d just got work chunk from %lu to %lu off of master queue\n", my_id, *start, *end);
   return(1); // signal that we found work
 }
 
@@ -1725,10 +1729,12 @@ static uint64_t worker_thread_get_chunk(P7_SERVER_WORKERNODE_STATE *workernode, 
 int32_t worker_thread_steal(P7_SERVER_WORKERNODE_STATE *workernode, uint32_t my_id){
   int victim_id = -1; // which thread are we going to steal from
   int i;
-
+  pthread_mutex_lock(&(workernode->work[my_id].lock));
   if(workernode->work[my_id].start <= workernode->work[my_id].end){
     p7_Die("Thread %d tried to steal when it still had work on its queue\n", my_id);
   }
+  pthread_mutex_unlock(&(workernode->work[my_id].lock));
+
   pthread_mutex_lock(&(workernode->steal_lock));
   if(workernode->no_steal){
     pthread_mutex_unlock(&(workernode->steal_lock));
@@ -1810,7 +1816,7 @@ int32_t worker_thread_steal(P7_SERVER_WORKERNODE_STATE *workernode, uint32_t my_
   if(pthread_mutex_unlock(&(workernode->work[my_id].lock))){
     p7_Die("Couldn't unlock work mutex in worker_thread_steal");
   }
-
+  printf("Worker %d just stole work from %lu to %lu from worker %d\n", my_id, my_new_start, my_new_end, victim_id);
   return 1;
 }
 
@@ -1867,6 +1873,12 @@ static void workernode_wait_for_Work(P7_SERVER_CHUNK_REPLY *the_reply, MPI_Datat
 #endif
 }
 
+typedef enum{
+  run,
+  done,
+  null_search
+} SEARCH_PROGRESS_ENUM;
+
 // workernode_perform_search_or_scan
 // NOTE !! Only call this procedure from the main (control) thread.  It sends and receives MPI messages, and we've told
 // MPI that only one thread per node will do that
@@ -1878,7 +1890,7 @@ static int workernode_perform_search_or_scan(P7_SERVER_WORKERNODE_STATE *workern
   int temp_pos =0;
   int works_requested=0; 
   int works_received=0;
-  int stop=0;
+  SEARCH_PROGRESS_ENUM stop=run; 
   // get and unpack the query object
   char *send_buf; // MPI buffer used to send hits to master
   int send_buf_length = 100 * 1024; // size of the send buffer. Default to 100kB, send code will resize as necessary
@@ -1919,19 +1931,29 @@ static int workernode_perform_search_or_scan(P7_SERVER_WORKERNODE_STATE *workern
   workernode_wait_for_Work(&work_reply, server_mpitypes);
   printf("Workernode %d received initial chunk from %lu to %lu\n", workernode->my_rank, work_reply.start, work_reply.end);
 
-  // Ok, we've unpacked the hmm and built all of the profiles we need.  
-  if(the_command->type == P7_SERVER_HMM_VS_SEQUENCES){
-    p7_server_workernode_start_hmm_vs_amino_db(workernode, the_command->db, work_reply.start, work_reply.end, gm);
-  }
-  else{
-    p7_server_workernode_start_amino_vs_hmm_db(workernode, the_command->db, work_reply.start, work_reply.end, seq);
-  }
+  if(work_reply.start != -1){ // Common case, there's at least one sequence/HMM to search on this node
+    // Ok, we've unpacked the hmm and built all of the profiles we need.  
+    if(the_command->type == P7_SERVER_HMM_VS_SEQUENCES){
+      p7_server_workernode_start_hmm_vs_amino_db(workernode, the_command->db, work_reply.start, work_reply.end, gm);
+    }
+    else{
+      p7_server_workernode_start_amino_vs_hmm_db(workernode, the_command->db, work_reply.start, work_reply.end, seq);
+    }
 
-  pthread_mutex_lock(&(workernode->wait_lock));
-  p7_server_workernode_release_threads(workernode);
-  pthread_mutex_unlock(&(workernode->wait_lock));
+    pthread_mutex_lock(&(workernode->wait_lock));
+    p7_server_workernode_release_threads(workernode);
+    pthread_mutex_unlock(&(workernode->wait_lock));
+  }
+  else{ // Starting search where this node doesn't have any work to do, so just skip directly to end of search 
+  // by setting stop = null_search.  This will cause the end-of-search code to not try to send hits back to the master node
+  // This can happen for two reasons.  First, someone might have loaded a database into the server that had fewer
+  // items than the server had shards.  Second, someone might have submitted a search using the --range_list option
+  // that only searched a few items, none of which were in this shard.
 
-  while(stop == 0){ //there's still work to do on this search
+  stop = null_search;
+
+  }
+  while(stop == run){ //there's still work to do on this search
     pthread_mutex_lock(&(workernode->wait_lock));  // Yes, we just unlocked this on first entry to loop, but need to lock it on subsequent iterations
     while(workernode->num_waiting != workernode->num_threads){ 
     // at least one worker thread is still working, so go through the tasks
@@ -2060,14 +2082,14 @@ static int workernode_perform_search_or_scan(P7_SERVER_WORKERNODE_STATE *workern
       }
       else{
         // Master has no work left, we're done
-        stop = 1;
+        stop = done;
         printf("Workernode %d received message that masternode was out of work\n", workernode->my_rank); 
 
       }
     }
     else{ // we're out of work and the master queue is empty, so we're done
       pthread_mutex_unlock(&(workernode->work_request_lock));
-      stop = 1;
+      stop = done;
     }
   }
   // Sanity checks: Did we get as many work chunks back as we requested, and did we somehow get out of the main work loop with 
@@ -2081,44 +2103,50 @@ static int workernode_perform_search_or_scan(P7_SERVER_WORKERNODE_STATE *workern
   }
   pthread_mutex_unlock(&(workernode->work_request_lock));
 
-  // At this point, we've completed the search, so send any hits that are still on this node to the master
-  int thread;
-  P7_TOPHITS *hits;
-  P7_PIPELINE *pli;
+   P7_PIPELINE *pli;
   if(the_command->type == P7_SERVER_HMM_VS_SEQUENCES){
     pli = p7_pipeline_Create(workernode->commandline_options, 100, 100, FALSE, p7_SEARCH_SEQS);
   }
   else{
     pli = p7_pipeline_Create(workernode->commandline_options, 100, 100, FALSE, p7_SCAN_MODELS);
   }
-  for(thread = 0; thread < workernode->num_threads; thread++){
-    pthread_mutex_lock(&(workernode->thread_state[thread].pipeline_lock));
-    p7_pipeline_Merge(pli, workernode->thread_state[thread].stats_pipeline);
-    p7_pipeline_Destroy(workernode->thread_state[thread].stats_pipeline);
-    pthread_mutex_unlock(&(workernode->thread_state[thread].pipeline_lock));
-    workernode->thread_state[thread].stats_pipeline=NULL;
-    if(workernode->thread_state[thread].tophits->N > 0){
-      // This thread has hits that we need to put in the tree
-      pthread_mutex_lock(&(workernode->thread_state[thread].hits_lock));
-      // grab the hits out of the workernode
-      hits = workernode->thread_state[thread].tophits;
-      workernode->thread_state[thread].tophits = p7_tophits_Create();
-      pthread_mutex_unlock(&(workernode->thread_state[thread].hits_lock));
-      p7_tophits_Merge(workernode->tophits, hits);
-      p7_tophits_Destroy(hits); // tophits_Merge mangles the second tophits
+  if(stop == done){ // Normal search end, gather any hits we need to send back.  Other possibility is a 
+  //search where this node had no work, so we won't have any hits
+
+    int thread;
+    P7_TOPHITS *hits;
+  
+    for(thread = 0; thread < workernode->num_threads; thread++){
+      pthread_mutex_lock(&(workernode->thread_state[thread].pipeline_lock));
+      p7_pipeline_Merge(pli, workernode->thread_state[thread].stats_pipeline);
+      p7_pipeline_Destroy(workernode->thread_state[thread].stats_pipeline);
+      pthread_mutex_unlock(&(workernode->thread_state[thread].pipeline_lock));
+      workernode->thread_state[thread].stats_pipeline=NULL;
+      if(workernode->thread_state[thread].tophits->N > 0){
+        // This thread has hits that we need to put in the tree
+        pthread_mutex_lock(&(workernode->thread_state[thread].hits_lock));
+        // grab the hits out of the workernode
+        hits = workernode->thread_state[thread].tophits;
+        workernode->thread_state[thread].tophits = p7_tophits_Create();
+        pthread_mutex_unlock(&(workernode->thread_state[thread].hits_lock));
+        p7_tophits_Merge(workernode->tophits, hits);
+        p7_tophits_Destroy(hits); // tophits_Merge mangles the second tophits
+      }
     }
   }
+  if(p7_pipeline_MPISend(pli, 0, HMMER_PIPELINE_STATE_MPI_TAG, MPI_COMM_WORLD, &send_buf, &send_buf_length) != eslOK){
+    p7_Die("Failed to send pipeline state to master");
+  }
+  
+  p7_pipeline_Destroy(pli);
   if(p7_tophits_MPISend(workernode->tophits, 0, HMMER_HIT_FINAL_MPI_TAG, MPI_COMM_WORLD, &send_buf, &send_buf_length) 
     != eslOK){
     p7_Die("Failed to send hit messages to master\n");
   }
 
-  if(p7_pipeline_MPISend(pli, 0, HMMER_PIPELINE_STATE_MPI_TAG, MPI_COMM_WORLD, &send_buf, &send_buf_length) != eslOK){
-    p7_Die("Failed to send pipeline state to master");
-  }
-  p7_pipeline_Destroy(pli);
-  //printf("Sending HMMER_HIT_FINAL_MPI_TAG message\n");
 
+    //printf("Sending HMMER_HIT_FINAL_MPI_TAG message\n");
+  
   p7_tophits_Destroy(workernode->tophits);
   workernode->tophits = p7_tophits_Create();
   p7_server_workernode_end_search(workernode);
