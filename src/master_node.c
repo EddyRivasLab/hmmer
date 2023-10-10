@@ -1163,39 +1163,100 @@ int process_search(P7_SERVER_MASTERNODE_STATE *masternode, P7_SERVER_QUEUE_DATA 
 
         /* The rangelist specifies the start and end of each range as positions within the overall database.  
            Need to convert those into iindices within each shard's fraction of th edatabase */
-        
-        if (which_shard < db_start % masternode->num_shards){
-          shard_start = (db_start / masternode->num_shards) +1;
-         }
-        else{
-          shard_start = db_start / masternode->num_shards;
-        }
-
-        if (which_shard <= db_end % masternode->num_shards){
-          shard_end = db_end / masternode->num_shards;
-        }
-        else{
-          shard_end = (db_end /masternode->num_shards) - 1;
-        }
-
-        if(current == NULL){
-          ESL_ALLOC(current, sizeof(P7_MASTER_WORK_DESCRIPTOR));
-          current->start = -1;
-          current->end = -1;
-          current->next = NULL;
-          if(prev != NULL){
-            prev->next = current;
+        if((db_end - db_start) +1 >= masternode->num_shards){ // Common case, every shard has at least one item to search
+          if (which_shard < db_start % masternode->num_shards){
+            shard_start = (db_start / masternode->num_shards) +1;
           }
           else{
-            p7_Fail("Both current and prev were NULL when parsing db_ranges.  This should never happen\n");
+            shard_start = db_start / masternode->num_shards;
+          }
+
+          if (which_shard <= db_end % masternode->num_shards){
+            shard_end = db_end / masternode->num_shards;
+          }
+          else{
+            shard_end = (db_end /masternode->num_shards) - 1;
+          }
+
+          // Make sure we have a work descriptor to write into.  We do this in multiple places in this code
+          // so that we only add a work descriptor to the queue if we have work to put in it.  
+          // Otherwise, we could wind up with multiple empty work descriptors on a queue, which would break things
+          if(current == NULL){
+            ESL_ALLOC(current, sizeof(P7_MASTER_WORK_DESCRIPTOR));
+            current->start = -1;
+            current->end = -1;
+            current->next = NULL;
+            if(prev != NULL){
+              prev->next = current;
+            }
+            else{
+              p7_Fail("Both current and prev were NULL when parsing db_ranges.  This should never happen\n");
+            }
+          }
+          current->start = shard_start;
+          current->end = shard_end;
+          prev=current;
+          current = current->next;
+          printf("Shard %d gets range from %ld to %ld\n", which_shard, shard_start, shard_end);
+        }
+        else{ // rare case, some shards don't have any work to do
+          uint64_t first_shard_in_range = db_start % masternode->num_shards;
+          uint64_t last_shard_in_range = db_end % masternode->num_shards;
+      
+          if (last_shard_in_range >= first_shard_in_range){ // Searches don't wrap around end of shards           
+            if((which_shard >= first_shard_in_range) && (which_shard <= last_shard_in_range)){
+              // This shard does have an item to search
+
+              // Make sure we have a search range object to write into.
+              if(current == NULL){
+                ESL_ALLOC(current, sizeof(P7_MASTER_WORK_DESCRIPTOR));
+                current->start = -1;
+                current->end = -1;
+                current->next = NULL;
+                if(prev != NULL){
+                  prev->next = current;
+                }
+                else{
+                  p7_Die("Both current and prev were NULL when parsing db_ranges.  This should never happen\n");
+                }
+              }
+              current->start = db_start /masternode->num_shards;
+              current->end = db_end / masternode->num_shards;
+              prev = current;
+              current = current->next;
+            }
+          }
+          else{ // Range does wrap around the highest-numbered shard
+            if((which_shard >= first_shard_in_range) || (which_shard <= last_shard_in_range)){
+              // This shard does get an item to search.  Remember that last_shard_in_range < first_shard_in_range
+              // if we get here, so >= first_shard_in_range and <= last shard_in_range are disjoint sets
+              
+              // Make sure we have a search range object to write into.
+              if(current == NULL){
+                ESL_ALLOC(current, sizeof(P7_MASTER_WORK_DESCRIPTOR));
+                current->start = -1;
+                current->end = -1;
+                current->next = NULL;
+                if(prev != NULL){
+                  prev->next = current;
+                }
+                else{
+                  p7_Die("Both current and prev were NULL when parsing db_ranges.  This should never happen\n");
+                }
+              }
+              if(which_shard >= first_shard_in_range){
+                current->start = db_start / masternode->num_shards;
+                current->end = db_start / masternode->num_shards;
+              }
+              else{
+                current->start = db_end/masternode->num_shards;
+                current->end = db_end/masternode->num_shards;
+              }
+              prev = current;
+              current = current->next;
+            }
           }
         }
-
-        current->start = shard_start;
-        current->end = shard_end;
-        prev=current;
-        current = current->next;
-        printf("Shard %d gets range from %ld to %ld\n", which_shard, shard_start, shard_end);
       }
       free(range_string_base);
     }
