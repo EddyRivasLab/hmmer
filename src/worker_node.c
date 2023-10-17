@@ -19,6 +19,10 @@
 #include <unistd.h>
 #include <time.h>
 
+
+// Debugging printf flags
+#define DEBUG_MASTER_QUEUE 1
+
 // Forward declarations for static functions
 static int worker_thread_front_end_search_loop(P7_SERVER_WORKERNODE_STATE *workernode, uint32_t my_id);
 static void worker_thread_back_end_sequence_search_loop(P7_SERVER_WORKERNODE_STATE *workernode, uint32_t my_id);
@@ -56,8 +60,16 @@ static int workernode_perform_search_or_scan(P7_SERVER_WORKERNODE_STATE *workern
  */
 //#define TEST_SEQUENCES
 
+/* 0.5 Test/debugging functions*/
 
-
+/* prints the state of the work queue whose head pointer is *head */
+static void print_work_queue(P7_WORK_CHUNK *head){
+  while(head !=NULL){
+    printf("%lu..%lu, ", head->start, head->end);
+    head= head->next;
+  }
+  printf("\n");
+}
 /*****************************************************************
  * 1. Functions that implement a worker node
  *****************************************************************/
@@ -609,6 +621,11 @@ int p7_server_workernode_add_work(P7_SERVER_WORKERNODE_STATE *workernode, uint64
     workernode->global_queue->start = start_object;
     workernode->global_queue->end = end_object;
   }
+  #ifdef DEBUG_MASTER_QUEUE
+    printf("Workernode %d added chunk to work queue leaving state: ", workernode->my_rank);
+    print_work_queue(workernode->global_queue);
+  #endif
+
   pthread_mutex_unlock(&(workernode->global_queue_lock)); // release lock
   pthread_mutex_lock(&(workernode->steal_lock));
   workernode->no_steal = 0;  // reset this to allow stealing work for the new search
@@ -1237,13 +1254,12 @@ static int worker_thread_front_end_search_loop(P7_SERVER_WORKERNODE_STATE *worke
           pthread_mutex_lock(&(workernode->work[my_id].lock));
           
           // grab the start and end pointers from our work queue
-          workernode->work[my_id].start = start+1;  // update this to reduce amount of redundant work done during steals, remember that we're working in shard index space
           end = workernode->work[my_id].end;
           
-          pthread_mutex_unlock(&(workernode->work[my_id].lock)); // release lock
+          
 
           if(start <= end){ // sequence hadn't been stolen
-
+            pthread_mutex_unlock(&(workernode->work[my_id].lock)); // release lock
 
             // get an entry to put this comparison in
             P7_BACKEND_QUEUE_ENTRY * the_entry = workernode_get_backend_queue_entry_from_pool(workernode);
@@ -1294,18 +1310,22 @@ static int worker_thread_front_end_search_loop(P7_SERVER_WORKERNODE_STATE *worke
               pthread_mutex_unlock(&(workernode->backend_threads_lock));
             }
           }
+          else{
+            pthread_mutex_unlock(&(workernode->work[my_id].lock)); // release lock in two places to guarantee work not stolen before we make decision
+          }
         }
         pthread_mutex_lock(&(workernode->work[my_id].lock)); //Lock this here to preserve invariant that threads can't 
-        //acquire work[id].lock while holding thread_state[id].mode.mode_lock
+        //acquire work[id].lock while holding thread_state[id].mode_lock
         pthread_mutex_lock(&(workernode->thread_state[my_id].mode_lock));
         if(workernode->thread_state[my_id].mode == BACKEND){
         // need to switch modes.
-          printf("Worker %d from node %d switching to back-end\n", my_id, workernode->my_rank);
+          //printf("Worker %d from node %d switching to back-end\n", my_id, workernode->my_rank);
           // Put our current work chunk back on the work queue
 
           // Synchronize so that we have the most up-to-date info on how much work is left on our local queue
 
           end = workernode->work[my_id].end;
+          start = workernode->work[my_id].start;  // will be the first object after the one we're currently processing
           workernode->work[my_id].start = -1;  // update this so other threads don't try to steal the work we're putting on the 
           // global queue
 
@@ -1349,6 +1369,8 @@ static int worker_thread_front_end_search_loop(P7_SERVER_WORKERNODE_STATE *worke
           //and free the current pipeline
           p7_pipeline_Destroy(workernode->thread_state[my_id].pipeline);
           workernode->thread_state[my_id].pipeline = NULL;
+          pthread_mutex_unlock(&(workernode->thread_state[my_id].mode_lock));
+          pthread_mutex_unlock(&(workernode->work[my_id].lock));
           return(0);
         }
         pthread_mutex_unlock(&(workernode->thread_state[my_id].mode_lock));
@@ -1423,7 +1445,7 @@ static void worker_thread_back_end_sequence_search_loop(P7_SERVER_WORKERNODE_STA
     // enqueuing an entry in an empty backend queue and the last backend thread deciding there's no front-end work to do.
     // If we don't switch to front-end mode, we'll just call this function again immediately
     pthread_mutex_lock(&(workernode->thread_state[my_id].mode_lock));
-    printf("Worker %d from node %d switching to front-end\n", my_id, workernode->my_rank);
+    //printf("Worker %d from node %d switching to front-end\n", my_id, workernode->my_rank);
     workernode->thread_state[my_id].mode = FRONTEND; // change my mode to frontend
     pthread_mutex_unlock(&(workernode->thread_state[my_id].mode_lock));
     workernode->num_backend_threads -= 1;
@@ -1710,8 +1732,11 @@ static uint64_t worker_thread_get_chunk(P7_SERVER_WORKERNODE_STATE *workernode, 
   // Return the start and end of the grabbed work chunk through start, end
   *start = my_start;
   *end = my_end;
+  #ifdef DEBUG_MASTER_QUEUE
+  printf("Worker %d on node %d just got work chunk from %lu to %lu off of master queue, leaving state: ", my_id, workernode->my_rank, *start, *end);
+  print_work_queue(workernode->global_queue);
+  #endif
   pthread_mutex_unlock(&(workernode->global_queue_lock));
-  printf("Worker %d just got work chunk from %lu to %lu off of master queue\n", my_id, *start, *end);
   return(1); // signal that we found work
 }
 
@@ -1734,7 +1759,6 @@ int32_t worker_thread_steal(P7_SERVER_WORKERNODE_STATE *workernode, uint32_t my_
     p7_Die("Thread %d tried to steal when it still had work on its queue\n", my_id);
   }
   pthread_mutex_unlock(&(workernode->work[my_id].lock));
-
   pthread_mutex_lock(&(workernode->steal_lock));
   if(workernode->no_steal){
     pthread_mutex_unlock(&(workernode->steal_lock));
@@ -1762,12 +1786,13 @@ int32_t worker_thread_steal(P7_SERVER_WORKERNODE_STATE *workernode, uint32_t my_
   if(victim_id == -1){
     // we didn't find a good target to steal from
     pthread_mutex_lock(&(workernode->steal_lock));
-    workernode->no_steal = 1;  // don't need to lock this because it only makes a 0->1 transition during each search
+    workernode->no_steal = 1;
     pthread_mutex_unlock(&(workernode->steal_lock));
     return 0;
   }
 
   // If we get this far, we found someone to steal from.
+  pthread_mutex_lock(&(workernode->work[my_id].lock));
   pthread_mutex_lock(&(workernode->work[victim_id].lock));
 
   // steal the lower half of the work from the victim's work queue if possible
@@ -1780,43 +1805,39 @@ int32_t worker_thread_steal(P7_SERVER_WORKERNODE_STATE *workernode, uint32_t my_
   }
 
   uint64_t work_available = workernode->work[victim_id].end - workernode->work[victim_id].start;
-  uint64_t stolen_work, my_new_end, new_victim_end;
+  uint64_t stolen_work, my_new_start, my_new_end, new_victim_end;
   if(work_available > 1){
     // there's enough work on the victim's queue to take half
     stolen_work = work_available/2;
 
     new_victim_end = workernode->work[victim_id].end - stolen_work;
-
+    my_new_start = new_victim_end +1;
     my_new_end = workernode->work[victim_id].end;
 
   }
   else{ // take all of the work on the victim's queue
     my_new_end = workernode->work[victim_id].end;
-    new_victim_end = workernode->work[victim_id].start;
+    my_new_start = workernode->work[victim_id].start;
+    new_victim_end = workernode->work[victim_id].start-1;
     stolen_work = work_available;
   }
   // update the victim with its new end point
   workernode->work[victim_id].end = new_victim_end;
+
+  // Now, update my work queue with the stolen work
+  workernode->work[my_id].start = my_new_start;
+  workernode->work[my_id].end = my_new_end;
 
   // unlock the victim's work queue so it can proceed
   if(pthread_mutex_unlock(&(workernode->work[victim_id].lock))){
     p7_Die("Couldn't unlock work mutex in worker_thread_steal");
   }
 
-  // Now, update my work queue with the stolen work
-  pthread_mutex_lock(&(workernode->search_definition_lock));
-  uint64_t my_new_start = new_victim_end;
-  pthread_mutex_unlock(&(workernode->search_definition_lock));
-  pthread_mutex_lock(&(workernode->work[my_id].lock));
-
-  workernode->work[my_id].start = my_new_start;
-  workernode->work[my_id].end = my_new_end;
-
   // release the lock on my local queue
   if(pthread_mutex_unlock(&(workernode->work[my_id].lock))){
     p7_Die("Couldn't unlock work mutex in worker_thread_steal");
   }
-  printf("Worker %d just stole work from %lu to %lu from worker %d\n", my_id, my_new_start, my_new_end, victim_id);
+  printf("Worker %d on node %d just stole work from %lu to %lu from worker %d\n", my_id, workernode->my_rank, my_new_start, my_new_end, victim_id);
   return 1;
 }
 
@@ -1958,9 +1979,6 @@ static int workernode_perform_search_or_scan(P7_SERVER_WORKERNODE_STATE *workern
     while(workernode->num_waiting != workernode->num_threads){ 
     // at least one worker thread is still working, so go through the tasks
     // the main thread is responsible for
-      if(pthread_mutex_trylock(&(workernode->wait_lock)) == 0){
-        printf("Huh?\n");
-      }
       pthread_mutex_unlock(&(workernode->wait_lock));
       int thread;
             

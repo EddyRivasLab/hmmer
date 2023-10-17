@@ -1761,7 +1761,7 @@ void p7_masternode_message_handler(P7_SERVER_MASTERNODE_STATE *masternode, P7_SE
 
       break;
     case HMMER_HIT_FINAL_MPI_TAG:
-      printf("HMMER_HIT_FINAL_MPI_TAG message received\n");
+      printf("HMMER_HIT_FINAL_MPI_TAG message received from rank %d\n", (*buffer_handle)->status.MPI_SOURCE);
     case HMMER_HIT_MPI_TAG:
       printf("HMMER_HIT_MPI_TAG message received\n");
       // The message was a set of hits from a worker node, so copy it into the buffer and queue the buffer for processing by the hit thread
@@ -1781,9 +1781,9 @@ void p7_masternode_message_handler(P7_SERVER_MASTERNODE_STATE *masternode, P7_SE
         
         // Get the shard that the requestor wants work for
         if(MPI_Recv(&requester_shard, 1, MPI_UNSIGNED, (*buffer_handle)->status.MPI_SOURCE, (*buffer_handle)->status.MPI_TAG, MPI_COMM_WORLD, &((*buffer_handle)->status)) != MPI_SUCCESS){
-          p7_Fail("MPI_Recv failed in p7_masternode_message_handler\n");
+          p7_Die("MPI_Recv failed in p7_masternode_message_handler\n");
         }
-        printf("Masternode saw work request for shard %d\n", requester_shard);
+        //printf("Masternode saw work request for shard %d\n", requester_shard);
         if(requester_shard >= masternode->num_shards){
           // The requestor asked for a non-existent shard
           p7_Die("Out-of-range shard %d sent in work request", requester_shard);
