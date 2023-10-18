@@ -20,8 +20,12 @@
 #include <time.h>
 
 
-// Debugging printf flags
-#define DEBUG_MASTER_QUEUE 1
+// defines that control debugging printfs
+//#define DEBUG_MASTER_QUEUE 1
+//#define DEBUG_COMPARISONS 1
+//#define DEBUG_MASTER_CHUNKS 1
+#define DEBUG_STEAL 1
+//#define DEBUG_HITS 1
 
 // Forward declarations for static functions
 static int worker_thread_front_end_search_loop(P7_SERVER_WORKERNODE_STATE *workernode, uint32_t my_id);
@@ -63,13 +67,15 @@ static int workernode_perform_search_or_scan(P7_SERVER_WORKERNODE_STATE *workern
 /* 0.5 Test/debugging functions*/
 
 /* prints the state of the work queue whose head pointer is *head */
-static void print_work_queue(P7_WORK_CHUNK *head){
+#ifdef DEBUG_MASTER_QUEUE  // only define this function if it's used to prevent compiler warnings
+static void print_work_queue(P7_WORK_CHUNK *head){  
   while(head !=NULL){
     printf("%lu..%lu, ", head->start, head->end);
     head= head->next;
   }
   printf("\n");
 }
+#endif
 /*****************************************************************
  * 1. Functions that implement a worker node
  *****************************************************************/
@@ -1231,7 +1237,9 @@ static int worker_thread_front_end_search_loop(P7_SERVER_WORKERNODE_STATE *worke
           p7_bg_SetLength(workernode->thread_state[my_id].bg, search_sequence->L);           
           p7_oprofile_ReconfigLength(workernode->thread_state[my_id].om,search_sequence->L);
           p7_pli_NewSeq(workernode->thread_state[my_id].pipeline, search_sequence);
+#ifdef DEBUG_COMPARISONS
           printf("Worker %d from node %d front-end searched sequence %s with index %lu\n", my_id, workernode->my_rank, search_sequence->name, start);
+#endif
           status = p7_Pipeline_Overthruster(workernode->thread_state[my_id].pipeline, workernode->thread_state[my_id].om, workernode->thread_state[my_id].bg, search_sequence, &fwdsc, &nullsc);
         }
         else{
@@ -1275,7 +1283,9 @@ static int worker_thread_front_end_search_loop(P7_SERVER_WORKERNODE_STATE *worke
                 p7_Die("Unable to allocate memory in worker_thread_front_end_sequence_search_loop.\n");
               }
               p7_pli_NewModel(workernode->thread_state[my_id].pipeline, workernode->thread_state[my_id].om, workernode->thread_state[my_id].bg);
+#ifdef DEBUG_COMPARISONS             
               printf("Worker %d from node %d sending sequence %s to backend, index was %lu\n", my_id, workernode->my_rank, search_sequence->name, start);
+#endif              
               the_entry->sequence = search_sequence;
               the_entry->om = workernode->thread_state[my_id].om;
             }
@@ -1754,17 +1764,25 @@ static uint64_t worker_thread_get_chunk(P7_SERVER_WORKERNODE_STATE *workernode, 
 int32_t worker_thread_steal(P7_SERVER_WORKERNODE_STATE *workernode, uint32_t my_id){
   int victim_id = -1; // which thread are we going to steal from
   int i;
+  pthread_mutex_lock(&(workernode->steal_lock));  // Only let one thread try to steal at a time to prevent deadlocks in the
+   // workernode->work[x].lock s.
+  #ifdef DEBUG_STEAL
+    printf("Worker %d on node %d starting steal.\n", my_id, workernode->my_rank);
+  #endif
+
   pthread_mutex_lock(&(workernode->work[my_id].lock));
   if(workernode->work[my_id].start <= workernode->work[my_id].end){
     p7_Die("Thread %d tried to steal when it still had work on its queue\n", my_id);
   }
   pthread_mutex_unlock(&(workernode->work[my_id].lock));
-  pthread_mutex_lock(&(workernode->steal_lock));
   if(workernode->no_steal){
     pthread_mutex_unlock(&(workernode->steal_lock));
+    #ifdef DEBUG_STEAL
+      printf("Worker %d on node %d ending steal because workernode->no_steal was set.\n", my_id, workernode->my_rank);
+    #endif
     return 0;  // check this and abort at start to avoid extra searches, locking, unlocking when many threads finish at same time
   }
-  pthread_mutex_unlock(&(workernode->steal_lock));
+
   int64_t most_work = 0;
   int64_t stealable_work = 0;
 
@@ -1785,8 +1803,10 @@ int32_t worker_thread_steal(P7_SERVER_WORKERNODE_STATE *workernode, uint32_t my_
 
   if(victim_id == -1){
     // we didn't find a good target to steal from
-    pthread_mutex_lock(&(workernode->steal_lock));
     workernode->no_steal = 1;
+    #ifdef DEBUG_STEAL
+      printf("Worker %d on node %d ending steal and setting workernode->no_steal because it couldn't find work to steal.\n", my_id, workernode->my_rank);
+    #endif
     pthread_mutex_unlock(&(workernode->steal_lock));
     return 0;
   }
@@ -1801,6 +1821,12 @@ int32_t worker_thread_steal(P7_SERVER_WORKERNODE_STATE *workernode, uint32_t my_
     if(pthread_mutex_unlock(&(workernode->work[victim_id].lock))){
       p7_Die("Couldn't unlock work mutex in worker_thread_steal");
     }
+    #ifdef DEBUG_STEAL
+      printf("Worker %d on node %d ending steal because someone had already stolen the work it planned to steal.\n", my_id, workernode->my_rank);
+    #endif
+    pthread_mutex_unlock(&(workernode->work[victim_id].lock));
+    pthread_mutex_unlock(&(workernode->work[my_id].lock));
+    pthread_mutex_unlock(&(workernode->steal_lock));
     return(worker_thread_steal(workernode, my_id));  
   }
 
@@ -1837,7 +1863,11 @@ int32_t worker_thread_steal(P7_SERVER_WORKERNODE_STATE *workernode, uint32_t my_
   if(pthread_mutex_unlock(&(workernode->work[my_id].lock))){
     p7_Die("Couldn't unlock work mutex in worker_thread_steal");
   }
+#ifdef DEBUG_STEAL
   printf("Worker %d on node %d just stole work from %lu to %lu from worker %d\n", my_id, workernode->my_rank, my_new_start, my_new_end, victim_id);
+#endif
+  pthread_mutex_unlock(&(workernode->steal_lock));
+
   return 1;
 }
 
@@ -1950,8 +1980,9 @@ static int workernode_perform_search_or_scan(P7_SERVER_WORKERNODE_STATE *workern
   // Wait to get an initial work range back from the master
   P7_SERVER_CHUNK_REPLY work_reply;
   workernode_wait_for_Work(&work_reply, server_mpitypes);
+#ifdef DEBUG_MASTER_CHUNKS
   printf("Workernode %d received initial chunk from %lu to %lu\n", workernode->my_rank, work_reply.start, work_reply.end);
-
+#endif
   if(work_reply.start != -1){ // Common case, there's at least one sequence/HMM to search on this node
     // Ok, we've unpacked the hmm and built all of the profiles we need.  
     if(the_command->type == P7_SERVER_HMM_VS_SEQUENCES){
@@ -1999,15 +2030,19 @@ static int workernode_perform_search_or_scan(P7_SERVER_WORKERNODE_STATE *workern
           works_received++;
 
           if(work_reply.start != -1){
-          //We got more work from the master node, add it to the global queue
-            printf("Workernode %d received chunk from %lu to %lu\n", workernode->my_rank, work_reply.start, work_reply.end);
+          //We got more work from the master node, add it to the global queue)
+#ifdef DEBUG_MASTER_CHUNKS
+            printf("Workernode %d received chunk from %lu to %lu\n", workernode->my_rank, work_reply.start, work_reply.end); 
+#endif
             p7_server_workernode_add_work(workernode, work_reply.start, work_reply.end);
             pthread_mutex_lock(&(workernode->wait_lock));
             p7_server_workernode_release_threads(workernode); // tell any paused threads to start up again
             pthread_mutex_unlock(&(workernode->wait_lock));
           }
           else{
+#ifdef DEBUG_MASTER_CHUNKS
             printf("Workernode %d received message that masternode was out of work\n", workernode->my_rank); 
+#endif
             pthread_mutex_lock(&(workernode->work_request_lock));
             workernode->master_queue_empty = 1;  // The master is out of work to give
             pthread_mutex_unlock(&(workernode->work_request_lock));
@@ -2050,13 +2085,18 @@ static int workernode_perform_search_or_scan(P7_SERVER_WORKERNODE_STATE *workern
           pthread_mutex_unlock(&(workernode->thread_state[thread].hits_lock));
           p7_tophits_Merge(workernode->tophits, hits);
           p7_tophits_Destroy(hits); // tophits_Merge mangles the second tophits
+#ifdef DEBUG_HITS
+          printf("Worker %d on node %d copying hitlist to master\n", thread, workernode->my_rank);
+#endif
         }
         else{
           pthread_mutex_unlock(&(workernode->thread_state[thread].hits_lock));
         }
       }
       if(workernode->tophits->N > 1000){ // Arbitrary number, but seems to work fine
-
+#ifdef DEBUG_HITS
+          printf("Node %d copying hitlist to master node\n", workernode->my_rank);
+#endif
         if(p7_tophits_MPISend(workernode->tophits, 0, HMMER_HIT_MPI_TAG, MPI_COMM_WORLD, &send_buf, &send_buf_length) 
           != eslOK){
           p7_Die("Failed to send hit messages to master\n");
@@ -2093,7 +2133,9 @@ static int workernode_perform_search_or_scan(P7_SERVER_WORKERNODE_STATE *workern
       if(work_reply.start != -1){
         //We got more work from the master node
         p7_server_workernode_add_work(workernode, work_reply.start, work_reply.end);
+#ifdef DEBUG_MASTER_CHUNKS
         printf("Workernode %d received chunk from %lu to %lu\n", workernode->my_rank, work_reply.start, work_reply.end);
+#endif
         pthread_mutex_lock(&(workernode->wait_lock));
         p7_server_workernode_release_threads(workernode); // tell any paused threads to go
         pthread_mutex_unlock(&(workernode->wait_lock));
