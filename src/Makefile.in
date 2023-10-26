@@ -66,16 +66,12 @@ PROGS = alimask\
 	nhmmer\
 	nhmmscan\
 	makehmmerdb\
-	hmmemit\
-	hmmscan\
-	hmmsearch\
-	jackhmmer\
-	phmmer\
 	ehmmemit\
 	ehmmscan\
 	ehmmsearch\
 	ejackhmmer\
 	ephmmer\
+	ejackhmmer\
 
 
 # "auxprogs" are built but not installed.

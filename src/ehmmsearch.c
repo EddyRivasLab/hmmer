@@ -104,6 +104,14 @@ static ESL_OPTIONS options[] = {
   { "--F2",         eslARG_REAL,  "1e-3", NULL, NULL,    NULL,  NULL, "--max",          "Stage 2 (Vit) threshold: promote hits w/ P <= F2",             7 },
   { "--F3",         eslARG_REAL,  "1e-5", NULL, NULL,    NULL,  NULL, "--max",          "Stage 3 (Fwd) threshold: promote hits w/ P <= F3",             7 },
   { "--nobias",     eslARG_NONE,   NULL,  NULL, NULL,    NULL,  NULL, "--max",          "turn off composition bias filter",                             7 },
+/* evolutionary options */
+  { "--noevo",      eslARG_NONE,   FALSE, NULL, NULL,    NULL,  NULL,  "--mx,--mxfile", "do not evolve",                                                0 },
+  { "--fixtime",    eslARG_REAL,    NULL, NULL, "x>=0",  NULL,  NULL,  NULL,            "TRUE: use a fix time for the evolutionary models of a pair",   0 },
+  { "--mx",         eslARG_STRING,  NULL, NULL, NULL,    NULL,  NULL,  "--mxfile",      "substitution rate matrix choice (of some built-in matrices)",  0 },
+  { "--mxfile",     eslARG_INFILE,  NULL, NULL, NULL,    NULL,  NULL,  "--mx",          "read substitution rate matrix from file <f>",                  0 },
+  { "--evomodel",   eslARG_STRING,"AGAX", NULL, NULL,    NULL,  NULL,  NULL,            "evolutionary model used",                                      0 },
+  { "--betainf",    eslARG_REAL,  "0.69", NULL, "x>=0",  NULL,  NULL,  NULL,            "betainf = ldI/muI = beta at time infinity (if ldI<muI)",       0 },
+  { "--statfile",   eslARG_OUTFILE,FALSE, NULL, NULL,    NULL,  NULL,  NULL,            "send stats to file <f>, not stdout",                           1 },
 
 /* Other options */
   { "--nonull2",    eslARG_NONE,   NULL,  NULL, NULL,    NULL,  NULL,  NULL,            "turn off biased composition score corrections",               12 },
@@ -111,6 +119,7 @@ static ESL_OPTIONS options[] = {
   { "--domZ",       eslARG_REAL,   FALSE, NULL, "x>0",   NULL,  NULL,  NULL,            "set # of significant seqs, for domain E-value calculation",   12 },
   { "--seed",       eslARG_INT,    "42",  NULL, "n>=0",  NULL,  NULL,  NULL,            "set RNG seed to <n> (if 0: one-time arbitrary seed)",         12 },
   { "--tformat",    eslARG_STRING,  NULL, NULL, NULL,    NULL,  NULL,  NULL,            "assert target <seqfile> is in format <s>: no autodetection",  12 },
+  { "--tol",        eslARG_REAL,  "1e-3", NULL, NULL,    NULL,  NULL,  NULL,            "tolerance",                                                   12 },
 
 #ifdef HMMER_THREADS 
   { "--cpu",        eslARG_INT, p7_NCPU,"HMMER_NCPU","n>=0",NULL,  NULL,  CPUOPTS,      "number of parallel CPU workers to use for multithreads",      12 },
@@ -306,7 +315,7 @@ main(int argc, char **argv)
 
   process_commandline(argc, argv, &go, &cfg.hmmfile, &cfg.dbfile);    
 
-/* is the range restricted? */
+  /* is the range restricted? */
   if (esl_opt_IsUsed(go, "--restrictdb_stkey") )
     if ((cfg.firstseq_key = esl_opt_GetString(go, "--restrictdb_stkey")) == NULL)  p7_Fail("Failure capturing --restrictdb_stkey\n");
 
@@ -342,7 +351,7 @@ main(int argc, char **argv)
   else
 #endif /*HMMER_MPI*/
     {
-      status = serial_master(go, &cfg);
+       status = serial_master(go, &cfg);
     }
 
   esl_getopts_Destroy(go);
@@ -423,8 +432,6 @@ serial_master(ESL_GETOPTS *go, struct cfg_s *cfg)
       esl_sqfile_OpenSSI(dbfp, NULL);
   }
 
-
-
   /* Open the query profile HMM file */
   status = p7_hmmfile_Open(cfg->hmmfile, NULL, &hfp, errbuf);
   if      (status == eslENOTFOUND) p7_Fail("File existence/permissions problem in trying to open HMM file %s.\n%s\n", cfg->hmmfile, errbuf);
@@ -438,6 +445,16 @@ serial_master(ESL_GETOPTS *go, struct cfg_s *cfg)
   if (esl_opt_IsOn(go, "--domtblout")) { if ((domtblfp = fopen(esl_opt_GetString(go, "--domtblout"), "w")) == NULL)  esl_fatal("Failed to open tabular per-dom output file %s for writing\n", esl_opt_GetString(go, "--domtblout")); }
   if (esl_opt_IsOn(go, "--pfamtblout")){ if ((pfamtblfp = fopen(esl_opt_GetString(go, "--pfamtblout"), "w")) == NULL)  esl_fatal("Failed to open pfam-style tabular output file %s for writing\n", esl_opt_GetString(go, "--pfamtblout")); }
 
+  evomodel = e1_rate_Evomodel(esl_opt_GetString(go, "--evomodel"));
+  betainf  = esl_opt_GetReal(go, "--betainf");
+  
+  if ( esl_opt_IsOn(go, "--statfile") ) {
+    if ((statfp = fopen(esl_opt_GetString(go, "--statfile"), "w")) == NULL) esl_fatal("Failed to open stats file %s", esl_opt_GetString(go, "--statfile"));
+  } else statfp = stdout;
+
+  /* other options */
+  tol    = esl_opt_GetReal   (go, "--tol");
+  
 #ifdef HMMER_THREADS
   /* initialize thread data */
   ncpus = ESL_MIN( esl_opt_GetInteger(go, "--cpu"), esl_threads_GetCPUCount());
@@ -510,13 +527,16 @@ serial_master(ESL_GETOPTS *go, struct cfg_s *cfg)
       nquery++;
       esl_stopwatch_Start(w);
 
+  printf("^^3yy\n");
       /* Calculate the hmm rate 
        * this should be part of hmmbuild
        */
       if (!esl_opt_IsOn(go, "--noevo") && 
 	  p7_RateCalculate(statfp, hmm, info[0].bg, emR, NULL, &R, evomodel, betainf, (float)info[0].fixtime, 0.001, errbuf, FALSE) != eslOK)  
 	esl_fatal("%s", errbuf);      
-      
+
+        printf("^^4yy\n");
+
       /* seqfile may need to be rewound (multiquery mode) */
       if (nquery > 1)
       {

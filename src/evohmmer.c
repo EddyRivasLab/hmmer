@@ -67,6 +67,8 @@ p7_RateCreate(int M, const ESL_ALPHABET *abc, EVOM evomodel, float fixtime, floa
 
   ESL_ALLOC(R, sizeof(P7_RATE));
 
+  printf("^^^^^^^^^^00^^ %d \n", evomodel);
+
   R->name     = NULL;
   R->acc      = NULL;
   R->desc     = NULL;
@@ -84,6 +86,8 @@ p7_RateCreate(int M, const ESL_ALPHABET *abc, EVOM evomodel, float fixtime, floa
     free(R);
     return NULL;
   }
+
+    printf("^^^^^^^^^^0000000^^\n");
 
   R->fixtime = fixtime;
  
@@ -169,7 +173,10 @@ p7_RateCreateWithEmRate(int M, const ESL_ALPHABET *abc, const P7_BG *bg, const E
   else if (emR)      emevol = emBYRATE;
   else               emevol = emNONE;
 
+  printf("^^00^^%d %d\n", emevol, emBYRATE);
+
   R = p7_RateCreate(M, (emevol == emNONE)? NULL : abc, evomodel, fixtime, betainf); if (R == NULL) { status = eslEMEM; goto ERROR; }
+  printf("^^11^^%d %d\n", emevol, emBYRATE);
  
   switch(emevol) {
   case emBYSCMX: 
@@ -524,8 +531,11 @@ p7_RateCalculate(FILE *statfp, const P7_HMM *hmm, const P7_BG *bg, const EMRATE 
   else if (emR)      emevol = emBYRATE;
   else               emevol = emNONE;
 
+  printf("^^77^^%d %d\n", emevol, emBYRATE);
+
   if ((status = p7_RateCreateWithEmRate(hmm->M, hmm->abc, bg, emR, S, &R, evomodel, fixtime, (float)betainf, tol, errbuf, verbose)) != eslOK) goto ERROR;
  
+  printf("^^7777^^%d %d\n", emevol, emBYRATE);
   if ((status = esl_strdup(hmm->name,   -1, &(R->name)))   != eslOK) goto ERROR;
   if ((status = esl_strdup(hmm->acc,    -1, &(R->acc)))    != eslOK) goto ERROR;
   if ((status = esl_strdup(hmm->desc,   -1, &(R->desc)))   != eslOK) goto ERROR;
@@ -540,6 +550,7 @@ p7_RateCalculate(FILE *statfp, const P7_HMM *hmm, const P7_BG *bg, const EMRATE 
 
     /* increase the information content of the match emission to pzero */
     status = p7_CalculatePzero(R, hmm, errbuf, verbose);
+    if (status != eslOK) goto ERROR;
 
     /* assign the given match emission to pstar */
     for (m = 0; m <= R->M; m ++) 
@@ -547,6 +558,7 @@ p7_RateCalculate(FILE *statfp, const P7_HMM *hmm, const P7_BG *bg, const EMRATE 
  
     /* calculate pinfy */
     status = p7_CalculatePinfy(R, hmm, bg, errbuf, verbose);
+   if (status != eslOK) goto ERROR;
 
     if (statfp) {
       fprintf(statfp, "%*s time\tME\tMRE\n", (int)strlen(hmm->name), "#anchor hmm");
