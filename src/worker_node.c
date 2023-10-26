@@ -21,11 +21,12 @@
 
 
 // defines that control debugging printfs
-//#define DEBUG_MASTER_QUEUE 1
-//#define DEBUG_COMPARISONS 1
-//#define DEBUG_MASTER_CHUNKS 1
+#define DEBUG_MASTER_QUEUE 1
+#define DEBUG_COMPARISONS 1
+#define DEBUG_MASTER_CHUNKS 1
 #define DEBUG_STEAL 1
-//#define DEBUG_HITS 1
+#define DEBUG_HITS 1
+#define DEBUG_SHARDS 1
 
 // Forward declarations for static functions
 static int worker_thread_front_end_search_loop(P7_SERVER_WORKERNODE_STATE *workernode, uint32_t my_id);
@@ -369,7 +370,9 @@ int p7_server_workernode_Setup(uint32_t num_databases, char **database_names, ui
   char id_string[14];
   id_string[13] = '\0';
   int i;
+#ifdef DEBUG_SHARDS
   printf("workernode setup saw %d shards, my_shard = %d\n", num_shards, my_shard);
+#endif
   uint32_t worker_threads;
   // First, figure out how many threads to create
   if(num_threads == 0){  // detect number of threads to use
@@ -2143,8 +2146,9 @@ static int workernode_perform_search_or_scan(P7_SERVER_WORKERNODE_STATE *workern
       else{
         // Master has no work left, we're done
         stop = done;
+#ifdef DEBUG_MASTER_CHUNKS
         printf("Workernode %d received message that masternode was out of work\n", workernode->my_rank); 
-
+#endif
       }
     }
     else{ // we're out of work and the master queue is empty, so we're done

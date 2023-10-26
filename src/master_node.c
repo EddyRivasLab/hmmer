@@ -50,6 +50,11 @@
 #define MAX_BUFFER   4096
 #include <unistd.h> // for testing
 
+
+// defines that control debugging commands
+#define DEBUG_COMMANDS 1
+#define DEBUG_HITS 1
+#define PRINT_PERF 1
 /* Functions to communicate with the client via sockets.  Taken from the original hmmpgmd*/
 typedef struct {
   int             sock_fd;
@@ -285,7 +290,6 @@ forward_results(P7_SERVER_QUEUE_DATA *query, SEARCH_RESULTS *results)
     p7_syslog(LOG_ERR,"[%s:%d] - writing %s error %d - %s\n", __FILE__, __LINE__, query->ip_addr, errno, strerror(errno));
     goto CLEAR;
   }
-  //printf("%p\n", results->hits[1]);
   // and finally the hits 
   n=buf_offset;
 
@@ -399,9 +403,10 @@ process_ServerCmd(char *ptr, CLIENTSIDE_ARGS *data)
   int            fd       = data->sock_fd;
   ESL_STACK     *cmdstack = data->cmdstack;
   char          *s;
+#ifdef DEBUG_COMMANDS
   time_t         date;
   char           timestamp[32];
-
+#endif
   /* skip leading white spaces */
   ++ptr;
   while (*ptr == ' ' || *ptr == '\t') ++ptr;
@@ -415,7 +420,9 @@ process_ServerCmd(char *ptr, CLIENTSIDE_ARGS *data)
   s = strsep(&ptr, " \t");
   if (strcmp(s, "shutdown") == 0) 
     {
+#ifdef DEBUG_COMMANDS
       printf("Master node saw shutdown command\n");
+#endif
       if ((cmd = malloc(sizeof(HMMD_HEADER))) == NULL) LOG_FATAL_MSG("malloc", errno);
       memset(cmd, 0, sizeof(HMMD_HEADER)); /* avoid uninit bytes & valgrind bitching. Remove, if we ever serialize structs correctly. */
       cmd->hdr.length  = 0;
@@ -441,12 +448,14 @@ process_ServerCmd(char *ptr, CLIENTSIDE_ARGS *data)
   parms->cmd_type   = cmd->hdr.command;
   parms->query_type = 0;
 
+
+#ifdef DEBUG_COMMANDS
   date = time(NULL);
   ctime_r(&date, timestamp);
   printf("\n%s", timestamp);	/* note ctime_r() leaves \n on end of timestamp */
   printf("Queuing command %d from %s (%d)\n", cmd->hdr.command, parms->ip_addr, parms->sock);
   fflush(stdout);
-
+#endif
   esl_stack_PPush(cmdstack, parms);
   free(cmd);
 }
@@ -548,7 +557,9 @@ clientside_loop(CLIENTSIDE_ARGS *data)
 
   if (!setjmp(jmp_env)) {
     dbx = 0;
+#ifdef DEBUG_COMMANDS
     printf("received options string of: %s\n", opt_str);
+#endif
     if ((opts = esl_getopts_Create(server_Client_Options))       == NULL)  client_msg_longjmp(data->sock_fd, status, &jmp_env, "Failed to create search options object");
     if ((status = esl_opt_ProcessSpoof(opts, opt_str)) != eslOK) client_msg_longjmp(data->sock_fd, status, &jmp_env, "Failed to parse options string: %s", opt_str);
     if ((status = esl_opt_VerifyConfig(opts))         != eslOK) client_msg_longjmp(data->sock_fd, status, &jmp_env, "Failed to parse options string: %s", opt_str);
@@ -583,8 +594,9 @@ clientside_loop(CLIENTSIDE_ARGS *data)
         }
         if((start < min_index) | (start > max_index)) client_msg_longjmp(data->sock_fd, eslEINVAL, &jmp_env,"Start of range %lu was outside of database index range %lu to %lu", start, min_index, max_index);
         if((end < min_index) | (end > max_index)) client_msg_longjmp(data->sock_fd, eslEINVAL, &jmp_env,"End of range %lu was outside of database index range %lu to %lu", end, min_index, max_index);
-        
+#ifdef DEBUG_COMMANDS
         printf("range found of %lu to %lu\n", start, end);
+#endif
         search_length +=(end-start)+1;
       }
       free(range_string_base);
@@ -704,6 +716,7 @@ clientside_loop(CLIENTSIDE_ARGS *data)
 
   date = time(NULL);
   ctime_r(&date, timestamp);
+#ifdef DEBUG_COMMANDS
   printf("\n%s", timestamp);	/* note ctime_r() leaves \n on end of timestamp */
 
   if (parms->seq != NULL) {
@@ -712,7 +725,7 @@ clientside_loop(CLIENTSIDE_ARGS *data)
     printf("Queuing hmm %s from %s (%d)\n", parms->hmm->name, parms->ip_addr, parms->sock);
   }
   fflush(stdout);
-
+#endif
   esl_stack_PPush(cmdstack, parms);
   free(buffer);
   return 0;
@@ -759,7 +772,6 @@ static void *clientside_thread(void *arg)
   /* remove any commands in stack associated with this client's socket */
   esl_stack_DiscardSelected(data->cmdstack, discard_function, &(data->sock_fd));
 
-  //printf("Closing %s (%d)\n", data->ip_addr, data->sock_fd);
   fflush(stdout);
 
   close(data->sock_fd);
@@ -1197,7 +1209,9 @@ int process_search(P7_SERVER_MASTERNODE_STATE *masternode, P7_SERVER_QUEUE_DATA 
           current->end = shard_end;
           prev=current;
           current = current->next;
+#ifdef DEBUG_COMMANDS
           printf("Shard %d gets range from %ld to %ld\n", which_shard, shard_start, shard_end);
+#endif
         }
         else{ // rare case, some shards don't have any work to do
           uint64_t first_shard_in_range = db_start % masternode->num_shards;
@@ -1285,7 +1299,9 @@ int process_search(P7_SERVER_MASTERNODE_STATE *masternode, P7_SERVER_QUEUE_DATA 
         }
 
       }
+#ifdef DEBUG_COMMANDS
       printf("Masternode created queue for shard %d with search range %lu to %lu, search length was %lu\n", which_shard, masternode->work_queues[which_shard]->start, masternode->work_queues[which_shard]->end, search_length);
+#endif
     }
   }
   masternode->chunk_size = (search_length / (masternode->num_worker_nodes * 128 )) +1; // round this up to avoid small amount of leftover work at the end
@@ -1334,12 +1350,14 @@ int process_search(P7_SERVER_MASTERNODE_STATE *masternode, P7_SERVER_QUEUE_DATA 
   }
   double elapsed_time = ((double)((end.tv_sec * 1000000 + (end.tv_usec)) - (start.tv_sec * 1000000 + start.tv_usec)))/1000000.0;
   double gcups = (ncells/elapsed_time) / 1.0e9;
+#ifdef PRINT_PERF
   if(query->cmd_type == HMMD_CMD_SEARCH){
     printf("%s, %lf, %d, %lf\n", gm->name, elapsed_time, gm->M, gcups);
   }
   else{
     printf("%s, %lf, %ld, %lf\n", query->seq->name, elapsed_time, query->seq->L, gcups);
   }
+#endif
   //Send results back to client
   results.nhits = masternode->tophits->N;
   results.stats.nhits = masternode->tophits->N;
@@ -1409,7 +1427,9 @@ void process_shutdown(P7_SERVER_MASTERNODE_STATE *masternode, P7_SERVER_QUEUE_DA
 #endif
 
 #ifdef HAVE_MPI
+#ifdef DEBUG_COMMANDS
   printf("Master node procecssing shutdown\n");
+#endif
   MPI_Bcast(&the_command, 1, server_mpitypes[P7_SERVER_COMMAND_MPITYPE], 0, MPI_COMM_WORLD);
   pthread_mutex_lock(&(masternode->hit_wait_lock));
   masternode->shutdown = 1;
@@ -1443,7 +1463,9 @@ void process_shutdown(P7_SERVER_MASTERNODE_STATE *masternode, P7_SERVER_QUEUE_DA
     free(buf_ptr);
   }
   // spurious barrier for testing so that master doesn't exit immediately
+#ifdef DEBUG_COMMANDS
   printf("Master node shutting down\n");
+#endif
   // Clean up memory
   p7_server_masternode_Destroy(masternode);
   return;
@@ -1572,7 +1594,9 @@ void p7_server_master_node_main(int argc, char ** argv, MPI_Datatype *server_mpi
   while (!shutdown){
 
     if(esl_stack_PPop(cmdstack, (void **) &query) == eslOK) {
+#ifdef DEBUG_COMMANDS
       printf("Processing command %d from %s\n", query->cmd_type, query->ip_addr);
+#endif
       fflush(stdout);
 
       //worker_comm.range_list = NULL;
@@ -1754,16 +1778,22 @@ void p7_masternode_message_handler(P7_SERVER_MASTERNODE_STATE *masternode, P7_SE
     switch((*buffer_handle)->status.MPI_TAG){
     case HMMER_PIPELINE_STATE_MPI_TAG:
       p7_pipeline_MPIRecv((*buffer_handle)->status.MPI_SOURCE, (*buffer_handle)->status.MPI_TAG, MPI_COMM_WORLD, &((*buffer_handle)->buffer), &((*buffer_handle)->buffer_alloc), query_opts, &temp_pipeline);
+#ifdef DEBUG_HITS
       printf("Received pipeline with %lu sequences\n", temp_pipeline->nseqs);
+#endif
       p7_pipeline_Merge(masternode->pipeline, temp_pipeline);
       p7_pipeline_Destroy(temp_pipeline);
       masternode->worker_stats_received++;
 
       break;
     case HMMER_HIT_FINAL_MPI_TAG:
+#ifdef DEBUG_HITS
       printf("HMMER_HIT_FINAL_MPI_TAG message received from rank %d\n", (*buffer_handle)->status.MPI_SOURCE);
-    case HMMER_HIT_MPI_TAG:
+#endif 
+     case HMMER_HIT_MPI_TAG:
+#ifdef DEBUG_HITS      
       printf("HMMER_HIT_MPI_TAG message received\n");
+#endif
       // The message was a set of hits from a worker node, so copy it into the buffer and queue the buffer for processing by the hit thread
       masternode->hit_messages_received++;
       p7_tophits_MPIRecv((*buffer_handle)->status.MPI_SOURCE, (*buffer_handle)->status.MPI_TAG, MPI_COMM_WORLD, &((*buffer_handle)->buffer), &((*buffer_handle)->buffer_alloc), &((*buffer_handle)->tophits));
@@ -1783,7 +1813,7 @@ void p7_masternode_message_handler(P7_SERVER_MASTERNODE_STATE *masternode, P7_SE
         if(MPI_Recv(&requester_shard, 1, MPI_UNSIGNED, (*buffer_handle)->status.MPI_SOURCE, (*buffer_handle)->status.MPI_TAG, MPI_COMM_WORLD, &((*buffer_handle)->status)) != MPI_SUCCESS){
           p7_Die("MPI_Recv failed in p7_masternode_message_handler\n");
         }
-        //printf("Masternode saw work request for shard %d\n", requester_shard);
+
         if(requester_shard >= masternode->num_shards){
           // The requestor asked for a non-existent shard
           p7_Die("Out-of-range shard %d sent in work request", requester_shard);

@@ -47,6 +47,7 @@ int main(int argc, char **argv){
     if(esl_opt_ArgNumber(go) != esl_opt_GetInteger(go, "--num_dbs")){
         p7_Fail("Error: number of database files provided as arguments not equal to the value passed to --num_dbs");
     }
+
     int stalling = FALSE;
     /* For debugging: stall until GDB can be attached */
     if (esl_opt_GetBoolean(go, "--stall"))
@@ -136,7 +137,10 @@ int main(int argc, char **argv){
     }
 	int num_nodes;
 	MPI_Comm_size(MPI_COMM_WORLD, &num_nodes);
-
+    // Make sure we're running with enough MPI ranks.  Must have at least one rank per shard plus one for the master node
+    if(num_nodes-1 < esl_opt_GetInteger(go, "--num_shards")){
+        p7_Die("Hmmserver was started with %d MPI ranks, but %d database shards were requested.  Hmmserver requires at least one rank (worker node) per shard plus one additional rank for the master node.\n", num_nodes, esl_opt_GetInteger(go, "--num_shards"));
+    }
 	int my_rank;
 	MPI_Comm_rank(MPI_COMM_WORLD, &my_rank);
 
