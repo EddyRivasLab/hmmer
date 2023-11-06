@@ -1779,7 +1779,12 @@ void p7_masternode_message_handler(P7_SERVER_MASTERNODE_STATE *masternode, P7_SE
     case HMMER_PIPELINE_STATE_MPI_TAG:
       p7_pipeline_MPIRecv((*buffer_handle)->status.MPI_SOURCE, (*buffer_handle)->status.MPI_TAG, MPI_COMM_WORLD, &((*buffer_handle)->buffer), &((*buffer_handle)->buffer_alloc), query_opts, &temp_pipeline);
 #ifdef DEBUG_HITS
-      printf("Received pipeline with %lu sequences\n", temp_pipeline->nseqs);
+      if(temp_pipeline->mode == p7_SEARCH_SEQS){
+        printf("Received pipeline with %lu sequences from node %d\n", temp_pipeline->nseqs, (*buffer_handle)->status.MPI_SOURCE);
+      }
+      else{
+        printf("Received pipeline with %lu HMMs from node %d\n", temp_pipeline->nmodels, (*buffer_handle)->status.MPI_SOURCE);
+      }
 #endif
       p7_pipeline_Merge(masternode->pipeline, temp_pipeline);
       p7_pipeline_Destroy(temp_pipeline);

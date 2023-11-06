@@ -109,15 +109,15 @@ P7_SHARD *p7_shard_Create_hmmfile(char *filename, uint32_t num_shards, uint32_t 
       }
 
       num_hmms+= 1; // Increment this last for ease of zero-based addressing
+         // Done with this HMM, so tear down the data structures
+      if(!masternode){
+        p7_hmm_Destroy(hmm);
+        p7_bg_Destroy(bg);
+      }
     }
 
     hmms_in_file++;
-    // Done with this HMM, so tear down the data structures
-    if(!masternode){
-      p7_hmm_Destroy(hmm);
-      p7_bg_Destroy(bg);
-
-    }
+ 
   }
   if(!masternode){
     the_shard->abc = abc;  // copy the alphabet into the shard so we can free it when done

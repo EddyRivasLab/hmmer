@@ -1166,10 +1166,11 @@ static int worker_thread_front_end_search_loop(P7_SERVER_WORKERNODE_STATE *worke
     // grab the start and end pointers from our work queue
     start = workernode->work[my_id].start;
     end = workernode->work[my_id].end;
+#ifdef DEBUG_COMPARISONS
     if(work_on_global){
-    //printf("Worker thread %d starting chunk from %ld to %ld\n", my_id, workernode->work[my_id].start, workernode->work[my_id].end);
+      printf("Worker thread %d starting chunk from %ld to %ld\n", my_id, workernode->work[my_id].start, workernode->work[my_id].end);
     } 
-    
+#endif
     pthread_mutex_unlock(&(workernode->work[my_id].lock)); // release lock
 
     if(!work_on_global){
@@ -1251,6 +1252,9 @@ static int worker_thread_front_end_search_loop(P7_SERVER_WORKERNODE_STATE *worke
           p7_oprofile_ReconfigLength(search_om, compare_L);
           p7_bg_SetLength(workernode->thread_state[my_id].bg, compare_L);           
           status = p7_Pipeline_Overthruster(workernode->thread_state[my_id].pipeline, search_om, workernode->thread_state[my_id].bg, compare_sequence, &fwdsc, &nullsc);
+#ifdef DEBUG_COMPARISONS
+          printf("Worker %d from node %d front-end searched HMM %s with index %lu\n", my_id, workernode->my_rank, search_om->name, start);
+#endif
         }
 
         if (status == eslFAIL)
@@ -1299,6 +1303,9 @@ static int worker_thread_front_end_search_loop(P7_SERVER_WORKERNODE_STATE *worke
               }
               the_entry->sequence = compare_sequence;
               the_entry->om = search_om;
+#ifdef DEBUG_COMPARISONS             
+              printf("Worker %d from node %d sending HMM %s to backend, index was %lu\n", my_id, workernode->my_rank, search_om->name, start);
+#endif   
             }
 
             // populate the fields
@@ -2044,7 +2051,7 @@ static int workernode_perform_search_or_scan(P7_SERVER_WORKERNODE_STATE *workern
           }
           else{
 #ifdef DEBUG_MASTER_CHUNKS
-            printf("Workernode %d received message that masternode was out of work\n", workernode->my_rank); 
+            printf("Workernode %d received message that masternode was out of work during normal polling\n", workernode->my_rank); 
 #endif
             pthread_mutex_lock(&(workernode->work_request_lock));
             workernode->master_queue_empty = 1;  // The master is out of work to give
@@ -2114,7 +2121,7 @@ static int workernode_perform_search_or_scan(P7_SERVER_WORKERNODE_STATE *workern
 
     pthread_mutex_unlock(&(workernode->wait_lock));  // Yes, we just locked this, but we need to have the lock at the start of the loop.
 
-    // When we get here, all of the worker nodes have run out of work to do, so request more work unless the master node has told us its
+    // When we get here, all of the worker threads have run out of work to do, so request more work unless the master node has told us its
     // out of work or we've already sent a request 
     pthread_mutex_lock(&(workernode->work_request_lock));
     if(!workernode->master_queue_empty){
@@ -2144,16 +2151,59 @@ static int workernode_perform_search_or_scan(P7_SERVER_WORKERNODE_STATE *workern
         pthread_mutex_unlock(&(workernode->wait_lock));
       }
       else{
-        // Master has no work left, we're done
-        stop = done;
+        // Master has no work left, double-check we have nothing else to do
+        pthread_mutex_lock(&(workernode->global_queue_lock));
 #ifdef DEBUG_MASTER_CHUNKS
-        printf("Workernode %d received message that masternode was out of work\n", workernode->my_rank); 
+        printf("Workernode %d received message that masternode was out of work during final request.  Top chunk on work queue had start = %lu and end = %lu\n", workernode->my_rank, workernode->global_queue->start, workernode->global_queue->end); 
 #endif
+        if(workernode->global_queue->start != -1){
+          pthread_mutex_unlock(&(workernode->global_queue_lock));
+#ifdef DEBUG_MASTER_CHUNKS
+          printf("Workernode %d found work on master queue after out-of-work message, re-releasing threads\n", workernode->my_rank); 
+#endif
+          pthread_mutex_lock(&(workernode->wait_lock));
+          p7_server_workernode_release_threads(workernode); // tell any paused threads to go
+          pthread_mutex_unlock(&(workernode->wait_lock));
+        }
+        else{ // really are out of work, end search
+          pthread_mutex_unlock(&(workernode->global_queue_lock));
+          stop = done;
+        }
+        
       }
     }
-    else{ // we're out of work and the master queue is empty, so we're done
+    else{ // We've gotten an out-of-work message from the master, make sure that no work arrived before it that 
+    // still needs to be done
       pthread_mutex_unlock(&(workernode->work_request_lock));
-      stop = done;
+      // See if there's any work in the queue
+      pthread_mutex_lock(&(workernode->global_queue_lock));
+      while((workernode->global_queue->end < workernode->global_queue->start) &&(workernode->global_queue->next != NULL)){
+        // there's no work in the object at the front of the queue, but there are more objects
+        //pop the head off of the list of work chunks
+        P7_WORK_CHUNK *temp = workernode->global_queue->next;
+
+        // put the empty entry back on the free list
+        workernode->global_queue->next = workernode->global_chunk_pool;
+        workernode->global_chunk_pool = workernode->global_queue;
+
+        workernode->global_queue = temp;
+      }
+      if(workernode->global_queue->end >= workernode->global_queue->start){
+        pthread_mutex_unlock(&(workernode->global_queue_lock));
+        // There is some work left in the master queue, so re-release the threads to complete it
+        // Yes, we may have just checked this but the loop above ends either when we find a work object with work left to do
+        // or when we run out of work objects
+        #ifdef DEBUG_MASTER_CHUNKS
+        printf("Workernode %d found work on its work queue after masternode sent out-of-work message, re-releasing worker threads\n", workernode->my_rank); 
+        #endif
+        pthread_mutex_lock(&(workernode->wait_lock));
+        p7_server_workernode_release_threads(workernode); // tell any paused threads to go
+        pthread_mutex_unlock(&(workernode->wait_lock));
+      }
+      else{ // There really is no more work to do
+        pthread_mutex_unlock(&(workernode->global_queue_lock));
+        stop = done;
+      }
     }
   }
   // Sanity checks: Did we get as many work chunks back as we requested, and did we somehow get out of the main work loop with 
