@@ -34,6 +34,7 @@
 #include "esl_cluster.h"
 #include "esl_composition.h"
 #include "esl_distance.h"
+#include "esl_dsq.h"
 #include "esl_getopts.h"
 #include "esl_iset.h"
 #include "esl_lognormal.h"
@@ -944,8 +945,8 @@ synthesize_twodom_positives(const PM_CONFIG *cfg, const ESL_MSA *msa, const int 
 
   while (i < nT-1)  // while we have at least two domains in the test set to embed...
     {
-      d1n = esl_abc_dsqrlen(msa->abc, msa->ax[T[i]]);
-      d2n = esl_abc_dsqrlen(msa->abc, msa->ax[T[i+1]]);
+      d1n = esl_dsq_GetRawLen(msa->abc, msa->ax[T[i]]);
+      d2n = esl_dsq_GetRawLen(msa->abc, msa->ax[T[i+1]]);
       do {
         L = (int) ceil(esl_lognormal_Sample(cfg->rng, cfg->seq_mu, cfg->seq_sigma)); 
       } while (d1n+d2n > L);
@@ -1054,7 +1055,7 @@ synthesize_onedom_positives(const PM_CONFIG *cfg, const ESL_MSA *msa, const int 
 
   for (i = 0; i < nT; i++)
     {
-      d1n = esl_abc_dsqrlen(msa->abc, msa->ax[T[i]]);
+      d1n = esl_dsq_GetRawLen(msa->abc, msa->ax[T[i]]);
       do {
         L = (int) ceil(esl_lognormal_Sample(cfg->rng, cfg->seq_mu, cfg->seq_sigma));
       } while (d1n > L);

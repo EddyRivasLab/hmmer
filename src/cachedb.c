@@ -322,6 +322,7 @@ p7_seqcache_Close(P7_SEQCACHE *cache)
 
 #include "easel.h"
 #include "esl_alphabet.h"
+#include "esl_dsq.h"
 #include "esl_getopts.h"
 #include "esl_sq.h"
 #include "esl_sqio.h"
@@ -509,7 +510,7 @@ main(int argc, char **argv)
       fprintf(ofp, "\n");
 
       for (pos = 0; pos < info->n; pos += 60) {
-        esl_abc_TextizeN(abc, info->dsq+pos+1, 60, buf);
+        esl_dsq_TextizeN(abc, info->dsq+pos+1, 60, buf);
         buf[60] = '\0';
         fprintf(ofp, "%s\n", buf);
       }
