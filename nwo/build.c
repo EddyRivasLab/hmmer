@@ -13,6 +13,7 @@
 #include "easel.h"
 #include "esl_alphabet.h"
 #include "esl_bitfield.h"
+#include "esl_dsq.h"
 #include "esl_matrixops.h"
 #include "esl_msa.h"
 #include "esl_msaweight.h"
@@ -372,7 +373,7 @@ collect_counts(const ESL_MSA *msa, const ESL_BITFIELD *fragassign, const int8_t 
       if (status != eslOK) goto ERROR;
 
       // SRE DEBUGGING
-      //status = h4_path_Validate(pi, msa->abc, ctm->M, esl_abc_dsqrlen(msa->abc, msa->ax[idx]), errbuf);
+      //status = h4_path_Validate(pi, msa->abc, ctm->M, esl_dsq_GetRawLen(msa->abc, msa->ax[idx]), errbuf);
       //if (status != eslOK) esl_fatal(errbuf);
 
       //h4_path_Dump(stdout, pi);
@@ -641,7 +642,7 @@ main(int argc, char **argv)
 
       /* Reproduce the H3 calculation, while setting bitflag instead of marking ~ in the msa */
       for (idx = 0; idx < msa->nseq; idx++)
-	if ((float) esl_abc_dsqrlen(msa->abc, msa->ax[idx]) / (float) msa->alen < fragthresh)
+	if ((float) esl_dsq_GetRawLen(msa->abc, msa->ax[idx]) / (float) msa->alen < fragthresh)
 	  esl_bitfield_Set(old_fragassign, idx);
 
       nnew = esl_bitfield_Count(new_fragassign);

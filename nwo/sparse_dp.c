@@ -15,6 +15,7 @@
 #include <h4_config.h>
 
 #include "easel.h"
+
 #include "esl_random.h"
 #include "esl_vectorops.h"
 
@@ -1337,6 +1338,8 @@ h4_sparse_StochasticTrace(ESL_RANDOMNESS *rng, float **wrk_byp, const H4_PROFILE
 
 #include <string.h>
 
+#include "esl_alphabet.h"
+#include "esl_dsq.h"
 #include "esl_sq.h"
 
 #include "h4_checkptmx.h"
@@ -1822,12 +1825,12 @@ utest_internal_glocal_exit(void)
   int            Q   = sm->Q; 
 
   /* Create the 40aa A-YA-Y test model */
-  if ( esl_abc_CreateDsq(abc, qseq, &qsq)   != eslOK) esl_fatal(msg);
+  if ( esl_dsq_Create(abc, qseq, &qsq)      != eslOK) esl_fatal(msg);
   if ( h4_seqmodel(qsq, M, abc, &hmm, NULL) != eslOK) esl_fatal(msg);
   if ( h4_mode_SetLength(mo, L)             != eslOK) esl_fatal(msg);
 
   /* Create the 38aa truncated test target seq */
-  if ( esl_abc_CreateDsq(abc, tseq, &tsq)   != eslOK) esl_fatal(msg);
+  if ( esl_dsq_Create(abc, tseq, &tsq)      != eslOK) esl_fatal(msg);
   
   /* Create a sparse mask that includes the main diagonal and the last column. 
    * This mask exercises the potential bug.

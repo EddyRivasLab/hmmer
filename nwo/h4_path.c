@@ -19,6 +19,7 @@
 
 #include "easel.h"
 #include "esl_alphabet.h"
+#include "esl_dsq.h"
 #include "esl_random.h"
 
 #include "h4_counts.h"
@@ -1366,8 +1367,8 @@ utest_zerolength(ESL_ALPHABET *abc)
   
   for (i = 0; i < nseq; i++)
     {
-      if ( esl_abc_Digitize(abc, aseq[i], ax) != eslOK) esl_fatal(msg);
-      for (L = 0, c = 1; c <= alen; c++) if (! esl_abc_XIsGap(abc, ax[c])) L++;     // don't use esl_abc_dsqrlen(). Here, we count *,~ as "residues".
+      if ( esl_dsq_Digitize(abc, aseq[i], ax) != eslOK) esl_fatal(msg);
+      for (L = 0, c = 1; c <= alen; c++) if (! esl_abc_XIsGap(abc, ax[c])) L++;     // don't use esl_dsq_GetRawLen(). Here, we count *,~ as "residues".
 
       // N L C: Z=3
       if ( h4_path_InferLocal(abc, ax, alen, matassign, -1, -1, pi)  != eslOK) esl_fatal(msg);
@@ -1440,7 +1441,7 @@ utest_dirtyseqs(ESL_RANDOMNESS *rng, ESL_ALPHABET *abc)
   for (i = 0; i < N; i++)
     {
       if ( esl_rsq_SampleDirty(rng, abc, &p, alen, ax)    != eslOK) esl_fatal(msg);
-      for (L = 0, c = 1; c <= alen; c++) if (! esl_abc_XIsGap(abc, ax[c])) L++;     // don't use esl_abc_dsqrlen(). Here, we count *,~ as "residues".
+      for (L = 0, c = 1; c <= alen; c++) if (! esl_abc_XIsGap(abc, ax[c])) L++;     // don't use esl_dsq_GetRawLen(). Here, we count *,~ as "residues".
 
       if ( h4_path_InferLocal(abc, ax, alen, matassign, -1, -1, pi)  != eslOK) esl_fatal(msg);
       if ( h4_path_Validate(pi, M, L, errbuf)                        != eslOK) esl_fatal("%s : %s", msg, errbuf);
@@ -1494,10 +1495,10 @@ utest_counting(void)
 
   for (idx = 0; idx < nseq; idx++)
     {
-      if ( esl_abc_Digitize(abc, aseq[idx], ax)                      != eslOK) esl_fatal(msg);
-      if ( h4_path_InferGlocal(abc, ax, alen, matassign, -1, -1, pi) != eslOK) esl_fatal(msg);
-      if ( h4_path_Validate(pi, M, esl_abc_dsqrlen(abc, ax), errbuf) != eslOK) esl_fatal("%s:\n  %s", msg, errbuf);
-      if ( h4_path_Count(pi, ax, 1.0, ctm)                           != eslOK) esl_fatal(msg);
+      if ( esl_dsq_Digitize(abc, aseq[idx], ax)                        != eslOK) esl_fatal(msg);
+      if ( h4_path_InferGlocal(abc, ax, alen, matassign, -1, -1, pi)   != eslOK) esl_fatal(msg);
+      if ( h4_path_Validate(pi, M, esl_dsq_GetRawLen(abc, ax), errbuf) != eslOK) esl_fatal("%s:\n  %s", msg, errbuf);
+      if ( h4_path_Count(pi, ax, 1.0, ctm)                             != eslOK) esl_fatal(msg);
       h4_path_Reuse(pi);
     }
 
@@ -1589,6 +1590,7 @@ main(int argc, char **argv)
 
 #include "easel.h"
 #include "esl_alphabet.h"
+#include "esl_dsq.h"
 
 int
 main(void)
@@ -1602,7 +1604,7 @@ main(void)
   int8_t *matassign = malloc(sizeof(int8_t) * (alen + 1));
   int i;
 
-  esl_abc_CreateDsq(abc, aseq1, &ax1);
+  esl_dsq_Create(abc, aseq1, &ax1);
 
   matassign[0] = 0;
   for (i = 1; i <= alen; i++)

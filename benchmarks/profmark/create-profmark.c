@@ -22,6 +22,7 @@
 #include "esl_alphabet.h"
 #include "esl_composition.h"
 #include "esl_distance.h"
+#include "esl_dsq.h"
 #include "esl_getopts.h"
 #include "esl_keyhash.h"
 #include "esl_msa.h"
@@ -328,12 +329,12 @@ remove_fragments(struct cfg_s *cfg, ESL_MSA *msa, ESL_MSA **ret_filteredmsa, int
   int      status;
 
   for (i = 0; i < msa->nseq; i++) 
-    len += esl_abc_dsqrlen(msa->abc, msa->ax[i]);
+    len += esl_dsq_GetRawLen(msa->abc, msa->ax[i]);
   len *= cfg->fragfrac / (double) msa->nseq;
 
   ESL_ALLOC(useme, sizeof(int) * msa->nseq);
   for (i = 0; i < msa->nseq; i++) 
-    useme[i] = (esl_abc_dsqrlen(msa->abc, msa->ax[i]) < len) ? 0 : 1;
+    useme[i] = (esl_dsq_GetRawLen(msa->abc, msa->ax[i]) < len) ? 0 : 1;
 
   if ((status = esl_msa_SequenceSubset(msa, useme, ret_filteredmsa)) != eslOK) goto ERROR;
   *ret_nfrags = msa->nseq - esl_vec_ISum(useme, msa->nseq);

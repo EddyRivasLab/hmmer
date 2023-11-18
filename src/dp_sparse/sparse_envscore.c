@@ -31,6 +31,8 @@
 #include <stdio.h>
 
 #include "easel.h"
+#include "esl_alphabet.h"
+#include "esl_dsq.h"
 
 #include "base/p7_profile.h"
 
@@ -672,7 +674,7 @@ create_envdoctored_dsq(const ESL_SQ *sq, int iae, int ibe, ESL_DSQ **ret_dsq)
   ESL_DSQ *dsq = NULL;
   int      i;
 
-  esl_abc_dsqdup(sq->dsq, sq->n, &dsq);
+  esl_dsq_Clone(sq->dsq, sq->n, &dsq);
   for (i = 1;     i < iae;    i++) dsq[i] = 0;
   for (i = ibe+1; i <= sq->n; i++) dsq[i] = 0;
   *ret_dsq = dsq;

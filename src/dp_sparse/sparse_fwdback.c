@@ -541,6 +541,7 @@ main(int argc, char **argv)
 
 #ifdef p7SPARSE_FWDBACK_TESTDRIVE
 #include "esl_alphabet.h"
+#include "esl_dsq.h"
 #include "esl_random.h"
 #include "esl_randomseq.h"
 
@@ -1074,7 +1075,7 @@ utest_internal_glocal_exit(void)
   int            Q   = sm->Q; 
 
   /* Create the 40aa A-YA-Y test model */
-  if ( esl_abc_CreateDsq(abc, qseq, &qsq)                                                != eslOK) esl_fatal(msg);
+  if ( esl_dsq_Create(abc, qseq, &qsq)                                                   != eslOK) esl_fatal(msg);
   if ( p7_builder_LoadScoreSystem(bld, "BLOSUM62", popen, pextend, bg)                   != eslOK) esl_fatal(msg); 
   if ( p7_Seqmodel(abc, qsq, M, "aatest", bld->Q, bg->f, bld->popen, bld->pextend, &hmm) != eslOK) esl_fatal(msg);
   if ( p7_hmm_SetComposition(hmm)                                                        != eslOK) esl_fatal(msg);
@@ -1082,7 +1083,7 @@ utest_internal_glocal_exit(void)
   if ( p7_profile_Config(gm, hmm, bg)                                                    != eslOK) esl_fatal(msg);
 
   /* Create the 38aa truncated test target seq */
-  if ( esl_abc_CreateDsq(abc, tseq, &tsq)                                                != eslOK) esl_fatal(msg);
+  if ( esl_dsq_Create(abc, tseq, &tsq)                                                   != eslOK) esl_fatal(msg);
   
   /* Create a sparse mask that includes the main diagonal and the last column. 
    * This mask exercises the potential bug.

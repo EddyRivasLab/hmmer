@@ -128,13 +128,13 @@ p7_Seqmodel(const ESL_ALPHABET *abc, ESL_DSQ *dsq, int M, char *name,
 #include <p7_config.h>
 
 #include "easel.h"
+#include "esl_alphabet.h"
+#include "esl_dmatrix.h"
 #include "esl_getopts.h"
 #include "esl_random.h"
-#include "esl_alphabet.h"
+#include "esl_scorematrix.h"
 #include "esl_sq.h"
 #include "esl_sqio.h"
-#include "esl_dmatrix.h"
-#include "esl_scorematrix.h"
 
 #include "hmmer.h"
 
@@ -247,6 +247,9 @@ main(int argc, char **argv)
 
 #include <string.h>
 
+#include "esl_alphabet.h"
+#include "esl_dsq.h"
+
 #include "base/p7_bg.h"
 #include "build/p7_builder.h"
 
@@ -266,7 +269,7 @@ utest_normalization(ESL_GETOPTS *go)
   P7_HMM       *hmm     = NULL;
   char          errbuf[eslERRBUFSIZE];
 
-  if ( esl_abc_CreateDsq(abc, seq, &dsq)                                                 != eslOK) esl_fatal(msg);
+  if ( esl_dsq_Create(abc, seq, &dsq)                                                    != eslOK) esl_fatal(msg);
   if ( (bld = p7_builder_Create(NULL, abc))                                              == NULL)  esl_fatal(msg);
   if ( p7_builder_LoadScoreSystem(bld, "BLOSUM62", popen, pextend, bg)                   != eslOK) esl_fatal(msg); 
   if ( p7_Seqmodel(abc, dsq, L, "aatest", bld->Q, bg->f, bld->popen, bld->pextend, &hmm) != eslOK) esl_fatal(msg);
