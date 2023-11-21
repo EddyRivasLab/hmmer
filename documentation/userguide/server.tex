@@ -4,8 +4,9 @@
 \newcommand{\hmmserver}{\mono{hmmserver}}
 \newcommand{\Hmmserver}{\mono{Hmmserver}}
 \newcommand{\hmmclient}{\mono{hmmclient}}
+\newcommand{\Hmmclient}{\mono{Hmmclient}}
 \newcommand{\hmmpgmd}{\mono{hmmpgmd}}
-
+\newcommand{\userguide}{HMMER User's Guide}
 \input{titlepage_server}                    % definitions for \maketitle 
 \bibliographystyle{unsrtnat-brief}   % customized natbib unsrtnat. Abbrev 3+ authors to ``et al.'' 
 
@@ -23,244 +24,36 @@
 
 
 \chapter{Introduction}
-
-\mono{Hmmserver} is a replacement/upgrades for HMMERs \hmmpgmmd daemon.  Like \hmmpgmd, \hmmserver distributes searches across multiple computers to improve performance, pre-loading HMM and/or sequence databases into RAM to prevent file read time from limiting performance.  However, \hmmserver provides a number of significant improvements over \hmmpgmd, including:
-
-\begin{itemize}
-  \item{The ability to load multiple sequence and/or databases into RAM and search them independently.  \hmmpgmd only supported a single database, although some users emulated multi-database searching by merging several databases into a single input file and searching subsets of it.}
-  \item{\hmmserver reads standard FASTA and HMM files and caches them in their entirety, allowing it to operate as a stand-alone system.  In contrast, \hmmpgmd required pre-processed data files that replaced any metadata (sequence/HMM names, comments, etc.) with a single item ID, which then had to be looked up in a separate database to restore the deleted information and generate user-readable results.  While this approach reduces the amount of data that has to be loaded into the memory of computers running \hmmpgmd, it makes \hmmpgmd harder to use for many users, and the required database lookup has proven to be a performance bottleneck for our partners at the European Bioinformatics Institute.}
-  \item{\hmmserver is implemented as a Message-Passing Interface (MPI) application, while \hmmpgmd was implemented as a set of programs that communicated through UNIX sockets.  Implementing \hmmserver as an MPI application makes it easier to manage, as a single \mono{mpirun} command can start the server on multiple machines, whereas \hmmpgmd must be individually invoked on each machine in the system and manually informed of which machine is running its master node.  It also allows \hmmserver to take advantage of high-performance networking hardware, such as Infiniband\texttrademark, without requiring any changes to the application.}
-  \item{Better sharding (division of databases into chunks so that each machine doesn't need to load the full database into RAM).  \hmmpgmd only supports unsharded (each worker machine loads the entire database into memory) and fully-sharded (each of the N worker machines loads $\frac{1}{N}$th of the database into RAM).  \hmmserver supports fractional sharding, where the database is divided into P pieces (shards) and M nodes load each copy into RAM as long as $P\timesM = N$.  This allows the user to make trade-offs between the amount of memory the server uses and performance, as having multiple machines load copies of each shard will allow \hmmserver to better balance the load across its worker nodes when it takes longer to search some regions of the database than others, as is commonly the case.}
-  \item{An improved parallelization scheme that better distributes work across the machines running a server and the cores within each machine that improves performance by approximately 50\% over \hmmpgmd when \hmmserver is run on large numbers of cores.}
-\end{itemize}
-
-\mono{Hmmclient} is a companion application to the \mono{hmmc2} test client. While \mono{hmmc2} required users to compose search/scan requests in the format of \hmmpgmmd's sockets interface, \hmmclient provides a user interface similar to \mono{hmmsearch}, \mono{hmmscan}, and \mono{phmmer} and generates the appropriate command to send to the server.  In addition, \hmmclient supports the same set of output formats as \mono{hmmsearch}, \mono{hmmscan}, and \mono{phmmer} as well as those programs' command-line options that affect how the search is performed\footnote{\hmmclient supports all of the command-line options that  \mono{hmmsearch}, \mono{hmmscan}, and \mono{phmmer} do, although some options, such as \mono{phmmer}'s options that affect how it generates a search HMM from its input sequence, may not apply to all search/scan types.  In the event that an invalid option is provided to \hmmclient, the server will generate an error that is sent back to, and displayed, by \hmmclient.}
- 
-\chapter{For Users Converting From \mono{Hmmpgmd}}
-From a user/administrator point of view, the key difference between \hmmpgmd and \hmmserver is how the two applications are invoked.  \mono{Hmmpgmd} had to be run separately on each machine that was to be part of the daemon, with the master process being started first so that the IP of its machine could be passed as a command-line argument to the server processes.  In contrast, \hmmserver runs as a single MPI process that the MPI system starts on all of the machines the server will run on.  The one complication this adds is that it can be hard to predict which machine will run the master node of \hmmserver, particularly when \hmmserver is run through a job scheduling system such as SLURM.  To alleviate this, the master node prints the name of its host machine to standard out as soon as it starts.
-
-To make it easier for \hmmpgmd users to convert to \hmmserver, we have tried to avoid changes to \hmmpgmd's client interface, although one change was necessary.  A 32-bit \mono{type} field was added to the \mono{HMMD_SEARCH_STATUS} structure that specifies the type of search (search of sequence database or scan of HMM database) that was performed.  This was done because \hmmclient needs to know the type of search that was performed, but does not know the type of data contained in a server's databases.  HMMER's routines that serialize and deserialize \mono{HMMD_SEARCH_STATUS} structures have been modified to handle this change, so any code that calls them should not require changes.
-
-We have also added a \mono{@--db} command to the \mono{@--seqdb} and \mono{@--hmmdb} search commands that \hmmpgmd supported.  \mono{@--db} indicates that a database should be searched/scanned without specifying the type of data in the database.  An error will be returned if a client attempts to send an HMM query to an HMM database. One thing to note is that \hmmserver indexes databases by the order that they were provided on its command line, without separating them by type.  Thus, a command of the form \mono{@--seqdb 3} will attempt to search the third database loaded into the server, not the third sequence database (and will return an error if that database contains HMM data).
-
-\chapter{Using \hmmserver}
-\Hmmserver is an MPI application, and require that its host machines provide an MPI implementation such as OpenMPI, MPICH, or Intel's proprietary MPI in order to function.  Building \hmmserver without MPI support By default, HMMER does not compile itself with MPI support even if its configure script detects one\footnote{Confusingly, the configure script tries to detect whether an MPI implementation is present on the system regardless of whether \mono{--enable-mpi} is passed and prints output saying whether it has found one, which can easily lead one to believe that HMMER has been compiled with MPI support when it hasn't.}.  Therefore, it is necessary to pass the \mono{--enable-mpi} flag to HMMER's configure script to get HMMER to build \hmmserver and MPI-enabled versions of our other programs.  Once HMMER has been configured with the \mono{--enable-mpi} flag, a standard \mono{make} command will build \hmmserver, \hmmclient, although you may want to run \mono{make clean} first to avoid problems caused by \mono{make} not building programs whose source files have not changed since a previous build that was not configured to support MPI.
-
-One consequence of building HMMER with MPI support is that all of the programs we provide will try to link in the MPI support library at run time, even those that do not use MPI in any way.  This can cause problems on systems, such as the one we develop on, that require that the user execute a command (\mono{"module load openmpi" in our case) to make the MPI implementation available.  When building HMMER on such a system, we suggest doing seperate builds of HMMER with and without MPI support and then using symlinks to create a directory that contains the appropriate version of each program and/or two versions of programs like \mono{hmmsearch} that can run with and without MPI support.  If you do this, please note that \hmmclient does not require MPI support, as it communicates with \hmmserver via sockets.  Only \hmmserver needs to be built with MPI support.
-
-Once \hmmserver has been built, it typically needs to be run via the \mono{mpirun} command\footnote{On many clusters this wil also require using a job control system such as SLURM to locate available computers to run the server.}, which will start the server on the specified number of machines.  One challenge of running \hmmserver as an MPI application is that it may be difficult to determine which computer is running the master node of the server.  The master node always runs on rank 0 of the MPI application, and clients need to know which machine is running the master node to send searches to the server.  While we acknowledge that this can be a challenge, we felt that the performance improvements that come from using MPI on systems with high-bandwidth networks over \hmmpgmd's sockets-based inter-node communication and the convenience of being able to start \hmmserver using a single MPI command instead of separate \hmmpgmd commands on each computer outweighted this drawback.
-
-On systems where users directly controll which computers an MPI application runs on, the \mono{--host} option to \mono{mpirun} may allow the user to specify the set of machines \hmmserver runs on, and rank 0 will typically run on the first machine in the list passed to \mono{--host}.  This may also be effective in cases where a job submission program is used to launch \hmmserver if the server runs on a dedicated partition (set of machines) that is not used by other jobs.  It will generally not work on shared partitions unless the user identifies a set of available machines and tells the job scheduling system to use those machines.
-
-If it is not possible to specify the machine that rank 0 of \hmmserver runs on, users can detect the machine that is running the master node by examining the standard output streams of each of \hmmserver's ranks.  The master node will output the name of its host machine at the start of execution, which can be extracted by a text-processing script\footnote{Do we want to have worker nodes forward commands to the master node?  This would allow any machine in the server to accept requests, which would simplify things if \hmmserver were run on a consistent set of machines or if it was easier to identify the set of machines running \hmmserver processes than to parse the output of each machine.}
-
-The base command to run \hmmserver is "\mono{mpirun <arguments to specify the number of ranks and machines to use> hmmserver --num_dbs <# of databases to load> <names of files containing the databases} although the \mono{--num_dbs} flag is not required and defaults to one.  \Hmmserver will fail with an error message if the number of database files provided does not match the value of the \mono{--num_dbs} argument.
-
-\Hmmserver implements a number of command-line options that influence how the server is run:
-\vspace{1ex}
-\begin{tabular}{rp{4in}}
-\monob{-h}    & displays help on version number and usage, then exits\\
-\monob{--cpu}    & number of cores to distribute work across on each worker node (defaults to all)\\
-\monob{--num_shards}   & The number of shards to divide each database into.  Defaults to 1, and must be both greater than zero and an integer divisor of the number of worker nodes.\\
-\monob{--num_dbs}    & the number of databases to load into RAM (defaults to one).  Must match the number of database files specified on the command line.\\
-\monob{--stall}     & stall execution of each MPI process after start to allow a debugger to be attached.  If this option is used, each rank of \hmmserver will enter a null loop until the "stalling" variable is set to 0 by the debugger.\\
-\monob{--cport}    & The port number clients will connect to when sending requests to the server.  Must be $\ge$ 49152 and $\le$ 65535. Defaults to 51371. \\
-\monob{--ccnts}      & The maximum number of clients that can connect to the server simultaneously.  Defaults to 16, and must be greater than zero.\\
-\end{tabular}    
-\vspace{1ex}
-
-Note that it is not necessary to tell \hmmserver how many machines (MPI ranks) it is running on, as it extracts that information from the MPI system, but that \hmmserver will fail with an error message if it is unable to start a master node process and at least one worker node process.  Also, it is possible to execute a multi-rank MPI process on a single machine, care must be taken when running \hmmserver in this way.  By default, each worker node process will attempt to use all of the cores on the host machine, which will overload the host if more than one worker node process is running, causing low performance due to the overhead in swapping processes in and out of execution.  For best results, the number of MPI ranks and cores used by each worker node should be selected such that ${MPI ranks -1}\times{cores used by each worker node} \leq {number of cores on the host machine -3} to avoid oversubscribing the host machine\sidenote{Many modern CPUs, including Intel x86 and IBM POWER support \em{hyperthreading}, an architectural technique in which each core executes multiple threads simultaneously, switching between them on a cycle-by-cycle basis to keep the core from becoming idle when one thread has to wait for data to come back from memory or for a long operation to complete.  On such systems, one may be able to  replace the "number of cores on the host machine" in the formua with "number of cores on the host machine $\times$ the number of hyperthreads per core if the system is configured to use hyperthreading.  If you are unsure whether your system supports hyperthreading \mono{cat /proc/cpuinfo"} will display information on the number of physical cores and hyperthreads on most Linux systems, or your system administrator should know.  By default, each worker node will use all the hyperthreads on its machine, however.}  (The -3 in that formula accounts for the threads used by the master node process.)
+\Hmmserver and \hmmclient are replacements for the \hmmpgmd and \mono{hmmc2} programs provided by earlier versions of HMMER.  Like \hmmpgmd, \hmmserver is a persistent, long-running, service that provides high-performance homology searches by caching sequence and HMM databases in RAM and distributing the work of each search across many computers and threads.  \Hmmclient is a full-featured command-line client application for \hmmserver that submits searches to a running server and displays results in a format that is as close as possible to that of the \mono{hmmsearch}, \mono{hmmscan}, \mono{phmmer}, and \mono{jackhmmer} programs.  It is thus a significant upgrade to the \mono{hmmc2} program, which was more of a debugging tool for \hmmpgmd than a full client program.
 
 
-\section{Sending Searches to a Daemon}
-The HMMER package includes {\em hmmc2}, an example client that can communicate with an \mono{hmmpgmd} or \mono{hmmpgmd\_shard} daemon.  Hmmc2 accepts four command-line arguments\sidenote{Hmmc2's code breaks Easel conventions by manually parsing its command-line arguments instead of using Easel's \mono{getopts} functions.  It also defines a separate Easel \mono{getopts} structure, \mono{{searchOpts}}, which it uses to parse search requests, which can easily be mistaken for a definition of \mono{hmmc2's} command-line options.}:
 
-\begin{sreitems}{\monob{header}}
-  \item[\monob{-i <IP address>}] specifies the IP address of the daemon to connect to.  Defaults to 127.0.0.1 if not provided.
-  \item[\monob{-p <port>}] specifies the port number that the daemon is listening to for client connections.  Defaults to 51371 (the \mono{hmmpgmd} default) if not provided.
-  \item[\monob{-S}] print the scores of any hits found by searches
-  \item[\monob{-A}] print the alignments of any hits found by searches.  The data printed when this option is provided is a superset of the data printed when "-S" is provided, so the "-S" option is redundant if -A is provided.
-\end{sreitems}
-
-Once it starts up, \mono{hmmc2} enters an interactive loop by printing the prompt "Enter next sequence:".  Any text the user enters between that prompt and the end-of-command string "{\tt //}" is interpreted as a command and sent to the daemon.  
-
-\subsection{Usage Example}
-After starting \mono{hmmc2} with the command
+\chapter{Installation}
+\Hmmserver and \hmmclient are included in the standard HMMER distribution package, but HMMER must be compiled with MPI support turned on for \hmmserver to be useful, so it is likely you will have to compile HMMER from source to use the server.  To do this, obtain a source-code copy of HMMER (see the \userguide for instructons on how to do this) and go through the standard configuration/build process, with one change: you must pass the \mono{--enable-mpi} flag to our configure script to cause HMMER to be built with MPI support:
 
 \vspace{1ex}
-\user{hmmc2 -i <IP of daemon's master node>}
+\user{\% ./configure {-}{-}prefix=/your/install/path {-}{-}enable-mpi}\\
+\user{\% make}
 \vspace{1ex}
 
-it will print the prompt
+\Hmmclient does not require MPI support, as it is a single-threaded program that communicates with a server via sockets.  If you only want to use \hmmclient to send searches to an existing server, any installation of HMMER, including ones from package managers or Linux distributions, should provide a working version of \hmmclient.
 
- \vspace{-1ex}
-  \xsreoutput{inclusions/hmmc2.out}
- \vspace{-1ex}
+\chapter{Usage}
 
-To run a simple search, enter the text
+\section{Hmmserver}
 
-\vspace{1ex}
-\user{@-{}-seqdb 1} \\
-\user{>sp|Q6GZW9|length\_10} \\
-\user{YLGPWVQAEY} \\
-\user{//}
-\vspace{1ex}
+\section{Hmmclient}
 
-The text {\small\bfseries\texttt @-{}-seqdb 1} on the first line instructs the daemon to perform a search against sequence database 1. The next two lines ({\small\bfseries\texttt >sp|Q6GZW9|length\_10} and {\small\bfseries\texttt YLGPWVQAEY}) are the FASTA-format specification of a (short) amino acid sequence that the daemon will translate into an HMM and search against the database.  Finally, the 
-{\small\bfseries\texttt //} by itself on the third line ends the command.  
+\chapter{For those converting from an hmmpgmd installation}
 
-Once it sees the end-of-command sequence, \mono{hmmc2} will send the command to the server, which will perform the search and generate output similar to
-
-\vspace{-1ex}
-  \xsreoutput{inclusions/hmmc2_2.out}
- \vspace{-1ex}
-
- although the exact output generated will vary depending on the database that the daemon has cached.  This output is a simple summary that shows the number of comparisons performed by the daemon, the number of hits found, and the time it took to perform the search.  If the \mono{-S} or \mono{-A} options had been used when starting \mono{hmmc2}, substantially more information about the hits found by the server would have been displayed.
-
- The next chapter provides significantly more detail about the format of the commands the daemon accepts and of the output it sends back to the client.
-
-\chapter{Daemon-Client Interface}
-Client machines use internet sockets to send commands to and receive results from a daemon's master node.  When a client opens a connection to the master node's client communication port (port 51371 by default), the master node forks a thread to manage the connection with the client.  This thread configures a socket to communicate with the client and then repeatedly calls the \mono{clientside\_loop}\sidenote{This function name is a bit of a misnomer, in that it does not contain a loop.  Instead, it is repeatedly called from within an outer loop.} function, which monitors the socket for commands from the client, until either the client detaches from the port or the daemon shuts down.  This approach allows multiple clients to connect to a daemon simultaneously without interfering with each other, although requests from one client may impact the amount of time it takes for the daemon to respond to requests from other clients.
-
-
-\section{Daemon Command Format}
-Daemon commands are variable-length sequences of ASCII text.  The first line of a command must contain the command itself and any options or parameters.  For search commands, this is followed by one or more lines that contain the sequence or HMM to be searched.  All commands end with a line that contains only two forward slashes ("{\tt //}").  When a command arrives from a client, the daemon reads bytes from the appropriate socket into a buffer until it sees the end-of-command sequence, growing the buffer as necessary\sidenote{This is a security vulnerability that should be addressed in HMMER4, as it allows an adversarial or erroneous client to consume arbitrary amounts of RAM, potentially exceeding the capacity of the master node.}, and then parses the contents of the buffer in order to execute the command.   
-
-The daemon supports three commands:
-
-\begin{sreitems}{\monob{header}}
-  \item[\monob{@-{}-hmmdb <database \#>}]  Initiates a search of a protein sequence against the HMM database cached by the daemon.  The protein sequence to be searched must be provided on the lines following the \mono{@-{}-hmmdb} command.  Note that the user is required to provide a database number argument to \mono{@-{}-hmmdb}, but \mono{hmmpgmd} can only load one HMM database at a time and ignores the value provided.  This is a known idiosyncrasy that has been left unchanged to avoid breaking EBI's tools and web interface code.
-  \item[\monob{@-{}-seqdb <database \#> [-{}-seqdb\_ranges <rangelist>]}] Initiates a search of a protein sequence or HMM against the specified protein sequence database\sidenote{Note that there is an inconsistency in how databases are numbered in search commands as compared to how they are numbered in the database file itself.  The database file uses 0-indexed numbering, (databases are numbered from 0 to N-1), while the search commands use 1-indexed numbering (databases are numbered from 1 to N)}.  The daemon determines whether a sequence or HMM has been submitted by examining the contents of the lines that follow the command, and, if a sequence has been submitted, converts it to an HMM before performing the search.
-
-  If the \mono{-{}-seqdb\_ranges} option is not provided, the entire target database is searched\sidenote{Currently, there is no way to search only a portion of an HMM database.  This is probably because existing HMM databases are small enough that the time to search them is rarely an issue.}. If the \mono{-{}-seqdb\_ranges} option is provided, it must be followed by a range list describing the set of sequences to be searched.  Each range in the range list should be formatted in the form "start..end", where "start" and "end" are the sequence IDs of the start and end of the range, and ranges in the list should be separated by commas. One note here is that the sequences in a sequence file are indexed as a single contiguous list, even if the file contains multiple databases, and each database can contain an arbitrary subset of the sequences in the file.  Thus, the sequence IDs specified in a range list refer to positions within the database file, and a range list search searches the sequences in the specified database whose IDs fall into the specified range(s), not the specified positions in the set of sequences contained in the database. For example: the command {\small\bfseries\texttt @-{}-seqdb 2 -{}-seqdb\_ranges 1..100, 201..300} searches the sequences in database 2 whose sequence ID's range from 1 to 100 or 201 to 300, not sequences 1-100 and 201-300 of the database.
-  \item[\monob{!shutdown}] Shuts the daemon down in an orderly fashion by first sending shutdown messages to all of its worker nodes and then exiting the master node's processes\sidenote{There's another security vulnerability here, in that any machine that can connect to the master node can shut it down.  This needs to be addressed in H4, as we intend to allow arbitrary clients to send searches to a server}.
-\end{sreitems}
-
-When the daemon receives a search command, any text on the command line after the \mono{@-{}-seqdb <database \#>} or \mono{@-{}-hmmdb <database \#>} specifies options to the search, using the same format as the \mono{hmmsearch} or \mono{hmmscan} commands.  Thus sending the command \user{@-{}-seqdb 1 -E 20} to the daemon instructs it to perform a search of sequence database 1, reporting all results with an e-value of less than 20 instead of the default 10.
-
-
-\section{Search Results Format}
-The results from each search are split across two sockets messages, as shown in Figure \ref{fig:search-results}.  The first is a fixed-length \mono{HMMD\_SEARCH\_STATUS} structure that contains two fields: a \mono{status} field that contains an Easel status code that tells the client whether the search completed successfully or not, and a \mono{msg\_size} field, which tells the client how large (in bytes) the second message will be.  The format of the second message depends on whether any errors were encountered during the search.  If an error occurred, the second message is simply a text string containing a description of the error.  
-
-
-\begin{figure*}
-\includegraphics[width=\textwidth]{inclusions/daemon-results.pdf}
-\caption{Format of the Messages the Daemon Sends to a Client When a Search Completes}
-\label{fig:search-results}
-\end{figure*}
-
-If the search succeeded, the \mono{status} field of the first message is set to \mono{eslOK} and the second message contains the results of the search.  This message begins with a \mono{HMMD\_SEARCH\_STATS} structure that contains information about the search, including the time the search took and the number of hits found.  This is then followed by a \mono{P7\_HIT} structure for each hit the search found, which describes the hit.
-
-\section{Serialization}
-Data structures and multi-byte values must be {\em serialized} before they can be sent over sockets.  There are two aspects to serializing the types of data structures the daemon uses.  Structures that contain pointers must be {\em flattened} by copying the data that their pointers point to into the block of data that will be sent over the socket, and multi-byte values must be converted to "network order," which is defined as big-endian, to prevent problems if the sending and receiving machines have different endiannesses.  To serialize floating-point numbers, we assume that all computers use IEEE 754 representations and just convert the bytes that represent the floating-point number to and from network byte order.  This is faster than the alternative approach of representing the floating-point number as an ASCII string and parsing it on the receiving side, and avoids any loss of precision, but will fail if the machines trying to communicate via sockets use different floating-point formats.  
-
-Figures \ref{fig:search-stats-serialize}--\ref{fig:alidisplay-serialize} show how the data structures used in sending search results back to clients are serialized.  The text streams the client uses to send commands to the daemon do not require serialization, as text streams do not contain pointers and are sequences of byte-wide characters that are not affected by endianness.    
-
-\begin{figure*}
-\includegraphics[width=\textwidth]{inclusions/hmmpgmd-search-stats-serialize.pdf}
-\caption{Serialized {HMMD\_SEARCH\_STATS} Structure}
-\label{fig:search-stats-serialize}
-\end{figure*} 
-
-\begin{figure*}
-\includegraphics[width=\textwidth]{inclusions/hit-serialize.pdf}
-\caption{Serialized {P7\_HIT} Structures}
-\label{fig:hit-serialize}
-\end{figure*}
-\begin{figure*}
-\includegraphics[width=\textwidth]{inclusions/domain-serialize.pdf}
-\caption{Serialized {P7\_DOMAIN} Structure}
-\label{fig:domain-serialize}
-\end{figure*}
-\begin{figure*}
-\includegraphics[width=\textwidth]{inclusions/alidisplay-serialize.pdf}
-\caption{Serialized {P7\_ALIDISPLAY} Structure}
-\label{fig:alidisplay-serialize}
-\end{figure*}
-
-All of the data structures that hmmpgmd serializes contain variable-length fields, and many of them contain optional fields that may or may not be present in a given object.  We handle optional fields by adding a byte of presence bit flags, one flag per optional field, to the serialized versions of data structures that contain optional fields.  If the flag bit corresponding to a field is set, then that field is present in the data structure. Otherwise it is not present.  None of the data structures hmmpgmd serializes have more than eight optional fields, so only one byte of presence flags/structure is required.
-
-Most of the variable-length fields in our data structures are strings, which we represent as standard C-terminated strings.  Routines such as \mono{strcpy} are used to copy these strings into and out of the serialized data structures, making it unnecessary to encode the strings' length in the serialized data structure.  Some non-string fields, such as the \mono{hit\_offsets} field in the {\mono{HMMD\_SEARCH\_STATS}} structure, have lengths that are determined by the value of some other field in the data structure, so it is not necessary to explicitly encode their lengths in the serialized data structures. One field, the \mono{scores\_per\_pos} array in the {\mono{P7\_DOMAIN}} structure, has a length that cannot be determined from the other data in the data structure, so we add an explicit field to the serialized data structure to encode its length.
-
-Because it is sometimes necessary to manipulate serialized data without deserializing the full set of results, we include two mechanisms to help locate sub-fields of the daemon's results.  The {\mono{HMMD\_SEARCH\_STATS}} structure contains a \mono{hit\_offsets} array that contains the offsets from the start of the block of serialized hits to the beginning of each serialized hit.  Also, all of our serialized data structures except {\mono{HMMD\_SEARCH\_STATS}} begin with a \mono{size} field that contains the length of the base (i.e., without any included sub-structures) serialized data structure in bytes.  For example, the \mono{size} field of a {\mono{P7\_HIT}} structure will contain the length of the serialized {\mono{P7\_HIT}} structure not including the lengths of the {\mono{P7\_DOMAIN}} structures that the {\mono{P7\_HIT}} structure contains.  These features allow software to quickly locate a specific {\mono{P7\_HIT}} structure within the array of results after decoding the {\mono{HMMD\_SEARCH\_STATS}} structure, and then to skip through the {\mono{P7\_HIT}} structure as necessary to locate its sub-fields.
-
-Functions to serialize and deserialize each of the daemon's data structures are provided in the .c files that contain the structure's routines.     
-
-\chapter{Database File Formats}
-The formats \mono{hmmpgmd} uses for HMM and sequence databases are derived from the formats used elsewhere in HMMER, with modifications to support integration with EBI's infrastructure and reduce the size of sequence databases.
-
-\section{HMM Database File Format}
-\mono{hmmpgmd} uses the HMMER 3 profile HMM file format as described in the \underline{HMMER User's Guide} for its HMM databases, with the requirement that the HMM file must have been processed by \mono{hmmpress} before it can be loaded into \mono{hmmpgmd}.  When an HMM database is cached in RAM, it is represented as a simple array of \mono{P7\_OPROFILE} objects, although each HMM's name is replaced with its ID number (position in the database file).  Each HMM file can only contain a single HMM database, and \mono{hmmpgmd} does not support caching of multiple HMM databases simultaneously.
-
-\section{Sequence Database File Format}
-The \mono{hmmpgmd} format that \mono{hmmpgmd} uses for sequence database files is a variant of the FASTA format in which sequence names are replaced with numeric IDs, sequence descriptions and accession information are removed, and new sequence descriptions are added that enable efficient caching of multiple databases simultaneously and assist EBI's web servers.  
-A FASTA file can be converted into a single-database \mono{hmmpgmd} sequence file using the \mono{esl-reformat} command.  For example, 
-
-\user{esl-reformat --id\_map mydb.hmmpgmd.map hmmpgmd mydb.fasta > mydb.hmmpgmd}
-
-generates the \mono{hmmpgmd} file "mydb.hmmpgmd\sidenote{The ".hmmpgmd" extension used here is only a convention.  \mono{hmmpgmd} does not enforce any restrictions on the names of its input files.}" from the FASTA file "mydb.fasta", using the optional \mono{--id\_map} flag to specify that the mapping between the sequence names and descriptions found in the FASTA file to the sequence ID numbers used in the \mono{hmmpgmd} file should be written to "mydb.hmmpgmd.map".  HMMER does not provide a tool to generate sequence files that contain multiple databases.  The EBI uses a tool flow of their own development to generate the multi-database files that they use in their HMMER server.
- 
-
-An \mono{hmmpgmd} file begins with a header line that contains information about the file's contents, which takes the form 
-
-\monob{\#res\_cnt seq\_cnt db\_cnt cnt\_1 fullcnt\_1 cnt\_2 fullcnt\_2 $\ldots$ date\_stamp}.
-
-The "\#" character at the start of the header line is mandatory, and allows HMMER/Easel's file parsing code to recognize the file as an \mono{hmmpgmd} file instead of a standard FASTA file.  The fields in the header line have the following meanings:
-
-\begin{sreitems}{\monob{header}}
-
-\item [\monob{res\_cnt}] Number of residues in the sequence file.
-
-\item [\monob{seq\_cnt}] Number of sequences in the sequence file. 
-
-\item [\monob{db\_cnt}] Number of databases in the sequence file. 
-
-\item [\monob{cnt\_i}] The number of sequences in database \mono{i}. This will always be less than or equal to \mono{seq\_cnt}.
- 
-\item [\monob{fullcnt\_i}] The number of sequences that should be used when computing E-values for database \mono{i}.  This will always be at least as large as \mono{cnt\_i}, and may be larger if database \mono{i} contained redundant sequences that were collapsed out.
-
-\item [\monob{date\_stamp}] The day and time when the file was created.
-\end{sreitems}
-
-After the header line, the file must contain \monob{seq\_cnt} sequence entries, which use a FASTA-like format where the first line of each sequence entry takes the form 
-
-\monob{>seq\_id database\_membership domain\_architecture taxonomy\_id}
-
-and the second and following lines contain the amino-acid specification of the sequence\sidenote{\mono{hmmpgmd} only supports caching of amino-acid sequences due to the large size of nucleotide sequence databases.}  
-
-The fields in a sequence's first line have the following meanings:
-
-\begin{sreitems}{\monob{header}}
-
-\item [\monob{seq\_id}] The sequence's ID number, which must be its position in the file, where the first sequence in the file has ID 1. This requirement exists because \mono{hmmpgmd} generates a string encoding of each sequence's ID by incrementing an internal counter for each sequence and stores that string encoding in the sequence structure's \mono{name} field.  Thus, the sequence ID \mono{hmmpgmd} caches will be the sequence's position in the database file regardless of the value of \mono{seq\_id}.  Note that the IDs used by \mono{hmmpgmd} are absolute and refer to each sequence's position in the original data file, not its position in a particular database.
-
-\item [\monob{database\_membership}] This field is a bit-vector (represented as a text string of "1" and "0s" characters) that identifies the databases that contain the sequence, where a "1" in a position indicates that the sequence is present in the corresponding database and a "0" indicates that it is not present.  Databases are represented in ascending order from left to right in the string, so the leftmost position in the string determines whether the sequence is present in database 1, the next position determines whether the string is present in database 2, and so on.  By convention, this field always contains as many digits as there are databases in the file, but the only absolute requirement is that it not contain more digits than there are databases in the file.
-
-\item [\monob{domain\_architecture}] If provided, this optional field must contain the string representation of an integer that can be represented as a long int.  When \mono{hmmpgmd} finds a hit, it converts this field into a long integer and stores it in the \mono{desc} field of the hit's \mono{{P7\_HIT}} structure, which is then returned to the client\sidenote{This is a nasty hack that we should avoid in the future if at all possible because it stores a long int in a pointer field.  On most current machines, long ints and pointers are both 64-bit quantities, but there is no guarantee that this will be true in the future.}.  EBI uses this field to encode the ID of a database entry that describes the sequence's domain architecture and is used to improve the display of results on their web clients.   
-
-\item [\monob{taxonomy\_id}] If provided, this optional field must contain the string representation of an integer that can be represented as a long int.  When a hit occurs, \mono{hmmpgmd} converts the string into a long int returns it in the \mono{acc} field of the hit's \mono{{P7\_HIT}} structure\sidenote{This has the same problems as the handling of the \mono{domain\_architecture} field}.  EBI uses this field to encode the ID of a database entry that describes the sequence's taxonomy for use by their web clients.
-
-\end{sreitems}
-
-As an example, consider the following set of sequence entries:
-
-\begin{sreoutput}
->1 100
-ACDEFGHIKLMNPQTVWY
->2 010
-ACDKLMNPQTVWYEFGHI
->3 111
-EFMNRGHIKLMNPQT
-\end{sreoutput}
-
-Sequence 1 in the set is part of database 1.  Sequence 2 is part of database 2, while sequence 3 is part of databases 1, 2, and 3.  This set of entries omits the optional \mono{domain\_architecture} and \mono{taxonomy\_id} fields from each sequence.
-
-
-
+\chapter{Desgn of hmmserver}
+\section{Parallelization and Performance}
+\section{Sharding}
+\section{Client-Server Interface}
 
 \begin{adjustwidth}{}{-1in}   
-\chapter{Manual Pages Related to the Daemon}
-\input{manpages_daemon}
+\chapter{Manual Pages Related to the Server}
+
 \end{adjustwidth}
 
 \chapter{Acknowledgments}
