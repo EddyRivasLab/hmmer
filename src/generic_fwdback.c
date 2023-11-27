@@ -11,6 +11,7 @@
 
 #include "easel.h"
 #include "esl_alphabet.h"
+#include "esl_dsq.h"
 
 #include "hmmer.h"
 
@@ -595,7 +596,7 @@ utest_enumeration(ESL_GETOPTS *go, ESL_RANDOMNESS *r, ESL_ALPHABET *abc, int M)
 	  fp =  exp(fsc + bg_ll);
 
 	  if (esl_opt_GetBoolean(go, "--vv")) {
-	    esl_abc_Textize(abc, dsq, L, seq);
+	    esl_dsq_Textize(abc, dsq, L, seq);
 	    printf("probability of sequence: %10s   %16g  (lod v=%8.4f f=%8.4f)\n", seq, fp, vsc, fsc);
 	  }
 	  total_p += fp;

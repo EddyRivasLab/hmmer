@@ -25,6 +25,7 @@
 
 #include "easel.h"
 #include "esl_alphabet.h"
+#include "esl_dsq.h"
 #include "esl_gumbel.h"
 
 #include "hmmer.h"
@@ -462,7 +463,7 @@ utest_basic(ESL_GETOPTS *go)
   if ((gm = p7_profile_Create(hmm->M, abc))        == NULL)  esl_fatal("failed to create GAATTC profile");
   if (p7_ProfileConfig(hmm, bg, gm, L, p7_UNILOCAL)!= eslOK) esl_fatal("failed to config profile");
   if (p7_profile_Validate(gm, NULL, 0.0001)        != eslOK) esl_fatal("whoops, profile is bad!");
-  if (esl_abc_CreateDsq(abc, targ, &dsq)           != eslOK) esl_fatal("failed to create GAATTC digital sequence");
+  if (esl_dsq_Create(abc, targ, &dsq)              != eslOK) esl_fatal("failed to create GAATTC digital sequence");
   if ((gx = p7_gmx_Create(gm->M, L))               == NULL)  esl_fatal("failed to create DP matrix");
   if ((tr = p7_trace_Create())                     == NULL)  esl_fatal("trace creation failed");
 
