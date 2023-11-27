@@ -71,7 +71,6 @@ PROGS = alimask\
 	ehmmsearch\
 	ejackhmmer\
 	ephmmer\
-	ejackhmmer\
 
 
 # "auxprogs" are built but not installed.

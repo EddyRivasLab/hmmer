@@ -527,15 +527,12 @@ serial_master(ESL_GETOPTS *go, struct cfg_s *cfg)
       nquery++;
       esl_stopwatch_Start(w);
 
-  printf("^^3yy\n");
       /* Calculate the hmm rate 
        * this should be part of hmmbuild
        */
       if (!esl_opt_IsOn(go, "--noevo") && 
 	  p7_RateCalculate(statfp, hmm, info[0].bg, emR, NULL, &R, evomodel, betainf, (float)info[0].fixtime, 0.001, errbuf, FALSE) != eslOK)  
 	esl_fatal("%s", errbuf);      
-
-        printf("^^4yy\n");
 
       /* seqfile may need to be rewound (multiquery mode) */
       if (nquery > 1)
@@ -574,9 +571,11 @@ serial_master(ESL_GETOPTS *go, struct cfg_s *cfg)
         info[i].th      = p7_tophits_Create();
 	info[i].gm      = p7_profile_Clone(gm);
 	info[i].om      = p7_oprofile_Clone(om);
+	//info[i].om = p7_oprofile_Copy(om);
         info[i].pli = p7_pipeline_Create(go, om->M, 100, FALSE, p7_SEARCH_SEQS); /* L_hint = 100 is just a dummy for now */
 	status = p7_pli_NewModel(info[i].pli, info[i].om, info[i].bg);
 	if (status == eslEINVAL) p7_Fail(info->pli->errbuf);
+
 
 #ifdef HMMER_THREADS
         if (ncpus > 0) esl_threads_AddThread(threadObj, &info[i]);
