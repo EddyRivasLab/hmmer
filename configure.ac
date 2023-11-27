@@ -701,6 +701,7 @@ AC_CONFIG_FILES([ \
 AC_CONFIG_FILES([ \
   documentation/userguide/titlepage.tex  \
   documentation/userguide/titlepage_daemon.tex  \
+  documentation/userguide/titlepage_server.tex  \
   documentation/userguide/copyright.tex  \
   ])
 
