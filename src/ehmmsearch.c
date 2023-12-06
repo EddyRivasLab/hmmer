@@ -19,6 +19,7 @@
 #include "esl_sq.h"
 #include "esl_sqio.h"
 #include "esl_stopwatch.h"
+#include "esl_vectorops.h"
 
 #ifdef HMMER_MPI
 #include "mpi.h"
@@ -478,16 +479,20 @@ serial_master(ESL_GETOPTS *go, struct cfg_s *cfg)
 
       for (i = 0; i < infocnt; ++i)
 	{
-	  info[i].bg      = p7_bg_Create(abc);
-#ifdef HMMER_THREADS
-	  info[i].queue   = queue;
-	  info[i].tol     = tol;
+	  info[i].pli     = NULL;
+	  info[i].th      = NULL;
+	  info[i].gm      = NULL;
+	  info[i].om      = NULL;
 	  info[i].R       = NULL;
 	  info[i].hmm     = NULL;
 	  info[i].bg      = p7_bg_Create(abc);
 	  info[i].noevo   = esl_opt_GetBoolean(go, "--noevo");
 	  info[i].fixtime = esl_opt_IsOn(go, "--fixtime")? esl_opt_GetReal(go, "--fixtime") : -1.0;
+	  info[i].tol     = tol;
+#ifdef HMMER_THREADS
+	  info[i].queue   = queue;
 #endif
+	  if (!info[i].bg) esl_fatal("Failed to allocate bg model");
 	}
 
 #ifdef HMMER_THREADS
@@ -504,17 +509,27 @@ serial_master(ESL_GETOPTS *go, struct cfg_s *cfg)
 
   /* read the substitution matrix */
   if (!esl_opt_IsOn(go, "--noevo")) {
+    double *f = NULL;
+    int     k;
+
+    ESL_ALLOC(f, sizeof(double) * abc->K);
+    for (k = 0; k < abc->K; k ++) {
+      f[k] = (double)info[0].bg->f[k];
+    }
+
     emR = ratematrix_emrate_Create(abc, 1);
 
     if (esl_opt_IsOn(go, "--mx")) {
-      ratematrix_emrate_Set(esl_opt_GetString(go, "--mx"), NULL, (double *)(info[0].bg->f), emR, TRUE, info[0].tol, errbuf, FALSE);
+      ratematrix_emrate_Set(esl_opt_GetString(go, "--mx"), NULL, f, &emR[0], TRUE, info[0].tol, errbuf, FALSE);
     }
     else if (esl_opt_IsOn(go, "--mxfile")) {
       /* TODO: read mx from a file */
     }
     else {
-      ratematrix_emrate_Set("BLOSUM62", NULL, (double *)(info[0].bg->f), emR, TRUE, info[0].tol, errbuf, FALSE);
+      ratematrix_emrate_Set("BLOSUM62", NULL, f, &emR[0], TRUE, info[0].tol, errbuf, FALSE);
     }
+
+    if (f) free(f);
   }
   
   /* Outer loop: over each query HMM in <hmmfile>. */
@@ -523,7 +538,7 @@ serial_master(ESL_GETOPTS *go, struct cfg_s *cfg)
       P7_RATE         *R       = NULL;
       P7_PROFILE      *gm      = NULL;
       P7_OPROFILE     *om      = NULL;       /* optimized query profile                  */
-
+      
       nquery++;
       esl_stopwatch_Start(w);
 
@@ -544,7 +559,8 @@ serial_master(ESL_GETOPTS *go, struct cfg_s *cfg)
           esl_sqfile_Position(dbfp, 0); //only re-set current position to 0 if we're not planning to set it in a moment
       }
 
-      if ( cfg->firstseq_key != NULL ) { //it's tempting to want to do this once and capture the offset position for future passes, but ncbi files make this non-trivial, so this keeps it general
+      if ( cfg->firstseq_key != NULL ) {
+	//it's tempting to want to do this once and capture the offset position for future passes, but ncbi files make this non-trivial, so this keeps it general
         sstatus = esl_sqfile_PositionByKey(dbfp, cfg->firstseq_key);
         if (sstatus != eslOK)
           p7_Fail("Failure setting restrictdb_stkey to %d\n", cfg->firstseq_key);
@@ -570,8 +586,8 @@ serial_master(ESL_GETOPTS *go, struct cfg_s *cfg)
         /* Create processing pipeline and hit list */
         info[i].th      = p7_tophits_Create();
 	info[i].gm      = p7_profile_Clone(gm);
-	info[i].om      = p7_oprofile_Clone(om);
-	//info[i].om = p7_oprofile_Copy(om);
+	//info[i].om    = p7_oprofile_Clone(om); does not work here, need to use _Copy that is really a _Clone function
+	info[i].om      = p7_oprofile_Copy(om);
         info[i].pli = p7_pipeline_Create(go, om->M, 100, FALSE, p7_SEARCH_SEQS); /* L_hint = 100 is just a dummy for now */
 	status = p7_pli_NewModel(info[i].pli, info[i].om, info[i].bg);
 	if (status == eslEINVAL) p7_Fail(info->pli->errbuf);
@@ -641,18 +657,23 @@ serial_master(ESL_GETOPTS *go, struct cfg_s *cfg)
 	    if (textw > 0) esl_msafile_Write(afp, msa, eslMSAFILE_STOCKHOLM);
 	    else           esl_msafile_Write(afp, msa, eslMSAFILE_PFAM);
 	  
-	    if (fprintf(ofp, "# Alignment of %d hits satisfying inclusion thresholds saved to: %s\n", msa->nseq, esl_opt_GetString(go, "-A")) < 0) ESL_EXCEPTION_SYS(eslEWRITE, "write failed");
+	    if (fprintf(ofp, "# Alignment of %d hits satisfying inclusion thresholds saved to: %s\n", msa->nseq, esl_opt_GetString(go, "-A")) < 0)
+	      ESL_EXCEPTION_SYS(eslEWRITE, "write failed");
 	  } 
 	else { if (fprintf(ofp, "# No hits satisfy inclusion thresholds; no alignment saved\n") < 0) ESL_EXCEPTION_SYS(eslEWRITE, "write failed"); }
 	  
 	esl_msa_Destroy(msa);
       }
 
-      if (info->R)   p7_RateDestroy(info->R);
-      if (info->hmm) p7_hmm_Destroy(info->hmm);
+      for (i = 0; i < infocnt; ++i) {
+	if (info[i].R)   p7_RateDestroy(info[i].R);
+	if (info[i].hmm) p7_hmm_Destroy(info[i].hmm);
+	if (info[i].gm)  p7_profile_Destroy(info[i].gm);
+      }
       p7_pipeline_Destroy(info->pli);
       p7_tophits_Destroy(info->th);
       p7_oprofile_Destroy(info->om);
+      
       p7_oprofile_Destroy(om);
       p7_profile_Destroy(gm);
       p7_hmm_Destroy(hmm);
@@ -1400,8 +1421,7 @@ serial_loop(WORKER_INFO *info, ESL_SQFILE *dbfp, int n_targetseqs)
       p7_oprofile_ReconfigLength(info->om, dbsq->n);
       
       if (p7_EvoPipeline(info->pli, /*emR=*/NULL, info->R, info->hmm, info->gm, info->om, info->bg, dbsq, NULL, info->th, info->noevo, (float)info->fixtime) != eslOK) {
-	printf("error in p7_EvoPipeline\n");
-	exit(1);
+	esl_fatal("error in p7_EvoPipeline");
       }
 
       seq_cnt++;
@@ -1509,8 +1529,7 @@ pipeline_thread(void *arg)
 	  p7_oprofile_ReconfigLength(info->om, dbsq->n);
 	  
 	  if (p7_EvoPipeline(info->pli, /*emR=*/NULL, info->R, info->hmm, info->gm, info->om, info->bg, dbsq, NULL, info->th, info->noevo, (float)info->fixtime) != eslOK) {
-	    printf("error in p7_EvoPipeline\n");
-	    exit(1);
+	    if (status != eslOK) esl_fatal("error in p7_EvoPipeline");
 	  }
 
 	  

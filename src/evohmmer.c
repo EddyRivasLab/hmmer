@@ -67,8 +67,6 @@ p7_RateCreate(int M, const ESL_ALPHABET *abc, EVOM evomodel, float fixtime, floa
 
   ESL_ALLOC(R, sizeof(P7_RATE));
 
-  printf("^^^^^^^^^^00^^ %d \n", evomodel);
-
   R->name     = NULL;
   R->acc      = NULL;
   R->desc     = NULL;
@@ -86,8 +84,6 @@ p7_RateCreate(int M, const ESL_ALPHABET *abc, EVOM evomodel, float fixtime, floa
     free(R);
     return NULL;
   }
-
-    printf("^^^^^^^^^^0000000^^\n");
 
   R->fixtime = fixtime;
  
@@ -173,10 +169,7 @@ p7_RateCreateWithEmRate(int M, const ESL_ALPHABET *abc, const P7_BG *bg, const E
   else if (emR)      emevol = emBYRATE;
   else               emevol = emNONE;
 
-  printf("^^00^^%d %d\n", emevol, emBYRATE);
-
   R = p7_RateCreate(M, (emevol == emNONE)? NULL : abc, evomodel, fixtime, betainf); if (R == NULL) { status = eslEMEM; goto ERROR; }
-  printf("^^11^^%d %d\n", emevol, emBYRATE);
  
   switch(emevol) {
   case emBYSCMX: 
@@ -531,11 +524,8 @@ p7_RateCalculate(FILE *statfp, const P7_HMM *hmm, const P7_BG *bg, const EMRATE 
   else if (emR)      emevol = emBYRATE;
   else               emevol = emNONE;
 
-  printf("^^77^^%d %d\n", emevol, emBYRATE);
-
   if ((status = p7_RateCreateWithEmRate(hmm->M, hmm->abc, bg, emR, S, &R, evomodel, fixtime, (float)betainf, tol, errbuf, verbose)) != eslOK) goto ERROR;
  
-  printf("^^7777^^%d %d\n", emevol, emBYRATE);
   if ((status = esl_strdup(hmm->name,   -1, &(R->name)))   != eslOK) goto ERROR;
   if ((status = esl_strdup(hmm->acc,    -1, &(R->acc)))    != eslOK) goto ERROR;
   if ((status = esl_strdup(hmm->desc,   -1, &(R->desc)))   != eslOK) goto ERROR;
@@ -693,7 +683,7 @@ p7_RateTransitions(const P7_HMM *hmm, P7_RATE *R, double betainf, double tol, ch
     status = e1_rate_AssignTransitionsFromRates(e1R, rateparam, errbuf, verbose);
     if (status != eslOK) goto ERROR;
     
-#if 1
+#if 0
     if (m == 2) {
       printf("\nhmm[k=%d] | MM %f MI %f MD %f IM %f II %f DM %f DD %f \n", m, hmm->t[m][p7H_MM], hmm->t[m][p7H_MI], hmm->t[m][p7H_MD], 
 	     hmm->t[m][p7H_IM], hmm->t[m][p7H_II], hmm->t[m][p7H_DM], hmm->t[m][p7H_DD]);
@@ -730,9 +720,8 @@ p7_EvolveFromRate(FILE *statfp, P7_HMM *hmm, const P7_RATE *R, const P7_BG *bg, 
  {
   struct e1_params  p;				
   E1_RATE          *e1R;
-  double            gammaM;
-  double            gammaD;
-  double            betaM;
+  double            gammaM, gammaD, gammaI;
+  double            betaM, betaD;
   double            eta;
   double            tM, tD, tI;
   double            itM, itD, itI;
@@ -743,6 +732,7 @@ p7_EvolveFromRate(FILE *statfp, P7_HMM *hmm, const P7_RATE *R, const P7_BG *bg, 
   int               dtselect;
   int               i;
   int               status;
+
 
   if (R->M != hmm->M) ESL_XFAIL(eslFAIL, errbuf, "Rate dim (%d) does not correspond to HMM dim (%d)", R->M, hmm->M);
   
@@ -789,7 +779,9 @@ p7_EvolveFromRate(FILE *statfp, P7_HMM *hmm, const P7_RATE *R, const P7_BG *bg, 
       /* not a valide case, return a trivial no-evolution solution */
       gammaM = 0.0;
       gammaD = 0.0;
+      gammaI = 0.0;
       betaM  = 0.0;
+      betaD  = 0.0;
       eta    = 0.0;
     }
     else {
@@ -798,10 +790,12 @@ p7_EvolveFromRate(FILE *statfp, P7_HMM *hmm, const P7_RATE *R, const P7_BG *bg, 
       if (time < eslINFINITY) {
 	gammaM = 1.0 - exp(-e1R->muA[e1R_S] * time);
 	gammaD = 1.0 - exp(-e1R->muA[e1R_D] * time);
+ 	gammaI = 1.0 - exp(-e1R->muA[e1R_I] * time);
       }
       else {
 	gammaM = 1-fsmall;
 	gammaD = 1-fsmall;
+	gammaI = 1-fsmall;
       }
             
       p.time           = time;
@@ -815,24 +809,25 @@ p7_EvolveFromRate(FILE *statfp, P7_HMM *hmm, const P7_RATE *R, const P7_BG *bg, 
       if (R->evomodel == AGA) p.rateparam.sI = e1R->sI;          
       p.special_case   = FALSE;
     
-      if (e1_model_AG_BetaFunc(&p, &betaM, NULL) != eslOK) ESL_XFAIL(eslFAIL, p.errbuf, "AGA_betaM failed for m=%d", m);
+      if (e1_model_AG_BetaFunc(&p, &betaM, &betaD) != eslOK) ESL_XFAIL(eslFAIL, p.errbuf, "AGA_betaM failed for m=%d", m);
     }
   
     /* Assign fundamental probabilities to the HMM transitions (avoid absolute zeros) */
-    hmm->t[m][p7H_MI] = (betaM       > fsmall)? betaM                  : fsmall; 
-    hmm->t[m][p7H_MD] = (1.0 - betaM > fsmall)? (1.0 - betaM) * gammaM : fsmall; 
-    hmm->t[m][p7H_II] = (eta         > fsmall)? eta                    : fsmall; 
-    hmm->t[m][p7H_DD] = (gammaD      > fsmall)? gammaD                 : fsmall; 
+    hmm->t[m][p7H_MI] = (betaM       > fsmall)? betaM                  : fsmall;
+    hmm->t[m][p7H_II] = (eta         > fsmall)? eta                    : fsmall;
     
-    hmm->t[m][p7H_MM] = (1.0 - hmm->t[m][p7H_MI] - hmm->t[m][p7H_MD] > fsmall)? 1.0 - hmm->t[m][p7H_MI] - hmm->t[m][p7H_MD] : fsmall; 
-    hmm->t[m][p7H_IM] = (1.0 - hmm->t[m][p7H_II]                     > fsmall)? 1.0 - hmm->t[m][p7H_II]                     : fsmall; 
-    hmm->t[m][p7H_DM] = (1.0 - hmm->t[m][p7H_DD]                     > fsmall)? 1.0 - hmm->t[m][p7H_DD]                     : fsmall; 
+    hmm->t[m][p7H_MD] = (1.0 - betaM > fsmall)? (1.0 - betaM) * gammaM : fsmall;
+    hmm->t[m][p7H_DD] = (1.0 - betaD > fsmall)? (1.0 - betaD) * gammaD : fsmall;
+    
+    hmm->t[m][p7H_MM] = ((1.0 - betaM) * (1.0 - gammaM) > fsmall)? (1.0 - betaM) * (1.0 - gammaM) : fsmall; 
+    hmm->t[m][p7H_DM] = ((1.0 - betaD) * (1.0 - gammaD) > fsmall)? (1.0 - betaD) * (1.0 - gammaD) : fsmall; 
+    hmm->t[m][p7H_IM] = ((1.0 - eta)   * (1.0 - gammaI) > fsmall)? (1.0 - eta)   * (1.0 - gammaI) : fsmall; 
 
     /* last node is a special: TMD shouldE be zero, TDM shouldE be one  */
     if (m == hmm->M && hmm->t[m][p7H_MD] > 0.0)   hmm->t[m][p7H_MD] = 0.0;
     if (m == hmm->M && hmm->t[m][p7H_DD] > 0.0) { hmm->t[m][p7H_DD] = 0.0; hmm->t[m][p7H_DM] = 1.0; }
 
-    /* normalize again */
+    /* normalize (this takes care of D->I = 0 and I->D = 0) */
     tM = hmm->t[m][p7H_MM] + hmm->t[m][p7H_MD] + hmm->t[m][p7H_MI];
     itM = (tM > 0.)? 1./tM : 0.0;
     hmm->t[m][p7H_MM] *= itM;

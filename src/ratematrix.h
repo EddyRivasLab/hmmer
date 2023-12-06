@@ -14,7 +14,7 @@
 
 typedef struct emrate_s {
   ESL_DMATRIX  *Qstar;	        /* the emissions rate matrix [K x K], saturates to pstar  */
-  ESL_DMATRIX  *Qinfy;	        /* the emissions rate matrix [K x K], saturaters to pinfy */
+  ESL_DMATRIX  *Qinfy;	        /* the emissions rate matrix [K x K], saturates to pinfy */
   ESL_DMATRIX  *E;	        /* the emissions exchangeability matrix [K x K]  */
   double       *f;              /* frequencies used to build the rate from a scoring matrix */
 

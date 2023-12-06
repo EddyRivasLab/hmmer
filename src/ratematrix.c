@@ -1619,18 +1619,22 @@ ratematrix_emrate_Set(const char *name, const ESL_DMATRIX *rate, double *f, EMRA
   /* Transfer scores from static built-in storage */
   for (x = 0; x < R->E->n; x++) 
     for (y = 0; y < R->E->n; y++) 
-      R->Qstar->mx[x][y] = (name)? ((scaledrate)? SCALED_RATEMATRIX_AA_PRELOADS[which].matrix[x][y] : RATEMATRIX_AA_PRELOADS[which].matrix[x][y] ): rate->mx[x][y];
+      R->Qstar->mx[x][y] = (name)? ((scaledrate)?
+				    SCALED_RATEMATRIX_AA_PRELOADS[which].matrix[x][y] :
+				    RATEMATRIX_AA_PRELOADS[which].matrix[x][y]
+				    ) : rate->mx[x][y];
   
   /* set Qstar and Qinfy identical for now */
   esl_dmatrix_Copy(R->Qstar, R->Qinfy);
   
   if (f != NULL) { 
     /* the background frequencies */
-    for (x = 0; x < R->E->n; x++)
+    for (x = 0; x < R->E->n; x++) 
       R->f[x] = f[x];  
   }
   else if (name && R->abc_r->type == eslAMINO) {
-    for (x = 0; x < R->E->n; x++) R->f[x] = (scaledrate)? SCALED_RATEMATRIX_AA_PRELOADS[which].pmarg[x] : RATEMATRIX_AA_PRELOADS[which].pmarg[x];
+    for (x = 0; x < R->E->n; x++)
+      R->f[x] = (scaledrate)? SCALED_RATEMATRIX_AA_PRELOADS[which].pmarg[x] : RATEMATRIX_AA_PRELOADS[which].pmarg[x];
   }
   /* the exchangeabilities (in logspace) */
   ratematrix_ExchangeFromRate(R->Qstar, R->f, R->E);

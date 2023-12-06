@@ -129,8 +129,8 @@ p7_EvoPipeline(P7_PIPELINE *pli, EMRATE *emR, P7_RATE *oR, P7_HMM *hmm, P7_PROFI
   int              d;
   int              be_verbose = FALSE;
   int              status;
-
- /* init */
+  
+  /* init */
   time = 1.0; 
   
 #if RECALIBRATE
@@ -145,6 +145,9 @@ p7_EvoPipeline(P7_PIPELINE *pli, EMRATE *emR, P7_RATE *oR, P7_HMM *hmm, P7_PROFI
   /* Base null model score (we could calculate this in NewSeq(), for a scan pipeline) */
   p7_bg_NullOne  (bg, sq->dsq, sq->n, &nullsc);
 
+  /* Make a copy of hmm into ehmm which will be evolved */
+  workaround_get_starprofile(pli, bg, hmm, gm, om, &ehmm, noevo); 
+
   /* First level filter: the MSV filter, multihit with <om> */
   // noevo = TRUE
   //p7_MSVFilter(sq->dsq, sq->n, om, pli->oxf, &usc);
@@ -153,7 +156,10 @@ p7_EvoPipeline(P7_PIPELINE *pli, EMRATE *emR, P7_RATE *oR, P7_HMM *hmm, P7_PROFI
     printf("\nsequence %s msvfilter did not optimize\n", sq->name);
   seq_score = (usc - nullsc) / eslCONST_LOG2;
   P = esl_gumbel_surv(seq_score,  om->evparam[p7_MMU],  om->evparam[p7_MLAMBDA]);
-  if (P > pli->F1) return eslOK;
+  if (P > pli->F1) {
+    p7_hmm_Destroy(ehmm);
+    return eslOK;
+  }
   pli->n_past_msv++;
 
   /* biased composition HMM filtering */
@@ -162,7 +168,10 @@ p7_EvoPipeline(P7_PIPELINE *pli, EMRATE *emR, P7_RATE *oR, P7_HMM *hmm, P7_PROFI
       p7_bg_FilterScore(bg, sq->dsq, sq->n, &filtersc);
       seq_score = (usc - filtersc) / eslCONST_LOG2;
       P = esl_gumbel_surv(seq_score,  om->evparam[p7_MMU],  om->evparam[p7_MLAMBDA]);
-      if (P > pli->F1) return eslOK;
+      if (P > pli->F1) {
+	p7_hmm_Destroy(ehmm);
+	return eslOK;
+      }
     }
   else filtersc = nullsc;
   pli->n_past_bias++;
@@ -185,7 +194,10 @@ p7_EvoPipeline(P7_PIPELINE *pli, EMRATE *emR, P7_RATE *oR, P7_HMM *hmm, P7_PROFI
 
       seq_score = (vfsc-filtersc) / eslCONST_LOG2;
       P  = esl_gumbel_surv(seq_score,  om->evparam[p7_VMU],  om->evparam[p7_VLAMBDA]);
-      if (P > pli->F2) return eslOK;
+      if (P > pli->F2) {
+	p7_hmm_Destroy(ehmm);
+	return eslOK;
+      }
     }
   pli->n_past_vit++;
 
@@ -203,7 +215,10 @@ p7_EvoPipeline(P7_PIPELINE *pli, EMRATE *emR, P7_RATE *oR, P7_HMM *hmm, P7_PROFI
 
   seq_score = (fwdsc-filtersc) / eslCONST_LOG2;
   P = esl_exp_surv(seq_score,  om->evparam[p7_FTAU],  om->evparam[p7_FLAMBDA]);
-  if (P > pli->F3) return eslOK;
+  if (P > pli->F3) {
+    p7_hmm_Destroy(ehmm);
+    return eslOK;
+  }
   pli->n_past_fwd++;
 
   /* ok, it's for real. Now a Backwards parser pass, and hand it to domain definition workflow */
@@ -376,6 +391,8 @@ p7_EvoPipeline(P7_PIPELINE *pli, EMRATE *emR, P7_RATE *oR, P7_HMM *hmm, P7_PROFI
 	  
     }
 
+  p7_hmm_Destroy(ehmm);
+  
   return eslOK;
 }
 
@@ -475,7 +492,8 @@ optimize_msvfilter(const ESL_DSQ *dsq, int n, float *ret_time,
 		   float tol, char *errbuf, int be_verbose)
 {
   struct optimize_data   data;
-  ESL_MIN_DAT           *stats = esl_min_dat_Create(NULL);
+  ESL_MIN_CFG           *cfg   = esl_min_cfg_Create(1);
+  ESL_MIN_DAT           *stats = esl_min_dat_Create(cfg);
   double                *p = NULL;	       /* parameter vector                        */
   double                *u = NULL;             /* max initial step size vector            */
   double                *wrk = NULL;           /* 4 tmp vectors of length nbranches       */
@@ -491,6 +509,7 @@ optimize_msvfilter(const ESL_DSQ *dsq, int n, float *ret_time,
   if (noevo || isfixtime || usc_init == eslINFINITY) {
     *ret_usc  = usc_init;
     *ret_time = time;
+    esl_min_dat_Destroy(stats);
     return eslOK;
   }
 
@@ -521,26 +540,32 @@ optimize_msvfilter(const ESL_DSQ *dsq, int n, float *ret_time,
   /* pass problem to the optimizer
    */
   optimize_bracket_define_direction(u, (long)np, &data);
-  status = esl_min_ConjugateGradientDescent(NULL, p, np,
+  status = esl_min_ConjugateGradientDescent(cfg, p, np,
 					    &optimize_msvfilter_func, NULL,
 					    (void *) (&data), &sc, stats);
-  if (status != eslOK) 
+  if (status == eslENOHALT) 
+    printf("optimize_msvfilter(): bracket minimization did not converged. You may consider increasing the number of iterations\n");		
+  else if (status != eslOK) 
     esl_fatal("optimize_msvfilter(): bad bracket minimization");	
   
   /* unpack the final parameter vector */
   optimize_unpack_paramvector(p, (long)np, &data);
   data.usc = -sc;
-  if (be_verbose) printf("END MSV OPTIMIZATION: time %f usc %f --> %f\n", data.time, usc_init, data.usc);
+  if (1||be_verbose) printf("END MSV OPTIMIZATION: time %f usc %f --> %f\n", data.time, usc_init, data.usc);
   
   *ret_usc  = data.usc;
   *ret_time = data.time;
   
   /* clean up */
+  esl_min_cfg_Destroy(cfg);
+  esl_min_dat_Destroy(stats);
   if (u   != NULL) free(u);
   if (p   != NULL) free(p);
   return eslOK;
 
  ERROR:
+  if (cfg)   esl_min_cfg_Destroy(cfg);
+  if (stats) esl_min_dat_Destroy(stats);
   if (p   != NULL) free(p);
   if (u   != NULL) free(u);
   return status;
@@ -553,7 +578,8 @@ p7_evopli_OptimizeViterbiFilter(const ESL_DSQ *dsq, int n, float *ret_time,
 				float tol, char *errbuf, int be_verbose)
 {
   struct optimize_data   data;
-  ESL_MIN_DAT           *stats = esl_min_dat_Create(NULL);
+  ESL_MIN_CFG           *cfg   = esl_min_cfg_Create(1);
+  ESL_MIN_DAT           *stats = esl_min_dat_Create(cfg);
   double                *p = NULL;	       /* parameter vector                        */
   double                *u = NULL;             /* max initial step size vector            */
   double                 sc;
@@ -566,8 +592,9 @@ p7_evopli_OptimizeViterbiFilter(const ESL_DSQ *dsq, int n, float *ret_time,
   time = (isfixtime)? fixtime : *ret_time;
   vfsc_init = func_viterbifilter((ESL_DSQ *)dsq, n, hmm, R, gm, om, bg, oxf, time, noevo, tol, errbuf, be_verbose);
   if (noevo || isfixtime || vfsc_init == eslINFINITY) {
-    *ret_vfsc  = vfsc_init;
-    *ret_time   = time;
+    *ret_vfsc = vfsc_init;
+    *ret_time = time;
+    esl_min_dat_Destroy(stats);
     return eslOK;
   }
 
@@ -600,26 +627,32 @@ p7_evopli_OptimizeViterbiFilter(const ESL_DSQ *dsq, int n, float *ret_time,
   /* pass problem to the optimizer
    */
   optimize_bracket_define_direction(u, (long)np, &data);
-  status = esl_min_ConjugateGradientDescent(NULL, p, np,
+  status = esl_min_ConjugateGradientDescent(cfg, p, np,
 					    &optimize_viterbifilter_func, NULL,
 					    (void *) (&data), &sc, stats);
-  if (status != eslOK) 
+  if (status == eslENOHALT) 
+    printf("optimize_viterbiparser(): bracket minimization did not converged. You may consider increasing the number of iterations\n");		
+  else   if (status != eslOK) 
     esl_fatal("optimize_viterbifilter(): bad bracket minimization");	
   
   /* unpack the final parameter vector */
   optimize_unpack_paramvector(p, (long)np, &data);
   data.vfsc = -sc;
-  if (be_verbose) printf("END VIT OPTIMIZATION: time %f vfsc %f --> %f\n", data.time, vfsc_init, data.vfsc);
+  if (1||be_verbose) printf("END VIT OPTIMIZATION: time %f vfsc %f --> %f\n", data.time, vfsc_init, data.vfsc);
   
   *ret_vfsc = data.vfsc;
   *ret_time = data.time;
   
   /* clean up */
+  esl_min_cfg_Destroy(cfg);
+  esl_min_dat_Destroy(stats);
   if (u   != NULL) free(u);
   if (p   != NULL) free(p);
   return eslOK;
 
  ERROR:
+  if (cfg)   esl_min_cfg_Destroy(cfg);
+  if (stats) esl_min_dat_Destroy(stats);
   if (p   != NULL) free(p);
   if (u   != NULL) free(u);
   return status;
@@ -633,7 +666,8 @@ p7_evopli_OptimizeForwardParser(const ESL_DSQ *dsq, int n, float *ret_time,
 				float tol, char *errbuf, int be_verbose)
 {
   struct optimize_data   data;
-  ESL_MIN_DAT           *stats = esl_min_dat_Create(NULL);
+  ESL_MIN_CFG           *cfg   = esl_min_cfg_Create(1);
+  ESL_MIN_DAT           *stats = esl_min_dat_Create(cfg);
   double                *p = NULL;	       /* parameter vector                      */
   double                *u = NULL;             /* max initial step size vector          */
   double                 sc;
@@ -646,8 +680,9 @@ p7_evopli_OptimizeForwardParser(const ESL_DSQ *dsq, int n, float *ret_time,
   time = (isfixtime)? fixtime : *ret_time;
   fwdsc_init = func_forwardparser((ESL_DSQ *)dsq, n, hmm, R, gm, om, bg, oxf, time, noevo, tol, errbuf, be_verbose);
   if (noevo || isfixtime || fwdsc_init == eslINFINITY) {
-    *ret_fwdsc  = fwdsc_init;
-    *ret_time   = time;
+    *ret_fwdsc = fwdsc_init;
+    *ret_time  = time;
+    esl_min_dat_Destroy(stats);
     return eslOK;
   }
   
@@ -680,26 +715,33 @@ p7_evopli_OptimizeForwardParser(const ESL_DSQ *dsq, int n, float *ret_time,
   /* pass problem to the optimizer
    */
   optimize_bracket_define_direction(u, (long)np, &data);
-  status = esl_min_ConjugateGradientDescent(NULL, p, np,
+  status = esl_min_ConjugateGradientDescent(cfg, p, np,
 					    &optimize_forwardparser_func, NULL,
 					    (void *) (&data), &sc, stats);
-  if (status != eslOK) 
-    esl_fatal("optimize_forwardparser(): bad bracket minimization");		
+  
+  if (status == eslENOHALT) 
+    printf("optimize_forwardparser(): bracket minimization did not converged. You may consider increasing the number of iterations\n");		
+  else if (status != eslOK) 
+    esl_fatal("optimize_forwardparser(): bad bracket minimization. status %d tol %f", status, data.tol);		
   
   /* unpack the final parameter vector */
   optimize_unpack_paramvector(p, (long)np, &data);
   data.fwdsc = -sc;
-  if (be_verbose) printf("END FWD OPTIMIZATION: time %f fwdsc %f --> %f\n", data.time, fwdsc_init, data.fwdsc);
+  if (1||be_verbose) printf("END FWD OPTIMIZATION: time %f fwdsc %f --> %f\n", data.time, fwdsc_init, data.fwdsc);
   
   *ret_fwdsc = data.fwdsc;
   *ret_time  = data.time;
   
   /* clean up */
+  esl_min_cfg_Destroy(cfg);
+  esl_min_dat_Destroy(stats);
   if (p   != NULL) free(p);
   if (u   != NULL) free(u);
   return eslOK;
 
  ERROR:
+  if (cfg)   esl_min_cfg_Destroy(cfg);  
+  if (stats) esl_min_dat_Destroy(stats);  
   if (p   != NULL) free(p);
   if (u   != NULL) free(u);
   return status;
@@ -860,17 +902,14 @@ workaround_get_starprofile(P7_PIPELINE *pli, const P7_BG *bg, const P7_HMM *hmm,
     /* Construct evolved HMM */
     ehmm = p7_hmm_Clone(hmm);
 
-
     /* Configure a profile from the HMM */
-    p7_ProfileConfig(hmm, bg, gm, 400, p7_LOCAL);
+    p7_ProfileConfig(ehmm, bg, gm, 400, p7_LOCAL);
     p7_oprofile_Convert(gm, om);     /* <om> is now p7_LOCAL, multihit */
-    p7_pli_NewModel(pli, om, (P7_BG *)bg);
-
     /* Convert to an optimized model */
-    if ( (status = p7_ProfileConfig(ehmm, bg, gm, 400, p7_LOCAL)) != eslOK) goto ERROR;
+    //if ( (status = p7_ProfileConfig(ehmm, bg, gm, 400, p7_LOCAL)) != eslOK) goto ERROR;
     //if ( (status = p7_profile_SetLength(gm, om->L))               != eslOK) goto ERROR;
-    if ( (status = p7_oprofile_Convert(gm, om))                   != eslOK) goto ERROR;      
-    if ( (status = p7_oprofile_ReconfigLength(om, om->L))         != eslOK) goto ERROR;
+    //if ( (status = p7_oprofile_Convert(gm, om))                   != eslOK) goto ERROR;      
+    //if ( (status = p7_oprofile_ReconfigLength(om, om->L))         != eslOK) goto ERROR;
   }
   
   *ret_ehmm = ehmm;
