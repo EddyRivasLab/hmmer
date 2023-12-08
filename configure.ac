@@ -756,8 +756,8 @@ AC_CONFIG_FILES([ \
   easel/miniapps/esl-sfetch.man      \
   easel/miniapps/esl-shuffle.man     \
   easel/miniapps/esl-ssdraw.man      \
-  easel/miniapps/esl-translate.man   \
   easel/miniapps/esl-weight.man      \
+  easel/miniapps/easel-translate.man \
  ])
 
 AC_CONFIG_HEADERS([easel/decoy_config.h])   # Put this first to keep gnu 'autoheader' from overwriting a real config file.
