@@ -656,7 +656,7 @@ main(int argc, char **argv)
       for (j=1; j<=block->list[i].n; j++) {
         c = abc->sym[block->list[i].dsq[j]];
         if ( meta->alph_type == fm_DNA) {
-          if (meta->inv_alph[c] == -1) {
+          if (meta->inv_alph[c] == 127) {
             // replace ambiguity characters by random choice of A,C,G, and T.
             c = meta->alph[(int)(esl_random(r)*4)];
 
@@ -669,7 +669,7 @@ main(int argc, char **argv)
           } else {
             in_ambig_run=0;
           }
-        } else if (meta->inv_alph[c] == -1) {
+        } else if (meta->inv_alph[c] == 127) {
           esl_fatal("requested alphabet doesn't match input text\n");
         }
 

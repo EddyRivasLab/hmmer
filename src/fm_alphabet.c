@@ -1,3 +1,11 @@
+/* 
+ * note: rethink this to use ESL_DSQ for digital alphabets, instead of
+ *       reinventing the wheel badly. In [SRE:1212-h3-signed-char] to
+ *       fix H3 iss#318, I changed some -1's to 127's as a workaround;
+ *       previous code incorrectly assumed "char" type is signed.
+ */
+
+
 #include <p7_config.h>
 
 #include <ctype.h>
@@ -15,7 +23,8 @@
  *            replaced with easel alphabet functions, but the easel
  *            requirement of having a gap-character between
  *            cannonical and degenerate symbols poses a problem
- *            from a bit-packing perspective
+ *            from a bit-packing perspective [SRE: unclear what problem
+ *            is being envisaged here]
  *
  * Args:      meta      - metadata object already initialized with the alphabet type.
  *                        This will hold the alphabet (and corresponding reverse alphabet)
@@ -88,7 +97,7 @@ fm_alphabetCreate (FM_METADATA *meta, uint8_t *alph_bits) {
 	}
 
 	for (i=0; i<256; i++)
-	  meta->inv_alph[i] = -1;
+	  meta->inv_alph[i] = 127;    // SRE: 127, not -1, to fix H3#318: don't assume char is signed [SRE:1212-h3-signed-char]
 
 	for (i=0; i<meta->alph_size; i++) {
 	  meta->inv_alph[tolower(meta->alph[i])] = meta->inv_alph[toupper(meta->alph[i])] = i;
@@ -174,5 +183,7 @@ fm_getComplement (char c, uint8_t alph_type)
     } else {
         esl_fatal("Unknown alphabet type\n%s", "");
     }
-    return -1;
+    return 127;  // SRE: 127, not -1, to fix H3#318: don't assume char is signed [SRE:1212-h3-signed-char]
+
+
 }
