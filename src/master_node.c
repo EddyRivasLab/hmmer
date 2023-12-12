@@ -52,9 +52,40 @@
 
 
 // defines that control debugging commands
-#define DEBUG_COMMANDS 1
-#define DEBUG_HITS 1
-#define PRINT_PERF 1
+//#define DEBUG_COMMANDS 1
+//#define DEBUG_HITS 1
+//#define PRINT_PERF 1
+
+// define this to switch mutexes to slower, but error-checking versions
+//#define CHECK_MUTEXES 1 
+
+#ifdef CHECK_MUTEXES
+static void parse_lock_errors(int errortype){
+  if(errortype == 0){ // No error
+    return;
+  }
+  switch (errortype){
+    case EINVAL:
+      printf("Masternode: attempt to lock/unlock uninitialized mutex\n");
+      break;
+    case EBUSY:
+      printf("Masternode: attempt to trylock an already-locked mutex\n");
+      break;
+    case EAGAIN:
+      printf("Masternode: attempt to lock a mutex with too many recursive locks\n");
+      break;
+    case EDEADLK:
+      printf("Masternode: attempt to lock a mutex that the thread had already locked\n");
+      break;
+    case EPERM:
+      printf("Masternode: attempt to unlock a mutex that the thread did not own\n");
+      break;
+    default:
+      p7_Die("Masternode: unknown error code %d returned by pthread lock/unlock\n");
+  }
+  return;
+}
+#endif
 /* Functions to communicate with the client via sockets.  Taken from the original hmmpgmd*/
 typedef struct {
   int             sock_fd;
@@ -306,6 +337,20 @@ forward_results(P7_SERVER_QUEUE_DATA *query, SEARCH_RESULTS *results)
   // gets destroyed
   if(results->nhits)  free(results->hits);  // init_results will set hits = NULL
 
+  shutdown(fd, SHUT_WR); // signal the client that we're closing the socket
+  // wait for client to close socket from its end, indicating that it's read the data
+  // probably should have a timeout to thwart malicious clients
+  for(;;){
+    n = read(fd, buf2_ptr, buf_offset2);  // see if the client has closed the socket
+    if (n<0){ // something went wrong
+      p7_syslog(LOG_ERR,"[%s:%d] - closing %s error %d - %s\n", __FILE__, __LINE__, query->ip_addr, errno, strerror(errno));
+      break;
+    }
+    if(n == 0){  // client closed socket
+      break;
+    }
+  }
+  close(fd); //terminate socket from our end
   if (pli)  p7_pipeline_Destroy(pli);
   if (hits) free(hits);
   if (dcl)  free(dcl);
@@ -459,6 +504,7 @@ process_ServerCmd(char *ptr, CLIENTSIDE_ARGS *data)
   esl_stack_PPush(cmdstack, parms);
   free(cmd);
 }
+
 static int
 clientside_loop(CLIENTSIDE_ARGS *data)
 {
@@ -469,7 +515,11 @@ clientside_loop(CLIENTSIDE_ARGS *data)
   char              *opt_str;
 
   int                dbx;
+  int                eod;
   int                n;
+  int                buf_size;
+  int                remaining;
+  int                amount;
 
   P7_HMM            *hmm     = NULL;     /* query HMM                      */
   ESL_SQ            *seq     = NULL;     /* query sequence                 */
@@ -488,30 +538,51 @@ clientside_loop(CLIENTSIDE_ARGS *data)
   int search_type = -1;
   int slen;
   uint64_t search_length=0;
-  
-  uint32_t serialized_command_length, command_length;
-  /* Receive message from client with size of command */
-  if ((n = read(data->sock_fd, &serialized_command_length, sizeof(uint32_t))) <0) {
-    p7_syslog(LOG_ERR,"[%s:%d] - reading %s error %d - %s\n", __FILE__, __LINE__, data->ip_addr, errno, strerror(errno));
-    return 0;
-  }
-  if(n ==0 ){ // zero-byte send indicates that socket was closed from the other end
-    return 1;  // tell caller to stop listening
-  }
-  if (n  != sizeof(uint32_t)) {// Wrong number of bytes were setn
-    p7_syslog(LOG_ERR,"[%s:%d] - reading %s error %d - %s\n", __FILE__, __LINE__, data->ip_addr, errno, strerror(errno));
-    return 0;
-  }
-  command_length = esl_ntoh32(serialized_command_length);
-  ESL_ALLOC(buffer, command_length +1);  // add one so we can zero-terminate
-  // now get the command
-  if ((n = read(data->sock_fd, buffer, command_length)) != command_length) {
-    p7_syslog(LOG_ERR,"[%s:%d] - reading %s error %d - %s\n", __FILE__, __LINE__, data->ip_addr, errno, strerror(errno));
-    return 0;
+
+  buf_size = MAX_BUFFER;
+  if ((buffer  = malloc(buf_size))   == NULL) LOG_FATAL_MSG("malloc", errno);
+  ptr = buffer;
+  remaining = buf_size;
+  amount = 0;
+  eod = 0;
+  while (!eod) {
+    int   l;
+    char *s;
+
+    /* Receive message from client */
+    if ((n = read(data->sock_fd, ptr, remaining)) < 0) {
+      p7_syslog(LOG_ERR,"[%s:%d] - reading %s error %d - %s\n", __FILE__, __LINE__, data->ip_addr, errno, strerror(errno));
+      return 1;
+    }
+
+    if (n == 0) return 1;
+
+    ptr += n;
+    amount += n;
+    remaining -= n;
+
+    /* scan backwards till we hit the start of the line */
+    l = amount;
+    s = ptr - 1;
+    while (l-- > 0 && (*s == '\n' || *s == '\r')) --s;
+    while (l-- > 0 && (*s != '\n' && *s != '\r')) --s;
+    eod = (amount > 1 && *(s + 1) == '/' && *(s + 2) == '/' );
+
+    /* if the buffer is full, make it larger */
+    if (!eod && remaining == 0) {
+      if ((buffer = realloc(buffer, buf_size * 2)) == NULL) LOG_FATAL_MSG("realloc", errno);
+      ptr = buffer + buf_size;
+      remaining = buf_size;
+      buf_size *= 2;
+    }
   }
 
-  // zero-terminate the command
-  *(buffer+command_length) = 0;
+  /* zero terminate the buffer */
+  if (remaining == 0) {
+    if ((buffer = realloc(buffer, buf_size + 1)) == NULL) LOG_FATAL_MSG("realloc", errno);
+    ptr = buffer + buf_size;
+  }
+  *ptr = 0;
 
   /* skip all leading white spaces */
   ptr = buffer;
@@ -561,8 +632,8 @@ clientside_loop(CLIENTSIDE_ARGS *data)
     printf("received options string of: %s\n", opt_str);
 #endif
     if ((opts = esl_getopts_Create(server_Client_Options))       == NULL)  client_msg_longjmp(data->sock_fd, status, &jmp_env, "Failed to create search options object");
-    if ((status = esl_opt_ProcessSpoof(opts, opt_str)) != eslOK) client_msg_longjmp(data->sock_fd, status, &jmp_env, "Failed to parse options string: %s", opt_str);
-    if ((status = esl_opt_VerifyConfig(opts))         != eslOK) client_msg_longjmp(data->sock_fd, status, &jmp_env, "Failed to parse options string: %s", opt_str);
+    if ((status = esl_opt_ProcessSpoof(opts, opt_str)) != eslOK) client_msg_longjmp(data->sock_fd, status, &jmp_env, "Failed to parse options string: %s", opts->errbuf);
+    if ((status = esl_opt_VerifyConfig(opts))         != eslOK) client_msg_longjmp(data->sock_fd, status, &jmp_env, "Failed to parse options string: %s", opts->errbuf);
 
     dbx = esl_opt_GetInteger(opts, "--db");
     if((dbx < 1) || (dbx > data->masternode->num_databases)){
@@ -730,9 +801,6 @@ clientside_loop(CLIENTSIDE_ARGS *data)
   free(buffer);
   return 0;
 
-  ERROR:
-  if(buffer) free(buffer);
-  return eslEMEM;
 }
 
 
@@ -757,9 +825,7 @@ discard_function(void *elemp, void *args)
     }
   return FALSE;
 }
-
-
-static void *clientside_thread(void *arg)
+static void *clientside_thread_old(void *arg)
 {
   int              eof;
   CLIENTSIDE_ARGS *data = (CLIENTSIDE_ARGS *)arg;
@@ -775,6 +841,312 @@ static void *clientside_thread(void *arg)
   fflush(stdout);
 
   close(data->sock_fd);
+  free(data);
+  pthread_exit(NULL);
+}
+
+static void *clientside_thread(void *arg)  // new version that reads exactly one command from a client
+{
+
+  CLIENTSIDE_ARGS *data = (CLIENTSIDE_ARGS *)arg;
+  pthread_detach(pthread_self()); // Mark our resources to be cleaned up on thread exit
+  int                status = eslOK;
+
+  char              *ptr;
+  char              *buffer;
+  char              *opt_str;
+
+  int                dbx;
+  int                eod;
+  int                n;
+  int                buf_size;
+  int                remaining;
+  int                amount;
+
+  P7_HMM            *hmm     = NULL;     /* query HMM                      */
+  ESL_SQ            *seq     = NULL;     /* query sequence                 */
+  ESL_SCOREMATRIX   *sco     = NULL;     /* scoring matrix                 */
+  P7_HMMFILE        *hfp     = NULL;
+  ESL_ALPHABET      *abc     = NULL;     /* digital alphabet               */
+  ESL_GETOPTS       *opts    = NULL;     /* search specific options        */
+  P7_BUILDER       *bld      = NULL;         /* HMM construction configuration */
+  P7_BG            *bg       = NULL;         /* null model                     */
+
+  ESL_STACK         *cmdstack = data->cmdstack;
+  P7_SERVER_QUEUE_DATA        *parms;
+  jmp_buf            jmp_env;
+  time_t             date;
+  char               timestamp[32];
+  int search_type = -1;
+  int slen;
+  uint64_t search_length=0;
+
+  buf_size = MAX_BUFFER;
+  if ((buffer  = malloc(buf_size))   == NULL) LOG_FATAL_MSG("malloc", errno);
+  ptr = buffer;
+  remaining = buf_size;
+  amount = 0;
+  eod = 0;
+  while (!eod) {
+    int   l;
+    char *s;
+
+    /* Receive message from client */
+    if ((n = read(data->sock_fd, ptr, remaining)) < 0) {
+      p7_syslog(LOG_ERR,"[%s:%d] - reading %s error %d - %s\n", __FILE__, __LINE__, data->ip_addr, errno, strerror(errno));
+      close(data->sock_fd);
+      pthread_exit(NULL);
+    }
+
+    if (n == 0) {
+      close(data->sock_fd);
+      pthread_exit(NULL);
+    }
+
+    ptr += n;
+    amount += n;
+    remaining -= n;
+printf("Received %lu bytes\n", ptr-buffer);
+    /* scan backwards till we hit the start of the line */
+    l = amount;
+    s = ptr - 1;
+    while (l-- > 0 && (*s == '\n' || *s == '\r')) --s;
+    while (l-- > 0 && (*s != '\n' && *s != '\r')) --s;
+    eod = (amount > 1 && *(s + 1) == '/' && *(s + 2) == '/' );
+
+    /* if the buffer is full, make it larger */
+    if (!eod && remaining == 0) {
+      if ((buffer = realloc(buffer, buf_size * 2)) == NULL) LOG_FATAL_MSG("realloc", errno);
+      ptr = buffer + buf_size;
+      remaining = buf_size;
+      buf_size *= 2;
+    }
+  }
+
+  /* zero terminate the buffer */
+  if (remaining == 0) {
+    if ((buffer = realloc(buffer, buf_size + 1)) == NULL) LOG_FATAL_MSG("realloc", errno);
+    ptr = buffer + buf_size;
+  }
+  *ptr = 0;
+
+  /* skip all leading white spaces */
+  ptr = buffer;
+  while (*ptr && isspace(*ptr)) ++ptr;
+
+  if (*ptr == '!') {
+    process_ServerCmd(ptr, data);
+    free(buffer);
+    pthread_exit(NULL);
+  } 
+  else if (*ptr == '@') {
+    char *s = ++ptr;
+
+    /* skip to the end of the line */
+    while (*ptr && (*ptr != '\n' && *ptr != '\r')) ++ptr;
+    *ptr++ = 0;
+
+    /* create a commandline string with dummy program name for
+     * the esl_opt_ProcessSpoof() function to parse.
+     */
+
+
+    slen = strlen(s);
+    opt_str = (char *) malloc(slen +10);  //This does not need to get freed in this function.  It gets added to the query
+    // data structure, which is freed after the query has been completed
+    if (opt_str == NULL){
+      client_msg_longjmp(data->sock_fd, status, &jmp_env, "Unable to allocate memory for options string. This is a fatal error");
+    }
+    if(strlen(s) > 0){
+      int strl = snprintf(opt_str, slen+10, "hmmpgmd %s\n", s);
+      opt_str[strl] = '\0'; // snprintf appears to sometimes not terminate string even though it's supposed to.
+    }
+    else{ // esl_opt_ProcessSpoof seems to have trouble with options strings that have trailing spaces
+      strcpy(opt_str, "hmmpgmd\n");
+    }    
+    /* skip remaining white spaces */
+    while (*ptr && isspace(*ptr)) ++ptr;
+  } else {
+    client_msg(data->sock_fd, eslEFORMAT, "Missing options string");
+    free(buffer);
+    close(data->sock_fd);
+    pthread_exit(NULL);
+  }
+
+  if (!setjmp(jmp_env)) {
+    dbx = 0;
+#ifdef DEBUG_COMMANDS
+    printf("received options string of: %s\n", opt_str);
+#endif
+    if ((opts = esl_getopts_Create(server_Client_Options))       == NULL)  client_msg_longjmp(data->sock_fd, status, &jmp_env, "Failed to create search options object");
+    if ((status = esl_opt_ProcessSpoof(opts, opt_str)) != eslOK) client_msg_longjmp(data->sock_fd, status, &jmp_env, "Failed to parse options string: %s", opts->errbuf);
+    if ((status = esl_opt_VerifyConfig(opts))         != eslOK) client_msg_longjmp(data->sock_fd, status, &jmp_env, "Failed to parse options string: %s", opts->errbuf);
+
+    dbx = esl_opt_GetInteger(opts, "--db");
+    if((dbx < 1) || (dbx > data->masternode->num_databases)){
+      client_msg_longjmp(data->sock_fd, eslEINVAL, &jmp_env, "Nonexistent database %d specified.  Valid database ID's for this server range from 1 to %d\n", dbx, data->masternode->num_databases);
+      }
+       
+    if(dbx == 0) {
+      client_msg_longjmp(data->sock_fd, eslEINVAL, &jmp_env, "No search database specified, --db <database #> is required");
+    }
+
+
+    // check for correctly formated rangelist if one is specified so that we can complain to the sender
+    if (esl_opt_IsUsed(opts, "--db_ranges")){
+      char *orig_range_string = esl_opt_GetString(opts, "--db_ranges");
+      char *range_string = NULL;
+      esl_strdup(orig_range_string, -1, &range_string);  // make copy becauese tokenizaton seems to modify the input string
+      char *range_string_base = range_string; // save this because we need to free it later
+      char *range;
+      uint64_t min_index = data->masternode->database_shards[dbx-1]->directory[0].index;
+      uint64_t max_index = data->masternode->database_shards[dbx-1]->directory[data->masternode->database_shards[dbx-1]->num_objects -1].index;
+      while ((status = esl_strtok(&range_string, ",", &range) ) == eslOK){
+        int64_t start, end;
+        status = esl_regexp_ParseCoordString(range, &start, &end);
+        // These errors should never occur, because we sanity check-the range when receiving the search command
+        if (status == eslESYNTAX) client_msg_longjmp(data->sock_fd, eslEINVAL, &jmp_env,"--db_ranges takes coords <from>..<to>; %s not recognized", range);
+        if (status == eslFAIL)    client_msg_longjmp(data->sock_fd, eslEINVAL, &jmp_env,"Failed to find <from> or <to> coord in %s", range);
+        if (start > end){
+          client_msg_longjmp(data->sock_fd, eslEINVAL, &jmp_env,"Illegal range from %lu to %lu found in --db_ranges", start, end);
+        }
+        if((start < min_index) | (start > max_index)) client_msg_longjmp(data->sock_fd, eslEINVAL, &jmp_env,"Start of range %lu was outside of database index range %lu to %lu", start, min_index, max_index);
+        if((end < min_index) | (end > max_index)) client_msg_longjmp(data->sock_fd, eslEINVAL, &jmp_env,"End of range %lu was outside of database index range %lu to %lu", end, min_index, max_index);
+#ifdef DEBUG_COMMANDS
+        printf("range found of %lu to %lu\n", start, end);
+#endif
+        search_length +=(end-start)+1;
+      }
+      free(range_string_base);
+    }
+    else{
+        search_length = data->masternode->database_shards[dbx-1]->num_objects;  // We're searching the entire shard, so get the length from the shard
+      }
+    seq = NULL;
+    hmm = NULL;
+
+    if (*ptr == '>') {
+      /* try to parse the input buffer as a FASTA sequence */
+      abc = esl_alphabet_Create(eslAMINO);
+      seq = esl_sq_CreateDigital(abc);
+      bg = p7_bg_Create(abc);
+      /* try to parse the input buffer as a FASTA sequence */
+      status = esl_sqio_Parse(ptr, strlen(ptr), seq, eslSQFILE_DAEMON);
+      if (status != eslOK) client_msg_longjmp(data->sock_fd, status, &jmp_env, "Error parsing FASTA sequence");
+      if (seq->n < 1) client_msg_longjmp(data->sock_fd, eslEFORMAT, &jmp_env, "Error zero length FASTA sequence");
+
+      if(data->masternode->database_shards[dbx-1]->data_type == AMINO){
+        search_type = HMMD_CMD_SEARCH;
+        // Searching an amino database with another sequence requires that we create an HMM from the sequence 
+        // a la phmmer
+
+        bld = p7_builder_Create(NULL, abc);
+        int seed;
+        if ((seed = esl_opt_GetInteger(opts, "--seed")) > 0) {
+          esl_randomness_Init(bld->r, seed);
+          bld->do_reseeding = TRUE;
+        }
+        bld->EmL = esl_opt_GetInteger(opts, "--EmL");
+        bld->EmN = esl_opt_GetInteger(opts, "--EmN");
+        bld->EvL = esl_opt_GetInteger(opts, "--EvL");
+        bld->EvN = esl_opt_GetInteger(opts, "--EvN");
+        bld->EfL = esl_opt_GetInteger(opts, "--EfL");
+        bld->EfN = esl_opt_GetInteger(opts, "--EfN");
+        bld->Eft = esl_opt_GetReal   (opts, "--Eft");
+
+        if (esl_opt_IsOn(opts, "--mxfile")) {
+          status = p7_builder_SetScoreSystem (bld, esl_opt_GetString(opts, "--mxfile"), NULL, esl_opt_GetReal(opts, "--popen"), esl_opt_GetReal(opts, "--pextend"), bg);
+        }
+        else{ 
+          status = p7_builder_LoadScoreSystem(bld, esl_opt_GetString(opts, "--mx"), esl_opt_GetReal(opts, "--popen"), esl_opt_GetReal(opts, "--pextend"), bg);
+        } 
+    
+        if (status != eslOK) {
+          client_msg_longjmp(data->sock_fd, eslEINVAL, &jmp_env, "hmmpgmd: failed to set single query sequence score system: %s", bld->errbuf);
+        }
+        p7_SingleBuilder(bld, seq, bg, &hmm, NULL, NULL, NULL);
+        esl_sq_Destroy(seq); // Free the sequence and set it to NULL so that the rest of the routine thinks 
+        // we were always doing an hmm-sequence search.
+        seq = NULL;
+        p7_builder_Destroy(bld);
+        p7_bg_Destroy(bg);
+      }
+      else{
+        search_type = HMMD_CMD_SCAN;
+      }
+    }
+    else if (*ptr == '*'){ // parse query object as serialized HMM
+      if (data->masternode->database_shards[dbx-1]->data_type == HMM){
+        client_msg_longjmp(data->sock_fd, status, &jmp_env, "Database %d contains HMM data, and a HMM cannot be used to search a HMM database", dbx);
+      }
+      abc = esl_alphabet_Create(eslAMINO);
+      uint32_t start_pos = 0;
+      p7_hmm_Deserialize((const uint8_t *) ptr+1, &start_pos, abc, &hmm);  // Grab the serialized HMM and its alphabet
+      search_type = HMMD_CMD_SEARCH;
+
+    }
+    else if (strncmp(ptr, "HMM", 3) == 0) {  // parse query object as text-mode HMM, must be amino (protein) HMM
+       if (data->masternode->database_shards[dbx-1]->data_type == HMM){
+        client_msg_longjmp(data->sock_fd, status, &jmp_env, "Database %d contains HMM data, and a HMM cannot be used to search a HMM database", dbx);
+      }
+      abc = esl_alphabet_Create(eslAMINO);
+
+      search_type = HMMD_CMD_SEARCH;
+      /* try to parse the buffer as an hmm */
+      status = p7_hmmfile_OpenBuffer(ptr, strlen(ptr), &hfp);
+      if (status != eslOK) client_msg_longjmp(data->sock_fd, status, &jmp_env, "Failed to open query hmm buffer");
+
+      status = p7_hmmfile_Read(hfp, &abc,  &hmm);
+      if (status != eslOK) client_msg_longjmp(data->sock_fd, status, &jmp_env, "Error reading query hmm: %s", hfp->errbuf);
+
+      p7_hmmfile_Close(hfp);
+    } else {
+      /* no idea what we are trying to parse */
+      client_msg_longjmp(data->sock_fd, eslEFORMAT, &jmp_env, "Unknown query sequence/hmm format");
+    }
+
+  } else {
+    /* an error occured some where, so try to clean up */
+    if (opts != NULL) esl_getopts_Destroy(opts);
+    if (abc  != NULL) esl_alphabet_Destroy(abc);
+    if (hmm  != NULL) p7_hmm_Destroy(hmm);
+    if (seq  != NULL) esl_sq_Destroy(seq);
+    if (sco  != NULL) esl_scorematrix_Destroy(sco);
+
+    free(buffer);
+    close(data->sock_fd);
+    pthread_exit(NULL);
+  }
+
+  parms = p7_server_queue_data_Create();
+
+  parms->hmm  = hmm;
+  parms->seq  = seq;
+  parms->abc  = abc;
+  parms->opts = opts;
+  parms->dbx  = dbx - 1;
+  parms->optsstring = opt_str;
+  parms->cnt = search_length;
+  strcpy(parms->ip_addr, data->ip_addr);
+  parms->sock       = data->sock_fd;
+  parms->cmd_type   = search_type;
+  parms->query_type = (seq != NULL) ? HMMD_SEQUENCE : HMMD_HMM;
+  parms->cnt = search_length;
+
+  date = time(NULL);
+  ctime_r(&date, timestamp);
+#ifdef DEBUG_COMMANDS
+  printf("\n%s", timestamp);	/* note ctime_r() leaves \n on end of timestamp */
+
+  if (parms->seq != NULL) {
+    printf("Queuing %s %s from %s (%d)\n", (parms->cmd_type == HMMD_CMD_SEARCH) ? "search" : "scan", parms->seq->name, parms->ip_addr, parms->sock);
+  } else {
+    printf("Queuing hmm %s from %s (%d)\n", parms->hmm->name, parms->ip_addr, parms->sock);
+  }
+  fflush(stdout);
+#endif
+  esl_stack_PPush(cmdstack, parms);
+  free(buffer);
   free(data);
   pthread_exit(NULL);
 }
@@ -867,7 +1239,11 @@ P7_SERVER_MASTERNODE_STATE *p7_server_masternode_Create(uint32_t num_shards, int
   int status; // return code from ESL_ALLOC
 
   P7_SERVER_MASTERNODE_STATE *the_node = NULL;
-
+  pthread_mutexattr_t mutex_type;
+  pthread_mutexattr_init(&mutex_type);
+#ifdef CHECK_MUTEXES
+  pthread_mutexattr_settype(&mutex_type, PTHREAD_MUTEX_ERRORCHECK);
+#endif
   // allocate memory for the base object
   ESL_ALLOC(the_node, sizeof(P7_SERVER_MASTERNODE_STATE));
   
@@ -910,25 +1286,25 @@ P7_SERVER_MASTERNODE_STATE *p7_server_masternode_Create(uint32_t num_shards, int
   // This starts out empty, since no messages have been received
   the_node->full_hit_message_pool = NULL;
 
-  if(pthread_mutex_init(&(the_node->hit_wait_lock), NULL)){
+  if(pthread_mutex_init(&(the_node->hit_wait_lock), &mutex_type)){
       p7_Fail("Unable to create mutex in p7_server_masternode_uCreate");
     }
 
-  if(pthread_mutex_init(&(the_node->empty_hit_message_pool_lock), NULL)){
+  if(pthread_mutex_init(&(the_node->empty_hit_message_pool_lock), &mutex_type)){
       p7_Fail("Unable to create mutex in p7_server_masternode_Create");
     }
 
-  if(pthread_mutex_init(&(the_node->full_hit_message_pool_lock), NULL)){
+  if(pthread_mutex_init(&(the_node->full_hit_message_pool_lock), &mutex_type)){
       p7_Fail("Unable to create mutex in p7_server_masternode_Create");
     }
 
-  if(pthread_mutex_init(&(the_node->hit_thread_start_lock), NULL)){
+  if(pthread_mutex_init(&(the_node->hit_thread_start_lock), &mutex_type)){
       p7_Fail("Unable to create mutex in p7_server_masternode_Create");
   }
-  if(pthread_mutex_init(&(the_node->master_tophits_lock), NULL)){
+  if(pthread_mutex_init(&(the_node->master_tophits_lock), &mutex_type)){
       p7_Fail("Unable to create mutex in p7_server_masternode_Create");
   }
- if(pthread_mutex_init(&(the_node->worker_nodes_done_lock), NULL)){
+ if(pthread_mutex_init(&(the_node->worker_nodes_done_lock), &mutex_type)){
       p7_Fail("Unable to create mutex in p7_server_masternode_Create");
   }
   // init the start contition variable
@@ -1094,6 +1470,7 @@ int process_search(P7_SERVER_MASTERNODE_STATE *masternode, P7_SERVER_QUEUE_DATA 
 #endif
 
 #ifdef HAVE_MPI
+  int lock_retval;
   struct timeval start, end;
   int status;
   P7_SERVER_COMMAND the_command;
@@ -1308,14 +1685,25 @@ int process_search(P7_SERVER_MASTERNODE_STATE *masternode, P7_SERVER_QUEUE_DATA 
 
 
   // Synchronize with the hit processing thread
-  pthread_mutex_lock(&(masternode->hit_wait_lock));
-  pthread_mutex_lock(&(masternode->worker_nodes_done_lock));
+  lock_retval = pthread_mutex_lock(&(masternode->hit_wait_lock));
+  #ifdef CHECK_MUTEXES
+    parse_lock_errors(lock_retval);
+  #endif
+  lock_retval = pthread_mutex_lock(&(masternode->worker_nodes_done_lock));
+  #ifdef CHECK_MUTEXES
+    parse_lock_errors(lock_retval);
+  #endif
   masternode->worker_nodes_done = 0;  // None of the workers are finished at search start time
-  pthread_mutex_unlock(&(masternode->worker_nodes_done_lock));
+  lock_retval = pthread_mutex_unlock(&(masternode->worker_nodes_done_lock));
+  #ifdef CHECK_MUTEXES
+    parse_lock_errors(lock_retval);
+  #endif
   masternode->worker_stats_received = 0; // and none have sent pipeline statistics
   pthread_cond_broadcast(&(masternode->start)); // signal hit processing thread to start
-  pthread_mutex_unlock(&(masternode->hit_wait_lock));
-
+  lock_retval = pthread_mutex_unlock(&(masternode->hit_wait_lock));
+  #ifdef CHECK_MUTEXES
+    parse_lock_errors(lock_retval);
+  #endif
 
   // Prep to send the options string to the workers
   the_command.options_length = strlen(query->optsstring) +1;
@@ -1330,17 +1718,33 @@ int process_search(P7_SERVER_MASTERNODE_STATE *masternode, P7_SERVER_QUEUE_DATA 
 
 
   // loop here until all of the workers are done with the search
-  pthread_mutex_lock(&(masternode->worker_nodes_done_lock));
+  lock_retval = pthread_mutex_lock(&(masternode->worker_nodes_done_lock));
+  #ifdef CHECK_MUTEXES
+    parse_lock_errors(lock_retval);
+  #endif
   while((masternode->worker_nodes_done < masternode->num_worker_nodes) || (masternode->worker_stats_received < masternode->num_worker_nodes)){
-    pthread_mutex_unlock(&(masternode->worker_nodes_done_lock));
+    lock_retval = pthread_mutex_unlock(&(masternode->worker_nodes_done_lock));
+     #ifdef CHECK_MUTEXES
+    parse_lock_errors(lock_retval);
+  #endif
     p7_masternode_message_handler(masternode, buffer_handle, server_mpitypes, query->opts);  //Poll for incoming messages
-    pthread_mutex_lock(&(masternode->worker_nodes_done_lock));
+    lock_retval = pthread_mutex_lock(&(masternode->worker_nodes_done_lock));
+    #ifdef CHECK_MUTEXES
+      parse_lock_errors(lock_retval);
+    #endif
   }
-  pthread_mutex_unlock(&(masternode->worker_nodes_done_lock));
+  lock_retval = pthread_mutex_unlock(&(masternode->worker_nodes_done_lock));
+    #ifdef CHECK_MUTEXES
+    parse_lock_errors(lock_retval);
+  #endif
   if(*buffer_handle != NULL){ // need to clean up that buffer
     p7_server_message_Destroy(*buffer_handle); 
   }
   gettimeofday(&end, NULL);
+
+  double elapsed_time = ((double)((end.tv_sec * 1000000 + (end.tv_usec)) - (start.tv_sec * 1000000 + start.tv_usec)))/1000000.0;
+
+#ifdef PRINT_PERF
   double ncells;
   if(query->cmd_type == HMMD_CMD_SEARCH){
     ncells = (double) gm->M * (double) database_shard->total_length;
@@ -1348,9 +1752,7 @@ int process_search(P7_SERVER_MASTERNODE_STATE *masternode, P7_SERVER_QUEUE_DATA 
   else{
     ncells = (double) query->seq->L * (double) database_shard->total_length;
   }
-  double elapsed_time = ((double)((end.tv_sec * 1000000 + (end.tv_usec)) - (start.tv_sec * 1000000 + start.tv_usec)))/1000000.0;
   double gcups = (ncells/elapsed_time) / 1.0e9;
-#ifdef PRINT_PERF
   if(query->cmd_type == HMMD_CMD_SEARCH){
     printf("%s, %lf, %d, %lf\n", gm->name, elapsed_time, gm->M, gcups);
   }
@@ -1399,10 +1801,16 @@ int process_search(P7_SERVER_MASTERNODE_STATE *masternode, P7_SERVER_QUEUE_DATA 
 
   forward_results(query, &results); 
   p7_pipeline_Destroy(masternode->pipeline);
-  pthread_mutex_lock(&(masternode->master_tophits_lock));
+  lock_retval = pthread_mutex_lock(&(masternode->master_tophits_lock));
+  #ifdef CHECK_MUTEXES
+    parse_lock_errors(lock_retval);
+  #endif
   p7_tophits_Destroy(masternode->tophits);
   masternode->tophits = p7_tophits_Create();
-  pthread_mutex_unlock(&(masternode->master_tophits_lock));
+  lock_retval = pthread_mutex_unlock(&(masternode->master_tophits_lock));
+    #ifdef CHECK_MUTEXES
+    parse_lock_errors(lock_retval);
+  #endif
   if(bg != NULL){
     p7_bg_Destroy(bg);
     bg = NULL;
@@ -1421,6 +1829,7 @@ int process_search(P7_SERVER_MASTERNODE_STATE *masternode, P7_SERVER_QUEUE_DATA 
 
 void process_shutdown(P7_SERVER_MASTERNODE_STATE *masternode, P7_SERVER_QUEUE_DATA *query, MPI_Datatype *server_mpitypes){
   P7_SERVER_COMMAND the_command;
+  int lock_retval;
   the_command.type = P7_SERVER_SHUTDOWN_WORKERS;
 #ifndef HAVE_MPI
   p7_Fail("process_shutdown requires MPI and HMMER was compiled without MPI support");
@@ -1431,10 +1840,15 @@ void process_shutdown(P7_SERVER_MASTERNODE_STATE *masternode, P7_SERVER_QUEUE_DA
   printf("Master node procecssing shutdown\n");
 #endif
   MPI_Bcast(&the_command, 1, server_mpitypes[P7_SERVER_COMMAND_MPITYPE], 0, MPI_COMM_WORLD);
-  pthread_mutex_lock(&(masternode->hit_wait_lock));
+  lock_retval = pthread_mutex_lock(&(masternode->hit_wait_lock));
+  #ifdef CHECK_MUTEXES
+    parse_lock_errors(lock_retval);
+  #endif
   masternode->shutdown = 1;
-  pthread_mutex_unlock(&(masternode->hit_wait_lock));
-
+  lock_retval = pthread_mutex_unlock(&(masternode->hit_wait_lock));
+  #ifdef CHECK_MUTEXES
+    parse_lock_errors(lock_retval);
+  #endif
   pthread_cond_broadcast(&(masternode->start));
 
   HMMD_SEARCH_STATUS sstatus;
@@ -1457,8 +1871,10 @@ void process_shutdown(P7_SERVER_MASTERNODE_STATE *masternode, P7_SERVER_QUEUE_DA
 
   if (writen(fd, buf_ptr, n) != n) {
     p7_syslog(LOG_ERR,"[%s:%d] - writing %s error %d - %s\n", __FILE__, __LINE__, query->ip_addr, errno, strerror(errno));
+    close(fd);
     goto CLEAR;
   }
+  close(fd); // shut down the socket to the client
   if(buf_ptr != NULL){
     free(buf_ptr);
   }
@@ -1508,7 +1924,7 @@ void p7_server_master_node_main(int argc, char ** argv, MPI_Datatype *server_mpi
     printf("Master node is running on: %s\n", p->ai_canonname);
   }
   freeaddrinfo(info);
-
+  int lock_retval;
   // For now, we only use one shard.  This will change in the future
   int num_shards = esl_opt_GetInteger(go, "--num_shards");
   int num_dbs = esl_opt_GetInteger(go, "--num_dbs"); 
@@ -1570,11 +1986,17 @@ void p7_server_master_node_main(int argc, char ** argv, MPI_Datatype *server_mpi
 
   int hit_thread_running =0;
   while(!hit_thread_running){ // This is overkill, but makes the thread sanitizer happy and only happens once on startup
-    pthread_mutex_lock(&(masternode->hit_thread_start_lock));
+   lock_retval = pthread_mutex_lock(&(masternode->hit_thread_start_lock));
+  #ifdef CHECK_MUTEXES
+    parse_lock_errors(lock_retval);
+  #endif
     if(masternode->hit_thread_ready){
       hit_thread_running =1;
     }
-    pthread_mutex_unlock(&(masternode->hit_thread_start_lock));
+    lock_retval = pthread_mutex_unlock(&(masternode->hit_thread_start_lock));
+      #ifdef CHECK_MUTEXES
+    parse_lock_errors(lock_retval);
+  #endif
   }
 
     /* initialize the search stack, set it up for interthread communication  */
@@ -1648,13 +2070,22 @@ void *p7_server_master_hit_thread(void *argument){
   P7_SERVER_MASTERNODE_HIT_THREAD_ARGUMENT *the_argument;
   the_argument = (P7_SERVER_MASTERNODE_HIT_THREAD_ARGUMENT *) argument;
   P7_SERVER_MASTERNODE_STATE *masternode = the_argument->masternode;
+  int lock_retval;
+  lock_retval = pthread_mutex_lock(&(masternode->hit_wait_lock));
+  #ifdef CHECK_MUTEXES
+    parse_lock_errors(lock_retval);
+  #endif
 
-  pthread_mutex_lock(&(masternode->hit_wait_lock));
-  pthread_mutex_lock(&(masternode->hit_thread_start_lock)); // This lock/unlock is unnecessary because only one thread ever
+  lock_retval = pthread_mutex_lock(&(masternode->hit_thread_start_lock)); // This lock/unlock is unnecessary because only one thread ever
   // writes this value, but it makes sanitize-threads happy
+  #ifdef CHECK_MUTEXES
+    parse_lock_errors(lock_retval);
+  #endif
   masternode->hit_thread_ready = 1;
-  pthread_mutex_unlock(&(masternode->hit_thread_start_lock));
-
+  lock_retval = pthread_mutex_unlock(&(masternode->hit_thread_start_lock));
+  #ifdef CHECK_MUTEXES
+    parse_lock_errors(lock_retval);
+  #endif
 
   while(1){ // loop until master tells us to exit
     pthread_cond_wait(&(masternode->start), &(masternode->hit_wait_lock)); // wait until master tells us to go
@@ -1665,11 +2096,19 @@ void *p7_server_master_hit_thread(void *argument){
     }
     
     // If we weren't told to exit, we're doing a search, so loop until all of the worker nodes are done with the search
-    pthread_mutex_lock(&(masternode->worker_nodes_done_lock));
+    lock_retval = pthread_mutex_lock(&(masternode->worker_nodes_done_lock));
+  #ifdef CHECK_MUTEXES
+    parse_lock_errors(lock_retval);
+  #endif
     while(masternode->worker_nodes_done < masternode->num_worker_nodes){
-      pthread_mutex_unlock(&(masternode->worker_nodes_done_lock));
-      pthread_mutex_lock(&(masternode->full_hit_message_pool_lock));
-
+      lock_retval = pthread_mutex_unlock(&(masternode->worker_nodes_done_lock));
+        #ifdef CHECK_MUTEXES
+    parse_lock_errors(lock_retval);
+  #endif
+      lock_retval = pthread_mutex_lock(&(masternode->full_hit_message_pool_lock));
+  #ifdef CHECK_MUTEXES
+      parse_lock_errors(lock_retval);
+  #endif
       if(masternode->full_hit_message_pool != NULL){
         // There's at least one message of hits for us to handle
         P7_SERVER_MESSAGE *the_message, *prev;
@@ -1690,32 +2129,62 @@ void *p7_server_master_hit_thread(void *argument){
           prev->next = NULL;
         }
 
-        pthread_mutex_unlock(&(masternode->full_hit_message_pool_lock));
-	      pthread_mutex_lock(&(masternode->master_tophits_lock));
+        lock_retval = pthread_mutex_unlock(&(masternode->full_hit_message_pool_lock));
+          #ifdef CHECK_MUTEXES
+    parse_lock_errors(lock_retval);
+  #endif
+	      lock_retval = pthread_mutex_lock(&(masternode->master_tophits_lock));
+    #ifdef CHECK_MUTEXES
+        parse_lock_errors(lock_retval);
+  #endif
         p7_tophits_Merge(masternode->tophits, the_message->tophits);
-	      pthread_mutex_unlock(&(masternode->master_tophits_lock));
+	      lock_retval = pthread_mutex_unlock(&(masternode->master_tophits_lock));
+          #ifdef CHECK_MUTEXES
+    parse_lock_errors(lock_retval);
+  #endif
         p7_tophits_Destroy(the_message->tophits);
         the_message->tophits = NULL;
         if(the_message->status.MPI_TAG == HMMER_HIT_FINAL_MPI_TAG){
           //this hit message was the last one from a thread, so increment the number of threads that have finished
-          pthread_mutex_lock(&(masternode->worker_nodes_done_lock));
+          lock_retval = pthread_mutex_lock(&(masternode->worker_nodes_done_lock));
+      #ifdef CHECK_MUTEXES
+          parse_lock_errors(lock_retval);
+      #endif
           masternode->worker_nodes_done++; //we're the only thread that changes this during a search, so no need to lock
-          pthread_mutex_unlock(&(masternode->worker_nodes_done_lock));
+          lock_retval = pthread_mutex_unlock(&(masternode->worker_nodes_done_lock));  
+          #ifdef CHECK_MUTEXES
+    parse_lock_errors(lock_retval);
+  #endif
         }
 
         // Put the message back on the empty list now that we've dealt with it.
-        pthread_mutex_lock(&(masternode->empty_hit_message_pool_lock));
+        lock_retval = pthread_mutex_lock(&(masternode->empty_hit_message_pool_lock));
+      #ifdef CHECK_MUTEXES
+        parse_lock_errors(lock_retval);
+      #endif
         the_message->next = (P7_SERVER_MESSAGE *) masternode->empty_hit_message_pool;
         masternode->empty_hit_message_pool = the_message;
 
-        pthread_mutex_unlock(&(masternode->empty_hit_message_pool_lock));
+        lock_retval = pthread_mutex_unlock(&(masternode->empty_hit_message_pool_lock));
+          #ifdef CHECK_MUTEXES
+    parse_lock_errors(lock_retval);
+  #endif
       }
       else{
-        pthread_mutex_unlock(&(masternode->full_hit_message_pool_lock));
+        lock_retval = pthread_mutex_unlock(&(masternode->full_hit_message_pool_lock));
+          #ifdef CHECK_MUTEXES
+    parse_lock_errors(lock_retval);
+  #endif
       }
-    pthread_mutex_lock(&(masternode->worker_nodes_done_lock));
+    lock_retval = pthread_mutex_lock(&(masternode->worker_nodes_done_lock));
+    #ifdef CHECK_MUTEXES
+      parse_lock_errors(lock_retval);
+    #endif
     }
-    pthread_mutex_unlock(&(masternode->worker_nodes_done_lock));
+    lock_retval = pthread_mutex_unlock(&(masternode->worker_nodes_done_lock));
+      #ifdef CHECK_MUTEXES
+    parse_lock_errors(lock_retval);
+  #endif
   }
   p7_Fail("Master node hit thread somehow reached unreachable end point\n");
   #endif
@@ -1748,9 +2217,13 @@ void p7_masternode_message_handler(P7_SERVER_MASTERNODE_STATE *masternode, P7_SE
 
 #ifdef HAVE_MPI
   P7_PIPELINE *temp_pipeline;
+  int lock_retval;
   if(*buffer_handle == NULL){
     //Try to grab a message buffer from the empty message pool
-    pthread_mutex_lock(&(masternode->empty_hit_message_pool_lock));
+    lock_retval = pthread_mutex_lock(&(masternode->empty_hit_message_pool_lock));
+    #ifdef CHECK_MUTEXES
+    parse_lock_errors(lock_retval);
+    #endif
     if(masternode->empty_hit_message_pool != NULL){
       (*buffer_handle) = (P7_SERVER_MESSAGE *) masternode->empty_hit_message_pool;
       masternode->empty_hit_message_pool = (*buffer_handle)->next;
@@ -1761,7 +2234,10 @@ void p7_masternode_message_handler(P7_SERVER_MASTERNODE_STATE *masternode, P7_SE
         p7_Fail("Unable to allocate memory in p7_masternode_message_handler\n");
       }
     }
-    pthread_mutex_unlock(&(masternode->empty_hit_message_pool_lock));
+    lock_retval = pthread_mutex_unlock(&(masternode->empty_hit_message_pool_lock));
+      #ifdef CHECK_MUTEXES
+    parse_lock_errors(lock_retval);
+  #endif
   }
 
   //Now, we have a buffer to potentially receive the message into
@@ -1804,12 +2280,17 @@ void p7_masternode_message_handler(P7_SERVER_MASTERNODE_STATE *masternode, P7_SE
       p7_tophits_MPIRecv((*buffer_handle)->status.MPI_SOURCE, (*buffer_handle)->status.MPI_TAG, MPI_COMM_WORLD, &((*buffer_handle)->buffer), &((*buffer_handle)->buffer_alloc), &((*buffer_handle)->tophits));
 
       // Put the message in the list for the hit thread to process
-      pthread_mutex_lock(&(masternode->full_hit_message_pool_lock));
-
+      int lock_retval = pthread_mutex_lock(&(masternode->full_hit_message_pool_lock));
+  #ifdef CHECK_MUTEXES
+      parse_lock_errors(lock_retval);
+  #endif
         (*buffer_handle)->next = (P7_SERVER_MESSAGE *) masternode->full_hit_message_pool;
         masternode->full_hit_message_pool = *buffer_handle;
         (*buffer_handle) = NULL;  // Make sure we grab a new buffer next time
-        pthread_mutex_unlock(&(masternode->full_hit_message_pool_lock));
+        lock_retval= pthread_mutex_unlock(&(masternode->full_hit_message_pool_lock));
+          #ifdef CHECK_MUTEXES
+    parse_lock_errors(lock_retval);
+  #endif
         break;
       case HMMER_WORK_REQUEST_TAG:
         // Work request messages can be handled quickly, so process them directly.

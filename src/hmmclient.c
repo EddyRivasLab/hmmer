@@ -32,6 +32,8 @@
 #define MAX_READ_LEN     4096
 typedef enum QUERY_TYPE{AMINO, HMM} query_type;
 
+/* ifdefs that control debugging printouts*/
+#define DEBUG_COMMANDS
 
 static char usage[]  = " <queryfile> <database number to search>";
 static char banner[] = "search profile(s) against a sequence database";
@@ -197,6 +199,10 @@ output_header(FILE *ofp, const ESL_GETOPTS *go, char *hmmfile, char *seqfile)
   if (esl_opt_IsUsed(go, "--noali")      && fprintf(ofp, "# show alignments in output:       no\n")                                                    < 0) ESL_EXCEPTION_SYS(eslEWRITE, "write failed");
   if (esl_opt_IsUsed(go, "--notextw")    && fprintf(ofp, "# max ASCII text line length:      unlimited\n")                                             < 0) ESL_EXCEPTION_SYS(eslEWRITE, "write failed");
   if (esl_opt_IsUsed(go, "--textw")      && fprintf(ofp, "# max ASCII text line length:      %d\n",             esl_opt_GetInteger(go, "--textw"))     < 0) ESL_EXCEPTION_SYS(eslEWRITE, "write failed");
+  if (esl_opt_IsUsed(go, "--popen")     && fprintf(ofp, "# gap open probability:            %f\n",             esl_opt_GetReal  (go, "--popen"))     < 0) ESL_EXCEPTION_SYS(eslEWRITE, "write failed");
+  if (esl_opt_IsUsed(go, "--pextend")   && fprintf(ofp, "# gap extend probability:          %f\n",             esl_opt_GetReal  (go, "--pextend"))   < 0) ESL_EXCEPTION_SYS(eslEWRITE, "write failed");
+  if (esl_opt_IsUsed(go, "--mx")        && fprintf(ofp, "# subst score matrix (built-in):   %s\n",             esl_opt_GetString(go, "--mx"))        < 0) ESL_EXCEPTION_SYS(eslEWRITE, "write failed");
+  if (esl_opt_IsUsed(go, "--mxfile")    && fprintf(ofp, "# subst score matrix (file):       %s\n",             esl_opt_GetString(go, "--mxfile"))    < 0) ESL_EXCEPTION_SYS(eslEWRITE, "write failed");
   if (esl_opt_IsUsed(go, "-E")           && fprintf(ofp, "# sequence reporting threshold:    E-value <= %g\n",  esl_opt_GetReal(go, "-E"))             < 0) ESL_EXCEPTION_SYS(eslEWRITE, "write failed");
   if (esl_opt_IsUsed(go, "-T")           && fprintf(ofp, "# sequence reporting threshold:    score >= %g\n",    esl_opt_GetReal(go, "-T"))             < 0) ESL_EXCEPTION_SYS(eslEWRITE, "write failed");
   if (esl_opt_IsUsed(go, "--domE")       && fprintf(ofp, "# domain reporting threshold:      E-value <= %g\n",  esl_opt_GetReal(go, "--domE"))         < 0) ESL_EXCEPTION_SYS(eslEWRITE, "write failed");
@@ -215,6 +221,29 @@ output_header(FILE *ofp, const ESL_GETOPTS *go, char *hmmfile, char *seqfile)
   if (esl_opt_IsUsed(go, "--nobias")     && fprintf(ofp, "# biased composition HMM filter:   off\n")                                                   < 0) ESL_EXCEPTION_SYS(eslEWRITE, "write failed");
 
   if (esl_opt_IsUsed(go, "--nonull2")    && fprintf(ofp, "# null2 bias corrections:          off\n")                                                   < 0) ESL_EXCEPTION_SYS(eslEWRITE, "write failed");
+    if (esl_opt_IsUsed(go, "--symfrac")    && fprintf(ofp, "# sym frac for model structure:    %.3f\n",           esl_opt_GetReal(go, "--symfrac"))     < 0) ESL_EXCEPTION_SYS(eslEWRITE, "write failed");
+  if (esl_opt_IsUsed(go, "--fragthresh") && fprintf(ofp, "# define fragments if <= x*alen:   %.3f\n",           esl_opt_GetReal(go, "--fragthresh"))  < 0) ESL_EXCEPTION_SYS(eslEWRITE, "write failed");
+  if (esl_opt_IsUsed(go, "--wpb")        && fprintf(ofp, "# relative weighting scheme:       Henikoff PB\n")                                          < 0) ESL_EXCEPTION_SYS(eslEWRITE, "write failed");
+  if (esl_opt_IsUsed(go, "--wgsc")       && fprintf(ofp, "# relative weighting scheme:       G/S/C\n")                                                < 0) ESL_EXCEPTION_SYS(eslEWRITE, "write failed");
+  if (esl_opt_IsUsed(go, "--wblosum")    && fprintf(ofp, "# relative weighting scheme:       BLOSUM filter\n")                                        < 0) ESL_EXCEPTION_SYS(eslEWRITE, "write failed");
+  if (esl_opt_IsUsed(go, "--wnone")      && fprintf(ofp, "# relative weighting scheme:       none\n")                                                 < 0) ESL_EXCEPTION_SYS(eslEWRITE, "write failed");
+  if (esl_opt_IsUsed(go, "--wid")        && fprintf(ofp, "# frac id cutoff for BLOSUM wgts:  %f\n",             esl_opt_GetReal(go, "--wid"))         < 0) ESL_EXCEPTION_SYS(eslEWRITE, "write failed");
+  if (esl_opt_IsUsed(go, "--eent")       && fprintf(ofp, "# effective seq number scheme:     entropy weighting\n")                                    < 0) ESL_EXCEPTION_SYS(eslEWRITE, "write failed");
+  if (esl_opt_IsUsed(go, "--eclust")     && fprintf(ofp, "# effective seq number scheme:     single linkage clusters\n")                              < 0) ESL_EXCEPTION_SYS(eslEWRITE, "write failed");
+  if (esl_opt_IsUsed(go, "--enone")      && fprintf(ofp, "# effective seq number scheme:     none\n")                                                 < 0) ESL_EXCEPTION_SYS(eslEWRITE, "write failed");
+  if (esl_opt_IsUsed(go, "--eset")       && fprintf(ofp, "# effective seq number:            set to %f\n",      esl_opt_GetReal(go, "--eset"))        < 0) ESL_EXCEPTION_SYS(eslEWRITE, "write failed");
+  if (esl_opt_IsUsed(go, "--ere")        && fprintf(ofp, "# minimum rel entropy target:      %f bits\n",        esl_opt_GetReal(go, "--ere"))         < 0) ESL_EXCEPTION_SYS(eslEWRITE, "write failed");
+  if (esl_opt_IsUsed(go, "--esigma")     && fprintf(ofp, "# entropy target sigma parameter:  %f bits\n",        esl_opt_GetReal(go, "--esigma"))      < 0) ESL_EXCEPTION_SYS(eslEWRITE, "write failed");
+  if (esl_opt_IsUsed(go, "--eid")        && fprintf(ofp, "# frac id cutoff for --eclust:     %f\n",             esl_opt_GetReal(go, "--eid"))         < 0) ESL_EXCEPTION_SYS(eslEWRITE, "write failed");
+  if (esl_opt_IsUsed(go, "--pnone")      && fprintf(ofp, "# prior scheme:                    none\n")                                                 < 0) ESL_EXCEPTION_SYS(eslEWRITE, "write failed");
+  if (esl_opt_IsUsed(go, "--plaplace")   && fprintf(ofp, "# prior scheme:                    Laplace +1\n")                   < 0) ESL_EXCEPTION_SYS(eslEWRITE, "write failed");    
+    if (esl_opt_IsUsed(go, "--EmL")       && fprintf(ofp, "# seq length, MSV Gumbel mu fit:   %d\n",             esl_opt_GetInteger(go, "--EmL"))      < 0) ESL_EXCEPTION_SYS(eslEWRITE, "write failed");
+  if (esl_opt_IsUsed(go, "--EmN")       && fprintf(ofp, "# seq number, MSV Gumbel mu fit:   %d\n",             esl_opt_GetInteger(go, "--EmN"))      < 0) ESL_EXCEPTION_SYS(eslEWRITE, "write failed");
+  if (esl_opt_IsUsed(go, "--EvL")       && fprintf(ofp, "# seq length, Vit Gumbel mu fit:   %d\n",             esl_opt_GetInteger(go, "--EvL"))      < 0) ESL_EXCEPTION_SYS(eslEWRITE, "write failed");
+  if (esl_opt_IsUsed(go, "--EvN")       && fprintf(ofp, "# seq number, Vit Gumbel mu fit:   %d\n",             esl_opt_GetInteger(go, "--EvN"))      < 0) ESL_EXCEPTION_SYS(eslEWRITE, "write failed");
+  if (esl_opt_IsUsed(go, "--EfL")       && fprintf(ofp, "# seq length, Fwd exp tau fit:     %d\n",             esl_opt_GetInteger(go, "--EfL"))      < 0) ESL_EXCEPTION_SYS(eslEWRITE, "write failed");
+  if (esl_opt_IsUsed(go, "--EfN")       && fprintf(ofp, "# seq number, Fwd exp tau fit:     %d\n",             esl_opt_GetInteger(go, "--EfN"))      < 0) ESL_EXCEPTION_SYS(eslEWRITE, "write failed");
+  if (esl_opt_IsUsed(go, "--Eft")       && fprintf(ofp, "# tail mass for Fwd exp tau fit:   %f\n",             esl_opt_GetReal   (go, "--Eft"))      < 0) ESL_EXCEPTION_SYS(eslEWRITE, "write failed");
   if (esl_opt_IsUsed(go, "-Z")           && fprintf(ofp, "# sequence search space set to:    %.0f\n",           esl_opt_GetReal(go, "-Z"))             < 0) ESL_EXCEPTION_SYS(eslEWRITE, "write failed");
   if (esl_opt_IsUsed(go, "--domZ")       && fprintf(ofp, "# domain search space set to:      %.0f\n",           esl_opt_GetReal(go, "--domZ"))         < 0) ESL_EXCEPTION_SYS(eslEWRITE, "write failed");
   if (esl_opt_IsUsed(go, "--seed"))  {
@@ -300,13 +329,6 @@ main(int argc, char **argv)
   }
 
   strcpy(server_ip, inet_ntoa(addr_temp->sin_addr));
-
-  /* Create a reliable, stream socket using TCP */
-  if ((sock = socket(AF_INET, SOCK_STREAM, 0)) < 0) {
-    p7_Die("[%s:%d] socket error %d - %s\n", __FILE__, __LINE__, errno, strerror(errno));
-    exit(1);
-  }
-
   serv_port = esl_opt_GetInteger(go, "--cport");
   /* Construct the server address structure */
   memset(&serv_addr, 0, sizeof(serv_addr));
@@ -316,14 +338,22 @@ main(int argc, char **argv)
   if ((inet_pton(AF_INET, server_ip, &serv_addr.sin_addr)) < 0) {
     p7_Die("[%s:%d] inet_pton error %d - %s\n", __FILE__, __LINE__, errno, strerror(errno));
   }
-
-  /* Establish the connection to the server */
-  if (connect(sock, (struct sockaddr *) &serv_addr, sizeof(serv_addr)) < 0) {
-    p7_Die("[%s:%d] connect error %d - %s\n", __FILE__, __LINE__, errno, strerror(errno));
-  }
+  /* Now, we have all the information we need to open the socket connection.  We'll do that when we're ready
+  to send the command */
 
   // If we're sending a shutdown command, do that
   if(esl_opt_IsUsed(go, "--shutdown")){
+      /* Create a reliable, stream socket using TCP */
+    if ((sock = socket(AF_INET, SOCK_STREAM, 0)) < 0) {
+      p7_Die("[%s:%d] socket error %d - %s\n", __FILE__, __LINE__, errno, strerror(errno));
+      exit(1);
+    }
+
+    /* Establish the connection to the server */
+    if (connect(sock, (struct sockaddr *) &serv_addr, sizeof(serv_addr)) < 0) {
+      p7_Die("[%s:%d] connect error %d - %s\n", __FILE__, __LINE__, errno, strerror(errno));
+    }
+
     if(rem < (14 + strlen(esl_opt_GetString(go, "--shutdown")))){ // Should never happen, but just to be safe
       ESL_REALLOC(cmd, 14+ strlen(esl_opt_GetString(go, "--shutdown")));
     }
@@ -335,7 +365,9 @@ main(int argc, char **argv)
       if (writen(sock, &serialized_send_command_length, sizeof(uint32_t)) != sizeof(uint32_t)) {
         p7_Die("[%s:%d] write (size %" PRIu64 ") error %d - %s\n", __FILE__, __LINE__, n, errno, strerror(errno));
       }
+#ifdef DEBUG_COMMANDS
       printf("sending %s to server, length %d\n", cmd, send_command_length);
+#endif
       if (writen(sock, cmd, send_command_length) != send_command_length) {
         p7_Die("[%s:%d] write (size %" PRIu64 ") error %d - %s\n", __FILE__, __LINE__, n, errno, strerror(errno));
       }
@@ -365,7 +397,7 @@ main(int argc, char **argv)
 
   // Start building the command string to send to the server
   // Can skip the length checks on cmd, because we know it has enough space for the opening command chars
-  if(esl_opt_IsDefault(go, "--db")){//need to construct default database specifier
+  if(esl_opt_GetSetter(go, "--db") == eslARG_SETBY_DEFAULT){//need to construct default database specifier
     strcpy(cmd, "@--db 1 ");
     rem -= 8;
     optslen = 9 + strlen(optsstring);
@@ -379,7 +411,14 @@ main(int argc, char **argv)
   }
   if(esl_opt_GetInteger(go, "--jack") > 1){ // We're doing a jackhmmer search, so might have to change the 
   // --incE and --incdomE values to match jackhmmer
-    if(esl_opt_GetSetter(go, "--incE") == eslARG_SETBY_DEFAULT){  // use esl_opt_GetSetter rather than esl_opt_IsDefault
+  // Add a flag for jackhmmer default --incE if the user hasn't specified --incE and hasn't specified 
+  // any of the other INCOPTS flags, because we only allow one INCOPT flag to be set for a given search
+    if((esl_opt_GetSetter(go, "--incE") == eslARG_SETBY_DEFAULT)
+      && (esl_opt_GetSetter(go, "--incT") == eslARG_SETBY_DEFAULT)
+      && (esl_opt_GetSetter(go, "--cut_ga") == eslARG_SETBY_DEFAULT)
+      && (esl_opt_GetSetter(go, "--cut_nc") == eslARG_SETBY_DEFAULT)
+      && (esl_opt_GetSetter(go, "--cut_tc") == eslARG_SETBY_DEFAULT))
+       {  // use esl_opt_GetSetter rather than esl_opt_IsDefault
       // because esl_opt_IsDefault returns true if the user has manually set a flag to its default value.  In that case, 
       // we want to honor the user's input, not override.
       
@@ -392,7 +431,13 @@ main(int argc, char **argv)
       strcat(cmd, "--incE 0.001 ");
       optslen += 13;
     }
-    if(esl_opt_GetSetter(go, "--incdomE")==  eslARG_SETBY_DEFAULT){ // add flag to change value to jackhmmer default
+    // ditto for --incdome if none of the INCDOMOPTS flags are set
+    if((esl_opt_GetSetter(go, "--incdomE") == eslARG_SETBY_DEFAULT)
+      && (esl_opt_GetSetter(go, "--incdomT") == eslARG_SETBY_DEFAULT)
+      && (esl_opt_GetSetter(go, "--cut_ga") == eslARG_SETBY_DEFAULT)
+      && (esl_opt_GetSetter(go, "--cut_nc") == eslARG_SETBY_DEFAULT)
+      && (esl_opt_GetSetter(go, "--cut_tc") == eslARG_SETBY_DEFAULT))
+       { 
       while(rem < 16){
         ESL_REALLOC(cmd, 2*cmdlen);
         rem += cmdlen;
@@ -449,6 +494,7 @@ main(int argc, char **argv)
     p7_Die("Unable to read any data from query input\n");
   }
   while(!done){ // Should always have valid data in the buffer at this point if not done
+
   // Get the type of the query object and handle accordingly
     esl_stopwatch_Start(w);
     nquery++;
@@ -580,11 +626,9 @@ main(int argc, char **argv)
       num_rounds = 1;
     }
     converged = 0;
-    prv_msa_nseq = 0;
-    int iteration=0;
+    int iteration=1;
     uint32_t send_command_length = strlen(cmd); // First-round commands are always string-formatted.  Later ones aren't
     while(num_rounds > 0 && !converged){
-      iteration++;
 	    if (esl_opt_IsOn(go, "--chkhmm") &&query_hmm != NULL) {
 	      checkpoint_hmm(nquery, query_hmm, esl_opt_GetString(go, "--chkhmm"), iteration);
 	    }
@@ -599,11 +643,25 @@ main(int argc, char **argv)
         p7_tophits_Destroy(th);
         th=NULL;
       }
-      uint32_t serialized_send_command_length = esl_hton32(send_command_length);
+/*      uint32_t serialized_send_command_length = esl_hton32(send_command_length);
       if (writen(sock, &serialized_send_command_length, sizeof(uint32_t)) != sizeof(uint32_t)) {
         p7_Die("[%s:%d] write (size %" PRIu64 ") error %d - %s\n", __FILE__, __LINE__, n, errno, strerror(errno));
+      } */
+printf("Opening socket to server\n");
+      /* Open the socket to the server.  Do this for every search so that one client can't hog the socket connection */
+      if ((sock = socket(AF_INET, SOCK_STREAM, 0)) < 0) {
+        p7_Die("[%s:%d] socket error %d - %s\n", __FILE__, __LINE__, errno, strerror(errno));
+        exit(1);
       }
+
+      /* Establish the connection to the server */
+      if (connect(sock, (struct sockaddr *) &serv_addr, sizeof(serv_addr)) < 0) {
+        p7_Die("[%s:%d] connect error %d - %s\n", __FILE__, __LINE__, errno, strerror(errno));
+      }
+printf("socket opened\n");
+#ifdef DEBUG_COMMANDS
       printf("sending %s to server, length %d\n", cmd, send_command_length);
+#endif
       if (writen(sock, cmd, send_command_length) != send_command_length) {
         p7_Die("[%s:%d] write (size %" PRIu64 ") error %d - %s\n", __FILE__, __LINE__, n, errno, strerror(errno));
       }
@@ -666,7 +724,9 @@ main(int argc, char **argv)
         free(ebuf);
         p7_Die("Terminating because server sent error message\n");
       }
-
+      printf("closing socket\n");
+      close(sock);  // shut the socket down, since we've gotten everything we need back from the server 
+      printf("socket closed\n");
       if(sstatus.type == HMMD_CMD_SEARCH){
         // Create the structures we'll deserialize the hits into
         pli = p7_pipeline_Create(go, 100, 100, FALSE, p7_SEARCH_SEQS);
@@ -740,7 +800,7 @@ main(int argc, char **argv)
       //p7_tophits_Threshold(th, pli); 
       p7_tophits_Targets(ofp, th, pli, textw); if (fprintf(ofp, "\n\n") < 0) ESL_EXCEPTION_SYS(eslEWRITE, "write failed");
       p7_tophits_Domains(ofp, th, pli, textw); if (fprintf(ofp, "\n\n") < 0) ESL_EXCEPTION_SYS(eslEWRITE, "write failed");
-
+      p7_pli_Statistics(ofp, pli, w);
       num_rounds -=1;
       if(num_rounds > 0){ // need to build HMM for next jackhmmer round
          /* Create alignment of the top hits */
@@ -784,7 +844,7 @@ main(int argc, char **argv)
           ESL_ALLOC(hmm_accession, strlen("hmmclient")+1);
           strcpy(hmm_accession, "hmmclient");
           query_hmm->acc = hmm_accession;
-
+          iteration++;  // Increment this here because we print the header stats for the next round before looping back
 	        if (fprintf(ofp, "@@\n")                                             < 0) ESL_EXCEPTION_SYS(eslEWRITE, "write failed");
 	        if (fprintf(ofp, "@@ Round:                  %d\n", iteration)       < 0) ESL_EXCEPTION_SYS(eslEWRITE, "write failed");
 	        if (fprintf(ofp, "@@ Included in MSA:        %d subsequences (query + %d subseqs from %d targets)\n",
@@ -802,6 +862,15 @@ main(int argc, char **argv)
           if(p7_hmm_Serialize(query_hmm,(uint8_t **) &cmd, &send_command_length, &cmdlen) != eslOK){
             p7_Die("Unable to send serialized HMM to server in jackhmmer-style search");
           }
+          // add the "//" at the end of the HMM so that the server can tell that it's gotten the whole thing
+          if((cmdlen -send_command_length) < 3){
+            ESL_REALLOC(cmd, cmdlen + 3);  // make sure we have space
+            cmdlen +=3;
+          }
+          cmd[send_command_length] = '\n';
+          cmd[send_command_length +1] = '/';
+          cmd[send_command_length +2] = '/';
+          send_command_length +=3;
         }
       } 
     }
@@ -818,7 +887,6 @@ main(int argc, char **argv)
       if (pfamtblfp) p7_tophits_TabularXfam(pfamtblfp, query_name, query_accession, th, pli);
   
       esl_stopwatch_Stop(w);
-      p7_pli_Statistics(ofp, pli, w);
       if (fprintf(ofp, "//\n") < 0) ESL_EXCEPTION_SYS(eslEWRITE, "write failed");
   
       /* Output the results in an MSA (-A option) */
@@ -891,7 +959,6 @@ main(int argc, char **argv)
   esl_alphabet_Destroy(abc);
   p7_bg_Destroy(bg);
 
-  close(sock);  // shut the socket down nicely
   exit(0); // done now, so quit
 ERROR:  
     p7_Die("Unable to allocate memory in hmmclient\n");
