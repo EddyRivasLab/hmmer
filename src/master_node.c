@@ -49,7 +49,8 @@
 
 #define MAX_BUFFER   4096
 #include <unistd.h> // for testing
-
+#define CLIENT_TIMEOUT 30  // time, in seconds that we're willing to wait for a client to close its socket after
+// we close our end
 
 // defines that control debugging commands
 //#define DEBUG_COMMANDS 1
@@ -336,7 +337,9 @@ forward_results(P7_SERVER_QUEUE_DATA *query, SEARCH_RESULTS *results)
   // don't need to free the actual hits -- they'll get cleaned up when the tophits object they came from
   // gets destroyed
   if(results->nhits)  free(results->hits);  // init_results will set hits = NULL
-
+  ESL_STOPWATCH *timeout;  // want to timeout if client doesn't close socket connection
+  timeout = esl_stopwatch_Create();
+  esl_stopwatch_Start(timeout);
   shutdown(fd, SHUT_WR); // signal the client that we're closing the socket
   // wait for client to close socket from its end, indicating that it's read the data
   // probably should have a timeout to thwart malicious clients
@@ -346,7 +349,14 @@ forward_results(P7_SERVER_QUEUE_DATA *query, SEARCH_RESULTS *results)
       p7_syslog(LOG_ERR,"[%s:%d] - closing %s error %d - %s\n", __FILE__, __LINE__, query->ip_addr, errno, strerror(errno));
       break;
     }
-    if(n == 0){  // client closed socket
+    esl_stopwatch_Stop(timeout); // Looks like we should be able to call this many times on the same stopwatch
+    // to re-compute time since start call
+    if((n == 0) || esl_stopwatch_GetElapsed(timeout) > CLIENT_TIMEOUT){  // client closed socket or timeout 
+    //  elapsed
+      if(esl_stopwatch_GetElapsed(timeout) > CLIENT_TIMEOUT){
+        p7_syslog(LOG_ERR,"[%s:%d] - closing %s error due to timeout expiration\n", __FILE__, __LINE__, query->ip_addr);
+        printf("Closing socket due to client timeout");
+      }
       break;
     }
   }
@@ -371,8 +381,7 @@ forward_results(P7_SERVER_QUEUE_DATA *query, SEARCH_RESULTS *results)
 }
 
 
-static void
-free_QueueData_shard(P7_SERVER_QUEUE_DATA *data)
+static void free_QueueData_shard(P7_SERVER_QUEUE_DATA *data)
 {
   /* free the query data */
   esl_getopts_Destroy(data->opts);
