@@ -524,7 +524,7 @@ main(int argc, char **argv)
 
   //shift inv_alph up one, to make space for '$' at 0
   for (i=0; i<256; i++)
-    if ( meta->inv_alph[i] >= 0)
+    if ( meta->inv_alph[i] != 127)  // 127=unset   inv_alph['A'] = 0, etc: maps char symbol to digitized residue code 0..alph_size-1
       meta->inv_alph[i]++;
 
 
