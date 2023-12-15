@@ -23,9 +23,9 @@
 #define NDTR  1
 #define NDT   NDTS+NDTL+NDTR
 #define DTMIN 0.01
-#define DTMAX 2.50
+#define DTMAX 5.50
 #define DTPRE 0.05
-#define DTPOS 2.00
+#define DTPOS 5.00
 
 
 enum emevol_e   { emNONE = 0, emBYRATE = 1, emBYSCMX = 2 };
@@ -43,9 +43,9 @@ typedef struct p7_rate_s {
   char     *desc;               /* brief (1-line) description of model   (optional: NULL) */ /* String, \0-terminated   */
  
   /* emission probabilities */
-  float   **pzero;              /* match emissions at tzero [1..M][0..K-1]                       */
-  float   **pstar;              /* match emissions at tstar [1..M][0..K-1]                       */
-  float   **pinfy;              /* match emissions at tinfinity [1..M][0..K-1]                   */
+  float   **pzero;              /* match emissions at t=zero     [1..M][0..K-1]                  x*/
+  float   **pstar;              /* match emissions at t=star     [1..M][0..K-1]                  */
+  float   **pinfy;              /* match emissions at t=infinity [1..M][0..K-1]                  */
   float   **ins;                /* insert emissions [1..M][0..K-1]                               */
  
   float           fixtime;
@@ -71,7 +71,8 @@ struct entropy_param_s {
 };
 
 extern P7_RATE *p7_RateCreate(int M, const ESL_ALPHABET *abc, EVOM evomodel, float fixtime, float betainf);
-extern int      p7_RateCreateWithEmRate(int M, const ESL_ALPHABET *abc, const P7_BG *bg, const EMRATE *emR, const ESL_SCOREMATRIX *S, P7_RATE **ret_R, EVOM evomodel, float fixtime, float betainf,
+extern int      p7_RateCreateWithEmRate(int M, const ESL_ALPHABET *abc, const P7_BG *bg, const EMRATE *emR, const ESL_SCOREMATRIX *S,
+					P7_RATE **ret_R, EVOM evomodel, float fixtime, float betainf,
 					double tol, char *errbuf, int verbose);
 extern double   p7_RateCompare(P7_RATE *R1, P7_RATE *R2, double tol);
 extern int      p7_RateCopy(P7_RATE *R, P7_RATE *Rcopy);

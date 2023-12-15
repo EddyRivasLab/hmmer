@@ -823,7 +823,7 @@ p7_EvolveFromRate(FILE *statfp, P7_HMM *hmm, const P7_RATE *R, const P7_BG *bg, 
     hmm->t[m][p7H_DM] = ((1.0 - betaD) * (1.0 - gammaD) > fsmall)? (1.0 - betaD) * (1.0 - gammaD) : fsmall; 
     hmm->t[m][p7H_IM] = ((1.0 - eta)   * (1.0 - gammaI) > fsmall)? (1.0 - eta)   * (1.0 - gammaI) : fsmall; 
 
-    /* last node is a special: TMD shouldE be zero, TDM shouldE be one  */
+    /* last node is a special: TMD should be zero, TDM should be one  */
     if (m == hmm->M && hmm->t[m][p7H_MD] > 0.0)   hmm->t[m][p7H_MD] = 0.0;
     if (m == hmm->M && hmm->t[m][p7H_DD] > 0.0) { hmm->t[m][p7H_DD] = 0.0; hmm->t[m][p7H_DM] = 1.0; }
 

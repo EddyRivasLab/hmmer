@@ -576,7 +576,8 @@ e1_model_AF_EtaFunc(void *params, double *ret_func)
   func = p->rateparam.rI + AIFbeta * (1-p->rateparam.rI);
   
 #if 0
-  printf("\nAFeta[t=%.3f] = %.8f special? %d || ldE=%.8f\tmuE=%.8f\tAIFbeta %f\trI=%.8f\n", p->time, func, p->special_case, p->rateparam.ldEM, p->rateparam.muEM, AIFbeta, p->rateparam.rI);
+  printf("\nAFeta[t=%.3f] = %.8f special? %d || ldE=%.8f\tmuE=%.8f\tAIFbeta %f\trI=%.8f\n",
+	 p->time, func, p->special_case, p->rateparam.ldEM, p->rateparam.muEM, AIFbeta, p->rateparam.rI);
 #endif
 
   if (func > 1.)   { if (func <  1.0+1e-3) func = 1.0; else { printf("AIFeta is larger than one %f\n", func); status = eslFAIL; goto ERROR; } }

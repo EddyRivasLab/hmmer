@@ -38,8 +38,7 @@ typedef struct {
   P7_OPROFILE      *om;
   float            *scores;
   float            *fwd_emissions_arr;
-} P7_PIPELINE_LONGTARGET_OBJS;
-
+} P7_PIPELINE_LONGTARGET_OBJS; 
 
 static int    optimize_pack_paramvector        (double *p, int np, struct optimize_data *data);
 static int    optimize_unpack_paramvector      (double *p, int np, struct optimize_data *data);
@@ -149,10 +148,9 @@ p7_EvoPipeline(P7_PIPELINE *pli, EMRATE *emR, P7_RATE *oR, P7_HMM *hmm, P7_PROFI
   workaround_get_starprofile(pli, bg, hmm, gm, om, &ehmm, noevo); 
 
   /* First level filter: the MSV filter, multihit with <om> */
-  // noevo = TRUE
   //p7_MSVFilter(sq->dsq, sq->n, om, pli->oxf, &usc);
   if ((status = optimize_msvfilter(sq->dsq, sq->n, &time, R, ehmm, gm, om, bg, pli->oxf,
-				   &usc, fixtime, TRUE, tol, pli->errbuf, be_verbose)) != eslOK)      
+				   &usc, fixtime, noevo, tol, pli->errbuf, be_verbose)) != eslOK)      
     printf("\nsequence %s msvfilter did not optimize\n", sq->name);
   seq_score = (usc - nullsc) / eslCONST_LOG2;
   P = esl_gumbel_surv(seq_score,  om->evparam[p7_MMU],  om->evparam[p7_MLAMBDA]);
@@ -187,6 +185,7 @@ p7_EvoPipeline(P7_PIPELINE *pli, EMRATE *emR, P7_RATE *oR, P7_HMM *hmm, P7_PROFI
   /* Second level filter: ViterbiFilter(), multihit with <om> */
   if (P > pli->F2)
     {
+      time = 1.0;
       //p7_ViterbiFilter(sq->dsq, sq->n, om, pli->oxf, &vfsc);
       if ((status = p7_evopli_OptimizeViterbiFilter(sq->dsq, sq->n, &time, R, ehmm, gm, om, bg, pli->oxf,
 						    &vfsc, noevo, fixtime, tol, pli->errbuf, be_verbose)) != eslOK) 
@@ -215,7 +214,7 @@ p7_EvoPipeline(P7_PIPELINE *pli, EMRATE *emR, P7_RATE *oR, P7_HMM *hmm, P7_PROFI
 
   seq_score = (fwdsc-filtersc) / eslCONST_LOG2;
   P = esl_exp_surv(seq_score,  om->evparam[p7_FTAU],  om->evparam[p7_FLAMBDA]);
-  if (P > pli->F3) {
+   if (P > pli->F3) {
     p7_hmm_Destroy(ehmm);
     return eslOK;
   }
@@ -503,7 +502,7 @@ optimize_msvfilter(const ESL_DSQ *dsq, int n, float *ret_time,
   int                    isfixtime = (fixtime >= 0.0)? TRUE : FALSE;
   int                    np;
   int                    status;
-  
+
   time = (isfixtime)? fixtime : *ret_time;
   usc_init = func_msvfilter((ESL_DSQ *)dsq, n, hmm, R, gm, om, bg, oxf, time, noevo, tol, errbuf, be_verbose);
   if (noevo || isfixtime || usc_init == eslINFINITY) {
@@ -527,6 +526,7 @@ optimize_msvfilter(const ESL_DSQ *dsq, int n, float *ret_time,
   data.hmm        = (P7_HMM *)hmm;
   data.gm         = (P7_PROFILE *)gm;
   data.om         = (P7_OPROFILE *)om;
+
   data.bg         = bg;
   data.oxf        = oxf;
   data.tol        = tol;
@@ -551,7 +551,7 @@ optimize_msvfilter(const ESL_DSQ *dsq, int n, float *ret_time,
   /* unpack the final parameter vector */
   optimize_unpack_paramvector(p, (long)np, &data);
   data.usc = -sc;
-  if (1||be_verbose) printf("END MSV OPTIMIZATION: time %f usc %f --> %f\n", data.time, usc_init, data.usc);
+  if (be_verbose) printf("END MSV OPTIMIZATION: time %f usc %f --> %f\n", data.time, usc_init, data.usc);
   
   *ret_usc  = data.usc;
   *ret_time = data.time;
@@ -638,7 +638,7 @@ p7_evopli_OptimizeViterbiFilter(const ESL_DSQ *dsq, int n, float *ret_time,
   /* unpack the final parameter vector */
   optimize_unpack_paramvector(p, (long)np, &data);
   data.vfsc = -sc;
-  if (1||be_verbose) printf("END VIT OPTIMIZATION: time %f vfsc %f --> %f\n", data.time, vfsc_init, data.vfsc);
+  if (be_verbose) printf("END VIT OPTIMIZATION: time %f vfsc %f --> %f\n", data.time, vfsc_init, data.vfsc);
   
   *ret_vfsc = data.vfsc;
   *ret_time = data.time;
@@ -727,7 +727,7 @@ p7_evopli_OptimizeForwardParser(const ESL_DSQ *dsq, int n, float *ret_time,
   /* unpack the final parameter vector */
   optimize_unpack_paramvector(p, (long)np, &data);
   data.fwdsc = -sc;
-  if (1||be_verbose) printf("END FWD OPTIMIZATION: time %f fwdsc %f --> %f\n", data.time, fwdsc_init, data.fwdsc);
+  if (be_verbose) printf("END FWD OPTIMIZATION: time %f fwdsc %f --> %f\n", data.time, fwdsc_init, data.fwdsc);
   
   *ret_fwdsc = data.fwdsc;
   *ret_time  = data.time;

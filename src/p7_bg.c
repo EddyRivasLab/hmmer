@@ -62,7 +62,7 @@ p7_bg_Create(const ESL_ALPHABET *abc)
   ESL_ALLOC(bg->f,     sizeof(float) * abc->K);
   if ((bg->fhmm = esl_hmm_Create(abc, 2)) == NULL) goto ERROR;
 
-  if       (abc->type == eslAMINO)
+  if (abc->type == eslAMINO)
     {
       if (p7_AminoFrequencies(bg->f) != eslOK) goto ERROR;
     }
