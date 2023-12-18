@@ -29,7 +29,7 @@ static ESL_OPTIONS options[] = {
   NULL,                               "number of shards to divide each database into (default 1)"},
  { "--cpu",       eslARG_INT,    "0",  NULL, "n>=0",  NULL,  NULL,  NULL,            "# of compute threads per worker. 0 = max possible (default)",         12 },
  { "--stall", 			eslARG_NONE,   FALSE, NULL, NULL,    NULL,  NULL,  NULL,      "Stall after start (debugging option)", 12}, 
- { "--tformat",    eslARG_STRING,  NULL, NULL, NULL,    NULL,  NULL,  NULL,            "Specify password required to shut down server",  12 },
+ { "--password",    eslARG_STRING,  "", NULL, NULL,    NULL,  NULL,  NULL,            "Specify password required to shut down server",  12 },
   {  0, 0, 0, 0, 0, 0, 0, 0, 0, 0 },
 };
 static char usage[]  = "[-options] <sequence database>";

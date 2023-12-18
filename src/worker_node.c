@@ -1150,17 +1150,20 @@ void *p7_server_worker_thread(void *worker_argument){
           }
         }
         break;
+      case SHUTDOWN:
+        printf("Worker thread %d on rank %d saw workernode->shutdown\n", my_id, workernode->my_rank);
+        break;  // Go to end of loop, next iteration will catch that we have shutdown set
       case IDLE:
         p7_Die("Workernode told to start search of type IDLE");
         break;
     }
   }
-
+ 
   esl_alphabet_Destroy(temp_abc);
   // If we get here, shutdown has been set, so exit the thread
   free(worker_argument);
+  printf("worker thread %d on rank %d about to exit\n", my_id, workernode->my_rank);
   pthread_exit(NULL);
-
 }
 
 
@@ -1251,6 +1254,7 @@ void p7_server_workernode_main(int argc, char **argv, int my_rank, MPI_Datatype 
     parse_lock_errors(lock_retval, workernode->my_rank);
   #endif
         workernode->shutdown = 1; // tell threads to shut down
+        workernode->search_type = SHUTDOWN;
         p7_server_workernode_release_threads(workernode); // release any waiting threads to process the shutdown
         lock_retval = pthread_mutex_unlock(&(workernode->wait_lock));
            #ifdef CHECK_MUTEXES

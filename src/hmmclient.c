@@ -354,17 +354,20 @@ main(int argc, char **argv)
       p7_Die("[%s:%d] connect error %d - %s\n", __FILE__, __LINE__, errno, strerror(errno));
     }
 
-    if(rem < (14 + strlen(esl_opt_GetString(go, "--shutdown")))){ // Should never happen, but just to be safe
-      ESL_REALLOC(cmd, 14+ strlen(esl_opt_GetString(go, "--shutdown")));
+    if(rem < (25 + strlen(esl_opt_GetString(go, "--password")))){ // Should never happen, but just to be safe
+      ESL_REALLOC(cmd, 25+ strlen(esl_opt_GetString(go, "--password")));
     }
     strcpy(cmd, "!shutdown ");
-    strcat(cmd, esl_opt_GetString(go, "--shutdown"));
+    if(esl_opt_IsUsed(go, "--password")){
+      strcat(cmd, "--password ");
+      strcat(cmd, esl_opt_GetString(go, "--password"));
+    }
     strcat(cmd, "\n//");
     uint32_t send_command_length = strlen(cmd);
-    uint32_t serialized_send_command_length = esl_hton32(send_command_length);
+ /*   uint32_t serialized_send_command_length = esl_hton32(send_command_length);
       if (writen(sock, &serialized_send_command_length, sizeof(uint32_t)) != sizeof(uint32_t)) {
         p7_Die("[%s:%d] write (size %" PRIu64 ") error %d - %s\n", __FILE__, __LINE__, n, errno, strerror(errno));
-      }
+      } */
 #ifdef DEBUG_COMMANDS
       printf("sending %s to server, length %d\n", cmd, send_command_length);
 #endif
@@ -374,7 +377,7 @@ main(int argc, char **argv)
     free(cmd);
 
     // Get the status structure back from the server
-    char *buf = malloc(HMMD_SEARCH_STATUS_SERIAL_SIZE);
+    buf = malloc(HMMD_SEARCH_STATUS_SERIAL_SIZE);
     buf_offset = 0;
     int n = HMMD_SEARCH_STATUS_SERIAL_SIZE;
     int size;
@@ -385,12 +388,33 @@ main(int argc, char **argv)
     if ((size = readn(sock, buf, n)) == -1) {
       p7_Die("[%s:%d] read error %d - %s\n", __FILE__, __LINE__, errno, strerror(errno));
     }
+
+
+    if(hmmd_search_status_Deserialize(buf, &buf_offset, &sstatus) != eslOK){
+      p7_Die("Unable to deserialize search status object \n");
+    }
+
+    if (sstatus.status != eslOK) {
+      char *ebuf;
+      n = sstatus.msg_size;
+      ebuf = malloc(n);
+      if ((size = readn(sock, ebuf, n)) == -1) {
+        p7_Die("[%s:%d] read error %d - %s\n", __FILE__, __LINE__, errno, strerror(errno));
+      }   
+      if(abc) esl_alphabet_Destroy(abc);
+      p7_Die("ERROR (%d): %s\n", sstatus.status, ebuf);
+    }
+
+    free(buf); // clear this out 
+
     printf("Server acknowleged shutdown command\n");
     esl_getopts_Destroy(go);
     close(sock);
     exit(0);
   }
 
+
+// if we get here, we're sending one or more searches to the server
   if(qf == NULL){
     p7_Die("Unable to open query file %s\n", queryfile);
   }
@@ -647,7 +671,7 @@ main(int argc, char **argv)
       if (writen(sock, &serialized_send_command_length, sizeof(uint32_t)) != sizeof(uint32_t)) {
         p7_Die("[%s:%d] write (size %" PRIu64 ") error %d - %s\n", __FILE__, __LINE__, n, errno, strerror(errno));
       } */
-printf("Opening socket to server\n");
+
       /* Open the socket to the server.  Do this for every search so that one client can't hog the socket connection */
       if ((sock = socket(AF_INET, SOCK_STREAM, 0)) < 0) {
         p7_Die("[%s:%d] socket error %d - %s\n", __FILE__, __LINE__, errno, strerror(errno));
@@ -658,7 +682,6 @@ printf("Opening socket to server\n");
       if (connect(sock, (struct sockaddr *) &serv_addr, sizeof(serv_addr)) < 0) {
         p7_Die("[%s:%d] connect error %d - %s\n", __FILE__, __LINE__, errno, strerror(errno));
       }
-printf("socket opened\n");
 #ifdef DEBUG_COMMANDS
       printf("sending %s to server, length %d\n", cmd, send_command_length);
 #endif
@@ -724,9 +747,8 @@ printf("socket opened\n");
         free(ebuf);
         p7_Die("Terminating because server sent error message\n");
       }
-      printf("closing socket\n");
+
       close(sock);  // shut the socket down, since we've gotten everything we need back from the server 
-      printf("socket closed\n");
       if(sstatus.type == HMMD_CMD_SEARCH){
         // Create the structures we'll deserialize the hits into
         pli = p7_pipeline_Create(go, 100, 100, FALSE, p7_SEARCH_SEQS);

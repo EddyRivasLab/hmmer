@@ -48,8 +48,9 @@ static ESL_OPTIONS server_Client_Options[] = {
  { "--cport",      eslARG_INT,     "51371",  NULL, "49151<n<65536",NULL,  NULL,  "--worker",      "port to use for client/server communication",                 42 },
   { "--db",           eslARG_INT,   "1", NULL, NULL,    NULL,  NULL,  NULL,            "number of the database to search",                         42 },
   { "--db_ranges",eslARG_STRING,     NULL,  NULL,  NULL,   NULL, NULL, NULL,         "range(s) of sequences within database that will be searched",  42 },
-  { "--jack",     eslARG_INT, "1",  NULL,  NULL,   NULL, NULL, NULL,         "number of rounds of jackhmmer search to perform",  42},
-  { "--shutdown",eslARG_STRING,     "",  NULL,  NULL,   NULL, NULL, NULL,         "send shutdown command to server with password",  42 },
+  { "--jack",     eslARG_INT, NULL,  NULL,  NULL,   NULL, NULL, NULL,         "number of rounds of jackhmmer search to perform",  42},
+  { "--shutdown",eslARG_NONE,     FALSE,  NULL,  NULL,   NULL, NULL, NULL,         "send shutdown command to server",  42 },
+  { "--password",eslARG_STRING,     "",  NULL,  NULL,   NULL, "--shutdown", NULL,         "password for shutdown command",  42 },
       /* Control of output */
   { "-o",           eslARG_OUTFILE, NULL, NULL, NULL,    NULL,  NULL,  NULL,            "direct output to file <f>, not stdout",                        2 },
   { "-A",           eslARG_OUTFILE, NULL, NULL, NULL,    NULL,  NULL,  NULL,            "save multiple alignment of all hits to file <f>",              2 },
@@ -66,7 +67,7 @@ static ESL_OPTIONS server_Client_Options[] = {
   { "--popen",      eslARG_REAL,       "0.02", NULL, "0<=x<0.5",NULL,  NULL,  NULL,              "gap open probability",                                         3 },
   { "--pextend",    eslARG_REAL,        "0.4", NULL, "0<=x<1",  NULL,  NULL,  NULL,              "gap extend probability",                                       3 },
   { "--mx",         eslARG_STRING, "BLOSUM62", NULL, NULL,      NULL,  NULL,  "--mxfile",        "substitution score matrix choice (of some built-in matrices)", 3 },
-  { "--mxfile",     eslARG_INFILE,       NULL, NULL, NULL,      NULL,  NULL,  "--mx",            "read substitution score matrix from file <f>",                 3 },
+  { "--mxfile",     eslARG_INFILE,       NULL, NULL, NULL,      NULL,  NULL,  "--mx",            "read substitution score matrix from file <f> (on server system)",                 3 },
   /* Control of reporting thresholds */
   { "-E",           eslARG_REAL,  "10.0", NULL, "x>0",   NULL,  NULL,  REPOPTS,         "report sequences <= this E-value threshold in output",         4 },
   { "-T",           eslARG_REAL,   FALSE, NULL, NULL,    NULL,  NULL,  REPOPTS,         "report sequences >= this score threshold in output",           4 },
@@ -88,24 +89,24 @@ static ESL_OPTIONS server_Client_Options[] = {
   { "--F3",         eslARG_REAL,  "1e-5", NULL, NULL,    NULL,  NULL, "--max",          "Stage 3 (Fwd) threshold: promote hits w/ P <= F3",             7 },
   { "--nobias",     eslARG_NONE,   NULL,  NULL, NULL,    NULL,  NULL, "--max",          "turn off composition bias filter",                             7 },
   /* Alternative relative sequence weighting strategies */
-  { "--wpb",        eslARG_NONE,    "default", NULL, NULL,   WGTOPTS,    NULL,  NULL,            "Henikoff position-based weights",                              9 },
-  { "--wgsc",       eslARG_NONE,         NULL, NULL, NULL,   WGTOPTS,    NULL,  NULL,            "Gerstein/Sonnhammer/Chothia tree weights",                     9 },
-  { "--wblosum",    eslARG_NONE,         NULL, NULL, NULL,   WGTOPTS,    NULL,  NULL,            "Henikoff simple filter weights",                               9 },
-  { "--wnone",      eslARG_NONE,         NULL, NULL, NULL,   WGTOPTS,    NULL,  NULL,            "don't do any relative weighting; set all to 1",                9 },
+  { "--wpb",        eslARG_NONE,    "default", NULL, NULL,   WGTOPTS,    "--jack",  NULL,            "Henikoff position-based weights",                              9 },
+  { "--wgsc",       eslARG_NONE,         NULL, NULL, NULL,   WGTOPTS,    "--jack",  NULL,            "Gerstein/Sonnhammer/Chothia tree weights",                     9 },
+  { "--wblosum",    eslARG_NONE,         NULL, NULL, NULL,   WGTOPTS,    "--jack",  NULL,            "Henikoff simple filter weights",                               9 },
+  { "--wnone",      eslARG_NONE,         NULL, NULL, NULL,   WGTOPTS,    "--jack",  NULL,            "don't do any relative weighting; set all to 1",                9 },
   { "--wgiven",     eslARG_NONE,         NULL, NULL, NULL,   WGTOPTS,    NULL,  NULL,            "use weights as given in MSA file",                            99 }, /* unused/prohibited in jackhmmer */
   { "--wid",        eslARG_REAL,       "0.62", NULL,"0<=x<=1", NULL,"--wblosum",NULL,            "for --wblosum: set identity cutoff",                           9 },
 /* Alternative effective sequence weighting strategies */
-  { "--eent",       eslARG_NONE,    "default", NULL, NULL,   EFFOPTS,    NULL,  NULL,            "adjust eff seq # to achieve relative entropy target",          10 },
-  { "--eentexp",    eslARG_NONE,     "default",NULL, NULL,    EFFOPTS,    NULL, NULL,            "adjust eff seq # to reach rel. ent. target using exp scaling", 10 },
-  { "--eclust",     eslARG_NONE,        FALSE, NULL, NULL,   EFFOPTS,    NULL,  NULL,            "eff seq # is # of single linkage clusters",                    10 },
-  { "--enone",      eslARG_NONE,        FALSE, NULL, NULL,   EFFOPTS,    NULL,  NULL,            "no effective seq # weighting: just use nseq",                  10 },
-  { "--eset",       eslARG_REAL,         NULL, NULL, NULL,   EFFOPTS,    NULL,  NULL,            "set eff seq # for all models to <x>",                          10 },
-  { "--ere",        eslARG_REAL,         NULL, NULL,"x>0",      NULL,    NULL, NULL,            "for --eent[exp]: set minimum rel entropy/position to <x>",      10 },
-  { "--esigma",     eslARG_REAL,       "45.0", NULL,"x>0",      NULL,    NULL, NULL,            "for --eent[exp]: set sigma param to <x>",                       10 },
+  { "--eent",       eslARG_NONE,    "default", NULL, NULL,   EFFOPTS,    "--jack",  NULL,            "adjust eff seq # to achieve relative entropy target",          10 },
+  { "--eentexp",    eslARG_NONE,     "default",NULL, NULL,    EFFOPTS,    "--jack", NULL,            "adjust eff seq # to reach rel. ent. target using exp scaling", 10 },
+  { "--eclust",     eslARG_NONE,        FALSE, NULL, NULL,   EFFOPTS,    "--jack",  NULL,            "eff seq # is # of single linkage clusters",                    10 },
+  { "--enone",      eslARG_NONE,        FALSE, NULL, NULL,   EFFOPTS,    "--jack",  NULL,            "no effective seq # weighting: just use nseq",                  10 },
+  { "--eset",       eslARG_REAL,         NULL, NULL, NULL,   EFFOPTS,    "--jack",  NULL,            "set eff seq # for all models to <x>",                          10 },
+  { "--ere",        eslARG_REAL,         NULL, NULL,"x>0",      NULL,    "--jack", NULL,            "for --eent[exp]: set minimum rel entropy/position to <x>",      10 },
+  { "--esigma",     eslARG_REAL,       "45.0", NULL,"x>0",      NULL,    "--jack", NULL,            "for --eent[exp]: set sigma param to <x>",                       10 },
   { "--eid",        eslARG_REAL,       "0.62", NULL,"0<=x<=1",  NULL,"--eclust",NULL,            "for --eclust: set fractional identity cutoff to <x>",          10 },
 /* Alternative prior strategies */
-  { "--pnone",       eslARG_NONE,       FALSE, NULL, NULL,      NULL,    NULL,"--plaplace",      "don't use any prior; parameters are frequencies",             13 },
-  { "--plaplace",    eslARG_NONE,       FALSE, NULL, NULL,      NULL,    NULL,   "--pnone",      "use a Laplace +1 prior",                                      13 },
+  { "--pnone",       eslARG_NONE,       FALSE, NULL, NULL,      NULL,    "--jack","--plaplace",      "don't use any prior; parameters are frequencies",             13 },
+  { "--plaplace",    eslARG_NONE,       FALSE, NULL, NULL,      NULL,    "--jack",   "--pnone",      "use a Laplace +1 prior",                                      13 },
 /* Control of E-value calibration */
   { "--EmL",        eslARG_INT,         "200", NULL,"n>0",      NULL,  NULL,  NULL,              "length of sequences for MSV Gumbel mu fit",                   11 },   
   { "--EmN",        eslARG_INT,         "200", NULL,"n>0",      NULL,  NULL,  NULL,              "number of sequences for MSV Gumbel mu fit",                   11 },   
@@ -119,9 +120,8 @@ static ESL_OPTIONS server_Client_Options[] = {
   { "-Z",           eslARG_REAL,   FALSE, NULL, "x>0",   NULL,  NULL,  NULL,            "set # of comparisons done, for E-value calculation",          12 },
   { "--domZ",       eslARG_REAL,   FALSE, NULL, "x>0",   NULL,  NULL,  NULL,            "set # of significant seqs, for domain E-value calculation",   12 },
   { "--seed",       eslARG_INT,    "42",  NULL, "n>=0",  NULL,  NULL,  NULL,            "set RNG seed to <n> (if 0: one-time arbitrary seed)",         12 },
-  { "--qformat",    eslARG_STRING,      NULL, NULL, NULL,      NULL,  NULL,  NULL,              "assert query <seqfile> is in format <s>: no autodetection",   12 },
   /* Alternative model construction strategies */
-  { "--fragthresh", eslARG_REAL,        "0.5", NULL, "0<=x<=1", NULL,    NULL,  NULL,            "if L <= x*alen, tag sequence as a fragment",                   8 },
+  { "--fragthresh", eslARG_REAL,        "0.5", NULL, "0<=x<=1", NULL,    "--jack",  NULL,            "if L <= x*alen, tag sequence as a fragment",                   8 },
     { "--fast",       eslARG_NONE,        FALSE, NULL, NULL,    CONOPTS,   NULL,  NULL,            "assign cols w/ >= symfrac residues as consensus",              99 }, // this option is disallowed, but p7_builder crashes 
     // if it is not defined
     { "--hand",       eslARG_NONE,    "default", NULL, NULL,    CONOPTS,   NULL,  NULL,            "manual construction (requires reference annotation)",          99 }, //ditto

@@ -30,9 +30,10 @@ typedef enum p7_thread_mode{FRONTEND, BACKEND} P7_THREAD_MODE;
  *                                     therefore goes to sleep, that thread will not re-do start-of-search work when woken up after more work arrives.
  *	         HMM_SEARCH: A one-sequence many-HMM search
  *           HMM_SEARCH_CONTINUE: A one-sequence many-HMM search where the master node has delivered at least one chunk of work after the first, analagous
- *                                to SEQUENCE_SEARCH_CONTINUE
+ *                                to SEQUENCE_SEARCH_CONTINUE) 
+ * 						SHUTDOWN: The server has been told to shut down
  */
-typedef enum p7_search_type{IDLE, SEQUENCE_SEARCH, SEQUENCE_SEARCH_CONTINUE, HMM_SEARCH, HMM_SEARCH_CONTINUE} P7_SEARCH_TYPE;
+typedef enum p7_search_type{IDLE, SEQUENCE_SEARCH, SEQUENCE_SEARCH_CONTINUE, HMM_SEARCH, HMM_SEARCH_CONTINUE, SHUTDOWN} P7_SEARCH_TYPE;
 
 //! Structure that describes the region of the database that a worker thread is currently processing, consisting of sequences start--end (inclusive) in the database
 typedef struct p7_work_descriptor{

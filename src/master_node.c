@@ -53,7 +53,7 @@
 // we close our end
 
 // defines that control debugging commands
-//#define DEBUG_COMMANDS 1
+#define DEBUG_COMMANDS 1
 //#define DEBUG_HITS 1
 //#define PRINT_PERF 1
 
@@ -94,8 +94,8 @@ typedef struct {
 
   ESL_STACK      *cmdstack;	/* stack of commands that clients want done */
   P7_SERVER_MASTERNODE_STATE *masternode;
+  ESL_GETOPTS    *opts; // The options passed to hmmserver, not the options passed to a given search
 } CLIENTSIDE_ARGS;
-
 
 typedef struct {
   HMMD_SEARCH_STATS   stats;
@@ -380,19 +380,6 @@ forward_results(P7_SERVER_QUEUE_DATA *query, SEARCH_RESULTS *results)
   return;
 }
 
-
-static void free_QueueData_shard(P7_SERVER_QUEUE_DATA *data)
-{
-  /* free the query data */
-  esl_getopts_Destroy(data->opts);
-
-  if (data->abc != NULL) esl_alphabet_Destroy(data->abc);
-  if (data->hmm != NULL) p7_hmm_Destroy(data->hmm);
-  if (data->seq != NULL) esl_sq_Destroy(data->seq);
-  memset(data, 0, sizeof(*data));
-  free(data);
-}
-
 static void print_client_msg(int fd, int status, char *format, va_list ap)
 {
   uint32_t nalloc =0;
@@ -448,9 +435,43 @@ client_msg_longjmp(int fd, int status, jmp_buf *env, char *format, ...)
   longjmp(*env, 1);
 }
 
-
+void check_phmmer_jackhmmer_only_flags(ESL_GETOPTS *opts, int fd, jmp_buf *jmp_env){
+  if(esl_opt_IsUsed(opts, "--jack")){
+    return; // all of the options below are legal if doing a jackhmmer search
+  }
+  if(esl_opt_IsUsed(opts, "--mx")){
+           client_msg_longjmp(fd, eslEFORMAT, jmp_env, "Error: --mx option may only be used when searching a sequence against a sequence database");
+  }
+  if(esl_opt_IsUsed(opts, "--popen")){
+           client_msg_longjmp(fd, eslEFORMAT, jmp_env, "Error: --popen option may only be used when searching a sequence against a sequence database");
+  }
+  if(esl_opt_IsUsed(opts, "--pextend")){
+           client_msg_longjmp(fd, eslEFORMAT, jmp_env, "Error: --pextend option may only be used when searching a sequence against a sequence database");
+  }
+  if(esl_opt_IsUsed(opts, "--EmL")){
+           client_msg_longjmp(fd, eslEFORMAT, jmp_env, "Error: --EmL option may only be used when searching a sequence against a sequence database");
+  }
+  if(esl_opt_IsUsed(opts, "--EmN")){
+           client_msg_longjmp(fd, eslEFORMAT, jmp_env, "Error: --EmN option may only be used when searching a sequence against a sequence database");
+  }
+  if(esl_opt_IsUsed(opts, "--EvL")){
+           client_msg_longjmp(fd, eslEFORMAT, jmp_env, "Error: --EvL option may only be used when searching a sequence against a sequence database");
+  }
+  if(esl_opt_IsUsed(opts, "--EvN")){
+           client_msg_longjmp(fd, eslEFORMAT, jmp_env, "Error: --EvN option may only be used when searching a sequence against a sequence database");
+  }
+  if(esl_opt_IsUsed(opts, "--EfL")){
+           client_msg_longjmp(fd, eslEFORMAT, jmp_env, "Error: --EfL option may only be used when searching a sequence against a sequence database");
+  }
+  if(esl_opt_IsUsed(opts, "--EfN")){
+           client_msg_longjmp(fd, eslEFORMAT, jmp_env, "Error: --EfN option may only be used when searching a sequence against a sequence database");
+  }
+  if(esl_opt_IsUsed(opts, "--Eft")){
+           client_msg_longjmp(fd, eslEFORMAT, jmp_env, "Error: --Eft option may only be used when searching a sequence against a sequence database");
+  }
+}
 static void
-process_ServerCmd(char *ptr, CLIENTSIDE_ARGS *data)
+process_ServerCmd(char *ptr, CLIENTSIDE_ARGS *data, ESL_GETOPTS *opts)
 {
   P7_SERVER_QUEUE_DATA    *parms    = NULL;     /* cmd to queue           */
   HMMD_COMMAND_SHARD  *cmd      = NULL;     /* parsed cmd to process  */
@@ -472,11 +493,25 @@ process_ServerCmd(char *ptr, CLIENTSIDE_ARGS *data)
 
   /* process the different commands */
   s = strsep(&ptr, " \t");
-  if (strcmp(s, "shutdown") == 0) 
-    {
+  if (strcmp(s, "shutdown") == 0)   {
 #ifdef DEBUG_COMMANDS
       printf("Master node saw shutdown command\n");
 #endif
+      printf("Server password is %s, client sent %s\n", esl_opt_GetString(data->opts, "--password"),esl_opt_GetString(opts, "--password"));
+      if (esl_opt_IsUsed(data->opts, "--password")){ 
+
+        if(!esl_opt_IsUsed(opts, "--password") ||
+          (strcmp(esl_opt_GetString(opts, "--password"), esl_opt_GetString(data->opts, "--password")) !=0)){
+          //passwords didn't match
+ #ifdef DEBUG_COMMANDS
+          printf("Master node rejected shutdown due to password miss-match\n");
+#endif         
+          client_msg(fd, eslEINVAL, "Incorrect shutdown password provided\n");
+          esl_getopts_Destroy(opts);
+          free(data); // don't free sub-structures, they're used and freed elsewhere
+          return;
+        }
+      }
       if ((cmd = malloc(sizeof(HMMD_HEADER))) == NULL) LOG_FATAL_MSG("malloc", errno);
       memset(cmd, 0, sizeof(HMMD_HEADER)); /* avoid uninit bytes & valgrind bitching. Remove, if we ever serialize structs correctly. */
       cmd->hdr.length  = 0;
@@ -485,9 +520,12 @@ process_ServerCmd(char *ptr, CLIENTSIDE_ARGS *data)
   else 
     {
       client_msg(fd, eslEINVAL, "Unknown command %s\n", s);
+      esl_getopts_Destroy(opts);
+      free(data); // don't free sub-structures, they're used and freed elsewhere
       return;
     }
 
+  // If we get here, we've been sent a shutdown command and it's passed password check
   if ((parms = malloc(sizeof(P7_SERVER_QUEUE_DATA))) == NULL) LOG_FATAL_MSG("malloc", errno);
   memset(parms, 0, sizeof(P7_SERVER_QUEUE_DATA)); /* avoid valgrind bitches about uninit bytes; remove if structs are serialized properly */
 
@@ -511,348 +549,11 @@ process_ServerCmd(char *ptr, CLIENTSIDE_ARGS *data)
   fflush(stdout);
 #endif
   esl_stack_PPush(cmdstack, parms);
+  esl_getopts_Destroy(opts);
   free(cmd);
 }
 
-static int
-clientside_loop(CLIENTSIDE_ARGS *data)
-{
-  int                status = eslOK;
 
-  char              *ptr;
-  char              *buffer;
-  char              *opt_str;
-
-  int                dbx;
-  int                eod;
-  int                n;
-  int                buf_size;
-  int                remaining;
-  int                amount;
-
-  P7_HMM            *hmm     = NULL;     /* query HMM                      */
-  ESL_SQ            *seq     = NULL;     /* query sequence                 */
-  ESL_SCOREMATRIX   *sco     = NULL;     /* scoring matrix                 */
-  P7_HMMFILE        *hfp     = NULL;
-  ESL_ALPHABET      *abc     = NULL;     /* digital alphabet               */
-  ESL_GETOPTS       *opts    = NULL;     /* search specific options        */
-  P7_BUILDER       *bld      = NULL;         /* HMM construction configuration */
-  P7_BG            *bg       = NULL;         /* null model                     */
-
-  ESL_STACK         *cmdstack = data->cmdstack;
-  P7_SERVER_QUEUE_DATA        *parms;
-  jmp_buf            jmp_env;
-  time_t             date;
-  char               timestamp[32];
-  int search_type = -1;
-  int slen;
-  uint64_t search_length=0;
-
-  buf_size = MAX_BUFFER;
-  if ((buffer  = malloc(buf_size))   == NULL) LOG_FATAL_MSG("malloc", errno);
-  ptr = buffer;
-  remaining = buf_size;
-  amount = 0;
-  eod = 0;
-  while (!eod) {
-    int   l;
-    char *s;
-
-    /* Receive message from client */
-    if ((n = read(data->sock_fd, ptr, remaining)) < 0) {
-      p7_syslog(LOG_ERR,"[%s:%d] - reading %s error %d - %s\n", __FILE__, __LINE__, data->ip_addr, errno, strerror(errno));
-      return 1;
-    }
-
-    if (n == 0) return 1;
-
-    ptr += n;
-    amount += n;
-    remaining -= n;
-
-    /* scan backwards till we hit the start of the line */
-    l = amount;
-    s = ptr - 1;
-    while (l-- > 0 && (*s == '\n' || *s == '\r')) --s;
-    while (l-- > 0 && (*s != '\n' && *s != '\r')) --s;
-    eod = (amount > 1 && *(s + 1) == '/' && *(s + 2) == '/' );
-
-    /* if the buffer is full, make it larger */
-    if (!eod && remaining == 0) {
-      if ((buffer = realloc(buffer, buf_size * 2)) == NULL) LOG_FATAL_MSG("realloc", errno);
-      ptr = buffer + buf_size;
-      remaining = buf_size;
-      buf_size *= 2;
-    }
-  }
-
-  /* zero terminate the buffer */
-  if (remaining == 0) {
-    if ((buffer = realloc(buffer, buf_size + 1)) == NULL) LOG_FATAL_MSG("realloc", errno);
-    ptr = buffer + buf_size;
-  }
-  *ptr = 0;
-
-  /* skip all leading white spaces */
-  ptr = buffer;
-  while (*ptr && isspace(*ptr)) ++ptr;
-
-  if (*ptr == '!') {
-    process_ServerCmd(ptr, data);
-    free(buffer);
-    return 0;
-  } 
-  else if (*ptr == '@') {
-    char *s = ++ptr;
-
-    /* skip to the end of the line */
-    while (*ptr && (*ptr != '\n' && *ptr != '\r')) ++ptr;
-    *ptr++ = 0;
-
-    /* create a commandline string with dummy program name for
-     * the esl_opt_ProcessSpoof() function to parse.
-     */
-
-
-    slen = strlen(s);
-    opt_str = (char *) malloc(slen +10);  //This does not need to get freed in this function.  It gets added to the query
-    // data structure, which is freed after the query has been completed
-    if (opt_str == NULL){
-      client_msg_longjmp(data->sock_fd, status, &jmp_env, "Unable to allocate memory for options string. This is a fatal error");
-    }
-    if(strlen(s) > 0){
-      int strl = snprintf(opt_str, slen+10, "hmmpgmd %s\n", s);
-      opt_str[strl] = '\0'; // snprintf appears to sometimes not terminate string even though it's supposed to.
-    }
-    else{ // esl_opt_ProcessSpoof seems to have trouble with options strings that have trailing spaces
-      strcpy(opt_str, "hmmpgmd\n");
-    }    
-    /* skip remaining white spaces */
-    while (*ptr && isspace(*ptr)) ++ptr;
-  } else {
-    client_msg(data->sock_fd, eslEFORMAT, "Missing options string");
-    free(buffer);
-    return 0;
-  }
-
-  if (!setjmp(jmp_env)) {
-    dbx = 0;
-#ifdef DEBUG_COMMANDS
-    printf("received options string of: %s\n", opt_str);
-#endif
-    if ((opts = esl_getopts_Create(server_Client_Options))       == NULL)  client_msg_longjmp(data->sock_fd, status, &jmp_env, "Failed to create search options object");
-    if ((status = esl_opt_ProcessSpoof(opts, opt_str)) != eslOK) client_msg_longjmp(data->sock_fd, status, &jmp_env, "Failed to parse options string: %s", opts->errbuf);
-    if ((status = esl_opt_VerifyConfig(opts))         != eslOK) client_msg_longjmp(data->sock_fd, status, &jmp_env, "Failed to parse options string: %s", opts->errbuf);
-
-    dbx = esl_opt_GetInteger(opts, "--db");
-    if((dbx < 1) || (dbx > data->masternode->num_databases)){
-      client_msg_longjmp(data->sock_fd, eslEINVAL, &jmp_env, "Nonexistent database %d specified.  Valid database ID's for this server range from 1 to %d\n", dbx, data->masternode->num_databases);
-      }
-       
-    if(dbx == 0) {
-      client_msg_longjmp(data->sock_fd, eslEINVAL, &jmp_env, "No search database specified, --db <database #> is required");
-    }
-
-
-    // check for correctly formated rangelist if one is specified so that we can complain to the sender
-    if (esl_opt_IsUsed(opts, "--db_ranges")){
-      char *orig_range_string = esl_opt_GetString(opts, "--db_ranges");
-      char *range_string = NULL;
-      esl_strdup(orig_range_string, -1, &range_string);  // make copy becauese tokenizaton seems to modify the input string
-      char *range_string_base = range_string; // save this because we need to free it later
-      char *range;
-      uint64_t min_index = data->masternode->database_shards[dbx-1]->directory[0].index;
-      uint64_t max_index = data->masternode->database_shards[dbx-1]->directory[data->masternode->database_shards[dbx-1]->num_objects -1].index;
-      while ((status = esl_strtok(&range_string, ",", &range) ) == eslOK){
-        int64_t start, end;
-        status = esl_regexp_ParseCoordString(range, &start, &end);
-        // These errors should never occur, because we sanity check-the range when receiving the search command
-        if (status == eslESYNTAX) client_msg_longjmp(data->sock_fd, eslEINVAL, &jmp_env,"--db_ranges takes coords <from>..<to>; %s not recognized", range);
-        if (status == eslFAIL)    client_msg_longjmp(data->sock_fd, eslEINVAL, &jmp_env,"Failed to find <from> or <to> coord in %s", range);
-        if (start > end){
-          client_msg_longjmp(data->sock_fd, eslEINVAL, &jmp_env,"Illegal range from %lu to %lu found in --db_ranges", start, end);
-        }
-        if((start < min_index) | (start > max_index)) client_msg_longjmp(data->sock_fd, eslEINVAL, &jmp_env,"Start of range %lu was outside of database index range %lu to %lu", start, min_index, max_index);
-        if((end < min_index) | (end > max_index)) client_msg_longjmp(data->sock_fd, eslEINVAL, &jmp_env,"End of range %lu was outside of database index range %lu to %lu", end, min_index, max_index);
-#ifdef DEBUG_COMMANDS
-        printf("range found of %lu to %lu\n", start, end);
-#endif
-        search_length +=(end-start)+1;
-      }
-      free(range_string_base);
-    }
-    else{
-        search_length = data->masternode->database_shards[dbx-1]->num_objects;  // We're searching the entire shard, so get the length from the shard
-      }
-    seq = NULL;
-    hmm = NULL;
-
-    if (*ptr == '>') {
-      /* try to parse the input buffer as a FASTA sequence */
-      abc = esl_alphabet_Create(eslAMINO);
-      seq = esl_sq_CreateDigital(abc);
-      bg = p7_bg_Create(abc);
-      /* try to parse the input buffer as a FASTA sequence */
-      status = esl_sqio_Parse(ptr, strlen(ptr), seq, eslSQFILE_DAEMON);
-      if (status != eslOK) client_msg_longjmp(data->sock_fd, status, &jmp_env, "Error parsing FASTA sequence");
-      if (seq->n < 1) client_msg_longjmp(data->sock_fd, eslEFORMAT, &jmp_env, "Error zero length FASTA sequence");
-
-      if(data->masternode->database_shards[dbx-1]->data_type == AMINO){
-        search_type = HMMD_CMD_SEARCH;
-        // Searching an amino database with another sequence requires that we create an HMM from the sequence 
-        // a la phmmer
-
-        bld = p7_builder_Create(NULL, abc);
-        int seed;
-        if ((seed = esl_opt_GetInteger(opts, "--seed")) > 0) {
-          esl_randomness_Init(bld->r, seed);
-          bld->do_reseeding = TRUE;
-        }
-        bld->EmL = esl_opt_GetInteger(opts, "--EmL");
-        bld->EmN = esl_opt_GetInteger(opts, "--EmN");
-        bld->EvL = esl_opt_GetInteger(opts, "--EvL");
-        bld->EvN = esl_opt_GetInteger(opts, "--EvN");
-        bld->EfL = esl_opt_GetInteger(opts, "--EfL");
-        bld->EfN = esl_opt_GetInteger(opts, "--EfN");
-        bld->Eft = esl_opt_GetReal   (opts, "--Eft");
-
-        if (esl_opt_IsOn(opts, "--mxfile")) {
-          status = p7_builder_SetScoreSystem (bld, esl_opt_GetString(opts, "--mxfile"), NULL, esl_opt_GetReal(opts, "--popen"), esl_opt_GetReal(opts, "--pextend"), bg);
-        }
-        else{ 
-          status = p7_builder_LoadScoreSystem(bld, esl_opt_GetString(opts, "--mx"), esl_opt_GetReal(opts, "--popen"), esl_opt_GetReal(opts, "--pextend"), bg);
-        } 
-    
-        if (status != eslOK) {
-          client_msg_longjmp(data->sock_fd, eslEINVAL, &jmp_env, "hmmpgmd: failed to set single query sequence score system: %s", bld->errbuf);
-        }
-        p7_SingleBuilder(bld, seq, bg, &hmm, NULL, NULL, NULL);
-        esl_sq_Destroy(seq); // Free the sequence and set it to NULL so that the rest of the routine thinks 
-        // we were always doing an hmm-sequence search.
-        seq = NULL;
-        p7_builder_Destroy(bld);
-        p7_bg_Destroy(bg);
-      }
-      else{
-        search_type = HMMD_CMD_SCAN;
-      }
-    }
-    else if (*ptr == '*'){ // parse query object as serialized HMM
-      if (data->masternode->database_shards[dbx-1]->data_type == HMM){
-        client_msg_longjmp(data->sock_fd, status, &jmp_env, "Database %d contains HMM data, and a HMM cannot be used to search a HMM database", dbx);
-      }
-      abc = esl_alphabet_Create(eslAMINO);
-      uint32_t start_pos = 0;
-      p7_hmm_Deserialize((const uint8_t *) ptr+1, &start_pos, abc, &hmm);  // Grab the serialized HMM and its alphabet
-      search_type = HMMD_CMD_SEARCH;
-
-    }
-    else if (strncmp(ptr, "HMM", 3) == 0) {  // parse query object as text-mode HMM, must be amino (protein) HMM
-       if (data->masternode->database_shards[dbx-1]->data_type == HMM){
-        client_msg_longjmp(data->sock_fd, status, &jmp_env, "Database %d contains HMM data, and a HMM cannot be used to search a HMM database", dbx);
-      }
-      abc = esl_alphabet_Create(eslAMINO);
-
-      search_type = HMMD_CMD_SEARCH;
-      /* try to parse the buffer as an hmm */
-      status = p7_hmmfile_OpenBuffer(ptr, strlen(ptr), &hfp);
-      if (status != eslOK) client_msg_longjmp(data->sock_fd, status, &jmp_env, "Failed to open query hmm buffer");
-
-      status = p7_hmmfile_Read(hfp, &abc,  &hmm);
-      if (status != eslOK) client_msg_longjmp(data->sock_fd, status, &jmp_env, "Error reading query hmm: %s", hfp->errbuf);
-
-      p7_hmmfile_Close(hfp);
-    } else {
-      /* no idea what we are trying to parse */
-      client_msg_longjmp(data->sock_fd, eslEFORMAT, &jmp_env, "Unknown query sequence/hmm format");
-    }
-
-  } else {
-    /* an error occured some where, so try to clean up */
-    if (opts != NULL) esl_getopts_Destroy(opts);
-    if (abc  != NULL) esl_alphabet_Destroy(abc);
-    if (hmm  != NULL) p7_hmm_Destroy(hmm);
-    if (seq  != NULL) esl_sq_Destroy(seq);
-    if (sco  != NULL) esl_scorematrix_Destroy(sco);
-
-    free(buffer);
-    return 0;
-  }
-
-  parms = p7_server_queue_data_Create();
-
-  parms->hmm  = hmm;
-  parms->seq  = seq;
-  parms->abc  = abc;
-  parms->opts = opts;
-  parms->dbx  = dbx - 1;
-  parms->optsstring = opt_str;
-  parms->cnt = search_length;
-  strcpy(parms->ip_addr, data->ip_addr);
-  parms->sock       = data->sock_fd;
-  parms->cmd_type   = search_type;
-  parms->query_type = (seq != NULL) ? HMMD_SEQUENCE : HMMD_HMM;
-  parms->cnt = search_length;
-
-  date = time(NULL);
-  ctime_r(&date, timestamp);
-#ifdef DEBUG_COMMANDS
-  printf("\n%s", timestamp);	/* note ctime_r() leaves \n on end of timestamp */
-
-  if (parms->seq != NULL) {
-    printf("Queuing %s %s from %s (%d)\n", (parms->cmd_type == HMMD_CMD_SEARCH) ? "search" : "scan", parms->seq->name, parms->ip_addr, parms->sock);
-  } else {
-    printf("Queuing hmm %s from %s (%d)\n", parms->hmm->name, parms->ip_addr, parms->sock);
-  }
-  fflush(stdout);
-#endif
-  esl_stack_PPush(cmdstack, parms);
-  free(buffer);
-  return 0;
-
-}
-
-
-
-/* discard_function()
- * function handed to esl_stack_DiscardSelected() to remove
- * all commands in the stack that are associated with a
- * particular client socket, because we're closing that
- * client down. Prototype to this is dictate by the generalized
- * interface to esl_stack_DiscardSelected().
- */
-static int
-discard_function(void *elemp, void *args)
-{
-  P7_SERVER_QUEUE_DATA  *elem = (P7_SERVER_QUEUE_DATA *) elemp;
-  int          fd   = * (int *) args;
-
-  if (elem->sock == fd) 
-    {
-      free_QueueData_shard(elem);
-      return TRUE;
-    }
-  return FALSE;
-}
-static void *clientside_thread_old(void *arg)
-{
-  int              eof;
-  CLIENTSIDE_ARGS *data = (CLIENTSIDE_ARGS *)arg;
-  pthread_detach(pthread_self()); // Mark our resources to be cleaned up on thread exit
-  eof = 0;
-  while (!eof) {
-    eof = clientside_loop(data);
-  }
-
-  /* remove any commands in stack associated with this client's socket */
-  esl_stack_DiscardSelected(data->cmdstack, discard_function, &(data->sock_fd));
-
-  fflush(stdout);
-
-  close(data->sock_fd);
-  free(data);
-  pthread_exit(NULL);
-}
 
 static void *clientside_thread(void *arg)  // new version that reads exactly one command from a client
 {
@@ -915,7 +616,7 @@ static void *clientside_thread(void *arg)  // new version that reads exactly one
     ptr += n;
     amount += n;
     remaining -= n;
-printf("Received %lu bytes\n", ptr-buffer);
+
     /* scan backwards till we hit the start of the line */
     l = amount;
     s = ptr - 1;
@@ -942,54 +643,61 @@ printf("Received %lu bytes\n", ptr-buffer);
   /* skip all leading white spaces */
   ptr = buffer;
   while (*ptr && isspace(*ptr)) ++ptr;
-
-  if (*ptr == '!') {
-    process_ServerCmd(ptr, data);
-    free(buffer);
-    pthread_exit(NULL);
-  } 
-  else if (*ptr == '@') {
-    char *s = ++ptr;
-
-    /* skip to the end of the line */
-    while (*ptr && (*ptr != '\n' && *ptr != '\r')) ++ptr;
-    *ptr++ = 0;
+  char *s = ptr+1;
 
     /* create a commandline string with dummy program name for
      * the esl_opt_ProcessSpoof() function to parse.
      */
 
 
-    slen = strlen(s);
-    opt_str = (char *) malloc(slen +10);  //This does not need to get freed in this function.  It gets added to the query
-    // data structure, which is freed after the query has been completed
-    if (opt_str == NULL){
-      client_msg_longjmp(data->sock_fd, status, &jmp_env, "Unable to allocate memory for options string. This is a fatal error");
+  slen = strlen(s);
+  opt_str = (char *) malloc(slen +10);  //This does not need to get freed in this function if we're doing a search.  It gets added to the query
+  // data structure, which is freed after the query has been completed
+  if (opt_str == NULL){
+    client_msg(data->sock_fd, status, "Unable to allocate memory for options string. This is a fatal error");
+  }
+  if(*ptr == '!'){ // opt_string for command gets created differently than search
+    if(slen > 0){
+      int strl = snprintf(opt_str, slen, "%s\n", s);
+      opt_str[strl] = '\0'; // snprintf appears to sometimes not terminate string even though it's supposed to.
     }
-    if(strlen(s) > 0){
+    else{ // esl_opt_ProcessSpoof seems to have trouble with options strings that have trailing spaces
+      strcpy(opt_str, "hmmpgmd\n");
+    }
+  }
+  else{
+    if(slen > 0){
       int strl = snprintf(opt_str, slen+10, "hmmpgmd %s\n", s);
       opt_str[strl] = '\0'; // snprintf appears to sometimes not terminate string even though it's supposed to.
     }
     else{ // esl_opt_ProcessSpoof seems to have trouble with options strings that have trailing spaces
       strcpy(opt_str, "hmmpgmd\n");
-    }    
-    /* skip remaining white spaces */
-    while (*ptr && isspace(*ptr)) ++ptr;
-  } else {
-    client_msg(data->sock_fd, eslEFORMAT, "Missing options string");
-    free(buffer);
-    close(data->sock_fd);
-    pthread_exit(NULL);
+    }
   }
-
-  if (!setjmp(jmp_env)) {
-    dbx = 0;
-#ifdef DEBUG_COMMANDS
+  #ifdef DEBUG_COMMANDS
     printf("received options string of: %s\n", opt_str);
 #endif
-    if ((opts = esl_getopts_Create(server_Client_Options))       == NULL)  client_msg_longjmp(data->sock_fd, status, &jmp_env, "Failed to create search options object");
+
+  if (!setjmp(jmp_env)) {
+    if ((opts = esl_getopts_Create(server_Client_Options))       == NULL)  client_msg_longjmp(data->sock_fd, status,  &jmp_env,"Failed to create search options object");
     if ((status = esl_opt_ProcessSpoof(opts, opt_str)) != eslOK) client_msg_longjmp(data->sock_fd, status, &jmp_env, "Failed to parse options string: %s", opts->errbuf);
     if ((status = esl_opt_VerifyConfig(opts))         != eslOK) client_msg_longjmp(data->sock_fd, status, &jmp_env, "Failed to parse options string: %s", opts->errbuf);
+    if (*ptr == '!') {
+      process_ServerCmd(ptr, data, opts);
+      free(buffer);
+      free(opt_str);
+      pthread_exit(NULL);
+    } 
+    else if (*ptr != '@') { // commands must begin with ! or @
+      client_msg_longjmp(data->sock_fd, eslEFORMAT, &jmp_env, "Unable to parse command %s\n", buffer);
+      free(buffer);
+      free(opt_str);
+      close(data->sock_fd);
+      pthread_exit(NULL);
+    }
+
+ 
+    dbx = 0;
 
     dbx = esl_opt_GetInteger(opts, "--db");
     if((dbx < 1) || (dbx > data->masternode->num_databases)){
@@ -1033,7 +741,9 @@ printf("Received %lu bytes\n", ptr-buffer);
       }
     seq = NULL;
     hmm = NULL;
-
+  /* skip to the end of the command line */
+    while (*ptr && (*ptr != '\n' && *ptr != '\r')) ++ptr;
+    *ptr++ = 0;
     if (*ptr == '>') {
       /* try to parse the input buffer as a FASTA sequence */
       abc = esl_alphabet_Create(eslAMINO);
@@ -1048,7 +758,15 @@ printf("Received %lu bytes\n", ptr-buffer);
         search_type = HMMD_CMD_SEARCH;
         // Searching an amino database with another sequence requires that we create an HMM from the sequence 
         // a la phmmer
-
+        if(esl_opt_IsUsed(opts, "--cut_ga")){
+           client_msg_longjmp(data->sock_fd, eslEFORMAT, &jmp_env, "Error: --cut_ga option may not be used when searching a sequence against a sequence database");
+        }
+        if(esl_opt_IsUsed(opts, "--cut_nc")){
+           client_msg_longjmp(data->sock_fd, eslEFORMAT, &jmp_env, "Error: --cut_nc option may not be used when searching a sequence against a sequence database");
+        }
+        if(esl_opt_IsUsed(opts, "--cut_tc")){
+           client_msg_longjmp(data->sock_fd, eslEFORMAT, &jmp_env, "Error: --cut_ga option may not be used when searching a sequence against a sequence database");
+        }
         bld = p7_builder_Create(NULL, abc);
         int seed;
         if ((seed = esl_opt_GetInteger(opts, "--seed")) > 0) {
@@ -1071,7 +789,7 @@ printf("Received %lu bytes\n", ptr-buffer);
         } 
     
         if (status != eslOK) {
-          client_msg_longjmp(data->sock_fd, eslEINVAL, &jmp_env, "hmmpgmd: failed to set single query sequence score system: %s", bld->errbuf);
+          client_msg_longjmp(data->sock_fd, eslEINVAL, &jmp_env, "hmmserver: failed to set single query sequence score system: %s", bld->errbuf);
         }
         p7_SingleBuilder(bld, seq, bg, &hmm, NULL, NULL, NULL);
         esl_sq_Destroy(seq); // Free the sequence and set it to NULL so that the rest of the routine thinks 
@@ -1082,12 +800,14 @@ printf("Received %lu bytes\n", ptr-buffer);
       }
       else{
         search_type = HMMD_CMD_SCAN;
+        check_phmmer_jackhmmer_only_flags(opts, data->sock_fd, &jmp_env); // Make sure we aren't using any of the flags that can only be used on phmmer or jackhmmer searches
       }
     }
     else if (*ptr == '*'){ // parse query object as serialized HMM
       if (data->masternode->database_shards[dbx-1]->data_type == HMM){
         client_msg_longjmp(data->sock_fd, status, &jmp_env, "Database %d contains HMM data, and a HMM cannot be used to search a HMM database", dbx);
       }
+      check_phmmer_jackhmmer_only_flags(opts, data->sock_fd, &jmp_env); // Make sure we aren't using any of the flags that can only be used on phmmer or jackhmmer searches
       abc = esl_alphabet_Create(eslAMINO);
       uint32_t start_pos = 0;
       p7_hmm_Deserialize((const uint8_t *) ptr+1, &start_pos, abc, &hmm);  // Grab the serialized HMM and its alphabet
@@ -1098,6 +818,7 @@ printf("Received %lu bytes\n", ptr-buffer);
        if (data->masternode->database_shards[dbx-1]->data_type == HMM){
         client_msg_longjmp(data->sock_fd, status, &jmp_env, "Database %d contains HMM data, and a HMM cannot be used to search a HMM database", dbx);
       }
+      check_phmmer_jackhmmer_only_flags(opts, data->sock_fd, &jmp_env); // Make sure we aren't using any of the flags that can only be used on phmmer or jackhmmer searches
       abc = esl_alphabet_Create(eslAMINO);
 
       search_type = HMMD_CMD_SEARCH;
@@ -1182,7 +903,7 @@ static void *client_comm_thread(void *arg)
     targs->cmdstack   = data->cmdstack;
     targs->sock_fd    = fd;
     targs->masternode = data->masternode;
-
+    targs->opts       = data->opts;
     addrlen = sizeof(targs->ip_addr);
     strncpy(targs->ip_addr, inet_ntoa(addr.sin_addr), addrlen);
     targs->ip_addr[addrlen-1] = 0;
@@ -1193,7 +914,7 @@ static void *client_comm_thread(void *arg)
 }
 
 static void
-setup_clientside_comm(ESL_GETOPTS *opts, CLIENTSIDE_ARGS *args)
+setup_clientside_comm(CLIENTSIDE_ARGS *args)
 {
   int                  n;
   int                  reuse;
@@ -1223,13 +944,13 @@ setup_clientside_comm(ESL_GETOPTS *opts, CLIENTSIDE_ARGS *args)
   memset(&addr, 0, sizeof(addr));
   addr.sin_family = AF_INET;
   addr.sin_addr.s_addr = htonl(INADDR_ANY);
-  addr.sin_port = htons(esl_opt_GetInteger(opts, "--cport"));
+  addr.sin_port = htons(esl_opt_GetInteger(args->opts, "--cport"));
 
   /* Bind to the local address */
   if (bind(sock_fd, (struct sockaddr *) &addr, sizeof(addr)) < 0) LOG_FATAL_MSG("bind", errno);
 
   /* Mark the socket so it will listen for incoming connections */
-  if (listen(sock_fd, esl_opt_GetInteger(opts, "--ccncts")) < 0) LOG_FATAL_MSG("listen", errno);
+  if (listen(sock_fd, esl_opt_GetInteger(args->opts, "--ccncts")) < 0) LOG_FATAL_MSG("listen", errno);
   args->sock_fd = sock_fd;
 
   if ((n = pthread_create(&thread_id, NULL, client_comm_thread, (void *)args)) != 0) LOG_FATAL_MSG("socket", n);
@@ -2017,7 +1738,8 @@ void p7_server_master_node_main(int argc, char ** argv, MPI_Datatype *server_mpi
   CLIENTSIDE_ARGS client_comm;
   client_comm.masternode = masternode;
   client_comm.cmdstack = cmdstack;
-  setup_clientside_comm(go, &client_comm);
+  client_comm.opts = go;
+  setup_clientside_comm(&client_comm);
   printf("clientside communication started\n");
 
   int shutdown = 0;
@@ -2030,7 +1752,6 @@ void p7_server_master_node_main(int argc, char ** argv, MPI_Datatype *server_mpi
 #endif
       fflush(stdout);
 
-      //worker_comm.range_list = NULL;
 
       switch(query->cmd_type) {
       case HMMD_CMD_SEARCH:
