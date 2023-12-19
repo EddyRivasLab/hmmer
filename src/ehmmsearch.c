@@ -678,7 +678,6 @@ serial_master(ESL_GETOPTS *go, struct cfg_s *cfg)
       p7_profile_Destroy(gm);
       p7_hmm_Destroy(hmm);
       if (R)   p7_RateDestroy(R);
-      if (emR) ratematrix_emrate_Destroy(emR, 1);
 
       hstatus = p7_hmmfile_Read(hfp, &abc, &hmm);
     } /* end outer loop over query HMMs */
@@ -701,6 +700,8 @@ serial_master(ESL_GETOPTS *go, struct cfg_s *cfg)
 
   /* Cleanup - prepare for exit
    */
+  if (emR) ratematrix_emrate_Destroy(emR, 1);
+
   for (i = 0; i < infocnt; ++i)
     p7_bg_Destroy(info[i].bg);
 

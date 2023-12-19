@@ -4,8 +4,7 @@
  *   1. P7_PIPELINE: allocation, initialization, destruction
  *   2. Pipeline API
  */
-#include <p7_config.h>
-
+#include <p7_config.h> 
 #include <stdlib.h>
 #include <stdio.h>
 #include <string.h> 
@@ -520,6 +519,7 @@ optimize_msvfilter(const ESL_DSQ *dsq, int n, float *ret_time,
  /* Copy shared info into the "data" structure
    */
   data.time       = time;
+  data.noevo      = noevo;
   data.dsq        = (ESL_DSQ *)dsq;
   data.n          = n;
   data.R          = (P7_RATE *)R;
@@ -544,7 +544,7 @@ optimize_msvfilter(const ESL_DSQ *dsq, int n, float *ret_time,
 					    &optimize_msvfilter_func, NULL,
 					    (void *) (&data), &sc, stats);
   if (status == eslENOHALT) 
-    printf("optimize_msvfilter(): bracket minimization did not converged. You may consider increasing the number of iterations\n");		
+    printf("optimize_msvfilter(): bracket minimization did not converge. You may want to consider increasing the number of iterations\n");		
   else if (status != eslOK) 
     esl_fatal("optimize_msvfilter(): bad bracket minimization");	
   
@@ -631,7 +631,7 @@ p7_evopli_OptimizeViterbiFilter(const ESL_DSQ *dsq, int n, float *ret_time,
 					    &optimize_viterbifilter_func, NULL,
 					    (void *) (&data), &sc, stats);
   if (status == eslENOHALT) 
-    printf("optimize_viterbiparser(): bracket minimization did not converged. You may consider increasing the number of iterations\n");		
+    printf("optimize_viterbiparser(): bracket minimization did not converge. You may want to consider increasing the number of iterations\n");		
   else   if (status != eslOK) 
     esl_fatal("optimize_viterbifilter(): bad bracket minimization");	
   
@@ -720,7 +720,7 @@ p7_evopli_OptimizeForwardParser(const ESL_DSQ *dsq, int n, float *ret_time,
 					    (void *) (&data), &sc, stats);
   
   if (status == eslENOHALT) 
-    printf("optimize_forwardparser(): bracket minimization did not converged. You may consider increasing the number of iterations\n");		
+    printf("optimize_forwardparser(): bracket minimization did not converge. You may want to consider increasing the number of iterations\n");		
   else if (status != eslOK) 
     esl_fatal("optimize_forwardparser(): bad bracket minimization. status %d tol %f", status, data.tol);		
   
@@ -836,7 +836,7 @@ func_msvfilter(ESL_DSQ *dsq, int n, P7_HMM *hmm, P7_RATE *R, P7_PROFILE *gm, P7_
   float  usc;
   
   if (!noevo) {
-    /* Construct evolved profile */
+    /* Construct the evolved profile */
     if (workaround_evolve_profile((double)time, n, R, bg, hmm, gm, om, verbose) != eslOK) exit(1);
   }
   
@@ -856,7 +856,7 @@ func_viterbifilter(ESL_DSQ *dsq, int n, P7_HMM *hmm, P7_RATE *R, P7_PROFILE *gm,
   float  vfsc;
   
   if (!noevo) {
-    /* Construct evolved profile */
+    /* Construct the evolved profile */
     if (workaround_evolve_profile((double)time, n, R, bg, hmm, gm, om, verbose) != eslOK) exit(1);
     
   }
@@ -877,11 +877,11 @@ func_forwardparser(ESL_DSQ *dsq, int n, P7_HMM *hmm, P7_RATE *R, P7_PROFILE *gm,
   float   fwdsc;
 
   if (!noevo) {
-    /* Construct evolved profile */
+    /* Construct the evolved profile */
     if (workaround_evolve_profile((double)time, n, R, bg, hmm, gm, om, verbose) != eslOK) exit(1);
   }
   
-  p7_ForwardParser(dsq, n, om, oxf, &(fwdsc)); 
+  p7_ForwardParser(dsq, n, om, oxf, &(fwdsc));
 
 #if 0
   printf("time %f fwdsc %f\n", time, fwdsc);
@@ -905,11 +905,7 @@ workaround_get_starprofile(P7_PIPELINE *pli, const P7_BG *bg, const P7_HMM *hmm,
     /* Configure a profile from the HMM */
     p7_ProfileConfig(ehmm, bg, gm, 400, p7_LOCAL);
     p7_oprofile_Convert(gm, om);     /* <om> is now p7_LOCAL, multihit */
-    /* Convert to an optimized model */
-    //if ( (status = p7_ProfileConfig(ehmm, bg, gm, 400, p7_LOCAL)) != eslOK) goto ERROR;
-    //if ( (status = p7_profile_SetLength(gm, om->L))               != eslOK) goto ERROR;
-    //if ( (status = p7_oprofile_Convert(gm, om))                   != eslOK) goto ERROR;      
-    //if ( (status = p7_oprofile_ReconfigLength(om, om->L))         != eslOK) goto ERROR;
+    if ( (status = p7_oprofile_ReconfigLength(om, om->L)) != eslOK) goto ERROR;
   }
   
   *ret_ehmm = ehmm;
