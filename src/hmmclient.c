@@ -306,12 +306,18 @@ main(int argc, char **argv)
   bg = p7_bg_Create(abc);
   int converged=0; 
   int num_rounds =1;
-  if(esl_opt_GetInteger(go, "--jack") > 1){
-    num_rounds = esl_opt_GetInteger(go, "--jack");
+  if(esl_opt_IsUsed(go, "--jack")){
+    if(esl_opt_GetInteger(go, "--jack") < 0){
+      p7_Die("The argument to '--jack' was negative, and it is not possible to perform a negative number of jackhmmer rounds.");
+    }
+    if(esl_opt_GetInteger(go, "--jack") > 1){
+      num_rounds = esl_opt_GetInteger(go, "--jack");
+    }
   }
-  if(esl_opt_GetInteger(go, "--jack") < 0){
-    p7_Die("The argument to '--jack' was negative, and it is not possible to perform a negative number of jackhmmer rounds.");
+  else{ // not doing iterative search
+    num_rounds = 1;
   }
+
   //set up the sockets connection to the server
 
   // step 1: networking voodoo to get the IP address of the hostname for the server 
@@ -357,7 +363,7 @@ main(int argc, char **argv)
     if(rem < (25 + strlen(esl_opt_GetString(go, "--password")))){ // Should never happen, but just to be safe
       ESL_REALLOC(cmd, 25+ strlen(esl_opt_GetString(go, "--password")));
     }
-    strcpy(cmd, "!shutdown ");
+    strcpy(cmd, "!shutdown --shutdown ");
     if(esl_opt_IsUsed(go, "--password")){
       strcat(cmd, "--password ");
       strcat(cmd, esl_opt_GetString(go, "--password"));

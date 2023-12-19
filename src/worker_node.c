@@ -300,6 +300,11 @@ ERROR:
 void p7_server_workernode_Destroy(P7_SERVER_WORKERNODE_STATE *workernode){
   int i, lock_retval;
 
+  // Wait for all the worker threads to terminate before we start freeing memory
+   for(i = 0; i < workernode->num_threads; i++){
+    pthread_join(workernode->thread_objs[i], NULL); 
+   }
+
   // free the database shards we're holding in memory
   for(i = 0; i < workernode->num_shards; i++){
     if(workernode->database_shards[i] != NULL){
@@ -341,7 +346,6 @@ void p7_server_workernode_Destroy(P7_SERVER_WORKERNODE_STATE *workernode){
     p7_tophits_Destroy(workernode->thread_state[i].tophits);
     pthread_mutex_destroy(&(workernode->thread_state[i].hits_lock));
     pthread_mutex_destroy(&(workernode->thread_state[i].pipeline_lock));
-    pthread_join(workernode->thread_objs[i], NULL); 
   }
   free(workernode->thread_state);
   free(workernode->thread_objs);
@@ -1151,6 +1155,10 @@ void *p7_server_worker_thread(void *worker_argument){
         }
         break;
       case SHUTDOWN:
+        lock_retval = pthread_mutex_unlock(&(workernode->search_definition_lock));
+  #ifdef CHECK_MUTEXES
+        parse_lock_errors(lock_retval, workernode->my_rank);
+  #endif
         printf("Worker thread %d on rank %d saw workernode->shutdown\n", my_id, workernode->my_rank);
         break;  // Go to end of loop, next iteration will catch that we have shutdown set
       case IDLE:
@@ -1261,6 +1269,7 @@ void p7_server_workernode_main(int argc, char **argv, int my_rank, MPI_Datatype 
     parse_lock_errors(lock_retval, workernode->my_rank);
   #endif
         p7_server_workernode_Destroy(workernode);
+        MPI_Barrier(MPI_COMM_WORLD);  //Barrier here because shutdown seems to get screwed up if master node exits early
         MPI_Finalize();
         exit(0);
         break;

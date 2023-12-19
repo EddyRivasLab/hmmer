@@ -1775,6 +1775,7 @@ void p7_server_master_node_main(int argc, char ** argv, MPI_Datatype *server_mpi
   if(shutdown == 0){
     p7_Die("Bad result from esl_stack_PPop\n");
   }
+  MPI_Barrier(MPI_COMM_WORLD);  //Barrier here because shutdown seems to get screwed up if master node exits early
   MPI_Finalize();
   exit(0);
   // GOTO target used to catch error cases from ESL_ALLOC
