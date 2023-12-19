@@ -524,7 +524,7 @@ main(int argc, char **argv)
 
   //shift inv_alph up one, to make space for '$' at 0
   for (i=0; i<256; i++)
-    if ( meta->inv_alph[i] >= 0)
+    if ( meta->inv_alph[i] != 127)  // 127=unset   inv_alph['A'] = 0, etc: maps char symbol to digitized residue code 0..alph_size-1
       meta->inv_alph[i]++;
 
 
@@ -656,7 +656,7 @@ main(int argc, char **argv)
       for (j=1; j<=block->list[i].n; j++) {
         c = abc->sym[block->list[i].dsq[j]];
         if ( meta->alph_type == fm_DNA) {
-          if (meta->inv_alph[c] == -1) {
+          if (meta->inv_alph[c] == 127) {
             // replace ambiguity characters by random choice of A,C,G, and T.
             c = meta->alph[(int)(esl_random(r)*4)];
 
@@ -669,7 +669,7 @@ main(int argc, char **argv)
           } else {
             in_ambig_run=0;
           }
-        } else if (meta->inv_alph[c] == -1) {
+        } else if (meta->inv_alph[c] == 127) {
           esl_fatal("requested alphabet doesn't match input text\n");
         }
 
