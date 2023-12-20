@@ -1097,25 +1097,26 @@ serial_master(ESL_GETOPTS *go, struct cfg_s *cfg)
           esl_fatal("Unexpected error %d reading sequence file %s", sstatus, dbfp->filename);
       }
 
-      //need to re-compute e-values before merging (when list will be sorted)
-      if (esl_opt_IsUsed(go, "-Z")) {
+      // Recompute e-values before merging (when list will be sorted)
+      if (esl_opt_IsUsed(go, "-Z"))
+        {
     	  resCnt = 1000000*esl_opt_GetReal(go, "-Z");
-
     	  if ( info[0].pli->strands == p7_STRAND_BOTH)
-    	    resCnt *= 2;
-
-      } else {
-#if defined (eslENABLE_SSE)
-        if (dbformat == eslSQFILE_FMINDEX) {
-          resCnt = 2 * fm_meta->char_count;
+   	    resCnt *= 2;
         }
-        else
+#if defined (eslENABLE_SSE)
+      else if (dbformat == eslSQFILE_FMINDEX)
+        {
+          resCnt = fm_meta->char_count;
+          if ( info[0].pli->strands == p7_STRAND_BOTH)
+   	    resCnt *= 2;
+        }
 #endif
+      else
         {
           for (i = 0; i < infocnt; ++i)
             resCnt += info[i].pli->nres;
         }
-      }
 
       for (i = 0; i < infocnt; ++i)
           p7_tophits_ComputeNhmmerEvalues(info[i].th, resCnt, info[i].om->max_length);
