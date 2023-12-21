@@ -30,7 +30,7 @@
 //#define DEBUG_SHARDS 1
 
 // define this to switch mutexes to slower, but error-checking versions
-//#define CHECK_MUTEXES 1 
+#define CHECK_MUTEXES 1 
 
 #ifdef CHECK_MUTEXES
 static void parse_lock_errors(int errortype, int rank){
@@ -1697,15 +1697,12 @@ static int worker_thread_front_end_search_loop(P7_SERVER_WORKERNODE_STATE *worke
            #ifdef CHECK_MUTEXES
     parse_lock_errors(lock_retval, workernode->my_rank);
   #endif
-        /*chunk_end = workernode->work[my_id].end; // update this to reduce redundant work.
-        workernode->work[my_id].start = start; // ditto
-        lock_retval = pthread_mutex_unlock(&(workernode->work[my_id].lock)); */
       }
-    }
     lock_retval = pthread_mutex_unlock(&(workernode->work[my_id].lock));
        #ifdef CHECK_MUTEXES
-    parse_lock_errors(lock_retval, workernode->my_rank);
-  #endif
+    parse_lock_errors(lock_retval, workernode->my_rank); 
+  #endif 
+    }
   }
 }
 

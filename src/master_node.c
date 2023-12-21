@@ -58,7 +58,7 @@
 //#define PRINT_PERF 1
 
 // define this to switch mutexes to slower, but error-checking versions
-//#define CHECK_MUTEXES 1 
+#define CHECK_MUTEXES 1 
 
 #ifdef CHECK_MUTEXES
 static void parse_lock_errors(int errortype){
@@ -567,11 +567,7 @@ static void *clientside_thread(void *arg)  // new version that reads exactly one
   char              *opt_str;
 
   int                dbx;
-  int                eod;
   int                n;
-  int                buf_size;
-  int                remaining;
-  int                amount;
 
   P7_HMM            *hmm     = NULL;     /* query HMM                      */
   ESL_SQ            *seq     = NULL;     /* query sequence                 */
@@ -590,55 +586,28 @@ static void *clientside_thread(void *arg)  // new version that reads exactly one
   int search_type = -1;
   int slen;
   uint64_t search_length=0;
+  uint32_t command_length;
 
-  buf_size = MAX_BUFFER;
-  if ((buffer  = malloc(buf_size))   == NULL) LOG_FATAL_MSG("malloc", errno);
-  ptr = buffer;
-  remaining = buf_size;
-  amount = 0;
-  eod = 0;
-  while (!eod) {
-    int   l;
-    char *s;
+ /* Future Nick: if you're ever tempted to switch this back to the old plan of reading until you see the "//" pattern, remmember that 
+    that plan breaks on some serialized HMMs because the right set of bytes to be "//" appears in mid-structure.*/
 
-    /* Receive message from client */
-    if ((n = read(data->sock_fd, ptr, remaining)) < 0) {
-      p7_syslog(LOG_ERR,"[%s:%d] - reading %s error %d - %s\n", __FILE__, __LINE__, data->ip_addr, errno, strerror(errno));
-      close(data->sock_fd);
-      pthread_exit(NULL);
-    }
-
-    if (n == 0) {
-      close(data->sock_fd);
-      pthread_exit(NULL);
-    }
-
-    ptr += n;
-    amount += n;
-    remaining -= n;
-
-    /* scan backwards till we hit the start of the line */
-    l = amount;
-    s = ptr - 1;
-    while (l-- > 0 && (*s == '\n' || *s == '\r')) --s;
-    while (l-- > 0 && (*s != '\n' && *s != '\r')) --s;
-    eod = (amount > 1 && *(s + 1) == '/' && *(s + 2) == '/' );
-
-    /* if the buffer is full, make it larger */
-    if (!eod && remaining == 0) {
-      if ((buffer = realloc(buffer, buf_size * 2)) == NULL) LOG_FATAL_MSG("realloc", errno);
-      ptr = buffer + buf_size;
-      remaining = buf_size;
-      buf_size *= 2;
-    }
+  if ((n = read(data->sock_fd, &command_length, sizeof(uint32_t))) < 0) {
+    p7_syslog(LOG_ERR,"[%s:%d] - reading command length from %s error %d - %s\n", __FILE__, __LINE__, data->ip_addr, errno, strerror(errno));
+    close(data->sock_fd);
+    pthread_exit(NULL);
+  }
+  int bytes_read;
+  ESL_ALLOC(buffer, command_length+1);
+  if((bytes_read = readn(data->sock_fd, buffer, command_length)) != command_length){ // couldn't read the whole command
+    p7_syslog(LOG_ERR,"[%s:%d] - reading command from %s error %d - %s\n", __FILE__, __LINE__, data->ip_addr, errno, strerror(errno));
+    close(data->sock_fd);
+    pthread_exit(NULL);
   }
 
-  /* zero terminate the buffer */
-  if (remaining == 0) {
-    if ((buffer = realloc(buffer, buf_size + 1)) == NULL) LOG_FATAL_MSG("realloc", errno);
-    ptr = buffer + buf_size;
-  }
-  *ptr = 0;
+  printf("Received %d bytes from client\n", bytes_read);
+
+  //zero-terminate the buffer
+  *(buffer+command_length) = 0;
 
   /* skip all leading white spaces */
   ptr = buffer;
@@ -675,7 +644,7 @@ static void *clientside_thread(void *arg)  // new version that reads exactly one
     }
   }
   #ifdef DEBUG_COMMANDS
-    printf("received options string of: %s\n", opt_str);
+    //printf("received options string of: %s\n", opt_str);
 #endif
 
   if (!setjmp(jmp_env)) {
@@ -837,7 +806,7 @@ static void *clientside_thread(void *arg)  // new version that reads exactly one
 
   } else {
     /* an error occured some where, so try to clean up */
-    if (opts != NULL) esl_getopts_Destroy(opts);
+    ERROR: if (opts != NULL) esl_getopts_Destroy(opts);
     if (abc  != NULL) esl_alphabet_Destroy(abc);
     if (hmm  != NULL) p7_hmm_Destroy(hmm);
     if (seq  != NULL) esl_sq_Destroy(seq);

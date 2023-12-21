@@ -48,7 +48,7 @@ static ESL_OPTIONS server_Client_Options[] = {
  { "--cport",      eslARG_INT,     "51371",  NULL, "49151<n<65536",NULL,  NULL,  "--worker",      "port to use for client/server communication",                 42 },
   { "--db",           eslARG_INT,   "1", NULL, NULL,    NULL,  NULL,  NULL,            "number of the database to search",                         42 },
   { "--db_ranges",eslARG_STRING,     NULL,  NULL,  NULL,   NULL, NULL, NULL,         "range(s) of sequences within database that will be searched",  42 },
-  { "--jack",     eslARG_INT, NULL,  NULL,  NULL,   NULL, NULL, NULL,         "number of rounds of jackhmmer search to perform",  42},
+  { "--jack",     eslARG_INT, NULL,  NULL,  "n>1",   NULL, NULL, NULL,         "number of rounds of jackhmmer search to perform",  42},
   { "--shutdown",eslARG_NONE,     FALSE,  NULL,  NULL,   NULL, NULL, NULL,         "send shutdown command to server",  42 },
   { "--password",eslARG_STRING,     "",  NULL,  NULL,   NULL, "--shutdown", NULL,         "password for shutdown command",  42 },
       /* Control of output */

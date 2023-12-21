@@ -439,7 +439,7 @@ main(int argc, char **argv)
     rem -= strlen(search_db); */
     optslen = 2 + strlen(optsstring);
   }
-  if(esl_opt_GetInteger(go, "--jack") > 1){ // We're doing a jackhmmer search, so might have to change the 
+  if((esl_opt_IsUsed(go, "--jack")) && (esl_opt_GetInteger(go, "--jack") > 1)){ // We're doing a jackhmmer search, so might have to change the 
   // --incE and --incdomE values to match jackhmmer
   // Add a flag for jackhmmer default --incE if the user hasn't specified --incE and hasn't specified 
   // any of the other INCOPTS flags, because we only allow one INCOPT flag to be set for a given search
@@ -649,7 +649,7 @@ main(int argc, char **argv)
     // When we get here, we should have a full query object, so send it to the server
     printf("%s\n", query_name);
     //reset num_counds and converged here to handle multi-query input files
-    if(esl_opt_GetInteger(go, "--jack") > 1){
+    if((esl_opt_IsUsed(go, "--jack")) &&(esl_opt_GetInteger(go, "--jack") > 1)){
       num_rounds = esl_opt_GetInteger(go, "--jack");
     }
     else{
@@ -691,6 +691,9 @@ main(int argc, char **argv)
 #ifdef DEBUG_COMMANDS
       printf("sending %s to server, length %d\n", cmd, send_command_length);
 #endif
+      if (writen(sock, &send_command_length, sizeof(send_command_length)) != sizeof(send_command_length)) {
+        p7_Die("[%s:%d] write (size %" PRIu64 ") error %d - %s\n", __FILE__, __LINE__, n, errno, strerror(errno));
+      }
       if (writen(sock, cmd, send_command_length) != send_command_length) {
         p7_Die("[%s:%d] write (size %" PRIu64 ") error %d - %s\n", __FILE__, __LINE__, n, errno, strerror(errno));
       }
@@ -965,7 +968,7 @@ main(int argc, char **argv)
         query_seq = NULL;
       }
       esl_keyhash_Reuse(kh);
-      if(esl_opt_GetInteger(go, "--jack") > 1){  //reset this so next query if any has the corrent value
+      if((esl_opt_IsUsed(go, "--jack")) &&(esl_opt_GetInteger(go, "--jack") > 1)){  //reset this so next query if any has the corrent value
         num_rounds = esl_opt_GetInteger(go, "--jack");
       } 
     }
