@@ -1,27 +1,32 @@
-.TH "makehmmerdb" 1 "@HMMER_DATE@" "HMMER @HMMER_VERSION@" "HMMER Manual"
+.TH "hmmer-makefmdb" 1 "@HMMER_DATE@" "HMMER @HMMER_VERSION@" "HMMER Manual"
 
 .SH NAME
-makehmmerdb \- build nhmmer database from a sequence file
-
+hmmer-makefmdb \- build an nhmmer FM-index database from an input sequence file
 
 .SH SYNOPSIS
-.B makehmmerdb
+.B hmmer-makefmdb
 [\fIoptions\fR]
-.I seqfile
-.I binaryfile
+.I seqfile_in
+.I fmdb_out
 
 
 .SH DESCRIPTION
 
 .PP
-.B makehmmerdb 
-is used to create a binary file from a DNA sequence file. This 
-binary file may be used as a target database for the DNA search tool
-.BR nhmmer . 
-Using default settings in 
-.BR nhmmer ,
-this yields a roughly 10-fold acceleration with small loss of 
-sensitivity on benchmarks. 
+.B hmmer-makefmdb
+creates an FM-index database from
+the input DNA sequence file
+.I seqfile_in
+and saves it to a binary file
+.I fmdb_out.
+The FM-index database
+may then be used
+as a target database for searches with
+.BR "nhmmer \-\-fmindex" . 
+FM-index acceleration is an experimental capability in
+.BR nhmmer .
+It typically yields a roughly 10-fold acceleration,
+at the cost of a significant loss in sensitivity.
 
 
 .SH OPTIONS

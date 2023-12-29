@@ -342,7 +342,7 @@ fm_convertRange2DSQ(const FM_DATA *fm, const FM_METADATA *meta, uint64_t first, 
 
     if (fix_ambiguities) {
       /*  Account for the fact that in the DNA alphabet without ambiguity codes,
-       *  makehmmerdb turns ambiguity codes into one of the nucleotides. Need
+       *  hmmer-makefmdb turns ambiguity codes into one of the nucleotides. Need
        *  to replace with an N.
        */
       int32_t pos = fm_findOverlappingAmbiguityBlock (fm, meta, first, first+length-1 );

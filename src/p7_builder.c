@@ -259,7 +259,7 @@ p7_builder_LoadScoreSystem(P7_BUILDER *bld, const char *matrix, double popen, do
  *            conditional probability parameters.
  *
  * Args:      bld      - <P7_BUILDER> to initialize
- *            mxfile   - score matrix file to use, or NULL for BLOSUM62 default
+ *            mxfile   - score matrix file to use, or NULL for BLOSUM62|DNA1 default
  *            env      - env variable containing directory list where <mxfile> may reside
  *            popen    - gap open probability
  *            pextend  - gap extend probability
@@ -484,6 +484,7 @@ p7_Builder(P7_BUILDER *bld, ESL_MSA *msa, P7_BG *bg,
  *            sq        - query sequence
  *            bg        - null model (needed to parameterize insert emission probs)
  *            opt_hmm   - optRETURN: new HMM
+ *            opt_tr    - optRETURN: faux trace of <sq> against core <hmm>
  *            opt_gm    - optRETURN: profile corresponding to <hmm>
  *            opt_om    - optRETURN: optimized profile corresponding to <gm>
  *
