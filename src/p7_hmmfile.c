@@ -384,7 +384,7 @@ open_engine(const char *filename, char *env, P7_HMMFILE **ret_hfp, int do_ascii_
   else if (magic.n == v3d_magic) { hfp->format = p7_HMMFILE_3d; hfp->parser = read_bin30hmm; }
   else if (magic.n == v3e_magic) { hfp->format = p7_HMMFILE_3e; hfp->parser = read_bin30hmm; }
   else if (magic.n == v3f_magic) { hfp->format = p7_HMMFILE_3f; hfp->parser = read_bin30hmm; }
-  else if (hfp->is_pressed) ESL_XFAIL(eslEFORMAT, errbuf, "Binary format tag in %s unrecognized\nCurrent H3 format is HMMER3/f. Previous H2/H3 formats also supported.", hfp->fname);
+  else if (hfp->is_pressed) ESL_XFAIL(eslEFORMAT, errbuf, "Binary format tag in %s unrecognized\nCurrent H3 format is HMMER3/f.", hfp->fname);
 
   /* 7. Checks for ASCII file format */
   if (hfp->parser == NULL)
@@ -404,7 +404,7 @@ open_engine(const char *filename, char *env, P7_HMMFILE **ret_hfp, int do_ascii_
     else if (strcmp("HMMER3/b", tok) == 0) { hfp->format = p7_HMMFILE_3b; hfp->parser = read_asc30hmm; }
     else if (strcmp("HMMER3/a", tok) == 0) { hfp->format = p7_HMMFILE_3a; hfp->parser = read_asc30hmm; }
     else if (strcmp("HMMER2.0", tok) == 0) { hfp->format = p7_HMMFILE_20; hfp->parser = read_asc20hmm; }
-    else ESL_XFAIL(eslEFORMAT, errbuf, "Format tag is '%s': unrecognized.\nCurrent H3 format is 'HMMER3/f'. Previous H2/H3 formats also supported.", tok);
+    else ESL_XFAIL(eslEFORMAT, errbuf, "Format tag may be '%s': doesn't look like a HMMER profile.\nCurrent H3 format is 'HMMER3/f'", tok);
   }
 
   *ret_hfp = hfp;
@@ -1322,7 +1322,10 @@ read_asc30hmm(P7_HMMFILE *hfp, ESL_ALPHABET **ret_abc, P7_HMM **opt_hmm)
 	if (*ret_abc == NULL) {
 	  if ((abc = esl_alphabet_Create(alphatype))                        == NULL)     { status = eslEMEM; goto ERROR; }
 	} else {
-	  if ((*ret_abc)->type != alphatype)                                             ESL_XFAIL(eslEINCOMPAT,hfp->errbuf,"Alphabet type mismatch: was %s, but current HMM says %s", esl_abc_DecodeType( (*ret_abc)->type), tok1);
+          if ( ((*ret_abc)->type != alphatype) &&                           // Allow an RNA profile to be read into a DNA alphabet, and vice versa.
+               ((*ret_abc)->type == eslDNA && alphatype != eslRNA) &&
+               ((*ret_abc)->type == eslRNA && alphatype != eslDNA))
+            ESL_XFAIL(eslEINCOMPAT,hfp->errbuf,"Alphabet type mismatch: was %s, but current HMM says %s", esl_abc_DecodeType( (*ret_abc)->type), tok1);
 	  abc = *ret_abc;
 	}
       } 

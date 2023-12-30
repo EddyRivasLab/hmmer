@@ -43,11 +43,11 @@ HMMER \- profile HMMs for biological sequence analysis
 .B hmmstat
   Summary statistics for a profile file
 
+.B phmmer
+  Search protein sequence(s) against a protein sequence database
+  
 .B jackhmmer
   Iteratively search sequence(s) against a sequence database
-
-.B makehmmerdb
-  build nhmmer database from a sequence file
 
 .B nhmmer
   Search DNA/RNA queries against a DNA/RNA sequence database
@@ -55,8 +55,8 @@ HMMER \- profile HMMs for biological sequence analysis
 .B nhmmscan
   Search DNA/RNA sequence(s) against a DNA/RNA profile database
 
-.B phmmer
-  Search protein sequence(s) against a protein sequence database
+.B hmmer-makefmdb
+  build an nhmmer FM-index database from an input sequence file
 
 .B alimask
   Calculate and add column mask to a multiple sequence alignment

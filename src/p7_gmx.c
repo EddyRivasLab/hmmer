@@ -418,7 +418,7 @@ utest_GrowTo(void)
   M = 87;    L = 57;    p7_gmx_GrowTo(gx, M, L);  gmx_testpattern(gx, M, L);
 
   /* and this exercises iss#176. Only do this if a large alloc is possible (we need 8.6G to exercise the bug!) */
-#if !defined(eslENABLE_ASAN) && !defined(eslENABLE_TSAN)  // I've seen asan/tsan fail here in a Linux VM just because of the large alloc
+#if !defined(eslENABLE_ASAN) && !defined(eslENABLE_TSAN) && !defined(eslENABLE_MSAN)  // Sanitizers will typically fail here just because of the large alloc
   M = 71582; L = 10000;
   nbytes = (int64_t) (M+1) * (int64_t) (L+1) * (int64_t) p7G_NSCELLS * (int64_t) sizeof(float);
   if ( nbytes < SIZE_MAX / 2)

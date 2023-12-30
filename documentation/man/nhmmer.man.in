@@ -1,62 +1,102 @@
 .TH "nhmmer" 1 "@HMMER_DATE@" "HMMER @HMMER_VERSION@" "HMMER Manual"
 
 .SH NAME
-nhmmer \- search DNA queries against a DNA sequence database
+nhmmer \- search DNA/RNA profile HMMs against a nucleotide sequence database
 
 
 .SH SYNOPSIS
+
 .B nhmmer
 [\fIoptions\fR]
-.I queryfile
-.I seqdb
+.I query_hmmfile
+.I target_seqfile
+
+.B nhmmer \-\-qseq
+[\fIoptions\fR]
+.I query_seqfile
+.I target_seqfile
+
+.B nhmmer \-\-qmsa
+[\fIoptions\fR]
+.I query_msafile
+.I target_seqfile
+
 
 
 .SH DESCRIPTION
 
-.PP
 .B nhmmer 
-is used to search one or more nucleotide queries against a 
-nucleotide sequence database.
-For each query in 
-.IR queryfile ,
-use that query to search the target database of sequences in
-.IR seqdb ,
-and output a ranked list of the hits with the most significant
-matches to the query. A query may be either a profile model 
-built using 
-.BR hmmbuild , 
-a sequence alignment, or a single sequence. Sequence based
-queries can be in a number of formats (see
-.BR \-\-qformat ), 
-and can typically be autodetected. Note that only 
-Stockholm
-format supports queries made up of more than one sequence 
-alignment.
+searches one or more DNA/RNA profile HMMs in
+.I query_hmmfile
+against the nucleotide sequences in
+.IR target_seqfile .
+The query(s) and the target(s) are nucleic acid; they can be
+either DNA or RNA.
+For each query, the output is a ranked list of the subsequences with the most significant
+matches to the profile HMM.
 
+.PP
+Alternatively, the query (or queries) can be a sequence or 
+a multiple sequence alignment instead of a profile HMM.
+With the
+.B \-\-qmsa
+option,
+multiple sequence alignment(s) are read from 
+an input
+.IR query_msafile,
+and converted into profile HMM(s) using the same
+method that the
+.B hmmbuild
+program uses.
+With the
+.B \-\-qseq
+option, single sequence query(s) are read from an
+input
+.IR query_seqfile,
+and converted to profile HMM(s) using a probabilistic
+interpretation of standard pairwise sequence alignment
+scoring with a substitution matrix and a gap-open/gap-extend cost,
+like what the
+.B phmmer
+program does for protein sequence comparison.
 
+.PP
+The format of the query file is autodetected by default. 
+For a profile
+.BI query_hmmfile ,
+any HMMER3 format (including older formats) can be used.
+For a sequence
+.BI query_seqfile ,
+FASTA, GenBank, and EMBL formats are accepted.
+For a MSA
+.BI query_msafile ,
+several common formats are accepted including
+Stockholm, afa (aligned FASTA), Clustal, and PHYLIP
+To bypass autodetection of sequence and MSA file formats,
+use
+.BI \-\-qformat " <fmt>"
+e.g. 
+.B \-\-qseq \-\-qformat [fasta|genbank|embl]
+or
+.B \-\-qmsa \-\-qformat [stockholm|afa|clustal|clustallike|phylip|phylips].
 
 .PP 
 Either the query
-.I queryfile 
-or the target
-.I seqdb 
+.I query_hmmfile 
+or the 
+.I target_seqfile
 may be '\-' (a dash character), in which case
-the query file or target database input will be read from a <stdin> pipe instead of from a
+the queries or target database input will be read from a <stdin> pipe instead of from a
 file. Only one input source can come through <stdin>, not both.
 If the
-.I queryfile 
+.I query_hmmfile 
 contains more than one query, then
-.I seqdb 
-cannot come from stdin, because we can't rewind the
-streaming target database to search it with another profile. 
+.I target_seqfile
+cannot come from stdin, because we can't rewind a
+stream to search it with another profile. 
 
-.PP
-If the query is sequence-based (unaligned or aligned),
-a new file containing the HMM(s) built from the input(s) in 
-.I queryfile
-may optionally be produced, with the filename set using the 
-.B \-\-hmmout
-flag.
+
+
 
 
 .PP
@@ -70,6 +110,26 @@ The
 option allows redirecting the main output, including throwing it away
 in /dev/null.
 
+.PP
+.B nhmmer
+supports an additional experimental acceleration method that uses
+an FM-index to essentially replace our usual SSV acceleration filter.
+To use this, first create a binary FM-index database
+from your sequence file using the
+.B hmmer-makefmdb
+program, e.g.
+.BR "hmmer-makefmdb <target_seqfile> <fmdb>" .
+Then use the
+.B nhmmer \-\-fmindex
+option, using 
+.I <fmdb>
+in place of the
+.IR <target_seqfile> ,
+e.g.
+.BR "nhmmer \-\-fmindex <query_hmmfile> <fmdb>" .
+FM-index acceleration requires SSE vector instructions; when
+HMMER3 is compiled for other vector instruction sets,
+FM-index acceleration is unavailable.
 
 
 .SH OPTIONS
@@ -78,6 +138,154 @@ in /dev/null.
 .B \-h
 Help; print a brief reminder of command line usage and all available
 options.
+
+
+.SH OPTIONS FOR ALTERNATIVE QUERY FILES
+
+.TP
+.B \-\-qseq
+Query file consists of single sequence(s), not profile HMM(s). Convert
+each sequence to a profile using a probabilistic interpretation of
+standard pairwise sequence alignment, with a substitution score matrix
+and a gap open/gap extend cost, like what
+.B phmmer
+does for protein sequence comparison.
+The default substitution matrix is
+"DNA1", a custom matrix estimated from Rfam 10.0 seed alignments,
+which has +39 to +41 scores for identities and -17 to -38 penalties
+for mismatches; to use a different matrix see the
+.B \-\-mxfile
+option. The default gap open probability is 0.3125 and gap extend
+is 0.75; to change these see the
+.B \-\-popen
+and
+.B \-\-pextend
+options.
+
+.TP
+.B \-\-qmsa
+Query file consists of multiple sequence alignment(s), not profile
+HMM(s).
+Convert each MSA to a profile using the same procedure as default
+.BR hmmbuild .
+
+.TP
+.BI \-\-qformat " <fmt>"
+Assert that the input sequence or MSA file 
+is in format
+.IR <fmt> ,
+bypassing autodetection.
+Choices for 
+.I <fmt>
+with
+.B \-\-qseq
+include:
+.BR fasta ,
+.BR embl ,
+.BR genbank.
+Choices for 
+.I <fmt>
+with
+.B \-\-qmsa include:
+.BR stockholm , 
+.BR afa ,
+.BR clustal ,
+.BR clustallike ,
+.BR phylip ,
+.BR phylips .
+The "clustallike" format accepts a broader range of Clustal-like formats
+that have a different header (MUSCLE alignments, for example).
+"phylip" is specifically interleaved PHYLIP, and "phylips" is sequential PHYLIP.
+The string
+.I <fmt>
+is case-insensitive (\fBfasta\fR or \fBFASTA\fR both work).
+
+.TP
+.BI \-\-popen " <x>"
+Set the gap open probability for a single sequence query model to 
+.IR <x> .
+The default is 0.03125.
+.I <x> 
+must be >= 0 and < 0.5.
+
+.TP
+.BI \-\-pextend " <x>"
+Set the gap extend probability for a single sequence query model to 
+.IR <x> .
+The default is 0.75. 
+.I <x> 
+must be >= 0 and < 1.0.
+
+.TP
+.BI \-\-mxfile "<mxfile>"
+Obtain pairwise
+residue alignment probabilities using the substitution matrix
+in file
+.IR mxfile .
+The default score matrix is a custom matrix called DNA1 (this matrix is internal to
+HMMER and does not have to be available as a file). 
+The format of a substitution matrix
+.I mxfile
+is the standard format accepted by BLAST, FASTA, and other sequence 
+analysis software.
+See
+.B ftp.ncbi.nlm.nih.gov/blast/matrices/
+for example files. (We require DNA/RNA matrices to be square, so use files
+like NCBI's NUC.4.4, not NUC.4.2.)
+
+
+
+.SH OPTIONS FOR TARGET SEQFILE
+
+
+.TP
+.BI \-\-tformat " <fmt>"
+Assert that the
+.I target_seqfile
+is in format
+.IR <fmt> ,
+bypassing format autodetection.
+Choices for 
+.I <fmt> 
+include:
+.BR fasta ,
+.BR embl ,
+.BR genbank.
+Unlike other HMMER and Easel-based programs,
+.B nhmmer
+has a limitation that prevents it from reading
+MSA files as unaligned sequence files. If you need
+to do this, reformat the MSA file using something
+like the
+.B esl-reformat
+miniapp.
+The string
+.I <fmt>
+is case-insensitive (\fBfasta\fR or \fBFASTA\fR both work).
+
+.TP 
+.B \-\-watson 
+Only search the top strand of the sequences in
+.I target_seqfile
+(or a target FM-index database).
+By default both strands are searched.
+
+.TP 
+.B \-\-crick 
+Only search the bottom (reverse-complement) strand
+of the sequences
+in
+.I target_seqfile
+(or a target FM-index database).
+By default both strands are searched.
+
+.TP
+.BI \-Z " <x>"
+For the purposes of E-value calculations,
+assert that the total size of the target sequence database is
+.I <x>
+million bases (Mb), 
+rather than the actual number of residues searched.
 
 
 
@@ -92,13 +300,13 @@ instead of the default stdout.
 .TP
 .BI \-A " <f>"
 Save a multiple alignment of all significant hits (those satisfying
-"inclusion thresholds") to the file 
+inclusion thresholds) to the file 
 .IR <f> .
 
 .TP 
 .BI \-\-tblout " <f>"
-Save a simple tabular (space-delimited) file summarizing the
-per-target output, with one data line per homologous target sequence
+Save a tabular (space-delimited) file summarizing the
+per-target output, with one data line per homologous target subsequence
 found.
 
 .TP 
@@ -119,9 +327,10 @@ different models.
 .BI \-\-hmmout " <f>" 
 If
 .I queryfile
-is sequence-based, write the internally-computed HMM(s) to file
+is
+a sequence file or MSA file, 
+save the internally-computed HMM(s) to file
 .IR <f> . 
-
 
 .TP 
 .B \-\-acc
@@ -147,63 +356,6 @@ Set the main output's line length limit to
 characters per line. The default is 120.
 
 
-
-.SH OPTIONS CONTROLLING SINGLE SEQUENCE SCORING
-
-By default, if a query is a single sequence from a file in 
-fasta format,
-.B nhmmer 
-uses a search model constructed from that sequence and a standard
-20x20 substitution matrix for residue probabilities, along with two
-additional parameters for position-independent gap open and gap extend
-probabilities. These options allow the default single-sequence scoring
-parameters to be changed, and for single-sequence scoring options to
-be applied to a single sequence coming from an aligned format.
-
-.TP
-.BI \-\-singlemx 
-If a single sequence query comes from a multiple sequence alignment file, 
-such as in Stockholm format, the search model is by default constructed as is typically done 
-for multiple sequence alignments. This option forces 
-.B nhmmer 
-to use the single-sequence method with substitution score matrix.
-
-.TP
-.BI \-\-mxfile "<mxfile"
-Obtain residue alignment probabilities from the substitution matrix
-in file
-.IR mxfile .
-The default score matrix is DNA1 (this matrix is internal to
-HMMER and does not have to be available as a file). 
-The format of a substitution matrix
-.I mxfile
-is the standard format accepted by BLAST, FASTA, and other sequence 
-analysis software.
-See
-.B ftp.ncbi.nlm.nih.gov/blast/matrices/
-for example files. (The only
-exception: we require matrices to be square, so for DNA, use files
-like NCBI's NUC.4.4, not NUC.4.2.)
-
-
-.TP
-.BI \-\-popen " <x>"
-Set the gap open probability for a single sequence query model to 
-.IR <x> .
-The default is 0.02. 
-.I <x> 
-must be >= 0 and < 0.5.
-
-.TP
-.BI \-\-pextend " <x>"
-Set the gap extend probability for a single sequence query model to 
-.IR <x> .
-The default is 0.4. 
-.I <x> 
-must be >= 0 and < 1.0.
-
-
-
 .SH OPTIONS CONTROLLING REPORTING THRESHOLDS
 
 Reporting thresholds control which hits are reported in output files
@@ -227,7 +379,6 @@ and decide for yourself if it's really noise.
 Instead of thresholding output on E-value, instead
 report target sequences with a bit score of >=
 .IR <x> .
-
 
 
 
@@ -340,68 +491,44 @@ flag increases sensitivity somewhat, at a large cost in speed.
 .BI \-\-F1 " <x>"
 Set the P-value threshold for the SSV filter step.  The default is
 0.02, meaning that roughly 2% of the highest scoring nonhomologous
-targets are expected to pass the filter.
+targets are expected to pass the filter. With
+.BR \-\-fmindex ,
+the default F1 threshold is slightly relaxed to 0.03.
 
 .TP
 .BI \-\-F2 " <x>"
 Set the P-value threshold for the Viterbi filter step.
-The default is 0.001. 
+The default is 0.003. 
 
 .TP
 .BI \-\-F3 " <x>"
 Set the P-value threshold for the Forward filter step.
-The default is 1e-5.
+The default is 3e-5.
 
 .TP
 .B \-\-nobias
 Turn off the bias filter. This increases sensitivity somewhat, but can
 come at a high cost in speed, especially if the query has biased
-residue composition (such as a repetitive sequence region, or if it is
-a membrane protein with large regions of hydrophobicity). Without the
-bias filter, too many sequences may pass the filter with biased
+residue composition (such as a repetitive sequence region)
+Without the bias filter, too many sequences may pass the filter with biased
 queries, leading to slower than expected performance as the
 computationally intensive Forward/Backward algorithms shoulder an
 abnormally heavy load.
 
 
-
-.SH OPTIONS FOR SPECIFYING THE ALPHABET
-
-.TP
-.B \-\-dna
-Assert that sequences in
-.I msafile
-are DNA, bypassing alphabet autodetection.
+.SH OPTIONS CONTROLLING EXPERIMENTAL FM-INDEX ACCELERATION
 
 .TP
-.B \-\-rna
-Assert that sequences in 
-.I msafile
-are RNA, bypassing alphabet autodetection.
+.B \-\-fmindex
+Use the experimental FM-index acceleration.
+Instead of a target seqfile, the target file argument
+is a binary database produced by
+.BR hmmer-makefmdb .
+FM-index acceleration is only compiled into HMMER3 when
+using the SSE vector instruction set; when HMMER3 is compiled
+for other vector instruction sets, FM-index acceleration is
+unavailable.
 
-
-
-.SH OPTIONS CONTROLLING SEED SEARCH HEURISTIC
-
-When searching with 
-.BR nhmmer ,
-one may optionally precompute a binary version of the target database, using
-.BR makehmmerdb ,
-then search against that database. Using default settings, this yields a
-roughly 10-fold acceleration with small loss of sensitivity on benchmarks.
-This is achieved using a heuristic method that searches for seeds (ungapped 
-alignments) around which full processing is done. This is essentially  
-a replacement to the SSV stage. (This method has been extensively tested, 
-but should still be treated as somewhat experimental.)
-The following options only impact 
-.B nhmmer
-if the value of 
-.B \-\-tformat
-is
-.BR hmmerdb .
-
-Changing parameters for this seed-finding step will impact both speed and 
-sensitivity - typically faster search leads to lower sensitivity. 
 
 .TP
 .BI \-\-seed_max_depth " <n>"
@@ -470,92 +597,12 @@ Decreasing this value slightly reduces run time, at a small risk of
 reduced sensitivity. (minor tuning option)
 
 
+
 .SH OTHER OPTIONS
-
-
-.TP
-.BI \-\-qformat " <s>"
-Assert that input
-.I queryfile
-is a sequence file (unaligned or aligned), in format
-.IR <s> ,
-bypassing format autodetection.
-Common choices for 
-.I <s> 
-include:
-.BR fasta ,
-.BR embl ,
-.BR genbank.
-Alignment formats also work, and will serve as the
-basis for automatic creation of a profile HMM used for
-searching;
-common choices include:
-.BR stockholm , 
-.BR a2m ,
-.BR afa ,
-.BR psiblast ,
-.BR clustal ,
-.BR phylip .
-For more information, and for codes for some less common formats,
-see main documentation.
-
-
-.TP
-.BI \-\-qsingle_seqs
-Force
-.I queryfile
-to be read as individual sequences, even if it is in
-an msa format. For example, if the input is in aligned
-.BR stockholm
-format, the
-.BR \-\-qsingle_seqs
- flag will cause each sequence in that alignment to be used as a separate query sequence.
-
-.TP
-.BI \-\-tformat " <s>"
-Assert that target sequence database
-.I seqdb
-is in format
-.IR <s> ,
-bypassing format autodetection.
-Common choices for 
-.I <s> 
-include:
-.BR fasta ,
-.BR embl ,
-.BR genbank ,
-.BR fmindex .
-Alignment formats also work;
-common choices include:
-.BR stockholm , 
-.BR a2m ,
-.BR afa ,
-.BR psiblast ,
-.BR clustal ,
-.BR phylip .
-For more information, and for codes for some less common formats,
-see main documentation.
-The string
-.I <s>
-is case-insensitive (\fBfasta\fR or \fBFASTA\fR both work).
-The format
-.B fmindex
-indicates that the database file is a binary file produced using
-.BR makehmmerdb . 
-
 
 .TP
 .B \-\-nonull2
 Turn off the null2 score corrections for biased composition.
-
-.TP
-.BI \-Z " <x>"
-For the purposes of per-hit E-value calculations,
-Assert that the total size of the target database is
-.I <x>
-million nucleotides, 
-rather than the actual number of targets seen. 
-
 
 .TP
 .BI \-\-seed " <n>"
@@ -565,7 +612,6 @@ Some steps in postprocessing require Monte Carlo simulation.  The
 default is to use a fixed seed (42), so that results are exactly
 reproducible. Any other positive integer will give different (but also
 reproducible) results. A choice of 0 uses a randomly chosen seed.
-
 
 .TP 
 .BI \-\-w_beta " <x>"
@@ -583,8 +629,6 @@ established for the model by
 .BR hmmbuild ,
 or when the query is sequence-based.
 
-
-
 .TP 
 .BI \-\-w_length " <n>"
 Override the model instance length upper bound, W,
@@ -599,18 +643,11 @@ W established for the model by
 .BR hmmbuild ,
 or when the query is sequence-based.
 
-
-
-.TP 
-.B \-\-watson 
-Only search the top strand. By default both the query sequence
-and its reverse-complement are searched.
-
-.TP 
-.B \-\-crick 
-Only search the bottom (reverse-complement) strand. By 
-default both the query sequence and its reverse-complement are searched.
-
+.TP
+.BI \-\-block-length " <n>"
+Set the size of the overlapping sequence windows read from the target
+seqfile, when the sequences are long (whole chromosomes, for example).
+The default is 262144 (256Kbytes).
 
 .TP
 .BI \-\-cpu " <n>"
@@ -619,35 +656,11 @@ Set the number of parallel worker threads to
 On multicore machines, the default is 2.
 You can also control this number by setting an environment variable, 
 .IR HMMER_NCPU .
-There is also a master thread, so the actual number of threads that
+There is also a director thread, so the actual number of threads that
 HMMER spawns is
 .IR <n> +1.
-
 This option is not available if HMMER was compiled with POSIX threads
 support turned off.
-
-
-
-
-.TP
-.BI \-\-stall
-For debugging the MPI master/worker version: pause after start, to
-enable the developer to attach debuggers to the running master and
-worker(s) processes. Send SIGCONT signal to release the pause.
-(Under gdb: 
-.BR "(gdb) signal SIGCONT" )
-(Only available if optional MPI support was enabled at compile-time.)
-
-.TP
-.BI \-\-mpi
-Run under MPI control with master/worker parallelization (using
-.BR mpirun ,
-for example, or equivalent). Only available if optional MPI support
-was enabled at compile-time.
-
-
-
-
 
 
 .SH SEE ALSO 

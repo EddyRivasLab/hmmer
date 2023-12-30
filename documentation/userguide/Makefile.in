@@ -37,25 +37,25 @@ endif
 
 # ./configure puts HMMER .man pages in ${top_builddir}/documentation/man
 MANPAGES = \
-	alimask.man     \
-	hmmalign.man    \
-	hmmbuild.man    \
-	hmmc2.man       \
-	hmmconvert.man  \
-	hmmemit.man     \
-	hmmfetch.man    \
-	hmmlogo.man     \
-	hmmpgmd.man     \
-	hmmpgmd_shard.man \
-	hmmpress.man    \
-	hmmscan.man     \
-	hmmsearch.man   \
-	hmmsim.man      \
-	hmmstat.man     \
-	jackhmmer.man   \
-	makehmmerdb.man \
-	nhmmer.man      \
-	nhmmscan.man    \
+	alimask.man        \
+	hmmalign.man       \
+	hmmbuild.man       \
+	hmmc2.man          \
+	hmmconvert.man     \
+	hmmemit.man        \
+	hmmfetch.man       \
+	hmmlogo.man        \
+	hmmpgmd.man        \
+	hmmpgmd_shard.man  \
+	hmmpress.man       \
+	hmmscan.man        \
+	hmmsearch.man      \
+	hmmsim.man         \
+	hmmstat.man        \
+	jackhmmer.man      \
+	hmmer-makefmdb.man \
+	nhmmer.man         \
+	nhmmscan.man       \
 	phmmer.man      
 
 MANPAGES_DAEMON = \

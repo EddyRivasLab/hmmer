@@ -35,7 +35,7 @@ MANS =  hmmer\
 	hmmsim\
 	hmmstat\
 	jackhmmer\
-	makehmmerdb\
+	hmmer-makefmdb\
 	phmmer\
 	nhmmer\
 	nhmmscan\

@@ -1499,16 +1499,14 @@ p7_Pipeline_LongTarget(P7_PIPELINE *pli, P7_OPROFILE *om, P7_SCOREDATA *data,
                         const FM_DATA *fmf, const FM_DATA *fmb, FM_CFG *fm_cfg
                         )
 {
-  int              i;
-  int              status;
-  float            nullsc;   /* null model score                        */
-  float            usc;      /* msv score  */
+  float            nullsc;   // null model score
+  float            usc;      // msv score
   float            P;
-  float            bias_filtersc;
-
+  //  float            bias_filtersc;  // SRE: see comment below on TJW's non-use of this
   ESL_DSQ          *subseq;
   uint64_t         seq_start;
-
+  int              i;
+  int              status;
 
   P7_HMM_WINDOWLIST msv_windowlist;
   P7_HMM_WINDOWLIST vit_windowlist;
@@ -1632,7 +1630,18 @@ p7_Pipeline_LongTarget(P7_PIPELINE *pli, P7_OPROFILE *om, P7_SCOREDATA *data,
       p7_bg_SetLength(bg, window->length);
       p7_bg_NullOne  (bg, subseq, window->length, &nullsc);
 
-      p7_bg_FilterScore(bg, subseq, window->length, &bias_filtersc);
+      /* SRE: Unclear what TJW's intent here is.
+       * He was calling p7_bg_FilterScore() without checking pli->do_biasfilter,
+       * which is a bug: p7_pli_NewModel only initializes the filter HMM when
+       * pli->do_biasfilter is TRUE, so memory sanitizers will see uninitialized
+       * memory being used. But he doesn't use bias_filtersc for anything,
+       * so it's a no-op anyway. I'm going to:
+       *    1. fix the code by checking for pli->do_biasfilter
+       *    2. then comment it out because he isn't using the result anyway.
+       */
+      // if (pli->do_biasfilter)
+      //   p7_bg_FilterScore(bg, subseq, window->length, &bias_filtersc);
+
       // Compute standard MSV to ensure that bias doesn't overcome SSV score when MSV
       // would have survived it
       p7_oprofile_ReconfigMSVLength(om, window->length);

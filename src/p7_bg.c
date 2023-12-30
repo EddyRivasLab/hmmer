@@ -445,6 +445,7 @@ p7_bg_SetFilter(P7_BG *bg, int M, const float *compo)
 
   bg->fhmm->pi[0] = 0.999;
   bg->fhmm->pi[1] = 0.001;
+  bg->fhmm->pi[2] = 0.000;  // state 2 is the end state, and you can't start there
 
   esl_hmm_Configure(bg->fhmm, bg->f);
   return eslOK;

@@ -37,8 +37,8 @@ static ESL_OPTIONS options[] = {
 
   {  0, 0, 0, 0, 0, 0, 0, 0, 0, 0 },
 };
-static char usage[]  = "[options] <seqfile> <binaryfile>";
-static char banner[] = "build a HMMER binary-formatted database from an input sequence file";
+static char usage[]  = "[options] <seqfile_in> <fmdb_out>";
+static char banner[] = "build an nhmmer FM-index database from an input sequence file";
 
 
 static int

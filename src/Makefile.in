@@ -65,6 +65,7 @@ PROGS = alimask\
 	phmmer\
 	nhmmer\
 	nhmmscan\
+<<<<<<< HEAD
 	makehmmerdb\
 	ehmmemit\
 	ehmmscan\
@@ -72,6 +73,9 @@ PROGS = alimask\
 	ejackhmmer\
 	ephmmer\
 
+=======
+	hmmer-makefmdb
+>>>>>>> 1770b54a0e8f241c0bca9478958ebacffdb7800d
 
 # "auxprogs" are built but not installed.
 AUXPROGS = \
@@ -96,6 +100,7 @@ PROGOBJS =\
 	phmmer.o\
 	nhmmer.o\
 	nhmmscan.o\
+<<<<<<< HEAD
 	makehmmerdb.o\
 	ehmmemit.o\
 	ehmmscan.o\
@@ -103,6 +108,9 @@ PROGOBJS =\
 	ejackhmmer.o\
 	ephmmer.o\
 
+=======
+	hmmer-makefmdb.o
+>>>>>>> 1770b54a0e8f241c0bca9478958ebacffdb7800d
 
 AUXPROGOBJS = \
 	hmmc2.o \
