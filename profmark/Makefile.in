@@ -18,11 +18,13 @@ ESLINC   = -I../${ESLDIR} -I${top_srcdir}/easel
 SRCINC   = -I../src   -I${top_srcdir}/src
 
 PROGS    = create-profmark\
-	   rocplot
+	   rocplot\
+	   rocplotdom
 
 PROGOBJS  =\
 	create-profmark.o\
-	rocplot.o
+	rocplot.o\
+	rocplotdom.o
 
 # beautification magic stolen from git 
 QUIET_SUBDIR0 = +${MAKE} -C #space separator after -c

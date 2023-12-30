@@ -1412,6 +1412,10 @@ serial_loop(WORKER_INFO *info, ESL_SQFILE *dbfp, int n_targetseqs)
   ESL_SQ   *dbsq     = NULL;   /* one target sequence (digital)  */
   int seq_cnt = 0;
 
+  int n_msv = 0;
+  int n_viterbi = 0;
+  int n_forward = 0;
+
   dbsq = esl_sq_CreateDigital(info->om->abc);
 
   /* Main loop: */
@@ -1421,7 +1425,7 @@ serial_loop(WORKER_INFO *info, ESL_SQFILE *dbfp, int n_targetseqs)
       p7_bg_SetLength(info->bg, dbsq->n);
       p7_oprofile_ReconfigLength(info->om, dbsq->n);
       
-      if (p7_EvoPipeline(info->pli, /*emR=*/NULL, info->R, info->hmm, info->gm, info->om, info->bg, dbsq, NULL, info->th, info->noevo, (float)info->fixtime) != eslOK) {
+      if (p7_EvoPipeline(info->pli, /*emR=*/NULL, info->R, info->hmm, info->gm, info->om, info->bg, dbsq, NULL, info->th, info->noevo, (float)info->fixtime, &n_msv, &n_viterbi, &n_forward) != eslOK) {
 	esl_fatal("error in p7_EvoPipeline");
       }
 
@@ -1430,6 +1434,8 @@ serial_loop(WORKER_INFO *info, ESL_SQFILE *dbfp, int n_targetseqs)
       p7_pipeline_Reuse(info->pli);
   }
 
+  printf("^^ nn %d %d %d\n", n_msv, n_viterbi, n_forward);
+  
   if (n_targetseqs!=-1 && seq_cnt==n_targetseqs)
     sstatus = eslEOF;
 
@@ -1506,6 +1512,10 @@ pipeline_thread(void *arg)
   ESL_SQ_BLOCK  *block = NULL;
   void          *newBlock;
   
+  int n_msv = 0;
+  int n_viterbi = 0;
+  int n_forward = 0;
+
   impl_Init();
 
   obj = (ESL_THREADS *) arg;
@@ -1529,10 +1539,10 @@ pipeline_thread(void *arg)
 	  p7_bg_SetLength(info->bg, dbsq->n);
 	  p7_oprofile_ReconfigLength(info->om, dbsq->n);
 	  
-	  if (p7_EvoPipeline(info->pli, /*emR=*/NULL, info->R, info->hmm, info->gm, info->om, info->bg, dbsq, NULL, info->th, info->noevo, (float)info->fixtime) != eslOK) {
+	  if (p7_EvoPipeline(info->pli, /*emR=*/NULL, info->R, info->hmm, info->gm, info->om, info->bg, dbsq, NULL, info->th, info->noevo, (float)info->fixtime,
+			     &n_msv, &n_viterbi, &n_forward) != eslOK) {
 	    if (status != eslOK) esl_fatal("error in p7_EvoPipeline");
 	  }
-
 	  
 	  esl_sq_Reuse(dbsq);
 	  p7_pipeline_Reuse(info->pli);
@@ -1546,6 +1556,8 @@ pipeline_thread(void *arg)
 
   status = esl_workqueue_WorkerUpdate(info->queue, block, NULL);
   if (status != eslOK) esl_fatal("Work queue worker failed");
+
+  printf("^^ worker nn %d %d %d\n", n_msv, n_viterbi, n_forward);
 
   esl_threads_Finished(obj, workeridx);
   return;

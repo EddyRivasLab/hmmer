@@ -104,7 +104,7 @@ static int workaroud_scanmodels(P7_PIPELINE *pli, int n, EMRATE *emR, P7_RATE **
 int
 p7_EvoPipeline(P7_PIPELINE *pli, EMRATE *emR, P7_RATE *oR, P7_HMM *hmm, P7_PROFILE *gm,
 	       P7_OPROFILE *om, P7_BG *bg, const ESL_SQ *sq, const ESL_SQ *ntsq, P7_TOPHITS *hitlist,
-	       int noevo, float fixtime)
+	       int noevo, float fixtime, int *ref_nmsv, int *ref_nviterbi, int *ref_nforward)
 {
   ESL_RANDOMNESS  *r       = NULL;     /* RNG for E-value calibration simulations */
   P7_HIT          *hit     = NULL;     /* ptr to the current hit output data      */
@@ -125,11 +125,12 @@ p7_EvoPipeline(P7_PIPELINE *pli, EMRATE *emR, P7_RATE *oR, P7_HMM *hmm, P7_PROFI
   float            tol = 0.1;
   int              Ld;               /* # of residues in envelopes */
   int              d;
+  int              do_viterbi = FALSE;
   int              be_verbose = FALSE;
   int              status;
-  
+
   /* init */
-  time = 1.0; 
+  time = 1.0;
   
 #if RECALIBRATE
   r = esl_randomness_CreateFast(seed);
@@ -147,7 +148,17 @@ p7_EvoPipeline(P7_PIPELINE *pli, EMRATE *emR, P7_RATE *oR, P7_HMM *hmm, P7_PROFI
   workaround_get_starprofile(pli, bg, hmm, gm, om, &ehmm, noevo); 
 
   /* First level filter: the MSV filter, multihit with <om> */
-  //p7_MSVFilter(sq->dsq, sq->n, om, pli->oxf, &usc);
+  *ref_nmsv += 1;
+  
+  p7_MSVFilter(sq->dsq, sq->n, om, pli->oxf, &usc);
+  seq_score = (usc - nullsc) / eslCONST_LOG2;
+  P = esl_gumbel_surv(seq_score,  om->evparam[p7_MMU],  om->evparam[p7_MLAMBDA]);
+  if (P > 5*pli->F1) {
+    p7_hmm_Destroy(ehmm);
+    return eslOK;
+  }
+
+#if 0
   if ((status = optimize_msvfilter(sq->dsq, sq->n, &time, R, ehmm, gm, om, bg, pli->oxf,
 				   &usc, fixtime, noevo, tol, pli->errbuf, be_verbose)) != eslOK)      
     printf("\nsequence %s msvfilter did not optimize\n", sq->name);
@@ -157,6 +168,8 @@ p7_EvoPipeline(P7_PIPELINE *pli, EMRATE *emR, P7_RATE *oR, P7_HMM *hmm, P7_PROFI
     p7_hmm_Destroy(ehmm);
     return eslOK;
   }
+#endif
+  
   pli->n_past_msv++;
 
   /* biased composition HMM filtering */
@@ -184,6 +197,9 @@ p7_EvoPipeline(P7_PIPELINE *pli, EMRATE *emR, P7_RATE *oR, P7_HMM *hmm, P7_PROFI
   /* Second level filter: ViterbiFilter(), multihit with <om> */
   if (P > pli->F2)
     {
+      do_viterbi = TRUE;
+      *ref_nviterbi += 1;
+      
       time = 1.0;
       //p7_ViterbiFilter(sq->dsq, sq->n, om, pli->oxf, &vfsc);
       if ((status = p7_evopli_OptimizeViterbiFilter(sq->dsq, sq->n, &time, R, ehmm, gm, om, bg, pli->oxf,
@@ -201,11 +217,16 @@ p7_EvoPipeline(P7_PIPELINE *pli, EMRATE *emR, P7_RATE *oR, P7_HMM *hmm, P7_PROFI
 
 
   /* Parse it with Forward and obtain its real Forward score. */
-  //p7_ForwardParser(sq->dsq, sq->n, om, pli->oxf, &fwdsc);
-  time = 1.0;
-  if ((status = p7_evopli_OptimizeForwardParser(sq->dsq, sq->n, &time, R, ehmm, gm, om, bg, pli->oxf, 
-						&fwdsc, noevo, fixtime, tol, pli->errbuf, be_verbose)) != eslOK)      
-    printf("\nsequence %s forwardparser did not optimize\n", sq->name);
+  *ref_nforward += 1;
+
+  if (do_viterbi)
+    p7_ForwardParser(sq->dsq, sq->n, om, pli->oxf, &fwdsc);
+  else {
+    time = 1.0;  
+    if ((status = p7_evopli_OptimizeForwardParser(sq->dsq, sq->n, &time, R, ehmm, gm, om, bg, pli->oxf, 
+						  &fwdsc, noevo, fixtime, tol, pli->errbuf, be_verbose)) != eslOK)      
+      printf("\nsequence %s forwardparser did not optimize\n", sq->name);
+  }
   
 #if RECALIBRATE
   workaround_calibrate(r, sq->n, bg, ehmm, gm, om);
@@ -543,9 +564,9 @@ optimize_msvfilter(const ESL_DSQ *dsq, int n, float *ret_time,
   status = esl_min_ConjugateGradientDescent(cfg, p, np,
 					    &optimize_msvfilter_func, NULL,
 					    (void *) (&data), &sc, stats);
-  if (status == eslENOHALT) 
+  if (0&&status == eslENOHALT) 
     printf("optimize_msvfilter(): bracket minimization did not converge. You may want to consider increasing the number of iterations\n");		
-  else if (status != eslOK) 
+  if (status != eslENOHALT && status != eslOK) 
     esl_fatal("optimize_msvfilter(): bad bracket minimization");	
   
   /* unpack the final parameter vector */
@@ -630,9 +651,9 @@ p7_evopli_OptimizeViterbiFilter(const ESL_DSQ *dsq, int n, float *ret_time,
   status = esl_min_ConjugateGradientDescent(cfg, p, np,
 					    &optimize_viterbifilter_func, NULL,
 					    (void *) (&data), &sc, stats);
-  if (status == eslENOHALT) 
+  if (0&&status == eslENOHALT) 
     printf("optimize_viterbiparser(): bracket minimization did not converge. You may want to consider increasing the number of iterations\n");		
-  else   if (status != eslOK) 
+  if (status != eslENOHALT && status != eslOK) 
     esl_fatal("optimize_viterbifilter(): bad bracket minimization");	
   
   /* unpack the final parameter vector */
@@ -719,9 +740,9 @@ p7_evopli_OptimizeForwardParser(const ESL_DSQ *dsq, int n, float *ret_time,
 					    &optimize_forwardparser_func, NULL,
 					    (void *) (&data), &sc, stats);
   
-  if (status == eslENOHALT) 
+  if (0&&status == eslENOHALT) 
     printf("optimize_forwardparser(): bracket minimization did not converge. You may want to consider increasing the number of iterations\n");		
-  else if (status != eslOK) 
+  if (status != eslENOHALT && status != eslOK) 
     esl_fatal("optimize_forwardparser(): bad bracket minimization. status %d tol %f", status, data.tol);		
   
   /* unpack the final parameter vector */

@@ -43,7 +43,7 @@ typedef struct p7_rate_s {
   char     *desc;               /* brief (1-line) description of model   (optional: NULL) */ /* String, \0-terminated   */
  
   /* emission probabilities */
-  float   **pzero;              /* match emissions at t=zero     [1..M][0..K-1]                  x*/
+  float   **pzero;              /* match emissions at t=zero     [1..M][0..K-1]                  */
   float   **pstar;              /* match emissions at t=star     [1..M][0..K-1]                  */
   float   **pinfy;              /* match emissions at t=infinity [1..M][0..K-1]                  */
   float   **ins;                /* insert emissions [1..M][0..K-1]                               */

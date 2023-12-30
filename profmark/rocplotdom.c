@@ -2,7 +2,8 @@
  * including confidence intervals derived by Bayesian bootstrapping.
  * 
  * The <.out file> from a profmark benchmark consists of lines:
- *     <E-value> <bitscore> <target_sequence> <query_model>
+ *     <E-value> <bitscore> <query_from> <query_to> <env_from> <env_to> <target_sequence> <query_model>
+ *
  * Target sequence names are either
  *   decoy\d+                    for negatives (decoys); example: decoy75382
  *   <model>/<#>[/<to>-<from>]+  for positives;          example: CHP02677/42/297-773/781-1257
@@ -96,7 +97,9 @@ struct result_s {
   double E;			/* E-value */
   int    qidx;			/* index of query  */
   int    tidx; 			/* index of target seq: 0..npos-1 for positives; npos..npos+nneg-1 for negatives */
-  int    class;			/* +1 = positive; -1 = negative; 0 = ignore   */
+  int    class;			/* +1 = positive; -1 =  negative; 0 =  ignore   */
+  double coverage;		/* if positive or ignore, fraction of target covered;  0 if negative */
+  int    overext;		/* if positive or ignore, number of overextension nts; 0 if negative */
 };
 
 
@@ -104,6 +107,7 @@ struct result_s {
 static int    parse_tblfile(char *tblfile, ESL_KEYHASH *kh);
 static int    parse_results(char *resfile, int **pni, ESL_KEYHASH *modelkh, ESL_KEYHASH *poskh, ESL_KEYHASH *negkh, struct result_s **ret_r, int *ret_nr);
 static int    classify_pair_by_names(const char *query, const char *target);
+static int    target_ends(const char *target, int *ret_q_from, int *ret_q_to);
 static double weighted_total_positives(int **pni, double *queryp, int nq, double *seqp, int npos, int nseq);
 static struct oneplot_s *create_plot(ESL_GETOPTS *go, int nq);
 static void   destroy_plot(struct oneplot_s *plot);
@@ -298,6 +302,23 @@ classify_pair_by_names(const char *query, const char *target)
     return 0;	/* ignore */
 }
 
+// DUF1949/9360/102-157
+// q_from = 102
+// q_to   = 157
+static int
+target_ends(const char *target, int *ret_q_from, int *ret_q_to)
+{
+  int q_from = 0;
+  int q_to   = 0;
+  int tlen = strlen(target);
+  
+
+  *ret_q_from = q_from;
+  *ret_q_to   = q_to;
+  
+  return eslOK;
+}
+
 /* Given bootstrap sampled weights, calculate the maximum # of positives possible */
 static double
 weighted_total_positives(int **pni, double *queryp, int nq, double *seqp, int npos, int nseq)
@@ -348,6 +369,8 @@ parse_results(char *resfile, int **pni, ESL_KEYHASH *qkh, ESL_KEYHASH *poskh, ES
   struct result_s *rp     = NULL;
   int              ralloc = 0;
   int              nr     = 0;
+  int              t_from, t_to; // target from-to
+  int              r_from, r_to; // result from-to
 
   if (esl_fileparser_Open(resfile, NULL, &efp) != eslOK) esl_fatal("failed to open pmark results file %s", resfile);
   esl_fileparser_SetCommentChar(efp, '#');
@@ -365,11 +388,22 @@ parse_results(char *resfile, int **pni, ESL_KEYHASH *qkh, ESL_KEYHASH *poskh, ES
       if (esl_fileparser_GetTokenOnLine(efp, &tok,    &toklen) != eslOK) esl_fatal("failed to parse line %d of %s", efp->linenumber, resfile); /* E-value => rp[nr].E */
       rp[nr].E = atof(tok);
       if (esl_fileparser_GetTokenOnLine(efp, &tok,    &toklen) != eslOK) esl_fatal("failed to parse line %d of %s", efp->linenumber, resfile); /* bit score ignored */
+      if (esl_fileparser_GetTokenOnLine(efp, &tok,    &toklen) != eslOK) esl_fatal("failed to parse line %d of %s", efp->linenumber, resfile); /* t_from */
+      r_from = atoi(tok);
+      if (esl_fileparser_GetTokenOnLine(efp, &tok,    &toklen) != eslOK) esl_fatal("failed to parse line %d of %s", efp->linenumber, resfile); /* t_to */
+      r_to = atoi(tok);
+      
+      if (esl_fileparser_GetTokenOnLine(efp, &tok,    &toklen) != eslOK) esl_fatal("failed to parse line %d of %s", efp->linenumber, resfile); /* q_from ignored */
+      if (esl_fileparser_GetTokenOnLine(efp, &tok,    &toklen) != eslOK) esl_fatal("failed to parse line %d of %s", efp->linenumber, resfile); /* q_to ignored */
+      
       if (esl_fileparser_GetTokenOnLine(efp, &target, &tlen)   != eslOK) esl_fatal("failed to parse line %d of %s", efp->linenumber, resfile); /* target name; will be converted to an index */
       if (esl_fileparser_GetTokenOnLine(efp, &query,  &qlen)   != eslOK) esl_fatal("failed to parse line %d of %s", efp->linenumber, resfile); /* query name; will be converted to an index */
       if (esl_keyhash_Lookup(qkh, query, qlen, &(rp[nr].qidx)) != eslOK) esl_fatal("failed to find query model %s in hash", query);  /* query index */
       rp[nr].class = classify_pair_by_names(query, target);
 
+      target_ends(target, &t_from, &t_end);
+      printf("^^ %d r_from %d r_to %d target %s from %d to %d query %s class %d\n", nr, r_from, r_to, target, t_from, t_to, query, rp[nr].class);
+      
       if (rp[nr].class == -1)		/* negatives: look up in negkh, and offset the index by npos */
 	{
 	  if (esl_keyhash_Lookup(negkh, target, tlen, &(rp[nr].tidx)) != eslOK) esl_fatal("failed to find target seq  %s in hash", target);	/* target index */
