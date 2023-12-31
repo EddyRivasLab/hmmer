@@ -30,7 +30,7 @@
 #include "logsum.h"
 
 /* Function:  h4_ascmx_fb_compare_std()
- * Synopsis:  Compare ASC Fwd or Bck matricee to standard, for equality
+ * Synopsis:  Compare ASC Fwd or Bck matrices to standard, for equality
  * Incept:    SRE, Sat 13 Feb 2021
  *
  * Purpose:   Compare ASC Forward or Backward UP/DOWN matrices <ascu>/<ascd>
