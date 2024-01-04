@@ -52,19 +52,20 @@ static int ssvfilter_dispatcher(const ESL_DSQ *dsq, int L, const H4_PROFILE *hmm
  *            
  *            Score may overflow (and will, on high-scoring
  *            sequences), but will not underflow. On overflow, returns
- *            <eslERANGE> and <*ret_sc> is set to its maximum allowed
- *            value.
+ *            <eslERANGE> and <*ret_sc> is set to the maximum
+ *            representable value, which is a lower bound on the
+ *            actual score.
  *            
  * Args:      dsq    - digital target sequence 1..L
  *            L      - length of <dsq> in residues
  *            hmm    - profile HMM, with striped vector params
- *            ret_sc - RETURN: SSV score in bits
+ *            ret_sc - RETURN: SSV raw score in bits
  *
  * Returns:   <eslOK> on success, and <*ret_sc> is the SSV score.
  * 
  *            <eslERANGE> if score overflows limited range. In this
  *            case, this is a high-scoring hit that passes the filter,
- *            and <*ret_sc> is set to its maximum allowed value.
+ *            and <*ret_sc> is set to its maximum representable value.
  *
  * Throws:    (no abnormal error conditions)
  */

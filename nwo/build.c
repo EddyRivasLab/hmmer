@@ -176,10 +176,10 @@ h4_Build(const H4_BUILD_CONFIG *cfg, ESL_MSA *msa, H4_PROFILE **ret_hmm, char *e
   if (( status = h4_standardize(hmm))            != eslOK) goto ERROR;
   if (( status = h4_vectorize(hmm))              != eslOK) goto ERROR;
 
+  esl_strdup(msa->name, -1, &(hmm->name));
   // annotate();
   // calibrate();
   // make_post_msa()
-
 
  DONE:
  ERROR:

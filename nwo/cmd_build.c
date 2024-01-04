@@ -105,6 +105,8 @@ h4_cmd_build(const char *topcmd, const ESL_SUBCMD *sub, int argc, char **argv)
     {
       nali++;
 
+      if (!msa->name) esl_msa_SetName(msa, "test", -1);  // SRE: temporary
+
       h4_Build(cfg, msa, &hmm, NULL);
   
       h4_hmmfile_Write(ofp, hmm);
@@ -173,3 +175,5 @@ process_cmdline(const char *topcmd, const ESL_SUBCMD *sub, const ESL_OPTIONS *su
   esl_getopts_Destroy(go);
   return NULL;
 }
+
+

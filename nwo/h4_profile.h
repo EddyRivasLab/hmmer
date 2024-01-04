@@ -49,6 +49,9 @@ typedef struct {
   // Fwd, Bck filters use striped single-precision floats: e.g. 4x per 128b vector         
   float   **rfv;            // match scores [x=0..Kp-1][q=0..Qf-1]              
   float   **tfv;            // transition score layout (see h4_profile.md)
+
+  // Metadata/annotation.
+  char *name;               // model name  (mandatory)
 } H4_PROFILE;
 
 

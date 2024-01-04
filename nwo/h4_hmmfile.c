@@ -13,6 +13,12 @@
 #include <stdio.h>
 #include <string.h>
 
+#include "easel.h"
+#include "esl_buffer.h"
+#include "esl_json.h"
+#include "esl_keyhash.h"
+#include "esl_mem.h"
+
 #include "h4_profile.h"
 #include "h4_hmmfile.h"
 
@@ -405,9 +411,16 @@ read_ascii4a(H4_HMMFILE *hfp, ESL_ALPHABET **ret_abc, H4_PROFILE **opt_hmm)
     }
   ESL_DASSERT1(( k == hmm->M ));
 
+  if (( status = esl_keyhash_Lookup(hfp->kh, "name",    -1, &keyi)) != eslOK) ESL_FAIL(eslEFORMAT, hfp->errmsg, "model starting at line %d has no `name` key",    hfp->pi->tok[0].linenum); 
+  idx = hfp->tokmap[keyi];
+  if ( hfp->pi->tok[idx].type != eslJSON_STRING) ESL_FAIL(eslEFORMAT, hfp->errmsg, "expected `name` to be a string value (line %d)",  hfp->pi->tok[idx].linenum);
+  if (( status = esl_memstrdup(esl_json_GetMem(hfp->pi, idx, hfp->bf), esl_json_GetLen(hfp->pi, idx, hfp->bf), &(hmm->name))) != eslOK) goto ERROR;
+  
   /* For now the other fields are unused, but we still error out if they're missing, because we have tests for err reporting */
   if (( status = esl_keyhash_Lookup(hfp->kh, "format",  -1, &keyi)) != eslOK) ESL_FAIL(eslEFORMAT, hfp->errmsg, "model starting at line %d has no `format` key",  hfp->pi->tok[0].linenum); // {bad.4:1}
   if (( status = esl_keyhash_Lookup(hfp->kh, "version", -1, &keyi)) != eslOK) ESL_FAIL(eslEFORMAT, hfp->errmsg, "model starting at line %d has no `version` key", hfp->pi->tok[0].linenum); // {bad.28:21}
+
+
 
   hmm->flags |= h4_HASPROBS;
 
@@ -467,6 +480,7 @@ write_ascii_4a(FILE *fp, const H4_PROFILE *hmm)
   int k,a,z;
 
   esl_fprintf(fp, "{\n");
+  esl_fprintf(fp, "  \"name\"     : \"%s\",\n", hmm->name);
   esl_fprintf(fp, "  \"format\"   : \"4/a\",\n");
   esl_fprintf(fp, "  \"version\"  : \"%s\",\n", HMMER_VERSION);
   esl_fprintf(fp, "  \"length\"   : %d,\n",     hmm->M);

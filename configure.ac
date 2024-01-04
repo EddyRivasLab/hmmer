@@ -8,7 +8,7 @@
 # reminders to save re-reading autoconf manual for the n'th time:
 #    output variables:
 #      -  defined here as normal shell variables, e.g. FOO="my string"
-#      -  made into output variables by calling AC_SUBST(FOO)
+#      -  then made into output variables by calling AC_SUBST(FOO)
 #      -  @FOO@ in an output file is substituted
 #      -  output files assigned w/ AC_CONFIG_FILES; e.g. Makefile.in
 #
@@ -46,7 +46,7 @@
 # Use full 3-arg form of AC_DEFINE() macros. autoheader chokes if you
 # don't.  We don't use autoheader (we only use autoconf, out of the
 # GNU build tools, to limit complexity) but some packagers do,
-# including Debian.
+# such as Debian.
 
 
 ################################################################
@@ -58,9 +58,10 @@
 AC_PREREQ(2.63)
 
 # Our extra macros are with Easel, in easel/m4
-# It's sort of standard to expect them in m4/; don't
+# It's sort of standard to expect them in m4/, but don't
 # be confused that they're down in Easel.
 #
+m4_include([lib/easel/m4/ax_check_compile_flag.m4])
 m4_include([lib/easel/m4/ax_gcc_func_attribute.m4])
 
 m4_include([lib/easel/m4/esl_sse4.m4])
@@ -80,8 +81,14 @@ m4_include([lib/easel/m4/esl_pic_flags.m4])
 # 2. AC_INIT
 ################################################################
 
-AC_INIT(HMMER, 4.0-nwo, sean@eddylab.org, hmmer)
+AC_INIT([HMMER], [4.0-nwo], [sean@eddylab.org], [hmmer])
 AC_MSG_NOTICE([Configuring HMMER4 for your system.])
+
+# remember if the user is overriding CFLAGS
+esl_cflags_env_set=no
+if test x"$CFLAGS" != x; then
+  esl_cflags_env_set=yes
+fi
 
 
 ################################################################
@@ -107,8 +114,8 @@ AC_MSG_NOTICE([Configuring HMMER4 for your system.])
 # to use HMMER as a library inside other packages, with no name clashes.
 ################################################################
 
-HMMER_DATE="Feb 2021"
-HMMER_COPYRIGHT="Copyright (C) 2021 Howard Hughes Medical Institute."
+HMMER_DATE="Jan 2024"
+HMMER_COPYRIGHT="Copyright (C) 2024 Howard Hughes Medical Institute."
 HMMER_LICENSE="Freely distributed under the BSD open source license."
 HMMER_VERSION=$PACKAGE_VERSION
 HMMER_URL="http://hmmer.org"
@@ -116,10 +123,10 @@ HMMER_URL="http://hmmer.org"
 HMMER_ESLDIR="lib/easel"
 HMMER_SADIR="lib/libdivsufsort"
 
-EASEL_DATE="Feb 2021"
-EASEL_COPYRIGHT="Copyright (C) 2021 Howard Hughes Medical Institute."
+EASEL_DATE="Jan 2024"
+EASEL_COPYRIGHT="Copyright (C) 2024 Howard Hughes Medical Institute."
 EASEL_LICENSE="Freely distributed under the BSD open source license."
-EASEL_VERSION="0.48"
+EASEL_VERSION="0.49"
 EASEL_URL="http://bioeasel.org/"
 
 AC_SUBST(HMMER_DATE)
@@ -206,6 +213,9 @@ fi
 
 AC_ARG_ENABLE(gcov,    [AS_HELP_STRING([--enable-gcov],    [compile for code coverage testing])],        enable_gcov=$enableval,    enable_gcov=no)
 AC_ARG_ENABLE(gprof,   [AS_HELP_STRING([--enable-gprof],   [compile for gcc code profiling])],           enable_gprof=$enableval,   enable_gprof=no)
+AC_ARG_ENABLE(asan,    [AS_HELP_STRING([--enable-asan],    [compile with address sanitizer]) ],          enable_asan=$enableval,    enable_asan=no)
+AC_ARG_ENABLE(msan,    [AS_HELP_STRING([--enable-msan],    [compile with memory sanitizer]) ],           enable_msan=$enableval,    enable_msan=no)
+AC_ARG_ENABLE(tsan,    [AS_HELP_STRING([--enable-tsan],    [compile with thread sanitizer]) ],           enable_tsan=$enableval,    enable_tsan=no)
 
 AC_ARG_ENABLE(sse,     [AS_HELP_STRING([--enable-sse],     [enable our SSE vector code])],               enable_sse4=$enableval,    enable_sse4=check)
 AC_ARG_ENABLE(avx,     [AS_HELP_STRING([--enable-avx],     [enable our AVX vector code])],               enable_avx=$enableval,     enable_avx=check)
@@ -216,23 +226,39 @@ AC_ARG_ENABLE(vmx,     [AS_HELP_STRING([--enable-vmx],     [enable our Altivec/V
 AC_ARG_ENABLE(threads, [AS_HELP_STRING([--enable-threads], [enable POSIX threads parallelization])],     enable_threads=$enableval, enable_threads=check)
 AC_ARG_ENABLE(mpi,     [AS_HELP_STRING([--enable-mpi],     [enable MPI parallelization])],               enable_mpi=$enableval,     enable_mpi=no)
 AC_ARG_ENABLE(pic,     [AS_HELP_STRING([--enable-pic],     [enable position-independent code])],         enable_pic=$enableval,     enable_pic=no)
+
 AC_ARG_WITH(gsl,       [AS_HELP_STRING([--with-gsl],       [use the GSL, GNU Scientific Library])],       with_gsl=$withval,         with_gsl=no)
 
 
-
-# Is the following shell code portable? Specifically, incrementing with $((n++)).
-if test "$enable_sse4" = "yes" || test "$enable_avx" = "yes" || test "$enable_avx512" = "yes"; then
-  enable_intel=yes
+# If a vector implementation is force-selected, make sure only one is,
+# and turn off checking for the others.
+vecsel=0
+if test "$enable_neon"    = "yes"; then vecsel=$((vecsel+1)); fi
+if test "$enable_sse"     = "yes"; then vecsel=$((vecsel+1)); fi
+if test "$enable_avx"     = "yes"; then vecsel=$((vecsel+1)); fi
+if test "$enable_avx512"  = "yes"; then vecsel=$((vecsel+1)); fi
+if test "$enable_vmx"     = "yes"; then vecsel=$((vecsel+1)); fi
+if   [[ $vecsel -gt 1 ]]; then
+  AC_MSG_ERROR([Select only one implementation: sse, avx, avx512, neon, or vmx])
+elif [[ $vecsel -eq 1 ]]; then
+  if test "$enable_neon"  = "check"; then enable_neon="no";   fi
+  if test "$enable_sse"   = "check"; then enable_sse="no";    fi
+  if test "$enable_avx"   = "check"; then enable_avx="no";    fi
+  if test "$enable_avx512"= "check"; then enable_avx512="no"; fi
+  if test "$enable_vmx"   = "check"; then enable_vmx="no";    fi
+  if test "$enable_neon"  = "check"; then enable_neon="no";   fi
 fi
-n=0
-if test "$enable_intel" = "yes"; then n=$((n++)); fi
-if test "$enable_neon"  = "yes"; then n=$((n++)); fi
-if test "$enable_vmx"   = "yes"; then n=$((n++)); fi
-if (( $n > 0 )); then
-  AC_MSG_ERROR([Incompatible vector implementations selected])
+
+# Same for the instrumentation options: let only one be selected.
+instsel=0
+if test "$enable_gcov"  = "yes"; then instsel=$((instsel+1)); fi
+if test "$enable_gprof" = "yes"; then instsel=$((instsel+1)); fi
+if test "$enable_asan"  = "yes"; then instsel=$((instsel+1)); fi
+if test "$enable_msan"  = "yes"; then instsel=$((instsel+1)); fi
+if test "$enable_tsan"  = "yes"; then instsel=$((instsel+1)); fi
+if   [[ $instsel -gt 1 ]]; then
+  AC_MSG_ERROR([Enable only one dev instrumentation: gcov, gprof, asan, msan, tsan])
 fi
-
-
 
 ################################################################
 # 5. Checks for programs, including ${CC} and its ${CFLAGS}.
@@ -251,18 +277,15 @@ fi
 #
 : ${CFLAGS=""}
 AX_PROG_CC_MPI([test x"$enable_mpi" = xyes],
-  [
-     AC_DEFINE(HAVE_MPI,  1, [Use MPI parallelization])
+    [AC_DEFINE(HAVE_MPI,  1, [Use MPI parallelization])
      AC_DEFINE(HMMER_MPI, 1, [Use MPI parallelization])
      AC_SUBST([MPI_UTESTS],     ["mpi_utest"])
-     AC_SUBST([MPI_BENCHMARKS], ["mpi_benchmark"])
-  ],
-  [
-    if test x"$enable_mpi" = xyes; then
-      AC_MSG_ERROR([MPI library not found for --enable-mpi]);
-    fi
-  ])
-AC_PROG_CC_STDC
+     AC_SUBST([MPI_BENCHMARKS], ["mpi_benchmark"])],
+    [ if test x"$enable_mpi" = xyes; then
+        AC_MSG_ERROR([MPI library not found for --enable-mpi]);
+      fi])
+
+AC_PROG_CC
 AC_PROG_CPP
 AC_PROG_INSTALL
 AC_CHECK_TOOL([STRIP],[strip])
@@ -274,9 +297,15 @@ AC_PROG_LN_S
 #  --enable-gcov, --enable-gprof, and --enable-debugging are mutually exclusive.
 #
 if test "$enable_gcov" = "yes"; then
-   CFLAGS="${CFLAGS} -g -Wall -fprofile-arcs -ftest-coverage"
+   if test "$esl_cflags_env_set" = "yes"; then
+     AC_MSG_ERROR([--enable-gcov overrides CFLAGS, so don't set CFLAGS])
+   fi
+   CFLAGS="-g -Wall -fprofile-arcs -ftest-coverage"
 elif test "$enable_gprof" = "yes"; then
-   CFLAGS="${CFLAGS} -O -g -pg"
+   if test "$esl_cflags_env_set" = "yes"; then
+     AC_MSG_ERROR([--enable-gprof overrides CFLAGS, so don't set CFLAGS])
+   fi
+   CFLAGS="-O -g -pg"
 elif test "$enable_debugging" != "no"; then
    if test "$GCC" = "yes"; then
       CFLAGS="${CFLAGS} -g -Wall"
@@ -286,6 +315,33 @@ elif test "$enable_debugging" != "no"; then
 elif test x"${CFLAGS}" = x; then
    CFLAGS="-O3"
 fi
+
+
+# Turn on a sanitizer, if asked.
+#
+if test "$enable_asan" = "yes"; then
+  CFLAGS="$CFLAGS -fsanitize=address"
+  LDFLAGS="$LDFLAGS -fsanitize=address"
+  AC_DEFINE(eslENABLE_ASAN, 1, [Using address sanitizer])
+fi
+if test "$enable_tsan" = "yes"; then
+  if test "$enable_asan" = "yes"; then  
+    AC_MSG_FAILURE([The address and thread sanitizers are incompatible. Use only one of --enable-asan and --enable-tsan])
+  fi
+  CFLAGS="$CFLAGS -fsanitize=thread"
+  LDFLAGS="$LDFLAGS -fsanitize=thread"
+  AC_DEFINE(eslENABLE_TSAN, 1, [Using threads sanitizer])
+fi
+if test "$enable_msan" = "yes"; then
+  if test "$enable_asan" = "yes" || test "$enable_tsan" = "yes"; then  
+    AC_MSG_FAILURE([Only one sanitizer at a time. Use only one of --enable-{asan,msan,tsan}])
+  fi
+  CFLAGS="$CFLAGS -fsanitize=memory -fsanitize-memory-track-origins -fPIE -pie"
+  LDFLAGS="$LDFLAGS -fsanitize=memory -fsanitize-memory-track-origins -fPIE -pie"
+  AC_DEFINE(eslENABLE_MSAN, 1, [Using memory sanitizer])
+fi
+
+
 
 # PIC (position-independent code) for shared library support
 #

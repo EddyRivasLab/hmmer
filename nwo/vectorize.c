@@ -50,7 +50,7 @@ ssv_conversion(H4_PROFILE *hmm)
   ESL_DASSERT1(( hmm->flags & h4_HASBITS ));
   ESL_DASSERT1(( hmm->abc ));
 
-  hmm->tauBM   = logf(2.0f / ((float) M * (float) (M+1)));   // Local alignment, uniform fragment length model. Not scaled! SSV adds it afterwards.
+  hmm->tauBM   = log2f(2.0f / ((float) M * (float) (M+1)));   // Local alignment, uniform fragment length model. Not scaled! SSV adds it afterwards.
 
   for (x = 0; x < hmm->abc->Kp; x++)
     {

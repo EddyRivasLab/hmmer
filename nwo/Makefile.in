@@ -4,6 +4,8 @@ SQCLEVEL = 2
 
 OBJS   = \
 	cmd_build.o           \
+	cmd_kiteline.o        \
+	cmd_statsim.o         \
 	h4_anchorhash.o       \
 	h4_anchorset.o        \
 	h4_checkptmx.o        \
@@ -21,6 +23,7 @@ OBJS   = \
 	h4_sparsemx.o         \
 	ascmx.o               \
 	build.o               \
+	calibrate.o           \
 	emit.o                \
 	eweight.o             \
 	fbfilter.o            \
@@ -51,7 +54,6 @@ VMX_OBJS    = fbfilter_vmx.o    ssvfilter_vmx.o    vitfilter_vmx.o
 
 HDRS = \
 	h4_config.h           \
-	cmd_build.h           \
 	h4_anchorhash.h       \
 	h4_anchorset.h        \
 	h4_checkptmx.h        \
@@ -69,6 +71,7 @@ HDRS = \
 	h4_sparsemx.h         \
 	ascmx.h               \
 	build.h               \
+	calibrate.h           \
 	emit.h                \
 	eweight.h             \
 	fbfilter.h            \
@@ -129,6 +132,7 @@ EXAMPLES = \
 	h4_hmmfile_example          \
 	h4_path_example             \
 	h4_sparsemask_example       \
+	calibrate_example           \
 	emit_example                \
 	fbfilter_example            \
 	logsum_example              \
