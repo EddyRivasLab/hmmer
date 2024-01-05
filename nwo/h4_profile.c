@@ -3,11 +3,14 @@
  * Contents:
  *    1. H4_PROFILE structure
  *    2. Model estimation: counts to probabilities
- *    4. Debugging and development tools
- *    5. Unit tests
- *    6. Test driver
+ *    3. Debugging and development tools
+ *    4. Unit tests
+ *    5. Test driver
  */
 #include <h4_config.h>
+
+#include <stdio.h>
+#include <string.h>
 
 #include "easel.h"
 #include "esl_alloc.h"
@@ -99,6 +102,8 @@ h4_profile_CreateShell(void)
 
   hmm->rfv       = NULL;
   hmm->tfv       = NULL;
+
+  hmm->name      = NULL;
 
   return hmm;
 
@@ -274,6 +279,9 @@ h4_profile_Copy(const H4_PROFILE *src, H4_PROFILE *dst)
   esl_mat_FCopy(src->rfv, src->abc->Kp, src->Qf*src->V/4, dst->rfv);
   esl_vec_FCopy(src->tfv[0], src->Qf*h4_NVT*src->V/4,     dst->tfv[0]);
 
+  /* metadata/annotations */
+  esl_strdup(src->name, -1, &(dst->name));
+
   dst->flags = src->flags;
   return eslOK;
 }
@@ -306,6 +314,8 @@ h4_profile_Sizeof(const H4_PROFILE *hmm)
   n += hmm->abc->Kp * h4_VWIDTH *  maxQf;                 // rfv[0]
   n += h4_NVT       * h4_VWIDTH * (maxQw + 1);            // twv[0]
   n += h4_NVT       * h4_VWIDTH * (maxQf + 1);            // tfv[0]
+
+  n += strlen(hmm->name) + 1;
   
   return n;
 }
@@ -330,6 +340,7 @@ h4_profile_Destroy(H4_PROFILE *hmm)
       if (hmm->twv) { esl_alloc_free(hmm->twv[0]); free(hmm->twv); }
       if (hmm->rfv) { esl_alloc_free(hmm->rfv[0]); free(hmm->rfv); }
       if (hmm->tfv) { esl_alloc_free(hmm->tfv[0]); free(hmm->tfv); }
+      free(hmm->name);
       free(hmm);
     }
 }
@@ -507,14 +518,7 @@ h4_profile_Occupancy(const H4_PROFILE *hmm, float *mocc, float *iocc, float *opt
 
 
 /*****************************************************************
- * 3. Profile configuration: probabilities to scores
- *****************************************************************/
-
-
-
-
-/*****************************************************************
- * 4. Debugging and development tools
+ * 3. Debugging and development tools
  *****************************************************************/
 
 
@@ -816,7 +820,7 @@ h4_profile_SameAsVF(const H4_PROFILE *hmm, H4_PROFILE **ret_xhmm)
 }
 
 /*****************************************************************
- * 5. Unit tests
+ * 4. Unit tests
  *****************************************************************/
 #ifdef h4PROFILE_TESTDRIVE
 
@@ -915,7 +919,7 @@ utest_occupancy(FILE *diagfp, ESL_RANDOMNESS *rng, int alphatype, int M, int N)
 #endif // h4PROFILE_TESTDRIVE
 
 /*****************************************************************
- * 6. Test driver
+ * 5. Test driver
  *****************************************************************/
 #ifdef h4PROFILE_TESTDRIVE
 
