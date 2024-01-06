@@ -4,6 +4,18 @@ VPATH          = @srcdir@
 
 SQCLEVEL = 2
 
+ALIS = 	20aa\
+	Caudal_act\
+	LuxC\
+	M1\
+	Patched\
+	RRM_1\
+	SMC_N\
+	XYPPX\
+	ecori\
+	3box\
+	PSE\
+
 # beautification magic stolen from git 
 #
 QUIET_SUBDIR0 = +${MAKE} -C #space separator after -c
@@ -17,14 +29,19 @@ ifndef V
 		        ${MAKE} -C $$subdir
 endif
 
-.PHONY: check clean distclean
+.PHONY: check hmms clean distclean
 
 check: 
 	@command -v python3 >/dev/null 2>&1 || { echo >&2 "python3 is required for 'make check', but is not in your PATH. Aborting."; exit 1; }
 	@echo 
-	@echo Running HMMER4 test suite...
+	@echo Running HMMER test suite...
 	@echo
 	@${top_srcdir}/easel/devkit/sqc ${SQCLEVEL} ${srcdir}/testsuite.sqc .. ${srcdir}/..
+
+hmms:
+	for ali in ${ALIS}; do\
+	   ../src/hmmbuild $$ali.hmm $$ali.sto;\
+	done
 
 clean:
 	-rm -f *.gcno *.gcda *.gcov

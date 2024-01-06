@@ -173,7 +173,7 @@ VMX_CFLAGS     = @VMX_CFLAGS@
 CPPFLAGS       = @CPPFLAGS@
 LDFLAGS        = @LDFLAGS@
 DEFS           = @DEFS@
-LIBS           = -lhmmer -leasel -ldivsufsort @LIBS@ -lm
+LIBS           = -lhmmer -leasel @LIBS@ -lm
 
 AR             = @AR@
 RANLIB         = @RANLIB@
@@ -184,19 +184,14 @@ INSTALL        = @INSTALL@
 # source dirs; and we want to find these first (in case an errant one is
 # in the source tree). All other headers are in the source tree.
 #
-ESLDIR       = @HMMER_ESLDIR@
-SADIR        = @HMMER_SADIR@
-MYLIBDIRS    = -L${top_builddir}/${ESLDIR}\
-               -L${top_builddir}/${SADIR}\
+MYLIBDIRS    = -L${top_builddir}/easel \
                ${LIBTMPDIR} \
                -L${top_builddir}/nwo
-MYINCDIRS    = -I${top_builddir}/${ESLDIR} \
-               -I${top_builddir}/${SADIR} \
+MYINCDIRS    = -I${top_builddir}/easel \
 	       -I${top_builddir}/nwo \
-	       -I${top_srcdir}/${ESLDIR} \
-	       -I${top_srcdir}/${SADIR} \
+	       -I${top_srcdir}/easel \
 	       -I${top_srcdir}/nwo
-MYLIBDEPS    = ${LIBTMPDEP} ${top_builddir}/nwo/libhmmer.a ${top_builddir}/${ESLDIR}/libeasel.a ${top_builddir}/${SADIR}/libdivsufsort.a
+MYLIBDEPS    = ${LIBTMPDEP} ${top_builddir}/nwo/libhmmer.a ${top_builddir}/easel/libeasel.a 
 
 
 
@@ -255,15 +250,17 @@ ${VMX_EXAMPLES}:      SIMD_CFLAGS:= $(VMX_CFLAGS)
 .FORCE:
 
 all:    ${PROGS} 
+
 dev:    ${PROGS} ${UTESTS} ${EXPERIMENTS} ${STATS} ${BENCHMARKS} ${EXAMPLES}
+
+tests:  ${PROGS} ${UTESTS} 
 
 check:  ${PROGS} ${UTESTS}
 	@command -v python3 >/dev/null 2>&1 || { echo >&2 "python3 is required for 'make check', but is not in your PATH. Aborting."; exit 1; }
 	@echo 
 	@echo Running HMMER NWO test suite...
 	@echo
-	@${top_srcdir}/lib/easel/devkit/sqc ${SQCLEVEL} nwo_tests.sqc .. ${srcdir}/..
-
+	@${top_srcdir}/easel/devkit/sqc ${SQCLEVEL} nwo_tests.sqc .. ${srcdir}/..
 
 # Programs build from their .c's directly. They are not included in libhmmer.a.
 ${PROGS}: % : %.c  libhmmer.a ${HDRS}
@@ -277,7 +274,7 @@ libhmmer.a: ${ALL_OBJS}
 ${ALL_OBJS}:  %.o : %.c ${HDRS} 
 	${QUIET_CC}${CC} ${CFLAGS} ${SIMD_CFLAGS} ${PTHREAD_CFLAGS} ${CPPFLAGS} ${DEFS} ${MYINCDIRS} -c $<
 
-${ALL_EXAMPLES}: libhmmer.a ${top_builddir}/lib/easel/libeasel.a ${HDRS} h4_config.h
+${ALL_EXAMPLES}: libhmmer.a ${top_builddir}/easel/libeasel.a ${HDRS} h4_config.h
 	@BASENAME=`echo $@ | sed -e 's/_example[0-9]*//' | sed -e 's/^h4_//'` ;\
 	DFLAG=h4`echo $@ | sed -e 's/^h4_//' | sed -e 'y/abcdefghijklmnopqrstuvwxyz/ABCDEFGHIJKLMNOPQRSTUVWXYZ/'`;\
 	if test -e ${srcdir}/h4_$${BASENAME}.c    ;\
@@ -290,7 +287,7 @@ ${ALL_EXAMPLES}: libhmmer.a ${top_builddir}/lib/easel/libeasel.a ${HDRS} h4_conf
         fi ;\
 	${CC} ${CFLAGS} ${SIMD_CFLAGS} ${PTHREAD_CFLAGS} ${CPPFLAGS} ${DEFS} ${MYINCDIRS} ${LDFLAGS} ${MYLIBDIRS} -D$${DFLAG} -o $@ $${DFILE} ${LIBS}
 
-${ALL_BENCHMARKS}: libhmmer.a ${top_builddir}/lib/easel/libeasel.a ${HDRS} h4_config.h
+${ALL_BENCHMARKS}: libhmmer.a ${top_builddir}/easel/libeasel.a ${HDRS} h4_config.h
 	@BASENAME=`echo $@ | sed -e 's/_benchmark[0-9]*//' | sed -e 's/^h4_//'` ;\
 	DFLAG=h4`echo $@ | sed -e 's/^h4_//' | sed -e 'y/abcdefghijklmnopqrstuvwxyz/ABCDEFGHIJKLMNOPQRSTUVWXYZ/'`;\
 	if test -e ${srcdir}/h4_$${BASENAME}.c    ;\
@@ -303,7 +300,7 @@ ${ALL_BENCHMARKS}: libhmmer.a ${top_builddir}/lib/easel/libeasel.a ${HDRS} h4_co
         fi ;\
 	${CC} ${CFLAGS} ${SIMD_CFLAGS} ${PTHREAD_CFLAGS} ${CPPFLAGS} ${DEFS} ${MYINCDIRS} ${LDFLAGS} ${MYLIBDIRS} -D$${DFLAG} -o $@ $${DFILE} ${LIBS}
 
-${ALL_UTESTS}: libhmmer.a ${HDRS} h4_config.h
+${ALL_UTESTS}: libhmmer.a  ${top_builddir}/easel/libeasel.a ${HDRS} h4_config.h
 	@BASENAME=`echo $@ | sed -e 's/_utest//' | sed -e 's/^h4_//'` ;\
 	DFLAG=`echo $${BASENAME} | sed -e 'y/abcdefghijklmnopqrstuvwxyz/ABCDEFGHIJKLMNOPQRSTUVWXYZ/'`;\
 	DFLAG=h4$${DFLAG}_TESTDRIVE ;\
@@ -318,7 +315,7 @@ ${ALL_UTESTS}: libhmmer.a ${HDRS} h4_config.h
         fi ;\
 	${CC} ${CFLAGS} ${SIMD_CFLAGS} ${PTHREAD_CFLAGS} ${CPPFLAGS} ${DEFS} ${MYINCDIRS} ${LDFLAGS} ${MYLIBDIRS} -D$${DFLAG} -o $@ $${DFILE} ${LIBS}
 
-${ALL_EXPERIMENTS}: libhmmer.a ${HDRS} h4_config.h
+${ALL_EXPERIMENTS}: libhmmer.a  ${top_builddir}/easel/libeasel.a ${HDRS} h4_config.h
 	@BASENAME=`echo $@ | sed -e 's/_experiment[0-9]*//' | sed -e 's/^h4_//'` ;\
 	DFLAG=h4`echo $@ | sed -e 's/^h4_//' | sed -e 'y/abcdefghijklmnopqrstuvwxyz/ABCDEFGHIJKLMNOPQRSTUVWXYZ/'`;\
 	if test -e ${srcdir}/h4_$${BASENAME}.c    ;\

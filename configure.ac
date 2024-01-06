@@ -61,19 +61,19 @@ AC_PREREQ(2.63)
 # It's sort of standard to expect them in m4/, but don't
 # be confused that they're down in Easel.
 #
-m4_include([lib/easel/m4/ax_check_compile_flag.m4])
-m4_include([lib/easel/m4/ax_gcc_func_attribute.m4])
+m4_include([easel/m4/ax_check_compile_flag.m4])
+m4_include([easel/m4/ax_gcc_func_attribute.m4])
 
-m4_include([lib/easel/m4/esl_sse4.m4])
-m4_include([lib/easel/m4/esl_avx.m4])
-m4_include([lib/easel/m4/esl_avx512.m4])
-m4_include([lib/easel/m4/esl_neon.m4])
-m4_include([lib/easel/m4/esl_vmx.m4])
+m4_include([easel/m4/esl_sse4.m4])
+m4_include([easel/m4/esl_avx.m4])
+m4_include([easel/m4/esl_avx512.m4])
+m4_include([easel/m4/esl_neon.m4])
+m4_include([easel/m4/esl_vmx.m4])
 
-m4_include([lib/easel/m4/ax_prog_cc_mpi.m4])
-m4_include([lib/easel/m4/ax_pthread.m4])
+m4_include([easel/m4/ax_prog_cc_mpi.m4])
+m4_include([easel/m4/ax_pthread.m4])
 
-m4_include([lib/easel/m4/esl_pic_flags.m4])
+m4_include([easel/m4/esl_pic_flags.m4])
 
 
 
@@ -120,9 +120,6 @@ HMMER_LICENSE="Freely distributed under the BSD open source license."
 HMMER_VERSION=$PACKAGE_VERSION
 HMMER_URL="http://hmmer.org"
 
-HMMER_ESLDIR="lib/easel"
-HMMER_SADIR="lib/libdivsufsort"
-
 EASEL_DATE="Jan 2024"
 EASEL_COPYRIGHT="Copyright (C) 2024 Howard Hughes Medical Institute."
 EASEL_LICENSE="Freely distributed under the BSD open source license."
@@ -134,9 +131,6 @@ AC_SUBST(HMMER_COPYRIGHT)
 AC_SUBST(HMMER_LICENSE)
 AC_SUBST(HMMER_VERSION)
 AC_SUBST(HMMER_URL)
-
-AC_SUBST(HMMER_ESLDIR)
-AC_SUBST(HMMER_SADIR)
 
 AC_SUBST(EASEL_DATE)
 AC_SUBST(EASEL_COPYRIGHT)
@@ -646,47 +640,19 @@ AC_SYS_LARGEFILE
 ################################################################
 # 13. Config subdirs and files (except main Makefile, which we defer)
 #################################################################
-if test -d documentation/release-notes; then
-  AC_CONFIG_FILES(documentation/release-notes/LICENSE.sh)
-fi
 
 AC_CONFIG_FILES([
-  documentation/Makefile
-  documentation/man/Makefile
-  documentation/userguide/Makefile
-  src/Makefile
-  src/Makefile-subdirs.mk
-  src/base/Makefile
-  src/build/Makefile
-  src/daemon/Makefile
-  src/dp_reference/Makefile
-  src/dp_sparse/Makefile
-  src/dp_vector/Makefile
-  src/experiments/Makefile
-  src/hardware/Makefile
-  src/misc/Makefile
-  src/programs/Makefile
-  src/sandbox/Makefile
-  src/search/Makefile
-  src/server/Makefile
-  src/utilities/Makefile
-  testsuite/Makefile
-  benchmarks/Makefile
-  benchmarks/profmark/Makefile
-  benchmarks/speed/Makefile
-  lib/easel/miniapps/Makefile
-  lib/easel/testsuite/Makefile
-  lib/easel/documentation/Makefile
-  lib/easel/Makefile
-  lib/libdivsufsort/Makefile
   nwo/Makefile
+  testsuite/Makefile
+  easel/miniapps/Makefile
+  easel/testsuite/Makefile
+  easel/documentation/Makefile
+  easel/Makefile
 ])
   
 AC_CONFIG_HEADERS([
-  src/p7_config.h
   nwo/h4_config.h
-  lib/easel/esl_config.h
-  lib/libdivsufsort/divsufsort.h
+  easel/esl_config.h
 ])
 
 ################################################################
@@ -725,14 +691,14 @@ if test x"$HAVE_PYTHON3" = x"yes"; then echo "
 Now do 'make'  to build HMMER, and optionally:
        'make check'  to run self tests,
        'make install'  to install programs and man pages.
-       '(cd lib/easel; make install)'  to install Easel tools.
+       '(cd easel; make install)'  to install Easel tools.
 ";
 else echo "
    (No python3 found, so 'make check' self tests are disabled.)
 
 Now do 'make'  to build HMMER, and optionally:
        'make install'  to install programs and man pages.
-       '(cd lib/easel; make install)'  to install Easel tools.
+       '(cd easel; make install)'  to install Easel tools.
 ";
 fi
 

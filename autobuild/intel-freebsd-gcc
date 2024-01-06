@@ -1,7 +1,0 @@
-MAKE=gmake
-../configure 
-gmake V=1                                  
-gmake V=1 dev                              
-gmake V=1 check 
-
-

@@ -1,9 +1,11 @@
-# Top level Makefile
+# Top level Makefile for HMMER4
 # 
 # On most systems, to build code you should only need:
 #     % ./configure; make
+#
 # Optionally, you can run a test suite:
 #     % make check
+#
 # And optionally, you can install everything more permanently:
 #     % make install
 #
@@ -15,13 +17,6 @@ top_srcdir     = @top_srcdir@
 srcdir         = @srcdir@
 VPATH          = @srcdir@
 SHELL          = /bin/sh
-
-# location of easel
-ESLDIR         = @HMMER_ESLDIR@
-
-# location of libdivsufsort for suffix array creation
-SADIR          = @HMMER_SADIR@
-
 
 # Package information
 #
@@ -77,51 +72,31 @@ endif
 #      (Excludes test programs.)
 #
 all: 
-	${QUIET_SUBDIR0}${ESLDIR}     ${QUIET_SUBDIR1} all
-	${QUIET_SUBDIR0}${SADIR}      ${QUIET_SUBDIR1} all
-	${QUIET_SUBDIR0}src           ${QUIET_SUBDIR1} all
-	${QUIET_SUBDIR0}benchmarks    ${QUIET_SUBDIR1} all
+	${QUIET_SUBDIR0}easel         ${QUIET_SUBDIR1} all
+	${QUIET_SUBDIR0}nwo           ${QUIET_SUBDIR1} all
 
 # dev: compile all executables, including drivers.
 #
 dev: 
-	${QUIET_SUBDIR0}${ESLDIR}  ${QUIET_SUBDIR1} dev
-	${QUIET_SUBDIR0}${SADIR}   ${QUIET_SUBDIR1} all
-	${QUIET_SUBDIR0}src        ${QUIET_SUBDIR1} dev
-	${QUIET_SUBDIR0}benchmarks ${QUIET_SUBDIR1} all
+	${QUIET_SUBDIR0}easel      ${QUIET_SUBDIR1} dev
+	${QUIET_SUBDIR0}nwo        ${QUIET_SUBDIR1} dev
 
 # tests: compile all test drivers for 'make check'
 #
 tests:
-	${QUIET_SUBDIR0}${ESLDIR}  ${QUIET_SUBDIR1} tests
-	${QUIET_SUBDIR0}src        ${QUIET_SUBDIR1} tests
+	${QUIET_SUBDIR0}easel      ${QUIET_SUBDIR1} tests
+	${QUIET_SUBDIR0}nwo        ${QUIET_SUBDIR1} tests
 
 # check: Run test suites.
 #
 check:
 	@command -v python3 >/dev/null 2>&1 || { echo >&2 "python3 is required for 'make check', but is not in your PATH. Aborting."; exit 1; }
-	${QUIET_SUBDIR0}${ESLDIR}  ${QUIET_SUBDIR1} tests
-	${QUIET_SUBDIR0}${SADIR}   ${QUIET_SUBDIR1} all	
-	${QUIET_SUBDIR0}src        ${QUIET_SUBDIR1} tests
-	${QUIET_SUBDIR0}${ESLDIR}  ${QUIET_SUBDIR1} check
+	${QUIET_SUBDIR0}easel      ${QUIET_SUBDIR1} tests
+	${QUIET_SUBDIR0}nwo        ${QUIET_SUBDIR1} tests
+	${QUIET_SUBDIR0}easel      ${QUIET_SUBDIR1} check
 	${QUIET_SUBDIR0}testsuite  ${QUIET_SUBDIR1} check
 
-# pdf: compile the User Guides.
-#
-pdf:
-	${QUIET_SUBDIR0}documentation ${QUIET_SUBDIR1} pdf
-
-# cscope: build cscope indices (code browsing aid, for developers)
-#    find -L: follow symlinks (so you index Easel too)
-#  cscope -b: build index
-#         -k: don't index /usr/include ("kernel mode")
-#         -q: build inverted index (enable fast symbol lookup)
-#         -u: unconditionally rebuild the index (not just changed files)
-cscope:
-	find -L . -name '*.[ch]' > cscope.files
-	cscope -b -k -q -u
-
-# TAGS: build etags indices (another code browsing aid)
+# TAGS: build etags indices (code browsing aid)
 TAGS:
 	./makeTAGS.sh
 
@@ -134,46 +109,30 @@ install:
 	${INSTALL} -d ${DESTDIR}${bindir}
 	${INSTALL} -d ${DESTDIR}${man1dir}
 	${INSTALL} -d ${DESTDIR}${pdfdir}
-	${QUIET_SUBDIR0}src           ${QUIET_SUBDIR1} install
-	${QUIET_SUBDIR0}documentation ${QUIET_SUBDIR1} install
+	${QUIET_SUBDIR0}nwo           ${QUIET_SUBDIR1} install
 
 # uninstall: Reverses the steps of "make install".
 #
 uninstall: 
-	${QUIET_SUBDIR0}src           ${QUIET_SUBDIR1} uninstall
-	${QUIET_SUBDIR0}documentation ${QUIET_SUBDIR1} uninstall
+	${QUIET_SUBDIR0}nwo           ${QUIET_SUBDIR1} uninstall
 
 # "make clean" removes almost everything except configuration files.
 #
 clean:
-	${QUIET_SUBDIR0}src           ${QUIET_SUBDIR1} clean
-	${QUIET_SUBDIR0}benchmarks    ${QUIET_SUBDIR1} clean
+	${QUIET_SUBDIR0}nwo           ${QUIET_SUBDIR1} clean
 	${QUIET_SUBDIR0}testsuite     ${QUIET_SUBDIR1} clean
-	${QUIET_SUBDIR0}documentation ${QUIET_SUBDIR1} clean
-	${QUIET_SUBDIR0}${ESLDIR}     ${QUIET_SUBDIR1} clean
-	${QUIET_SUBDIR0}${SADIR}      ${QUIET_SUBDIR1} clean
+	${QUIET_SUBDIR0}easel         ${QUIET_SUBDIR1} clean
 	-rm -f *.o *~ Makefile.bak core TAGS TAGS.part gmon.out
 
 # "make distclean" leaves a pristine source distribution.
 #
 distclean:
-	${QUIET_SUBDIR0}src           ${QUIET_SUBDIR1} distclean
-	${QUIET_SUBDIR0}benchmarks    ${QUIET_SUBDIR1} distclean
+	${QUIET_SUBDIR0}nwo           ${QUIET_SUBDIR1} distclean
 	${QUIET_SUBDIR0}testsuite     ${QUIET_SUBDIR1} distclean
-	${QUIET_SUBDIR0}documentation ${QUIET_SUBDIR1} distclean
-	${QUIET_SUBDIR0}${ESLDIR}     ${QUIET_SUBDIR1} distclean
-	${QUIET_SUBDIR0}${SADIR}      ${QUIET_SUBDIR1} distclean
+	${QUIET_SUBDIR0}easel         ${QUIET_SUBDIR1} distclean
 	-rm config.log config.status
 	-rm -rf autom4te.cache
 	-rm -f *.o *~ Makefile.bak core TAGS TAGS.part gmon.out
-	-rm -f cscope.po.out cscope.out cscope.in.out cscope.files
 	-rm Makefile
-#Use 'ifneq' instead of 'test -e' because the '+@' in QUIET_SUBDIR0 can't
-#be passed to the shell. Note that ifneq breaks if indented.
-ifneq (,$(wildcard ./documentation/release-notes/LICENSE.sh))
-	-rm -f documentation/release-notes/LICENSE.sh
-endif
-
-
 
 
