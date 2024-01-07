@@ -1525,6 +1525,13 @@ p7_Pipeline_LongTarget(P7_PIPELINE *pli, P7_OPROFILE *om, P7_SCOREDATA *data,
   ESL_ALLOC(pli_tmp->scores, sizeof(float) * om->abc->Kp * 4); //allocation of space to store scores that will be used in p7_oprofile_Update(Fwd|Vit|MSV)EmissionScores
   ESL_ALLOC(pli_tmp->fwd_emissions_arr, sizeof(float) *  om->abc->Kp * (om->M+1));
 
+  memset(pli_tmp->fwd_emissions_arr, 0, sizeof(float) *  om->abc->Kp * (om->M+1));
+  // ^^ note on why the memset() is there:
+  // p7_oprofile_GetFwdEmissionsScoreArray() appears problematic.
+  // iss #320 detected use of uninitialized memory and I'm not surprised; probably not the only thing wrong.
+  // the memset() above is added to patch iss #320, but I expect other more subtle problems. See note on the function.
+  // [SRE 2024/0107-h3-iss320]
+
   msv_windowlist.windows = NULL;
   vit_windowlist.windows = NULL;
   p7_hmmwindow_init(&msv_windowlist);
@@ -1542,7 +1549,7 @@ p7_Pipeline_LongTarget(P7_PIPELINE *pli, P7_OPROFILE *om, P7_SCOREDATA *data,
    * short high-scoring regions.
    */
   if (fmf) // using an FM-index
-    p7_SSVFM_longlarget(om, 2.0, bg, pli->F1, fmf, fmb, fm_cfg, data, pli->strands, pli->r, &msv_windowlist );
+    p7_SSVFM_longlarget(om, 2.0, bg, pli->F1, fmf, fmb, fm_cfg, data, pli->strands, pli->r, &msv_windowlist );   // SRE: ** _longlarget ** ????
   else // compare directly to sequence
     p7_SSVFilter_longtarget(sq->dsq, sq->n, om, pli->oxf, data, bg, pli->F1, &msv_windowlist);
 

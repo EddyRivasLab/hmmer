@@ -220,7 +220,6 @@ vecsel=0
 if test "$enable_neon"    = "yes"; then vecsel=$((vecsel+1)); fi
 if test "$enable_sse"     = "yes"; then vecsel=$((vecsel+1)); fi
 if test "$enable_vmx"     = "yes"; then vecsel=$((vecsel+1)); fi
-if test "$enable_neon"    = "yes"; then vecsel=             ; fi
 if   [[ $vecsel -gt 1 ]]; then
   AC_MSG_ERROR([Select only one implementation: sse, neon,  or vmx])
 elif [[ $vecsel -eq 1 ]]; then
