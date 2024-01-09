@@ -65,17 +65,12 @@ PROGS = alimask\
 	phmmer\
 	nhmmer\
 	nhmmscan\
-<<<<<<< HEAD
-	makehmmerdb\
+	hmmer-makefmdb\
 	ehmmemit\
 	ehmmscan\
 	ehmmsearch\
 	ejackhmmer\
 	ephmmer\
-
-=======
-	hmmer-makefmdb
->>>>>>> 1770b54a0e8f241c0bca9478958ebacffdb7800d
 
 # "auxprogs" are built but not installed.
 AUXPROGS = \
@@ -100,17 +95,12 @@ PROGOBJS =\
 	phmmer.o\
 	nhmmer.o\
 	nhmmscan.o\
-<<<<<<< HEAD
-	makehmmerdb.o\
+	hmmer-makefmdb.o\
 	ehmmemit.o\
 	ehmmscan.o\
 	ehmmsearch.o\
 	ejackhmmer.o\
 	ephmmer.o\
-
-=======
-	hmmer-makefmdb.o
->>>>>>> 1770b54a0e8f241c0bca9478958ebacffdb7800d
 
 AUXPROGOBJS = \
 	hmmc2.o \
@@ -134,7 +124,6 @@ HDRS =  hmmer.h \
 	p7_evopipeline.h\
 	p7_etophits_output_tabular.h\
 	ratematrix.h\
-
 
 OBJS =  build.o\
 	cachedb.o\
@@ -211,7 +200,6 @@ OBJS =  build.o\
 	ratebuilder.o\
 	ratematrix.o\
 #	island.o\
-
 
 STATS = \
 	evalues_stats

@@ -103,8 +103,18 @@ if not tblfp:    sys.exit("failed to open tblfile {} for reading".format(tblfile
 if not outfp:    sys.exit("failed to open outfile {} for writing".format(outfile))
 if not domoutfp: sys.exit("failed to open domoutfile {} for writing".format(domoutfile))
 
+nmsa = 0
 for line in tblfp:
-    msaname = line.split(None, 1)[0]
+    fields = line.split()
+    if (len(fields) == 11):
+        msaname = fields[0]
+        success = fields[7]
+        if success != 'ok': continue
+    else:
+        msaname = fields[0]
+        
+    nmsa += 1
+    print("MSA ", nmsa, msaname)
     
     cmd = 'esl-afetch -o {0}/{1}.sto {2} {1}'.format(resultdir, msaname, msafile)
     r = subprocess.run(cmd.split(), capture_output=True, encoding='utf-8')
@@ -115,7 +125,7 @@ for line in tblfp:
     r = subprocess.run(cmd.split(), capture_output=True, encoding='utf-8')
     if r.returncode: sys.exit('FAILED: {}\n{}'.format(cmd, r.stderr))
 
-    cmd = 'time {0} {1} --tblout {2}/{3}.tmp --domtblout {2}/{3}.domtmp {2}/{3}.hmm {4} '.format(hmmsearch, searchopts, resultdir, msaname, fafile)
+    cmd = '{0} {1} --tblout {2}/{3}.tmp --domtblout {2}/{3}.domtmp {2}/{3}.hmm {4} '.format(hmmsearch, searchopts, resultdir, msaname, fafile)
         
     r = subprocess.run(cmd.split(), stdout=subprocess.DEVNULL, stderr=subprocess.PIPE, encoding='utf-8')
     if r.returncode: sys.exit('FAILED: {}\n{}'.format(cmd, r.stderr))
@@ -159,16 +169,4 @@ for line in tblfp:
 tblfp.close()
 outfp.close()
 domoutfp.close()
-
-# rocplot
-rocplot = '{}/profmark/rocplot'.format(top_builddir)
-
-pmark   = msafile[:-10]
-rocfile = outfile+".roc"
-rocfp   = open(rocfile, "w")
-
-cmd = '{0} -n {1} {2} '.format(rocplot, pmark, outfile)
-r = subprocess.run(cmd.split(), stdout = rocfp, encoding='utf-8')
-if r.returncode: sys.exit('FAILED: {}\n{}'.format(cmd, r.stderr))
-rocfp.close()
 

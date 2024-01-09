@@ -43,6 +43,7 @@ if (args.random > 0):
 #
 msaname = []
 alen    = {}
+msainfo = {}
 n_ok    = 0
 n       = 0
 with open(tblfile) as tblfp:
@@ -55,23 +56,27 @@ with open(tblfile) as tblfp:
             if args.name:
                 if fields[0] == args.name:
                     msaname.append(fields[0])
-                    alen[fields[0]] = int(fields[2])
+                    alen[fields[0]]    = int(fields[2])
+                    msainfo[fields[0]] = line.strip('\n\r')
                     break
            
             elif args.getfirst > 0:
                 if n < args.getfirst:
                     msaname.append(fields[0])
-                    alen[fields[0]] = int(fields[2])
+                    alen[fields[0]]    = int(fields[2])
+                    msainfo[fields[0]] = line.strip('\n\r')
                     n += 1
                 
             elif (args.random > 0):
                 if n_ok in msa_rand:
                     msaname.append(fields[0])
-                    alen[fields[0]] = int(fields[2])
+                    alen[fields[0]]    = int(fields[2])
+                    msainfo[fields[0]] = line.strip('\n\r')
                     
             else:
                 msaname.append(fields[0])
-                alen[fields[0]] = int(fields[2])
+                alen[fields[0]]    = int(fields[2])
+                msainfo[fields[0]] = line.strip('\n\r')
             
 
 # Sort the list of MSA names by length of alignment (in columns),
@@ -82,4 +87,4 @@ print("msa", len(msaname))
 print("tblfile", tblfile_ok)
 with open(tblfile_ok, 'w') as f:
     for i in range(len(msaname)):
-        print(msaname[i], alen[msaname[i]], file=f)
+        print(msainfo[msaname[i]], file=f)

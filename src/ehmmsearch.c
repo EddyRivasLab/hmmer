@@ -1434,8 +1434,6 @@ serial_loop(WORKER_INFO *info, ESL_SQFILE *dbfp, int n_targetseqs)
       p7_pipeline_Reuse(info->pli);
   }
 
-  printf("^^ nn %d %d %d\n", n_msv, n_viterbi, n_forward);
-  
   if (n_targetseqs!=-1 && seq_cnt==n_targetseqs)
     sstatus = eslEOF;
 
