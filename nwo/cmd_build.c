@@ -139,41 +139,37 @@ process_cmdline(const char *topcmd, const ESL_SUBCMD *sub, const ESL_OPTIONS *su
   if (esl_opt_ProcessCmdline(go, argc, argv) != eslOK ||
       esl_opt_VerifyConfig(go)               != eslOK) 
     {
-      if ( esl_printf("Failed to parse command line: %s\n", go->errbuf)                                  != eslOK) goto ERROR;
-      if ( esl_printf("Usage:\n  %s %s %s\n", topcmd, sub->subcmd, sub->usage)                           != eslOK) goto ERROR;
-      if ( esl_printf("\nTo see more help on available options, do `%s %s -h`\n\n", topcmd, sub->subcmd) != eslOK) goto ERROR;
+      esl_printf("Failed to parse command line: %s\n", go->errbuf);
+      esl_printf("Usage:\n  %s %s %s\n", topcmd, sub->subcmd, sub->usage);
+      esl_printf("\nTo see more help on available options, do `%s %s -h`\n\n", topcmd, sub->subcmd);
       exit(1);
     }
   if (esl_opt_GetBoolean(go, "-h") == TRUE) 
     {
-      if ( esl_printf("%s %s : %s\n", topcmd, sub->subcmd, sub->description)                != eslOK) goto ERROR;
-      if ( esl_printf("\nUsage:\n  %s %s %s\n", topcmd, sub->subcmd, sub->usage)            != eslOK) goto ERROR;
-      if ( esl_printf("\nOptions:\n")                                                       != eslOK) goto ERROR;
-      if ( esl_opt_DisplayHelp(stdout, go, 1, 2, 80)                                        != eslOK) goto ERROR;
-      if ( esl_printf("\noptions for asserting MSA file format, instead of autoguessing:\n")!= eslOK) goto ERROR;
-      if ( esl_opt_DisplayHelp(stdout, go, 2, 2, 80)                                        != eslOK) goto ERROR;
-      if ( esl_printf("\noptions for determining consensus columns:\n")                     != eslOK) goto ERROR;
-      if ( esl_opt_DisplayHelp(stdout, go, 3, 2, 80)                                        != eslOK) goto ERROR;
-      if ( esl_printf("\noptions for relative sequence weighting:\n")                       != eslOK) goto ERROR;
-      if ( esl_opt_DisplayHelp(stdout, go, 4, 2, 80)                                        != eslOK) goto ERROR; 
-      if ( esl_printf("\noptions for effective sequence number:\n")                         != eslOK) goto ERROR;
-      if ( esl_opt_DisplayHelp(stdout, go, 5, 2, 80)                                        != eslOK) goto ERROR; 
-      if ( esl_printf("\nother options:\n")                                                 != eslOK) goto ERROR;
-      if ( esl_opt_DisplayHelp(stdout, go, 5, 2, 80)                                        != eslOK) goto ERROR; 
+      esl_printf("%s %s : %s\n", topcmd, sub->subcmd, sub->description);
+      esl_printf("\nUsage:\n  %s %s %s\n", topcmd, sub->subcmd, sub->usage);
+      esl_printf("\nOptions:\n");
+      esl_opt_DisplayHelp(stdout, go, 1, 2, 80);
+      esl_printf("\noptions for asserting MSA file format, instead of autoguessing:\n");
+      esl_opt_DisplayHelp(stdout, go, 2, 2, 80);
+      esl_printf("\noptions for determining consensus columns:\n");
+      esl_opt_DisplayHelp(stdout, go, 3, 2, 80);
+      esl_printf("\noptions for relative sequence weighting:\n");
+      esl_opt_DisplayHelp(stdout, go, 4, 2, 80);
+      esl_printf("\noptions for effective sequence number:\n");
+      esl_opt_DisplayHelp(stdout, go, 5, 2, 80);
+      esl_printf("\nother options:\n");
+      esl_opt_DisplayHelp(stdout, go, 5, 2, 80);
       exit(0);
     }
   if (esl_opt_ArgNumber(go) != sub->nargs) 
     {
-      if ( esl_printf("Incorrect number of command line arguments.\n")                                   != eslOK) goto ERROR;
-      if ( esl_printf("Usage:\n  %s %s %s\n", topcmd, sub->subcmd, sub->usage)                           != eslOK) goto ERROR;
-      if ( esl_printf("\nTo see more help on available options, do `%s %s -h`\n\n", topcmd, sub->subcmd) != eslOK) goto ERROR;
+      esl_printf("Incorrect number of command line arguments.\n");
+      esl_printf("Usage:\n  %s %s %s\n", topcmd, sub->subcmd, sub->usage);
+      esl_printf("\nTo see more help on available options, do `%s %s -h`\n\n", topcmd, sub->subcmd);
       exit(1);
     }
   return go;
-
- ERROR:
-  esl_getopts_Destroy(go);
-  return NULL;
 }
 
 

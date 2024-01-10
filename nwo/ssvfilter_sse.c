@@ -12,6 +12,7 @@
 
 #include "easel.h"
 
+#include "h4_mode.h"
 #include "h4_profile.h"
 
 #include "simdvec.h"
@@ -391,7 +392,7 @@ static __m128i calc_band_18(const ESL_DSQ *dsq, int L, const H4_PROFILE *hmm, in
  * Synopsis:  SSV filter; x86 SSE version.
  */
 int
-h4_ssvfilter_sse(const ESL_DSQ *dsq, int L, const H4_PROFILE *hmm, float *ret_sc)
+h4_ssvfilter_sse(const ESL_DSQ *dsq, int L, const H4_PROFILE *hmm, const H4_MODE *mo, float *ret_sc)
 {
   int     Q       = H4_Q(hmm->M, h4_VWIDTH_SSE); // segment length: # of vectors                  
   __m128i beginv  = _mm_set1_epi8(-128);         // initialization of each set of diagonals
@@ -428,6 +429,7 @@ h4_ssvfilter_sse(const ESL_DSQ *dsq, int L, const H4_PROFILE *hmm, float *ret_sc
                        // vvv   Add +128 back onto the diagonal score. DP calculated it from -128 baseline.
   *ret_sc = ((float) xE + 128.) / h4_SCALE_B + hmm->tauBM - h4_2NAT_APPROX;   // 2.0 is the tauNN/tauCC "2 nat approximation". tauBM is B->Mk entry score (unscaled!)
   *ret_sc += 2.0 * log2f(2.0 / (float) (L + 2));                              // tauNB, tauCT moves... also unscaled floats.  
+  *ret_sc -= mo->nullsc;
   return (xE == 127 ? eslERANGE : eslOK);
 }
 

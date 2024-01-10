@@ -246,7 +246,7 @@ ${AVX512_EXAMPLES}:   SIMD_CFLAGS:= $(AVX512_CFLAGS)
 ${NEON_EXAMPLES}:     SIMD_CFLAGS:= $(NEON_CFLAGS)    
 ${VMX_EXAMPLES}:      SIMD_CFLAGS:= $(VMX_CFLAGS)     
 
-.PHONY: all dev check tests install uninstall distclean clean tags-append
+.PHONY: all dev tests install uninstall distclean clean tags-append
 .FORCE:
 
 all:    ${PROGS} 
@@ -254,13 +254,6 @@ all:    ${PROGS}
 dev:    ${PROGS} ${UTESTS} ${EXPERIMENTS} ${STATS} ${BENCHMARKS} ${EXAMPLES}
 
 tests:  ${PROGS} ${UTESTS} 
-
-check:  ${PROGS} ${UTESTS}
-	@command -v python3 >/dev/null 2>&1 || { echo >&2 "python3 is required for 'make check', but is not in your PATH. Aborting."; exit 1; }
-	@echo 
-	@echo Running HMMER NWO test suite...
-	@echo
-	@${top_srcdir}/easel/devkit/sqc ${SQCLEVEL} nwo_tests.sqc .. ${srcdir}/..
 
 # Programs build from their .c's directly. They are not included in libhmmer.a.
 ${PROGS}: % : %.c  libhmmer.a ${HDRS}

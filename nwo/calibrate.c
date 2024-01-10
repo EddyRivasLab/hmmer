@@ -8,10 +8,12 @@
 #include "esl_random.h"
 #include "esl_randomseq.h"
 
+#include "h4_filtermx.h"
 #include "h4_mode.h"
 #include "h4_profile.h"
 
 #include "ssvfilter.h"
+#include "vitfilter.h"
 
 /* Function:  h4_lambda()
  * Synopsis:  Determine lambda (slope) parameter
@@ -61,6 +63,7 @@ h4_lambda(const H4_PROFILE *hmm, double *ret_lambda)
  *            estimate of the SSV mu parameter.
  *
  * Throws:    <eslEMEM> on allocation failures.
+ *            <eslEINVAL> if profile isn't vectorized.
  */
 int
 h4_ssv_mu(ESL_RANDOMNESS *rng, const H4_PROFILE *hmm, int L, int N, double lambda, double *ret_smu)
@@ -72,7 +75,7 @@ h4_ssv_mu(ESL_RANDOMNESS *rng, const H4_PROFILE *hmm, int L, int N, double lambd
   int        i;
   int        status;
 
-  if (!(hmm->flags & h4_HASVECS)) esl_fatal("profile not vectorized");
+  if (!(hmm->flags & h4_HASVECS)) ESL_XEXCEPTION(eslEINVAL, "profile not vectorized");
 
   if ((mo = h4_mode_Create()) == NULL) { status = eslEMEM; goto ERROR; }
   ESL_ALLOC(xv,  sizeof(double)  * N);
@@ -85,21 +88,88 @@ h4_ssv_mu(ESL_RANDOMNESS *rng, const H4_PROFILE *hmm, int L, int N, double lambd
     {
       if ((status = esl_rsq_xfIID(rng, hmm->f, hmm->abc->K, L, dsq)) != eslOK) goto ERROR;
 
-      status = h4_ssvfilter(dsq, L, hmm, &sc); 
+      status = h4_ssvfilter(dsq, L, hmm, mo, &sc); 
       if (status != eslOK && status != eslERANGE) goto ERROR;  
       // eslERANGE means we overflowed SSV filter score range, and sc is only a lower bound
 
-      sc -= mo->nullsc;                 // sc is now the log-odds bitscore
       xv[i] = sc;                       // H4 scores are floats, but esl_gumbel takes doubles.
     }
   if ((status = esl_gumbel_FitCompleteLoc(xv, N, lambda, ret_smu)) != eslOK) goto ERROR;
-
+  /* status = OK flows through to cleanup and exit; *ret_smu was just set */
  ERROR:
   h4_mode_Destroy(mo);
   free(xv);
   free(dsq);
   return status;
 }
+
+
+/* Function:  h4_vit_mu()
+ * Synopsis:  Determine the local Viterbi Gumbel mu parameter for a profile
+ * Incept:    SRE, Mon 08 Jan 2024 [Jay-Z, Numb/Encore]
+ *
+ * Purpose:   Identical to h4_ssv_mu(), above, except that it fits
+ *            Viterbi scores instead of SSV scores. 
+ *
+ *            The difference between the two mus is small, but can be
+ *            up to ~1 bit or so for large, low-info models [J4/126] so
+ *            decided to calibrate the two mus separately [J5/8]. 
+ *
+ * Args:      rng     :  source of random numbers
+ *            hmm     :  profile (with vectorized scores set)
+ *            L       :  length of sequences to simulate
+ *            N	      :  number of sequences to simulate		
+ *            lambda  :  known Gumbel lambda parameter to use
+ *            ret_vmu :  RETURN: ML estimate of location param mu
+ *
+ * Returns:   <eslOK> on success, and <ret_mu> contains the ML estimate
+ *            of $\mu$.
+ *
+ * Throws:    <eslEMEM> on allocation error.
+ *            <eslEINVAL> if profile isn't vectorized.
+ */
+int
+h4_vit_mu(ESL_RANDOMNESS *rng, const H4_PROFILE *hmm, int L, int N, double lambda, double *ret_vmu)
+{
+  H4_FILTERMX  *fx  = h4_filtermx_Create(hmm->M); 
+  ESL_DSQ      *dsq = NULL;
+  double       *xv  = NULL;
+  H4_MODE      *mo  = NULL;
+  float        sc;
+  int          i;
+  int          status;
+
+  if (!(hmm->flags & h4_HASVECS)) ESL_XEXCEPTION(eslEINVAL, "profile not vectorized");
+  if (!fx)                        { status = eslEMEM; goto ERROR; }
+
+  if ((mo = h4_mode_Create()) == NULL) { status = eslEMEM; goto ERROR; }
+  ESL_ALLOC(xv,  sizeof(double)  * N);
+  ESL_ALLOC(dsq, sizeof(ESL_DSQ) * (L+2));
+
+  if ((status = h4_mode_SetLength(mo, L)) != eslOK) goto ERROR;
+
+  for (i = 0; i < N; i++)
+    {
+      if ((status = esl_rsq_xfIID(rng, hmm->f, hmm->abc->K, L, dsq)) != eslOK) goto ERROR;
+
+      status = h4_vitfilter(dsq, L, hmm, mo, fx, &sc); 
+      if (status != eslOK && status != eslERANGE) goto ERROR;  
+      if (sc == -eslINFINITY) ESL_XEXCEPTION(eslEINCONCEIVABLE, "you told me the viterbi filter doesn't underflow");
+      // eslERANGE (and a finite sc) means we overflowed SSV filter score range, and sc is only a lower bound
+
+      xv[i] = sc;                       // H4 scores are floats, but esl_gumbel takes doubles.
+    }
+  if ((status = esl_gumbel_FitCompleteLoc(xv, N, lambda, ret_vmu)) != eslOK) goto ERROR;
+  /* status = OK flows through to cleanup and exit; *ret_vmu was just set */
+ ERROR:
+  h4_filtermx_Destroy(fx);
+  h4_mode_Destroy(mo);
+  free(xv);
+  free(dsq);
+  return status;
+}
+
+
 
 
 /*****************************************************************

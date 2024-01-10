@@ -7,9 +7,9 @@
  * allocation.
  * 
  * The code here is only the runtime CPU dispatcher. The ISA-specific
- * SIMD implementations are in ssvfilter_{sse,avx,avx512...}. Documentation 
- * and testing code is here, rather than repeating it across each 
- * ISA-specific implementation.
+ * SIMD implementations are in ssvfilter_{sse,avx,avx512...}. Function
+ * call documentation and unit testing code are here, rather than
+ * repeating them across each ISA-specific implementation.
  * 
  * Contents:
  *    1. h4_ssvfilter() stub
@@ -24,11 +24,12 @@
 #include "easel.h"
 #include "esl_cpu.h"
 
+#include "h4_mode.h"
 #include "h4_profile.h"
 
 #include "ssvfilter.h"
 
-static int ssvfilter_dispatcher(const ESL_DSQ *dsq, int L, const H4_PROFILE *hmm, float *ret_sc);
+static int ssvfilter_dispatcher(const ESL_DSQ *dsq, int L, const H4_PROFILE *hmm, const H4_MODE *mo, float *ret_sc);
 
 
 /*****************************************************************
@@ -38,17 +39,21 @@ static int ssvfilter_dispatcher(const ESL_DSQ *dsq, int L, const H4_PROFILE *hmm
 /* Function:  h4_ssvfilter()
  * Synopsis:  The SSV filter, the first step in the acceleration pipeline
  *
- * Purpose:   Calculates approximate SSV score for digital sequence <dsq>
- *            of length <L> residues, using profile <hmm>. Return
- *            the SSV raw score, in bits, in <ret_sc>.
+ * Purpose:   Calculates approximate SSV score for digital sequence
+ *            <dsq> of length <L> residues, using profile <hmm> and
+ *            alignment mode <mo>. Return the SSV raw score, in bits,
+ *            in <ret_sc>.
  * 
  *            The <hmm> has its striped vector parameters set (and its 
  *            <h4_HASVECS> flag).
+ *
+ *            The alignment mode <mo> has been set for target length
+ *            <L> by a <h4_mode_SetLength(mo, L)> call. The SSV filter
+ *            only uses <mo> to obtain the null model score, for
+ *            calculating and returning a bitscore.
  *            
- *            There is no alignment mode to set. SSV assumes
- *            single-hit local alignment by construction.  There isn't
- *            any DP matrix either; SSV works entirely in SIMD
- *            registers.
+ *            The SSV filter doesn't use a DP matrix. SSV works
+ *            entirely in SIMD registers.
  *            
  *            Score may overflow (and will, on high-scoring
  *            sequences), but will not underflow. On overflow, returns
@@ -59,6 +64,7 @@ static int ssvfilter_dispatcher(const ESL_DSQ *dsq, int L, const H4_PROFILE *hmm
  * Args:      dsq    - digital target sequence 1..L
  *            L      - length of <dsq> in residues
  *            hmm    - profile HMM, with striped vector params
+ *            mo     - alignment mode - h4_mode_SetLength(mo, L) has been called - used for null score
  *            ret_sc - RETURN: SSV raw score in bits
  *
  * Returns:   <eslOK> on success, and <*ret_sc> is the SSV score.
@@ -70,7 +76,7 @@ static int ssvfilter_dispatcher(const ESL_DSQ *dsq, int L, const H4_PROFILE *hmm
  * Throws:    (no abnormal error conditions)
  */
 int
-(*h4_ssvfilter)(const ESL_DSQ *dsq, int L, const H4_PROFILE *hmm, float *ret_sc) = 
+(*h4_ssvfilter)(const ESL_DSQ *dsq, int L, const H4_PROFILE *hmm, const H4_MODE *mo, float *ret_sc) = 
   ssvfilter_dispatcher;
 
 
@@ -81,16 +87,16 @@ int
  *****************************************************************/
 
 static int 
-ssvfilter_dispatcher(const ESL_DSQ *dsq, int L, const H4_PROFILE *hmm, float *ret_sc) 
+ssvfilter_dispatcher(const ESL_DSQ *dsq, int L, const H4_PROFILE *hmm, const H4_MODE *mo, float *ret_sc) 
 {
   h4_ssvfilter = h4_ssvfilter_sse;               // SRE FIXME: SSE only for now
-  return h4_ssvfilter_sse(dsq, L, hmm, ret_sc);
+  return h4_ssvfilter_sse(dsq, L, hmm, mo, ret_sc);
 
 #ifdef eslENABLE_AVX512  // Fastest first.
   if (esl_cpu_has_avx512())
     {
       h4_ssvfilter = h4_ssvfilter_avx512;
-      return h4_ssvfilter_avx512(dsq, L, hmm, ret_sc);
+      return h4_ssvfilter_avx512(dsq, L, hmm, mo, ret_sc);
     }
 #endif
 
@@ -98,7 +104,7 @@ ssvfilter_dispatcher(const ESL_DSQ *dsq, int L, const H4_PROFILE *hmm, float *re
   if (esl_cpu_has_avx())
     {
       h4_ssvfilter = h4_ssvfilter_avx;
-      return h4_ssvfilter_avx(dsq, L, hmm, ret_sc);
+      return h4_ssvfilter_avx(dsq, L, hmm, mo, ret_sc);
     }
 #endif
 
@@ -106,18 +112,18 @@ ssvfilter_dispatcher(const ESL_DSQ *dsq, int L, const H4_PROFILE *hmm, float *re
   if (esl_cpu_has_sse4())
     {
       h4_ssvfilter = h4_ssvfilter_sse;
-      return h4_ssvfilter_sse(dsq, L, hmm, ret_sc);
+      return h4_ssvfilter_sse(dsq, L, hmm, mo, ret_sc);
     }
 #endif
   
 #ifdef eslENABLE_NEON
   h4_ssvfilter = h4_ssvfilter_neon;
-  return h4_ssvfilter_neon(dsq, L, hmm, ret_sc);
+  return h4_ssvfilter_neon(dsq, L, hmm, mo, ret_sc);
 #endif
 
 #ifdef eslENABLE_VMX
   h4_ssvfilter = h4_ssvfilter_vmx;
-  return h4_ssvfilter_vmx(dsq, L, hmm, ret_sc);
+  return h4_ssvfilter_vmx(dsq, L, hmm, mo, ret_sc);
 #endif
 
   esl_fatal("ssvfilter_dispatcher found no vector implementation - that shouldn't happen.");
@@ -169,6 +175,7 @@ main(int argc, char **argv)
   ESL_ALPHABET   *abc     = NULL;
   H4_HMMFILE     *hfp     = NULL;
   H4_PROFILE     *hmm     = NULL;
+  H4_MODE        *mo      = h4_mode_Create();
   int             L       = esl_opt_GetInteger(go, "-L");
   int             N       = esl_opt_GetInteger(go, "-N");
   ESL_DSQ       **dsq     = malloc(N * sizeof(ESL_DSQ *));
@@ -179,6 +186,8 @@ main(int argc, char **argv)
   if ( h4_hmmfile_Open(hmmfile, NULL, &hfp) != eslOK) esl_fatal("couldn't open profile file %s", hmmfile);
   if ( h4_hmmfile_Read(hfp, &abc, &hmm)     != eslOK) esl_fatal("failed to read profile from file %s", hmmfile);
   h4_hmmfile_Close(hfp);
+
+  h4_mode_SetLength(mo, L);
 
   /* Overriding the CPU dispatcher */
   if      (esl_opt_GetBoolean(go, "--sse"))    h4_ssvfilter = h4_ssvfilter_sse;
@@ -195,7 +204,7 @@ main(int argc, char **argv)
   /* benchmark timing */
   esl_stopwatch_Start(w);
   for (i = 0; i < N; i++)
-    h4_ssvfilter(dsq[i], L, hmm, &sfsc);
+    h4_ssvfilter(dsq[i], L, hmm, mo, &sfsc);
   esl_stopwatch_Stop(w);
 
   Mcs        = (double) N * (double) L * (double) hmm->M * 1e-6 / (double) w->elapsed;
@@ -271,11 +280,11 @@ utest_compare_reference(ESL_RANDOMNESS *rng, ESL_ALPHABET *abc, int M, int L, in
     {
       esl_rsq_xfIID(rng, hmm->f, hmm->abc->K, L, dsq);
 
-      status = h4_ssvfilter(dsq, L, hmm,  &sfsc);
+      status = h4_ssvfilter(dsq, L, hmm, mo, &sfsc);
       if (status == eslOK) 
 	{      
 	  h4_reference_Viterbi(dsq, L, xhmm, xmo, vit, NULL, &vsc);
-	  vsc = (vsc / h4_SCALE_B) - h4_2NAT_APPROX;
+	  vsc = (vsc / h4_SCALE_B) - h4_2NAT_APPROX - xmo->nullsc;    // SRE note: when we make a planned change to have h4_reference_Viterbi return bitscore, not rawscore, delete the xmo->nullsc term here
 	  vsc = ESL_MAX(minsc, vsc);  // catch case where emulated ref Vit score is < minimum reportable SSV score.
 
 	  //printf("M: %6d L: %6d sfsc: %8.2f vsc: %8.2f\n", M, L, sfsc, vsc);
@@ -401,7 +410,7 @@ main(int argc, char **argv)
   H4_MODE        *mo      = h4_mode_Create();   // SSV doesn't use a mode. We only use this for mo->nullsc.
   ESL_SQ         *sq      = NULL;
   ESL_SQFILE     *sqfp    = NULL;
-  float           sfraw, sfscore;
+  float           sfscore;
   int             status;
 
   /* Read in one HMM */
@@ -418,8 +427,7 @@ main(int argc, char **argv)
     {
       h4_mode_SetLength(mo, sq->n); 
 
-      h4_ssvfilter(sq->dsq, sq->n, hmm, &sfraw);
-      sfscore = sfraw - mo->nullsc;
+      h4_ssvfilter(sq->dsq, sq->n, hmm, mo, &sfscore);
 
       if (esl_opt_GetBoolean(go, "-1"))
 	{

@@ -60,7 +60,7 @@ static int vitfilter_dispatcher(const ESL_DSQ *dsq, int L, const H4_PROFILE *hmm
  *            The local vs. glocal parameters of <mo> (i.e.  the B
  *            $\rightarrow$ L | G parameters) are ignored.  (Thus,
  *            <mo> can be a default dual-mode local/glocal multihit
- *            mode for length <L>, and the Viterbi filter will do
+ *            mode for length <L>, and the Viterbi filter will still do
  *            local multihit alignment with it.)
  *            
  *            Caller has allocated DP matrix <fx> to any size. It will
@@ -79,10 +79,18 @@ static int vitfilter_dispatcher(const ESL_DSQ *dsq, int L, const H4_PROFILE *hmm
  *            in debugging mode (with a nonzero <eslDEBUGLEVEL>).
  *            
  *            The Viterbi filter has limited numeric range, in 16-bit
- *            integers. Scores will not underflow, but high scoring
- *            sequences can overflow. If a score overflows, <*ret_sc>
- *            is returned as <eslINFINITY> and the function returns an
- *            <eslERANGE> error code.
+ *            integers. Scores will overflow on high-scoring
+ *            sequences, which is fine for filtering purposes. On
+ *            overflow, returns <eslERANGE> and <*ret_sc> is set to
+ *            the maximum representable bitscore, which is a lower
+ *            bound on the actual score.
+ *
+ *            The score is not supposed to underflow, but if it did,
+ *            <*ret_sc> to -eslINFINITY and return <eslERANGE>.
+ *
+ *            Because <eslERANGE> is the return code for both overflow
+ *            and a should-not-happen underflow, don't use it to
+ *            detect one or the other without also checking <*ret_sc>.
  *
  * Args:      dsq     - digital target sequence, 1..L
  *            L       - length of dsq in residues          
@@ -91,11 +99,17 @@ static int vitfilter_dispatcher(const ESL_DSQ *dsq, int L, const H4_PROFILE *hmm
  *            fx      - viterbil filter DP matrix 
  *            ret_sc  - RETURN: Viterbi score (in bits)          
  *
- * Returns:   <eslOK> on success;
- *            <eslERANGE> if the score overflows; in this case
- *            <*ret_sc> is <eslINFINITY>, and the sequence can 
- *            be treated as a high-scoring hit.
- *            <fx> may be reallocated.
+ * Returns:   <eslOK> on success; <*ret_sc> is the bitscore; 
+ *            <fx> is likely to have been reallocated.
+ *
+ *            <eslERANGE> if the score overflows. In this case,
+ *            this is a high-scoring hit that passes the filter, 
+ *            and <*ret_sc> is set to the maximum representable bitscore.
+ *
+ *            <eslERANGE> if the score underflows despite me thinking
+ *            that I've guaranteed that it can't; <*ret_sc> is set to
+ *            <-eslINFINITY>.
+ *            
  *
  * Xref:      [Farrar07] for ideas behind striped SIMD DP.
  *            J2/46-47 for layout of HMMER's striped SIMD DP.
@@ -327,8 +341,8 @@ utest_compare_reference(ESL_RANDOMNESS *rng, ESL_ALPHABET *abc, int M, int L, in
 
       h4_vitfilter        (dsq, L, hmm,  mo,  fx,      &vfsc);
       h4_reference_Viterbi(dsq, L, xhmm, xmo, vit, pi, &vsc);
-      vsc = (vsc / h4_SCALE_W) - h4_3NAT_APPROX;
-
+      vsc = (vsc / h4_SCALE_W) - h4_3NAT_APPROX - xmo->nullsc;    // SRE note: when we make a planned change to have h4_reference_Viterbi return bitscore, not rawscore, delete the xmo->nullsc term here
+      
       //h4_refmx_Dump(stdout, vit);
       //h4_refmx_DumpAsVF(stdout, vit);
       //h4_path_Dump(stdout, pi);

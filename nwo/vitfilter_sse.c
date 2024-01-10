@@ -7,7 +7,7 @@
  * limited precision (signed words: 16 bits) and range. It may overflow on
  * high scoring sequences, but this indicates that the sequence is a
  * high-scoring hit worth examining more closely anyway.  It will not
- * underflow, in local alignment mode.
+ * underflow in local alignment mode.
  */
 #include <h4_config.h>
 
@@ -133,7 +133,14 @@ h4_vitfilter_sse(const ESL_DSQ *dsq, int L, const H4_PROFILE *hmm, const H4_MODE
 
       /* Now the "special" states, which start from Mk->E (->C, ->J->B) */
       xE   = esl_sse_hmax_epi16(xEv);
-      if (xE >= 32767) { *ret_sc = eslINFINITY; return eslERANGE; }            // immediately detect overflow 
+      if (xE >= 32767)                // Immediately detect overflow; calculate max representative bitscore and return
+        {                             // (Saturated max is 32767 when we overflow xE. The >= is overkill.)
+          *ret_sc = (float) xE + (float) mo->xw[h4_C][h4_MOVE] - h4_BASE_W;  // E->C costs 0; C->C's are in the 3NAT_APPROX below; C->T cost assessed; then take out the offset
+          *ret_sc /= h4_SCALE_W;      //  ... and unscale...
+          *ret_sc -= h4_3NAT_APPROX;  // ... assess the NN/CC/JJ=0,-3nat approximation: see J5/36. That's L \log_2 \frac{L}{L+3} for L>>0, for our NN,CC,JJ contrib 
+          *ret_sc -= mo->nullsc;      // ... and subtract remaining null model score. Now we have a complete bit score.
+          return eslERANGE;
+        }            
       xC = ESL_MAX(xC,                         xE + mo->xw[h4_E][h4_MOVE]);    // Assume the 3 nat approximation... NN/CC/JJ transitions = 0. 
       xJ = ESL_MAX(xJ,                         xE + mo->xw[h4_E][h4_LOOP]);    //   xN never changes        (otherwise xN = xN + mo->xw[h4_N][h4_LOOP])                               
       xB = ESL_MAX(xJ + mo->xw[h4_J][h4_MOVE], xN + mo->xw[h4_N][h4_MOVE]);    //   xC, xJ elide transition (otherwise xC = ESL_MAX(xC + mo->xw[h4_C][h4_LOOP]...), and resp. for xJ)
@@ -160,11 +167,12 @@ h4_vitfilter_sse(const ESL_DSQ *dsq, int L, const H4_PROFILE *hmm, const H4_MODE
     } /* end loop over sequence residues 1..L */
 
   /* finally C->T */
-  if (xC > -32768)
+  if (xC > -32768)   // -32768 = saturated underflow, which should not happen in theory. (In theory there is no difference between theory and practice but...)
     {
       *ret_sc = (float) xC + (float) mo->xw[h4_C][h4_MOVE] - h4_BASE_W;
       *ret_sc /= h4_SCALE_W;
-      *ret_sc -= h4_3NAT_APPROX; /* the NN/CC/JJ=0,-3nat approximation: see J5/36. That's L \log_2 \frac{L}{L+3} for L>>0, for our NN,CC,JJ contrib */
+      *ret_sc -= h4_3NAT_APPROX; // the NN/CC/JJ=0,-3nat approximation: see J5/36. That's L \log_2 \frac{L}{L+3} for L>>0, for our NN,CC,JJ contrib 
+      *ret_sc -= mo->nullsc;
     }
   else  *ret_sc = -eslINFINITY;
   return eslOK;
