@@ -1,11 +1,12 @@
-\documentclass[notoc,justified]{tufte-book}    % `notoc` suppresses TL custom TOC, reverts to standard LaTeX
+\documentclass[notoc,justified,openany]{tufte-book}    % `notoc` suppresses TL custom TOC, reverts to standard LaTeX
 \usepackage{graphicx}
+\usepackage{xspace}
 \hyphenation{HMMER}
-\newcommand{\hmmserver}{\mono{hmmserver}}
-\newcommand{\Hmmserver}{\mono{Hmmserver}}
-\newcommand{\hmmclient}{\mono{hmmclient}}
-\newcommand{\Hmmclient}{\mono{Hmmclient}}
-\newcommand{\hmmpgmd}{\mono{hmmpgmd}}
+\newcommand{\hmmserver}{\mono{hmmserver}\xspace}
+\newcommand{\Hmmserver}{\mono{Hmmserver}\xspace}
+\newcommand{\hmmclient}{\mono{hmmclient}\xspace}
+\newcommand{\Hmmclient}{\mono{Hmmclient}\xspace}
+\newcommand{\hmmpgmd}{\mono{hmmpgmd}\xspace}
 \newcommand{\userguide}{HMMER User's Guide}
 \input{titlepage_server}                    % definitions for \maketitle 
 \bibliographystyle{unsrtnat-brief}   % customized natbib unsrtnat. Abbrev 3+ authors to ``et al.'' 
@@ -26,10 +27,27 @@
 \chapter{Introduction}
 \Hmmserver and \hmmclient are replacements for the \hmmpgmd and \mono{hmmc2} programs provided by earlier versions of HMMER.  Like \hmmpgmd, \hmmserver is a persistent, long-running, service that provides high-performance homology searches by caching sequence and HMM databases in RAM and distributing the work of each search across many computers and threads.  \Hmmclient is a full-featured command-line client application for \hmmserver that submits searches to a running server and displays results in a format that is as close as possible to that of the \mono{hmmsearch}, \mono{hmmscan}, \mono{phmmer}, and \mono{jackhmmer} programs.  It is thus a significant upgrade to the \mono{hmmc2} program, which was more of a debugging tool for \hmmpgmd than a full client program.
 
+\Hmmserver improves on \hmmpgmd in a number of ways:
+\begin{enumerate}
+  \item{A single \hmmserver instance can support searches of multiple databases\sidenote{"Database" is used here to describe a collection of sequence or HMM data that can be searched, which is typically implemented as a single file of data, as opposed to an SQL database or some similar structure.} of sequence and/or HMM data by loading multiple data files into RAM simultaneously.  In contrast, \hmmpgmd can only handle a single data file, requiring users to run multiple instances of \hmmpgmd or merge multiple databases into a single data file if they want to be able to search more than one database.}
+  \item{\Hmmserver is implemented as an MPI application that can typically be invoked with a single command, as compared to \hmmpgmd, which required that users start an instance of its master program, wait for that to initialize, and then manually start worker instances on each worker machine.}
+  \item{\Hmmserver implements dynamic allocation of work across the worker nodes to improve performance over \hmmpgmd, which allocated a fixed fraction of a search to each worker node, and uses a work-stealing algorithm within each worker node to further improve performance.  Together, these improvements in parallelization increase search performance by approximately 50\% when running on a large number of cores.}
+  \item{\Hmmserver implements an improved scheme to reduce memory use by distributing target data across multiple machines (sharding).  \mono{Hmmpgmd} implemented sharding, but required that each worker node in an N-node system load $\frac{1}{Nth}$ of the data, which was reasonable given that \hmmpgmd allocated a fixed fraction of each search to each worker node.  In contrast, \hmmserver allows the user to specify the number of shards that each database should be broken into independently of the number of worker nodes\sidenote{As long as the server has at least as many worker nodes as shards.} to allow trade-offs between the amount of memory required on each worker node and performance.  
+  
+  For example, a server with 12 worker nodes could be configured with one shard to maximize performance by providing the most opportunity to dynamically allocate work to worker nodes, at the cost of requiring that each worker node load all of each database into RAM, with 12 shards to minimize memory usage at the cost of not allowing the server to dynamically allocate work to nodes, or with 4 shards, allowing the work of searching each shard to be dynamically allocated to the three nodes that load the shard's data.}
+  \item{\Hmmserver reads standard FASTA or HMM files, while \hmmpgmd required that data files be pre-processed into a special format.  Among other things, this format discarded the metadata (name, accession, etc.) assocated with a sequence or HMM and replaced it with a numeric ID.  While this reduced the amount of memory required to hold the database, it required that the results of each search be post-processed to replace that ID with the appropriate metadata to create human-readable results.  Having to implement this post-processing step greatly increased the effort required to use \hmmpgmd.  In addition, post-processing of search results has become a major performance bottleneck for the server implemented by the European Bioinformatics Institute, which the switch to \hmmserver will eliminate.}
+\end{enumerate}
+
+\Hmmclient is the companion application to \hmmserver, and provides a command-line interface that users can use to send queries to a server.  \Hmmclient is designed to mimic as much as possible the behavior of HMMERs command-line search applications \mono{hmmsearch}, \mono{hmmscan}, \mono{phmmer}, and \mono{jackhmmer}.  In particular, it generates the same output formats as these command-line applications, allowing it to be a drop-in replacement for them in analysis pipelines.
+
+\Hmmserver is most useful when a user wants to perform searches interactively, running one search, examining the results, and using them to identify a second search of interest.  While \hmmserver's performance scales very well with the number of cores allocated to the server\sidenote{Add example number when we have data}, it does not scale perfectly.  Thus, when a user needs to perform many searches of a given database, it may be more efficient to use our command-line search applications to perform multiple searches in parallel than to use \hmmserver, although this will depend on whether the file systems of the hardware those searches run on can meet the I/O demands of multiple simultaneous searches.  Users are advised to run pilot experiments on their own systems before doing large-scale runs.
+
+The remainder of this manual begins with a discussion of how to install and use the \hmmserver and \hmmclient, the topics of most interest to end users.  This is followed by a discussion of the issues involved in converting an instance of \hmmpgmd to \hmmserver, and then a discussion of the design and implementation of \hmmserver.
+
 
 
 \chapter{Installation}
-\Hmmserver and \hmmclient are included in the standard HMMER distribution package, but HMMER must be compiled with MPI support turned on for \hmmserver to be useful, so it is likely you will have to compile HMMER from source to use the server.  To do this, obtain a source-code copy of HMMER (see the \userguide for instructons on how to do this) and go through the standard configuration/build process, with one change: you must pass the \mono{--enable-mpi} flag to our configure script to cause HMMER to be built with MPI support:
+\Hmmserver and \hmmclient are included in the standard HMMER distribution package, but HMMER must be compiled with MPI support turned on for \hmmserver to be useful, so it is likely you will have to compile HMMER from source to use the server.  To do this, obtain a source-code copy of HMMER (see the \userguide for instructions on how to do this) and go through the standard configuration/build process, with one change: you must pass the \mono{--enable-mpi} flag to our configure script to cause HMMER to be built with MPI support:
 
 \vspace{1ex}
 \user{\% ./configure {-}{-}prefix=/your/install/path {-}{-}enable-mpi}\\
@@ -53,7 +71,7 @@
 
 \begin{adjustwidth}{}{-1in}   
 \chapter{Manual Pages Related to the Server}
-
+\input{manpages_server}
 \end{adjustwidth}
 
 \chapter{Acknowledgments}
@@ -62,7 +80,7 @@ Simon Potter of the European Bioinformatics Institute was of great help in under
 \label{manualend}
 
 % To create distributable/gitted 'distilled.bib' from lab's bibtex dbs:
-%   # uncomment the {master,lab,books}
+%   # uncomment the {master,lab,books};
 %   pdflatex main
 %   bibdistill main.aux > distilled.bib
 %   # restore the {distilled} 
