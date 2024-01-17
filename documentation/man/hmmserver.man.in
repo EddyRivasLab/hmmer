@@ -1,125 +1,37 @@
-.TH "hmmpgmd" 1 "@HMMER_DATE@" "HMMER @HMMER_VERSION@" "HMMER Manual"
+.TH "hmmserver" 1 "@HMMER_DATE@" "HMMER @HMMER_VERSION@" "HMMER Manual"
 
 .SH NAME
-hmmpgmd \- daemon for database search web services
+hmmserver \- server that accelerates homology searches
 
 
 .SH SYNOPSIS
-.B hmmpgmd
+.B hmmserver
 [\fIoptions\fR]
+.I list 
+.I of 
+.I data 
+.I files 
+.I to 
+.I be 
+.I read 
+.I into 
+.I memory
 
 
 .SH DESCRIPTION
 
 .PP
-The
-.B hmmpgmd 
-program is the daemon that we use internally for the hmmer.org web server. 
-It essentially stands in front of the search programs
-.BR phmmer , 
-.BR hmmsearch ,
-and 
-.BR hmmscan . 
+The 
+.B hmmserver
+command starts a service that accepts search requests from clients and distributes the work of searches across one or more computers to improve performance.
+Once started, the server listens on the specified port for search requests, processes them as they arrive, and returns the results to clients.  The server userguide (documentation/userguide/Server_Userguide.pdf) describes the format that
+.B hmmserver
+expects for search requests and replies.
 
 .PP
-To use
-.BR hmmpgmd , 
-first an instance must be started up as a 
-master 
-server, and provided with at least one 
-sequence database
-(using the 
-.B \-\-seqdb
-flag)
-and/or an 
-HMM database
-(using the
-.B \-\-hmmdb
-flag). 
-A sequence database must be in hmmpgmd format, which may be
-produced using 
-.BR esl-reformat .
-An HMM database is of the form produced by 
-.BR hmmbuild .
-The input database(s) will be loaded into memory by the 
-master. When the master has finished loading the database(s), it 
-prints the line:
-"Data loaded into memory. Master is ready."
-
-
-.PP
-After the master is ready, one or more instances of hmmpgmd may
-be started as workers. These workers may be (and typically are) on
-different machines from the master, but must have access to the 
-same database file(s) provided to the master, with the same path. As 
-with the master, each worker loads the database(s) into memory, and 
-indicates completion by printing: "Data loaded into memory. Worker is ready."
-
-
-.PP
-The master process and workers are expected to remain running.
-One or more clients then connect to the master and submit possibly
-many queries. The master distributes the work of a query among the
-workers, collects results, and merges them before responding to the
-client. Two example client programs are included in the HMMER src 
-directory - the C program
-.B hmmc2
-and the perl script
-.BR hmmpgmd_client_example.pl .
-These are intended as examples only, and should be extended as 
-necessary to meet your needs. 
-
-.PP
-A query is submitted to the master from the client as a character
-string. Queries may be the sort that would normally be handled
-by 
-.B phmmer
-(protein sequence vs protein database),
-.B hmmsearch
-(protein HMM query vs protein database), or
-.B hmmscan
-(protein query vs protein HMM database).
- 
-
-The general form of a client query is to start with a single line
-of the form 
-.BR "@[options]" , 
-followed by multiple lines of text representing either the query HMM 
-or fasta-formatted sequence. The final line of each query is the separator 
-.BR "//" .
-
-
-.PP
-For example, to perform a 
-.B phmmer
-type search of a sequence against a sequence database 
-file, the first line is of the form 
-.BR "@\-\-seqdb 1" ,
-then the fasta-formatted query sequence starting with the header line
-.BR >sequence-name ,
-followed by one or more lines of sequence, and finally the closing
-.BR "//" .
-
-.PP
-To perform an
-.B hmmsearch 
-type search, the query sequence is replaced by the full
-text of a HMMER-format query HMM. 
-
-.PP
-To perform an
-.B hmmscan 
-type search, the text matches that of the 
-.B phmmer
-type search, except that the first line changes to 
-.BR "@\-\-hmmdb 1" .
-
-.PP
-In the hmmpgmd-formatted sequence database file, each sequence
-can be associated with one or more sub-databases. The 
-.B \-\-seqdb
-flag indicates which of these sub-databases will be queried. 
-The HMM database format does not support sub-databases.
+.B Hmmserver
+must be run as an MPI (message-passing interface) process with at least two ranks, one for the master process and one or more worker processes.  See your local system's documentation
+for details on how to start an MPI process, as the details vary depending on cluster configuration and the implementation of MPI used.
 
 
  
@@ -132,54 +44,35 @@ Help; print a brief reminder of command line usage and all available
 options.
 
 .TP 
-.BI \-\-master
-Run as the master server.
-
-.TP
-.BI \-\-worker " <s>"
-Run as a worker, connecting to the master server that is running on IP
-address
-.IR <s> .
-
-.TP 
 .BI \-\-cport " <n>"
-Port to use for communication between clients and the master server. 
+Port to use for communication between clients and the master node of the server. 
 The default is 51371.
-
-.TP 
-.BI \-\-wport " <n>"
-Port to use for communication between workers and the master server. 
-The default is 51372.
 
 .TP 
 .BI \-\-ccncts " <n>"
 Maximum number of client connections to accept. The default is 16.
 
 .TP 
-.BI \-\-wcncts " <n>"
-Maximum number of worker connections to accept. The default is 32.
+.BI \-\-num_dbs " <n>"
+Number of database files to read into RAM.  Must match the number of data files passed as arguments to 
+.B hmmserver
+, and defaults to one.
 
-.TP 
-.BI \-\-pid " <f>"
-Name of file into which the process id will be written. 
-
-.TP 
-.BI \-\-seqdb " <f>"
-Name of the file (in
-.B hmmpgmd
-format) containing protein sequences.
-The contents of this file will be cached for searches. 
-
-.TP 
-.BI \-\-hmmdb " <f>"
-Name of the file containing protein HMMs. The contents of this file 
-will be cached for searches.
+.TP
+.BI \-\-num_shards " <n>"
+Number of shards (pieces) to divide each database into to reduce memory usage. Defaults to one, and must be less than the number of ranks in the MPI process to allow at least one worker rank per shard, plus one rank for the master node.  In general, having fewer shards will increase performance by allowing better load-balancing at the cost of making the server use more memory on each worker node.  Specifying a number of shards that is not an integer divisor of the number of worker ranks will lead to suboptimal performance as some shards will have fewer worker nodes operating on them than others.  
 
 .TP 
 .BI \-\-cpu " <n>"
-Number of parallel threads to use (for 
-.B \-\-worker
-).
+Number of worker threads to start on each worker node.  If 0 (the default), queries the system's hardware to determine how many threads it can support simultaneously, and starts that many minus one worker threads, to leave one thread for the worker node's master thread.  The master node always starts a fixed (small) number of threads, independent of the value passed via this flag.
+
+.TP
+.BI \-\-stall
+Instructs the server to stall immediately after startup so that a debugger can be attached to each node.  When this option is set, the server sets the variable "stalling" to TRUE and enters a loop that iterates until stalling is set to false by the debugger.
+
+.TP
+.BI \-\-password " <password>"
+Specifies a password that a client must send along with the shutdown command in order to shut down the server.  
 
 
 .SH SEE ALSO 

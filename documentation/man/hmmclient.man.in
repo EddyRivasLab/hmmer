@@ -1,20 +1,19 @@
-.TH "hmmsearch" 1 "@HMMER_DATE@" "HMMER @HMMER_VERSION@" "HMMER Manual"
+.TH "hmmmclient" 1 "@HMMER_DATE@" "HMMER @HMMER_VERSION@" "HMMER Manual"
 
 .SH NAME
-hmmsearch \- search profile(s) against a sequence database
+hmmclient \- submit searches to a server for execution
 
 
 .SH SYNOPSIS
-.B hmmsearch
+.B hmmclient
 [\fIoptions\fR]
-.I hmmfile
-.I seqdb
+.I query hmmfile or seqfile
 
 
 .SH DESCRIPTION
 
 .PP
-.B hmmsearch 
+.B hmmclient
 is used to search one or more profiles against a sequence database.
 For each profile in 
 .IR hmmfile ,
