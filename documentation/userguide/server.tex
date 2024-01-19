@@ -26,27 +26,54 @@
 \chapter{Introduction}
 \Hmmserver and \hmmclient are replacements for the \hmmpgmd and \mono{hmmc2} programs provided by earlier versions of HMMER.  Like \hmmpgmd, \hmmserver is a persistent, long-running, service that provides high-performance homology searches by caching sequence and HMM databases in RAM and distributing the work of each search across many computers and threads.  \Hmmclient is a full-featured command-line client application for \hmmserver that submits searches to a running server and displays results in a format that is as close as possible to that of the \mono{hmmsearch}, \mono{hmmscan}, \mono{phmmer}, and \mono{jackhmmer} programs.  It is thus a significant upgrade to the \mono{hmmc2} program, which was more of a debugging tool for \hmmpgmd than a full client program.
 
-
+\Hmmserver improves on \hmmpgmd in several ways:
+\begin{enumerate}
+\item{Parallelization has been significantly improved.  \Hmmpgmd assigns an equal number of sequence-HMM comparisons to each worker node when performing a search, but the time required to perform a given sequence-HMM comparison varies greatly depending on the length of the sequence, the length of the HMM, and (most importantly), whether the comparison finds a hit or not.  Thus, assigning equal numbers of comparisons to each worker node often causes the worker nodes to take very different amounts of time to complete their fraction of a search.
+\Hmmserver uses a work-requesting protocol in which worker nodes proactively request more work from the master node as they run low on work to do, which significantly improves load-balancing.  Within each worker node, worer threads use a work-stealing protocol to reduce load imbalance, combined with a split-phase comparison pipeline that prioritizes the processing of comparisons that result in hits to make it less likely that a long-running sequence-HMM comparison delays the completion of a search.  Together, these parallelization improvements reduce search time by approximately 50\% when the server is run on hundreds of cores.}
+\item{\Hmmserver reads standard FASTA and HMM files as its inputs, instead of the special-format files \hmmpgmd requires.  This allows it (at some cost in memory usage) to return the full results of a search.  In contrast, \hmmpgmd replaces the metadata (name, accession, taxonomy ID, etc.) associated with each sequence or HMM in a database with a unique ID, requiring database or file accesses to retrieve that metadata before results can be returned, which has proven to be a significant performance bottleneck.}
+\item{\Hmmserver can load multiple sequence and/or HMM databases into memory simultaneously and accept searches to any of them in any order.  In contrast, \hmmpgmd could only load a single sequence or HMM database.  This required users to run separate instances of \hmmpgmd for sequence and HMM data, potentially wasting resources if the fraction of searches to each type of database was not predicted accurately.  Similarly, if a user wanted to provide the ability to search multiple databases of a given data type, they had to either run a separate instance of \hmmpgmd for each database or create a single data file containing all of the data in all of the databases and implement searches of individual databases as searches of sub-ranges of the unified database.  Generating these unifiied databases any time one of the individual databases changed proved to be time-consuming for our partners at the European Bioinformatics Institute (EBI), making it more difficult for them to provide the latest version of each database on their \hmmpgmd server.}
+\item{\Hmmserver implements a more-flexible sharding scheme than \hmmpgmd.  Originally, \hmmpgmd required each worker node to load the entire database that \hmmpgmd caches into RAM. As sequence database sizes increased, the amount of RAM this requried became a problem, so \hmmpgmd was modified to shard its database by loading $\frac{1}{N}th$ of the database onto each worker node of a system with N workers.   
+\end{enumerate}
 
 \chapter{Installation}
-\Hmmserver and \hmmclient are included in the standard HMMER distribution package, but HMMER must be compiled with MPI support turned on for \hmmserver to be useful, so it is likely you will have to compile HMMER from source to use the server.  To do this, obtain a source-code copy of HMMER (see the \userguide for instructons on how to do this) and go through the standard configuration/build process, with one change: you must pass the \mono{--enable-mpi} flag to our configure script to cause HMMER to be built with MPI support:
+\Hmmserver and \hmmclient are included in the standard HMMER distribution package, but HMMER must be compiled with MPI support turned on for \hmmserver to be useful, so it is likely you will have to compile HMMER from source to use the server.  Builds of HMMER without MPI support enabled will create a \hmmserver executable, which will print an error message and exit if run.  \Hmmclient does not require MPI support, so any installation of HMMER should have a working \hmmclient application.
+
+To build HMMER with MPI support, obtain a source-code copy of HMMER from hmmer.org\sidenote{The \userguide has more detail on how to do this.} or elsewhere and go through the standard configuration/build process, with one change: you must pass the \mono{--enable-mpi} flag to our configure script to cause HMMER to be built with MPI support:
 
 \vspace{1ex}
 \user{\% ./configure {-}{-}prefix=/your/install/path {-}{-}enable-mpi}\\
-\user{\% make}
 \vspace{1ex}
 
-\Hmmclient does not require MPI support, as it is a single-threaded program that communicates with a server via sockets.  If you only want to use \hmmclient to send searches to an existing server, any installation of HMMER, including ones from package managers or Linux distributions, should provide a working version of \hmmclient.
+After configuring the build to enable MPI, running \mono{make} as normal will build HMMER with MPI support and create a functional \hmmserver program.  One note, however, is that building HMMER in this way will make all of our programs dependent on the MPI libraries.  If your system (like the one we develop on) requires the user to take steps to make the MPI libraries available, you may find it more convenient to build most of HMMER without MPI support, do a separate build with MPI support enabled, and copy the \hmmserver executable from the MPI-enabled build to the non-MPI build so that it is the only application that loads the MPI libraries.
+
+Once HMMER has been built, \hmmserver and \hmmclient will be available in the \mono{src} directory of the distribution, and can either be run from there or made available system wide by running \mono{make install}.
+
 
 \chapter{Usage}
 
 \section{Hmmserver}
+\Hmmserver must be run as an MPI process with at least one rank for the master node and one worker rank for each shard that the target database(s) will be divided into.  The different implementations of MPI vary in how this is done, but a common invocation of \hmmserver would be\sidenote{On many systems, MPI jobs need to be sumbitted through a job control mechanism such as SLURM.  See your system documentation for information on how to use the job control system on your cluster.}:
+\vspace{1ex}
+\user{\% mpirun -n <# of ranks> hmmserver {-}{-}num_dbs <n> {-}{-}num_shards <s> <List of sequence and/or HMM databases to be read into memory>}\
+\vspace{1ex} 
+
+One challenge that comes from making \hmmserver an MPI process is that the master node of the \hmmserver will run as rank 0 of the MPI process, but the MPI runtime assigns ranks to hosts in an unpredictable manner.  To address this, the master node of \hmmserver determines the host name of its machine and outputs that to standard output at the beginning of execution.  Alternately, the {-}{-}host option to mpirun/mpiexec can be used to specify the set of computers that \hmmserver will run on, and rank 0 will run on the first computer in that list\sidenote{This may be an implementation-dependent behavior.  The documentation for many MPI implementations states that this is what will happen, but we do not believe that this is a required behavior for all implementations of MPI.}
+
+One key decision when starting an \hmmserver is the number of shards (pieces) that each database will be divided into.  In an \hmmserver with $s$ shards, each worker node will load $frac{1}{sth}$ of each database into memory, but will then only be able to process the parts of each search that corresponds to the items it has in RAM.  This creates a tradeoff between performance and memory requirements: increasing the number of shards a server uses will decrease the amount of memory used on each worker node, but will reduce performance by restricting the set of nodes that each shard's fraction of the search can be distributed across.  While the only hard requirement is that the number of worker nodes must be at least equal to the number of shards, using a number of shards that is not an integer divisor of the number of worker nodes will reduce performance by having one or more shards with fewer nodes assigned to them than others. For example, a server with eight worker nodes could be set to divide its databases into three shards, but this would result in two of the shards having three worker nodes assigned to them, and one shard only having two, in which case the shard with two worker nodes would generally take longer to search than the other two, making it the bottleneck on performance.
+
+Once started, \hmmserver will continue running until it receives a shutdown command from a client, at which point it will terminate.  As an (admittedly weak) protection against spurious/malicious shutdown requests, the \mono{{-}{-}password} option to \hmmserver can be used to specify a password that must be sent along with a shutdown command for the command to take effect.
+
 
 \section{Hmmclient}
+The \hmmclient application provides a command-line interface to send searches to a running \hmmserver and display results in the same manner as the \mono{hmmsearch}, \mono{hmmscan}, \mono{phmmer}, and \mono{jackhmmer} programs.  A typical use of \hmmclient is:
+\vspace{1ex}
+\user{\% hmmclient {-}s <servername> {-}{-}db <d> <name of the file containing the sequence or HMM to be searched>}\\
+\vspace{1ex}
+ 
 
 \chapter{For those converting from an hmmpgmd installation}
 
-\chapter{Desgn of hmmserver}
+\chapter{Design of \Hmmserver}
 \section{Parallelization and Performance}
 \section{Sharding}
 \section{Client-Server Interface}
