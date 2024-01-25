@@ -544,6 +544,10 @@ per position (see
 This is the default.
 
 .TP
+.B \-\-eentexp
+Adjust the effective sequence number to reach the relative entropy target using exponential scaling.
+
+.TP
 .B \-\-eclust
 Set effective sequence number to the number of single-linkage clusters
 at a specific identity threshold (see 

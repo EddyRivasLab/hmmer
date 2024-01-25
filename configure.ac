@@ -712,6 +712,7 @@ AC_CONFIG_FILES([ \
   documentation/man/hmmalign.man    \
   documentation/man/hmmbuild.man    \
   documentation/man/hmmc2.man       \
+  documentation/man/hmmclient.man       \
   documentation/man/hmmconvert.man  \
   documentation/man/hmmemit.man     \
   documentation/man/hmmer.man       \
@@ -722,6 +723,7 @@ AC_CONFIG_FILES([ \
   documentation/man/hmmpress.man    \
   documentation/man/hmmscan.man     \
   documentation/man/hmmsearch.man   \
+  documentation/man/hmmserver.man   \
   documentation/man/hmmsim.man      \
   documentation/man/hmmstat.man     \
   documentation/man/jackhmmer.man   \

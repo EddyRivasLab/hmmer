@@ -1,11 +1,13 @@
-\documentclass[notoc,justified]{tufte-book}    % `notoc` suppresses TL custom TOC, reverts to standard LaTeX
+\documentclass[notoc,justified,openany]{tufte-book}    % `notoc` suppresses TL custom TOC, reverts to standard LaTeX
 \usepackage{graphicx}
+\usepackage{xspace}
 \hyphenation{HMMER}
-\newcommand{\hmmserver}{\mono{hmmserver}}
-\newcommand{\Hmmserver}{\mono{Hmmserver}}
-\newcommand{\hmmclient}{\mono{hmmclient}}
-\newcommand{\Hmmclient}{\mono{Hmmclient}}
-\newcommand{\hmmpgmd}{\mono{hmmpgmd}}
+\newcommand{\hmmserver}{\mono{hmmserver}\xspace}
+\newcommand{\Hmmserver}{\mono{Hmmserver}\xspace}
+\newcommand{\hmmclient}{\mono{hmmclient}\xspace}
+\newcommand{\Hmmclient}{\mono{Hmmclient}\xspace}
+\newcommand{\hmmpgmd}{\mono{hmmpgmd}\xspace}
+\newcommand{\Hmmpgmd}{\mono{Hmmpgmd}\xspace}
 \newcommand{\userguide}{HMMER User's Guide}
 \input{titlepage_server}                    % definitions for \maketitle 
 \bibliographystyle{unsrtnat-brief}   % customized natbib unsrtnat. Abbrev 3+ authors to ``et al.'' 
@@ -28,12 +30,14 @@
 
 \Hmmserver improves on \hmmpgmd in several ways:
 \begin{enumerate}
-\item{Parallelization has been significantly improved.  \Hmmpgmd assigns an equal number of sequence-HMM comparisons to each worker node when performing a search, but the time required to perform a given sequence-HMM comparison varies greatly depending on the length of the sequence, the length of the HMM, and (most importantly), whether the comparison finds a hit or not.  Thus, assigning equal numbers of comparisons to each worker node often causes the worker nodes to take very different amounts of time to complete their fraction of a search.
-\Hmmserver uses a work-requesting protocol in which worker nodes proactively request more work from the master node as they run low on work to do, which significantly improves load-balancing.  Within each worker node, worer threads use a work-stealing protocol to reduce load imbalance, combined with a split-phase comparison pipeline that prioritizes the processing of comparisons that result in hits to make it less likely that a long-running sequence-HMM comparison delays the completion of a search.  Together, these parallelization improvements reduce search time by approximately 50\% when the server is run on hundreds of cores.}
+\item{Parallelization has been significantly improved.  \Hmmserver uses a work-requesting protcol to distribute work across the machines that make up a server and a combination of work-requesting and work-stealing to balance load across the worker threads on each worker machine.  Together, these parallelization improvements reduce search time by approximately 50\% when the server is run on hundreds of cores.}
 \item{\Hmmserver reads standard FASTA and HMM files as its inputs, instead of the special-format files \hmmpgmd requires.  This allows it (at some cost in memory usage) to return the full results of a search.  In contrast, \hmmpgmd replaces the metadata (name, accession, taxonomy ID, etc.) associated with each sequence or HMM in a database with a unique ID, requiring database or file accesses to retrieve that metadata before results can be returned, which has proven to be a significant performance bottleneck.}
 \item{\Hmmserver can load multiple sequence and/or HMM databases into memory simultaneously and accept searches to any of them in any order.  In contrast, \hmmpgmd could only load a single sequence or HMM database.  This required users to run separate instances of \hmmpgmd for sequence and HMM data, potentially wasting resources if the fraction of searches to each type of database was not predicted accurately.  Similarly, if a user wanted to provide the ability to search multiple databases of a given data type, they had to either run a separate instance of \hmmpgmd for each database or create a single data file containing all of the data in all of the databases and implement searches of individual databases as searches of sub-ranges of the unified database.  Generating these unifiied databases any time one of the individual databases changed proved to be time-consuming for our partners at the European Bioinformatics Institute (EBI), making it more difficult for them to provide the latest version of each database on their \hmmpgmd server.}
-\item{\Hmmserver implements a more-flexible sharding scheme than \hmmpgmd.  Originally, \hmmpgmd required each worker node to load the entire database that \hmmpgmd caches into RAM. As sequence database sizes increased, the amount of RAM this requried became a problem, so \hmmpgmd was modified to shard its database by loading $\frac{1}{N}th$ of the database onto each worker node of a system with N workers.   
+\item{\Hmmserver implements a more-flexible sharding scheme than \hmmpgmd.  Originally, \hmmpgmd required each worker node to load the entire database that \hmmpgmd caches into RAM. As sequence database sizes increased, the amount of RAM this requried became a problem, so \hmmpgmd was modified to shard its database by loading $\frac{1}{N}th$ of the database onto each worker node of a system with N workers.}
+\item{\Hmmserver is implemented as an MPI application, in contrast to \hmmclient, which was a set of independent programs that communicated via UNIX sockets.  This allows \hmmserver to take advantage of high-bandwidth computer networks to improve performance, and simplifies the process of starting an \hmmserver, as the entire server can be started as a single MPI application across multiple machines.}
 \end{enumerate}
+
+
 
 \chapter{Installation}
 \Hmmserver and \hmmclient are included in the standard HMMER distribution package, but HMMER must be compiled with MPI support turned on for \hmmserver to be useful, so it is likely you will have to compile HMMER from source to use the server.  Builds of HMMER without MPI support enabled will create a \hmmserver executable, which will print an error message and exit if run.  \Hmmclient does not require MPI support, so any installation of HMMER should have a working \hmmclient application.
@@ -67,20 +71,49 @@ Once started, \hmmserver will continue running until it receives a shutdown comm
 \section{Hmmclient}
 The \hmmclient application provides a command-line interface to send searches to a running \hmmserver and display results in the same manner as the \mono{hmmsearch}, \mono{hmmscan}, \mono{phmmer}, and \mono{jackhmmer} programs.  A typical use of \hmmclient is:
 \vspace{1ex}
-\user{\% hmmclient {-}s <servername> {-}{-}db <d> <name of the file containing the sequence or HMM to be searched>}\\
+\user{\% hmmclient {-}s <servername> {-}{-}db <d> <name of the file containing the sequence(s) or HMM(s) to be searched>}\\
 \vspace{1ex}
  
+\Hmmclient accepts the same set of command-line options for controlling output, managing the acceleration pipeline, defining how HMMs are constructed from sequences, and setting reporting thresholds as \mono{hmmsearch}, \mono{phmmer}, \mono{hmmscan}, and \mono{jackhmmer}.  See the documentation for those programs for more information on those options.  \Hmmclient does not support the \mono{--cpu} option that sets the number of worker threads in our command-line applications, as that decision is made at the time the server is started.
+
+In most cases, \hmmserver infers the type of search to be performed from the types of the query and target objects.  The exception is when the user wants to perform an iterative (\mono{jackhmmer}-style) search.  In that case, the \mono{--jack <maxrounds>} option should be passed to \hmmclient.  Note that the \mono{--jack} option is only valid when both the query object and target database are sequences. 
 
 \chapter{For those converting from an hmmpgmd installation}
+For an administrator, the biggest change between \hmmpgmd and \hmmserver is the switch from independent programs to an MPI application.  This allows \hmmserver to be started with a single command, although the exact syntax of this command may vary between implementations of MPI.  See your local system documentation for more information.
 
-\chapter{Design of \Hmmserver}
-\section{Parallelization and Performance}
+Making \hmmserver an MPI application introduces the challenge of determining what machine the master rank (rank 0) of the server is running on, and thus which machine clients should send queries to.  There are two ways to do this.  The first is to examine the output of \hmmserver shortly after the server starts, as the master rank will print its hostname on standard out.  The second is to use options to the command that starts \hmmserver, such as the \mono{--host} flag supported by many MPI implementations, to control which machines \hmmserver runs on and thus specify the machine that will run the master rank.
+
+We attempted to keep the client interface to \hmmserver as close as possible to that of \hmmpgmd, but a few changes were necessary.  The two most significant of these are:
+\begin{itemize}
+  \item{\Hmmserver only allows a client to send one query to the server per socket connection, requiring that the client disconnect from the server after each search completes and request a new connection if it wants to send another request.  In contrast, \hmmpgmd allowed a client to open a socket connection and send multiple query requests before disconnecting, which, in some cases, led to clients monopolizing the server by sending large numbers of requests in one connection.  Requiring a client to disconnect and reconnect between queries forces it to arbitrate with other clients for use of the server, making it harder for one poorly-behaved client to lock others out of the server.}
+  \item{\Hmmpgmd detected the end of }
+\endC{itemize}
+\chapter{Hmmserver's Design}
+\Hmmserver is an MPI application that uses a conventional master-worker topology.  While the most-common use of \hmmserver will distribute the MPI ranks across multiple machines, this is not required\sidenote{If each MPI rank is not assigned to a separate computer, we strongly recommend using the \mono{--cpu} flag to specify the number of worker threads on each worker rank.  If this is not done, each worker rank will start as many worker threads as its machine has hardware thread slots, severely over-subscribing the hardware if multiple worker ranks run on the same machine.}.  One MPI rank (rank 0) acts as the master rank, while the rest act as workers.  The master rank handles communication with clients, receiving search requests from them and sending results back when each search completes.  The master rank also co-ordinates the work of the workers, assigning them regions of the target database to search and collecting the hits that each worker finds into a single list.  Worker ranks cache the server's target databases in memory and perform the work of each search.  Thus, the worker ranks can require significant memory, depending on the number and size of the target databases and the number of shards those databases are divided into.  The master rank does not cache target databases, as it only needs to know the number of items in each database to distribute work across the worker ranks.  Thus, it uses very little memory when the server is idle, but it may require significant amounts of memory to assemble the results of searches that return large numbers of hits.
+
+The decision to build \hmmserver as an MPI application was a significant change from \hmmpgmd, which was implemented as a set of independent programs that communicate with each other via UNIX sockets.  The initial motivation for this change was to improve performance by taking advantage of high-bandwidth networks, which MPI typically does and sockets typically does not.  During discussions with our collaborators at the European Bioinformatics Institute, they disclosed that managing \hmmpgmd's independent programs was a source of difficulty for them, so the switch to an MPI application provided a second benefit.
+
+\section{Parallelization and Load Balancing}
+\Hmmpgmd statically distributed the work of each search across the worker nodes, assigning $\frac{1}{Nth}$ of the items to be searched to each worker node in a system with N workers.  This led to significant variance in the amount of time each worker took to perform its fraction of the search, reducing search performance. The root cause of this load imbalance is the fact that the amount of time to perform a sequence-HMM comparison varies greatly depending on whether the sequence and HMM are clearly not homologs, are close to being similar enough to be considered homologs, or are detected as homologs.  This causes regions of the database that contain many homologs to take much longer to search than regions that contain few homologs.  Thus, worker nodes that find many homologs take significantly longer to finish their fraction of a search than worker nodes that find few homologs.  Worse yet, the distribution of homologs across the target database varies from search to search, making it impossible to find a static allocation of work to worker nodes that balances load well.
+
+To address this, \hmmserver dynamically distributes work across its worker node using a work-requesting system.  The master node maintains a global list of the items in each shard that still need to be compared to complete the search.  Worker nodes each maintain a local list of work (items to be searched) that they are responsible for.  When the amount of work remaining on a worker node's local list drops below a threshold, it sends a request to the master node for more work.  If the master node has any work remaining on its global list, it responds with a chunk of work (range of items) that the worker node is now responsible for.  To trade-off load balancing against the amount of communication required, work chunks contain a large amount of work at the beginning of a search and decrease in size over the course of the search.
+
+\subsection{Within-Node Parallelization}
+Within each worker node, \hmmpgmd uses a load-balancing system similar to how \hmmserver distributes work across nodes.  Each worker node maintains a list of the work assigned to it, and worker threads request chunks of work from the list as they complete their previously-assigned work.  This creates a trade-off between load balancing and contention for the work list: if the work chunks are too small, the worker threads need to request more work frequently, and access to the work list becomes a bottleneck.  On the other hand, if the work chunks are too large, the worker thread that grabs the last chunk of work from the list can wind up working for a significant amount of time after the other threads finish, increasing the time to complete each search.
+
+\Hmmserver improves load-balancing by adding work stealing to \hmmpgmd's within-node load balancing scheme.  When a worker thread finds that the work list is empty, it examines the chunks of work that the other worker threads are working on and takes half of the work from the thread with the most to do.  This spreads the work at the end of a search more-evenly across the worker threads, preventing one thread from significantly delaying the end of the search.
+
+\Hmmserver also adds split-phase processing of sequence-HMM comparisons to further improve performance.  The final steps of hit and domain detection can take a significant amount of time, such that the threads processing the last few hits in a search can delay completion noticeably, particularly when running the server on a large enough number of machines to meet our one second average search time goal\sidenote{This was definitely true in the HMMER4 performance prototype of the server, as HMMER4's final stage trades run time for accuracy in some cases.  We have not done a great deal of analysis on whether it is true in HMMER3.}.  To address this, the server splits sequence-HMM comparisons into "front-end" (the filter pipeline) and "back-end" (the main stage) processing.  Initially, all of the worker threads start processing the front end of comparisons.  When a comparison passes all of the steps in the front end, it is placed in a queue for back-end processing, and one of the worker threads is switched to process comparisons out of the back-end queue.  If the depth of the back-end queue exceeds a threshold, additional worker threads are switched to processing the back end of comparisons.  Similarly, if the back-end queue drops below a depth threshold, worker threads are switched back to processing the front end of comparisons.  This has the effect of prioritizing the back-end comparisons that take the longest to handle, decreasing the chance that a small number of long-running comparisons extend the overall search time.
+
+
 \section{Sharding}
+The original version of \hmmpgmd 
+
 \section{Client-Server Interface}
 
 \begin{adjustwidth}{}{-1in}   
 \chapter{Manual Pages Related to the Server}
-
+\input{manpages_server}
 \end{adjustwidth}
 
 \chapter{Acknowledgments}
@@ -89,7 +122,7 @@ Simon Potter of the European Bioinformatics Institute was of great help in under
 \label{manualend}
 
 % To create distributable/gitted 'distilled.bib' from lab's bibtex dbs:
-%   # uncomment the {master,lab,books}
+%   # uncomment the {master,lab,books};
 %   pdflatex main
 %   bibdistill main.aux > distilled.bib
 %   # restore the {distilled} 
