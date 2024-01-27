@@ -43,29 +43,29 @@ static int vitfilter_dispatcher(const ESL_DSQ *dsq, int L, const H4_PROFILE *hmm
  *****************************************************************/
 
 /* Function:  h4_vitfilter()
- * Synopsis:  Calculates Viterbi score, vewy vewy fast, in limited precision.
- * Incept:    SRE, Sun 30 Jun 2019 (Lawless, Dear God)
+ * Synopsis:  the Viterbi acceleration filter
  *
  * Purpose:   Calculates an approximation of the Viterbi score for sequence
  *            <dsq> of length <L> residues, using profile <hmm>, alignment
  *            mode <mo>, and an allocated DP matrix <fx>. Return the 
- *            estimated Viterbi raw score (in bits) in <ret_sc>.
+ *            estimated Viterbi score (in bits) in <ret_sc>.
  *            
  *            The <hmm> has its striped vector parameters set (and its
  *            <h4_HASVECS) flag).
  *            
  *            The caller has set the alignment mode <mo>, including
- *            its length parameterization (see <h4_mode_SetLength()>).
- *            However, the Viterbi filter uses local alignment only.
- *            The local vs. glocal parameters of <mo> (i.e.  the B
- *            $\rightarrow$ L | G parameters) are ignored.  (Thus,
- *            <mo> can be a default dual-mode local/glocal multihit
- *            mode for length <L>, and the Viterbi filter will still do
- *            local multihit alignment with it.)
+ *            its length parameterization (see <h4_mode_SetLength()>)
+ *            and multihit vs. unihit mode.  Local alignment is
+ *            hardcoded; B $\rightarrow$ L|G local/glocal
+ *            parameterization is ignored, implicitly assuming B->L =
+ *            1.0.
+ *
+ *            (Thus, <mo> can be a default dual-mode local/glocal
+ *            multihit mode for length <L>, and the Viterbi filter
+ *            will still do **local** multihit alignment with it.)
  *            
- *            Caller has allocated DP matrix <fx> to any size. It will
- *            be resized here as needed, using a
- *            <h4_filtermx_Reinit()> call. Caller does not have to
+ *            Caller has allocated DP matrix <fx> to any size. It is
+ *            resized here as needed. Caller does not have to
  *            call any reuse or reinit on the <fx> to reuse it for
  *            another DP calculation.
  *            
@@ -97,7 +97,7 @@ static int vitfilter_dispatcher(const ESL_DSQ *dsq, int L, const H4_PROFILE *hmm
  *            hmm     - profile HMM, with striped vector params
  *            mo      - alignment mode (algorithm-dependent parameters)
  *            fx      - viterbil filter DP matrix 
- *            ret_sc  - RETURN: Viterbi score (in bits)          
+ *            ret_sc  - RETURN: Viterbi filter score (in bits)          
  *
  * Returns:   <eslOK> on success; <*ret_sc> is the bitscore; 
  *            <fx> is likely to have been reallocated.

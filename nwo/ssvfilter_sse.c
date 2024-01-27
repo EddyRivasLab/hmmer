@@ -427,9 +427,9 @@ h4_ssvfilter_sse(const ESL_DSQ *dsq, int L, const H4_PROFILE *hmm, const H4_MODE
    * In that case, we set sc to max representable raw bitscore, and return ERANGE.
    */
                        // vvv   Add +128 back onto the diagonal score. DP calculated it from -128 baseline.
-  *ret_sc = ((float) xE + 128.) / h4_SCALE_B + hmm->tauBM - h4_2NAT_APPROX;   // 2.0 is the tauNN/tauCC "2 nat approximation". tauBM is B->Mk entry score (unscaled!)
-  *ret_sc += 2.0 * log2f(2.0 / (float) (L + 2));                              // tauNB, tauCT moves... also unscaled floats.  
-  *ret_sc -= mo->nullsc;
+  *ret_sc = ((float) xE + 128.) / h4_SCALE_B + hmm->tauBM - h4_2NAT_APPROX;   // h4_2NAT_APPROX is tauNN/tauCC unihit "2 nat approximation" in bits (2.89). tauBM is B->Mk local entry score (unscaled!)
+  *ret_sc += 2.0 * log2f(2.0 / (float) (L + 2));                              // tauNB, tauCT moves (also unscaled floats, in bits): SSV hardcodes a unihit length model
+  *ret_sc -= mo->nullsc;                                                      // nullsc is target length dependent; caller needs to have done h4_mode_SetLength()
   return (xE == 127 ? eslERANGE : eslOK);
 }
 

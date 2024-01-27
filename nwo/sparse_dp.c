@@ -41,7 +41,7 @@
  *            mask <sm>.  Fill in the sparse Viterbi matrix <sx>;
  *            (optionally) trace back the optimal path and return it
  *            in <opt_pi> if the caller provides it; and (optionally)
- *            return the Viterbi raw score in bits in <*opt_vsc>.
+ *            return the Viterbi score in bits in <*opt_vsc>.
  *            
  *            <sx> and <opt_pi> are provided as existing space;
  *            reused/reallocated as needed.
@@ -52,11 +52,11 @@
  *            sm      - sparse mask
  *            sx      - Viterbi matrix to fill (reallocated/reused)
  *            opt_pi  - optRESULT: optimal path (reallocated/reused); or NULL if unwanted
- *            opt_vsc - optRETURN: raw Viterbi score in bits; or NULL
+ *            opt_vsc - optRETURN: Viterbi score in bits; or NULL
  *
  * Returns:   <eslOK> on success; <sx> is the Viterbi DP matrix;
  *            <opt_pi>, if non-NULL, contains Viterbi path; and
- *            <*opt_vsc> optionally contains the raw Viterbi score.
+ *            <*opt_vsc> optionally contains the Viterbi bit score.
  *
  * Throws:    <eslEMEM> if reallocation of <sx> or <opt_pi> fails.
  */
@@ -193,7 +193,7 @@ h4_sparse_Viterbi(const ESL_DSQ *dsq, int L, const H4_PROFILE *hmm, const H4_MOD
       dpp = last_dpc;
     }
 
-  if (opt_vsc) *opt_vsc = xC + ( ng ? ng * mo->xsc[h4_C][h4_LOOP] : 0.0f) + mo->xsc[h4_C][h4_MOVE];
+  if (opt_vsc) *opt_vsc = xC + ( ng ? ng * mo->xsc[h4_C][h4_LOOP] : 0.0f) + mo->xsc[h4_C][h4_MOVE] - mo->nullsc;
   if (opt_pi && xC != -eslINFINITY) return h4_sparse_ViterbiTrace(hmm, mo, sx, opt_pi);
   else                              return eslOK;
 }
@@ -212,7 +212,7 @@ h4_sparse_Viterbi(const ESL_DSQ *dsq, int L, const H4_PROFILE *hmm, const H4_MOD
  *            <dsq> of length <L>, by the sparse Forward DP algorithm,
  *            constrained by the sparse mask <sm>.  Fill in the sparse
  *            Forward matrix <sx>, and (optionally) return the Forward
- *            raw score in bits in <*opt_fsc>.
+ *            score in bits in <*opt_fsc>.
  *            
  *            <sx> is provided as existing space; reused/reallocated
  *            as needed.
@@ -223,7 +223,7 @@ h4_sparse_Viterbi(const ESL_DSQ *dsq, int L, const H4_PROFILE *hmm, const H4_MOD
  *            mo      - comparison mode
  *            sm      - sparse mask
  *            sx      - Forward matrix to fill (reallocated/reused)
- *            opt_fsc - optRETURN: raw Forward score in bits; or NULL
+ *            opt_fsc - optRETURN: Forward score in bits; or NULL
  *
  * Returns:   <eslOK> on success. 
  *
@@ -362,7 +362,7 @@ h4_sparse_Forward(const ESL_DSQ *dsq, int L, const H4_PROFILE *hmm, const H4_MOD
       dpp = last_dpc;
     }
 
-  if (opt_fsc) *opt_fsc = xC + ( ng ? ng * mo->xsc[h4_C][h4_LOOP] : 0.0f) + mo->xsc[h4_C][h4_MOVE];
+  if (opt_fsc) *opt_fsc = xC + ( ng ? ng * mo->xsc[h4_C][h4_LOOP] : 0.0f) + mo->xsc[h4_C][h4_MOVE] - mo->nullsc;
   return eslOK;
 }
 /*-------------------- end, Forward -----------------------------*/
@@ -378,7 +378,7 @@ h4_sparse_Forward(const ESL_DSQ *dsq, int L, const H4_PROFILE *hmm, const H4_MOD
  *            <dsq> of length <L> by the sparse Backward DP algorithm,
  *            constrained by the sparse mask <sm>.  Fill in the sparse
  *            DP Backward matrix <sx> and (optionally) return the
- *            overall raw Backward score in <*opt_sc>.
+ *            overall Backward score in <*opt_sc>.
  *
  * Args:      dsq     - digital target sequence 1..L
  *            L       - length of <dsq>
@@ -386,7 +386,7 @@ h4_sparse_Forward(const ESL_DSQ *dsq, int L, const H4_PROFILE *hmm, const H4_MOD
  *            mo      - comparison mode
  *            sm      - sparse mask
  *            sx      - Backward matrix to fill (reallocated/reused)
- *            opt_sc  - optRETURN: raw Backwards score in bits
+ *            opt_sc  - optRETURN: Backwards score in bits
  *                      
  * Returns:   <eslOK> on success. 
  *            
@@ -561,7 +561,7 @@ h4_sparse_Backward(const ESL_DSQ *dsq, int L, const H4_PROFILE *hmm, const H4_MO
 	}
     } // end loop over i
 
-  if (opt_sc) *opt_sc = xN;	/* tS->N is 1.0, no cost. */
+  if (opt_sc) *opt_sc = xN - mo->nullsc;	// tS->N is 1.0, no cost.
   return eslOK;
 }
 /*-------------------- end, Backward ----------------------------*/
@@ -753,8 +753,8 @@ h4_sparse_Decoding(const ESL_DSQ *dsq, int L, const H4_PROFILE *hmm, const H4_MO
 	/* Renormalization.
 	 * 
 	 * Roundoff error accumulation in F/B is significant. For large
-	 * target seqs, it isn't unusual to have a whole nat of
-	 * difference in overall fwd vs. bck raw score; for example, fn3
+	 * target seqs, it isn't unusual to have a whole bit of
+	 * difference in overall fwd vs. bck score; for example, fn3
 	 * vs. TITIN_HUMAN. Since we only use the bck score (at i=0) for
 	 * normalization above, pp's would have very large systematic
 	 * error. 
@@ -2146,12 +2146,12 @@ main(int argc, char **argv)
       if (esl_opt_GetBoolean(go, "-P")) h4_path_Dump(stdout, vpi);
       if (esl_opt_GetBoolean(go, "-S")) h4_path_Dump(stdout, spi);
 
-      printf("%12s  fwd filter raw score: %9.4f bits\n", sq->name, ffsc);
-      printf("%12s  sparse Vit raw score: %9.4f bits\n", sq->name, vsc);
-      printf("%12s  sparse Fwd raw score: %9.4f bits\n", sq->name, fsc);
-      printf("%12s  sparse Bck raw score: %9.4f bits\n", sq->name, bsc);
-      printf("%12s  Vit path raw score:   %9.4f bits\n", sq->name, vpisc);
-      printf("%12s  sto path raw score:   %9.4f bits\n", sq->name, spisc);
+      printf("%12s  fwd filter score: %9.4f bits\n", sq->name, ffsc);
+      printf("%12s  sparse Vit score: %9.4f bits\n", sq->name, vsc);
+      printf("%12s  sparse Fwd score: %9.4f bits\n", sq->name, fsc);
+      printf("%12s  sparse Bck score: %9.4f bits\n", sq->name, bsc);
+      printf("%12s  Vit path score:   %9.4f bits\n", sq->name, vpisc);
+      printf("%12s  sto path score:   %9.4f bits\n", sq->name, spisc);
       
       esl_sq_Reuse(sq);
     }

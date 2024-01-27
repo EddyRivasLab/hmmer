@@ -171,7 +171,7 @@ h4_vitfilter_sse(const ESL_DSQ *dsq, int L, const H4_PROFILE *hmm, const H4_MODE
     {
       *ret_sc = (float) xC + (float) mo->xw[h4_C][h4_MOVE] - h4_BASE_W;
       *ret_sc /= h4_SCALE_W;
-      *ret_sc -= h4_3NAT_APPROX; // the NN/CC/JJ=0,-3nat approximation: see J5/36. That's L \log_2 \frac{L}{L+3} for L>>0, for our NN,CC,JJ contrib 
+      *ret_sc -= h4_3NAT_APPROX; // the NN/CC/JJ=0,-3nat approximation in bits: see J5/36. That's L \log_2 \frac{L}{L+3} for L>>0, for our NN,CC,JJ contrib 
       *ret_sc -= mo->nullsc;
     }
   else  *ret_sc = -eslINFINITY;

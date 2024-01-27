@@ -49,8 +49,11 @@ static int ssvfilter_dispatcher(const ESL_DSQ *dsq, int L, const H4_PROFILE *hmm
  *
  *            The alignment mode <mo> has been set for target length
  *            <L> by a <h4_mode_SetLength(mo, L)> call. The SSV filter
- *            only uses <mo> to obtain the null model score, for
- *            calculating and returning a bitscore.
+ *            only uses <mo> to obtain the null model score
+ *            <mo->nullsc>, for calculating and returning a
+ *            bitscore. (Other alignment mode parameters are hardcoded
+ *            for unihit local SSV alignment, ignoring what <mo>
+ *            says.)
  *            
  *            The SSV filter doesn't use a DP matrix. SSV works
  *            entirely in SIMD registers.
@@ -64,7 +67,7 @@ static int ssvfilter_dispatcher(const ESL_DSQ *dsq, int L, const H4_PROFILE *hmm
  * Args:      dsq    - digital target sequence 1..L
  *            L      - length of <dsq> in residues
  *            hmm    - profile HMM, with striped vector params
- *            mo     - alignment mode - h4_mode_SetLength(mo, L) has been called - used for null score
+ *            mo     - alignment mode - h4_mode_SetLength(mo, L) has been called - used for mo->nullsc only
  *            ret_sc - RETURN: SSV raw score in bits
  *
  * Returns:   <eslOK> on success, and <*ret_sc> is the SSV score.
@@ -437,9 +440,7 @@ main(int argc, char **argv)
 	{
           printf("vector code used:     %s\n",        esl_cpu_Get());
 	  printf("target sequence:      %s\n",        sq->name);
-	  printf("SSV filter raw score: %.2f nats\n", sfraw);
-	  printf("null score:           %.2f nats\n", mo->nullsc);
-	  printf("per-seq score:        %.2f bits\n", sfscore);
+	  printf("SSV filter score:     %.2f bits\n", sfscore);
 	}      
  
       esl_sq_Reuse(sq);

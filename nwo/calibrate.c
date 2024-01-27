@@ -8,10 +8,12 @@
 #include "esl_random.h"
 #include "esl_randomseq.h"
 
+#include "h4_checkptmx.h"
 #include "h4_filtermx.h"
 #include "h4_mode.h"
 #include "h4_profile.h"
 
+#include "fbfilter.h"
 #include "ssvfilter.h"
 #include "vitfilter.h"
 
@@ -170,6 +172,103 @@ h4_vit_mu(ESL_RANDOMNESS *rng, const H4_PROFILE *hmm, int L, int N, double lambd
 }
 
 
+/* Function:  h4_fwd_tau()
+ * Synopsis:  Determine Forward tau location parameter for a profile
+ *
+ * Purpose:   Determine $\tau$ location parameter for exponential fit to
+ *            Forward score distribution for profile <hmm>.  Done by
+ *            fitting scores for <N> i.i.d. random sequences of length
+ *            <L> and default composition (in an H4_MODE). Focus
+ *            fitting procedure on high-scoring tail of top fraction
+ *            of <tailp> scores, using previously determined slope
+ *            parameter <lambda>. Return estimated tau in <*ret_tau>.
+ *
+ *            The $\tau$ parameter is for a complete exponential
+ *            distribution Exp($\tau$, $\lambda$), but the fit is only
+ *            accurate in the extreme tail of the Forward score
+ *            distribution, from about $P(s>x) < 0.001$ or so.
+ *
+ *            Because we can't afford the time to generate enough
+ *            samples N to collect enough points (0.001 * N) in this
+ *            high-scoring tail for an actual exponential fit, we use
+ *            a heuristic method that works for much smaller N. We fit
+ *            all N scores to a complete Gumbel, determine the
+ *            location of the base of this Gumbel's high-scoring tail
+ *            at a high <tailp> (typically ~0.04), and then
+ *            extrapolate that base location back to the base of a
+ *            complete exponential (backing it up by
+ *            log(tailp)/lambda).
+ *
+ *            This heuristic works because a delicate choice of
+ *            <tailp> will roughly cancel two opposing systematic
+ *            errors.  On the one hand, the base location for the top
+ *            <tailp> of the *actual* distribution of Forward scores
+ *            overestimates <tau> (because the empirical distribution
+ *            asymptotically approaches the exponential tail from
+ *            above). On the other hand, the Gumbel fit systematically
+ *            errs toward a steeper tail (higher fitted lambda), so
+ *            the fitted Gumbel distribution *underestimates* the base
+ *            location for the top <tailp> scores. The choice of
+ *            <tailp> ~ 0.03-0.04 was empirically and carefully tuned
+ *            to work for any model. [SRE:J1/134-135].
+ *
+ *            Typical choices are L=100, N=200, tailp=0.04, yielding
+ *            estimates $\hat{\tau}$ with a precision (standard
+ *            deviation) of $\pm$ 0.2 bits, corresponding to a $\pm$
+ *            15\% error in E-values. [SRE:J1/135].
+ *            
+ *            
+ *
+ * Args:      rng     :  source of random numbers
+ *            hmm     :  profile (with vectorized scores set)
+ *            L       :  length of sequences to simulate
+ *            N	      :  number of sequences to simulate		
+ *            lambda  :  known lambda parameter to use
+ *            tailp   :  tail mass to fit (typically 0.04)
+ *            ret_tau :  RETURN: estimate of location param tau
+ *
+ * Returns:   <eslOK> on success, and <ret_mu> contains the ML estimate
+ *            of $\mu$.
+ *
+ * Throws:    <eslEMEM> on allocation failure, and <*ret_tau> is -eslINFINITY.
+ */
+int
+h4_fwd_tau(ESL_RANDOMNESS *rng, const H4_PROFILE *hmm, int L, int N, double lambda, double tailp, double *ret_tau)
+{
+  H4_MODE      *mo  = NULL;
+  H4_CHECKPTMX *cpx = NULL;
+  ESL_DSQ      *dsq = NULL;
+  double       *xv  = NULL;
+  float         sc;
+  double        gmu, glam;
+  int           i;
+  int           status;
+
+  if ((mo  = h4_mode_Create())                               == NULL) { status = eslEMEM; goto ERROR; }
+  if ((cpx = h4_checkptmx_Create(hmm->M, L, ESL_MBYTES(32))) == NULL) { status = eslEMEM; goto ERROR; }
+  ESL_ALLOC(xv,  sizeof(double)  * N);
+  ESL_ALLOC(dsq, sizeof(ESL_DSQ) * (L+2));
+
+  if ((status = h4_mode_SetLength(mo, L)) != eslOK) goto ERROR;
+
+  for (i = 0; i < N; i++)
+    {
+      if ((status = esl_rsq_xfIID(rng, hmm->f, hmm->abc->K, L, dsq)) != eslOK) goto ERROR;
+      if ((status = h4_fwdfilter(dsq, L, hmm, mo, cpx, &sc))         != eslOK) goto ERROR; 
+      xv[i] = sc;                       // H4 scores are floats, but esl_gumbel takes doubles.
+    }
+      
+  if ((status = esl_gumbel_FitComplete(xv, N, &gmu, &glam)) != eslOK) goto ERROR;  // this is the heuristic. complete Gumbel fit...
+  *ret_tau = esl_gumbel_invcdf(1.0-tailp, gmu, glam) + (log(tailp) / lambda);      // ... then find the location of its tail... then back up to complete exponential base location.
+  // flowthrough to cleanup... status == eslOK from the fit above
+ ERROR:
+  if (status != eslOK) *ret_tau = -eslINFINITY;
+  h4_mode_Destroy(mo);
+  h4_checkptmx_Destroy(cpx);
+  free(xv);
+  free(dsq);
+  return status;
+}
 
 
 /*****************************************************************

@@ -10,6 +10,7 @@
 #include "easel.h"
 #include "esl_alphabet.h"
 #include "esl_dsq.h"
+#include "esl_exponential.h"
 #include "esl_getopts.h"
 #include "esl_gumbel.h"
 #include "esl_histogram.h"
@@ -64,7 +65,7 @@ static ESL_OPTIONS statsim_options[] = {
   { "--EvN",        eslARG_INT,  "200",  NULL, "n>0",  NULL,  NULL, NULL,  "number of sequences for Vit filter Gumbel mu fit",    4 },   
   { "--EfL",        eslARG_INT,  "100",  NULL, "n>0",  NULL,  NULL, NULL,  "length of sequences for Fwd filter exp tail tau fit", 4 },   
   { "--EfN",        eslARG_INT,  "200",  NULL, "n>0",  NULL,  NULL, NULL,  "number of sequences for Fwd filter exp tail tau fit", 4 },   
-  { "--Eft",       eslARG_REAL, "0.04",  NULL,"0<x<=1",NULL,  NULL, NULL,  "tail mass for Fwd filter exponential tail tau fit",   4 },   
+  { "--Eft",        eslARG_REAL,"0.001", NULL,"0<x<=1",NULL,  NULL, NULL,  "tail mass for Fwd filter exponential tail tau fit",   4 },  // *not* the same as the tail mass used in Fwd calibration (~0.04)
   {  0, 0, 0, 0, 0, 0, 0, 0, 0, 0 },
 };
 
@@ -85,14 +86,15 @@ struct statsim_cfg_s {
   int      EvN;
   int      EfL;
   int      EfN;
-  int      Eft;
+  double   Eft;
 };
 
 static ESL_GETOPTS *process_cmdline(const char *topcmd, const ESL_SUBCMD *sub, const ESL_OPTIONS *suboptions, int argc, char **argv);
 static void         initialize_cfg(ESL_GETOPTS *go, struct statsim_cfg_s *cfg);
 
-static void process_workunit(struct statsim_cfg_s *cfg, const H4_PROFILE *hmm, double *scores, double *ret_mu, double *ret_lambda);
-static void output_results  (struct statsim_cfg_s *cfg, char *hmmname, double *scores, double emu, double elambda);
+static void process_workunit  (struct statsim_cfg_s *cfg, const H4_PROFILE *hmm, double *scores, double *ret_mu, double *ret_lambda);
+static void output_results_vit(struct statsim_cfg_s *cfg, char *hmmname, double *scores, double emu,  double elambda);
+static void output_results_fwd(struct statsim_cfg_s *cfg, char *hmmname, double *scores, double etau, double elambda);
 
 
 int
@@ -119,7 +121,14 @@ h4_cmd_statsim(const char *topcmd, const ESL_SUBCMD *sub, int argc, char **argv)
   while ((status = h4_hmmfile_Read(hfp, &abc, &hmm)) == eslOK)
     {
       process_workunit(&cfg, hmm, scores, &emu, &elambda);
-      output_results  (&cfg, hmm->name, scores, emu, elambda);
+
+      if (cfg.which_score_type == h4STATSIM_DO_SSVFILTER ||
+          cfg.which_score_type == h4STATSIM_DO_VITFILTER ||
+          cfg.which_score_type == h4STATSIM_DO_VIT)
+        output_results_vit(&cfg, hmm->name, scores, emu, elambda);
+      else
+        output_results_fwd(&cfg, hmm->name, scores, emu, elambda); // <emu> is really the estimated tau location param
+
       nhmm++;
     }
   if      (status == eslEFORMAT)      esl_fatal("Parse failed, bad profile HMM file format in %s:\n   %s",  strcmp(hmmfile, "-") == 0 ? "<stdin>" : hmmfile, hfp->errmsg);
@@ -228,6 +237,7 @@ process_workunit(struct statsim_cfg_s *cfg, const H4_PROFILE *hmm, double *score
   ESL_DSQ        *dsq = NULL;
   H4_MODE        *mo  = NULL;
   H4_FILTERMX    *fx  = NULL;
+  H4_CHECKPTMX   *cpx = NULL;
   int             i;
   float           sc;
   double          mu, lambda;
@@ -235,10 +245,10 @@ process_workunit(struct statsim_cfg_s *cfg, const H4_PROFILE *hmm, double *score
 
   if (!(hmm->flags & h4_HASVECS)) esl_fatal("profile not vectorized");
 
-  if ((mo = h4_mode_Create()) == NULL) { status = eslEMEM; goto ERROR; }
   ESL_ALLOC(dsq, sizeof(ESL_DSQ) * (cfg->L + 2));
-  if ((status = h4_mode_SetLength(mo, cfg->L)) != eslOK) goto ERROR;  
 
+  if ((mo = h4_mode_Create()) == NULL) { status = eslEMEM; goto ERROR; }   // default = multihit dual (glocal/local) mode
+  if ((status = h4_mode_SetLength(mo, cfg->L)) != eslOK) goto ERROR;  
 
   /* Allocate any DP matrix(s) we need */
   if (cfg->use_reference_impl)
@@ -247,19 +257,20 @@ process_workunit(struct statsim_cfg_s *cfg, const H4_PROFILE *hmm, double *score
     }
   else
     {
-      if (cfg->which_score_type == h4STATSIM_DO_VITFILTER)
-        fx = h4_filtermx_Create(hmm->M);
+      if      (cfg->which_score_type == h4STATSIM_DO_VITFILTER) fx  = h4_filtermx_Create(hmm->M);
+      else if (cfg->which_score_type == h4STATSIM_DO_FWDFILTER) cpx = h4_checkptmx_Create(hmm->M, cfg->L, ESL_MBYTES(128));
+      else  esl_fatal("unimplemented");
     }
   
 
   /* (Re)calibrate the model as directed */
   h4_lambda(hmm, &lambda);
   switch (cfg->which_score_type) {
-  case h4STATSIM_DO_SSVFILTER: h4_ssv_mu(rng, hmm, cfg->EsL, cfg->EsN, lambda, &mu); break;
-  case h4STATSIM_DO_VITFILTER: h4_vit_mu(rng, hmm, cfg->EvL, cfg->EvN, lambda, &mu); break;
+  case h4STATSIM_DO_SSVFILTER: h4_ssv_mu (rng, hmm, cfg->EsL, cfg->EsN, lambda,       &mu);  break;
+  case h4STATSIM_DO_VITFILTER: h4_vit_mu (rng, hmm, cfg->EvL, cfg->EvN, lambda,       &mu);  break;
+  case h4STATSIM_DO_FWDFILTER: h4_fwd_tau(rng, hmm, cfg->EfL, cfg->EfN, lambda, 0.04, &mu); break;
   default: esl_fatal("unimplemented");
   }
-
 
   /* Collect scores on N random sequences */
   for (i = 0; i < cfg->N; i++)
@@ -273,9 +284,9 @@ process_workunit(struct statsim_cfg_s *cfg, const H4_PROFILE *hmm, double *score
       else
         {
           switch (cfg->which_score_type) {
-          case h4STATSIM_DO_SSVFILTER: h4_ssvfilter(dsq, cfg->L, hmm, mo,     &sc); break;  // can return eslERANGE if we overflowed SSV filter score range, and sc is only a lower bound
-          case h4STATSIM_DO_VITFILTER: h4_vitfilter(dsq, cfg->L, hmm, mo, fx, &sc); break;
-          case h4STATSIM_DO_FWDFILTER: esl_fatal("unimplemented");
+          case h4STATSIM_DO_SSVFILTER: h4_ssvfilter(dsq, cfg->L, hmm, mo,      &sc); break;  // can return eslERANGE if we overflowed SSV filter score range, and sc is only a lower bound
+          case h4STATSIM_DO_VITFILTER: h4_vitfilter(dsq, cfg->L, hmm, mo, fx,  &sc); break;
+          case h4STATSIM_DO_FWDFILTER: h4_fwdfilter(dsq, cfg->L, hmm, mo, cpx, &sc); break;
           case h4STATSIM_DO_VIT:       esl_fatal("unimplemented");
           case h4STATSIM_DO_FWD:       esl_fatal("unimplemented");
           case h4STATSIM_DO_ASC:       esl_fatal("unimplemented");
@@ -296,8 +307,15 @@ process_workunit(struct statsim_cfg_s *cfg, const H4_PROFILE *hmm, double *score
 }
 
 
+/* output_results_vit()
+ *
+ * For a bunch of <scores> collected for Viterbi-like optimal
+ * alignment algorithms (including the SSV and Viterbi filters), fit
+ * the complete distribution to a Gumbel distribution, with provided
+ * vs. fitted mu/lambda parameters.
+ */
 static void
-output_results(struct statsim_cfg_s *cfg, char *hmmname, double *scores, double emu, double elambda)
+output_results_vit(struct statsim_cfg_s *cfg, char *hmmname, double *scores, double emu, double elambda)
 {
   ESL_HISTOGRAM *h = esl_histogram_CreateFull(-50., 50., 0.2);
   double         x10;               // 10th highest score
@@ -305,7 +323,6 @@ output_results(struct statsim_cfg_s *cfg, char *hmmname, double *scores, double 
   double         mufix,  E10fix;    //  ... using lambda fixed at log 2
   double         mufix2, E10fix2;   //  ... using H4-estimated lambda (with edge correction)
   double         E10e;              //  ... using H4 estimates for mu, lambda
-  double         tailp = 1.0;       // Unused for now. Viterbi scores fit to complete distribution.
   int            i;
  
   for (i = 0; i < cfg->N; i++)
@@ -329,7 +346,7 @@ output_results(struct statsim_cfg_s *cfg, char *hmmname, double *scores, double 
   E10e    = cfg->N * esl_gumbel_surv(x10, emu,   elambda); 
       
   fprintf(cfg->ofp, "%-20s  %8.4f %8.4f %8.4f %8.4f %8.4f %8.4f %8.4f %8.4f %8.4f %8.4f %8.4f\n", 
-          hmmname, tailp, mu, lambda, E10, mufix, E10fix, mufix2, E10fix2, emu, elambda, E10e);
+          hmmname, /*tailp=*/1.0, mu, lambda, E10, mufix, E10fix, mufix2, E10fix2, emu, elambda, E10e);
 
   
   if (cfg->survfp) {
@@ -337,7 +354,49 @@ output_results(struct statsim_cfg_s *cfg, char *hmmname, double *scores, double 
     esl_gumbel_Plot(cfg->survfp, mu,    lambda,   esl_gumbel_surv, h->xmin - 5., h->xmax + 5., 0.1);
     esl_gumbel_Plot(cfg->survfp, mufix, 0.693147, esl_gumbel_surv, h->xmin - 5., h->xmax + 5., 0.1);
   }
-
 }
   
+/* output_results_fwd()
+ *
+ * For <scores> collected with Forward-like ensemble algorithms
+ * (including ASC), fit the tail distribution to an exponential,
+ * with provided vs. fitted tau/lambda parameters.
+ */
+static void
+output_results_fwd(struct statsim_cfg_s *cfg, char *hmmname, double *scores, double etau, double elambda)
+{
+  ESL_HISTOGRAM *h = esl_histogram_CreateFull(-50., 50., 0.2);
+  double         x10;               // 10th highest score
+  double        *xv;                // points in the tail, that we'll fit to
+  int            n;                 // number of points in the tail; n <= tailp * cfg->N
+  double         tau, lambda, E10;  // tau, lambda from ML exponential fitting; and E-value of 10th highest score using them
+  double         E10fix;            //  ... E@10 using fixed lambda=log 2 instead
+  double         E10e;              //  ... E@10 using provided H4 estimates <etau>, <elambda>
+  int            i;
 
+  for (i = 0; i < cfg->N; i++)
+    esl_histogram_Add(h, scores[i]);
+
+  esl_histogram_GetRank(h, 10, &x10);
+
+  esl_histogram_GetTailByMass(h, cfg->Eft, &xv, &n, /*N-n=*/NULL);
+  ESL_DASSERT1(( n == (int) floor(cfg->Eft * cfg->N)));
+
+  esl_exp_FitComplete(xv, n, &tau, &lambda);
+  tau += log(cfg->Eft) / lambda;              // back that base location up to P=1.0 complete exponential
+
+  E10    = cfg->N * esl_exp_surv(x10, tau,  lambda);
+  E10fix = cfg->N * esl_exp_surv(x10, tau,  0.693147);  
+  E10e   = cfg->N * esl_exp_surv(x10, etau, elambda);   
+
+  fprintf(cfg->ofp, "%-20s  %8.4f %8.4f %8.4f %8.4f %8.4f %8.4f %8.4f %8.4f\n", 
+          hmmname, cfg->Eft, tau, lambda, E10, E10fix, etau, elambda, E10e);
+
+  if (cfg->survfp) 
+    {
+      esl_histogram_PlotSurvival(cfg->survfp, h);
+      esl_exp_Plot(cfg->survfp, tau,  lambda,   esl_exp_surv, tau,  h->xmax + 5., 0.1);  // that's using tau, lambda params; plotting P(S>x) survival function; from x=tau to xmax+5 in steps of 0.1
+      esl_exp_Plot(cfg->survfp, etau, elambda,  esl_exp_surv, etau, h->xmax + 5., 0.1);
+    }
+
+}

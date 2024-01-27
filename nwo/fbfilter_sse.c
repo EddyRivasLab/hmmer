@@ -160,7 +160,7 @@ h4_fwdfilter_sse(const ESL_DSQ *dsq, int L, const H4_PROFILE *hmm, const H4_MODE
   xc  = (float *) (dpc + Q * h4C_NSCELLS);
   ESL_DASSERT1( (cpx->R == cpx->Ra+cpx->Rb+cpx->Rc) );
   ESL_DASSERT1( ( (! isnan(xc[h4C_C])) && (! isinf(xc[h4C_C]))) );
-  if (opt_sc) *opt_sc = totsc + esl_log2f(xc[h4C_C] * mo->xf[h4_C][h4_MOVE]);
+  if (opt_sc) *opt_sc = totsc + esl_log2f(xc[h4C_C] * mo->xf[h4_C][h4_MOVE]) - mo->nullsc;
   return eslOK;
 }
 
@@ -230,7 +230,7 @@ h4_bckfilter_sse(const ESL_DSQ *dsq, int L, const H4_PROFILE *hmm, const H4_MODE
   /* If there's any checkpointing, there's an L-1 row to fill now. */
   if (cpx->Rb+cpx->Rc > 0)
     {
-      /* Compute fwd[L-1] frhmm last checkpoint, which we know is fwd[L-2] */
+      /* Compute fwd[L-1] from last checkpoint, which we know is fwd[L-2] */
       dpp = (__m128 *) cpx->dpf[cpx->R0+cpx->R-1];  // fwd[L-2] values, already known
       fwd = (__m128 *) cpx->dpf[cpx->R0+cpx->R];    // get free row memory from top of stack
       forward_row_sse(dsq[i], hmm, mo, dpp, fwd, Q);    // calculate fwd[L-1]
@@ -238,7 +238,7 @@ h4_bckfilter_sse(const ESL_DSQ *dsq, int L, const H4_PROFILE *hmm, const H4_MODE
       if (do_dumping) h4_checkptmx_DumpFBRow(cpx, i, (float *) fwd, "f2 X");
 #endif
 
-      /* Chmmpute bck[L-1] from bck[L]. */
+      /* Compute bck[L-1] from bck[L]. */
       xf  = (float *) (fwd + Q*h4C_NSCELLS);
       dpp = (__m128 *) cpx->dpf[(i+1)%2]; 
       bck = (__m128 *) cpx->dpf[i%2];             // get space for bck[L-1]
@@ -354,6 +354,7 @@ h4_bckfilter_sse(const ESL_DSQ *dsq, int L, const H4_PROFILE *hmm, const H4_MODE
   if (cpx->bck) save_debug_row_fb_sse(cpx, cpx->bck, bck, 0, cpx->bcksc); 
   if ((status = posterior_decode_row_sse(cpx, 0, sm, sm_thresh, Tvalue)) != eslOK) return status;
   cpx->bcksc += xN;
+  cpx->bcksc -= mo->nullsc;
 #endif
 
   h4_sparsemask_Finish(sm);

@@ -4,13 +4,12 @@
  * pipeline, after SSV and VF.
  *
  * The Forward pass of the FB filter computes a local (only) ensemble
- * Forward score. If this score is deemed sufficient, a
- * Backward/Decoding pass does posterior decoding to identify i,k
- * lattice cells (for sequence positions i and profile positions k)
- * with more than a threshold amount of probability mass. These cells
- * are marked in a data structure (H4_SPARSEMASK) for subsequent
- * sparse dynamic programming with the full glocal/local dual-mode
- * model.
+ * Forward score. If this score is deemed sufficient, then we do a
+ * second pass with Backward and posterior decoding to identify i,k
+ * lattice cells (sequence positions i, profile positions k) that have
+ * more than a threshold amount of probability mass. These cells are
+ * marked in a data structure (H4_SPARSEMASK) for subsequent sparse
+ * dynamic programming with the full glocal/local dual-mode model.
  *
  * The FB filter is memory-efficient, using checkpointed dynamic
  * programming. It requires $O(M \sqrt L)$ memory for a profile of
@@ -52,6 +51,55 @@ static int bckfilter_dispatcher(const ESL_DSQ *dsq, int L, const H4_PROFILE *hmm
  * 1. h4_fwdfilter(), h4_bckfilter() 
  *****************************************************************/
 
+/* Function:  h4_fwdfilter()
+ * Synopsis:  the Forward acceleration filter 
+ *
+ * Purpose:   Calculates the local Forward filter score for a comparison
+ *            of profile <hmm> to digital sequence <dsq> of length
+ *            <L>, using alignment mode <mo>, and checkpoint DP matrix
+ *            <cpx>.  Returns the Forward filter score (in bits) in
+ *            <ret_sc>.
+ *
+ *            The <hmm> has its striped vector parameters set (and its
+ *            <h4_HASVECS) flag).
+ *            
+ *            The Forward filter uses multihit local alignment. The
+ *            caller provides a multihit alignment mode <mo>, with its
+ *            length parameterization set
+ *            (<h4_mode_SetLength()>). Local alignment is hardcoded; B
+ *            $\rightarrow$ L|G local/glocal parameterization is
+ *            ignored, implicitly assuming B->L = 1.0.  Multihit mode
+ *            is required to guarantee that scores will not underflow
+ *            in sparse rescaling [Eddy11].
+ *
+ *            (Thus, <mo> can be our default dual-mode local/glocal
+ *            multihit mode for length <L>, and the Forward filter
+ *            will still do **local** multihit alignment with it.)
+ *            
+ *            Caller provides an allocated DP matrix <cpx> of any
+ *            size. It is resized here as needed. Caller does not have
+ *            to call any reuse or reinit on <cpx> to reuse it for
+ *            another DP calculation.
+ *    
+ *            The Forward filter uses a memory-efficient checkpointed
+ *            DP algorithm that requires $O(M \sqrt L)$ memory.
+ *            
+ *
+ * Args:      dsq    : digital target sequence 1..L
+ *            L      : length of <dsq>
+ *            hmm    : profile HMM, with striped vector params
+ *            mo     : alignment mode, multihit, with length L set
+ *            cpx    : checkpointed DP matrix, any allocation is fine
+ *            ret_sc : RETURN: Forward filter score (bits)
+ *
+ * Returns:   <eslOK> on success;
+ *            <*ret_sc> is the Forward filter score in bits;
+ *            <cpx> contains a checkpointed Forward DP matrix, ready for <h4_bckfilter()>.
+ *
+ * Throws:    <eslEMEM> if a DP matrix reallocation fails.
+ *
+ * Xref:      fbfilter.md for more notes
+ */
 int
 (*h4_fwdfilter)(const ESL_DSQ *dsq, int L, const H4_PROFILE *hmm, const H4_MODE *mo, H4_CHECKPTMX *cpx, float *opt_sc) =
   fwdfilter_dispatcher;
