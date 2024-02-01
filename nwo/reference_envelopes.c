@@ -311,6 +311,8 @@ approxsc(H4_ENVSET *env, const H4_REFMX *afd, const H4_MODE *mo)
 	  mo->xsc[h4_N][h4_LOOP] * (env->e[d].oa-1) +
 	  mo->xsc[h4_C][h4_LOOP] * (L-env->e[d].ob) +
 	  mo->xsc[h4_C][h4_MOVE];
+
+        env->e[d].env_sc -= mo->nullsc;
       }
   return eslOK;
 }
@@ -348,6 +350,7 @@ exactsc(H4_ENVSET *env, const ESL_DSQ *dsq, const H4_PROFILE *hmm, const H4_MODE
          * as if this domain were alone in the sequence.
          */
         env->e[d].env_sc += ( env->L - env->e[d].ob + offset ) * mo->xsc[h4_N][h4_LOOP];
+        env->e[d].env_sc -= mo->nullsc;
       }
   return eslOK;
 }

@@ -287,7 +287,7 @@ utest_compare_reference(ESL_RANDOMNESS *rng, ESL_ALPHABET *abc, int M, int L, in
       if (status == eslOK) 
 	{      
 	  h4_reference_Viterbi(dsq, L, xhmm, xmo, vit, NULL, &vsc);
-	  vsc = (vsc / h4_SCALE_B) - h4_2NAT_APPROX - xmo->nullsc;    // SRE note: when we make a planned change to have h4_reference_Viterbi return bitscore, not rawscore, delete the xmo->nullsc term here
+	  vsc = (vsc / h4_SCALE_B) - h4_2NAT_APPROX;
 	  vsc = ESL_MAX(minsc, vsc);  // catch case where emulated ref Vit score is < minimum reportable SSV score.
 
 	  //printf("M: %6d L: %6d sfsc: %8.2f vsc: %8.2f\n", M, L, sfsc, vsc);

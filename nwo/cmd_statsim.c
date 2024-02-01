@@ -18,16 +18,21 @@
 #include "esl_randomseq.h"
 #include "esl_subcmd.h"
 
+#include "h4_checkptmx.h"
 #include "h4_filtermx.h"
 #include "h4_hmmfile.h"
 #include "h4_mode.h"
 #include "h4_profile.h"
+#include "h4_sparsemask.h"
+#include "h4_sparsemx.h"
 
 #include "calibrate.h"
 #include "general.h"
 #include "ssvfilter.h"
 #include "vitfilter.h"
 #include "fbfilter.h"
+#include "sparse_dp.h"
+
 
 #define ALGORITHMS "--ssvfilter,--vitfilter,--fwdfilter,--vit,--fwd,--asc"
 
@@ -47,13 +52,14 @@ static ESL_OPTIONS statsim_options[] = {
   { "-N",           eslARG_INT, "1000",  NULL, "n>0",  NULL,  NULL, NULL,  "number of random target seqs",                     1 },
 
   /* Which type of score to collect - which algorithm to run */
-  { "--ssvfilter", eslARG_NONE,  FALSE,  NULL,  NULL,ALGORITHMS,NULL, NULL, "collect SSV filter scores (local)",                               2 },
-  { "--vitfilter", eslARG_NONE,  FALSE,  NULL,  NULL,ALGORITHMS,NULL, NULL, "collect Viterbi filter scores (local)",                           2 },
-  { "--fwdfilter", eslARG_NONE,  FALSE,  NULL,  NULL,ALGORITHMS,NULL, NULL, "collect Forward filter scores (local)",                           2 },
-  { "--vit",       eslARG_NONE,  FALSE,  NULL,  NULL,ALGORITHMS,NULL, NULL, "collect Viterbi scores (dual-mode glocal/local)",                 2 },
-  { "--fwd",       eslARG_NONE,"default",NULL,  NULL,ALGORITHMS,NULL, NULL, "collect Forward scores (dual-mode glocal/local)",                 2 },
-  { "--asc",       eslARG_NONE,  FALSE,  NULL,  NULL,ALGORITHMS,NULL, NULL, "collect ASC Forward scores (dual-mode glocal/local)",             2 },
-  { "--reference", eslARG_NONE,  FALSE,  NULL,  NULL,  NULL,    NULL, NULL, "use reference implementation, not production sparse|vector code", 2 },
+  { "--ssvfilter", eslARG_NONE,  FALSE,  NULL,  NULL,ALGORITHMS,NULL, NULL,         "collect SSV filter scores (local)",                               2 },
+  { "--vitfilter", eslARG_NONE,  FALSE,  NULL,  NULL,ALGORITHMS,NULL, NULL,         "collect Viterbi filter scores (local)",                           2 },
+  { "--fwdfilter", eslARG_NONE,  FALSE,  NULL,  NULL,ALGORITHMS,NULL, NULL,         "collect Forward filter scores (local)",                           2 },
+  { "--vit",       eslARG_NONE,  FALSE,  NULL,  NULL,ALGORITHMS,NULL, NULL,         "collect Viterbi scores (dual-mode glocal/local)",                 2 },
+  { "--fwd",       eslARG_NONE,"default",NULL,  NULL,ALGORITHMS,NULL, NULL,         "collect Forward scores (dual-mode glocal/local)",                 2 },
+  { "--asc",       eslARG_NONE,  FALSE,  NULL,  NULL,ALGORITHMS,NULL, NULL,         "collect ASC Forward scores (dual-mode glocal/local)",             2 },
+  { "--reference", eslARG_NONE,  FALSE,  NULL,  NULL,  NULL,    NULL, NULL,         "use reference implementation, not production sparse|vector code", 2 },
+  { "-a",          eslARG_NONE,  FALSE,  NULL,  NULL,  NULL,    NULL, "--reference","with vit|fwd|asc sparse DP: mark all cells, do full matrix",      2 },
   
   /* Outputs */
   { "--xyfile", eslARG_OUTFILE,   NULL,  NULL,  NULL,  NULL,  NULL, NULL,  "output P(S>x) survival plots to <f> in xy format", 3 },
@@ -76,6 +82,7 @@ struct statsim_cfg_s {
 
   int      which_score_type;
   int      use_reference_impl;
+  int      do_all_cells;
 
   FILE   *ofp;          // tabular summary output
   FILE   *survfp;       // optional output of survival plots (xmgrace .xy format)
@@ -92,7 +99,12 @@ struct statsim_cfg_s {
 static ESL_GETOPTS *process_cmdline(const char *topcmd, const ESL_SUBCMD *sub, const ESL_OPTIONS *suboptions, int argc, char **argv);
 static void         initialize_cfg(ESL_GETOPTS *go, struct statsim_cfg_s *cfg);
 
-static void process_workunit  (struct statsim_cfg_s *cfg, const H4_PROFILE *hmm, double *scores, double *ret_mu, double *ret_lambda);
+static void         collect_ssvfilter (struct statsim_cfg_s *cfg, const H4_PROFILE *hmm, double *scores, double *ret_mu,  double *ret_lambda);
+static void         collect_vitfilter (struct statsim_cfg_s *cfg, const H4_PROFILE *hmm, double *scores, double *ret_mu,  double *ret_lambda);
+static void         collect_fwdfilter (struct statsim_cfg_s *cfg, const H4_PROFILE *hmm, double *scores, double *ret_tau, double *ret_lambda);
+static void         collect_sparse_vit(struct statsim_cfg_s *cfg, const H4_PROFILE *hmm, double *scores, double *ret_mu,  double *ret_lambda);
+static void         collect_sparse_fwd(struct statsim_cfg_s *cfg, const H4_PROFILE *hmm, double *scores, double *ret_tau, double *ret_lambda);
+
 static void output_results_vit(struct statsim_cfg_s *cfg, char *hmmname, double *scores, double emu,  double elambda);
 static void output_results_fwd(struct statsim_cfg_s *cfg, char *hmmname, double *scores, double etau, double elambda);
 
@@ -111,6 +123,7 @@ h4_cmd_statsim(const char *topcmd, const ESL_SUBCMD *sub, int argc, char **argv)
   double        emu, elambda;
   int           status;
 
+  h4_Init();
   initialize_cfg(go, &cfg);
 
   ESL_ALLOC(scores, sizeof(double) * cfg.N);
@@ -120,7 +133,22 @@ h4_cmd_statsim(const char *topcmd, const ESL_SUBCMD *sub, int argc, char **argv)
 
   while ((status = h4_hmmfile_Read(hfp, &abc, &hmm)) == eslOK)
     {
-      process_workunit(&cfg, hmm, scores, &emu, &elambda);
+      if (cfg.use_reference_impl)
+        {
+          esl_fatal("unimplemented");
+        }
+      else
+        {
+          switch (cfg.which_score_type) {
+          case h4STATSIM_DO_SSVFILTER: collect_ssvfilter (&cfg, hmm, scores, &emu, &elambda); break;
+          case h4STATSIM_DO_VITFILTER: collect_vitfilter (&cfg, hmm, scores, &emu, &elambda); break;
+          case h4STATSIM_DO_FWDFILTER: collect_fwdfilter (&cfg, hmm, scores, &emu, &elambda); break;
+          case h4STATSIM_DO_VIT:       collect_sparse_vit(&cfg, hmm, scores, &emu, &elambda); break;
+          case h4STATSIM_DO_FWD:       collect_sparse_fwd(&cfg, hmm, scores, &emu, &elambda); break;
+          case h4STATSIM_DO_ASC:       esl_fatal("unimplemented");
+          default: esl_fatal("can't happen. no such score type?");
+          }
+        }
 
       if (cfg.which_score_type == h4STATSIM_DO_SSVFILTER ||
           cfg.which_score_type == h4STATSIM_DO_VITFILTER ||
@@ -205,6 +233,7 @@ initialize_cfg(ESL_GETOPTS *go, struct statsim_cfg_s *cfg)
   else esl_fatal("can't happen. no default score type set in options?");
 
   cfg->use_reference_impl = esl_opt_GetBoolean(go, "--reference");
+  cfg->do_all_cells       = esl_opt_GetBoolean(go, "-a");
 
   if (( outfile = esl_opt_GetString(go, "-o")) != NULL)
     {
@@ -227,84 +256,182 @@ initialize_cfg(ESL_GETOPTS *go, struct statsim_cfg_s *cfg)
   cfg->EfN = esl_opt_GetInteger(go, "--EfN");
   cfg->EfL = esl_opt_GetInteger(go, "--EfL");
   cfg->Eft = esl_opt_GetReal   (go, "--Eft");
+
+  if (cfg->do_all_cells &&
+      (cfg->which_score_type == h4STATSIM_DO_SSVFILTER ||
+       cfg->which_score_type == h4STATSIM_DO_VITFILTER ||
+       cfg->which_score_type == h4STATSIM_DO_FWDFILTER))
+    esl_fatal("-a option is for --vit|--fwd|--asc sparse DP score collections");
 }
 
 
+
 static void
-process_workunit(struct statsim_cfg_s *cfg, const H4_PROFILE *hmm, double *scores, double *ret_mu, double *ret_lambda)
+collect_ssvfilter(struct statsim_cfg_s *cfg, const H4_PROFILE *hmm, double *scores, double *ret_mu, double *ret_lambda)
 {
   ESL_RANDOMNESS *rng = esl_randomness_Create(cfg->rng_seed);
-  ESL_DSQ        *dsq = NULL;
-  H4_MODE        *mo  = NULL;
-  H4_FILTERMX    *fx  = NULL;
-  H4_CHECKPTMX   *cpx = NULL;
+  ESL_DSQ        *dsq = esl_dsq_Create(cfg->L);
+  H4_MODE        *mo  = h4_mode_Create();
   int             i;
   float           sc;
-  double          mu, lambda;
-  int             status;
 
-  if (!(hmm->flags & h4_HASVECS)) esl_fatal("profile not vectorized");
+  h4_mode_SetLength(mo, cfg->L);
 
-  ESL_ALLOC(dsq, sizeof(ESL_DSQ) * (cfg->L + 2));
+  h4_lambda(hmm, ret_lambda);
+  h4_ssv_mu (rng, hmm, cfg->EsL, cfg->EsN, *ret_lambda, ret_mu);  
 
-  if ((mo = h4_mode_Create()) == NULL) { status = eslEMEM; goto ERROR; }   // default = multihit dual (glocal/local) mode
-  if ((status = h4_mode_SetLength(mo, cfg->L)) != eslOK) goto ERROR;  
-
-  /* Allocate any DP matrix(s) we need */
-  if (cfg->use_reference_impl)
+  for (i = 0; i < cfg->N; i++)
     {
-      esl_fatal("unimplemented");
+      esl_rsq_xfIID(rng, hmm->f, hmm->abc->K, cfg->L, dsq);
+      h4_ssvfilter(dsq, cfg->L, hmm, mo, &sc);          // can return eslERANGE if we overflowed SSV filter score range, and sc is only a lower bound
+      scores[i] = sc;
     }
-  else
+
+  h4_mode_Destroy(mo);
+  esl_randomness_Destroy(rng);
+  free(dsq);  
+}
+
+static void
+collect_vitfilter(struct statsim_cfg_s *cfg, const H4_PROFILE *hmm, double *scores, double *ret_mu, double *ret_lambda)
+{
+  ESL_RANDOMNESS *rng = esl_randomness_Create(cfg->rng_seed);
+  ESL_DSQ        *dsq = esl_dsq_Create(cfg->L);
+  H4_MODE        *mo  = h4_mode_Create();
+  H4_FILTERMX    *fx  = h4_filtermx_Create(hmm->M);
+  int             i;
+  float           sc;
+
+  h4_mode_SetLength(mo, cfg->L);
+
+  h4_lambda(hmm, ret_lambda);
+  h4_vit_mu(rng, hmm, cfg->EvL, cfg->EvN, *ret_lambda, ret_mu); 
+
+  for (i = 0; i < cfg->N; i++)
     {
-      if      (cfg->which_score_type == h4STATSIM_DO_VITFILTER) fx  = h4_filtermx_Create(hmm->M);
-      else if (cfg->which_score_type == h4STATSIM_DO_FWDFILTER) cpx = h4_checkptmx_Create(hmm->M, cfg->L, ESL_MBYTES(128));
-      else  esl_fatal("unimplemented");
+      esl_rsq_xfIID(rng, hmm->f, hmm->abc->K, cfg->L, dsq);
+      h4_vitfilter(dsq, cfg->L, hmm, mo, fx,  &sc);
+      scores[i] = sc;
     }
+
+  h4_filtermx_Destroy(fx);
+  h4_mode_Destroy(mo);
+  esl_randomness_Destroy(rng);
+  free(dsq);  
+}
+ 
+static void
+collect_fwdfilter(struct statsim_cfg_s *cfg, const H4_PROFILE *hmm, double *scores, double *ret_tau, double *ret_lambda)
+{
+  ESL_RANDOMNESS *rng = esl_randomness_Create(cfg->rng_seed);
+  ESL_DSQ        *dsq = esl_dsq_Create(cfg->L);
+  H4_MODE        *mo  = h4_mode_Create();
+  H4_CHECKPTMX   *cpx = h4_checkptmx_Create(hmm->M, cfg->L, ESL_MBYTES(128));
+  int             i;
+  float           sc;
+
+  h4_mode_SetLength(mo, cfg->L);
+
+  h4_lambda(hmm, ret_lambda);
+  h4_fwd_tau(rng, hmm, cfg->EfL, cfg->EfN, *ret_lambda, 0.04, ret_tau);  
+
+  for (i = 0; i < cfg->N; i++)
+    {
+      esl_rsq_xfIID(rng, hmm->f, hmm->abc->K, cfg->L, dsq);
+      h4_fwdfilter(dsq, cfg->L, hmm, mo, cpx, &sc); 
+      scores[i] = sc;
+    }
+
+  h4_checkptmx_Destroy(cpx);
+  h4_mode_Destroy(mo);
+  esl_randomness_Destroy(rng);
+  free(dsq);  
+}
   
+static void
+collect_sparse_vit(struct statsim_cfg_s *cfg, const H4_PROFILE *hmm, double *scores, double *ret_mu, double *ret_lambda)
+{
+  ESL_RANDOMNESS *rng = esl_randomness_Create(cfg->rng_seed);
+  ESL_DSQ        *dsq = esl_dsq_Create(cfg->L);
+  H4_MODE        *mo  = h4_mode_Create();
+  H4_CHECKPTMX   *cpx = h4_checkptmx_Create(hmm->M, cfg->L, ESL_MBYTES(128));
+  H4_SPARSEMASK  *sm  = h4_sparsemask_Create(hmm->M, cfg->L);
+  H4_SPARSEMX    *sx  = h4_sparsemx_Create(NULL);
+  int             i;
+  float           sc;
+  
+  h4_mode_SetLength(mo, cfg->L);
+  if (cfg->do_all_cells)
+    h4_sparsemask_AddAll(sm);
 
-  /* (Re)calibrate the model as directed */
-  h4_lambda(hmm, &lambda);
-  switch (cfg->which_score_type) {
-  case h4STATSIM_DO_SSVFILTER: h4_ssv_mu (rng, hmm, cfg->EsL, cfg->EsN, lambda,       &mu);  break;
-  case h4STATSIM_DO_VITFILTER: h4_vit_mu (rng, hmm, cfg->EvL, cfg->EvN, lambda,       &mu);  break;
-  case h4STATSIM_DO_FWDFILTER: h4_fwd_tau(rng, hmm, cfg->EfL, cfg->EfN, lambda, 0.04, &mu); break;
-  default: esl_fatal("unimplemented");
-  }
+  h4_lambda(hmm, ret_lambda);
+  h4_vit_mu (rng, hmm, cfg->EvL, cfg->EvN, *ret_lambda, ret_mu); 
 
-  /* Collect scores on N random sequences */
   for (i = 0; i < cfg->N; i++)
     {
       esl_rsq_xfIID(rng, hmm->f, hmm->abc->K, cfg->L, dsq);
 
-      if (cfg->use_reference_impl)
+      if (! cfg->do_all_cells)
         {
-          esl_fatal("unimplemented");
+          h4_fwdfilter(dsq, cfg->L, hmm, mo, cpx, /*ffsc=*/NULL);                
+          h4_bckfilter(dsq, cfg->L, hmm, mo, cpx, sm, h4SPARSIFY_THRESH);
         }
-      else
-        {
-          switch (cfg->which_score_type) {
-          case h4STATSIM_DO_SSVFILTER: h4_ssvfilter(dsq, cfg->L, hmm, mo,      &sc); break;  // can return eslERANGE if we overflowed SSV filter score range, and sc is only a lower bound
-          case h4STATSIM_DO_VITFILTER: h4_vitfilter(dsq, cfg->L, hmm, mo, fx,  &sc); break;
-          case h4STATSIM_DO_FWDFILTER: h4_fwdfilter(dsq, cfg->L, hmm, mo, cpx, &sc); break;
-          case h4STATSIM_DO_VIT:       esl_fatal("unimplemented");
-          case h4STATSIM_DO_FWD:       esl_fatal("unimplemented");
-          case h4STATSIM_DO_ASC:       esl_fatal("unimplemented");
-          default: esl_fatal("can't happen. no such score type?");
-          }
-        }
+
+      h4_sparse_Viterbi(dsq, cfg->L, hmm, mo, sm, sx, /*path=*/NULL, &sc); 
       scores[i] = sc;
     }
 
-  // status == eslOK if all is well, and we flow through to cleanup
-  *ret_mu     = mu;
-  *ret_lambda = lambda;
- ERROR:
-  h4_filtermx_Destroy(fx);
+  h4_sparsemx_Destroy(sx);
+  h4_sparsemask_Destroy(sm);
+  h4_checkptmx_Destroy(cpx);
   h4_mode_Destroy(mo);
   esl_randomness_Destroy(rng);
   free(dsq);
 }
+
+
+static void
+collect_sparse_fwd(struct statsim_cfg_s *cfg, const H4_PROFILE *hmm, double *scores, double *ret_tau, double *ret_lambda)
+{
+  ESL_RANDOMNESS *rng = esl_randomness_Create(cfg->rng_seed);
+  ESL_DSQ        *dsq = esl_dsq_Create(cfg->L);
+  H4_MODE        *mo  = h4_mode_Create();
+  H4_CHECKPTMX   *cpx = h4_checkptmx_Create(hmm->M, cfg->L, ESL_MBYTES(128));
+  H4_SPARSEMASK  *sm  = h4_sparsemask_Create(hmm->M, cfg->L);
+  H4_SPARSEMX    *sx  = h4_sparsemx_Create(NULL);
+  int             i;
+  float           sc;
+  
+  h4_mode_SetLength(mo, cfg->L);
+  if (cfg->do_all_cells)
+    h4_sparsemask_AddAll(sm);
+
+  h4_lambda(hmm, ret_lambda);
+  h4_fwd_tau(rng, hmm, cfg->EfL, cfg->EfN, *ret_lambda, 0.04, ret_tau); 
+  *ret_tau -= 1.0;  // SRE FIXME. I think this will be right, for B->G = 0.5?
+
+  for (i = 0; i < cfg->N; i++)
+    {
+      esl_rsq_xfIID(rng, hmm->f, hmm->abc->K, cfg->L, dsq);
+
+      if (! cfg->do_all_cells)
+        {
+          h4_fwdfilter(dsq, cfg->L, hmm, mo, cpx, /*ffsc=*/NULL);                
+          h4_bckfilter(dsq, cfg->L, hmm, mo, cpx, sm, h4SPARSIFY_THRESH);
+        }
+
+      h4_sparse_Forward(dsq, cfg->L, hmm, mo, sm, sx, &sc); 
+      scores[i] = sc;
+    }
+
+  h4_sparsemx_Destroy(sx);
+  h4_sparsemask_Destroy(sm);
+  h4_checkptmx_Destroy(cpx);
+  h4_mode_Destroy(mo);
+  esl_randomness_Destroy(rng);
+  free(dsq);
+}
+  
 
 
 /* output_results_vit()
@@ -351,8 +478,8 @@ output_results_vit(struct statsim_cfg_s *cfg, char *hmmname, double *scores, dou
   
   if (cfg->survfp) {
     esl_histogram_PlotSurvival(cfg->survfp, h);
-    esl_gumbel_Plot(cfg->survfp, mu,    lambda,   esl_gumbel_surv, h->xmin - 5., h->xmax + 5., 0.1);
-    esl_gumbel_Plot(cfg->survfp, mufix, 0.693147, esl_gumbel_surv, h->xmin - 5., h->xmax + 5., 0.1);
+    esl_gumbel_Plot(cfg->survfp, mu,   lambda,  esl_gumbel_surv, h->xmin - 5., h->xmax + 5., 0.1);
+    esl_gumbel_Plot(cfg->survfp, emu,  elambda, esl_gumbel_surv, h->xmin - 5., h->xmax + 5., 0.1);
   }
 }
   

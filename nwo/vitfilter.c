@@ -341,7 +341,7 @@ utest_compare_reference(ESL_RANDOMNESS *rng, ESL_ALPHABET *abc, int M, int L, in
 
       h4_vitfilter        (dsq, L, hmm,  mo,  fx,      &vfsc);
       h4_reference_Viterbi(dsq, L, xhmm, xmo, vit, pi, &vsc);
-      vsc = (vsc / h4_SCALE_W) - h4_3NAT_APPROX - xmo->nullsc;    // SRE note: when we make a planned change to have h4_reference_Viterbi return bitscore, not rawscore, delete the xmo->nullsc term here
+      vsc = (vsc / h4_SCALE_W) - h4_3NAT_APPROX;
       
       //h4_refmx_Dump(stdout, vit);
       //h4_refmx_DumpAsVF(stdout, vit);

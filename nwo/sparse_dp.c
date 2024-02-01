@@ -1722,6 +1722,7 @@ utest_singlepath(ESL_RANDOMNESS *rng, ESL_ALPHABET *abc, int M, int N)
           if ( h4_mode_SetUniglocal(mo)                     != eslOK) esl_fatal(msg);
           if ( h4_mode_SetLength(mo, 0)                     != eslOK) esl_fatal(msg);
           if ( h4_emit(rng, hmm, mo, sq, gpi)               != eslOK) esl_fatal(msg);
+          if ( h4_mode_SetLength(mo, sq->n)                 != eslOK) esl_fatal(msg);   // reset length model to this sampled seq's length before scoring or DP 
           if ( h4_path_Score(gpi, sq->dsq, hmm, mo, &esc)   != eslOK) esl_fatal(msg);
         }
       else
@@ -1825,12 +1826,12 @@ utest_internal_glocal_exit(void)
   int            Q   = sm->Q; 
 
   /* Create the 40aa A-YA-Y test model */
-  if ( esl_dsq_Create(abc, qseq, &qsq)      != eslOK) esl_fatal(msg);
+  if ( esl_dsq_Build(abc, qseq, &qsq)       != eslOK) esl_fatal(msg);
   if ( h4_seqmodel(qsq, M, abc, &hmm, NULL) != eslOK) esl_fatal(msg);
   if ( h4_mode_SetLength(mo, L)             != eslOK) esl_fatal(msg);
 
   /* Create the 38aa truncated test target seq */
-  if ( esl_dsq_Create(abc, tseq, &tsq)      != eslOK) esl_fatal(msg);
+  if ( esl_dsq_Build(abc, tseq, &tsq)       != eslOK) esl_fatal(msg);
   
   /* Create a sparse mask that includes the main diagonal and the last column. 
    * This mask exercises the potential bug.
@@ -1943,8 +1944,7 @@ utest_approx_decoding(ESL_RANDOMNESS *rng, const ESL_ALPHABET *abc, int M, int n
     h4_emit(rng, hmm, mo, sq, NULL);
   } while (sq->n > M*3); // keep sequence length from getting ridiculous; long seqs do have higher abs error per cell 
 
-  /* for DP, length model has to be sq->n or 0 -- original L=M doesn't work. */
-  if (mo->L != 0) h4_mode_SetLength(mo, sq->n);
+  h4_mode_SetLength(mo, sq->n); // reset for actual sequence length
 
   /* Fwd/Bck local filter to calculate the sparse mask */
   if ( h4_fwdfilter(sq->dsq, sq->n, hmm, mo, cpx, NULL)                  != eslOK) esl_fatal(msg);

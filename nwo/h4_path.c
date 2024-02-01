@@ -820,7 +820,7 @@ h4_path_Count(const H4_PATH *pi, const ESL_DSQ *dsq, float wgt, H4_COUNTS *ctm)
  *****************************************************************/
 
 /* Function:  h4_path_Score()
- * Synopsis:  Calculate score of a path.
+ * Synopsis:  Calculate bit score of a path.
  * Incept:    SRE, Sun 03 Feb 2019
  *
  * Purpose:   Calculate the score of path <pi> for a comparison of
@@ -917,7 +917,7 @@ h4_path_Score(const H4_PATH *pi, const ESL_DSQ *dsq, const H4_PROFILE *hmm, cons
 	break;
       }
     }
-  sc += mo->xsc[h4_C][h4_MOVE];  // in Z=0 case, this is -inf + tau_CT = -inf, so it's fine.
+  sc += mo->xsc[h4_C][h4_MOVE] - mo->nullsc;  // in Z=0 case, this is -inf + tau_CT = -inf, so it's fine.
 
   *ret_sc = sc;
   return eslOK;
@@ -1604,7 +1604,7 @@ main(void)
   int8_t *matassign = malloc(sizeof(int8_t) * (alen + 1));
   int i;
 
-  esl_dsq_Create(abc, aseq1, &ax1);
+  esl_dsq_Build(abc, aseq1, &ax1);
 
   matassign[0] = 0;
   for (i = 1; i <= alen; i++)

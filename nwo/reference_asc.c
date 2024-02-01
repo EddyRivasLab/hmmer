@@ -43,7 +43,7 @@
  *            algorithm. Compare digital sequence <dsq> of length <L>
  *            to profile <hmm> in mode <mo>, constrained by anchor set
  *            <anch>. Fill in ASC UP/DOWN matrices <mxu/mxd>, and
- *            optionally return the ASC Forward raw score, in bits, in
+ *            optionally return the ASC Forward score, in bits, in
  *            <*opt_sc>.
  *
  *            DP matrices <mxu> and <mxd> can be provided as any
@@ -56,7 +56,7 @@
  *            anch    - anchorset
  *            mxu     - RESULT: ASC UP matrix (reused/reallocated as needed)
  *            mxd     - RESULT: ASC DOWN matrix (ditto)
- *            opt_sc  - optRETURN: ASC raw fwd score, in bits
+ *            opt_sc  - optRETURN: ASC fwd bit score
  *
  * Returns:   <eslOK> on success
  *
@@ -389,7 +389,7 @@ h4_reference_asc_Forward(const ESL_DSQ *dsq, int L, const H4_PROFILE *hmm, const
    * special states for the last row L... even for the edge case
    * of D=0 (and the edge case L=0 which must also have D=0).
    */
-  if (opt_sc) *opt_sc = xc[h4R_C] + mo->xsc[h4_C][h4_MOVE]; /* C->T */
+  if (opt_sc) *opt_sc = xc[h4R_C] + mo->xsc[h4_C][h4_MOVE] - mo->nullsc;
   return eslOK;
 }
 /*-------------------- end, ASC Forward -------------------------*/
@@ -408,7 +408,7 @@ h4_reference_asc_Forward(const ESL_DSQ *dsq, int L, const H4_PROFILE *hmm, const
  *            algorithm. Compare digital sequence <dsq> of length <L>
  *            to profile <hmm> in mode <mo>, constrained to sum only
  *            over those paths that have <D> domains that use the
- *            anchor set <anch>. Return the ASC Backward raw score, in
+ *            anchor set <anch>. Return the ASC Backward score, in
  *            bits, in <*opt_sc>.
  *
  *            Caller provides two reference DP matrices <mxu> and
@@ -430,7 +430,7 @@ h4_reference_asc_Forward(const ESL_DSQ *dsq, int L, const H4_PROFILE *hmm, const
  *            mxd     - ASC DOWN matrix
  *
  *            output:
- *            opt_sc  - ASC raw bck score, in bits
+ *            opt_sc  - ASC bck bit score
  *
  * Returns:   <eslOK> on success
  *
@@ -673,7 +673,7 @@ h4_reference_asc_Backward(const ESL_DSQ *dsq, int L, const H4_PROFILE *hmm, cons
       xc[h4R_E]  = xc[h4R_J] + mo->xsc[h4_E][h4_LOOP];  
     } /* end loop over domains d */
 
-  if (opt_sc) *opt_sc = xN;
+  if (opt_sc) *opt_sc = xN - mo->nullsc;
   return eslOK;
 }
 

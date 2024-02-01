@@ -60,7 +60,7 @@
  *            mo      - profile's mode (algorithm-dependent parameters)
  *            rmx     - RETURN: DP matrix                                        [caller-provided space; reused/resized as needed]
  *            opt_pi  - optRETURN: path structure for Viterbi alignment, or NULL [caller-provided space; reused/resized as needed]
- *            opt_sc  - optRETURN: Viterbi raw score in bits, or NULL
+ *            opt_sc  - optRETURN: Viterbi bit score, or NULL
  *
  * Returns:   <eslOK> on success. <rmx> contains the Viterbi matrix.
  * 
@@ -204,7 +204,7 @@ h4_reference_Viterbi(const ESL_DSQ *dsq, int L, const H4_PROFILE *hmm, const H4_
     }
   /* Done with all rows i. As we leave, dpc is still sitting on the specials for i=L ... including even the L=0 case */
   
-  vsc =  dpc[h4R_C] + mo->xsc[h4_C][h4_MOVE];
+  vsc =  dpc[h4R_C] + mo->xsc[h4_C][h4_MOVE] - mo->nullsc;
   if (opt_sc) *opt_sc = vsc;
   if (opt_pi && vsc != -eslINFINITY) return h4_reference_ViterbiTrace(hmm, mo, rmx, opt_pi);  // if no paths are possible at all: leave pi->N=0, our convention for impossible trace
   else                               return eslOK;
@@ -244,7 +244,7 @@ h4_reference_Viterbi(const ESL_DSQ *dsq, int L, const H4_PROFILE *hmm, const H4_
  *            hmm    : query profile
  *            mo     : algorithm-dependent parameters, the alignment "mode"
  *            rmx    : RESULT: DP matrix                                      [caller-provided space; reused/resized as needed]
- *            opt_sc : optRETURN: raw Forward score in bits
+ *            opt_sc : optRETURN: Forward bit score
  *
  * Returns:   <eslOK> on success. <rmx> contains the Forward matrix;
  *            its internals may have been reallocated.
@@ -391,7 +391,7 @@ h4_reference_Forward(const ESL_DSQ *dsq, int L, const H4_PROFILE *hmm, const H4_
     }
   /* Done with all rows i. As we leave, dpc is still sitting on the final special value for i=L ... including even the L=0 case */
   
-  if (opt_sc) *opt_sc = dpc[h4R_C] + mo->xsc[h4_C][h4_MOVE]; /* C->T */
+  if (opt_sc) *opt_sc = dpc[h4R_C] + mo->xsc[h4_C][h4_MOVE] - mo->nullsc;
   return eslOK;
 
  ERROR:
@@ -418,7 +418,7 @@ h4_reference_Forward(const ESL_DSQ *dsq, int L, const H4_PROFILE *hmm, const H4_
  *            Caller must have initialized with a <h4_logsum_Init()>
  *            call, because this function will use <h4_logsum()>.
  *            
- *            Upon successful return, the raw Backward score (in bits)
+ *            Upon successful return, the Backward score (in bits)
  *            is optionally returned in <*opt_sc>, and the DP matrix
  *            <rmx> is filled in.
  *
@@ -427,7 +427,7 @@ h4_reference_Forward(const ESL_DSQ *dsq, int L, const H4_PROFILE *hmm, const H4_
  *            hmm    : query profile 
  *            mo     : algorithm-dependent parameters, the alignment "mode"
  *            rmx    : RETURN: allocated DP matrix                            [caller-provided space; reused/resized as needed]
- *            opt_sc : optRETURN: raw Backward score in bits
+ *            opt_sc : optRETURN: Backward bit score
  *
  * Returns:   <eslOK> on success. <rmx> contains the Backward matrix;
  *            its internals may have been reallocated.
@@ -634,7 +634,7 @@ h4_reference_Backward(const ESL_DSQ *dsq, int L, const H4_PROFILE *hmm, const H4
   /* for complete cleanliness: set all the main states on row 0 to -inf */
   esl_vec_FSet(rmx->dp[0], (M+1)*h4R_NSCELLS, -eslINFINITY);
 
-  if (opt_sc) *opt_sc = dpc[h4R_N]; // assumes dpc is sitting on i=0 specials (M+1)
+  if (opt_sc) *opt_sc = dpc[h4R_N] - mo->nullsc; // assumes dpc is sitting on i=0 specials (M+1)
   return eslOK;
 
  ERROR:

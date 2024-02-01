@@ -220,7 +220,8 @@ h4_mode_SetLength(H4_MODE *mo, int L)
 {
   ESL_DASSERT1(( L >= 0 && L <= 100000 ));
 
-  mo->nullsc = (float) L * log2f((float) L / (float) (L+1)) +  log2f(1.0f / (float) (L+1));
+  if (L == 0) mo->nullsc = 0.;
+  else        mo->nullsc = (float) L * log2f((float) L / (float) (L+1)) +  log2f(1.0f / (float) (L+1));
 
   mo->xf[h4_N][h4_LOOP] = mo->xf[h4_J][h4_LOOP] = mo->xf[h4_C][h4_LOOP] =  (float) L    / ( (float) L + 2. + mo->nj);
   mo->xf[h4_N][h4_MOVE] = mo->xf[h4_J][h4_MOVE] = mo->xf[h4_C][h4_MOVE] = (2. + mo->nj) / ( (float) L + 2. + mo->nj);
@@ -280,7 +281,7 @@ h4_mode_Dump(FILE *fp, const H4_MODE *mo)
  *            Before conversion, the mode <mo> should be configured by
  *            the caller for unihit local alignment, with its length
  *            modeling set. (However, in this implementation, only the
- *            length model in <mo> is sctually needed. Unilocal
+ *            length model in <mo> is actually needed. Unilocal
  *            alignment will be set for <xmo> regardless of how <mo>
  *            is set.)
  *           
@@ -300,12 +301,13 @@ h4_mode_SameAsSSV(const H4_MODE *mo, H4_MODE **ret_xmo)
 
   if (( xmo = h4_mode_Clone(mo)) == NULL) { status = eslEMEM; goto ERROR; }
 
-
   xmo->xsc[h4_E][h4_LOOP] = -eslINFINITY;  xmo->xsc[h4_E][h4_MOVE] = 0.;
   xmo->xsc[h4_N][h4_LOOP] = 0.;            xmo->xsc[h4_N][h4_MOVE] = txx;
   xmo->xsc[h4_J][h4_LOOP] = 0.;            xmo->xsc[h4_J][h4_MOVE] = txx;  // J->B doesn't matter, because we're unilocal and J is unreachable, E->J=-inf
   xmo->xsc[h4_C][h4_LOOP] = 0.;            xmo->xsc[h4_C][h4_MOVE] = txx;
   xmo->xsc[h4_B][h4_LOOP] = 0.;            xmo->xsc[h4_B][h4_MOVE] = -eslINFINITY;
+
+  xmo->nullsc *= h4_SCALE_B;
 
   *ret_xmo = xmo;
   return eslOK;
@@ -351,6 +353,8 @@ h4_mode_SameAsVF(const H4_MODE *mo, H4_MODE **ret_xmo)
   for (s = 0; s < h4_NX; s++)
     for (t = 0; t < h4_NXT; t++)
       xmo->xsc[s][t] = (float) xmo->xw[s][t];
+
+  xmo->nullsc *= h4_SCALE_W;
 
   *ret_xmo = xmo;
   return eslOK;

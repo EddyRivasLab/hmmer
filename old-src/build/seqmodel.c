@@ -269,7 +269,7 @@ utest_normalization(ESL_GETOPTS *go)
   P7_HMM       *hmm     = NULL;
   char          errbuf[eslERRBUFSIZE];
 
-  if ( esl_dsq_Create(abc, seq, &dsq)                                                    != eslOK) esl_fatal(msg);
+  if ( esl_dsq_Build(abc, seq, &dsq)                                                     != eslOK) esl_fatal(msg);
   if ( (bld = p7_builder_Create(NULL, abc))                                              == NULL)  esl_fatal(msg);
   if ( p7_builder_LoadScoreSystem(bld, "BLOSUM62", popen, pextend, bg)                   != eslOK) esl_fatal(msg); 
   if ( p7_Seqmodel(abc, dsq, L, "aatest", bld->Q, bg->f, bld->popen, bld->pextend, &hmm) != eslOK) esl_fatal(msg);

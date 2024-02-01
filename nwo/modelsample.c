@@ -396,7 +396,7 @@ h4_modelsample_SinglePath(ESL_RANDOMNESS *rng, const ESL_ALPHABET *abc, int M, H
  *            opt_mo   - comparison mode (uniglocal, with L=sq->n set)
  *            opt_pi   - sampled path \pi
  *            opt_anch - sampled anchorset A (for one domain D=1)
- *            opt_sc   - raw bitscore of the single path
+ *            opt_sc   - bitscore of the single path
  *
  * Returns:   <eslOK> on success.
  *
@@ -437,7 +437,7 @@ h4_modelsample_SinglePathSeq(ESL_RANDOMNESS *rng, const ESL_ALPHABET *abc, int M
  *            optional output:
  *            opt_mo   - comparison mode (multiglocal, with L=sq->n set)
  *            opt_pi   - sampled path \pi
- *            opt_sc   - raw bitscore of the single path
+ *            opt_sc   - bitscore of the single path
  *
  * Returns:   <eslOK> on success.
  *
@@ -681,7 +681,7 @@ zeropeppered_probvector(ESL_RANDOMNESS *rng, float *p, int n)
  *    opt_mo   - comparison mode (uniglocal or multiglocal, with target L set)
  *    opt_pi   - sampled path \pi
  *    opt_anch - sampled anchorset A (available in unihit version too, not just multihit)
- *    opt_sc   - raw bitscore of the single path
+ *    opt_sc   - bitscore of the single path
  */
 static int
 single_path_seq_engine(ESL_RANDOMNESS *rng, const ESL_ALPHABET *abc, int M, int do_multi,
