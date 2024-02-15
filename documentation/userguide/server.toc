@@ -1,0 +1,18 @@
+\contentsline {chapter}{Introduction}{4}{chapter*.2}%
+\contentsline {chapter}{Installation}{6}{chapter*.3}%
+\contentsline {chapter}{Usage}{7}{chapter*.4}%
+\contentsline {section}{Hmmserver}{7}{section*.5}%
+\contentsline {section}{Hmmclient}{8}{section*.6}%
+\contentsline {chapter}{For those converting from an hmmpgmd installation}{9}{chapter*.7}%
+\contentsline {chapter}{Hmmserver's Design}{11}{chapter*.8}%
+\contentsline {section}{Parallelization and Load Balancing}{11}{section*.9}%
+\contentsline {subsection}{Within-Node Parallelization}{13}{subsection*.10}%
+\contentsline {section}{Sharding}{14}{section*.11}%
+\contentsline {section}{Client-Server Interface}{15}{section*.12}%
+\contentsline {section}{Command Format}{16}{section*.13}%
+\contentsline {section}{Reply Format}{17}{section*.14}%
+\contentsline {chapter}{Manual Pages Related to the Server}{23}{chapter*.15}%
+\contentsline {section}{{\smaller \bfseries \texttt {hmmclient}} - submit searches to a server for execution }{23}{section*.16}%
+\contentsline {section}{{\smaller \bfseries \texttt {hmmserver}} - server that accelerates homology searches }{32}{section*.17}%
+\contentsline {chapter}{Acknowledgments}{34}{chapter*.18}%
+\contentsfinish 

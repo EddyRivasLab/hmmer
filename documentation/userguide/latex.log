@@ -1,0 +1,923 @@
+This is pdfTeX, Version 3.141592653-2.6-1.40.25 (TeX Live 2023) (preloaded format=pdflatex)
+ restricted \write18 enabled.
+entering extended mode
+(./server.tex
+LaTeX2e <2022-11-01> patch level 1
+L3 programming layer <2023-02-22> (./tufte-book.cls
+Document Class: tufte-book 2015/06/30 v3.5.3 Tufte-book class
+(./tufte-common.def
+(/usr/local/texlive/2023/texmf-dist/tex/latex/xkeyval/xkeyval.sty
+(/usr/local/texlive/2023/texmf-dist/tex/generic/xkeyval/xkeyval.tex
+(/usr/local/texlive/2023/texmf-dist/tex/generic/xkeyval/xkvutils.tex
+(/usr/local/texlive/2023/texmf-dist/tex/generic/xkeyval/keyval.tex))))
+(/usr/local/texlive/2023/texmf-dist/tex/latex/xifthen/xifthen.sty
+(/usr/local/texlive/2023/texmf-dist/tex/latex/tools/calc.sty)
+(/usr/local/texlive/2023/texmf-dist/tex/latex/base/ifthen.sty)
+(/usr/local/texlive/2023/texmf-dist/tex/latex/ifmtarg/ifmtarg.sty))
+(/usr/local/texlive/2023/texmf-dist/tex/latex/hardwrap/hardwrap.sty
+(/usr/local/texlive/2023/texmf-dist/tex/latex/ifplatform/ifplatform.sty
+(/usr/local/texlive/2023/texmf-dist/tex/latex/tools/shellesc.sty)
+(/usr/local/texlive/2023/texmf-dist/tex/generic/pdftexcmds/pdftexcmds.sty
+(/usr/local/texlive/2023/texmf-dist/tex/generic/infwarerr/infwarerr.sty)
+(/usr/local/texlive/2023/texmf-dist/tex/generic/iftex/iftex.sty)
+(/usr/local/texlive/2023/texmf-dist/tex/generic/ltxcmds/ltxcmds.sty))
+(/usr/local/texlive/2023/texmf-dist/tex/generic/catchfile/catchfile.sty
+(/usr/local/texlive/2023/texmf-dist/tex/generic/etexcmds/etexcmds.sty))
+(/usr/local/texlive/2023/texmf-dist/tex/generic/iftex/ifluatex.sty)
+
+Package ifplatform Warning: 
+    shell escape is disabled, so I can only detect \ifwindows.
+
+) (/usr/local/texlive/2023/texmf-dist/tex/generic/iftex/ifxetex.sty)
+(|kpsewhich -var-value=max_print_line))
+(/usr/local/texlive/2023/texmf-dist/tex/latex/base/book.cls
+Document Class: book 2022/07/02 v1.4n Standard LaTeX document class
+(/usr/local/texlive/2023/texmf-dist/tex/latex/base/bk10.clo))
+(/usr/local/texlive/2023/texmf-dist/tex/generic/iftex/ifpdf.sty)
+(/usr/local/texlive/2023/texmf-dist/tex/latex/titlesec/titlesec.sty)
+(/usr/local/texlive/2023/texmf-dist/tex/latex/titlesec/titletoc.sty)
+(/usr/local/texlive/2023/texmf-dist/tex/latex/hyperref/hyperref.sty
+(/usr/local/texlive/2023/texmf-dist/tex/latex/kvsetkeys/kvsetkeys.sty)
+(/usr/local/texlive/2023/texmf-dist/tex/generic/kvdefinekeys/kvdefinekeys.sty)
+(/usr/local/texlive/2023/texmf-dist/tex/generic/pdfescape/pdfescape.sty)
+(/usr/local/texlive/2023/texmf-dist/tex/latex/hycolor/hycolor.sty)
+(/usr/local/texlive/2023/texmf-dist/tex/latex/letltxmacro/letltxmacro.sty)
+(/usr/local/texlive/2023/texmf-dist/tex/latex/auxhook/auxhook.sty)
+(/usr/local/texlive/2023/texmf-dist/tex/latex/hyperref/nameref.sty
+(/usr/local/texlive/2023/texmf-dist/tex/latex/refcount/refcount.sty)
+(/usr/local/texlive/2023/texmf-dist/tex/generic/gettitlestring/gettitlestring.s
+ty (/usr/local/texlive/2023/texmf-dist/tex/latex/kvoptions/kvoptions.sty)))
+(/usr/local/texlive/2023/texmf-dist/tex/latex/hyperref/pd1enc.def)
+(/usr/local/texlive/2023/texmf-dist/tex/generic/intcalc/intcalc.sty)
+(/usr/local/texlive/2023/texmf-dist/tex/latex/hyperref/puenc.def)
+(/usr/local/texlive/2023/texmf-dist/tex/latex/url/url.sty)
+(/usr/local/texlive/2023/texmf-dist/tex/generic/bitset/bitset.sty
+(/usr/local/texlive/2023/texmf-dist/tex/generic/bigintcalc/bigintcalc.sty))
+(/usr/local/texlive/2023/texmf-dist/tex/latex/base/atbegshi-ltx.sty))
+(/usr/local/texlive/2023/texmf-dist/tex/latex/hyperref/hpdftex.def
+(/usr/local/texlive/2023/texmf-dist/tex/latex/base/atveryend-ltx.sty)
+(/usr/local/texlive/2023/texmf-dist/tex/latex/rerunfilecheck/rerunfilecheck.sty
+
+(/usr/local/texlive/2023/texmf-dist/tex/generic/uniquecounter/uniquecounter.sty
+))) (/usr/local/texlive/2023/texmf-dist/tex/latex/ragged2e/ragged2e.sty)
+(/usr/local/texlive/2023/texmf-dist/tex/latex/geometry/geometry.sty
+(/usr/local/texlive/2023/texmf-dist/tex/generic/iftex/ifvtex.sty))
+(/usr/local/texlive/2023/texmf-dist/tex/latex/changepage/changepage.sty)
+(/usr/local/texlive/2023/texmf-dist/tex/latex/paralist/paralist.sty)
+(/usr/local/texlive/2023/texmf-dist/tex/latex/textcase/textcase.sty)
+(/usr/local/texlive/2023/texmf-dist/tex/latex/microtype/letterspace.sty)
+(/usr/local/texlive/2023/texmf-dist/tex/latex/setspace/setspace.sty)
+(/usr/local/texlive/2023/texmf-dist/tex/latex/xcolor/xcolor.sty
+(/usr/local/texlive/2023/texmf-dist/tex/latex/graphics-cfg/color.cfg)
+(/usr/local/texlive/2023/texmf-dist/tex/latex/graphics-def/pdftex.def)
+(/usr/local/texlive/2023/texmf-dist/tex/latex/graphics/mathcolor.ltx)
+(/usr/local/texlive/2023/texmf-dist/tex/latex/graphics/dvipsnam.def)
+(/usr/local/texlive/2023/texmf-dist/tex/latex/xcolor/svgnam.def))
+(/usr/local/texlive/2023/texmf-dist/tex/latex/natbib/natbib.sty)
+(/usr/local/texlive/2023/texmf-dist/tex/latex/natbib/bibentry.sty)
+No file server.bbl.
+(/usr/local/texlive/2023/texmf-dist/tex/latex/sauerj/optparams.sty)
+(/usr/local/texlive/2023/texmf-dist/tex/latex/placeins/placeins.sty)
+(/usr/local/texlive/2023/texmf-dist/tex/latex/psnfss/mathpazo.sty)
+(/usr/local/texlive/2023/texmf-dist/tex/latex/psnfss/helvet.sty)
+(/usr/local/texlive/2023/texmf-dist/tex/latex/bera/beramono.sty)
+(/usr/local/texlive/2023/texmf-dist/tex/latex/base/fontenc.sty
+(/usr/local/texlive/2023/texmf-dist/tex/latex/psnfss/t1pplj.fd))
+(/usr/local/texlive/2023/texmf-dist/tex/latex/base/textcomp.sty)
+(/usr/local/texlive/2023/texmf-dist/tex/latex/fancyhdr/fancyhdr.sty)
+(/usr/local/texlive/2023/texmf-dist/tex/latex/tools/multicol.sty)
+(./tufte-common-local.tex
+(/usr/local/texlive/2023/texmf-dist/tex/latex/fancybox/fancybox.sty
+Style option: `fancybox' v1.4 <2010/05/15> (tvz)
+) (/usr/local/texlive/2023/texmf-dist/tex/latex/relsize/relsize.sty)
+(/usr/local/texlive/2023/texmf-dist/tex/latex/fancyvrb/fancyvrb.sty))))
+(/usr/local/texlive/2023/texmf-dist/tex/latex/graphics/graphicx.sty
+(/usr/local/texlive/2023/texmf-dist/tex/latex/graphics/graphics.sty
+(/usr/local/texlive/2023/texmf-dist/tex/latex/graphics/trig.sty)
+(/usr/local/texlive/2023/texmf-dist/tex/latex/graphics-cfg/graphics.cfg)))
+(/usr/local/texlive/2023/texmf-dist/tex/latex/tools/xspace.sty)
+(./titlepage_server.tex)
+(/usr/local/texlive/2023/texmf-dist/tex/latex/l3backend/l3backend-pdftex.def)
+(./server.aux) (./server.out) (./server.out)
+*geometry* driver: auto-detecting
+*geometry* detected driver: pdftex
+(/usr/local/texlive/2023/texmf-dist/tex/context/base/mkii/supp-pdf.mkii
+[Loading MPS to PDF converter (version 2006.09.02).]
+) (/usr/local/texlive/2023/texmf-dist/tex/latex/epstopdf-pkg/epstopdf-base.sty
+(/usr/local/texlive/2023/texmf-dist/tex/latex/latexconfig/epstopdf-sys.cfg))
+(./inclusions/inclusions.def)
+(/usr/local/texlive/2023/texmf-dist/tex/latex/psnfss/ot1pplx.fd)
+(/usr/local/texlive/2023/texmf-dist/tex/latex/psnfss/omlzplm.fd)
+(/usr/local/texlive/2023/texmf-dist/tex/latex/psnfss/omszplm.fd)
+(/usr/local/texlive/2023/texmf-dist/tex/latex/psnfss/omxzplm.fd)
+(/usr/local/texlive/2023/texmf-dist/tex/latex/psnfss/ot1zplm.fd) [1{/usr/local/
+texlive/2023/texmf-var/fonts/map/pdftex/updmap/pdftex.map}{/usr/local/texlive/2
+023/texmf-dist/fonts/enc/dvips/base/8r.enc}] (./copyright.tex) [2]
+(./server.toc (/usr/local/texlive/2023/texmf-dist/tex/latex/bera/t1fvm.fd))
+[3]
+Overfull \hbox (3.97644pt too wide) in paragraph at lines 33--34
+\T1/pplj/m/n/10 ma-chine. To-gether, these par-al-leliza-tion im-prove-ments re
+-duce search
+[4]
+Overfull \hbox (10.16454pt too wide) in paragraph at lines 37--38
+[]\T1/fvm/m/n/8 Hmmserver \T1/pplj/m/n/10 is im-ple-mented as an MPI ap-pli-ca-
+tion, in con-trast to \T1/fvm/m/n/8 hmmclient\T1/pplj/m/n/10 ,
+[5]
+
+LaTeX Warning: Marginpar on page 6 moved.
+
+[6]
+
+LaTeX Warning: Marginpar on page 7 moved.
+
+
+Underfull \hbox (badness 7685) in paragraph at lines 65--65
+$[]$\T1/pplj/m/n/8 This may be an implementation-
+
+LaTeX Warning: Marginpar on page 7 moved.
+
+
+Underfull \vbox (badness 1147) has occurred while \output is active [7]
+Overfull \hbox (43.58386pt too wide) in paragraph at lines 76--78
+[][]\T1/fvm/b/n/8 % hmmclient -s <servername> --db <d> <name of the file contai
+ning the sequence(s)
+[8] (/usr/local/texlive/2023/texmf-dist/tex/latex/psnfss/ts1pplj.fd)
+Overfull \hbox (5.07977pt too wide) in paragraph at lines 90--91
+\T1/pplj/m/n/10 socket con-nec-tion, re-quir-ing that the client dis-con-nect f
+rom the server
+
+Overfull \hbox (5.48987pt too wide) in paragraph at lines 91--92
+\T1/pplj/m/n/10 of a com-mand, which worked be-cause it only ac-cepted text-for
+matted
+[9] [10]
+Underfull \hbox (badness 10000) in paragraph at lines 99--102
+
+
+Overfull \hbox (3.26917pt too wide) in paragraph at lines 97--104
+\T1/pplj/m/n/10 topol-ogy, as shown in Fig-ure [][]1[][]. While the most-common
+ use of \T1/fvm/m/n/8 hmmserver
+
+LaTeX Warning: Marginpar on page 11 moved.
+
+[11] [12 <./inclusions/server.pdf>]
+Overfull \hbox (5.46794pt too wide) in paragraph at lines 113--114
+[]\T1/fvm/m/n/8 Hmmserver \T1/pplj/m/n/10 im-proves load-balancing by adding wo
+rk steal-ing to \T1/fvm/m/n/8 hmmpgmd\T1/pplj/m/n/10 's
+
+Underfull \hbox (badness 10000) in paragraph at lines 115--115
+$[]$\T1/pplj/m/n/8 This was def-i-nitely true in the
+
+LaTeX Warning: Marginpar on page 13 moved.
+
+
+Underfull \vbox (badness 6575) has occurred while \output is active [13]
+Underfull \vbox (badness 10000) has occurred while \output is active [14]
+
+LaTeX Warning: Marginpar on page 15 moved.
+
+
+Underfull \hbox (badness 10000) in paragraph at lines 129--132
+
+[15 <./inclusions/server_interface.pdf>]
+
+LaTeX Warning: Marginpar on page 16 moved.
+
+
+LaTeX Warning: Marginpar on page 16 moved.
+
+
+Overfull \hbox (27.77112pt too wide) in paragraph at lines 141--153
+\T1/fvm/b/n/8 >sp|Q6GZX3|002L_FRG3G Uncharacterized protein 002L OS=Frog virus 
+3 (isolate Goorha) 
+[16]
+Overfull \hbox (65.41245pt too wide) in paragraph at lines 162--163
+\T1/pplj/m/n/10 When a \T1/fvm/m/n/8 hmmserver \T1/pplj/m/n/10 com-pletes a sea
+rch, it sends a se-ri-al-ized[] HMMD_SEARCH_STATUS
+
+Overfull \hbox (46.12907pt too wide) in paragraph at lines 162--163
+\T1/pplj/m/n/10 type field of the ob-ject is ei-ther HMMD_CMD_SEARCH or HMMD_CM
+D_SCAN
+
+Overfull \hbox (3.11977pt too wide) in paragraph at lines 162--163
+\T1/pplj/m/n/10 de-pend-ing on whether the tar-get database con-tained se-quenc
+e or HMM
+
+LaTeX Warning: Marginpar on page 17 moved.
+
+
+Underfull \hbox (badness 10000) in paragraph at lines 165--168
+
+
+Underfull \hbox (badness 10000) in paragraph at lines 168--168
+\T1/pplj/m/n/8 Figure 3: Se-ri-al-ized
+
+Underfull \hbox (badness 10000) in paragraph at lines 168--168
+\T1/pplj/m/n/8 HMMD_SEARCH_STATUS Struc-
+
+Underfull \hbox (badness 10000) in paragraph at lines 173--176
+
+
+Underfull \hbox (badness 10000) in paragraph at lines 176--176
+\T1/pplj/m/n/8 Figure 4: Se-ri-al-ized
+
+Underfull \hbox (badness 1242) in paragraph at lines 178--178
+$[]$\T1/pplj/m/n/8 Because the map-ping of enums to
+
+Underfull \hbox (badness 3098) in paragraph at lines 178--178
+\T1/pplj/m/n/8 bi-nary val-ues is not guar-an-teed to
+
+Underfull \hbox (badness 1264) in paragraph at lines 178--178
+\T1/pplj/m/n/8 enums to and from spe-cific in-te-gers
+
+Overfull \hbox (16.95639pt too wide) in paragraph at lines 178--179
+\T1/pplj/m/n/10 se-quence residues searched. The next four fields (n_past_msv, 
+n_past_bias,
+[17 <./inclusions/HMMD_SEARCH_STATUS.pdf>]
+
+LaTeX Warning: Marginpar on page 18 moved.
+
+
+Underfull \hbox (badness 10000) in paragraph at lines 181--184
+
+[18 <./inclusions/HMMD_SEARCH_STATS.pdf>] [19 <./inclusions/hit-serialize.pdf>]
+
+Underfull \hbox (badness 10000) in paragraph at lines 192--195
+
+
+Underfull \hbox (badness 10000) in paragraph at lines 199--202
+
+
+Underfull \hbox (badness 1043) in paragraph at lines 202--202
+\T1/pplj/m/n/8 Figure 7: Se-ri-al-ized P7_ALIDISPLAY
+
+LaTeX Warning: Marginpar on page 20 moved.
+
+
+Overfull \hbox (16.52911pt too wide) in paragraph at lines 204--205
+[]\T1/pplj/m/n/10 The P7_ALIDISPLAY struc-ture (Fig-ure [][]7[][]) con-tains a 
+num-ber of variable-
+[20 <./inclusions/domain-serialize.pdf>] [21 <./inclusions/alidisplay-serialize
+.pdf>] [22] (./manpages_server.tex
+Overfull \hbox (8.43478pt too wide) in paragraph at lines 48--53
+[]\T1/pplj/m/n/10 Instructs the server to search a sub-set of the items in the 
+database
+[23]
+Overfull \hbox (3.06483pt too wide) in paragraph at lines 74--77
+\T1/pplj/m/n/10 main de-tected in a query se-quence for each ho-mol-o-gous mode
+l. 
+
+Overfull \hbox (6.5684pt too wide) in paragraph at lines 80--83
+\T1/pplj/m/n/10 check-point the query HMM, sav-ing it to a file named \T1/fvm/m
+/sl/8 prefix\T1/fvm/m/n/8 -\T1/fvm/m/sl/8 n\T1/fvm/m/n/8 .hmm
+[24]
+Overfull \hbox (0.42491pt too wide) in paragraph at lines 113--118
+\T1/pplj/m/n/10 SUM45, BLO-SUM50, BLO-SUM62, BLO-SUM80, or BLO-SUM90.
+[25] [26]
+Overfull \hbox (0.97145pt too wide) in paragraph at lines 219--222
+\T1/pplj/m/n/10 ward/Backward post-pro-cess-ing on ev-ery tar-get. This in-crea
+ses
+
+Overfull \hbox (8.09488pt too wide) in paragraph at lines 230--237
+\T1/pplj/m/n/10 ward/Backward al-go-rithms shoul-der an ab-nor-mally heavy load
+. 
+[27]
+Overfull \hbox (6.50151pt too wide) in paragraph at lines 275--276
+[]\T1/pplj/m/n/10 No rel-a-tive weights. All se-quences are as-signed uni-form 
+weight. 
+
+Overfull \hbox (3.0542pt too wide) in paragraph at lines 277--279
+\T1/pplj/m/n/10 when us-ing \T1/fvm/m/n/8 --wblosum\T1/pplj/m/n/10 . In-valid w
+ith any other weight-ing scheme.
+[28] [29] [30] [31] [32] [33])
+No file server.bbl.
+[34] (./server.aux)
+
+LaTeX Warning: Label(s) may have changed. Rerun to get cross-references right.
+
+ )
+(see the transcript file for additional information)</usr/local/texlive/2023/te
+xmf-dist/fonts/type1/public/amsfonts/cm/cmmi10.pfb></usr/local/texlive/2023/tex
+mf-dist/fonts/type1/public/fpl/fplbj8a.pfb></usr/local/texlive/2023/texmf-dist/
+fonts/type1/public/fpl/fplrc8a.pfb></usr/local/texlive/2023/texmf-dist/fonts/ty
+pe1/public/bera/fvmb8a.pfb></usr/local/texlive/2023/texmf-dist/fonts/type1/publ
+ic/bera/fvmbo8a.pfb></usr/local/texlive/2023/texmf-dist/fonts/type1/public/bera
+/fvmr8a.pfb></usr/local/texlive/2023/texmf-dist/fonts/type1/public/bera/fvmro8a
+.pfb></usr/local/texlive/2023/texmf-dist/fonts/type1/urw/palatino/uplb8a.pfb></
+usr/local/texlive/2023/texmf-dist/fonts/type1/urw/palatino/uplr8a.pfb></usr/loc
+al/texlive/2023/texmf-dist/fonts/type1/urw/palatino/uplri8a.pfb>
+Output written on server.pdf (34 pages, 2557353 bytes).
+Transcript written on server.log.
+This is BibTeX, Version 0.99d (TeX Live 2023)
+The top-level auxiliary file: main.aux
+The style file: unsrtnat-brief.bst
+Database file #1: distilled.bib
+This is pdfTeX, Version 3.141592653-2.6-1.40.25 (TeX Live 2023) (preloaded format=pdflatex)
+ restricted \write18 enabled.
+entering extended mode
+(./server.tex
+LaTeX2e <2022-11-01> patch level 1
+L3 programming layer <2023-02-22> (./tufte-book.cls
+Document Class: tufte-book 2015/06/30 v3.5.3 Tufte-book class
+(./tufte-common.def
+(/usr/local/texlive/2023/texmf-dist/tex/latex/xkeyval/xkeyval.sty
+(/usr/local/texlive/2023/texmf-dist/tex/generic/xkeyval/xkeyval.tex
+(/usr/local/texlive/2023/texmf-dist/tex/generic/xkeyval/xkvutils.tex
+(/usr/local/texlive/2023/texmf-dist/tex/generic/xkeyval/keyval.tex))))
+(/usr/local/texlive/2023/texmf-dist/tex/latex/xifthen/xifthen.sty
+(/usr/local/texlive/2023/texmf-dist/tex/latex/tools/calc.sty)
+(/usr/local/texlive/2023/texmf-dist/tex/latex/base/ifthen.sty)
+(/usr/local/texlive/2023/texmf-dist/tex/latex/ifmtarg/ifmtarg.sty))
+(/usr/local/texlive/2023/texmf-dist/tex/latex/hardwrap/hardwrap.sty
+(/usr/local/texlive/2023/texmf-dist/tex/latex/ifplatform/ifplatform.sty
+(/usr/local/texlive/2023/texmf-dist/tex/latex/tools/shellesc.sty)
+(/usr/local/texlive/2023/texmf-dist/tex/generic/pdftexcmds/pdftexcmds.sty
+(/usr/local/texlive/2023/texmf-dist/tex/generic/infwarerr/infwarerr.sty)
+(/usr/local/texlive/2023/texmf-dist/tex/generic/iftex/iftex.sty)
+(/usr/local/texlive/2023/texmf-dist/tex/generic/ltxcmds/ltxcmds.sty))
+(/usr/local/texlive/2023/texmf-dist/tex/generic/catchfile/catchfile.sty
+(/usr/local/texlive/2023/texmf-dist/tex/generic/etexcmds/etexcmds.sty))
+(/usr/local/texlive/2023/texmf-dist/tex/generic/iftex/ifluatex.sty)
+
+Package ifplatform Warning: 
+    shell escape is disabled, so I can only detect \ifwindows.
+
+) (/usr/local/texlive/2023/texmf-dist/tex/generic/iftex/ifxetex.sty)
+(|kpsewhich -var-value=max_print_line))
+(/usr/local/texlive/2023/texmf-dist/tex/latex/base/book.cls
+Document Class: book 2022/07/02 v1.4n Standard LaTeX document class
+(/usr/local/texlive/2023/texmf-dist/tex/latex/base/bk10.clo))
+(/usr/local/texlive/2023/texmf-dist/tex/generic/iftex/ifpdf.sty)
+(/usr/local/texlive/2023/texmf-dist/tex/latex/titlesec/titlesec.sty)
+(/usr/local/texlive/2023/texmf-dist/tex/latex/titlesec/titletoc.sty)
+(/usr/local/texlive/2023/texmf-dist/tex/latex/hyperref/hyperref.sty
+(/usr/local/texlive/2023/texmf-dist/tex/latex/kvsetkeys/kvsetkeys.sty)
+(/usr/local/texlive/2023/texmf-dist/tex/generic/kvdefinekeys/kvdefinekeys.sty)
+(/usr/local/texlive/2023/texmf-dist/tex/generic/pdfescape/pdfescape.sty)
+(/usr/local/texlive/2023/texmf-dist/tex/latex/hycolor/hycolor.sty)
+(/usr/local/texlive/2023/texmf-dist/tex/latex/letltxmacro/letltxmacro.sty)
+(/usr/local/texlive/2023/texmf-dist/tex/latex/auxhook/auxhook.sty)
+(/usr/local/texlive/2023/texmf-dist/tex/latex/hyperref/nameref.sty
+(/usr/local/texlive/2023/texmf-dist/tex/latex/refcount/refcount.sty)
+(/usr/local/texlive/2023/texmf-dist/tex/generic/gettitlestring/gettitlestring.s
+ty (/usr/local/texlive/2023/texmf-dist/tex/latex/kvoptions/kvoptions.sty)))
+(/usr/local/texlive/2023/texmf-dist/tex/latex/hyperref/pd1enc.def)
+(/usr/local/texlive/2023/texmf-dist/tex/generic/intcalc/intcalc.sty)
+(/usr/local/texlive/2023/texmf-dist/tex/latex/hyperref/puenc.def)
+(/usr/local/texlive/2023/texmf-dist/tex/latex/url/url.sty)
+(/usr/local/texlive/2023/texmf-dist/tex/generic/bitset/bitset.sty
+(/usr/local/texlive/2023/texmf-dist/tex/generic/bigintcalc/bigintcalc.sty))
+(/usr/local/texlive/2023/texmf-dist/tex/latex/base/atbegshi-ltx.sty))
+(/usr/local/texlive/2023/texmf-dist/tex/latex/hyperref/hpdftex.def
+(/usr/local/texlive/2023/texmf-dist/tex/latex/base/atveryend-ltx.sty)
+(/usr/local/texlive/2023/texmf-dist/tex/latex/rerunfilecheck/rerunfilecheck.sty
+
+(/usr/local/texlive/2023/texmf-dist/tex/generic/uniquecounter/uniquecounter.sty
+))) (/usr/local/texlive/2023/texmf-dist/tex/latex/ragged2e/ragged2e.sty)
+(/usr/local/texlive/2023/texmf-dist/tex/latex/geometry/geometry.sty
+(/usr/local/texlive/2023/texmf-dist/tex/generic/iftex/ifvtex.sty))
+(/usr/local/texlive/2023/texmf-dist/tex/latex/changepage/changepage.sty)
+(/usr/local/texlive/2023/texmf-dist/tex/latex/paralist/paralist.sty)
+(/usr/local/texlive/2023/texmf-dist/tex/latex/textcase/textcase.sty)
+(/usr/local/texlive/2023/texmf-dist/tex/latex/microtype/letterspace.sty)
+(/usr/local/texlive/2023/texmf-dist/tex/latex/setspace/setspace.sty)
+(/usr/local/texlive/2023/texmf-dist/tex/latex/xcolor/xcolor.sty
+(/usr/local/texlive/2023/texmf-dist/tex/latex/graphics-cfg/color.cfg)
+(/usr/local/texlive/2023/texmf-dist/tex/latex/graphics-def/pdftex.def)
+(/usr/local/texlive/2023/texmf-dist/tex/latex/graphics/mathcolor.ltx)
+(/usr/local/texlive/2023/texmf-dist/tex/latex/graphics/dvipsnam.def)
+(/usr/local/texlive/2023/texmf-dist/tex/latex/xcolor/svgnam.def))
+(/usr/local/texlive/2023/texmf-dist/tex/latex/natbib/natbib.sty)
+(/usr/local/texlive/2023/texmf-dist/tex/latex/natbib/bibentry.sty)
+No file server.bbl.
+(/usr/local/texlive/2023/texmf-dist/tex/latex/sauerj/optparams.sty)
+(/usr/local/texlive/2023/texmf-dist/tex/latex/placeins/placeins.sty)
+(/usr/local/texlive/2023/texmf-dist/tex/latex/psnfss/mathpazo.sty)
+(/usr/local/texlive/2023/texmf-dist/tex/latex/psnfss/helvet.sty)
+(/usr/local/texlive/2023/texmf-dist/tex/latex/bera/beramono.sty)
+(/usr/local/texlive/2023/texmf-dist/tex/latex/base/fontenc.sty
+(/usr/local/texlive/2023/texmf-dist/tex/latex/psnfss/t1pplj.fd))
+(/usr/local/texlive/2023/texmf-dist/tex/latex/base/textcomp.sty)
+(/usr/local/texlive/2023/texmf-dist/tex/latex/fancyhdr/fancyhdr.sty)
+(/usr/local/texlive/2023/texmf-dist/tex/latex/tools/multicol.sty)
+(./tufte-common-local.tex
+(/usr/local/texlive/2023/texmf-dist/tex/latex/fancybox/fancybox.sty
+Style option: `fancybox' v1.4 <2010/05/15> (tvz)
+) (/usr/local/texlive/2023/texmf-dist/tex/latex/relsize/relsize.sty)
+(/usr/local/texlive/2023/texmf-dist/tex/latex/fancyvrb/fancyvrb.sty))))
+(/usr/local/texlive/2023/texmf-dist/tex/latex/graphics/graphicx.sty
+(/usr/local/texlive/2023/texmf-dist/tex/latex/graphics/graphics.sty
+(/usr/local/texlive/2023/texmf-dist/tex/latex/graphics/trig.sty)
+(/usr/local/texlive/2023/texmf-dist/tex/latex/graphics-cfg/graphics.cfg)))
+(/usr/local/texlive/2023/texmf-dist/tex/latex/tools/xspace.sty)
+(./titlepage_server.tex)
+(/usr/local/texlive/2023/texmf-dist/tex/latex/l3backend/l3backend-pdftex.def)
+(./server.aux) (./server.out) (./server.out)
+*geometry* driver: auto-detecting
+*geometry* detected driver: pdftex
+(/usr/local/texlive/2023/texmf-dist/tex/context/base/mkii/supp-pdf.mkii
+[Loading MPS to PDF converter (version 2006.09.02).]
+) (/usr/local/texlive/2023/texmf-dist/tex/latex/epstopdf-pkg/epstopdf-base.sty
+(/usr/local/texlive/2023/texmf-dist/tex/latex/latexconfig/epstopdf-sys.cfg))
+(./inclusions/inclusions.def)
+(/usr/local/texlive/2023/texmf-dist/tex/latex/psnfss/ot1pplx.fd)
+(/usr/local/texlive/2023/texmf-dist/tex/latex/psnfss/omlzplm.fd)
+(/usr/local/texlive/2023/texmf-dist/tex/latex/psnfss/omszplm.fd)
+(/usr/local/texlive/2023/texmf-dist/tex/latex/psnfss/omxzplm.fd)
+(/usr/local/texlive/2023/texmf-dist/tex/latex/psnfss/ot1zplm.fd) [1{/usr/local/
+texlive/2023/texmf-var/fonts/map/pdftex/updmap/pdftex.map}{/usr/local/texlive/2
+023/texmf-dist/fonts/enc/dvips/base/8r.enc}] (./copyright.tex) [2]
+(./server.toc (/usr/local/texlive/2023/texmf-dist/tex/latex/bera/t1fvm.fd))
+[3]
+Overfull \hbox (3.97644pt too wide) in paragraph at lines 33--34
+\T1/pplj/m/n/10 ma-chine. To-gether, these par-al-leliza-tion im-prove-ments re
+-duce search
+[4]
+Overfull \hbox (10.16454pt too wide) in paragraph at lines 37--38
+[]\T1/fvm/m/n/8 Hmmserver \T1/pplj/m/n/10 is im-ple-mented as an MPI ap-pli-ca-
+tion, in con-trast to \T1/fvm/m/n/8 hmmclient\T1/pplj/m/n/10 ,
+[5]
+
+LaTeX Warning: Marginpar on page 6 moved.
+
+[6]
+
+LaTeX Warning: Marginpar on page 7 moved.
+
+
+Underfull \hbox (badness 7685) in paragraph at lines 65--65
+$[]$\T1/pplj/m/n/8 This may be an implementation-
+
+LaTeX Warning: Marginpar on page 7 moved.
+
+
+Underfull \vbox (badness 1147) has occurred while \output is active [7]
+Overfull \hbox (43.58386pt too wide) in paragraph at lines 76--78
+[][]\T1/fvm/b/n/8 % hmmclient -s <servername> --db <d> <name of the file contai
+ning the sequence(s)
+[8] (/usr/local/texlive/2023/texmf-dist/tex/latex/psnfss/ts1pplj.fd)
+Overfull \hbox (5.07977pt too wide) in paragraph at lines 90--91
+\T1/pplj/m/n/10 socket con-nec-tion, re-quir-ing that the client dis-con-nect f
+rom the server
+
+Overfull \hbox (5.48987pt too wide) in paragraph at lines 91--92
+\T1/pplj/m/n/10 of a com-mand, which worked be-cause it only ac-cepted text-for
+matted
+[9] [10]
+Underfull \hbox (badness 10000) in paragraph at lines 99--102
+
+
+Overfull \hbox (3.26917pt too wide) in paragraph at lines 97--104
+\T1/pplj/m/n/10 topol-ogy, as shown in Fig-ure [][]1[][]. While the most-common
+ use of \T1/fvm/m/n/8 hmmserver
+
+LaTeX Warning: Marginpar on page 11 moved.
+
+[11] [12 <./inclusions/server.pdf>]
+Overfull \hbox (5.46794pt too wide) in paragraph at lines 113--114
+[]\T1/fvm/m/n/8 Hmmserver \T1/pplj/m/n/10 im-proves load-balancing by adding wo
+rk steal-ing to \T1/fvm/m/n/8 hmmpgmd\T1/pplj/m/n/10 's
+
+Underfull \hbox (badness 10000) in paragraph at lines 115--115
+$[]$\T1/pplj/m/n/8 This was def-i-nitely true in the
+
+LaTeX Warning: Marginpar on page 13 moved.
+
+
+Underfull \vbox (badness 6575) has occurred while \output is active [13]
+Underfull \vbox (badness 10000) has occurred while \output is active [14]
+
+LaTeX Warning: Marginpar on page 15 moved.
+
+
+Underfull \hbox (badness 10000) in paragraph at lines 129--132
+
+[15 <./inclusions/server_interface.pdf>]
+
+LaTeX Warning: Marginpar on page 16 moved.
+
+
+LaTeX Warning: Marginpar on page 16 moved.
+
+
+Overfull \hbox (27.77112pt too wide) in paragraph at lines 141--153
+\T1/fvm/b/n/8 >sp|Q6GZX3|002L_FRG3G Uncharacterized protein 002L OS=Frog virus 
+3 (isolate Goorha) 
+[16]
+Overfull \hbox (65.41245pt too wide) in paragraph at lines 162--163
+\T1/pplj/m/n/10 When a \T1/fvm/m/n/8 hmmserver \T1/pplj/m/n/10 com-pletes a sea
+rch, it sends a se-ri-al-ized[] HMMD_SEARCH_STATUS
+
+Overfull \hbox (46.12907pt too wide) in paragraph at lines 162--163
+\T1/pplj/m/n/10 type field of the ob-ject is ei-ther HMMD_CMD_SEARCH or HMMD_CM
+D_SCAN
+
+Overfull \hbox (3.11977pt too wide) in paragraph at lines 162--163
+\T1/pplj/m/n/10 de-pend-ing on whether the tar-get database con-tained se-quenc
+e or HMM
+
+LaTeX Warning: Marginpar on page 17 moved.
+
+
+Underfull \hbox (badness 10000) in paragraph at lines 165--168
+
+
+Underfull \hbox (badness 10000) in paragraph at lines 168--168
+\T1/pplj/m/n/8 Figure 3: Se-ri-al-ized
+
+Underfull \hbox (badness 10000) in paragraph at lines 168--168
+\T1/pplj/m/n/8 HMMD_SEARCH_STATUS Struc-
+
+Underfull \hbox (badness 10000) in paragraph at lines 173--176
+
+
+Underfull \hbox (badness 10000) in paragraph at lines 176--176
+\T1/pplj/m/n/8 Figure 4: Se-ri-al-ized
+
+Underfull \hbox (badness 1242) in paragraph at lines 178--178
+$[]$\T1/pplj/m/n/8 Because the map-ping of enums to
+
+Underfull \hbox (badness 3098) in paragraph at lines 178--178
+\T1/pplj/m/n/8 bi-nary val-ues is not guar-an-teed to
+
+Underfull \hbox (badness 1264) in paragraph at lines 178--178
+\T1/pplj/m/n/8 enums to and from spe-cific in-te-gers
+
+Overfull \hbox (16.95639pt too wide) in paragraph at lines 178--179
+\T1/pplj/m/n/10 se-quence residues searched. The next four fields (n_past_msv, 
+n_past_bias,
+[17 <./inclusions/HMMD_SEARCH_STATUS.pdf>]
+
+LaTeX Warning: Marginpar on page 18 moved.
+
+
+Underfull \hbox (badness 10000) in paragraph at lines 181--184
+
+[18 <./inclusions/HMMD_SEARCH_STATS.pdf>] [19 <./inclusions/hit-serialize.pdf>]
+
+Underfull \hbox (badness 10000) in paragraph at lines 192--195
+
+
+Underfull \hbox (badness 10000) in paragraph at lines 199--202
+
+
+Underfull \hbox (badness 1043) in paragraph at lines 202--202
+\T1/pplj/m/n/8 Figure 7: Se-ri-al-ized P7_ALIDISPLAY
+
+LaTeX Warning: Marginpar on page 20 moved.
+
+
+Overfull \hbox (16.52911pt too wide) in paragraph at lines 204--205
+[]\T1/pplj/m/n/10 The P7_ALIDISPLAY struc-ture (Fig-ure [][]7[][]) con-tains a 
+num-ber of variable-
+[20 <./inclusions/domain-serialize.pdf>] [21 <./inclusions/alidisplay-serialize
+.pdf>] [22] (./manpages_server.tex
+Overfull \hbox (8.43478pt too wide) in paragraph at lines 48--53
+[]\T1/pplj/m/n/10 Instructs the server to search a sub-set of the items in the 
+database
+[23]
+Overfull \hbox (3.06483pt too wide) in paragraph at lines 74--77
+\T1/pplj/m/n/10 main de-tected in a query se-quence for each ho-mol-o-gous mode
+l. 
+
+Overfull \hbox (6.5684pt too wide) in paragraph at lines 80--83
+\T1/pplj/m/n/10 check-point the query HMM, sav-ing it to a file named \T1/fvm/m
+/sl/8 prefix\T1/fvm/m/n/8 -\T1/fvm/m/sl/8 n\T1/fvm/m/n/8 .hmm
+[24]
+Overfull \hbox (0.42491pt too wide) in paragraph at lines 113--118
+\T1/pplj/m/n/10 SUM45, BLO-SUM50, BLO-SUM62, BLO-SUM80, or BLO-SUM90.
+[25] [26]
+Overfull \hbox (0.97145pt too wide) in paragraph at lines 219--222
+\T1/pplj/m/n/10 ward/Backward post-pro-cess-ing on ev-ery tar-get. This in-crea
+ses
+
+Overfull \hbox (8.09488pt too wide) in paragraph at lines 230--237
+\T1/pplj/m/n/10 ward/Backward al-go-rithms shoul-der an ab-nor-mally heavy load
+. 
+[27]
+Overfull \hbox (6.50151pt too wide) in paragraph at lines 275--276
+[]\T1/pplj/m/n/10 No rel-a-tive weights. All se-quences are as-signed uni-form 
+weight. 
+
+Overfull \hbox (3.0542pt too wide) in paragraph at lines 277--279
+\T1/pplj/m/n/10 when us-ing \T1/fvm/m/n/8 --wblosum\T1/pplj/m/n/10 . In-valid w
+ith any other weight-ing scheme.
+[28] [29] [30] [31] [32] [33])
+No file server.bbl.
+[34] (./server.aux) )
+(see the transcript file for additional information)</usr/local/texlive/2023/te
+xmf-dist/fonts/type1/public/amsfonts/cm/cmmi10.pfb></usr/local/texlive/2023/tex
+mf-dist/fonts/type1/public/fpl/fplbj8a.pfb></usr/local/texlive/2023/texmf-dist/
+fonts/type1/public/fpl/fplrc8a.pfb></usr/local/texlive/2023/texmf-dist/fonts/ty
+pe1/public/bera/fvmb8a.pfb></usr/local/texlive/2023/texmf-dist/fonts/type1/publ
+ic/bera/fvmbo8a.pfb></usr/local/texlive/2023/texmf-dist/fonts/type1/public/bera
+/fvmr8a.pfb></usr/local/texlive/2023/texmf-dist/fonts/type1/public/bera/fvmro8a
+.pfb></usr/local/texlive/2023/texmf-dist/fonts/type1/urw/palatino/uplb8a.pfb></
+usr/local/texlive/2023/texmf-dist/fonts/type1/urw/palatino/uplr8a.pfb></usr/loc
+al/texlive/2023/texmf-dist/fonts/type1/urw/palatino/uplri8a.pfb>
+Output written on server.pdf (34 pages, 2557353 bytes).
+Transcript written on server.log.
+This is pdfTeX, Version 3.141592653-2.6-1.40.25 (TeX Live 2023) (preloaded format=pdflatex)
+ restricted \write18 enabled.
+entering extended mode
+(./server.tex
+LaTeX2e <2022-11-01> patch level 1
+L3 programming layer <2023-02-22> (./tufte-book.cls
+Document Class: tufte-book 2015/06/30 v3.5.3 Tufte-book class
+(./tufte-common.def
+(/usr/local/texlive/2023/texmf-dist/tex/latex/xkeyval/xkeyval.sty
+(/usr/local/texlive/2023/texmf-dist/tex/generic/xkeyval/xkeyval.tex
+(/usr/local/texlive/2023/texmf-dist/tex/generic/xkeyval/xkvutils.tex
+(/usr/local/texlive/2023/texmf-dist/tex/generic/xkeyval/keyval.tex))))
+(/usr/local/texlive/2023/texmf-dist/tex/latex/xifthen/xifthen.sty
+(/usr/local/texlive/2023/texmf-dist/tex/latex/tools/calc.sty)
+(/usr/local/texlive/2023/texmf-dist/tex/latex/base/ifthen.sty)
+(/usr/local/texlive/2023/texmf-dist/tex/latex/ifmtarg/ifmtarg.sty))
+(/usr/local/texlive/2023/texmf-dist/tex/latex/hardwrap/hardwrap.sty
+(/usr/local/texlive/2023/texmf-dist/tex/latex/ifplatform/ifplatform.sty
+(/usr/local/texlive/2023/texmf-dist/tex/latex/tools/shellesc.sty)
+(/usr/local/texlive/2023/texmf-dist/tex/generic/pdftexcmds/pdftexcmds.sty
+(/usr/local/texlive/2023/texmf-dist/tex/generic/infwarerr/infwarerr.sty)
+(/usr/local/texlive/2023/texmf-dist/tex/generic/iftex/iftex.sty)
+(/usr/local/texlive/2023/texmf-dist/tex/generic/ltxcmds/ltxcmds.sty))
+(/usr/local/texlive/2023/texmf-dist/tex/generic/catchfile/catchfile.sty
+(/usr/local/texlive/2023/texmf-dist/tex/generic/etexcmds/etexcmds.sty))
+(/usr/local/texlive/2023/texmf-dist/tex/generic/iftex/ifluatex.sty)
+
+Package ifplatform Warning: 
+    shell escape is disabled, so I can only detect \ifwindows.
+
+) (/usr/local/texlive/2023/texmf-dist/tex/generic/iftex/ifxetex.sty)
+(|kpsewhich -var-value=max_print_line))
+(/usr/local/texlive/2023/texmf-dist/tex/latex/base/book.cls
+Document Class: book 2022/07/02 v1.4n Standard LaTeX document class
+(/usr/local/texlive/2023/texmf-dist/tex/latex/base/bk10.clo))
+(/usr/local/texlive/2023/texmf-dist/tex/generic/iftex/ifpdf.sty)
+(/usr/local/texlive/2023/texmf-dist/tex/latex/titlesec/titlesec.sty)
+(/usr/local/texlive/2023/texmf-dist/tex/latex/titlesec/titletoc.sty)
+(/usr/local/texlive/2023/texmf-dist/tex/latex/hyperref/hyperref.sty
+(/usr/local/texlive/2023/texmf-dist/tex/latex/kvsetkeys/kvsetkeys.sty)
+(/usr/local/texlive/2023/texmf-dist/tex/generic/kvdefinekeys/kvdefinekeys.sty)
+(/usr/local/texlive/2023/texmf-dist/tex/generic/pdfescape/pdfescape.sty)
+(/usr/local/texlive/2023/texmf-dist/tex/latex/hycolor/hycolor.sty)
+(/usr/local/texlive/2023/texmf-dist/tex/latex/letltxmacro/letltxmacro.sty)
+(/usr/local/texlive/2023/texmf-dist/tex/latex/auxhook/auxhook.sty)
+(/usr/local/texlive/2023/texmf-dist/tex/latex/hyperref/nameref.sty
+(/usr/local/texlive/2023/texmf-dist/tex/latex/refcount/refcount.sty)
+(/usr/local/texlive/2023/texmf-dist/tex/generic/gettitlestring/gettitlestring.s
+ty (/usr/local/texlive/2023/texmf-dist/tex/latex/kvoptions/kvoptions.sty)))
+(/usr/local/texlive/2023/texmf-dist/tex/latex/hyperref/pd1enc.def)
+(/usr/local/texlive/2023/texmf-dist/tex/generic/intcalc/intcalc.sty)
+(/usr/local/texlive/2023/texmf-dist/tex/latex/hyperref/puenc.def)
+(/usr/local/texlive/2023/texmf-dist/tex/latex/url/url.sty)
+(/usr/local/texlive/2023/texmf-dist/tex/generic/bitset/bitset.sty
+(/usr/local/texlive/2023/texmf-dist/tex/generic/bigintcalc/bigintcalc.sty))
+(/usr/local/texlive/2023/texmf-dist/tex/latex/base/atbegshi-ltx.sty))
+(/usr/local/texlive/2023/texmf-dist/tex/latex/hyperref/hpdftex.def
+(/usr/local/texlive/2023/texmf-dist/tex/latex/base/atveryend-ltx.sty)
+(/usr/local/texlive/2023/texmf-dist/tex/latex/rerunfilecheck/rerunfilecheck.sty
+
+(/usr/local/texlive/2023/texmf-dist/tex/generic/uniquecounter/uniquecounter.sty
+))) (/usr/local/texlive/2023/texmf-dist/tex/latex/ragged2e/ragged2e.sty)
+(/usr/local/texlive/2023/texmf-dist/tex/latex/geometry/geometry.sty
+(/usr/local/texlive/2023/texmf-dist/tex/generic/iftex/ifvtex.sty))
+(/usr/local/texlive/2023/texmf-dist/tex/latex/changepage/changepage.sty)
+(/usr/local/texlive/2023/texmf-dist/tex/latex/paralist/paralist.sty)
+(/usr/local/texlive/2023/texmf-dist/tex/latex/textcase/textcase.sty)
+(/usr/local/texlive/2023/texmf-dist/tex/latex/microtype/letterspace.sty)
+(/usr/local/texlive/2023/texmf-dist/tex/latex/setspace/setspace.sty)
+(/usr/local/texlive/2023/texmf-dist/tex/latex/xcolor/xcolor.sty
+(/usr/local/texlive/2023/texmf-dist/tex/latex/graphics-cfg/color.cfg)
+(/usr/local/texlive/2023/texmf-dist/tex/latex/graphics-def/pdftex.def)
+(/usr/local/texlive/2023/texmf-dist/tex/latex/graphics/mathcolor.ltx)
+(/usr/local/texlive/2023/texmf-dist/tex/latex/graphics/dvipsnam.def)
+(/usr/local/texlive/2023/texmf-dist/tex/latex/xcolor/svgnam.def))
+(/usr/local/texlive/2023/texmf-dist/tex/latex/natbib/natbib.sty)
+(/usr/local/texlive/2023/texmf-dist/tex/latex/natbib/bibentry.sty)
+No file server.bbl.
+(/usr/local/texlive/2023/texmf-dist/tex/latex/sauerj/optparams.sty)
+(/usr/local/texlive/2023/texmf-dist/tex/latex/placeins/placeins.sty)
+(/usr/local/texlive/2023/texmf-dist/tex/latex/psnfss/mathpazo.sty)
+(/usr/local/texlive/2023/texmf-dist/tex/latex/psnfss/helvet.sty)
+(/usr/local/texlive/2023/texmf-dist/tex/latex/bera/beramono.sty)
+(/usr/local/texlive/2023/texmf-dist/tex/latex/base/fontenc.sty
+(/usr/local/texlive/2023/texmf-dist/tex/latex/psnfss/t1pplj.fd))
+(/usr/local/texlive/2023/texmf-dist/tex/latex/base/textcomp.sty)
+(/usr/local/texlive/2023/texmf-dist/tex/latex/fancyhdr/fancyhdr.sty)
+(/usr/local/texlive/2023/texmf-dist/tex/latex/tools/multicol.sty)
+(./tufte-common-local.tex
+(/usr/local/texlive/2023/texmf-dist/tex/latex/fancybox/fancybox.sty
+Style option: `fancybox' v1.4 <2010/05/15> (tvz)
+) (/usr/local/texlive/2023/texmf-dist/tex/latex/relsize/relsize.sty)
+(/usr/local/texlive/2023/texmf-dist/tex/latex/fancyvrb/fancyvrb.sty))))
+(/usr/local/texlive/2023/texmf-dist/tex/latex/graphics/graphicx.sty
+(/usr/local/texlive/2023/texmf-dist/tex/latex/graphics/graphics.sty
+(/usr/local/texlive/2023/texmf-dist/tex/latex/graphics/trig.sty)
+(/usr/local/texlive/2023/texmf-dist/tex/latex/graphics-cfg/graphics.cfg)))
+(/usr/local/texlive/2023/texmf-dist/tex/latex/tools/xspace.sty)
+(./titlepage_server.tex)
+(/usr/local/texlive/2023/texmf-dist/tex/latex/l3backend/l3backend-pdftex.def)
+(./server.aux) (./server.out) (./server.out)
+*geometry* driver: auto-detecting
+*geometry* detected driver: pdftex
+(/usr/local/texlive/2023/texmf-dist/tex/context/base/mkii/supp-pdf.mkii
+[Loading MPS to PDF converter (version 2006.09.02).]
+) (/usr/local/texlive/2023/texmf-dist/tex/latex/epstopdf-pkg/epstopdf-base.sty
+(/usr/local/texlive/2023/texmf-dist/tex/latex/latexconfig/epstopdf-sys.cfg))
+(./inclusions/inclusions.def)
+(/usr/local/texlive/2023/texmf-dist/tex/latex/psnfss/ot1pplx.fd)
+(/usr/local/texlive/2023/texmf-dist/tex/latex/psnfss/omlzplm.fd)
+(/usr/local/texlive/2023/texmf-dist/tex/latex/psnfss/omszplm.fd)
+(/usr/local/texlive/2023/texmf-dist/tex/latex/psnfss/omxzplm.fd)
+(/usr/local/texlive/2023/texmf-dist/tex/latex/psnfss/ot1zplm.fd) [1{/usr/local/
+texlive/2023/texmf-var/fonts/map/pdftex/updmap/pdftex.map}{/usr/local/texlive/2
+023/texmf-dist/fonts/enc/dvips/base/8r.enc}] (./copyright.tex) [2]
+(./server.toc (/usr/local/texlive/2023/texmf-dist/tex/latex/bera/t1fvm.fd))
+[3]
+Overfull \hbox (3.97644pt too wide) in paragraph at lines 33--34
+\T1/pplj/m/n/10 ma-chine. To-gether, these par-al-leliza-tion im-prove-ments re
+-duce search
+[4]
+Overfull \hbox (10.16454pt too wide) in paragraph at lines 37--38
+[]\T1/fvm/m/n/8 Hmmserver \T1/pplj/m/n/10 is im-ple-mented as an MPI ap-pli-ca-
+tion, in con-trast to \T1/fvm/m/n/8 hmmclient\T1/pplj/m/n/10 ,
+[5]
+
+LaTeX Warning: Marginpar on page 6 moved.
+
+[6]
+
+LaTeX Warning: Marginpar on page 7 moved.
+
+
+Underfull \hbox (badness 7685) in paragraph at lines 65--65
+$[]$\T1/pplj/m/n/8 This may be an implementation-
+
+LaTeX Warning: Marginpar on page 7 moved.
+
+
+Underfull \vbox (badness 1147) has occurred while \output is active [7]
+Overfull \hbox (43.58386pt too wide) in paragraph at lines 76--78
+[][]\T1/fvm/b/n/8 % hmmclient -s <servername> --db <d> <name of the file contai
+ning the sequence(s)
+[8] (/usr/local/texlive/2023/texmf-dist/tex/latex/psnfss/ts1pplj.fd)
+Overfull \hbox (5.07977pt too wide) in paragraph at lines 90--91
+\T1/pplj/m/n/10 socket con-nec-tion, re-quir-ing that the client dis-con-nect f
+rom the server
+
+Overfull \hbox (5.48987pt too wide) in paragraph at lines 91--92
+\T1/pplj/m/n/10 of a com-mand, which worked be-cause it only ac-cepted text-for
+matted
+[9] [10]
+Underfull \hbox (badness 10000) in paragraph at lines 99--102
+
+
+Overfull \hbox (3.26917pt too wide) in paragraph at lines 97--104
+\T1/pplj/m/n/10 topol-ogy, as shown in Fig-ure [][]1[][]. While the most-common
+ use of \T1/fvm/m/n/8 hmmserver
+
+LaTeX Warning: Marginpar on page 11 moved.
+
+[11] [12 <./inclusions/server.pdf>]
+Overfull \hbox (5.46794pt too wide) in paragraph at lines 113--114
+[]\T1/fvm/m/n/8 Hmmserver \T1/pplj/m/n/10 im-proves load-balancing by adding wo
+rk steal-ing to \T1/fvm/m/n/8 hmmpgmd\T1/pplj/m/n/10 's
+
+Underfull \hbox (badness 10000) in paragraph at lines 115--115
+$[]$\T1/pplj/m/n/8 This was def-i-nitely true in the
+
+LaTeX Warning: Marginpar on page 13 moved.
+
+
+Underfull \vbox (badness 6575) has occurred while \output is active [13]
+Underfull \vbox (badness 10000) has occurred while \output is active [14]
+
+LaTeX Warning: Marginpar on page 15 moved.
+
+
+Underfull \hbox (badness 10000) in paragraph at lines 129--132
+
+[15 <./inclusions/server_interface.pdf>]
+
+LaTeX Warning: Marginpar on page 16 moved.
+
+
+LaTeX Warning: Marginpar on page 16 moved.
+
+
+Overfull \hbox (27.77112pt too wide) in paragraph at lines 141--153
+\T1/fvm/b/n/8 >sp|Q6GZX3|002L_FRG3G Uncharacterized protein 002L OS=Frog virus 
+3 (isolate Goorha) 
+[16]
+Overfull \hbox (65.41245pt too wide) in paragraph at lines 162--163
+\T1/pplj/m/n/10 When a \T1/fvm/m/n/8 hmmserver \T1/pplj/m/n/10 com-pletes a sea
+rch, it sends a se-ri-al-ized[] HMMD_SEARCH_STATUS
+
+Overfull \hbox (46.12907pt too wide) in paragraph at lines 162--163
+\T1/pplj/m/n/10 type field of the ob-ject is ei-ther HMMD_CMD_SEARCH or HMMD_CM
+D_SCAN
+
+Overfull \hbox (3.11977pt too wide) in paragraph at lines 162--163
+\T1/pplj/m/n/10 de-pend-ing on whether the tar-get database con-tained se-quenc
+e or HMM
+
+LaTeX Warning: Marginpar on page 17 moved.
+
+
+Underfull \hbox (badness 10000) in paragraph at lines 165--168
+
+
+Underfull \hbox (badness 10000) in paragraph at lines 168--168
+\T1/pplj/m/n/8 Figure 3: Se-ri-al-ized
+
+Underfull \hbox (badness 10000) in paragraph at lines 168--168
+\T1/pplj/m/n/8 HMMD_SEARCH_STATUS Struc-
+
+Underfull \hbox (badness 10000) in paragraph at lines 173--176
+
+
+Underfull \hbox (badness 10000) in paragraph at lines 176--176
+\T1/pplj/m/n/8 Figure 4: Se-ri-al-ized
+
+Underfull \hbox (badness 1242) in paragraph at lines 178--178
+$[]$\T1/pplj/m/n/8 Because the map-ping of enums to
+
+Underfull \hbox (badness 3098) in paragraph at lines 178--178
+\T1/pplj/m/n/8 bi-nary val-ues is not guar-an-teed to
+
+Underfull \hbox (badness 1264) in paragraph at lines 178--178
+\T1/pplj/m/n/8 enums to and from spe-cific in-te-gers
+
+Overfull \hbox (16.95639pt too wide) in paragraph at lines 178--179
+\T1/pplj/m/n/10 se-quence residues searched. The next four fields (n_past_msv, 
+n_past_bias,
+[17 <./inclusions/HMMD_SEARCH_STATUS.pdf>]
+
+LaTeX Warning: Marginpar on page 18 moved.
+
+
+Underfull \hbox (badness 10000) in paragraph at lines 181--184
+
+[18 <./inclusions/HMMD_SEARCH_STATS.pdf>] [19 <./inclusions/hit-serialize.pdf>]
+
+Underfull \hbox (badness 10000) in paragraph at lines 192--195
+
+
+Underfull \hbox (badness 10000) in paragraph at lines 199--202
+
+
+Underfull \hbox (badness 1043) in paragraph at lines 202--202
+\T1/pplj/m/n/8 Figure 7: Se-ri-al-ized P7_ALIDISPLAY
+
+LaTeX Warning: Marginpar on page 20 moved.
+
+
+Overfull \hbox (16.52911pt too wide) in paragraph at lines 204--205
+[]\T1/pplj/m/n/10 The P7_ALIDISPLAY struc-ture (Fig-ure [][]7[][]) con-tains a 
+num-ber of variable-
+[20 <./inclusions/domain-serialize.pdf>] [21 <./inclusions/alidisplay-serialize
+.pdf>] [22] (./manpages_server.tex
+Overfull \hbox (8.43478pt too wide) in paragraph at lines 48--53
+[]\T1/pplj/m/n/10 Instructs the server to search a sub-set of the items in the 
+database
+[23]
+Overfull \hbox (3.06483pt too wide) in paragraph at lines 74--77
+\T1/pplj/m/n/10 main de-tected in a query se-quence for each ho-mol-o-gous mode
+l. 
+
+Overfull \hbox (6.5684pt too wide) in paragraph at lines 80--83
+\T1/pplj/m/n/10 check-point the query HMM, sav-ing it to a file named \T1/fvm/m
+/sl/8 prefix\T1/fvm/m/n/8 -\T1/fvm/m/sl/8 n\T1/fvm/m/n/8 .hmm
+[24]
+Overfull \hbox (0.42491pt too wide) in paragraph at lines 113--118
+\T1/pplj/m/n/10 SUM45, BLO-SUM50, BLO-SUM62, BLO-SUM80, or BLO-SUM90.
+[25] [26]
+Overfull \hbox (0.97145pt too wide) in paragraph at lines 219--222
+\T1/pplj/m/n/10 ward/Backward post-pro-cess-ing on ev-ery tar-get. This in-crea
+ses
+
+Overfull \hbox (8.09488pt too wide) in paragraph at lines 230--237
+\T1/pplj/m/n/10 ward/Backward al-go-rithms shoul-der an ab-nor-mally heavy load
+. 
+[27]
+Overfull \hbox (6.50151pt too wide) in paragraph at lines 275--276
+[]\T1/pplj/m/n/10 No rel-a-tive weights. All se-quences are as-signed uni-form 
+weight. 
+
+Overfull \hbox (3.0542pt too wide) in paragraph at lines 277--279
+\T1/pplj/m/n/10 when us-ing \T1/fvm/m/n/8 --wblosum\T1/pplj/m/n/10 . In-valid w
+ith any other weight-ing scheme.
+[28] [29] [30] [31] [32] [33])
+No file server.bbl.
+[34] (./server.aux) )
+(see the transcript file for additional information)</usr/local/texlive/2023/te
+xmf-dist/fonts/type1/public/amsfonts/cm/cmmi10.pfb></usr/local/texlive/2023/tex
+mf-dist/fonts/type1/public/fpl/fplbj8a.pfb></usr/local/texlive/2023/texmf-dist/
+fonts/type1/public/fpl/fplrc8a.pfb></usr/local/texlive/2023/texmf-dist/fonts/ty
+pe1/public/bera/fvmb8a.pfb></usr/local/texlive/2023/texmf-dist/fonts/type1/publ
+ic/bera/fvmbo8a.pfb></usr/local/texlive/2023/texmf-dist/fonts/type1/public/bera
+/fvmr8a.pfb></usr/local/texlive/2023/texmf-dist/fonts/type1/public/bera/fvmro8a
+.pfb></usr/local/texlive/2023/texmf-dist/fonts/type1/urw/palatino/uplb8a.pfb></
+usr/local/texlive/2023/texmf-dist/fonts/type1/urw/palatino/uplr8a.pfb></usr/loc
+al/texlive/2023/texmf-dist/fonts/type1/urw/palatino/uplri8a.pfb>
+Output written on server.pdf (34 pages, 2557353 bytes).
+Transcript written on server.log.

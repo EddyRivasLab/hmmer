@@ -57,9 +57,10 @@ Once HMMER has been built, \hmmserver and \hmmclient will be available in the \m
 
 \section{Hmmserver}
 \Hmmserver must be run as an MPI process with at least one rank for the master node and one worker rank for each shard that the target database(s) will be divided into.  The different implementations of MPI vary in how this is done, but a common invocation of \hmmserver would be\sidenote{On many systems, MPI jobs need to be sumbitted through a job control mechanism such as SLURM.  See your system documentation for information on how to use the job control system on your cluster.}:
+
 \vspace{1ex}
-\user{\% mpirun -n <# of ranks> hmmserver {-}{-}num_dbs <n> {-}{-}num_shards <s> <List of sequence and/or HMM databases to be read into memory>}\
-\vspace{1ex} 
+\user{\% mpirun {-}n <number of ranks> hmmserver {-}num\_dbs <n>}\\
+\vspace{1ex}
 
 One challenge that comes from making \hmmserver an MPI process is that the master node of the \hmmserver will run as rank 0 of the MPI process, but the MPI runtime assigns ranks to hosts in an unpredictable manner.  To address this, the master node of \hmmserver determines the host name of its machine and outputs that to standard output at the beginning of execution.  Alternately, the {-}{-}host option to mpirun/mpiexec can be used to specify the set of computers that \hmmserver will run on, and rank 0 will run on the first computer in that list\sidenote{This may be an implementation-dependent behavior.  The documentation for many MPI implementations states that this is what will happen, but we do not believe that this is a required behavior for all implementations of MPI.}
 
@@ -70,6 +71,7 @@ Once started, \hmmserver will continue running until it receives a shutdown comm
 
 \section{Hmmclient}
 The \hmmclient application provides a command-line interface to send searches to a running \hmmserver and display results in the same manner as the \mono{hmmsearch}, \mono{hmmscan}, \mono{phmmer}, and \mono{jackhmmer} programs.  A typical use of \hmmclient is:
+
 \vspace{1ex}
 \user{\% hmmclient {-}s <servername> {-}{-}db <d> <name of the file containing the sequence(s) or HMM(s) to be searched>}\\
 \vspace{1ex}
@@ -86,11 +88,18 @@ Making \hmmserver an MPI application introduces the challenge of determining wha
 We attempted to keep the client interface to \hmmserver as close as possible to that of \hmmpgmd, but a few changes were necessary.  The two most significant of these are:
 \begin{itemize}
   \item{\Hmmserver only allows a client to send one query to the server per socket connection, requiring that the client disconnect from the server after each search completes and request a new connection if it wants to send another request.  In contrast, \hmmpgmd allowed a client to open a socket connection and send multiple query requests before disconnecting, which, in some cases, led to clients monopolizing the server by sending large numbers of requests in one connection.  Requiring a client to disconnect and reconnect between queries forces it to arbitrate with other clients for use of the server, making it harder for one poorly-behaved client to lock others out of the server.}
-  \item{\Hmmpgmd detected the end of }
-\endC{itemize}
-\chapter{Hmmserver's Design}
-\Hmmserver is an MPI application that uses a conventional master-worker topology.  While the most-common use of \hmmserver will distribute the MPI ranks across multiple machines, this is not required\sidenote{If each MPI rank is not assigned to a separate computer, we strongly recommend using the \mono{--cpu} flag to specify the number of worker threads on each worker rank.  If this is not done, each worker rank will start as many worker threads as its machine has hardware thread slots, severely over-subscribing the hardware if multiple worker ranks run on the same machine.}.  One MPI rank (rank 0) acts as the master rank, while the rest act as workers.  The master rank handles communication with clients, receiving search requests from them and sending results back when each search completes.  The master rank also co-ordinates the work of the workers, assigning them regions of the target database to search and collecting the hits that each worker finds into a single list.  Worker ranks cache the server's target databases in memory and perform the work of each search.  Thus, the worker ranks can require significant memory, depending on the number and size of the target databases and the number of shards those databases are divided into.  The master rank does not cache target databases, as it only needs to know the number of items in each database to distribute work across the worker ranks.  Thus, it uses very little memory when the server is idle, but it may require significant amounts of memory to assemble the results of searches that return large numbers of hits.
+  \item{\Hmmpgmd used two forward slash characters ("//") to indicate the end of a command, which worked because it only accepted text-formatted HMMs and sequences.  \Hmmserver also accepts HMMs as serialized \mono{P7\_HMM} structures, in order to support iterative search without the precision loss that converting an HMM to text format incurse.  To support this, \hmmserver requires two socket messages to transmit a command: one 32-bit message containing the length of the command being sent, followed by the command itself.}  
+\end{itemize}
 
+
+
+\chapter{Hmmserver's Design}
+\Hmmserver is an MPI application that uses a conventional master-worker topology, as shown in Figure \ref{fig:server}.  While the most-common use of \hmmserver will distribute the MPI ranks across multiple machines, this is not required\sidenote{If each MPI rank is not assigned to a separate computer, we strongly recommend using the \mono{--cpu} flag to specify the number of worker threads on each worker rank.  If this is not done, each worker rank will start as many worker threads as its machine has hardware thread slots, severely over-subscribing the hardware if multiple worker ranks run on the same machine.}.  One MPI rank (rank 0) acts as the master rank, while the rest act as workers.  The master rank handles communication with clients, receiving search requests from them and sending results back when each search completes.  The master rank also co-ordinates the work of the workers, assigning them regions of the target database to search and collecting the hits that each worker finds into a single list.  Worker ranks cache the server's target databases in memory and perform the work of each search, and can require significant memory, depending on the number and size of the target databases and the number of shards those databases are divided into.  The master rank does not cache target databases, as it only needs to know the number of items in each database to distribute work across the worker ranks.  Thus, it uses very little memory when the server is idle, but it may require significant amounts of memory to assemble the results of searches that return large numbers of hits.
+\begin{figure*}
+  \includegraphics[width=\textwidth]{inclusions/server.pdf}
+  \caption{Hmmserver Architecture}
+  \label{fig:server}
+  \end{figure*} 
 The decision to build \hmmserver as an MPI application was a significant change from \hmmpgmd, which was implemented as a set of independent programs that communicate with each other via UNIX sockets.  The initial motivation for this change was to improve performance by taking advantage of high-bandwidth networks, which MPI typically does and sockets typically does not.  During discussions with our collaborators at the European Bioinformatics Institute, they disclosed that managing \hmmpgmd's independent programs was a source of difficulty for them, so the switch to an MPI application provided a second benefit.
 
 \section{Parallelization and Load Balancing}
@@ -107,14 +116,99 @@ Within each worker node, \hmmpgmd uses a load-balancing system similar to how \h
 
 
 \section{Sharding}
-The original version of \hmmpgmd 
+In the database community, \emph{sharding} a database is the practice of dividing the data in a database across multiple computers, reducing the amount of storage required on each computer at the cost of requiring communication between computers when a database query needs to access data that is stored on multiple machines.  In homology search, we use the term the same way, although, since each sequence-HMM comparison in a homology search is independent, sharding a database across multiple machines does not introduce extra communication.  Instead, it restricts the server's ability to distribute work across multiple computers, since only some of the computers now have access to each sequence or HMM.
+
+The initial version of \hmmpgmd did not support sharding, instead requiring that the entire contents of the database file be loaded into memory on each worker node.  As the size of sequence databases increased, the amount of memory this required on each node became a significant problem, so a simple version of sharding was added to \hmmpgmd.  This scheme always divided the database into as many shards as there were worker nodes, distributing the items in the database round-robin across the worker nodes.  This minimized the amount of memory required per worker node, and, since \hmmpgmd statically allocated the work of each search to worker nodes, did not reduce performance.
+
+\Hmmserver supports a more-flexible sharding scheme which, in combination with its improved load-balancing across nodes, allows the user to trade-off memory usage against performance.  \Hmmserver allows the user to specify the number of shards that the database will be divided into independently of the number of worker nodes as long as there is at least one worker node per shard.  If the server has more worker nodes per shard, it loads each shard onto multiple shards and dynamically distributes the work of searching the shard across the nodes that have it loaded into memory.  For example, a server with six worker nodes could be configured with one shard to deliver maximal performance, with six shards to minimize memory usage, or with two or three shards to provide greater performance than the six-shard case at lower memory usage than the one-shard case.  Note that, while server will operate correctly if the number of shards is not an integer divisor of the number of worker nodes, this will lead to reduced performance because some shards will have fewer nodes assigned to them than others.
 
 \section{Client-Server Interface}
+Figure \ref{fig:server_interface} shows the sequence of events involved in sending a search request to a \hmmserver and receiving results back.  A client initiates a search request by opening a socket connection to the server.  It then sends a 32-bit message to the server containing the length of the command that will be sent, followed by the command itself.  After the server completes the search, it sends a fixed-length serialized {HMMD\_SEARCH\_STATUS} object back to the client, followed by a {HMMD\_SEARCH\_STATS} object and one {P7\_HIT} object for each hit the search found.  The server then calls the shutdown function on its side of the socket to signal its intent to close the socket.  Once the client has received all of the data, it closes the socket from its end, which, in turn, signals the server to close its end of the socket connection\sidenote{The server will also close its end of the socket if a timeout (default 30 seconds) expires after it executes the socket shutdown operation, to prevent clients from leaving the socket connection open indefinitely.}, at which point the server is ready to accept another search request.
+
+\begin{figure*}
+  \includegraphics[width=\textwidth]{inclusions/server_interface.pdf}
+  \caption{Client-Server Interface}
+  \label{fig:server_interface}
+  \end{figure*} 
+
+The server can accept multiple client connections simultaneously, up to the limit set by the \mono{{-}{-}ccnts} flag passed to \hmmserver, but queues the requests from clients and processes them sequentially.  Limiting each client to one search per socket connection is new in \hmmserver, as \hmmclient allowed a client to keep a single socket connection open while it sent multiple search requests over the connection.  This change was made to make it harder for clients to monopolize a server.  In \hmmpgmd, a client could potentially send thousands of requests over a single connection.  With \hmmserver, clients can still send many requests to a server, but having to drop and re-establish the socket connection between searches gives other clients a chance to access the server as well.  Note that this "one search per connection" rule applies even to \mono{jackhmmer}-style searches.  \Hmmserver does not implement multi-round searches internally.  Instead a client must send a search request, use the results to create a query object for the next search, send that search, and so on.
+
+\section{Command Format}
+Commands are variable-length objects that must begin with a line of ASCII text.  The server accepts two types of commands: search requests and server instructions.
+
+The first line of a search request must begin with the sequence \monob{@-{}-db <database \#>}\sidenote{For backwards compatibility, the server also accepts \monob{@-{}-seqdb <database \#>} and \monob{@-{}-hmmdb <database \#>} as the beginning of a search command, treating them as synonyms for \monob{@-{}-db <database \#>}.}, followed an options string containing the options to be passed by the search.  The second and following lines of a search request contain the query object that will be searched against the specified database, which must either be a FASTA-format sequence, a text-format HMM, or an asterisk followed serialized \mono{{P7\_HMM}} object\sidenote{The server examines the initial character of the query object to determine its format, and the asterisk indicates a serialized \mono{{P7\_HMM}}.}
+
+The following is an example of a search request command. The trailing slash characters are not strictly necessary, but are accepted for compatibility with \hmmpgmd.\\
+\vspace{1ex}
+\user{\ @{-}{-}db 1  {-}{-}max -Z 42 \\
+>sp|Q6GZX3|002L\_FRG3G Uncharacterized protein 002L OS=Frog virus 3 (isolate Goorha)\\
+MSIIGATRLQNDKSDTYSAGPCYAGGCSAFTPRGTCGKDWDLGEQTCASGFCTSQPLCAR\\
+IKKTQVCGLRYSSKGKDPLVSAEWDSRGAPYVRCTYDADLIDTQAQVDQFVSMFGESPSL\\
+AERYCMRGVKNTAGELVSRVSSDADPAGGWCRKWYSAHRGPDQDAALGSFCIKNPGAADC\\
+KCINRASDPVYQKVKTLHAYPDQCWYVPCAADVGELKMGTQRDTPTNCPTQVCQIVFNML\\
+DDGSVTMDDVKNTINCDFSKYVPPPPPPKPTPPTPPTPPTPPTPPTPPTPPTPRPVHNRK\\
+VMFFVAGAVLVAILISTVRW\\
+\slash\slash}\\
+\vspace{1ex}
+
+\Hmmserver determines the type of search to be performed from the types of the query object and target database, constructing an HMM from the query sequence if both the query object and target database are sequences.  \Hmmserver does not directly support iterative (\mono{jackhmmer}-style) searches.  Instead, the client must send the initial search to the server, construct an HMM from the results, and repeat as necessary.  Support for serialized \mono{{P7\_HMM}} query objects is new in \hmmserver, and was added to support iterative search.  Converting a \mono{{P7\_HMM}} data structure into a text-mode HMM causes some loss of precision because the HMM file format uses a fixed number of digits for each floating-point value, which causes differences in output between iterative searches with \hmmserver and \mono{jackhmmer}.  Sending the HMM for each search round as a serialized data structure eliminates this problem.
+
+Server instructions begin with an exclamation point, followed by the instruction and any arguments.  The only server instruction \hmmserver currently supports is the shutdown command, which has the following format:\\
+\vspace{1ex}
+\user{\ !shutdown <optional password>}\\
+\vspace{1ex}
+
+\section{Reply Format}
+When a \hmmserver completes a search, it sends a serialized\sidenote{Functions to serialize all relevant data structures into network-order streams of bytes and to de-serialize them into big- or little-endian values depending on the endianness of the hardware {HMMER} is running on are provided in the {HMMER} source code.} {HMMD\_SEARCH\_STATUS} object, as shown in Figure \ref{fig:search-status-serialize}, back to the client.  The status field of the object contains an Easel result code, which is either {ESLok} if the search completed correctly, or an error code if something went wrong.  The type field of the object is either {HMMD\_CMD\_SEARCH} or {HMMD\_CMD\_SCAN} depending on whether the target database contained sequence or HMM data.  Finally, the msg\_size field contains the length (in bytes) of the remaining data that will be sent to the client.
+
+  \begin{figure*}
+    \includegraphics[width=\textwidth]{inclusions/HMMD_SEARCH_STATUS.pdf}
+    \caption{Serialized {HMMD\_SEARCH\_STATUS} Structure}
+    \label{fig:search-status-serialize}
+    \end{figure*} 
+
+If an error occurred during the search, the server then sends a string describing the error.  If the search completed successfully, it sends a serialized {HMMD\_SEARCH\_STATS} structure (Figure \ref{fig:search-stats-serialize}) followed by $N$ serialized {P7\_HIT} structures, one for each hit found by the search.  If an error occurred, the msg\_size field of the {HMMD\_SEARCH\_STATUS} object contains the length of the error description string.  Otherwise it contains the sum of the length of the {HMMD\_SEARCH\_STATS} structure and the $N$ {P7\_HIT} structures, which can be read into a single buffer and un-packed using the deserialization functions HMMER provides.
+
+\begin{figure*}
+  \includegraphics[width=\textwidth]{inclusions/HMMD_SEARCH_STATS.pdf}
+  \caption{Serialized {HMMD\_SEARCH\_STATS} Structure}
+  \label{fig:search-stats-serialize}
+  \end{figure*} 
+
+The {HMMD\_SEARCH\_STATS} structure contains information about the search itself.  The first three fields (elapsed, user, and sys) contain the elapsed, user, and system time required for the search, in seconds, and are double-precision floating-point numbers.  The next four ({Z}, dom{Z}, {Z}\_setby, and dom{Z}\_setby) contain the number of targets searched and number of significant targets searched, which are used in calculating e-values, as well as enums that describe whether the number of targets was set by the database size or a command-line parameter\sidenote{Because the mapping of enums to binary values is not guaranteed to be portable, our serialization and de-serialization routines explicitly convert enums to and from specific integers rather than serializing the actual enums.}. The four fields after than (nmodels, nnodes, nseqs, and nres) contain the number of HMMs searched, number of HMM nodes searched, number of sequences searched, and total number of sequence residues searched.  The next four fields (n\_past\_msv, n\_past\_bias, n\_past\_vit, n\_past\_fwd) contain the number of sequence-HMM comparisons that made it past each of the stages of HMMER's comparison pipeline during the search, and the three after that (nhits, nreported, nincluded) contain the number of hits found, the number of hits that met the reporting threshold for the search, and the number of hits that met the threshold to be considered significant.  Finally, the hit\_offsets array contains the offset (in bytes) from the start of the serialized {P7\_HIT} objects to the start of each {P7\_HIT} objects, if at least one hit was found.
+
+  \begin{figure*}
+    \includegraphics[width=\textwidth]{inclusions/hit-serialize.pdf}
+    \caption{Serialized {P7\_HIT} Structures}
+    \label{fig:hit-serialize}
+  \end{figure*}
+
+  {P7\_HIT} objects, shown in Figure \ref{fig:hit-serialize} are somewhat complex to serialize and de-serialize, as they are variable-length themselves, have optional fields, and contain {P7\_DOMAIN} structures, which contain {P7\_ALIDISPLAY} structures, both of which are variable-length.  Because of the number of fields in these data structures, we refer the reader to the {HMMER} source code for information about the meaning of each data structure's fields, and only describe here how the serialization of these data structures differs from a straightforward concatenation of the fields in the structure into a network-ordered stream of bytes.
+
+  A serialized {P7\_HIT} structure begins with a four-byte size field that is not part of the {P7\_HIT} structure and contains the length (in bytes)
+  of the serialized {P7\_HIT} object.  This is followed by all of the fixed-length fields in the data structure, a one-byte field of string presence flags that encode whether the {P7\_HIT} object contains the optional acc and desc strings, and the variable-length name acc, and desc strings (if present) from the {P7\_HIT} object.  The serialized object then concludes with $Ndom$ serialized {P7\_DOMAIN} structures.
+
+  \begin{figure*}
+    \includegraphics[width=\textwidth]{inclusions/domain-serialize.pdf}
+    \caption{Serialized {P7\_DOMAIN} Structure}
+    \label{fig:domain-serialize}
+  \end{figure*}
+
+  The {P7\_DOMAIN} structure (Figure \ref{fig:domain-serialize}) is relatively straightforward to serialize.  The serialized structure begins with a size field that encodes its length in bytes, followed by the fixed-length fields of the data structure.  The only complexity comes from the scores\_per\_pos array, which is a variable-length array of floating-point numbers.  The scores\_per\_pos length field\sidenote{This field is not strictly necessary, as it contains the same information as the n field of the domain's {P7\_ALIDISPLAY} structure, but including it explicitly simplifies de-serialization.} gives the length of this array in elements, and is followed by the serialized scores\_per\_pos array and the domain's {P7\_ALIDISPLAY} structure.
+  \begin{figure*}
+    \includegraphics[width=\textwidth]{inclusions/alidisplay-serialize.pdf}
+    \caption{Serialized {P7\_ALIDISPLAY} Structure}
+    \label{fig:alidisplay-serialize}
+  \end{figure*}
+
+The {P7\_ALIDISPLAY} structure (Figure \ref{fig:alidisplay-serialize}) contains a number of variable-length fields, several of which are optional.  The serialized structure begins with a size field containing its length in bytes, followed by the fixed-length fields of the data structure.  A byte of string presence flags encodes the presence or absence of each of the optional field, using a one-hot format.  Then, the variable-length fields of the data structure are serialized as byte arrays.
 
 \begin{adjustwidth}{}{-1in}   
 \chapter{Manual Pages Related to the Server}
 \input{manpages_server}
 \end{adjustwidth}
+
+
 
 \chapter{Acknowledgments}
 Simon Potter of the European Bioinformatics Institute was of great help in understanding the daemon's interactions with the EBI's web servers.  We would also like to thank all of the organizations that have supported the development of HMMER, as well as all of the individuals who have contributed to it. In particular, Washington University, the National Institutes of Health, Monsanto, the Howard Hughes Medical Institute, and Harvard University have been major supporters of this work.  For a more thorough set of acknowledgments that includes a discussion of HMMER's history, please see the \underline{HMMER User's Guide}.
