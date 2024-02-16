@@ -69,10 +69,10 @@ static int exactsc  (H4_ENVSET *env, const ESL_DSQ *dsq, const H4_PROFILE *hmm, 
  *            hmm  : profile
  *            mo   : comparison mode, with length model set to <L>
  *            anch : anchor set for <dsq>/<hmm> comparison
- *            afu  : ASC Forward UP matrix
- *            afd  : ASC Forward DOWN matrix
  *            apu  : ASC posterior decoding UP matrix
  *            apd  : ASC posterior decoding DOWN matrix
+ *            afu  : ASC Forward UP matrix
+ *            afd  : ASC Forward DOWN matrix
  *            env  : RETURN : envelope data for all <D> domains [caller-provided space; reused/resized as needed]
  *
  * Returns:   <eslOK> on success. <env> may have been reallocated,
@@ -350,10 +350,13 @@ exactsc(H4_ENVSET *env, const ESL_DSQ *dsq, const H4_PROFILE *hmm, const H4_MODE
          * as if this domain were alone in the sequence.
          */
         env->e[d].env_sc += ( env->L - env->e[d].ob + offset ) * mo->xsc[h4_N][h4_LOOP];
-        env->e[d].env_sc -= mo->nullsc;
+         
+        /* ASC Forward already included mo->nullsc, don't subtract it again.
+         */
       }
   return eslOK;
 }
+
 
 /*****************************************************************
  * 3. Unit tests

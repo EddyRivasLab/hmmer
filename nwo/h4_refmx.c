@@ -2,8 +2,9 @@
  *
  * Contents:
  *   1. H4_REFMX object
- *   2. Debugging and development tools
- *   3. Validation 
+ *   2. Visualization tools for DP matrix data
+ *   3. Debugging and development tools
+ *   4. Validation 
  *
  * See also: 
  *   reference_dp.c
@@ -13,6 +14,7 @@
 #include <stdio.h>
 
 #include "easel.h"
+#include "esl_dmatrix.h"
 #include "esl_vectorops.h"
 
 #include "logsum.h"
@@ -262,7 +264,267 @@ h4_refmx_Destroy(H4_REFMX *rx)
 
 
 /*****************************************************************
- * 2. Debugging and development tools
+ * 2. Visualization tools for DP matrix data
+ *****************************************************************/
+
+/* Function:  h4_refmx_GetDecodedCoverage()
+ * Synopsis:  Return the number of residues in domains, by decoding
+ * Incept:    SRE, Sat 10 Feb 2024
+ *
+ * Purpose:   Return the number of positions in homologous
+ *            domain regions, defined as having a posterior decoding
+ *            probability of $\geq$ <pthresh> to a profile state (M*k
+ *            or I*k), using decoding matrix <rxd>.
+ */
+int
+h4_refmx_GetDecodedDomainCoverage(const H4_REFMX *rxd, float pthresh)
+{
+  int   i;
+  float ph;
+  int   ncov = 0;
+
+  for (i = 1; i <= rxd->L; i++)
+    {
+      ph =  1.0 - ( H4R_XMX(rxd, i, h4R_N) + H4R_XMX(rxd, i, h4R_JJ) + H4R_XMX(rxd, i, h4R_CC));
+      if (ph >= pthresh) ncov++;
+    }
+  return ncov;
+}
+
+/* Function:  h4_refmx_DecodingTracks()
+ * Synopsis:  Decode probability of homology regions and their starts and ends on a 1..L seq
+ * Incept:    SRE, Wed 07 Feb 2024
+ *
+ * Purpose:   Given a posterior decoding matrix <rxd>, calculate
+ *            posterior decoding probability tracks along the target
+ *            sequence, for the probability that each residue i=1..L
+ *            is a) in a domain (emitted by an M or I state); b) start
+ *            of a domain; or c) end of a domain.
+ *
+ *            Caller can request any of these three optional tracks.
+ *            For any track you don't want, pass NULL as the argument.
+ *
+ *            Tracks are allocated here. Anything the caller gets,
+ *            it is responsible for free'ing.
+ *
+ * Returns:   <eslOK> on success, and any non-NULL <opt_> arguments
+ *            contain a probability decoding track p[0,1..L]; p[0] is
+ *            always 0., the decoding values are for a sequence 1..L.
+ *            Caller must free the tracks it gets back.
+ *
+ * Throws:    <eslEMEM> on allocation failure. Now any non-NULL
+ *            <*opt_> arguments are set to NULL, with no allocation.
+ */
+int
+h4_refmx_DecodingTracks(const H4_REFMX *rxd, float **opt_homology, float **opt_start, float **opt_end)
+{
+  float *p1 = NULL;
+  float *p2 = NULL;
+  float *p3 = NULL;
+  int    i;
+  int    status;
+
+  ESL_DASSERT1(( rxd->type == h4R_DECODING ));
+
+  if (opt_homology)
+    {
+      ESL_ALLOC(p1, sizeof(float) * (rxd->L+1));
+      p1[0] = 0.;
+
+      for (i = 1; i <= rxd->L; i++)
+        p1[i] =  1.0 - ( H4R_XMX(rxd, i, h4R_N) + H4R_XMX(rxd, i, h4R_JJ) + H4R_XMX(rxd, i, h4R_CC));
+
+      *opt_homology = p1;
+    }
+
+  if (opt_start)
+    { 
+      ESL_ALLOC(p2, sizeof(float) * (rxd->L+1));
+      p2[0] = 0.;
+      for (i = 1; i <= rxd->L; i++)
+        p2[i] = H4R_XMX(rxd, i-1, h4R_B); // B is on ia-1 from the start of a domain.
+
+      *opt_start = p2;
+    }
+
+  if (opt_end)
+    {
+      ESL_ALLOC(p3, sizeof(float) * (rxd->L+1));
+      p3[0] = 0.;
+      for (i = 1; i <= rxd->L; i++)
+        p3[i] = H4R_XMX(rxd, i, h4R_E);
+
+      *opt_end = p3;
+    }
+  return eslOK;
+
+ ERROR:
+  free(p1); free(p2); free(p3);
+  if (opt_homology) *opt_homology = NULL;
+  if (opt_start)    *opt_start    = NULL;
+  if (opt_end)      *opt_end      = NULL;
+  return status;
+}
+
+
+/* Function:  h4_refmx_PlotDomainInference()
+ * Synopsis:  Plot graph of domain inference data, in XMGRACE xy format
+ * Incept:    SRE, Sun 11 Feb 2024
+ *
+ * Purpose:   Given posterior decoding matrix <pp>, write data for
+ *            plotting a 2D graph of decoding data relevant to inferring
+ *            sequence coords of domain locations. The output is written
+ *            to <ofp> in XMGRACE xy format.
+ *
+ *            Restrict the plot to sequence coords <ia..ib>, which can
+ *            range from <1..pp->L>. To get the full sequence, pass
+ *            <ia=1>, <ib=pp->L>.
+ *
+ *            At least three sets are plotted. Set 0 is P(homology);
+ *            the posterior probability that this residue is 'in' the
+ *            model (as opposed to being emitted by N,C, or J states).
+ *            Set 1 is P(B), the posterior probability of beginning a
+ *            domain (of using the B state at position i-1).
+ *            state. Set 2 is P(E), the posterior probability of the
+ *            END state at position i.
+ *
+ *            Optionally, caller may also provide a path <pi>, showing
+ *            where domains have been defined (as horizontal lines
+ *            above the plot); each domain is a xmgrace dataset (so,
+ *            sets 4..4+ndom-1 are these horizontal lines).
+ */
+int
+h4_refmx_PlotDomainInference(FILE *ofp, H4_REFMX *pp, H4_PATH *pi, int ia, int ib)
+{
+  float *ph = NULL;
+  float *ps = NULL;
+  float *pe = NULL;
+  float  tr_height = 1.2;
+  int    d,i,D;
+  int    domia, domib;
+  int    status;
+
+  if ((status = h4_refmx_DecodingTracks(pp, &ph, &ps, &pe)) != eslOK) goto ERROR;
+
+  for (i = ia; i <= ib; i++)
+    esl_fprintf(ofp, "%-6d %.5f\n", i, ph[i]);
+  esl_fprintf(ofp, "&\n");
+
+  for (i = ia; i <= ib; i++)
+    esl_fprintf(ofp, "%-6d %.5f\n", i, ps[i]);
+  esl_fprintf(ofp, "&\n");
+
+  for (i = ia; i <= ib; i++)
+    esl_fprintf(ofp, "%-6d %.5f\n", i, pe[i]);
+  esl_fprintf(ofp, "&\n");
+
+  if (pi)
+    {
+      D  = h4_path_GetDomainCount(pi);
+      for (d = 1; d <= D; d++)
+        {
+          h4_path_FetchDomainBounds(pi, d, &domia, &domib, /*opt_ka, kb=*/ NULL, NULL);
+          fprintf(ofp, "%-6d %.5f\n", domia, tr_height);
+          fprintf(ofp, "%-6d %.5f\n", domib, tr_height);
+          fprintf(ofp, "&\n");
+        }
+    }
+
+  free(ph); free(ps); free(pe);
+  return eslOK;
+
+ ERROR:
+  free(ph); free(ps); free(pe);
+  return status;
+}
+
+
+/* Function:  h4_refmx_PlotHeatMap()
+ * Synopsis:  Plot heat map of decoding matrix in PostScript.
+ * Incept:    SRE, Sun 11 Feb 2024
+ *
+ * Purpose:   Plot a heat map representation of a window of the decoding
+ *            matrix <pp> to open stream <ofp>, in PostScript format.
+ *            Window is sequence position <ia>..<ib>, and model node
+ *            <ka>..<kb>. To plot the whole matrix, pass <ia=1>,
+ *            <ib=pp->L>, <ka=1>, <kb=pp->M>.
+ *            
+ *            One cell (i,k) is plotted for each sequence position i
+ *            and model position k. The value in this cell is the sum
+ *            of the posterior probabilities of all states s at
+ *            (i,k,s): including M,D,I and including both glocal and
+ *            local.
+ *
+ *            The plot has the sequence as the y-axis running from
+ *            *bottom to top*, and profile as x-axis left to right.
+ *            (I usually rotate this to the right in Illustrator, so
+ *            the sequence runs left to right and profle top to
+ *            bottom.)
+ *
+ *            The format of the plot is hardcoded in several respects,
+ *            just sufficient for my visualization purposes.
+ *            The plot is always a single PostScript 8x11.5" page,
+ *            792x612pt, with 20pt margins. The color scheme is a
+ *            10-level scheme modified from ColorBrewer
+ *            (colorbrewer2.org), their 9-class Red plus a light blue
+ *            zero bin (pp $<$ 0.1). No coords are plotted on the axes
+ *            of the matrix. All this is dictated by
+ *            <esl_dmatrix_PlotHeatMap()>. The documentation there
+ *            may be more up to date than this.
+ *            
+ *            Don't try to plot anything but a posterior probability
+ *            matrix, because another thing that's hardcoded here is
+ *            the expectation that DP matrix values range from 0 to 1.
+ *
+ * Args:      ofp    - open stream for writing PostScript output
+ *            pp     - decoding matrix to visualize
+ *            ia     - seq coord start (1..L; perhaps 1)
+ *            ib     - seq coord end   (1..L; perhaps pp->L)
+ *            ka     - model coord start (1..M; perhaps 1)
+ *            kb     - model coord end   (1..M; perhaps pp->M)
+ *
+ * Returns:   <eslOK> on success.
+ *
+ * Throws:    <eslEMEM> on allocation failure
+ */
+int
+h4_refmx_PlotHeatMap(FILE *ofp, H4_REFMX *pp, int ia, int ib, int ka, int kb)
+{
+  ESL_DMATRIX *dmx  = NULL;
+  int          nrow = ib - ia + 1;
+  int          ncol = kb - ka + 1;
+  int          i,k;
+  float        val;
+  int          status;
+
+  /* Copy to an <ESL_DMATRIX>, which has heat mapping tools.
+   * Marginalize local+glocal paths, MDI.
+   */
+  if ((dmx = esl_dmatrix_Create(nrow, ncol)) == NULL) { status = eslEMEM; goto ERROR; }
+  for (i = ia; i <= ib; i++)
+    for (k = ka; k <= kb; k++)
+      {
+	val = 
+          H4R_MX(pp, i, k, h4R_MG) + H4R_MX(pp, i, k, h4R_ML)  +
+          H4R_MX(pp, i, k, h4R_IG) + H4R_MX(pp, i, k, h4R_IL)  +
+          H4R_MX(pp, i, k, h4R_DG) + H4R_MX(pp, i, k, h4R_DL);
+
+	dmx->mx[ib-i][k-ka] = val;    // ib-i flips the y axis; 1 at page bottom 
+      }
+
+  if ((status = esl_dmatrix_PlotHeatMap(ofp, dmx, 0.0, 1.0)) != eslOK) goto ERROR;
+
+  esl_dmatrix_Destroy(dmx);
+  return eslOK;
+
+ ERROR:
+  esl_dmatrix_Destroy(dmx);
+  return status;
+}
+
+
+/*****************************************************************
+ * 3. Debugging and development tools
  *****************************************************************/
 
 /* Function:  h4_refmx_DecodeSpecial()
@@ -638,7 +900,7 @@ h4_refmx_CompareDecoding(const H4_REFMX *ppe, const H4_REFMX *ppa, float a_tol)
 
 
 /*****************************************************************
- * 3. Validation
+ * 4. Validation
  *****************************************************************/
 
 static inline int

@@ -104,8 +104,8 @@ h4_mpas_stats_Dump(FILE *ofp, H4_MPAS_STATS *stats)
     {
       fprintf(ofp, "# tot_iterations       = %d\n",    stats->tot_iterations);
       fprintf(ofp, "# tot_asc_calculations = %d\n",    stats->tot_asc_calculations);
-      fprintf(ofp, "# Viterbi score (nats) = %.2f\n",  stats->vsc);
-      fprintf(ofp, "# Forward score (nats) = %.2f\n",  stats->fsc);
+      fprintf(ofp, "# Viterbi score (bits) = %.2f\n",  stats->vsc);
+      fprintf(ofp, "# Forward score (bits) = %.2f\n",  stats->fsc);
       fprintf(ofp, "# vit_asc              = %.2f\n",  stats->vit_asc);
       fprintf(ofp, "# vit_ascprob          = %6.4f\n", stats->vit_ascprob);
       fprintf(ofp, "# best_asc             = %.2f\n",  stats->best_asc);

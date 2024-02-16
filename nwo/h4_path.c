@@ -390,9 +390,70 @@ h4_path_GetDomainCount(const H4_PATH *pi)
   int z;
 
   for (z = 0; z < pi->Z; z++)
-    if (h4_path_IsB(pi->st[z])) d++;
+    if (h4_path_IsB(pi->st[z])) d++;   // h4_path_IsB() tests for h4P_L || h4P_G. H4_PATH doesn't explicitly contain h4P_B.
   return d;
 }
+
+
+/* Function:  h4_path_GetFullDomainCount()
+ * Synopsis:  Returns the number of full-length (k=1..M) domains in path
+ * Incept:    SRE, Wed 07 Feb 2024 [AGBT24, Orlando]
+ *
+ * Purpose:   Returns the number of full length domains in the path,
+ *            defined as alignments that start with k=1 and end with
+ *            k=<M>.  This is at least the number of glocal alignments
+ *            in the path, but even a local alignment can be
+ *            full-length (for example, when path was inferred in a
+ *            local-only mode).
+ *
+ *            Caller has to tell us what <M> is, because the path is
+ *            so compressed, it needs to be interpreted against a
+ *            particular profile and sequence; here we only need the
+ *            profile length to do the job.
+ */
+int
+h4_path_GetFullDomainCount(const H4_PATH *pi, int M)
+{
+  int z,k,ka,kb;
+  int nfull = 0;
+
+  for (z = 0; z < pi->Z; z++)
+    {
+      if      (h4_path_IsB(pi->st[z])) ka = k = pi->rle[z];  // k=1 for G
+      else if (h4_path_IsM(pi->st[z])) k += pi->rle[z]; 
+      else if (h4_path_IsD(pi->st[z])) k += pi->rle[z]; 
+      else if (pi->st[z] == h4P_J || pi->st[z] == h4P_C)
+        {
+          kb = k-1;
+          if (ka == 1 && kb == M) nfull++;
+        }
+    } 
+  return nfull;
+}
+
+
+/* Function:  h4_path_GetHomologyCoverage()
+ * Synopsis:  Returns the number of residues in homologous domain regions.
+ * Incept:    SRE, Wed 07 Feb 2024 [AGBT24, Orlando]
+ *
+ * Purpose:   Count the number of residues in homologous domain regions
+ *            (residues emitted by M|I states in the profile), and
+ *            return that count.
+ */
+int
+h4_path_GetHomologyCoverage(const H4_PATH *pi)
+{
+  int z;
+  int ncov = 0;
+
+  for (z = 0; z < pi->Z; z++)
+    {
+      if      (h4_path_IsM(pi->st[z])) ncov += pi->rle[z];
+      else if (h4_path_IsI(pi->st[z])) ncov += pi->rle[z];
+    }
+  return ncov;
+}
+
 
 
 /* Function:  h4_path_FetchDomainBounds()
@@ -401,6 +462,8 @@ h4_path_GetDomainCount(const H4_PATH *pi)
  *
  * Purpose:   Get bounds <ia>..<ib> (on the sequence) and <ka>..<kb> (on
  *            the profile) for domain <whichd> from path <pi>.
+ *
+ *            Domains are numbered starting with 1.
  *
  * Args:      pi     - path to get domain coords from
  *            whichd - which domain to get coords for (1..D)
@@ -877,10 +940,10 @@ h4_path_Score(const H4_PATH *pi, const ESL_DSQ *dsq, const H4_PROFILE *hmm, cons
 	sc += hmm->rsc[dsq[i++]][k];                                  // i advances to the next x_i that'll be emitted.
 
 	for (y = 2; y <= pi->rle[z]; y++)
-	  {                                        // for remaining MG's in a run:
-	    sc += hmm->tsc[k++][h4_MM];            //   ... score transition, advance k to next MG_k
+	  {                                        // for remaining MG's or ML's in a run:
+	    sc += hmm->tsc[k++][h4_MM];            //   ... score transition, advance k to next MG_k | ML_k
 	    sc += hmm->rsc[dsq[i++]][k];           //   ... score emission,   advance i to next x_i
-	  }                                        // k is now the current MGk; i is now the next x_i
+	  }                                        // k is now the current MGk | MLk; i is now the next x_i
 	break;
 
       case h4P_IG:
@@ -1300,6 +1363,139 @@ h4_path_Dump(FILE *fp, const H4_PATH *pi)
   fprintf(fp,   "# Zalloc   = %d\n", pi->Zalloc);
   fprintf(fp,   "# Zredline = %d\n", pi->Zredline);
   fprintf(fp,   "# L        = %d\n", h4_path_GetSeqlen(pi));
+  return eslOK;
+}
+
+
+int
+h4_path_DumpVerbose(FILE *fp, const H4_PATH *pi, const H4_PROFILE *hmm, const H4_MODE *mo, const ESL_DSQ *dsq)
+{
+  int z,y;
+  int i = 0;   // last x_i we emitted
+  int k = 0;   // last k that we used
+  float esc,tsc;
+
+  fprintf(fp, "st  z    y    i   x[i]  k   emission transition\n");
+  fprintf(fp, "-- ---- ---- ----  -   ---- -------- ----------\n");
+
+  for (z = 0; z < pi->Z; z++)
+    {
+      switch (pi->st[z]) {
+      case h4P_N:
+        fprintf(fp, "%2s %4d %4d %4s  %c   %4s %8s %8s\n",   "S", z, 0, ".", '.', ".", ".", ".");
+        fprintf(fp, "%2s %4d %4d %4s  %c   %4s %8s %8.4f\n", "N", z, 1, ".", '.', ".", ".", 0.);
+        for (y = 2; y <= pi->rle[z]; y++)
+          {
+            i++;
+            fprintf(fp, "%2s %4d %4d %4d  %c   %4s %8.4f %8.4f\n",
+                    "N", z, y, i, hmm->abc->sym[dsq[i]], ".", 0., mo->xsc[h4_N][h4_LOOP]);
+          }
+        break;
+
+      case h4P_G:
+        fprintf(fp, "%2s %4s %4s %4s  %c   %4s %8s %8.4f\n",
+                "B", ".", ".", ".", '.', ".", ".",
+                (pi->st[z-1] == h4P_N ? mo->xsc[h4_N][h4_MOVE] : mo->xsc[h4_J][h4_MOVE])); // {NJ}->B
+        fprintf(fp, "%2s %4d %4s %4s  %c   %4s %8s %8.4f\n",
+                "G", z, ".", ".", '.', ".", ".", mo->xsc[h4_B][h4_MOVE]);
+        k = 0;
+        break;
+
+      case h4P_L:
+        fprintf(fp, "%2s %4s %4s %4s  %c   %4s %8s %8.4f\n",
+                "B", ".", ".", ".", '.', ".", ".",
+                (pi->st[z-1] == h4P_N ? mo->xsc[h4_N][h4_MOVE] : mo->xsc[h4_J][h4_MOVE])); // {NJ}->B
+        fprintf(fp, "%2s %4d %4s %4s  %c   %4s %8s %8.4f\n",
+                "L", z, ".", ".", '.', ".", ".", mo->xsc[h4_B][h4_MOVE]);
+        k = pi->rle[z] - 1;
+        break;
+
+      case h4P_MG:
+      case h4P_ML:
+        for (y = 1; y <= pi->rle[z]; y++)
+          {
+            if (y == 1) {
+              switch (pi->st[z-1]) {
+              case h4P_IG: case h4P_IL: tsc = hmm->tsc[k++][h4_IM]; break; 
+              case h4P_DG: case h4P_DL: tsc = hmm->tsc[k++][h4_DM]; break;
+              case h4P_G:               tsc = hmm->tsc[k++][h4_MM]; break;  // (k=0 advances to 1)
+              case h4P_L:               tsc = hmm->tsc[k++][h4_LM]; break;  // (L->Mk is stored off-by-one in profile. k advances to correct MLk coord here.)
+              }
+            } else tsc = hmm->tsc[k++][h4_MM];
+            
+            i++;
+            esc = hmm->rsc[dsq[i]][k];       
+
+            fprintf(fp, "%2s %4d %4d %4d  %c   %4d %8.4f %8.4f\n",
+                    h4_path_DecodeStatetype(pi->st[z]), z, y, i, hmm->abc->sym[dsq[i]], k, esc, tsc);
+          }
+        break;
+
+      case h4P_IG:
+      case h4P_IL:
+        for (y = 1; y <= pi->rle[z]; y++)
+          {
+            if (y == 1) {
+              switch (pi->st[z-1]) {
+              case h4P_MG: case h4P_ML: tsc = hmm->tsc[k][h4_MI]; break; 
+              case h4P_DG: case h4P_DL: tsc = hmm->tsc[k][h4_DI]; break;
+              }
+            } else tsc = hmm->tsc[k][h4_II];
+
+            i++;
+            fprintf(fp, "%2s %4d %4d %4d  %c   %4d %8.4f %8.4f\n",
+                    h4_path_DecodeStatetype(pi->st[z]), z, y, i, hmm->abc->sym[dsq[i]], k, 0.0, tsc);
+          }
+        break;
+
+      case h4P_DG:
+      case h4P_DL:
+        for (y = 1; y <= pi->rle[z]; y++)
+          {
+            if (y == 1) {
+              	switch (pi->st[z-1]) {
+                case h4P_MG: case h4P_ML: tsc = hmm->tsc[k++][h4_MD]; break;
+                case h4P_IG: case h4P_IL: tsc = hmm->tsc[k++][h4_ID]; break;
+                case h4P_G:               tsc = hmm->tsc[k++][h4_MD]; break;
+                }
+            } else tsc = hmm->tsc[k++][h4_DD];
+
+            fprintf(fp, "%2s %4d %4d %4s  %c   %4d %8s %8.4f\n",
+                    h4_path_DecodeStatetype(pi->st[z]), z, y, ".", '.', k, ".", tsc);
+          }
+        break; 
+
+      case h4P_J:
+        fprintf(fp, "%2s %4s %4s %4s  %c   %4s %8s %8.4f\n",
+                "E", ".", ".", ".", '.', ".", ".", 0.0);
+        fprintf(fp, "%2s %4d %4d %4s  %c   %4s %8s %8.4f\n",
+                "J", z, 1, ".", '.', ".", ".", mo->xsc[h4_E][h4_LOOP]);
+        for (y = 2; y <= pi->rle[z]; y++)
+          {
+            i++;
+            fprintf(fp, "%2s %4d %4d %4d  %c   %4s %8.4f %8.4f\n",
+                    "J", z, y, i, hmm->abc->sym[dsq[i]], ".", 0., mo->xsc[h4_J][h4_LOOP]);
+          }
+        break;
+
+      case h4P_C:
+        fprintf(fp, "%2s %4s %4s %4s  %c   %4s %8s %8.4f\n",
+                "E", ".", ".", ".", '.', ".", ".", 0.0);
+        fprintf(fp, "%2s %4d %4d %4s  %c   %4s %8s %8.4f\n",
+                "C", z, 1, ".", '.', ".", ".", mo->xsc[h4_E][h4_MOVE]);
+        for (y = 2; y <= pi->rle[z]; y++)
+          {
+            i++;
+            fprintf(fp, "%2s %4d %4d %4d  %c   %4s %8.4f %8.4f\n",
+                    "J", z, y, i, hmm->abc->sym[dsq[i]], ".", 0., mo->xsc[h4_C][h4_LOOP]);
+          }
+        break;
+      }
+    }  
+  fprintf(fp, "%2s %4s %4s %4s  %c   %4s %8s %8.4f\n",
+          "T", ".", ".", ".", '.', ".", ".",  mo->xsc[h4_C][h4_MOVE]);
+
+  fprintf(fp, "(and - %8.4f of nullsc)\n", mo->nullsc);
   return eslOK;
 }
 

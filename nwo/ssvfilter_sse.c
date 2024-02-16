@@ -398,7 +398,7 @@ h4_ssvfilter_sse(const ESL_DSQ *dsq, int L, const H4_PROFILE *hmm, const H4_MODE
   __m128i beginv  = _mm_set1_epi8(-128);         // initialization of each set of diagonals
   __m128i xEv     = beginv; 	                 // E state: keeps max for Mk->E as we go    
   int     last_q  = 0;                           // for saving the last q value to find band width           
-  int8_t  xE;                                    // DP max, before conversion to nats
+  int8_t  xE;                                    // DP max, before conversion to bits
   int     q;			                 // counter over vectors 0..nq-1  
   int     bands;                                 // number of bands (rounds) to use   
   int     i;                                     // counter for bands                     

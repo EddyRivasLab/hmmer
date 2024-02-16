@@ -272,7 +272,7 @@ utest_compare_reference(ESL_RANDOMNESS *rng, ESL_ALPHABET *abc, int M, int L, in
 
   /* SSV filter assumes best local alignment diagonal has nonnegative
    * score. For an optimal ungapped local alignment of score D, the
-   * SSV score reported is max(0,D) + tNB + tBM + tCT - 2 nats. It's
+   * SSV score reported is max(0,D) + tNB + tBM + tCT - 2 nats (but in bits). It's
    * almost always true that there's at least one positive scoring
    * residue somewhere, but on edge cases (M ~ 1, L ~ 1) there may not
    * be. The unit test has to check for the SSV minimal score floor.

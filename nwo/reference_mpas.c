@@ -116,7 +116,7 @@ static int anchorset_from_path(const H4_PATH *pi, const H4_REFMX *rxd, H4_ANCHOR
  *            afu       : empty matrix to be used for ASC UP calculations     [caller-provided space; reused/resized as needed here]
  *            afd       : empty matrix to be used for ASC DOWN calculations   [caller-provided space; reused/resized as needed here]
  *            anch      : empty anchor data structure to hold result          [caller-provided space; reused/resized as needed here]
- *            ret_asc   : score of the most probable anchor set (raw, nats)
+ *            ret_asc   : score of the most probable anchor set (bits)
  *            prm       : OPTIONAL : non-default control parameters (or NULL)
  *            stats     : OPTIONAL : detailed data collection for development, debugging (or NULL)
  *
@@ -138,7 +138,7 @@ h4_reference_MPAS(ESL_RANDOMNESS *rng, const ESL_DSQ *dsq, int L, const H4_PROFI
                   H4_REFMX *afu, H4_REFMX *afd, H4_ANCHORSET *anch, float *ret_asc,
                   const H4_MPAS_PARAMS *prm, H4_MPAS_STATS *stats)
 {
-  float           fwdsc          = H4R_XMX(rxf, L, h4R_C) + mo->xsc[h4_C][h4_MOVE];  
+  float           fwdsc          = H4R_XMX(rxf, L, h4R_C) + mo->xsc[h4_C][h4_MOVE] - mo->nullsc;  
   int             max_iterations = (prm ? prm->max_iterations      : h4_MPAS_MAX_ITERATIONS);
   float           loglossthresh  = (prm ? log(prm->loss_threshold) : log(h4_MPAS_LOSS_THRESHOLD));
   int             nmax_sampling  = (prm ? prm->nmax_sampling       : h4_MPAS_NMAX_SAMPLING);
@@ -171,7 +171,7 @@ h4_reference_MPAS(ESL_RANDOMNESS *rng, const ESL_DSQ *dsq, int L, const H4_PROFI
    */
   h4_anchorhash_Reuse(ah);
   
-  if (be_verbose) printf("# Forward score: %6.2f nats\n", fwdsc);
+  if (be_verbose) printf("# Forward score: %6.2f bits\n", fwdsc);
 
   /* MPAS algorithm main loop */
   while (1) // ends on convergence tests at end of loop

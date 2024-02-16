@@ -79,7 +79,7 @@ h4_fwdfilter_sse(const ESL_DSQ *dsq, int L, const H4_PROFILE *hmm, const H4_MODE
   __m128       *dpc   = NULL;                     // dpc points at current row
   const __m128  zerov = _mm_setzero_ps();     
   float        *xc    = NULL;                     // specials E,N,JJ,J,B,CC,C,SCALE    
-  float         totsc = 0.0f;                     // accumulates Forward score in nats 
+  float         totsc = 0.0f;                     // accumulates Forward score in bits
   int Q;                                          // segment length; # of MID vectors on each row
   int q;                                          // counter over vectors 0..Q-1
   int i;                                          // counter over residues/rows 1..L 
@@ -917,7 +917,7 @@ posterior_decode_row_sse(H4_CHECKPTMX *cpx, int rowi, H4_SPARSEMASK *sm, float s
  * is added to the sum of the logs of all the scalefactors (which
  * the caller has been accumulating in <cpx->bcksc>), then
  * the <cpx->bcksc> value is finished and equal to the Backwards
- * raw score in nats.
+ * score in bits.
  */
 static inline float
 backward_row_zero_sse(ESL_DSQ x1, const H4_PROFILE *hmm, const H4_MODE *mo, H4_CHECKPTMX *cpx)

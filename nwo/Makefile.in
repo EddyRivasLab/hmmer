@@ -117,8 +117,10 @@ UTESTS = \
 STATS  =
 
 EXPERIMENTS = \
-	h4_build_experiment  \
-	h4_build_experiment2
+	build_experiment           \
+	build_experiment2          \
+	reference_aec_experiment   \
+	reference_aec_experiment2
 
 BENCHMARKS = \
 	fbfilter_benchmark      \

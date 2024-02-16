@@ -104,6 +104,11 @@ extern int       h4_refmx_Scale    (H4_REFMX *rx, float scale);
 extern int       h4_refmx_Reuse    (H4_REFMX *rx);
 extern void      h4_refmx_Destroy  (H4_REFMX *rx);
 
+extern int       h4_refmx_GetDecodedDomainCoverage(const H4_REFMX *rxd, float pthresh);
+extern int       h4_refmx_DecodingTracks(const H4_REFMX *rxd, float **opt_homology, float **opt_start, float **opt_end);
+extern int       h4_refmx_PlotDomainInference(FILE *ofp, H4_REFMX *rxd, H4_PATH *pi, int ia, int ib);
+extern int       h4_refmx_PlotHeatMap(FILE *ofp, H4_REFMX *pp, int ia, int ib, int ka, int kb);
+
 extern char     *h4_refmx_DecodeSpecial(int type);
 extern char     *h4_refmx_DecodeState  (int type);
 extern int       h4_refmx_Dump      (FILE *ofp, H4_REFMX *rx);

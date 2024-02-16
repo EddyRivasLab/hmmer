@@ -67,6 +67,8 @@ extern void     h4_path_Destroy(H4_PATH *pi);
 /* 2. Getting info from H4_PATH */
 extern int h4_path_GetSeqlen(const H4_PATH *pi);
 extern int h4_path_GetDomainCount(const H4_PATH *pi);
+extern int h4_path_GetFullDomainCount(const H4_PATH *pi, int M);
+extern int h4_path_GetHomologyCoverage(const H4_PATH *pi);
 extern int h4_path_FetchDomainBounds(const H4_PATH *pi, int whichd, int *opt_ia, int *opt_ib, int *opt_ka, int *opt_kb);
 
 /* 3. Inferring paths from existing alignments */
@@ -86,8 +88,9 @@ extern char *h4_path_DecodeStatetype(int8_t st);
 extern int   h4_path_Validate(const H4_PATH *pi, int M, int L, char *errbuf);
 extern int   h4_path_Compare(const H4_PATH *pi1, const H4_PATH *pi2);
 extern int   h4_path_CompareLoosely(const H4_PATH *pi1, const H4_PATH *pi2, const ESL_DSQ *dsq);
-extern int   h4_path_Dump     (FILE *fp, const H4_PATH *pi);
-extern int   h4_path_DumpCigar(FILE *fp, const H4_PATH *pi);
+extern int   h4_path_Dump       (FILE *fp, const H4_PATH *pi);
+extern int   h4_path_DumpVerbose(FILE *fp, const H4_PATH *pi, const H4_PROFILE *hmm, const H4_MODE *mo, const ESL_DSQ *dsq);
+extern int   h4_path_DumpCigar  (FILE *fp, const H4_PATH *pi);
 
 
 

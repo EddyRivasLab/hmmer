@@ -169,7 +169,8 @@ h4_cmd_kiteline(const char *topcmd, const ESL_SUBCMD *sub, int argc, char **argv
       /* AEC alignment */
       h4_reference_aec_Align(hmm, apu, apd, env, aec, pi);
 
-      //printf("%-30s %10.2f %10.2g %10.2f %10.2g %10.2f %10.2g %10.2f %10.2f %10.2f %10.2g %4d\n", sq->name, sfsc, sfP, vfsc, vfP, ffsc, ffP, vsc, fsc, bsc, fwdP, anch->D);
+      //printf("%-30s %10.2f %10.2g %10.2f %10.2g %10.2f %10.2g %10.2f %10.2f %10.2f %10.2g %4d\n",
+      //       sq->name, sfsc, sfP, vfsc, vfP, ffsc, ffP, vsc, fsc, bsc, fwdP, anch->D);
 
       z = 0;
       for (d = 1; d <= env->D; d++)
