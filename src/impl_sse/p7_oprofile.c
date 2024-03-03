@@ -1310,8 +1310,6 @@ p7_oprofile_GetSSVEmissionScoreArray(const P7_OPROFILE *om, uint8_t *arr )
  *            in the striped vectors and try to store them somewhere.
  *            I think it's only working because of order of operations:
  *            it improperly stores a few values then overwrites them.
- *            It's also assuming that vectors are only 4 wide; it will
- *            fail on AVX and AVX512.
  */
 int
 p7_oprofile_GetFwdEmissionScoreArray(const P7_OPROFILE *om, float *arr )
