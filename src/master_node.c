@@ -58,7 +58,7 @@
 //#define PRINT_PERF 1
 
 // define this to switch mutexes to slower, but error-checking versions
-#define CHECK_MUTEXES 1 
+//#define CHECK_MUTEXES 1 
 
 #ifdef CHECK_MUTEXES
 static void parse_lock_errors(int errortype){

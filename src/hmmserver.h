@@ -63,6 +63,10 @@ static ESL_OPTIONS server_Client_Options[] = {
   { "--noali",      eslARG_NONE,   FALSE, NULL, NULL,    NULL,  NULL,  NULL,            "don't output alignments, so output is smaller",                2 },
   { "--notextw",    eslARG_NONE,    NULL, NULL, NULL,    NULL,  NULL, "--textw",        "unlimit ASCII text output line width",                         2 },
   { "--textw",      eslARG_INT,    "120", NULL, "n>=120",NULL,  NULL, "--notextw",      "set max width of ASCII text output lines",                     2 },
+  // Specification of query type
+  { "--qseq",       eslARG_NONE,        FALSE, NULL, NULL,    NULL,  NULL,  "--qmsa",      "query file is a set of single query sequences, not a profile HMM",      2 },     
+  { "--qmsa",       eslARG_NONE,        FALSE, NULL, NULL,    NULL,  NULL,  "--qseq",      "query file consists of one or more MSAs, not a profile HMM",            2 },     
+  { "--qformat",    eslARG_STRING,       NULL, NULL, NULL,    NULL,  NULL,      NULL,      "assert query file is in seq|msa file format <s> (for --qseq | --qmsa)", 2 },     
 /* Control of scoring system */
   { "--popen",      eslARG_REAL,       "0.02", NULL, "0<=x<0.5",NULL,  NULL,  NULL,              "gap open probability",                                         3 },
   { "--pextend",    eslARG_REAL,        "0.4", NULL, "0<=x<1",  NULL,  NULL,  NULL,              "gap extend probability",                                       3 },

@@ -189,7 +189,10 @@ static int
 output_header(FILE *ofp, const ESL_GETOPTS *go, char *hmmfile, char *seqfile)
 {
   p7_banner(ofp, go->argv[0], banner);
-  
+   if      (esl_opt_IsUsed(go, "--qseq"))     fprintf(ofp, "# query object is one or more sequences\n");
+  else if (esl_opt_IsUsed(go, "--qmsa"))     fprintf(ofp, "# query object is one or more MSAs\n");
+  else                                       fprintf(ofp, "# query object is one or more profile HMMs\n");
+  if (esl_opt_IsUsed(go, "--qformat"))       fprintf(ofp, "# query file format asserted:      %s\n", esl_opt_GetString(go, "--qformat"));
   if (esl_opt_IsUsed(go, "-o")           && fprintf(ofp, "# output directed to file:         %s\n",             esl_opt_GetString(go, "-o"))           < 0) ESL_EXCEPTION_SYS(eslEWRITE, "write failed");
   if (esl_opt_IsUsed(go, "-A")           && fprintf(ofp, "# MSA of all hits saved to file:   %s\n",             esl_opt_GetString(go, "-A"))           < 0) ESL_EXCEPTION_SYS(eslEWRITE, "write failed");
   if (esl_opt_IsUsed(go, "--tblout")     && fprintf(ofp, "# per-seq hits tabular output:     %s\n",             esl_opt_GetString(go, "--tblout"))     < 0) ESL_EXCEPTION_SYS(eslEWRITE, "write failed");
@@ -254,12 +257,25 @@ output_header(FILE *ofp, const ESL_GETOPTS *go, char *hmmfile, char *seqfile)
   if (fprintf(ofp, "# - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -\n\n")                                                    < 0) ESL_EXCEPTION_SYS(eslEWRITE, "write failed");
   return eslOK;
 }
+static void
+assign_msa_name(char *queryfile, ESL_MSA *msa)
+{
+  char *msaname;
+
+  if (! strcmp(queryfile, "-"))
+    {
+      esl_FileTail(queryfile, /*nosuffix=*/TRUE, &msaname);
+      esl_msa_SetName(msa, msaname, /*namelen=unknown*/-1);
+    }
+  else esl_msa_SetName(msa, "query", -1);
+}
 
 int
 main(int argc, char **argv)
 {
   ESL_GETOPTS     *go       = NULL;	       
   int              status   = eslOK;
+  char errbuf[eslERRBUFSIZE];
   char *buffer=NULL;
   char *cmd=NULL;
   uint8_t *buf;
@@ -277,11 +293,13 @@ main(int argc, char **argv)
   char *query_name=NULL, *query_accession=NULL, *query_obj=NULL, *query_desc=NULL;
   P7_HMM *query_hmm=NULL;
   ESL_SQ *query_seq = NULL;
-  P7_HMMFILE      *hfp      = NULL;  
+  ESL_MSA *query_msa = NULL;
   int i;
   P7_PIPELINE     *pli     = NULL;
   P7_TOPHITS      *th      = NULL;
-  FILE *qf = fopen(queryfile, "r"); 
+  P7_HMMFILE      *hfp=NULL;               // default: open hmmfile; else NULL
+  ESL_SQFILE      *qseq_fp=NULL;           // --qseq:  open seqfile; else NULL
+  ESL_MSAFILE     *qmsa_fp=NULL;           // --qmsa:  open msafile; else NULL
   int                  sock;
   int n =0;
   unsigned short       serv_port;
@@ -291,12 +309,14 @@ main(int argc, char **argv)
   ESL_ALPHABET    *abc     = NULL;        /* digital alphabet                */
   int              prv_msa_nseq;
   int textw = 0;
+  int fmt;
   ESL_STOPWATCH   *w;
   ESL_MSA *msa = NULL;
   ESL_KEYHASH     *kh       = NULL;		  /* hash of previous top hits' ranks                */
   int query_len=0;
   P7_BG           *bg       = NULL;		  /* null model */
   P7_TRACE   *qtr=NULL;
+  uint32_t send_command_length=0;
   w = esl_stopwatch_Create();
   kh            = esl_keyhash_Create();
   int nnew_targets;
@@ -419,11 +439,44 @@ main(int argc, char **argv)
     exit(0);
   }
 
-
+  P7_BUILDER      *bld      = NULL;               /* HMM construction configuration                  */
 // if we get here, we're sending one or more searches to the server
-  if(qf == NULL){
-    p7_Die("Unable to open query file %s\n", queryfile);
-  }
+// Figure out what the query object is 
+ if (esl_opt_GetBoolean(go, "--qseq"))
+    { // query file is sequences
+      fmt = eslSQFILE_UNKNOWN;
+      if (esl_opt_IsOn(go, "--qformat")) {
+        if ((fmt = esl_sqio_EncodeFormat(esl_opt_GetString(go, "--qformat"))) == eslSQFILE_UNKNOWN)
+          p7_Fail("%s is not a valid input sequence file format for --qformat");       
+      }
+      if (fmt == eslSQFILE_NCBI    || fmt == eslSQFILE_DAEMON ||
+          fmt == eslSQFILE_HMMPGMD || fmt == eslSQFILE_FMINDEX )
+        p7_Fail("%s is not a valid query sequence file format\n", esl_opt_GetString(go, "--qformat"));
+
+      status = esl_sqfile_OpenDigital(abc, queryfile, fmt, /*env=*/NULL, &(qseq_fp));
+      if      (status == eslENOTFOUND) p7_Fail("No such file.");
+      else if (status == eslEFORMAT)   p7_Fail("Format couldn't be determined.");      
+      else if (status != eslOK)        p7_Fail("Open failed, code %d.", status);       
+    }
+  else if (esl_opt_GetBoolean(go, "--qmsa"))
+    {
+      fmt = eslMSAFILE_UNKNOWN;
+      if (esl_opt_IsOn(go, "--qformat") &&
+          (fmt = esl_msafile_EncodeFormat(esl_opt_GetString(go, "--qformat"))) == eslMSAFILE_UNKNOWN)
+        p7_Fail("%s is not a valid MSA file format for --qformat", esl_opt_GetString(go, "--qformat"));
+
+      if ((status = esl_msafile_Open(&(abc), queryfile, /*env=*/NULL, fmt, NULL, &(qmsa_fp))) != eslOK)
+        esl_msafile_OpenFailure(qmsa_fp, status);
+    }
+  else
+    {
+      status = p7_hmmfile_Open(queryfile, /*env=*/NULL, &(hfp), errbuf);     
+      if      (status == eslENOTFOUND) p7_Fail("File existence/permissions problem in trying to open HMM file %s.\n%s\n", queryfile, errbuf);
+      else if (status == eslEFORMAT)   p7_Fail("File format problem in trying to open HMM file %s.\n%s\n",                queryfile, errbuf);
+      else if (status != eslOK)        p7_Fail("Unexpected error %d in opening HMM file %s.\n%s\n",               status, queryfile, errbuf);
+    }
+
+
 
   // Start building the command string to send to the server
   // Can skip the length checks on cmd, because we know it has enough space for the opening command chars
@@ -476,7 +529,19 @@ main(int argc, char **argv)
       strcat(cmd, "--incdomE 0.001 ");
       optslen += 16;
     }
-  }
+    bld = p7_builder_Create(go, abc); // Want to pass command-line options to builder for iterative searches
+
+  /* Initialize builder configuration 
+   * Default matrix is stored in the --mx option, so it's always IsOn(). 
+   * Check --mxfile first; then go to the --mx option and the default. 
+   */
+    if (esl_opt_IsOn(go, "--mxfile")) status = p7_builder_SetScoreSystem (bld, esl_opt_GetString(go, "--mxfile"), NULL, esl_opt_GetReal(go, "--popen"), esl_opt_GetReal(go, "--pextend"), bg);
+    else                              status = p7_builder_LoadScoreSystem(bld, esl_opt_GetString(go, "--mx"),           esl_opt_GetReal(go, "--popen"), esl_opt_GetReal(go, "--pextend"), bg); 
+    if (status != eslOK) p7_Fail("Failed to set single query seq score system:\n%s\n", bld->errbuf);
+    }
+  else{
+      bld = p7_builder_Create(NULL, abc);  // Use defaults if we're building HMMs from MSAs
+    }
   while(strlen(optsstring)+1 >rem){
     ESL_REALLOC(cmd, 2*cmdlen);
     if(cmd ==NULL){
@@ -497,16 +562,6 @@ main(int argc, char **argv)
   FILE *pfamtblfp = NULL;
 
 
-  /* Initialize builder configuration 
-   * Default matrix is stored in the --mx option, so it's always IsOn(). 
-   * Check --mxfile first; then go to the --mx option and the default. 
-   */
-  P7_BUILDER      *bld      = NULL;               /* HMM construction configuration                  */
-  bld = p7_builder_Create(go, abc);
-  if (esl_opt_IsOn(go, "--mxfile")) status = p7_builder_SetScoreSystem (bld, esl_opt_GetString(go, "--mxfile"), NULL, esl_opt_GetReal(go, "--popen"), esl_opt_GetReal(go, "--pextend"), bg);
-  else                              status = p7_builder_LoadScoreSystem(bld, esl_opt_GetString(go, "--mx"),           esl_opt_GetReal(go, "--popen"), esl_opt_GetReal(go, "--pextend"), bg); 
-  if (status != eslOK) p7_Fail("Failed to set single query seq score system:\n%s\n", bld->errbuf);
-
   /* Open the results output files */
   if (esl_opt_IsOn(go, "-o"))          { if ((ofp      = fopen(esl_opt_GetString(go, "-o"), "w")) == NULL) p7_Die("Failed to open output file %s for writing\n",    esl_opt_GetString(go, "-o")); }
   if (esl_opt_IsOn(go, "-A"))          { if ((afp      = fopen(esl_opt_GetString(go, "-A"), "w")) == NULL) p7_Die("Failed to open alignment file %s for writing\n", esl_opt_GetString(go, "-A")); }
@@ -520,14 +575,71 @@ main(int argc, char **argv)
   int found_next_sequence=0;
   int done = 0;
   int nquery =0;
-  if(fgets(buffer, MAX_READ_LEN, qf) == NULL){
-    p7_Die("Unable to read any data from query input\n");
-  }
+  int msas_named = 0;
   while(!done){ // Should always have valid data in the buffer at this point if not done
 
   // Get the type of the query object and handle accordingly
-    esl_stopwatch_Start(w);
+    esl_stopwatch_Start(w); 
     nquery++;
+    
+    if (qseq_fp) { // query is one or more sequences
+      query_seq = esl_sq_CreateDigital(abc);
+      status = esl_sqio_Read(qseq_fp, query_seq);
+      if      (nquery && status == eslEOF) break;
+      else if (status == eslEFORMAT)       p7_Fail("Sequence file parsing failed\n  %s", esl_sqfile_GetErrorBuf(qseq_fp));
+      else if (status == eslEOF)           p7_Fail("No sequences found - is file %s empty?\n", queryfile);
+      else if (status != eslOK)            p7_Fail("Unexpected error %d in reading sequence file %s", status, queryfile);
+      
+        }
+
+      
+    else if (hfp)
+      { // query is an HMM
+        status = p7_hmmfile_Read(hfp, &(abc), &query_hmm);
+        if (nquery && status == eslEOF)  break;
+        else if (status == eslEFORMAT)   p7_Fail("Bad file format in profile HMM fil\e %s:\n%s\n",          hfp->fname, hfp->errbuf);
+        else if (status == eslEINCOMPAT) p7_Fail("Profile HMM in %s is not in the expected %s alphabet\n", hfp->fname, esl_abc_DecodeType(abc->type));
+        else if (status == eslEOF)       p7_Fail("No profiles found - is file %s emp\ty?\n",                hfp->fname);
+        else if (status != eslOK)        p7_Fail("Unexpected error in reading profil\e HMMs from %s\n",     hfp->fname);
+        query_name=query_hmm->name;
+        query_accession = query_hmm->acc;
+        query_desc = query_hmm->desc;
+        cmd[optslen] = '*';
+        rem =cmdlen - (optslen +1);
+        send_command_length = optslen+1;
+        if(p7_hmm_Serialize(query_hmm,(uint8_t **) &cmd, &send_command_length, &cmdlen) != eslOK){
+            p7_Die("Unable to serialize HMM to send to server");
+          }
+      }
+        else if(qmsa_fp){
+          status = esl_msafile_Read(qmsa_fp, &query_msa);
+          if      (nquery && status == eslEOF) break;
+          else if (status != eslOK)            esl_msafile_ReadFailure(qmsa_fp, status);
+
+          if (! query_msa->name) {  // If one MSA lacks a name, we can name it using the filename. More than one, we fail out.
+            if (msas_named) p7_Fail("Name annotation is required for each alignment in a multi MSA file; failed on #%d", nquery);
+            assign_msa_name(queryfile, query_msa);
+            msas_named++;
+          }
+
+          if(p7_Builder(bld, query_msa, bg, &query_hmm, NULL, NULL, NULL, NULL) != eslOK){
+            p7_Die("Unable to create  HMM from provided MSA\n");
+          };
+          query_name=query_hmm->name;
+          query_accession = query_hmm->acc;
+          query_desc = query_hmm->desc;
+          cmd[optslen] = '*';
+          rem =cmdlen - (optslen +1);
+          send_command_length = optslen+1;
+          if(p7_hmm_Serialize(query_hmm,(uint8_t **) &cmd, &send_command_length, &cmdlen) != eslOK){
+            p7_Die("Unable to serialize HMM to send to server");
+          }
+        }
+        else{
+          p7_Die("Hmmclient was unable to determine a candidate format for the query object.  This should never happen.\n");
+        }
+    
+/*
     if(*buffer == '>'){ // FASTA sequence, handle the first line
       read_len = strlen(buffer);
       while(rem < read_len){
@@ -587,7 +699,7 @@ main(int argc, char **argv)
       query_desc = query_seq->desc;
       if (num_rounds > 1)	// jackhmmer search, so need an inital trace
 	    {
-	      p7_SingleBuilder(bld, query_seq, bg, &query_hmm, &qtr, NULL, NULL); /* bypass HMM - only need model */
+	      p7_SingleBuilder(bld, query_seq, bg, &query_hmm, &qtr, NULL, NULL); //bypass HMM - only need model 
 	      prv_msa_nseq = 1;
 	    }
     }
@@ -645,7 +757,7 @@ main(int argc, char **argv)
     else{
       p7_Die("Couldn't parse query object as either FASTA sequence or HMM, and those are the only query objects hmmclient handles\n");
     }
-
+*/
     // When we get here, we should have a full query object, so send it to the server
     printf("%s\n", query_name);
     //reset num_counds and converged here to handle multi-query input files
@@ -657,7 +769,7 @@ main(int argc, char **argv)
     }
     converged = 0;
     int iteration=1;
-    uint32_t send_command_length = strlen(cmd); // First-round commands are always string-formatted.  Later ones aren't
+
     while(num_rounds > 0 && !converged){
 	    if (esl_opt_IsOn(go, "--chkhmm") &&query_hmm != NULL) {
 	      checkpoint_hmm(nquery, query_hmm, esl_opt_GetString(go, "--chkhmm"), iteration);
@@ -673,10 +785,7 @@ main(int argc, char **argv)
         p7_tophits_Destroy(th);
         th=NULL;
       }
-/*      uint32_t serialized_send_command_length = esl_hton32(send_command_length);
-      if (writen(sock, &serialized_send_command_length, sizeof(uint32_t)) != sizeof(uint32_t)) {
-        p7_Die("[%s:%d] write (size %" PRIu64 ") error %d - %s\n", __FILE__, __LINE__, n, errno, strerror(errno));
-      } */
+
 
       /* Open the socket to the server.  Do this for every search so that one client can't hog the socket connection */
       if ((sock = socket(AF_INET, SOCK_STREAM, 0)) < 0) {
