@@ -123,7 +123,6 @@ h4_cmd_statsim(const char *topcmd, const ESL_SUBCMD *sub, int argc, char **argv)
   double        emu, elambda;
   int           status;
 
-  h4_Init();
   initialize_cfg(go, &cfg);
 
   ESL_ALLOC(scores, sizeof(double) * cfg.N);

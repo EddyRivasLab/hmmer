@@ -4,6 +4,7 @@ SQCLEVEL = 2
 
 OBJS   = \
 	cmd_build.o           \
+	cmd_emit.o            \
 	cmd_kiteline.o        \
 	cmd_statsim.o         \
 	h4_anchorhash.o       \
@@ -102,6 +103,7 @@ UTESTS = \
 	h4_path_utest             \
 	h4_profile_utest          \
 	h4_sparsemask_utest       \
+	emit_utest                \
 	fbfilter_utest            \
 	logsum_utest              \
 	modelsample_utest         \

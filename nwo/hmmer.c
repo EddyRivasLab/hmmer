@@ -8,7 +8,10 @@
 #include "esl_getopts.h"
 #include "esl_subcmd.h"
 
+#include "general.h"
+
 extern int h4_cmd_build   (const char *topcmd, const ESL_SUBCMD *sub, int argc, char **argv);
+extern int h4_cmd_emit    (const char *topcmd, const ESL_SUBCMD *sub, int argc, char **argv);
 extern int h4_cmd_kiteline(const char *topcmd, const ESL_SUBCMD *sub, int argc, char **argv);
 extern int h4_cmd_statsim (const char *topcmd, const ESL_SUBCMD *sub, int argc, char **argv);
 
@@ -17,6 +20,7 @@ static void top_help (const char *topcmd);
 
 ESL_SUBCMD subcommands[] = {
   { h4_cmd_build,    "build",    2, "[-options] <msafile> <hmmfile>", "build profile(s) from multiple alignment(s)"       },
+  { h4_cmd_emit,     "emit",     1, "[-options] <hmmfile>",           "sample sequences from a profile"                   },
   { h4_cmd_kiteline, "kiteline", 2, "[-options] <hmmfile> <seqfile>", "prototype: search profile(s) against sequences"    },
   { h4_cmd_statsim,  "statsim",  1, "[-options] <hmmfile>",           "test statistical distributions of sequence scores" },
 };
@@ -37,6 +41,8 @@ main(int argc, char **argv)
   int ncmds =  sizeof(subcommands) / sizeof(ESL_SUBCMD);
   int idx;
  
+  h4_Init();
+
   if (esl_opt_ProcessCmdline(go, argc, argv) != eslOK) esl_fatal("Failed to parse command line: %s\n\n",  go->errbuf);
   if (esl_opt_VerifyConfig(go)               != eslOK) esl_fatal("Failed to parse command line: %s\n\n",  go->errbuf);
   

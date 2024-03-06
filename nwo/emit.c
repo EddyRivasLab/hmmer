@@ -3,7 +3,9 @@
  * Contents:
  *    1. Sequence sampling, h4_emit()
  *    2. Internal support functions
- *    x. Example
+ *    3. Unit tests
+ *    4. Test driver
+ *    5. Example
  */
 #include <h4_config.h>
 
@@ -86,6 +88,7 @@ h4_emit(ESL_RANDOMNESS *rng, const H4_PROFILE *hmm, const H4_MODE *mo, ESL_SQ *s
 	switch (st) {
 	case h4P_L:
 	  if (( status = sample_endpoints(rng, hmm, &k, &kend)) != eslOK) goto ERROR;  // both k and kend have to be sampled, from implicit prob model's fragment distribution
+          if (pi) pi->rle[pi->Z-1] = k;   // unwarranted chumminess with the internals of (optional) path; set local start position <k> in L that's already added to <pi>
 	  st = h4P_ML;
 	  break;
 	case h4P_S:  st = h4P_N; break;
@@ -193,11 +196,169 @@ sample_endpoints(ESL_RANDOMNESS *rng, const H4_PROFILE *hmm, int *ret_kstart, in
   *ret_kend   = 0;
   return status;
 }
+/*---------------------------------------------------------------*/
 
+
+/*****************************************************************
+ * 3. Unit tests
+ *****************************************************************/
+#ifdef h4EMIT_TESTDRIVE
+
+#include "esl_vectorops.h"
+
+#include "modelsample.h"
+
+static void
+utest_sanity(ESL_RANDOMNESS *rng, ESL_ALPHABET *abc)
+{
+  char        msg[] = "emit::sanity unit test failed";
+  char        errbuf[eslERRBUFSIZE];
+  H4_PROFILE *hmm = NULL;
+  H4_MODE    *mo  = h4_mode_Create();
+  H4_PATH    *pi  = h4_path_Create();
+  ESL_SQ     *sq  = esl_sq_CreateDigital(abc);
+  int         M   = 10;
+  int         N   = 1000;
+  int         L   = 10;
+  int         do_seq;
+  int         do_path;
+  int         i;
+
+  if ( h4_modelsample_zeropeppered(rng, abc, M, &hmm) != eslOK) esl_fatal(msg);
+
+  for (i = 0; i < N; i++)
+    {
+      /* Randomize the alignment mode and length model */
+      switch (esl_rnd_Roll(rng, 6)) {
+      case 0: h4_mode_SetDefault(mo);   break;   // dual local/glocal; multihit
+      case 1: h4_mode_SetLocal(mo);     break;   //      local;        multihit
+      case 2: h4_mode_SetGlocal(mo);    break;   //            glocal; multihit
+      case 3: h4_mode_SetUnihit(mo);    break;   // dual local/glocal; unihit
+      case 4: h4_mode_SetUnilocal(mo);  break;   //      local;        unihit
+      case 5: h4_mode_SetUniglocal(mo); break;   //            glocal; unihit
+      default: esl_fatal(msg);
+      }
+      if  (esl_rnd_Roll(rng, 2) == 0) h4_mode_SetLength(mo, 0); 
+      else                            h4_mode_SetLength(mo, L);
+
+      /* Randomize optional args */
+      do_seq  = esl_rnd_Roll(rng, 2);
+      do_path = (do_seq ? esl_rnd_Roll(rng, 2) : FALSE);  // need <sq> to be able to validate the path <pi>
+
+      if (( h4_emit(rng, hmm, mo, (do_seq ? sq : NULL), (do_path ? pi : NULL))) != eslOK) esl_fatal(msg);
+      
+      if ( do_seq  &&  esl_sq_Validate(sq,           errbuf) != eslOK) esl_fatal("%s\n%s", msg, errbuf);
+      if ( do_path && h4_path_Validate(pi, M, sq->n, errbuf) != eslOK) esl_fatal("%s\n%s", msg, errbuf);
+    }
+
+
+  esl_sq_Destroy(sq);
+  h4_path_Destroy(pi);
+  h4_mode_Destroy(mo);
+  h4_profile_Destroy(hmm);
+}
+
+  
+static void
+utest_endpoints(ESL_ALPHABET *abc)
+{
+  char            msg[] = "emit endpoints unit test failed";
+  ESL_RANDOMNESS *rng   = esl_randomness_Create(42);               // fixed seed, because test can stochastically fail
+  H4_PROFILE     *hmm   = NULL;
+  H4_MODE        *mo    = h4_mode_Create();  // default: dual glocal/local; multihit
+  H4_PATH        *pi    = h4_path_Create();
+  int             M     = 5;                 // test model length
+  int             N     = 1000;              // number of traces/seqs to sample
+  int             L     = 10;                // seq length config for <mo>
+  int          **ct     = NULL;
+  int             i,d,D;
+  int             ka,kb;
+
+  if ( h4_modelsample(rng, abc, M, &hmm) != eslOK) esl_fatal(msg);
+  if ( h4_mode_SetLength(mo, L)          != eslOK) esl_fatal(msg);
+
+  if ((ct    = malloc(sizeof(int *) * (M+1)))         == NULL) esl_fatal(msg);
+  if ((ct[0] = malloc(sizeof(int)   * (M+1) * (M+1))) == NULL) esl_fatal(msg);
+  for (ka = 1; ka <= M; ka++) ct[ka] = ct[0] + ka * (M+1);
+  esl_vec_ISet(ct[0], (M+1)*(M+1), 0);
+
+  for (i = 0; i < N; i++)
+    {
+      if ( h4_emit(rng, hmm, mo, NULL, pi) != eslOK) esl_fatal(msg);
+      D = h4_path_GetDomainCount(pi);
+      for (d = 1; d <= D; d++)
+        {
+          if ( h4_path_FetchDomainBounds(pi, d, NULL, NULL, &ka, &kb) != eslOK) esl_fatal(msg);
+          if (ka < 1 || ka > M || kb < 1 || kb > M || ka > kb)                  esl_fatal(msg);
+          ct[ka][kb]++;
+        }
+    }
+
+  for (ka = 1; ka <= M; ka++)
+    for (kb = ka; kb <= M; kb++)
+      if (ct[ka][kb] == 0) esl_fatal(msg);
+
+  free(ct[0]);
+  free(ct);
+  h4_path_Destroy(pi);
+  h4_mode_Destroy(mo);
+  h4_profile_Destroy(hmm);
+  esl_randomness_Destroy(rng);
+}
+
+
+#endif // h4EMIT_TESTDRIVE
+/*---------------------------------------------------------------*/
+
+/*****************************************************************
+ * 4. Test driver
+ *****************************************************************/
+#ifdef h4EMIT_TESTDRIVE
+
+#include <h4_config.h>
+
+#include "esl_getopts.h"
+
+#include "general.h"
+
+static ESL_OPTIONS options[] = {
+  /* name           type      default  env  range toggles reqs incomp  help                          docgroup*/
+  { "-h",         eslARG_NONE,   NULL, NULL, NULL,  NULL,  NULL, NULL, "show brief help summary",             0 },
+  { "-s",         eslARG_INT,     "0", NULL, NULL,  NULL,  NULL, NULL, "set random number generator seed",    0 },
+  { "--version",  eslARG_NONE,   NULL, NULL, NULL,  NULL,  NULL, NULL, "show HMMER version number",           0 },
+  {  0, 0, 0, 0, 0, 0, 0, 0, 0, 0 },
+};
+
+
+int
+main(int argc, char **argv)
+{
+  ESL_GETOPTS    *go  = h4_CreateDefaultApp(options, 0, argc, argv, "test driver for emit.c", "[-options]");
+  ESL_ALPHABET   *abc = esl_alphabet_Create(eslAMINO);
+  ESL_RANDOMNESS *rng = esl_randomness_Create(esl_opt_GetInteger(go, "-s"));
+
+  esl_fprintf(stderr, "## %s\n", argv[0]);
+  esl_fprintf(stderr, "#  rng seed = %" PRIu32 "\n", esl_randomness_GetSeed(rng));
+
+  utest_sanity(rng, abc);
+  utest_endpoints(abc);
+
+  esl_fprintf(stderr, "#  status   = ok\n");
+
+  esl_randomness_Destroy(rng);
+  esl_alphabet_Destroy(abc);
+  esl_getopts_Destroy(go);
+  exit(0);
+}
 
     
+#endif // h4EMIT_TESTDRIVE
+/*----------------  end, test driver ----------------------------*/
+
+
+
 /*****************************************************************
- * x. Example
+ * 5. Example
  *****************************************************************/
 #ifdef h4EMIT_EXAMPLE
 

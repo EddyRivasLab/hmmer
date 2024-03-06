@@ -69,7 +69,7 @@ extern int h4_path_GetSeqlen(const H4_PATH *pi);
 extern int h4_path_GetDomainCount(const H4_PATH *pi);
 extern int h4_path_GetFullDomainCount(const H4_PATH *pi, int M);
 extern int h4_path_GetHomologyCoverage(const H4_PATH *pi);
-extern int h4_path_FetchDomainBounds(const H4_PATH *pi, int whichd, int *opt_ia, int *opt_ib, int *opt_ka, int *opt_kb);
+extern int h4_path_FetchDomainBounds(const H4_PATH *pi, int whichd, int *opt_ia, int *opt_ib, int *opt_ka, int *opt_kb);  // domains numbered starting from whichd=1
 
 /* 3. Inferring paths from existing alignments */
 extern int h4_path_InferLocal (const ESL_ALPHABET *abc, const ESL_DSQ *ax, int alen, const int8_t *matassign, int lcol, int rcol, H4_PATH *pi);
