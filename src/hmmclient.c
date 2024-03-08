@@ -139,7 +139,7 @@ process_commandline(int argc, char **argv, ESL_GETOPTS **ret_go, char **ret_quer
       esl_opt_DisplayHelp(stdout, go, 12, 2, 80); 
       exit(0);
     }
-  if(!esl_opt_IsUsed(go, "--shutdown")){ // Normal search
+  if(!esl_opt_IsUsed(go, "--shutdown") && !esl_opt_IsUsed(go, "--contents")){ // Normal search
     if (esl_opt_ArgNumber(go) != 1 )     { if (puts("Incorrect number of command line arguments.")      < 0) ESL_XEXCEPTION_SYS(eslEWRITE, "write failed"); goto FAILURE; }
     if ((*ret_query= esl_opt_GetArg(go, 1)) == NULL)  { if (puts("Failed to get <queryfile> argument on command line") < 0) ESL_XEXCEPTION_SYS(eslEWRITE, "write failed"); goto FAILURE; }
     if (esl_opt_IsUsed(go, "--db")) {
@@ -390,10 +390,11 @@ main(int argc, char **argv)
     }
     strcat(cmd, "\n//");
     uint32_t send_command_length = strlen(cmd);
- /*   uint32_t serialized_send_command_length = esl_hton32(send_command_length);
-      if (writen(sock, &serialized_send_command_length, sizeof(uint32_t)) != sizeof(uint32_t)) {
+
+    uint32_t serialized_send_command_length = esl_hton32(send_command_length);
+    if (writen(sock, &serialized_send_command_length, sizeof(uint32_t)) != sizeof(uint32_t)) {
         p7_Die("[%s:%d] write (size %" PRIu64 ") error %d - %s\n", __FILE__, __LINE__, n, errno, strerror(errno));
-      } */
+      } 
 #ifdef DEBUG_COMMANDS
       printf("sending %s to server, length %d\n", cmd, send_command_length);
 #endif
@@ -434,6 +435,80 @@ main(int argc, char **argv)
     free(buf); // clear this out 
 
     printf("Server acknowleged shutdown command\n");
+    esl_getopts_Destroy(go);
+    close(sock);
+    exit(0);
+  }
+  if(esl_opt_IsUsed(go, "--contents")){
+      /* Create a reliable, stream socket using TCP */
+    if ((sock = socket(AF_INET, SOCK_STREAM, 0)) < 0) {
+      p7_Die("[%s:%d] socket error %d - %s\n", __FILE__, __LINE__, errno, strerror(errno));
+      exit(1);
+    }
+
+    /* Establish the connection to the server */
+    if (connect(sock, (struct sockaddr *) &serv_addr, sizeof(serv_addr)) < 0) {
+      p7_Die("[%s:%d] connect error %d - %s\n", __FILE__, __LINE__, errno, strerror(errno));
+    }
+
+    if(rem < (10)){ // Should never happen, but just to be safe
+      ESL_REALLOC(cmd, 10);
+    }
+    strcpy(cmd, "!contents\0");
+   
+    uint32_t send_command_length = strlen(cmd)+1;
+    uint32_t serialized_send_command_length = esl_hton32(send_command_length);
+      if (writen(sock, &serialized_send_command_length, sizeof(uint32_t)) != sizeof(uint32_t)) {
+        p7_Die("[%s:%d] write (size %" PRIu64 ") error %d - %s\n", __FILE__, __LINE__, n, errno, strerror(errno));
+      } 
+#ifdef DEBUG_COMMANDS
+      printf("sending %s to server, length %d\n", cmd, send_command_length);
+#endif
+      if (writen(sock, cmd, send_command_length) != send_command_length) {
+        p7_Die("[%s:%d] write (size %" PRIu64 ") error %d - %s\n", __FILE__, __LINE__, n, errno, strerror(errno));
+      }
+    free(cmd);
+    // Get the status structure back from the server
+    buf = malloc(HMMD_SEARCH_STATUS_SERIAL_SIZE);
+    buf_offset = 0;
+    int n = HMMD_SEARCH_STATUS_SERIAL_SIZE;
+    int size;
+    if(buf == NULL){
+      p7_Die("Unable to allocate memory for search status structure\n");
+    }
+
+    if ((size = readn(sock, buf, n)) == -1) {
+      p7_Die("[%s:%d] read error %d - %s\n", __FILE__, __LINE__, errno, strerror(errno));
+    }
+
+
+    if(hmmd_search_status_Deserialize(buf, &buf_offset, &sstatus) != eslOK){
+      p7_Die("Unable to deserialize search status object \n");
+    }
+
+    if (sstatus.status != eslOK) {
+      char *ebuf;
+      n = sstatus.msg_size;
+      ebuf = malloc(n);
+      if ((size = readn(sock, ebuf, n)) == -1) {
+        p7_Die("[%s:%d] read error %d - %s\n", __FILE__, __LINE__, errno, strerror(errno));
+      }   
+      if(abc) esl_alphabet_Destroy(abc);
+      p7_Die("ERROR (%d): %s\n", sstatus.status, ebuf);
+    }
+
+    else{ //Command completed normally, print its reply
+      n = sstatus.msg_size;
+      free(buf);
+      buf = malloc(n);
+      if ((size = readn(sock, buf, n)) == -1) {
+        p7_Die("[%s:%d] read error %d - %s\n", __FILE__, __LINE__, errno, strerror(errno));
+      }
+      printf("%s", buf);
+    }
+
+    free(buf); // clear this out 
+    if(abc) esl_alphabet_Destroy(abc);
     esl_getopts_Destroy(go);
     close(sock);
     exit(0);
@@ -607,6 +682,7 @@ main(int argc, char **argv)
         cmd[optslen] = '*';
         rem =cmdlen - (optslen +1);
         send_command_length = optslen+1;
+
         if(p7_hmm_Serialize(query_hmm,(uint8_t **) &cmd, &send_command_length, &cmdlen) != eslOK){
             p7_Die("Unable to serialize HMM to send to server");
           }
@@ -800,7 +876,8 @@ main(int argc, char **argv)
 #ifdef DEBUG_COMMANDS
       printf("sending %s to server, length %d\n", cmd, send_command_length);
 #endif
-      if (writen(sock, &send_command_length, sizeof(send_command_length)) != sizeof(send_command_length)) {
+      uint32_t serialized_send_command_length = esl_hton32(send_command_length);
+      if (writen(sock, &serialized_send_command_length, sizeof(serialized_send_command_length)) != sizeof(serialized_send_command_length)) {
         p7_Die("[%s:%d] write (size %" PRIu64 ") error %d - %s\n", __FILE__, __LINE__, n, errno, strerror(errno));
       }
       if (writen(sock, cmd, send_command_length) != send_command_length) {

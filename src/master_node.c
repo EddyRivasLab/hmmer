@@ -517,8 +517,16 @@ process_ServerCmd(char *ptr, CLIENTSIDE_ARGS *data, ESL_GETOPTS *opts)
       cmd->hdr.length  = 0;
       cmd->hdr.command = HMMD_CMD_SHUTDOWN;
     } 
-  else 
-    {
+  else if (strcmp(s, "contents") == 0)   {
+#ifdef DEBUG_COMMANDS
+    printf("request for contents found \n"); 
+#endif
+      if ((cmd = malloc(sizeof(HMMD_HEADER))) == NULL) LOG_FATAL_MSG("malloc", errno);
+      memset(cmd, 0, sizeof(HMMD_HEADER)); /* avoid uninit bytes & valgrind bitching. Remove, if we ever serialize structs correctly. */
+      cmd->hdr.length  = 0;
+      cmd->hdr.command = HMMD_CMD_CONTENTS;
+  }
+  else  {
       client_msg(fd, eslEINVAL, "Unknown command %s\n", s);
       esl_getopts_Destroy(opts);
       free(data); // don't free sub-structures, they're used and freed elsewhere
@@ -586,16 +594,17 @@ static void *clientside_thread(void *arg)  // new version that reads exactly one
   int search_type = -1;
   int slen;
   uint64_t search_length=0;
-  uint32_t command_length;
+  uint32_t command_length, serialized_command_length;
 
  /* Future Nick: if you're ever tempted to switch this back to the old plan of reading until you see the "//" pattern, remmember that 
     that plan breaks on some serialized HMMs because the right set of bytes to be "//" appears in mid-structure.*/
 
-  if ((n = read(data->sock_fd, &command_length, sizeof(uint32_t))) < 0) {
+  if ((n = read(data->sock_fd, &serialized_command_length, sizeof(uint32_t))) < 0) {
     p7_syslog(LOG_ERR,"[%s:%d] - reading command length from %s error %d - %s\n", __FILE__, __LINE__, data->ip_addr, errno, strerror(errno));
     close(data->sock_fd);
     pthread_exit(NULL);
   }
+  command_length = esl_hton32(serialized_command_length);
   int bytes_read;
   ESL_ALLOC(buffer, command_length+1);
   if((bytes_read = readn(data->sock_fd, buffer, command_length)) != command_length){ // couldn't read the whole command
@@ -1536,7 +1545,7 @@ void process_shutdown(P7_SERVER_MASTERNODE_STATE *masternode, P7_SERVER_QUEUE_DA
 
 #ifdef HAVE_MPI
 #ifdef DEBUG_COMMANDS
-  printf("Master node procecssing shutdown\n");
+  printf("Master node processing shutdown\n");
 #endif
   MPI_Bcast(&the_command, 1, server_mpitypes[P7_SERVER_COMMAND_MPITYPE], 0, MPI_COMM_WORLD);
   lock_retval = pthread_mutex_lock(&(masternode->hit_wait_lock));
@@ -1589,6 +1598,91 @@ void process_shutdown(P7_SERVER_MASTERNODE_STATE *masternode, P7_SERVER_QUEUE_DA
       free(buf_ptr);
     }
     return;
+#endif
+}
+void process_contents(P7_SERVER_MASTERNODE_STATE *masternode, P7_SERVER_QUEUE_DATA *query, MPI_Datatype *server_mpitypes){
+  P7_SERVER_COMMAND the_command;
+  int lock_retval;
+  the_command.type = P7_SERVER_SHUTDOWN_WORKERS;
+  int status;
+#ifndef HAVE_MPI
+  p7_Fail("process_contents requires MPI and HMMER was compiled without MPI support");
+#endif
+
+#ifdef HAVE_MPI
+#ifdef DEBUG_COMMANDS
+  printf("Master node processing contents request\n");
+#endif
+
+
+  char *header= NULL;
+  char nshards[200];  //ASCII printout of an INT can't be this long.
+  snprintf(nshards, 200, "%d", masternode->num_databases);
+  int headlength = strlen("Server has  databases.\n")+strlen(nshards)+ 1;
+  ESL_ALLOC(header, headlength); // pad for end-of-string character
+  snprintf(header, headlength, "Server has %d databases\n", masternode->num_databases);
+  for(int i = 0; i < masternode->num_databases; i++){
+    int linelength = 5 + strlen(masternode->database_shards[i]->sourcename)+2; // 5 is for "DB :,  the +1 is for end-of-line+ end-of-string"
+    snprintf(nshards, 200, "%d", i);
+    linelength += strlen(nshards);
+    char * nextline;
+    ESL_ALLOC(nextline, linelength);
+    headlength += linelength;
+    snprintf(nextline, linelength, "DB %d: %s\n", i, masternode->database_shards[i]->sourcename);
+    ESL_REALLOC(header, headlength);
+    strcat(header, nextline);
+    free(nextline);
+  }
+  HMMD_SEARCH_STATUS sstatus;
+  sstatus.status = eslOK;
+  sstatus.type = HMMD_CMD_CONTENTS;
+  sstatus.msg_size = headlength; // no follow-on data for a search
+  uint8_t **buf, *buf_ptr;
+  buf_ptr = NULL;
+  buf = &(buf_ptr);
+  uint32_t buf_offset = 0;
+  uint32_t nalloc = 0;
+  int fd = query->sock;
+  if(hmmd_search_status_Serialize(&(sstatus), buf, &buf_offset, &nalloc) != eslOK){
+    LOG_FATAL_MSG("Serializing HMMD_SEARCH_STATUS failed", errno);
+  }
+
+  // Now, send the buffers in the reverse of the order they were built
+  /* send back a successful status message */
+  int n = buf_offset;
+
+  if (writen(fd, buf_ptr, n) != n) {
+    p7_syslog(LOG_ERR,"[%s:%d] - writing %s error %d - %s\n", __FILE__, __LINE__, query->ip_addr, errno, strerror(errno));
+    close(fd);
+    goto CLEAR;
+  }
+
+  if(writen(fd, header, headlength) != headlength){
+    p7_syslog(LOG_ERR,"[%s:%d] - writing %s error %d - %s\n", __FILE__, __LINE__, query->ip_addr, errno, strerror(errno));
+    close(fd);
+    goto CLEAR;
+  }
+
+  free(header);
+  close(fd); // shut down the socket to the client
+  if(buf_ptr != NULL){
+    free(buf_ptr);
+  }
+
+#ifdef DEBUG_COMMANDS
+  printf("Master node done with contents request\n");
+#endif
+
+  return;
+  CLEAR:
+    if(buf_ptr!= NULL){
+      free(buf_ptr);
+    }
+    return;
+  ERROR:
+    if(header){
+      free(header);
+    }
 #endif
 }
 // p7_master_node_main
@@ -1733,6 +1827,9 @@ void p7_server_master_node_main(int argc, char ** argv, MPI_Datatype *server_mpi
         process_shutdown(masternode, query, server_mpitypes);
         p7_syslog(LOG_ERR,"[%s:%d] - shutting down...\n", __FILE__, __LINE__);
         shutdown = 1;
+        break;
+      case HMMD_CMD_CONTENTS:
+        process_contents(masternode, query, server_mpitypes);
         break;
       default:
         p7_syslog(LOG_ERR,"[%s:%d] - unknown command %d from %s\n", __FILE__, __LINE__, query->cmd_type, query->ip_addr);

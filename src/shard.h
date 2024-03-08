@@ -50,6 +50,8 @@ typedef struct p7_shard{
 	//! What type of data does the shard hold?
 	P7_SHARD_DATA_TYPE data_type;
 
+	//! What file did the data in the shard come from?
+	char *sourcename;
 	//! How many objects are there in the shard?
 	uint64_t num_objects;
 

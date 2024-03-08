@@ -23,6 +23,14 @@ P7_SHARD *p7_shard_Create_hmmfile(char *filename, uint32_t num_shards, uint32_t 
   P7_SHARD *the_shard;
   ESL_ALLOC(the_shard, sizeof(P7_SHARD));
 
+  if(strcmp(filename, "_")){
+    esl_FileTail(filename, FALSE, &(the_shard->sourcename)); // Get the name of the shard's source from the input file name
+  }
+  else{
+    ESL_ALLOC(the_shard->sourcename, 6);
+    strcpy(the_shard->sourcename, "stdin");   
+  }
+
   the_shard->data_type = HMM; // Only one possible data type for an HMM file
 
   uint64_t num_hmms= 0; // Number of HMMs we've put in the database
@@ -158,7 +166,14 @@ P7_SHARD *p7_shard_Create_sqdata(char *filename, uint32_t num_shards, uint32_t m
   // allocate the base shard object
   P7_SHARD *the_shard;
   ESL_ALLOC(the_shard, sizeof(P7_SHARD));
-
+ if(strcmp(filename, "_")){
+    esl_FileTail(filename, FALSE, &(the_shard->sourcename)); // Get the name of the shard's source from the input file name
+  }
+  else{
+    ESL_ALLOC(the_shard->sourcename, 6);
+    strcpy(the_shard->sourcename, "stdin");   
+  }
+  
   ESL_ALPHABET *abc = esl_alphabet_Create(eslAMINO);
   the_shard->abc = abc;
 
