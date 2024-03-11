@@ -116,8 +116,25 @@ Specifies a password to be sent along with the shutdown command.  May only be us
 .B \-\-shutdown 
 is also used.
 
+.TP
+.BI \-\-contents
+Instructs the server to return a description of the databases that it has available to be searched.
 
+.SH OPTIONS THAT SPECIFY THE TYPE OF QUERY OBJECT 
+.TP
+.BI \-\-qseq
+Specifies that the query object is one or more sequences.
 
+.TP
+.BI \-\-qmsa
+Specifies that the query object is one or more multiple-sequence alignments
+
+.TP \-\-qformat " <format>"
+Specifies the exact format of the query file.  Only valid if 
+.B \-\-qseq
+or
+.B \-\-qmsa
+is used.
 
 .SH OPTIONS FOR CONTROLLING OUTPUT
 

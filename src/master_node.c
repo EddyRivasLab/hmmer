@@ -1625,10 +1625,29 @@ void process_contents(P7_SERVER_MASTERNODE_STATE *masternode, P7_SERVER_QUEUE_DA
     int linelength = 5 + strlen(masternode->database_shards[i]->sourcename)+2; // 5 is for "DB :,  the +1 is for end-of-line+ end-of-string"
     snprintf(nshards, 200, "%d", i);
     linelength += strlen(nshards);
+    char datatype[256]; // Double-check that this is long enough
+    switch(masternode->database_shards[i]->data_type){
+      case AMINO:
+        strcpy(datatype, "(Amino sequence data)\0");
+        linelength += strlen(datatype);
+        break;
+      case DNA:
+        strcpy(datatype, "(DNA sequence data)\0");
+        linelength += strlen(datatype);
+        break;
+      case RNA:
+        strcpy(datatype, "(RNA sequence data)\0");
+        linelength += strlen(datatype);
+      break;
+      case HMM:
+        strcpy(datatype, "(Hidden Markov Models)\0");
+        linelength += strlen(datatype);
+      break;
+    }
     char * nextline;
     ESL_ALLOC(nextline, linelength);
     headlength += linelength;
-    snprintf(nextline, linelength, "DB %d: %s\n", i, masternode->database_shards[i]->sourcename);
+    snprintf(nextline, linelength, "DB %d %s %s\n", i, masternode->database_shards[i]->sourcename, datatype);
     ESL_REALLOC(header, headlength);
     strcat(header, nextline);
     free(nextline);

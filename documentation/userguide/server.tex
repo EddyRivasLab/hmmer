@@ -78,7 +78,17 @@ The \hmmclient application provides a command-line interface to send searches to
  
 \Hmmclient accepts the same set of command-line options for controlling output, managing the acceleration pipeline, defining how HMMs are constructed from sequences, and setting reporting thresholds as \mono{hmmsearch}, \mono{phmmer}, \mono{hmmscan}, and \mono{jackhmmer}.  See the documentation for those programs for more information on those options.  \Hmmclient does not support the \mono{--cpu} option that sets the number of worker threads in our command-line applications, as that decision is made at the time the server is started.
 
-In most cases, \hmmserver infers the type of search to be performed from the types of the query and target objects.  The exception is when the user wants to perform an iterative (\mono{jackhmmer}-style) search.  In that case, the \mono{--jack <maxrounds>} option should be passed to \hmmclient.  Note that the \mono{--jack} option is only valid when both the query object and target database are sequences. 
+\Hmmclient accepts three types of query objects: HMMs, protein sequences, and multiple-sequence alignments (MSAs).  HMMs and protein sequence queries are sent directly to the server, while MSA queries are converted into HMMs before being sent to the server.
+
+Like our other programs, query objects may either be read from files, or from standard input if a dash ('-') is passed as the name of the query file.  \Hmmclient expects HMM queries to be in .hmm file format, either text-mode or processed with \mono{hmmpress}.  It accepts sequence queries in {FASTA}, {UniProt}, {Genbank}, {DDBJ} and {EMBL} formats, and multiple-sequence alignment queries in Stockholm, aligned {FASTA}, {CLUSTAL}, interleaved {PHYLIP}, and {SELEX} formats\sidenote{See the files esl\_sqio.tex and esl\_msafile.md in your Easel distribution for more detail on sequence and MSA file formats.}.
+
+Accepting this wide a range of query formats means that, unlike many of our other programs, \hmmclient cannot determine the type of query object it has been passed by examining the contents of the query file\sidenote{One reason that this is necessary is that our routines that read sequence files treat MSA files as sets of unaligned sequenvces.}.  \Hmmclient defaults to assuming its query is as HMM unless the \mono{{-}{-}qseq} option is specified to indicate that the query file contains seqences or the \mono{{-}{-}qmsa} option is passed to indicate that the query file contains multiple-sequence alignments.  In most cases, \hmmclient can automatically determine the format of the query file once it knows the type of the query object.  When that is not possible, the \mono{{-}{-}qformat <format>} command can be used to explicitly specify the format of the query file.
+
+A query file may contain one or more query objects.  \Hmmclient reads each query object from a file sequentially and submits a separate query to the server for each object.  
+
+\Hmmclient also supports iterative (\mono{jackhmmer}-style) queries.  To instruct \hmmclient to perform an iterative query, pass the \mono{{-}{-}jack <maxrounds>} option on the command line, where \mono{<maxrounds>} specifies the maximum number of iterative queries that should be done if the query does not converge before then.  \Hmmclient only supports iterative queries when the query object is one or more sequences.
+
+In addition to queries, \hmmclient can send two instructions to the server.  The first, specified by passing \mono{{-}{-}contents} on the command line, instructs the server to return a list of the databases that it has available to be searched.  The second, specified by passing \mono{{-}{-}shutdown} on the command line, instructs the server to shut down.  A shutdown instruction may also specify a password, indicated by the \mono{{-}{-}password <password>} flag on the command line. If the server has been configured to require a password to shut down, a shutdown instruction must provide a matching password, otherwise an error will occur. Each invocation of \hmmclient can either send one instruction or one or more queries to the server; attempting to send two instructions or an instruction and one or more queries in the same invocation results in an error.
 
 \chapter{For those converting from an hmmpgmd installation}
 For an administrator, the biggest change between \hmmpgmd and \hmmserver is the switch from independent programs to an MPI application.  This allows \hmmserver to be started with a single command, although the exact syntax of this command may vary between implementations of MPI.  See your local system documentation for more information.
@@ -153,7 +163,12 @@ VMFFVAGAVLVAILISTVRW\\
 
 \Hmmserver determines the type of search to be performed from the types of the query object and target database, constructing an HMM from the query sequence if both the query object and target database are sequences.  \Hmmserver does not directly support iterative (\mono{jackhmmer}-style) searches.  Instead, the client must send the initial search to the server, construct an HMM from the results, and repeat as necessary.  Support for serialized \mono{{P7\_HMM}} query objects is new in \hmmserver, and was added to support iterative search.  Converting a \mono{{P7\_HMM}} data structure into a text-mode HMM causes some loss of precision because the HMM file format uses a fixed number of digits for each floating-point value, which causes differences in output between iterative searches with \hmmserver and \mono{jackhmmer}.  Sending the HMM for each search round as a serialized data structure eliminates this problem.
 
-Server instructions begin with an exclamation point, followed by the instruction and any arguments.  The only server instruction \hmmserver currently supports is the shutdown command, which has the following format:\\
+Server instructions begin with an exclamation point, followed by the instruction and any arguments.  \Hmmserver currently accepts two instructions.  The first is a request for the server's contents, which has the following format:
+\vspace{1ex}
+\user{\ !contents}\\
+\vspace{1ex}
+
+The second instructs the server to shut down, and has the following format, where the optional password must match the one specified at server startup (if one was specified):\\
 \vspace{1ex}
 \user{\ !shutdown <optional password>}\\
 \vspace{1ex}
@@ -168,6 +183,7 @@ When a \hmmserver completes a search, it sends a serialized\sidenote{Functions t
     \end{figure*} 
 
 If an error occurred during the search, the server then sends a string describing the error.  If the search completed successfully, it sends a serialized {HMMD\_SEARCH\_STATS} structure (Figure \ref{fig:search-stats-serialize}) followed by $N$ serialized {P7\_HIT} structures, one for each hit found by the search.  If an error occurred, the msg\_size field of the {HMMD\_SEARCH\_STATUS} object contains the length of the error description string.  Otherwise it contains the sum of the length of the {HMMD\_SEARCH\_STATS} structure and the $N$ {P7\_HIT} structures, which can be read into a single buffer and un-packed using the deserialization functions HMMER provides.
+
 
 \begin{figure*}
   \includegraphics[width=\textwidth]{inclusions/HMMD_SEARCH_STATS.pdf}
@@ -208,6 +224,7 @@ The {P7\_ALIDISPLAY} structure (Figure \ref{fig:alidisplay-serialize}) contains 
 \input{manpages_server}
 \end{adjustwidth}
 
+The server's response to an instruction is similar to its response to a search that causes an error.  It sends an {HMMD\_SEARCH\_STATUS} object that describes the command, followed by a text string.  In the case of a request for the server's contents, the text string specifies the number of databases that the server has available to search, along with a description of each database.  The response to a shutdown instruction indicates whether the shutdown command was accepted or refused due to password miss-match.
 
 
 \chapter{Acknowledgments}
