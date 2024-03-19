@@ -726,13 +726,14 @@ static void *clientside_thread(void *arg)  // new version that reads exactly one
       /* try to parse the input buffer as a FASTA sequence */
       abc = esl_alphabet_Create(eslAMINO);
       seq = esl_sq_CreateDigital(abc);
-      bg = p7_bg_Create(abc);
+
       /* try to parse the input buffer as a FASTA sequence */
       status = esl_sqio_Parse(ptr, strlen(ptr), seq, eslSQFILE_DAEMON);
       if (status != eslOK) client_msg_longjmp(data->sock_fd, status, &jmp_env, "Error parsing FASTA sequence");
-      if (seq->n < 1) client_msg_longjmp(data->sock_fd, eslEFORMAT, &jmp_env, "Error zero length FASTA sequence");
+      if (seq->n < 1) client_msg_longjmp(data->sock_fd, eslEFORMAT, &jmp_env, "Error: zero length FASTA sequence");
 
       if(data->masternode->database_shards[dbx-1]->data_type == AMINO){
+        bg = p7_bg_Create(abc); // need this to build the HMM
         search_type = HMMD_CMD_SEARCH;
         // Searching an amino database with another sequence requires that we create an HMM from the sequence 
         // a la phmmer
@@ -781,6 +782,64 @@ static void *clientside_thread(void *arg)  // new version that reads exactly one
         check_phmmer_jackhmmer_only_flags(opts, data->sock_fd, &jmp_env); // Make sure we aren't using any of the flags that can only be used on phmmer or jackhmmer searches
       }
     }
+    else if (*ptr == '#'){ // query object is serialized sequence
+      uint32_t start_pos = 0;
+      status = esl_sq_Deserialize((const uint8_t *) ptr+1, &start_pos, &abc, &seq);
+      if(status != eslOK){
+        if (status != eslOK) client_msg_longjmp(data->sock_fd, status, &jmp_env, "Error deserializing query sequence");
+        if (seq->n < 1) client_msg_longjmp(data->sock_fd, eslEFORMAT, &jmp_env, "Error: zero length FASTA sequence");
+      }
+      if(data->masternode->database_shards[dbx-1]->data_type == AMINO){
+        bg = p7_bg_Create(abc); // need this to build the HMM
+        search_type = HMMD_CMD_SEARCH;
+        // Searching an amino database with another sequence requires that we create an HMM from the sequence 
+        // a la phmmer
+        if(esl_opt_IsUsed(opts, "--cut_ga")){
+           client_msg_longjmp(data->sock_fd, eslEFORMAT, &jmp_env, "Error: --cut_ga option may not be used when searching a sequence against a sequence database");
+        }
+        if(esl_opt_IsUsed(opts, "--cut_nc")){
+           client_msg_longjmp(data->sock_fd, eslEFORMAT, &jmp_env, "Error: --cut_nc option may not be used when searching a sequence against a sequence database");
+        }
+        if(esl_opt_IsUsed(opts, "--cut_tc")){
+           client_msg_longjmp(data->sock_fd, eslEFORMAT, &jmp_env, "Error: --cut_ga option may not be used when searching a sequence against a sequence database");
+        }
+        bld = p7_builder_Create(NULL, abc);
+        int seed;
+        if ((seed = esl_opt_GetInteger(opts, "--seed")) > 0) {
+          esl_randomness_Init(bld->r, seed);
+          bld->do_reseeding = TRUE;
+        }
+        bld->EmL = esl_opt_GetInteger(opts, "--EmL");
+        bld->EmN = esl_opt_GetInteger(opts, "--EmN");
+        bld->EvL = esl_opt_GetInteger(opts, "--EvL");
+        bld->EvN = esl_opt_GetInteger(opts, "--EvN");
+        bld->EfL = esl_opt_GetInteger(opts, "--EfL");
+        bld->EfN = esl_opt_GetInteger(opts, "--EfN");
+        bld->Eft = esl_opt_GetReal   (opts, "--Eft");
+
+        if (esl_opt_IsOn(opts, "--mxfile")) {
+          status = p7_builder_SetScoreSystem (bld, esl_opt_GetString(opts, "--mxfile"), NULL, esl_opt_GetReal(opts, "--popen"), esl_opt_GetReal(opts, "--pextend"), bg);
+        }
+        else{ 
+          status = p7_builder_LoadScoreSystem(bld, esl_opt_GetString(opts, "--mx"), esl_opt_GetReal(opts, "--popen"), esl_opt_GetReal(opts, "--pextend"), bg);
+        } 
+    
+        if (status != eslOK) {
+          client_msg_longjmp(data->sock_fd, eslEINVAL, &jmp_env, "hmmserver: failed to set single query sequence score system: %s", bld->errbuf);
+        }
+        p7_SingleBuilder(bld, seq, bg, &hmm, NULL, NULL, NULL);
+        esl_sq_Destroy(seq); // Free the sequence and set it to NULL so that the rest of the routine thinks 
+        // we were always doing an hmm-sequence search.
+        seq = NULL;
+        p7_builder_Destroy(bld);
+        p7_bg_Destroy(bg);
+      }
+      else{
+        search_type = HMMD_CMD_SCAN;
+        check_phmmer_jackhmmer_only_flags(opts, data->sock_fd, &jmp_env); // Make sure we aren't using any of the flags that can only be used on phmmer or jackhmmer searches
+      }
+    }
+
     else if (*ptr == '*'){ // parse query object as serialized HMM
       if (data->masternode->database_shards[dbx-1]->data_type == HMM){
         client_msg_longjmp(data->sock_fd, status, &jmp_env, "Database %d contains HMM data, and a HMM cannot be used to search a HMM database", dbx);

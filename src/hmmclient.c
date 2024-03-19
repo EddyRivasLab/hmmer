@@ -664,9 +664,24 @@ main(int argc, char **argv)
       else if (status == eslEFORMAT)       p7_Fail("Sequence file parsing failed\n  %s", esl_sqfile_GetErrorBuf(qseq_fp));
       else if (status == eslEOF)           p7_Fail("No sequences found - is file %s empty?\n", queryfile);
       else if (status != eslOK)            p7_Fail("Unexpected error %d in reading sequence file %s", status, queryfile);
-      
+      query_name = query_seq->name;
+      query_accession = query_seq->acc;
+      query_desc = query_seq->desc;
+      if (rem < 1){ // Need more space in command
+        ESL_REALLOC(cmd, 2*cmdlen);
+        if(cmd ==NULL){
+          p7_Die("[%s:%d] realloc error %d - %s\n", __FILE__, __LINE__, errno, strerror(errno));
         }
-
+        rem += cmdlen;
+        cmdlen *=2;
+      }
+      cmd[optslen] = '#';
+      rem = cmdlen - (optslen +1);
+      send_command_length = optslen+1;
+      if(esl_sq_Serialize(query_seq,(uint8_t **) &cmd, &send_command_length, &cmdlen) != eslOK){
+            p7_Die("Unable to serialize HMM to send to server");
+        }
+    }
       
     else if (hfp)
       { // query is an HMM
@@ -679,6 +694,15 @@ main(int argc, char **argv)
         query_name=query_hmm->name;
         query_accession = query_hmm->acc;
         query_desc = query_hmm->desc;
+        if (rem < 1){ // Need more space in command
+          ESL_REALLOC(cmd, 2*cmdlen);
+          if(cmd ==NULL){
+            p7_Die("[%s:%d] realloc error %d - %s\n", __FILE__, __LINE__, errno, strerror(errno));
+          }
+          rem += cmdlen;
+          cmdlen *=2;
+        }
+
         cmd[optslen] = '*';
         rem =cmdlen - (optslen +1);
         send_command_length = optslen+1;
