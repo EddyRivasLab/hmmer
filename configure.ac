@@ -712,33 +712,35 @@ AC_CONFIG_FILES([ \
 AC_CONFIG_FILES([ \
   documentation/userguide/titlepage.tex  \
   documentation/userguide/titlepage_daemon.tex  \
+  documentation/userguide/titlepage_server.tex  \
   documentation/userguide/copyright.tex  \
   ])
 
 # Substitutions in HMMER man pages:
 # HMMER_VERSION, HMMER_DATE, HMMER_COPYRIGHT, HMMER_LICENSE, HMMER_URL
 AC_CONFIG_FILES([ \
-  documentation/man/alimask.man        \
-  documentation/man/hmmalign.man       \
-  documentation/man/hmmbuild.man       \
-  documentation/man/hmmc2.man          \
-  documentation/man/hmmconvert.man     \
-  documentation/man/hmmemit.man        \
-  documentation/man/hmmer.man          \
-  documentation/man/hmmfetch.man       \
-  documentation/man/hmmlogo.man        \
-  documentation/man/hmmpgmd.man        \
-  documentation/man/hmmpgmd_shard.man  \
-  documentation/man/hmmpress.man       \
-  documentation/man/hmmscan.man        \
-  documentation/man/hmmsearch.man      \
-  documentation/man/hmmsim.man         \
-  documentation/man/hmmstat.man        \
-  documentation/man/jackhmmer.man      \
-  documentation/man/hmmer-makefmdb.man \
-  documentation/man/nhmmer.man         \
-  documentation/man/nhmmscan.man       \
-  documentation/man/phmmer.man         \
+  documentation/man/alimask.man     \
+  documentation/man/hmmalign.man    \
+  documentation/man/hmmbuild.man    \
+  documentation/man/hmmc2.man       \
+  documentation/man/hmmclient.man       \
+  documentation/man/hmmconvert.man  \
+  documentation/man/hmmemit.man     \
+  documentation/man/hmmer.man       \
+  documentation/man/hmmfetch.man    \
+  documentation/man/hmmlogo.man     \
+  documentation/man/hmmpgmd.man     \
+  documentation/man/hmmpgmd_shard.man     \
+  documentation/man/hmmpress.man    \
+  documentation/man/hmmscan.man     \
+  documentation/man/hmmsearch.man   \
+  documentation/man/hmmserver.man   \
+  documentation/man/hmmsim.man      \
+  documentation/man/hmmstat.man     \
+  documentation/man/jackhmmer.man   \
+  documentation/man/nhmmer.man      \
+  documentation/man/nhmmscan.man    \
+  documentation/man/phmmer.man      \
   ])
 
 # Substitutions in Easel man pages:

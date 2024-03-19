@@ -50,6 +50,7 @@ MYINCDIRS = -I../${ESLDIR} \
 PROGS = alimask\
 	hmmalign\
 	hmmbuild\
+	hmmclient\
 	hmmconvert\
 	hmmemit\
 	hmmfetch\
@@ -59,6 +60,7 @@ PROGS = alimask\
 	hmmpress\
 	hmmscan\
 	hmmsearch\
+	hmmserver\
 	hmmsim\
 	hmmstat\
 	jackhmmer\
@@ -76,6 +78,7 @@ PROGOBJS =\
 	alimask.o\
 	hmmalign.o\
 	hmmbuild.o\
+	hmmclient.o\
 	hmmconvert.o\
 	hmmemit.o\
 	hmmfetch.o\
@@ -84,6 +87,7 @@ PROGOBJS =\
 	hmmpress.o\
 	hmmscan.o\
 	hmmsearch.o\
+	hmmserver.o\
 	hmmsim.o\
 	hmmstat.o\
 	jackhmmer.o\
@@ -101,7 +105,11 @@ HDRS =  hmmer.h \
 	p7_gbands.h \
 	p7_gmxb.h \
 	p7_gmxchk.h \
-	p7_hmmcache.h
+	p7_hmmcache.h \
+	hmmpgmd.h\
+	shard.h\
+	master_node.h\
+	worker_node.h
 
 OBJS =  build.o\
 	cachedb.o\
@@ -131,11 +139,14 @@ OBJS =  build.o\
 	hmmdutils.o\
 	hmmer.o\
 	logsum.o\
+	master_node.o\
 	modelconfig.o\
 	modelstats.o\
 	mpisupport.o\
 	seqmodel.o\
+	shard.o\
 	tracealign.o\
+	worker_node.o\
 	p7_alidisplay.o\
 	p7_bg.o\
 	p7_builder.o\
@@ -201,6 +212,7 @@ UTESTS =\
 	p7_hmmd_search_stats_utest\
 	p7_hmm_utest\
 	p7_hmmfile_utest\
+	p7_mpisupport_utest\
 	p7_profile_utest\
 	p7_tophits_utest\
 	p7_trace_utest\

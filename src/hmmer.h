@@ -124,6 +124,8 @@ enum p7_strands_e {    p7_STRAND_TOPONLY  = 0, p7_STRAND_BOTTOMONLY = 1,  p7_STR
 #define p7H_CHKSUM  (1<<15)   /* model has an alignment checksum                  */
 #define p7H_CONS    (1<<16)   /* consensus residue line available                 */
 #define p7H_MMASK   (1<<17)   /* #MM annotation available                        !*/
+#define p7H_COMLOG  (1<<18)   /* HMM has command line field */
+#define p7H_CTIME   (1<<19)   /* HMM (has creation time field)*/
 
 /* Indices of Plan7 main model state transitions, hmm->t[k][] */
 enum p7h_transitions_e {
@@ -1445,6 +1447,9 @@ extern int p7_hmm_MPIUnpack(char *buf, int n, int *pos, MPI_Comm comm, ESL_ALPHA
 extern int p7_hmm_MPIRecv(int source, int tag, MPI_Comm comm, char **buf, int *nalloc, ESL_ALPHABET **abc, P7_HMM **ret_hmm);
 
 extern int p7_profile_MPISend(P7_PROFILE *gm, int dest, int tag, MPI_Comm comm, char **buf, int *nalloc);
+extern int p7_profile_MPIPackSize(P7_PROFILE *gm, MPI_Comm comm, int *ret_n);
+extern int p7_profile_MPIPack(P7_PROFILE *gm, char *buf, int n, int *position, MPI_Comm comm);
+extern int p7_profile_MPIUnpack(char *buf, int n, int *pos, MPI_Comm comm, ESL_ALPHABET **abc, P7_PROFILE **ret_profile);
 extern int p7_profile_MPIRecv(int source, int tag, MPI_Comm comm, const ESL_ALPHABET *abc, const P7_BG *bg,
 			      char **buf, int *nalloc,  P7_PROFILE **ret_gm);
 
@@ -1591,8 +1596,8 @@ extern int     p7_hmm_Compare(P7_HMM *h1, P7_HMM *h2, float tol);
 extern int     p7_hmm_Validate(P7_HMM *hmm, char *errbuf, float tol);
 /*      5. Other routines in the API */
 extern int     p7_hmm_CalculateOccupancy(const P7_HMM *hmm, float *mocc, float *iocc);
-
-
+extern int     p7_hmm_Serialize(const P7_HMM *hmm, uint8_t **buf, uint32_t *n, uint32_t *nalloc);
+extern int     p7_hmm_Deserialize(const uint8_t *buf, uint32_t *n, ESL_ALPHABET *abc, P7_HMM **ret_obj);
 
 /* p7_hmmfile.c */
 extern int  p7_hmmfile_Open      (const char *filename, char *env, P7_HMMFILE **ret_hfp, char *errbuf);
@@ -1651,11 +1656,9 @@ extern int p7_Pipeline_LongTarget   (P7_PIPELINE *pli, P7_OPROFILE *om, P7_SCORE
                                      const ESL_SQ *sq, int complementarity,
                                      const FM_DATA *fmf, const FM_DATA *fmb, FM_CFG *fm_cfg
                                      );
-
-
-
+extern int p7_Pipeline_Mainstage(P7_PIPELINE *pli, P7_OPROFILE *om, P7_BG *bg, const ESL_SQ *sq, const ESL_SQ *ntsq, P7_TOPHITS *hitlist, float fwdsc, float nullsc);
+extern int p7_Pipeline_Overthruster(P7_PIPELINE *pli, P7_OPROFILE *om, P7_BG *bg, const ESL_SQ *sq, float *ret_fwdsc, float *ret_nullsc);
 extern int p7_pli_Statistics(FILE *ofp, P7_PIPELINE *pli, ESL_STOPWATCH *w);
-
 
 /* p7_prior.c */
 extern P7_PRIOR  *p7_prior_CreateAmino(void);
