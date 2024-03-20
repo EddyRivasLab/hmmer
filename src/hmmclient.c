@@ -33,7 +33,7 @@
 typedef enum QUERY_TYPE{AMINO, HMM} query_type;
 
 /* ifdefs that control debugging printouts*/
-#define DEBUG_COMMANDS
+//#define DEBUG_COMMANDS
 
 static char usage[]  = " <queryfile> <database number to search>";
 static char banner[] = "search profile(s) against a sequence database";
@@ -864,7 +864,9 @@ main(int argc, char **argv)
     }
 */
     // When we get here, we should have a full query object, so send it to the server
+ #ifdef DEBUG_COMMANDS 
     printf("%s\n", query_name);
+ #endif
     //reset num_counds and converged here to handle multi-query input files
     if((esl_opt_IsUsed(go, "--jack")) &&(esl_opt_GetInteger(go, "--jack") > 1)){
       num_rounds = esl_opt_GetInteger(go, "--jack");

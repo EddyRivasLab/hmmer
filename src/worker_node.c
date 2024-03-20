@@ -2369,6 +2369,10 @@ typedef enum{
 // NOTE !! Only call this procedure from the main (control) thread.  It sends and receives MPI messages, and we've told
 // MPI that only one thread per node will do that
 static int workernode_perform_search_or_scan(P7_SERVER_WORKERNODE_STATE *workernode, P7_SERVER_COMMAND *the_command, ESL_ALPHABET *abc, MPI_Datatype *server_mpitypes){
+#ifndef HAVE_MPI
+      p7_Die("Attempt to call workernode_perform_search_or_scan when HMMER was compiled without MPI support");
+#endif
+#ifdef HAVE_MPI
   int status; 
   char *compare_obj_buff;
   P7_PROFILE *gm=NULL;
@@ -2827,4 +2831,5 @@ ERROR:
     free(optsstring);
   }
   return eslEMEM;
+#endif
 }

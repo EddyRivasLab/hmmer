@@ -53,7 +53,7 @@
 // we close our end
 
 // defines that control debugging commands
-#define DEBUG_COMMANDS 1
+//#define DEBUG_COMMANDS 1
 //#define DEBUG_HITS 1
 //#define PRINT_PERF 1
 
