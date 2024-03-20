@@ -681,6 +681,11 @@ main(int argc, char **argv)
       if(esl_sq_Serialize(query_seq,(uint8_t **) &cmd, &send_command_length, &cmdlen) != eslOK){
             p7_Die("Unable to serialize HMM to send to server");
         }
+      if (num_rounds > 1)	// jackhmmer search, so need an inital trace
+	    {
+	      p7_SingleBuilder(bld, query_seq, bg, &query_hmm, &qtr, NULL, NULL); //bypass HMM - only need model 
+	      prv_msa_nseq = 1;
+	    }
     }
       
     else if (hfp)
