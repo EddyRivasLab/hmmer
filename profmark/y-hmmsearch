@@ -40,6 +40,7 @@ import sys
 import os
 import subprocess
 import argparse
+import pathlib
 
 usage = "y-hmmsearch [options] <top_builddir> <top_srcdir> <resultdir> <tblfile> <msafile> <fafile> <outfile>"
 #if len(sys.argv) < 8: sys.exit('Incorrect number of cmdline args.\nUsage: {}'.format(usage))
@@ -64,6 +65,9 @@ parser.add_argument('outfile',     type=str,
 parser.add_argument('--enone',   action="store_true", default=None, help='hmmbuild --enone')
 parser.add_argument('--max',     action="store_true", default=None, help='hmmsearch --max')
 parser.add_argument('--verbose', action="store_true", default=None, help='does not remove intermediate files')
+parser.add_argument('--F1',      type=float, required=False, help='hmmsearch --F1')
+parser.add_argument('--F2',      type=float, required=False, help='hmmsearch --F2')
+parser.add_argument('--F3',      type=float, required=False, help='hmmsearch --F3')
 
 args = parser.parse_args()
 if (len(sys.argv) < 8):
@@ -81,9 +85,12 @@ domoutfile    = outfile+".dom"
 hmmbuild    = '{}/src/hmmbuild'.format(top_builddir)
 hmmsearch   = '{}/src/hmmsearch'.format(top_builddir)
 buildopts   = '';
-if args.enone: buildopts = '--enone'
-searchopts  = '-E 200 --cpu 1'
-if args.max: searchopts  = '--max -E 200 --cpu 1'
+if args.enone: buildopts = '--enone '
+searchopts  = '-E 200 --cpu 1 '
+if args.max: searchopts += '--max '
+if args.F1:  searchopts += '--F1 {} '.format(args.F1)
+if args.F2:  searchopts += '--F2 {} '.format(args.F2)
+if args.F3:  searchopts += '--F3 {} '.format(args.F3)
 
 if not os.path.isdir(top_builddir):  sys.exit("didn't find top_builddir at {}".format(top_builddir))
 if not os.path.isdir(top_srcdir):    sys.exit("didn't find top_srcdir at {}".format(top_srcdir))
@@ -125,9 +132,11 @@ for line in tblfp:
     r = subprocess.run(cmd.split(), capture_output=True, encoding='utf-8')
     if r.returncode: sys.exit('FAILED: {}\n{}'.format(cmd, r.stderr))
 
-    cmd = '{0} {1} --tblout {2}/{3}.tmp --domtblout {2}/{3}.domtmp {2}/{3}.hmm {4} '.format(hmmsearch, searchopts, resultdir, msaname, fafile)
+    cmd = '{0} {1} --noali --tblout {2}/{3}.tmp --domtblout {2}/{3}.domtmp {2}/{3}.hmm {4} '.format(hmmsearch, searchopts, resultdir, msaname, fafile)
         
-    r = subprocess.run(cmd.split(), stdout=subprocess.DEVNULL, stderr=subprocess.PIPE, encoding='utf-8')
+    f = open('{0}/{1}.hmmer'.format(resultdir, msaname), "w")
+    if args.max: f = open('{0}/{1}.max.hmmer'.format(resultdir, msaname), "w")
+    r = subprocess.run(cmd.split(), stdout=f, stderr=subprocess.PIPE, encoding='utf-8')
     if r.returncode: sys.exit('FAILED: {}\n{}'.format(cmd, r.stderr))
 
     resfp = open('{0}/{1}.tmp'.format(resultdir, msaname))
@@ -142,6 +151,7 @@ for line in tblfp:
 
         outfp.write('{0} {1} {2} {3}\n'.format(pval, bitscore, target, msaname))
     resfp.close()
+    f.close()
 
     resfp = open('{0}/{1}.domtmp'.format(resultdir, msaname))
     if not resfp: sys.exit('failed to open hmmsearch .domtblout file {0}/{1}.domtmp for reading'.format(resultdir, msaname))
@@ -165,6 +175,8 @@ for line in tblfp:
         os.remove('{0}/{1}.sto'.format(resultdir, msaname))
         os.remove('{0}/{1}.tmp'.format(resultdir, msaname))
         os.remove('{0}/{1}.domtmp'.format(resultdir, msaname))
+        #os.remove('{0}/{1}.hmmer'.format(resultdir, msaname))
+        #if args.max: os.remove('{0}/{1}.max.hmmer'.format(resultdir, msaname))
 
 tblfp.close()
 outfp.close()

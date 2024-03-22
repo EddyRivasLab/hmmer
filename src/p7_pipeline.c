@@ -747,7 +747,7 @@ p7_Pipeline(P7_PIPELINE *pli, P7_OPROFILE *om, P7_BG *bg, const ESL_SQ *sq, cons
   /* Second level filter: ViterbiFilter(), multihit with <om> */
   if (P > pli->F2)
     {
-      p7_ViterbiFilter(sq->dsq, sq->n, om, pli->oxf, &vfsc);  
+      p7_ViterbiFilter(sq->dsq, sq->n, om, pli->oxf, &vfsc);
       seq_score = (vfsc-filtersc) / eslCONST_LOG2;
       P  = esl_gumbel_surv(seq_score,  om->evparam[p7_VMU],  om->evparam[p7_VLAMBDA]);
       if (P > pli->F2) return eslOK;
@@ -761,7 +761,7 @@ p7_Pipeline(P7_PIPELINE *pli, P7_OPROFILE *om, P7_BG *bg, const ESL_SQ *sq, cons
   P = esl_exp_surv(seq_score,  om->evparam[p7_FTAU],  om->evparam[p7_FLAMBDA]);
   if (P > pli->F3) return eslOK;
   pli->n_past_fwd++;
-
+  
   /* ok, it's for real. Now a Backwards parser pass, and hand it to domain definition workflow */
   p7_omx_GrowTo(pli->oxb, om->M, 0, sq->n);
   p7_BackwardParser(sq->dsq, sq->n, om, pli->oxf, pli->oxb, NULL);
@@ -828,7 +828,6 @@ p7_Pipeline(P7_PIPELINE *pli, P7_OPROFILE *om, P7_BG *bg, const ESL_SQ *sq, cons
       seq_score = sum_score;
       pre_score = pre2_score;
     }
-
   /* Apply thresholding and determine whether to put this
    * target into the hit list. E-value thresholding may
    * only be a lower bound for now, so this list may be longer

@@ -37,14 +37,17 @@ struct optimize_data {
   int            be_verbose;
 };
 
-extern int p7_evopli_OptimizeViterbiFilter(const ESL_DSQ *dsq, int n, float *ret_time, 
+extern int p7_OptimizeMSVFilter(const ESL_DSQ *dsq, int n, float *ret_time,
+				P7_RATE *R, P7_HMM *hmm, P7_PROFILE *gm, P7_OPROFILE *om, P7_BG *bg, P7_OMX *oxf,
+				float *ret_usc, float fixtime, int noevo, float tol);
+extern int p7_OptimizeViterbiFilter(const ESL_DSQ *dsq, int n, float *ret_time, 
 					   P7_RATE *R, P7_HMM *hmm, P7_PROFILE *gm, P7_OPROFILE *om, P7_BG *bg, P7_OMX *oxf,
-					   float *ret_vfsc, int noevo, float fixtime, float tol, char *errbuf, int be_verbose);
-extern int p7_evopli_OptimizeForwardParser(const ESL_DSQ *dsq, int n, float *ret_time, 
+					   float *ret_vfsc, int noevo, float fixtime, float tol);
+extern int p7_OptimizeForwardParser(const ESL_DSQ *dsq, int n, float *ret_time, 
 					   P7_RATE *R, P7_HMM *hmm, P7_PROFILE *gm, P7_OPROFILE *om, P7_BG *bg, P7_OMX *oxf,
-					   float *ret_fwdsc, int noevo, float fixtime, float tol, char *errbuf, int be_verbose);
-extern int p7_EvoPipeline(P7_PIPELINE *pli, EMRATE *emR, P7_RATE *R, P7_HMM *hmm, P7_PROFILE *gm, P7_OPROFILE *om, P7_BG *bg, const ESL_SQ *sq, const ESL_SQ *ntsq,
-			  P7_TOPHITS *hitlist, int noevo, float fixtime, int *ret_nmsv, int *ret_nviterbi, int *ret_nforward);
+					   float *ret_fwdsc, int noevo, float fixtime, float tol);
+extern int p7_EvoPipeline(P7_PIPELINE *pli, ESL_RANDOMNESS *r, P7_RATE *R, P7_HMM *hmm, P7_PROFILE *gm, P7_OPROFILE *om, P7_BG *bg, const ESL_SQ *sq, const ESL_SQ *ntsq,
+			  P7_TOPHITS *hitlist, int noevo, float fixtime);
 
 #endif /*P7_EVOPIPELINE_INCLUDED*/
 

@@ -71,6 +71,7 @@ PROGS = alimask\
 	ehmmsearch\
 	ejackhmmer\
 	ephmmer\
+	ehmmbuild\
 
 # "auxprogs" are built but not installed.
 AUXPROGS = \
@@ -124,6 +125,8 @@ HDRS =  hmmer.h \
 	p7_evopipeline.h\
 	p7_etophits_output_tabular.h\
 	ratematrix.h\
+	p7_evobuilder.h\
+	evo_evalues.h\
 
 OBJS =  build.o\
 	cachedb.o\
@@ -199,6 +202,8 @@ OBJS =  build.o\
 	ratematrix.o\
 	ratebuilder.o\
 	ratematrix.o\
+	p7_evobuilder.o\
+	evo_evalues.o\
 #	island.o\
 
 STATS = \

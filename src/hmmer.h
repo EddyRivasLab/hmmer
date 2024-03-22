@@ -1517,6 +1517,7 @@ extern int p7_Builder      (P7_BUILDER *bld, ESL_MSA *msa, P7_BG *bg, P7_HMM **o
 extern int p7_SingleBuilder(P7_BUILDER *bld, ESL_SQ *sq,   P7_BG *bg, P7_HMM **opt_hmm, P7_TRACE  **opt_tr,    P7_PROFILE **opt_gm, P7_OPROFILE **opt_om); 
 extern int p7_Builder_MaxLength      (P7_HMM *hmm, double emit_thresh);
 
+
 /* p7_domain.c */
 extern P7_DOMAIN *p7_domain_Create_empty();
 extern void p7_domain_Destroy(P7_DOMAIN *obj);

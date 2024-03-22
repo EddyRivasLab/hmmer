@@ -44,7 +44,8 @@
 typedef struct {
 #ifdef HMMER_THREADS
   ESL_WORK_QUEUE   *queue;
-#endif 
+#endif
+  ESL_RANDOMNESS   *r;
   P7_BG            *bg;	         /* null model                              */
   P7_PIPELINE      *pli;         /* work pipeline                           */
   P7_TOPHITS       *th;          /* top hit results                         */
@@ -106,21 +107,20 @@ static ESL_OPTIONS options[] = {
   { "--F3",         eslARG_REAL,  "1e-5", NULL, NULL,    NULL,  NULL, "--max",          "Stage 3 (Fwd) threshold: promote hits w/ P <= F3",             7 },
   { "--nobias",     eslARG_NONE,   NULL,  NULL, NULL,    NULL,  NULL, "--max",          "turn off composition bias filter",                             7 },
 /* evolutionary options */
-  { "--noevo",      eslARG_NONE,   FALSE, NULL, NULL,    NULL,  NULL,  "--mx,--mxfile", "do not evolve",                                                0 },
-  { "--fixtime",    eslARG_REAL,    NULL, NULL, "x>=0",  NULL,  NULL,  NULL,            "TRUE: use a fix time for the evolutionary models of a pair",   0 },
-  { "--mx",         eslARG_STRING,  NULL, NULL, NULL,    NULL,  NULL,  "--mxfile",      "substitution rate matrix choice (of some built-in matrices)",  0 },
-  { "--mxfile",     eslARG_INFILE,  NULL, NULL, NULL,    NULL,  NULL,  "--mx",          "read substitution rate matrix from file <f>",                  0 },
-  { "--evomodel",   eslARG_STRING,"AGAX", NULL, NULL,    NULL,  NULL,  NULL,            "evolutionary model used",                                      0 },
-  { "--betainf",    eslARG_REAL,  "0.69", NULL, "x>=0",  NULL,  NULL,  NULL,            "betainf = ldI/muI = beta at time infinity (if ldI<muI)",       0 },
-  { "--statfile",   eslARG_OUTFILE,FALSE, NULL, NULL,    NULL,  NULL,  NULL,            "send stats to file <f>, not stdout",                           1 },
-
+  { "--noevo",      eslARG_NONE,   FALSE, NULL, NULL,    NULL,  NULL,  "--mx,--mxfile", "do not evolve",                                                3 },
+  { "--fixtime",    eslARG_REAL,    NULL, NULL, "x>=0",  NULL,  NULL,  NULL,            "TRUE: use a fix time for the evolutionary models of a pair",   3 },
+  { "--mx",         eslARG_STRING,  NULL, NULL, NULL,    NULL,  NULL,  "--mxfile",      "substitution rate matrix choice (of some built-in matrices)",  3 },
+  { "--mxfile",     eslARG_INFILE,  NULL, NULL, NULL,    NULL,  NULL,  "--mx",          "read substitution rate matrix from file <f>",                  3 },
+  { "--evomodel",   eslARG_STRING,"AGAX", NULL, NULL,    NULL,  NULL,  NULL,            "evolutionary model used",                                      3 },
+  { "--betainf",    eslARG_REAL,  "0.69", NULL, "x>=0",  NULL,  NULL,  NULL,            "betainf = ldI/muI = beta at time infinity (if ldI<muI)",       3 },
+  { "--statfile",   eslARG_OUTFILE,FALSE, NULL, NULL,    NULL,  NULL,  NULL,            "send stats to file <f>, not stdout",                           3 },
 /* Other options */
   { "--nonull2",    eslARG_NONE,   NULL,  NULL, NULL,    NULL,  NULL,  NULL,            "turn off biased composition score corrections",               12 },
   { "-Z",           eslARG_REAL,   FALSE, NULL, "x>0",   NULL,  NULL,  NULL,            "set # of comparisons done, for E-value calculation",          12 },
   { "--domZ",       eslARG_REAL,   FALSE, NULL, "x>0",   NULL,  NULL,  NULL,            "set # of significant seqs, for domain E-value calculation",   12 },
   { "--seed",       eslARG_INT,    "42",  NULL, "n>=0",  NULL,  NULL,  NULL,            "set RNG seed to <n> (if 0: one-time arbitrary seed)",         12 },
   { "--tformat",    eslARG_STRING,  NULL, NULL, NULL,    NULL,  NULL,  NULL,            "assert target <seqfile> is in format <s>: no autodetection",  12 },
-  { "--tol",        eslARG_REAL,  "1e-3", NULL, NULL,    NULL,  NULL,  NULL,            "tolerance",                                                   12 },
+  { "--tol",        eslARG_REAL,  "1e-2", NULL, NULL,    NULL,  NULL,  NULL,            "tolerance",                                                   12 },
 
 #ifdef HMMER_THREADS 
   { "--cpu",        eslARG_INT, p7_NCPU,"HMMER_NCPU","n>=0",NULL,  NULL,  CPUOPTS,      "number of parallel CPU workers to use for multithreads",      12 },
@@ -160,6 +160,8 @@ struct cfg_s {
 
   char             *firstseq_key;     /* name of the first sequence in the restricted db range */
   int              n_targetseq;       /* number of sequences in the restricted range */
+
+  ESL_RANDOMNESS  *r;                 /* source of randomness                    */
 };
 
 static int  serial_master(ESL_GETOPTS *go, struct cfg_s *cfg);
@@ -297,9 +299,9 @@ output_header(FILE *ofp, const ESL_GETOPTS *go, char *hmmfile, char *seqfile)
 int
 main(int argc, char **argv)
 {
-  ESL_GETOPTS     *go       = NULL;	
+  ESL_GETOPTS     *go     = NULL;	
   struct cfg_s     cfg;        
-  int              status   = eslOK;
+  int              status = eslOK;
 
   impl_Init();                  /* processor specific initialization */
   p7_FLogsumInit();		/* we're going to use table-driven Logsum() approximations at times */
@@ -326,6 +328,8 @@ main(int argc, char **argv)
   if ( cfg.n_targetseq != -1 && cfg.n_targetseq < 1 )
     p7_Fail("--restrictdb_n must be >= 1\n");
 
+
+  cfg.r = esl_randomness_CreateFast(esl_opt_GetInteger(go, "--seed"));
 
   /* Figure out who we are, and send control there: 
    * we might be an MPI master, an MPI worker, or a serial program.
@@ -357,6 +361,7 @@ main(int argc, char **argv)
 
   esl_getopts_Destroy(go);
 
+  esl_randomness_Destroy(cfg.r);
   return status;
 }
 
@@ -394,7 +399,7 @@ serial_master(ESL_GETOPTS *go, struct cfg_s *cfg)
   EMRATE          *emR      = NULL;
   EVOM             evomodel;
   float            betainf;
-  double           tol = 1e-5;
+  double           tol      = 1e-2;
   FILE            *statfp   = NULL;	          /* stats output stream                     */
 
   int              ncpus    = 0;
@@ -479,16 +484,17 @@ serial_master(ESL_GETOPTS *go, struct cfg_s *cfg)
 
       for (i = 0; i < infocnt; ++i)
 	{
-	  info[i].pli     = NULL;
-	  info[i].th      = NULL;
-	  info[i].gm      = NULL;
-	  info[i].om      = NULL;
-	  info[i].R       = NULL;
-	  info[i].hmm     = NULL;
-	  info[i].bg      = p7_bg_Create(abc);
-	  info[i].noevo   = esl_opt_GetBoolean(go, "--noevo");
-	  info[i].fixtime = esl_opt_IsOn(go, "--fixtime")? esl_opt_GetReal(go, "--fixtime") : -1.0;
-	  info[i].tol     = tol;
+	  info[i].pli        = NULL;
+	  info[i].th         = NULL;
+	  info[i].gm         = NULL;
+	  info[i].om         = NULL;
+	  info[i].R          = NULL;
+	  info[i].hmm        = NULL;
+	  info[i].bg         = p7_bg_Create(abc);
+	  info[i].noevo      = esl_opt_GetBoolean(go, "--noevo");
+	  info[i].fixtime    = esl_opt_IsOn(go, "--fixtime")? esl_opt_GetReal(go, "--fixtime") : -1.0;
+	  info[i].tol        = tol;
+	  info[i].r          = cfg->r;
 #ifdef HMMER_THREADS
 	  info[i].queue   = queue;
 #endif
@@ -518,7 +524,6 @@ serial_master(ESL_GETOPTS *go, struct cfg_s *cfg)
     }
 
     emR = ratematrix_emrate_Create(abc, 1);
-
     if (esl_opt_IsOn(go, "--mx")) {
       ratematrix_emrate_Set(esl_opt_GetString(go, "--mx"), NULL, f, &emR[0], TRUE, info[0].tol, errbuf, FALSE);
     }
@@ -542,7 +547,7 @@ serial_master(ESL_GETOPTS *go, struct cfg_s *cfg)
       nquery++;
       esl_stopwatch_Start(w);
 
-      /* Calculate the hmm rate 
+      /* Calculate the hmm rate R
        * this should be part of hmmbuild
        */
       if (!esl_opt_IsOn(go, "--noevo") && 
@@ -580,15 +585,15 @@ serial_master(ESL_GETOPTS *go, struct cfg_s *cfg)
       {
 	if (!esl_opt_IsOn(go, "--noevo")) {
 	  info[i].R   = p7_RateClone(R);
-	  info[i].hmm = p7_hmm_Clone(hmm);
 	}
 	
         /* Create processing pipeline and hit list */
         info[i].th      = p7_tophits_Create();
+	info[i].hmm     = p7_hmm_Clone(hmm);
 	info[i].gm      = p7_profile_Clone(gm);
 	//info[i].om    = p7_oprofile_Clone(om); does not work here, need to use _Copy that is really a _Clone function
 	info[i].om      = p7_oprofile_Copy(om);
-        info[i].pli = p7_pipeline_Create(go, om->M, 100, FALSE, p7_SEARCH_SEQS); /* L_hint = 100 is just a dummy for now */
+        info[i].pli     = p7_pipeline_Create(go, om->M, 100, FALSE, p7_SEARCH_SEQS); /* L_hint = 100 is just a dummy for now */
 	status = p7_pli_NewModel(info[i].pli, info[i].om, info[i].bg);
 	if (status == eslEINVAL) p7_Fail(info->pli->errbuf);
 
@@ -929,10 +934,6 @@ mpi_master(ESL_GETOPTS *go, struct cfg_s *cfg)
   BLOCK_LIST      *list     = NULL;
   SEQ_BLOCK        block;
 
-  EMRATE          *emR      = NULL;
-  EVOM             evomodel;
-  float            betainf;
-  
   int              i;
   int              size;
   MPI_Status       mpistatus;
@@ -1289,6 +1290,7 @@ mpi_worker(ESL_GETOPTS *go, struct cfg_s *cfg)
   /* Outer loop: over each query HMM in <hmmfile>. */
   while (hstatus == eslOK) 
     {
+      P7_RATE         *R       = NULL;
       P7_PROFILE      *gm      = NULL;
       P7_OPROFILE     *om      = NULL;       /* optimized query profile                  */
       P7_PIPELINE     *pli     = NULL;
@@ -1301,7 +1303,7 @@ mpi_worker(ESL_GETOPTS *go, struct cfg_s *cfg)
       /* Calculate the hmm rate 
        * this should be part of hmmbuild
        */
-      betainf  = esl_opt_GetReal(go,   "--betainf");
+      betainf  = esl_opt_GetReal(go, "--betainf");
       if (esl_opt_IsUsed(go, "-R")) {
 	emR = ratematrix_emrate_Create(abc);
 	ratematrix_emrate_Set(esl_opt_GetString(go, "--rmx"), (const double *)bg->f, emR, info[0].tol, errbuf, FALSE);
@@ -1339,8 +1341,9 @@ mpi_worker(ESL_GETOPTS *go, struct cfg_s *cfg)
 	      p7_bg_SetLength(bg, dbsq->n);
 	      p7_oprofile_ReconfigLength(om, dbsq->n);
       
-	      p7_Pipeline(pli, om, bg, dbsq, NULL, th);
-
+	      p7_EvoPipeline(pli, cfg->r, R, hmm, gm, om, bg, dbsq, NULL, th, noevo, fixtime) != eslOK) {
+	    esl_fatal("error in p7_EvoPipeline");
+ 
 	      esl_sq_Reuse(dbsq);
 	      p7_pipeline_Reuse(pli);
 
@@ -1370,6 +1373,7 @@ mpi_worker(ESL_GETOPTS *go, struct cfg_s *cfg)
       p7_oprofile_Destroy(om);
       p7_profile_Destroy(gm);
       p7_hmm_Destroy(hmm);
+      p7_rate_Destroy(R);
 
       hstatus = p7_hmmfile_Read(hfp, &abc, &hmm);
     } /* end outer loop over query HMMs */
@@ -1412,10 +1416,6 @@ serial_loop(WORKER_INFO *info, ESL_SQFILE *dbfp, int n_targetseqs)
   ESL_SQ   *dbsq     = NULL;   /* one target sequence (digital)  */
   int seq_cnt = 0;
 
-  int n_msv = 0;
-  int n_viterbi = 0;
-  int n_forward = 0;
-
   dbsq = esl_sq_CreateDigital(info->om->abc);
 
   /* Main loop: */
@@ -1423,9 +1423,11 @@ serial_loop(WORKER_INFO *info, ESL_SQFILE *dbfp, int n_targetseqs)
   {
       p7_pli_NewSeq(info->pli, dbsq);
       p7_bg_SetLength(info->bg, dbsq->n);
+      p7_ReconfigLength(info->gm, dbsq->n);
       p7_oprofile_ReconfigLength(info->om, dbsq->n);
-      
-      if (p7_EvoPipeline(info->pli, /*emR=*/NULL, info->R, info->hmm, info->gm, info->om, info->bg, dbsq, NULL, info->th, info->noevo, (float)info->fixtime, &n_msv, &n_viterbi, &n_forward) != eslOK) {
+
+      if (p7_EvoPipeline(info->pli, info->r, info->R, info->hmm, info->gm, info->om, info->bg, dbsq, NULL, info->th,
+			 info->noevo, (float)info->fixtime) != eslOK) {
 	esl_fatal("error in p7_EvoPipeline");
       }
 
@@ -1510,10 +1512,6 @@ pipeline_thread(void *arg)
   ESL_SQ_BLOCK  *block = NULL;
   void          *newBlock;
   
-  int n_msv = 0;
-  int n_viterbi = 0;
-  int n_forward = 0;
-
   impl_Init();
 
   obj = (ESL_THREADS *) arg;
@@ -1535,13 +1533,12 @@ pipeline_thread(void *arg)
 
 	  p7_pli_NewSeq(info->pli, dbsq);
 	  p7_bg_SetLength(info->bg, dbsq->n);
+	  p7_ReconfigLength(info->gm, dbsq->n);
 	  p7_oprofile_ReconfigLength(info->om, dbsq->n);
 	  
-	  if (p7_EvoPipeline(info->pli, /*emR=*/NULL, info->R, info->hmm, info->gm, info->om, info->bg, dbsq, NULL, info->th, info->noevo, (float)info->fixtime,
-			     &n_msv, &n_viterbi, &n_forward) != eslOK) {
-	    if (status != eslOK) esl_fatal("error in p7_EvoPipeline");
-	  }
-	  
+	  status = p7_EvoPipeline(info->pli, info->r, info->R, info->hmm, info->gm, info->om, info->bg, dbsq, NULL, info->th, info->noevo, (float)info->fixtime);
+	  if (status != eslOK) esl_fatal("error in p7_EvoPipeline");
+
 	  esl_sq_Reuse(dbsq);
 	  p7_pipeline_Reuse(info->pli);
 	}
@@ -1554,8 +1551,6 @@ pipeline_thread(void *arg)
 
   status = esl_workqueue_WorkerUpdate(info->queue, block, NULL);
   if (status != eslOK) esl_fatal("Work queue worker failed");
-
-  printf("^^ worker nn %d %d %d\n", n_msv, n_viterbi, n_forward);
 
   esl_threads_Finished(obj, workeridx);
   return;
