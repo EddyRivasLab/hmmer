@@ -115,8 +115,8 @@
  */
 #undef eslENABLE_NEON
 #undef eslENABLE_SSE
+#undef eslENABLE_AVX
 #undef eslENABLE_VMX
-
 /* System headers
  */
 #undef HAVE_NETINET_IN_H        /* On FreeBSD, you need netinet/in.h for struct sockaddr_in */
