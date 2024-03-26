@@ -289,6 +289,7 @@ int main(int argc, char *argv[])
 
   seq[0] = 0;
   while (strncmp(seq, "//", 2) != 0) {
+
     int rem;
 
     eod = 0;
@@ -406,6 +407,7 @@ int main(int argc, char *argv[])
       abc = esl_alphabet_Create(eslAMINO);
 
       if (status == eslOK) {
+        esl_stopwatch_Start(w);
         /* Send the string to the server */ 
         n = strlen(seq);
         printf ("Sending data %" PRIu64 ":\n", n);
@@ -479,7 +481,9 @@ int main(int argc, char *argv[])
         w->sys           = stats->sys;
 
         pli->nmodels     = stats->nmodels;
-        pli->nseqs       = stats->nseqs;
+        pli->nnodes      = stats->nnodes;
+        pli->nseqs       = stats->nseqs;  
+        pli->nres        = stats->nres;
         pli->n_past_msv  = stats->n_past_msv;
         pli->n_past_bias = stats->n_past_bias;
         pli->n_past_vit  = stats->n_past_vit;
@@ -530,14 +534,17 @@ int main(int argc, char *argv[])
         /* adjust the reported and included hits */
         //th->is_sorted = FALSE;
         //p7_tophits_Sort(th);
-		
+        esl_stopwatch_Stop(w);
         /* Print the results.  */
+
         if (scores) { p7_tophits_Targets(stdout, th, pli, 120); fprintf(stdout, "\n\n"); }
         if (ali)    { p7_tophits_Domains(stdout, th, pli, 120); fprintf(stdout, "\n\n"); }
         p7_pli_Statistics(stdout, pli, w);  
 
         p7_pipeline_Destroy(pli); 
         p7_tophits_Destroy(th);
+        esl_stopwatch_Destroy(w);
+        w=esl_stopwatch_Create();
         free(buf);
 
         fprintf(stdout, "//\n");  fflush(stdout);

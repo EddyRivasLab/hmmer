@@ -354,7 +354,8 @@ main(int argc, char **argv)
           else if (status == eslEOF)           p7_Fail("No sequences found - is file %s empty?\n", cfg.queryfile); 
           else if (status != eslOK)            p7_Fail("Unexpected error %d in reading sequence file %s", status, cfg.queryfile);
  
-          p7_SingleBuilder(cfg.builder, qsq, cfg.bg, &hmm, /*opt_tr=*/NULL, /*opt_gm=*/NULL, /*opt_om*/NULL);
+          status = p7_SingleBuilder(cfg.builder, qsq, cfg.bg, &hmm, /*opt_tr=*/NULL, /*opt_gm=*/NULL, /*opt_om*/NULL);
+          if (status != eslOK) p7_Fail("Single sequence profile construction failed for %s", qsq->name);
         }
       else if (cfg.qmsa_fp)
         {
@@ -368,7 +369,10 @@ main(int argc, char **argv)
             msas_named++;
           }
           
-          p7_Builder(cfg.builder, qmsa, cfg.bg, &hmm, /*opt_tr=*/NULL, /*opt_gm=*/NULL, /*opt_om*/NULL, /*opt_postmsa*/NULL);
+          status = p7_Builder(cfg.builder, qmsa, cfg.bg, &hmm, /*opt_tr=*/NULL, /*opt_gm=*/NULL, /*opt_om*/NULL, /*opt_postmsa*/NULL);
+          if      (status == eslEFORMAT)    p7_Fail("MSA %s has a format problem - maybe no reference annotation line?", qmsa->name ? qmsa->name : "(unnamed)"); // shouldn't happen. nhmmer doesn't have --hand construction.
+          else if (status == eslENORESULT)  p7_Fail("No consensus columns found for some reason in input MSA");
+          else if (status != eslOK)         p7_Fail("Failed to build profile from input MSA - unexpected error %d", status);
         }
       nquery++;
 

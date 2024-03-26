@@ -1206,8 +1206,10 @@ p7_hmm_Compare(P7_HMM *h1, P7_HMM *h2, float tol)
   printf("^^666 entro\n");
 
   if (strcmp(h1->name,   h2->name)   != 0) return eslFAIL;
+
   if (esl_strcmp(h1->comlog, h2->comlog) != 0) return eslFAIL;
-  if (strcmp(h1->ctime,  h2->ctime)  != 0) return eslFAIL;
+ 
+  if (esl_strcmp(h1->ctime, h2->ctime) != 0) return eslFAIL;
 
   if (h1->nseq     != h2->nseq)                                      return eslFAIL;
   if (esl_FCompare_old(h1->eff_nseq, h2->eff_nseq, tol) != eslOK)        return eslFAIL;
@@ -1362,9 +1364,543 @@ p7_hmm_CalculateOccupancy(const P7_HMM *hmm, float *mocc, float *iocc)
 
   return eslOK;
 }
+/* Function:  p7_hmm_Serialize
+ * Synopsis:  Serializes a P7_HMM object into a stream of bytes
+ *.           that can be reliably transmitted over internet sockets
+ *
+ * Purpose:   Converts an architecture-dependent P7_HMM object into a contiguous stream
+ *            of bytes with each field of the data structure in network byte order for transmission
+ *            over sockets.  The serialized byte stream may be part of a larger allocated buffer.
+ *            If the provided buffer is NULL, allocates a new buffer large enough for the serialized object
+ *            If the provided buffer is not large enough to hold the serialized object and its existing data, re-allocates
+ *            a larger buffer
+ *
+ * Inputs:    hmm: A pointer to the P7_HMM object to be serialized
+ *            buf: Handle to the buffer that the object should be serialized into.  If *buf is NULL,
+ *                 a new buffer will be allocated.  Passing a NULL buf is an error.
+ *            n:   Offset (in bytes) from the start of the buffer to where the serialized object should start.
+ *            nalloc: size (in bytes) of the buffer passed in buf 
+ *
+ *Returns:    On success: returns eslOK, sets *buf to the base of the buffer containing the object
+ *            if allocation or re-allocation was requried, sets *n to the offset from the start of the buffer
+ *            to the first position after the serialized object and sets *nalloc to the new size of the buffer 
+ *            if allocation or re-allocation was required.
+ *
+ * Throws:    Returns eslEMEM if unable to allocate or re-allocate memory.  Returns eslEINVAL if obj == NULL, if buf == NULL, if
+ *            n == NULL, if nalloc == NULL, or if obj->abc->type is either eslNONSTANDARD or eslUNKNOWN
+ */
+
+extern int p7_hmm_Serialize(const P7_HMM *hmm, uint8_t **buf, uint32_t *n, uint32_t *nalloc){
+  if((buf == NULL) || (hmm == NULL) || (n == NULL) || (hmm->abc->type == eslNONSTANDARD) || (hmm->abc->type == eslUNKNOWN)){
+    return eslEINVAL;
+  }
+  int status;
+  uint64_t host_64bit, network_64bit;
+  uint32_t flags = 0;
+  //Step 1: figure out how much memory the serialized object will occupy and resize the buffer if needed
+  uint64_t ser_size = 0;
+   ser_size += sizeof(int); // type of alphabet abc.  We don't serialize the alphabet directly.  We require it to be one of the 
+  // standard types and create a new one during de-serialization.  Put this first in the serialized object because we need to create 
+  // the alphabet field of the HMM first so we can know the size of some of the other fields
+
+  ser_size += sizeof(int); // Bitfield that records whether the HMM has different optional fields.  Has a few 
+  // more flag bits than the hmm->flags field because some of the optional strings don't have flags in that field
+  ser_size += sizeof(int); // M 
+  ser_size += (hmm->M+1) * p7H_NTRANSITIONS * sizeof(float); // t field
+  ser_size += (hmm->M+1) * (hmm->abc->K) * sizeof(float); //mat field
+  ser_size += (hmm->M+1) * (hmm->abc->K) * sizeof(float); //ins field
+  ser_size += strlen(hmm->name) + 1; // Remember the termination character
+  if(hmm->acc != NULL){
+    ser_size += strlen(hmm->acc) +1;
+    flags |= p7H_ACC;
+  }
+  if(hmm->flags & p7H_DESC){
+    ser_size += strlen(hmm->desc) +1;
+    flags |= p7H_DESC;
+  }
+  if(hmm->flags & p7H_RF){
+    ser_size += (hmm->M + 2) * sizeof(char);  // rf field
+    flags |= p7H_RF;
+  }
+  if(hmm->flags & p7H_MMASK){
+    ser_size += (hmm->M + 2) * sizeof(char);  // mm field
+    flags |= p7H_MMASK;
+  }
+  if(hmm->flags & p7H_CONS){
+    ser_size += (hmm->M + 2) * sizeof(char);  // consensus field
+    flags |= p7H_CONS;  
+  }
+  if(hmm->flags & p7H_CS){
+    ser_size += (hmm->M + 2) * sizeof(char);  // cs field
+    flags |= p7H_CS;
+  }
+  if(hmm->flags & p7H_CA){
+    ser_size += (hmm->M + 2) * sizeof(char);  // ca field
+    flags |= p7H_CA;
+  } 
+  //comlog_present
+  if(hmm->comlog != NULL){
+    ser_size += strlen(hmm->comlog) +1;
+    flags |= p7H_COMLOG;
+  }
+  ser_size += sizeof(int); // nseq field
+  ser_size += sizeof(float); //eff_nseq
+  ser_size += sizeof(int); //max_length
+  if(hmm->ctime != NULL){
+    ser_size+= strlen(hmm->ctime)+1;
+    flags |= p7H_CTIME;
+  }
+  if(hmm->flags & p7H_MAP){
+    ser_size += (hmm->M +1) * sizeof(int);  //map field
+    flags |= p7H_MAP;
+  }
+  ser_size += sizeof(uint32_t); //checksum field
+  ser_size += p7_NEVPARAM * sizeof(float); // evparam
+  ser_size += p7_NCUTOFFS * sizeof(float); //cutoff
+  ser_size += p7_MAXABET * sizeof(float); //compo
+  ser_size += sizeof(off_t); //offset
+  ser_size += sizeof(int); //flags field
+
+  // Step 2: make sure we have enough buffer space for the serialized HMM
+  if(*buf == NULL){// No buffer provided, so allocate one
+    ESL_ALLOC(*buf, ser_size);
+    *nalloc = ser_size;
+    *n = 0;
+  }
+  else if (*nalloc - *n < ser_size){
+    ESL_REALLOC(*buf, *n+ser_size);
+    *nalloc = *n + ser_size;
+  }
+
+  // Step 3: serialize
+  uint8_t *ptr = *buf + *n;
+  uint32_t network_32bit;
+
+  // Type of the alphabet goes first so that we can create the alphabet first during de-serialization
+  network_32bit = esl_hton32(hmm->abc->type);
+  memcpy((void *) ptr, (void *) &network_32bit, sizeof(uint32_t));
+  ptr += sizeof(uint32_t);
+
+  //flags so that we know which fields of the HMM to deserialize
+  network_32bit = esl_hton32(flags);
+  memcpy((void *) ptr, (void *) &network_32bit, sizeof(uint32_t));
+  ptr += sizeof(uint32_t);
+
+  // M field
+  network_32bit = esl_hton32(hmm->M);
+  memcpy((void *) ptr, (void *) &network_32bit, sizeof(uint32_t));
+  ptr += sizeof(uint32_t);
+
+  uint32_t *ptr2 = (uint32_t *) hmm->t[0];  
+  // tt field.  Is allocated as one sequential array in tt[0], with tt[1:x] set as pointers within that array
+  for(int i = 0; i < (hmm->M + 1)* p7H_NTRANSITIONS; i++){
+    network_32bit = esl_hton32(*ptr2);
+    memcpy((void *) ptr, (void *) &network_32bit, sizeof(uint32_t));
+    ptr += sizeof(uint32_t);  // units = bytes
+    ptr2 += 1; // units = 32-bit words 
+  }
+
+  ptr2 = (uint32_t *) hmm->mat[0];
+  // mat field.  Is allocated as one sequential array in mat[0], with mat[1:x] set as pointers within that array
+  for(int i = 0; i < (hmm->M + 1)* hmm->abc->K; i++){
+    network_32bit = esl_hton32(*ptr2);
+    memcpy((void *) ptr, (void *) &network_32bit, sizeof(uint32_t));
+    ptr += sizeof(uint32_t);  // units = bytes
+    ptr2 += 1; // units = 32-bit words 
+  }
+
+  ptr2 = (uint32_t *) hmm->ins[0];
+  // ins field.  Is allocated as one sequential array in mat[0], with ins[1:x] set as pointers within that array
+  for(int i = 0; i < (hmm->M + 1)* hmm->abc->K; i++){
+    network_32bit = esl_hton32(*ptr2);
+    memcpy((void *) ptr, (void *) &network_32bit, sizeof(uint32_t));
+    ptr += sizeof(uint32_t);  // units = bytes
+    ptr2 += 1; // units = 32-bit words 
+  }
+  //name field.  Strings don't care about endianess, because they're arrays of single-byte quantities
+  strcpy(ptr, hmm->name);
+  ptr+= strlen(hmm->name)+1;
+
+  //acc field, if present
+  if(hmm->flags & p7H_ACC){
+    strcpy(ptr, hmm->acc);
+    ptr += strlen(hmm->acc) +1;
+  }
+
+  // desc field, if present
+  if(hmm->flags & p7H_DESC){
+    strcpy(ptr, hmm->desc);
+    ptr += strlen(hmm->desc) +1;
+  }
+
+  //rf field
+  if(hmm->flags & p7H_RF){
+    strcpy(ptr, hmm->rf);
+    ptr+= strlen(hmm->rf)+1;
+  }
+
+  // mm field
+  if(hmm->flags & p7H_MMASK){
+    strcpy(ptr, hmm->mm);
+    ptr += strlen(hmm->mm)+1;
+  }
+  //consensus field
+  if(hmm->flags & p7H_CONS){
+    strcpy(ptr, hmm->consensus);
+    ptr += strlen(hmm->consensus)+1;
+  }
+  //cs field
+  if(hmm->flags & p7H_CS){
+    strcpy(ptr, hmm->cs);
+    ptr += strlen(hmm->cs)+1;
+  }
+
+  //ca field 
+  if(hmm->flags & p7H_CA){
+    strcpy(ptr, hmm->ca);
+    ptr += strlen(hmm->ca)+1;
+  }
+
+  // comlog (command line) field
+  if(hmm->comlog != NULL){
+    strcpy(ptr, hmm->comlog);
+    ptr += strlen(hmm->comlog) +1;
+  }
+
+  //nseq field
+  network_32bit = esl_hton32(hmm->nseq);
+  memcpy(ptr, &network_32bit, sizeof(uint32_t));
+  ptr += sizeof(uint32_t);
+
+  //eff_nseq (needs care because is float)
+  uint32_t host_32bit;
+  memcpy(&host_32bit, &(hmm->eff_nseq), sizeof(float));
+  network_32bit = esl_hton32(host_32bit);
+  memcpy(ptr, &network_32bit, sizeof(uint32_t));
+  ptr += sizeof(uint32_t);
+
+  //max_length
+  network_32bit = esl_hton32(hmm->max_length);
+  memcpy(ptr, &network_32bit, sizeof(uint32_t));
+  ptr += sizeof(uint32_t);
+
+  //ctime field (optional)
+  if(hmm->ctime != NULL){
+    strcpy(ptr, hmm->ctime);
+    ptr += strlen(hmm->ctime) +1;
+  }
+
+  //map field
+  if(hmm->flags & p7H_MAP){
+    for(int i = 0; i < hmm->M +1; i++){
+      network_32bit = esl_hton32(hmm->map[i]);
+      memcpy(ptr, &network_32bit, sizeof(uint32_t));
+      ptr += sizeof(uint32_t);
+    }
+  }
+  //checksum field
+  network_32bit = esl_hton32(hmm->checksum);
+  memcpy(ptr, &network_32bit, sizeof(uint32_t));
+  ptr += sizeof(uint32_t);
+
+  ptr2 = (uint32_t *) hmm->evparam;  
+  for(int i = 0; i < p7_NEVPARAM; i++){
+    memcpy(&host_32bit, ptr2, sizeof(uint32_t));
+    network_32bit = esl_hton32(host_32bit);
+    memcpy(ptr, &network_32bit, sizeof(uint32_t)); // do memory copy becaause evparam is a float
+    ptr2+=1; // units = 32-bit words
+    ptr += sizeof(uint32_t); // units = bytes
+  }
+
+  ptr2 = (uint32_t *) hmm->cutoff;  
+  for(int i = 0; i < p7_NCUTOFFS; i++){
+    memcpy(&host_32bit, ptr2, sizeof(uint32_t));
+    network_32bit = esl_hton32(host_32bit);
+    memcpy(ptr, &network_32bit, sizeof(uint32_t)); // do memory copy becaause evparam is a float
+    ptr2+=1; // units = 32-bit words
+    ptr += sizeof(uint32_t); // units = bytes
+  }
+
+  ptr2 = (uint32_t *) hmm->compo;  
+  for(int i = 0; i < p7_MAXABET; i++){
+    memcpy(&host_32bit, ptr2, sizeof(uint32_t));
+    network_32bit = esl_hton32(host_32bit);
+    memcpy(ptr, &network_32bit, sizeof(uint32_t)); // do memory copy becaause evparam is a float
+    ptr2+=1; // units = 32-bit words
+    ptr += sizeof(uint32_t); // units = bytes
+  }
+  //offset field
+  network_64bit = esl_hton64(hmm->offset);
+  memcpy(ptr, &network_64bit, sizeof(uint64_t));
+  ptr += sizeof(uint64_t);
+
+  //flags field
+  network_32bit = esl_hton32(hmm->flags);
+  memcpy(ptr, &network_32bit, sizeof(uint32_t));
+  ptr += sizeof(uint32_t);
 
 
+  *n = ptr-*buf;
+  return eslOK; 
+ ERROR: // We only get here if memory (re)allocation failed, so no cleanup required.
 
+  return(eslEMEM); 
+
+}
+
+/* Function:  P7_HMM_Deserialize
+ * Synopsis:  Derializes a P7_HMM object from a stream of bytes in network order into
+ *            a valid data structure
+ *
+ * Purpose:   Deserializes a serialized P7_HMM object from
+ *.           buf starting at position position *pos.  
+ *
+ * Inputs:    buf: the buffer that the object should be de-serialized from
+ *            pos: a pointer to the offset from the start of buf to the beginning of the object
+ *            abc: the alphabet structure the HMM will use.  Must not be NULL, and must be the same type
+ *                 as the incoming HMM.  This is a bit messy, but is required because the P7_HMM data structure
+ *                 expects that the alphabet object in an HMM will be managed (freed) by outside code, so
+ *                 just creating a new alphabet object for the HMM will lead to memory leaks.
+ *            ret_obj: a P7_HMM structure to deserialize the object into.  Ret_obj may not be NULL. It may point to 
+ *                     NULL, in which case a new P7_HMM object will be created.  If ret_obj does not point to NULL,
+ *                     the P7_HMM it points to will be destroyed and a new one created.  In this case, it is the 
+ *                     responsibility of the caller to ensure that (*ret_obj)->abc is properly freed.
+ *
+ * Returns:   On success: returns eslOK, deserializes P7_HMM object into ret_object, and updates 
+ *.           n to point to the position after the end of the P7_HMM object.
+ *
+ * Throws:    Returns eslEINVAL if ret_obj == NULL , buf == NULL n == NULL, or the type field of the HMM to be
+ *            deserialized is not the same as that of abc.
+ */
+extern int p7_hmm_Deserialize(const uint8_t *buf, uint32_t *n, ESL_ALPHABET *abc, P7_HMM **ret_obj){
+  uint8_t *ptr;
+  uint32_t network_32bit; // holds 32-bit values in network order 
+  uint32_t host_32bit; //variable to hold 32-bit values after conversion to host order
+  uint64_t network_64bit, host_64bit;
+  int status;
+  uint32_t flags;  //flags that tell us what fields in the hmm are valid.  Not the flags field of the HMM
+  uint32_t type;  // type of the HMM's alphabet
+  P7_HMM *hmm;
+
+  if ((buf == NULL) || (ret_obj == NULL)|| (n == NULL)){ // check to make sure we've been passed valid objects
+      return(eslEINVAL);
+  }
+
+  ptr  = (uint8_t *) buf + *n; // Get pointer to start of object
+
+  //type of the alphabet is first  
+  memcpy(&network_32bit, ptr, sizeof(uint32_t)); // Grab the bytes out of the buffer
+  host_32bit = esl_ntoh32(network_32bit);
+  type = *((int *) &host_32bit);
+  ptr += sizeof(uint32_t);
+  if(type != abc->type){ // tried to deserialize HMM with a different alphabet than the one provided
+    return(eslEINVAL);
+  }
+
+  // Now, the flags bit-vector
+  memcpy(&network_32bit, ptr, sizeof(uint32_t)); // Grab the bytes out of the buffer
+  host_32bit = esl_ntoh32(network_32bit);
+  flags = *((int *) &host_32bit);
+  ptr += sizeof(uint32_t);
+
+  // M (Length) of HMM
+  memcpy(&network_32bit, ptr, sizeof(uint32_t)); // Grab the bytes out of the buffer
+  host_32bit = esl_ntoh32(network_32bit);
+  int M = *((int *) &host_32bit);
+  ptr += sizeof(uint32_t);
+
+  // Now, we have enough information to create the P7_HMM object if necessary
+  if(*ret_obj != NULL){
+    p7_hmm_Destroy(*ret_obj);
+  }
+  hmm = p7_hmm_Create(M, abc);
+
+  uint32_t *ptr2 = (uint32_t *) hmm->t[0];  
+  // tt field.  Is allocated as one sequential array in tt[0], with tt[1:x] set as pointers within that array
+  for(int i = 0; i < (hmm->M + 1)* p7H_NTRANSITIONS; i++){
+    memcpy(&network_32bit, ptr, sizeof(uint32_t)); // Grab the bytes out of the buffer
+    host_32bit = esl_ntoh32(network_32bit);
+    memcpy(ptr2, &host_32bit, sizeof(uint32_t));
+    ptr += sizeof(uint32_t);  // units = bytes
+    ptr2 += 1; // units = 32-bit words 
+  }
+
+  ptr2 = (uint32_t *) hmm->mat[0];  
+  // mat field.  Is allocated as one sequential array in tt[0], with mat[1:x] set as pointers within that array
+  for(int i = 0; i < (hmm->M + 1)* abc->K; i++){
+    memcpy(&network_32bit, ptr, sizeof(uint32_t)); // Grab the bytes out of the buffer
+    host_32bit = esl_ntoh32(network_32bit);
+    memcpy(ptr2, &host_32bit, sizeof(uint32_t));
+    ptr += sizeof(uint32_t);  // units = bytes
+    ptr2 += 1; // units = 32-bit words 
+  }
+
+  ptr2 = (uint32_t *) hmm->ins[0];  
+  // ins field.  Is allocated as one sequential array in tt[0], with ins[1:x] set as pointers within that array
+  for(int i = 0; i < (hmm->M + 1)* abc->K; i++){
+    memcpy(&network_32bit, ptr, sizeof(uint32_t)); // Grab the bytes out of the buffer
+    host_32bit = esl_ntoh32(network_32bit);
+    memcpy(ptr2, &host_32bit, sizeof(uint32_t));
+    ptr += sizeof(uint32_t);  // units = bytes
+    ptr2 += 1; // units = 32-bit words 
+  }
+  for (int k = 1; k <= M; k++) { // Fill in first-level pointers of 2-D arrays
+    hmm->mat[k] = hmm->mat[0] + k * hmm->abc->K;
+    hmm->ins[k] = hmm->ins[0] + k * hmm->abc->K;
+    hmm->t[k]   = hmm->t[0]   + k * p7H_NTRANSITIONS;
+  }
+
+  //name field
+  ESL_ALLOC(hmm->name, strlen(ptr)+1);
+  strcpy(hmm->name, ptr);
+  ptr += strlen(hmm->name)+1;
+
+  //Acc field (optional)
+  if(flags & p7H_ACC){
+    ESL_ALLOC(hmm->acc, strlen(ptr)+1);
+  
+    strcpy(hmm->acc, ptr);
+    ptr += strlen(hmm->acc)+1;
+  }
+  //Desc field (optional)
+  if(flags & p7H_DESC){
+    ESL_ALLOC(hmm->desc, strlen(ptr)+1);
+  
+    strcpy(hmm->desc, ptr);
+    ptr += strlen(hmm->desc)+1;
+  }
+
+  //rf field
+  if(flags & p7H_RF){
+    ESL_ALLOC(hmm->rf, strlen(ptr)+1);
+    strcpy(hmm->rf, ptr);
+    ptr+= strlen(hmm->rf)+1;
+  }
+
+  //mm field
+  if(flags & p7H_MMASK){
+    ESL_ALLOC(hmm->mm, strlen(ptr)+1);
+    strcpy(hmm->mm, ptr);
+    ptr+= strlen(hmm->mm)+1;
+  }
+
+  //consensus field
+  if(flags & p7H_CONS){
+    ESL_ALLOC(hmm->consensus, strlen(ptr)+1);
+    strcpy(hmm->consensus, ptr);
+    ptr+= strlen(hmm->consensus)+1;
+  }
+
+  //cs field
+  if(flags & p7H_CS){
+    ESL_ALLOC(hmm->cs, strlen(ptr)+1);
+    strcpy(hmm->cs, ptr);
+    ptr+= strlen(hmm->cs)+1;
+  }
+  
+  //ca field
+  if(flags & p7H_CA){
+    ESL_ALLOC(hmm->ca, strlen(ptr)+1);
+    strcpy(hmm->ca, ptr);
+    ptr+= strlen(hmm->ca)+1;
+  }
+
+  //comlog field (optional)
+  if(flags & p7H_COMLOG){
+    ESL_ALLOC(hmm->comlog, strlen(ptr)+1);
+  
+    strcpy(hmm->comlog, ptr);
+    ptr += strlen(hmm->comlog)+1;
+  }
+
+  //nseq 
+  memcpy(&network_32bit, ptr, sizeof(uint32_t));
+  ptr += sizeof(uint32_t);
+  hmm->nseq = esl_ntoh32(network_32bit);
+
+  //eff_nseq
+  memcpy(&network_32bit, ptr, sizeof(uint32_t));
+  ptr += sizeof(uint32_t);
+  host_32bit = esl_ntoh32(network_32bit);
+  memcpy(&(hmm->eff_nseq), &host_32bit, sizeof(uint32_t)); // do memory copy becaause eff_nseq is a float
+
+  //max_length
+  memcpy(&network_32bit, ptr, sizeof(uint32_t));
+  ptr += sizeof(uint32_t);
+  hmm->max_length = esl_ntoh32(network_32bit);
+
+  //ctime
+  if(flags & p7H_CTIME){
+    ESL_ALLOC(hmm->ctime, strlen(ptr)+1);
+    strcpy(hmm->ctime, ptr);
+    ptr += strlen(ptr) +1;
+  }
+
+  //map field
+  if(flags & p7H_MAP){
+    ESL_ALLOC(hmm->map, (hmm->M + 1)* sizeof(int));
+    for(int i = 0; i < hmm->M +1; i++){
+      memcpy(&network_32bit, ptr, sizeof(int));
+      ptr += sizeof(int);
+      hmm->map[i] = esl_hton32(network_32bit);
+    }
+  }
+
+  ///checksum
+  memcpy(&network_32bit, ptr, sizeof(uint32_t));
+  ptr += sizeof(uint32_t);
+  hmm->checksum = esl_ntoh32(network_32bit);
+
+
+  //evparam, cutoff, compo are static fields of the hmm structure, don't need to be allocated
+  ptr2 = (uint32_t *) hmm->evparam;  
+  for(int i = 0; i < p7_NEVPARAM; i++){
+    memcpy(&network_32bit, ptr, sizeof(uint32_t));
+    ptr += sizeof(uint32_t); // units = bytes
+    host_32bit = esl_ntoh32(network_32bit);
+    memcpy(ptr2, &host_32bit, sizeof(uint32_t)); // do memory copy becaause evparam is a float
+    ptr2+=1; // units = 32-bit words
+  }
+
+  ptr2 = (uint32_t *) hmm->cutoff;  
+  for(int i = 0; i < p7_NCUTOFFS; i++){
+    memcpy(&network_32bit, ptr, sizeof(uint32_t));
+    ptr += sizeof(uint32_t); // units = bytes
+    host_32bit = esl_ntoh32(network_32bit);
+    memcpy(ptr2, &host_32bit, sizeof(uint32_t)); // do memory copy becaause cutoff is a float
+    ptr2+=1; // units = 32-bit words
+  }
+
+  ptr2 = (uint32_t *) hmm->compo;  
+  for(int i = 0; i < p7_MAXABET; i++){
+    memcpy(&network_32bit, ptr, sizeof(uint32_t));
+    ptr += sizeof(uint32_t); // units = bytes
+    host_32bit = esl_ntoh32(network_32bit);
+    memcpy(ptr2, &host_32bit, sizeof(uint32_t)); // do memory copy becaause compo is a float
+    ptr2+=1; // units = 32-bit words
+  }
+
+  //offset 
+  memcpy(&network_64bit, ptr, sizeof(uint64_t));
+  ptr += sizeof(uint64_t);
+  hmm->offset = esl_ntoh32(network_64bit);
+
+  // hmm->abc was set by hmm_Create
+
+  //flags
+  memcpy(&network_32bit, ptr, sizeof(uint32_t));
+  ptr += sizeof(uint32_t);
+  hmm->flags = esl_ntoh32(network_32bit);
+
+  *n = ptr-buf;  // set n to the offset from the start of buf to the first byte past the hmm
+  *ret_obj = hmm;  // Return the new HMM
+  return eslOK;
+  ERROR: 
+    if(hmm != NULL){
+    p7_hmm_Destroy(hmm);
+  }
+    return eslEMEM;
+}
 /*---------------- end of the rest of the API -------------------*/
 
 
@@ -1405,7 +1941,7 @@ utest_occupancy(ESL_GETOPTS *go, ESL_RANDOMNESS *r, ESL_ALPHABET *abc)
   return;
 }
 
-/* The composition unit test validates the SetComposition()
+/* The composition unit test validaetes the SetComposition()
  * calculation against the composition of a large number of sampled
  * core HMM traces. This also exercises the correctness of
  * p7_hmm_Sample() and p7_hmm_SetOccupancy(). 
@@ -1456,6 +1992,311 @@ utest_composition(ESL_GETOPTS *go, ESL_RANDOMNESS *r, ESL_ALPHABET *abc)
   return;
 }
 
+/* Utest for the synchronization and de-synchronization routines
+ * NPC 3/23/23 */
+static void
+utest_synchronize(ESL_GETOPTS *go, ESL_RANDOMNESS *r, ESL_ALPHABET *abc)
+{
+  char *hmm_filename;
+  uint8_t *buffer;
+  int buflength = 10;
+  int pos = 0;
+  int pos2 = 0;
+  int status;
+  P7_HMMFILE      *hfp      = NULL;
+  P7_HMM          *hmm      = NULL;
+  P7_HMM          *hmm2      = NULL;
+  char             errbuf[eslERRBUFSIZE];
+  char *msg  = "p7_hmm.c:: synchronization unit test failed";
+  // get a source hmm to serialize
+  if ((hmm_filename= esl_opt_GetArg(go, 1)) == NULL)  { 
+    esl_fatal(msg);
+  }
+  if (p7_hmmfile_Open(hmm_filename, NULL, &hfp, errbuf) != eslOK){
+    printf("%s\n", errbuf);
+    esl_fatal(msg);
+  }
+  if(p7_hmmfile_Read(hfp, &abc, &hmm) != eslOK){
+    esl_fatal(msg);
+  }
+  
+  ESL_ALLOC(buffer, 10);  // 10-byte buffer should be shorter than our hmm, forcing test of reallocation
+  
+  //First, test a basic serialize/deserialize
+  if(p7_hmm_Serialize(hmm, &buffer, &pos, &buflength) != eslOK){
+    esl_fatal(msg);
+  }
+  if(p7_hmm_Deserialize(buffer, &pos2, abc, &hmm2) != eslOK){
+    esl_fatal(msg);
+  }
+  if(pos != pos2){ // length of serialized message should match amount of data deserialized
+    esl_fatal(msg);
+  }
+  if(pos != buflength){ // something went wrong in re-allocation
+    esl_fatal(msg);
+  }
+  // Make sure we got back the HMM we sent
+  if(p7_hmm_Compare(hmm, hmm2, 0.1)!= eslOK){
+    esl_fatal(msg);
+  }
+  p7_hmm_Destroy(hmm2);
+  hmm2 = NULL;
+
+  // repeat to test synch/desync into the middle of a buffer
+    if(p7_hmm_Serialize(hmm, &buffer, &pos, &buflength) != eslOK){
+    esl_fatal(msg);
+  }
+  if(p7_hmm_Deserialize(buffer, &pos2, abc, &hmm2) != eslOK){
+    esl_fatal(msg);
+  }
+  if(pos != pos2){ // length of serialized message should match amount of data deserialized
+    esl_fatal(msg);
+  }
+  if(pos != buflength){ // something went wrong in re-allocation
+    esl_fatal(msg);
+  }
+  // Make sure we got back the HMM we sent
+  if(p7_hmm_Compare(hmm, hmm2, 0.1)!= eslOK){
+    esl_fatal(msg);
+  }
+  p7_hmm_Destroy(hmm);
+  p7_hmm_Destroy(hmm2);
+  hmm2 = NULL;
+
+  // Now, successively add optional fields to a new HMM to test that
+  hmm = p7_hmm_Create(50, abc);
+
+  // Fill in mandatory fields
+  p7_hmm_SetName(hmm, "test_HMM");
+  // t field.  Is allocated as one sequential array in tt[0], with tt[1:x] set as pointers within that array
+  float *ptr = hmm->t[0]; 
+  float val = 0.001;
+  for(int i = 0; i < (hmm->M + 1)* p7H_NTRANSITIONS; i++){
+    *ptr = val;
+    ptr +=1;
+    val += 0.001;
+  }
+
+  ptr = hmm->mat[0];  
+  val = 0.002;
+  // mat field.  Is allocated as one sequential array in tt[0], with mat[1:x] set as pointers within that array
+  for(int i = 0; i < (hmm->M + 1)* abc->K; i++){
+    *ptr = val;
+    ptr +=1;
+    val += 0.001;
+  }
+
+  ptr = hmm->ins[0]; 
+  val = 0.003; 
+  // ins field.  Is allocated as one sequential array in tt[0], with ins[1:x] set as pointers within that array
+  for(int i = 0; i < (hmm->M + 1)* abc->K; i++){
+    *ptr = val;
+    ptr +=1;
+    val += 0.001;
+  }
+  hmm->nseq = 42;
+  hmm->eff_nseq = 42.0;
+
+
+  pos = 0;
+  pos2 = 0;
+  if(p7_hmm_Serialize(hmm, &buffer, &pos, &buflength) != eslOK){
+    esl_fatal(msg);
+  }
+  if(p7_hmm_Deserialize(buffer, &pos2, abc, &hmm2) != eslOK){
+    esl_fatal(msg);
+  }
+  // Make sure we got back the HMM we sent
+  if(p7_hmm_Compare(hmm, hmm2, 0.1)!= eslOK){
+    esl_fatal(msg);
+  }
+  p7_hmm_Destroy(hmm2);
+  hmm2 = NULL;
+
+  // add accession field 
+  p7_hmm_SetAccession  (hmm, "123456");
+  pos = 0;
+  pos2 = 0;
+  if(p7_hmm_Serialize(hmm, &buffer, &pos, &buflength) != eslOK){
+    esl_fatal(msg);
+  }
+  if(p7_hmm_Deserialize(buffer, &pos2, abc, &hmm2) != eslOK){
+    esl_fatal(msg);
+  }
+  // Make sure we got back the HMM we sent
+  if(p7_hmm_Compare(hmm, hmm2, 0.1)!= eslOK){
+    esl_fatal(msg);
+  }
+  p7_hmm_Destroy(hmm2);
+  hmm2 = NULL;
+
+  p7_hmm_SetDescription(hmm, "a test HMM");
+  pos = 0;
+  pos2 = 0;
+  if(p7_hmm_Serialize(hmm, &buffer, &pos, &buflength) != eslOK){
+    esl_fatal(msg);
+  }
+  if(p7_hmm_Deserialize(buffer, &pos2, abc, &hmm2) != eslOK){
+    esl_fatal(msg);
+  }
+  // Make sure we got back the HMM we sent
+  if(p7_hmm_Compare(hmm, hmm2, 0.1)!= eslOK){
+    esl_fatal(msg);
+  }
+  p7_hmm_Destroy(hmm2);
+  hmm2 = NULL;
+
+  ESL_ALLOC(hmm->rf, (hmm->M+2)); // field is M+2 bytes + string terminator
+  strcpy(hmm->rf, "123456789012345678901234567890123456789012345678901");
+  hmm->flags |= p7H_RF;
+  pos = 0;
+  pos2 = 0;
+  if(p7_hmm_Serialize(hmm, &buffer, &pos, &buflength) != eslOK){
+    esl_fatal(msg);
+  }
+  if(p7_hmm_Deserialize(buffer, &pos2, abc, &hmm2) != eslOK){
+    esl_fatal(msg);
+  }
+  // Make sure we got back the HMM we sent
+  if(p7_hmm_Compare(hmm, hmm2, 0.1)!= eslOK){
+    esl_fatal(msg);
+  }
+  p7_hmm_Destroy(hmm2);
+  hmm2 = NULL;
+
+  ESL_ALLOC(hmm->mm, (hmm->M+2)); // field is M+2 bytes + string terminator
+  strcpy(hmm->mm, "abcdefghijabcdefghijabcdefghijabcdefghijabcdefghijk");
+  hmm->flags |= p7H_MMASK;
+  pos = 0;
+  pos2 = 0;
+  if(p7_hmm_Serialize(hmm, &buffer, &pos, &buflength) != eslOK){
+    esl_fatal(msg);
+  }
+  if(p7_hmm_Deserialize(buffer, &pos2, abc, &hmm2) != eslOK){
+    esl_fatal(msg);
+  }
+  // Make sure we got back the HMM we sent
+  if(p7_hmm_Compare(hmm, hmm2, 0.1)!= eslOK){
+    esl_fatal(msg);
+  }
+  p7_hmm_Destroy(hmm2);
+  hmm2 = NULL;
+ 
+  ESL_ALLOC(hmm->consensus, (hmm->M+2)); // field is M+2 bytes + string terminator
+  strcpy(hmm->consensus, "a1b2c3d4e5a1b2c3d4e5a1b2c3d4e5a1b2c3d4e5a1b2c3d4e5f");
+  hmm->flags |= p7H_CONS;
+  pos = 0;
+  pos2 = 0;
+  if(p7_hmm_Serialize(hmm, &buffer, &pos, &buflength) != eslOK){
+    esl_fatal(msg);
+  }
+  if(p7_hmm_Deserialize(buffer, &pos2, abc, &hmm2) != eslOK){
+    esl_fatal(msg);
+  }
+  // Make sure we got back the HMM we sent
+  if(p7_hmm_Compare(hmm, hmm2, 0.1)!= eslOK){
+    esl_fatal(msg);
+  }
+  p7_hmm_Destroy(hmm2);
+  hmm2 = NULL;
+
+  ESL_ALLOC(hmm->cs, (hmm->M+2)); // field is M+2 bytes + string terminator
+  strcpy(hmm->cs, "f6g7h8j9k0f6g7h8j9k0f6g7h8j9k0f6g7h8j9k0f6g7h8j9k0l");
+  hmm->flags |= p7H_CS;
+  pos = 0;
+  pos2 = 0;
+  if(p7_hmm_Serialize(hmm, &buffer, &pos, &buflength) != eslOK){
+    esl_fatal(msg);
+  }
+  if(p7_hmm_Deserialize(buffer, &pos2, abc, &hmm2) != eslOK){
+    esl_fatal(msg);
+  }
+  // Make sure we got back the HMM we sent
+  if(p7_hmm_Compare(hmm, hmm2, 0.1)!= eslOK){
+    esl_fatal(msg);
+  }
+  p7_hmm_Destroy(hmm2);
+  hmm2 = NULL;
+
+  ESL_ALLOC(hmm->ca, (hmm->M+2)); // field is M+2 bytes + string terminator
+  strcpy(hmm->ca, "l1m2n3o4p5l1m2n3o4p5l1m2n3o4p5l1m2n3o4p5l1m2n3o4p5q");
+  hmm->flags |= p7H_CA;
+  pos = 0;
+  pos2 = 0;
+  if(p7_hmm_Serialize(hmm, &buffer, &pos, &buflength) != eslOK){
+    esl_fatal(msg);
+  }
+  if(p7_hmm_Deserialize(buffer, &pos2, abc, &hmm2) != eslOK){
+    esl_fatal(msg);
+  }
+  // Make sure we got back the HMM we sent
+  if(p7_hmm_Compare(hmm, hmm2, 0.1)!= eslOK){
+    esl_fatal(msg);
+  }
+  p7_hmm_Destroy(hmm2);
+  hmm2 = NULL;
+
+  char *comlog = "A sample command --foo";
+  ESL_ALLOC(hmm->comlog, strlen(comlog)+1);
+  strcpy(hmm->comlog, comlog);
+  pos = 0;
+  pos2 = 0;
+  if(p7_hmm_Serialize(hmm, &buffer, &pos, &buflength) != eslOK){
+    esl_fatal(msg);
+  }
+  if(p7_hmm_Deserialize(buffer, &pos2, abc, &hmm2) != eslOK){
+    esl_fatal(msg);
+  }
+  // Make sure we got back the HMM we sent
+  if(p7_hmm_Compare(hmm, hmm2, 0.1)!= eslOK){
+    esl_fatal(msg);
+  }
+  p7_hmm_Destroy(hmm2);
+  hmm2 = NULL;
+
+  p7_hmm_SetCtime(hmm);
+   pos = 0;
+  pos2 = 0;
+  if(p7_hmm_Serialize(hmm, &buffer, &pos, &buflength) != eslOK){
+    esl_fatal(msg);
+  }
+  if(p7_hmm_Deserialize(buffer, &pos2, abc, &hmm2) != eslOK){
+    esl_fatal(msg);
+  }
+  // Make sure we got back the HMM we sent
+  if(p7_hmm_Compare(hmm, hmm2, 0.1)!= eslOK){
+    esl_fatal(msg);
+  }
+  p7_hmm_Destroy(hmm2);
+  hmm2 = NULL;
+
+  ESL_ALLOC(hmm->map, (hmm->M+1) *sizeof(int));
+  for(int i = 0; i <=hmm->M; i++){
+    hmm->map[i] = i;
+  }
+  hmm->flags |= p7H_MAP;
+  pos = 0;
+  pos2 = 0;
+  if(p7_hmm_Serialize(hmm, &buffer, &pos, &buflength) != eslOK){
+    esl_fatal(msg);
+  }
+  if(p7_hmm_Deserialize(buffer, &pos2, abc, &hmm2) != eslOK){
+    esl_fatal(msg);
+  }
+  // Make sure we got back the HMM we sent
+  if(p7_hmm_Compare(hmm, hmm2, 0.1)!= eslOK){
+    esl_fatal(msg);
+  }
+  
+  // Clean up to keep Valgrind happy
+  p7_hmm_Destroy(hmm);
+  p7_hmm_Destroy(hmm2);
+  p7_hmmfile_Close(hfp);
+  free(buffer);
+  return;
+  ERROR:
+    esl_fatal(msg);
+}
 #endif /*p7HMM_TESTDRIVE*/
 /*---------------------- end of unit tests -----------------------*/
 
@@ -1485,12 +2326,12 @@ static char banner[] = "unit test driver for p7_hmm.c core model routines";
 int
 main(int argc, char **argv)
 {
-  ESL_GETOPTS    *go   = p7_CreateDefaultApp(options, 0, argc, argv, banner, usage);
+  ESL_GETOPTS    *go   = p7_CreateDefaultApp(options, 1, argc, argv, banner, usage);
   ESL_RANDOMNESS *r    = esl_randomness_Create(esl_opt_GetInteger(go, "-s"));
   ESL_ALPHABET   *abc  = esl_alphabet_Create(eslAMINO);
-
   utest_occupancy  (go, r, abc);
   utest_composition(go, r, abc);
+  utest_synchronize(go, r, abc);
 
   esl_alphabet_Destroy(abc);
   esl_randomness_Destroy(r);

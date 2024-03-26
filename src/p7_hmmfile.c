@@ -573,25 +573,25 @@ p7_hmmfile_WriteASCII(FILE *fp, int format, P7_HMM *hmm)
   if (hmm->flags & p7H_COMPO) {
     if (fprintf(fp, "  COMPO ") < 0) ESL_EXCEPTION_SYS(eslEWRITE, "hmm write failed");
     for (x = 0; x < hmm->abc->K; x++) 
-      { if ( (status = printprob(fp, 8, hmm->compo[x])) != eslOK) return status; }
+      { if ( (status = printprob(fp, 12, hmm->compo[x])) != eslOK) return status; }
     if (fputc('\n', fp)         < 0) ESL_EXCEPTION_SYS(eslEWRITE, "hmm write failed");
   }
 
   /* node 0 is special: insert emissions, and B-> transitions */
   if (fputs("        ", fp) < 0) ESL_EXCEPTION_SYS(eslEWRITE, "hmm write failed");
   for (x = 0; x < hmm->abc->K;      x++) 
-    { if ( (status = printprob(fp, 8, hmm->ins[0][x])) != eslOK) return status; }  
+    { if ( (status = printprob(fp, 12, hmm->ins[0][x])) != eslOK) return status; }  
   if (fputc('\n', fp)       < 0) ESL_EXCEPTION_SYS(eslEWRITE, "hmm write failed");
 
   if (fputs("        ", fp) < 0) ESL_EXCEPTION_SYS(eslEWRITE, "hmm write failed");
   for (x = 0; x < p7H_NTRANSITIONS; x++) 
-    { if ( (status = printprob(fp, 8, hmm->t[0][x])) != eslOK) return status; }    
+    { if ( (status = printprob(fp, 12, hmm->t[0][x])) != eslOK) return status; }    
   if (fputc('\n', fp)       < 0) ESL_EXCEPTION_SYS(eslEWRITE, "hmm write failed");
   for (k = 1; k <= hmm->M; k++) {
     /* Line 1: k; match emissions; optional map, RF, MM, CS */
     if (fprintf(fp, " %6d ",  k) < 0) ESL_EXCEPTION_SYS(eslEWRITE, "hmm write failed");
     for (x = 0; x < hmm->abc->K; x++)
-    { if ( (status = printprob(fp, 8, hmm->mat[k][x])) != eslOK) return status; }
+    { if ( (status = printprob(fp, 12, hmm->mat[k][x])) != eslOK) return status; }
 
     if (hmm->flags & p7H_MAP) { if (fprintf(fp, " %6d", hmm->map[k]) < 0) ESL_EXCEPTION_SYS(eslEWRITE, "hmm write failed"); }
     else                      { if (fprintf(fp, " %6s", "-")         < 0) ESL_EXCEPTION_SYS(eslEWRITE, "hmm write failed"); }
@@ -615,11 +615,11 @@ p7_hmmfile_WriteASCII(FILE *fp, int format, P7_HMM *hmm)
     /* Line 2:   insert emissions */
     if (fputs("        ", fp) < 0) ESL_EXCEPTION_SYS(eslEWRITE, "hmm write failed");
     for (x = 0; x < hmm->abc->K; x++)
-    { if ( (status = printprob(fp, 8, hmm->ins[k][x])) != eslOK) return status; }
+    { if ( (status = printprob(fp, 12, hmm->ins[k][x])) != eslOK) return status; }
     /* Line 3:   transitions */
     if (fputs("\n        ", fp) < 0) ESL_EXCEPTION_SYS(eslEWRITE, "hmm write failed");
     for (x = 0; x < p7H_NTRANSITIONS; x++)
-    { if ( (status = printprob(fp, 8, hmm->t[k][x])) != eslOK) return status; }
+    { if ( (status = printprob(fp, 12, hmm->t[k][x])) != eslOK) return status; }
     if (fputc('\n', fp) < 0) ESL_EXCEPTION_SYS(eslEWRITE, "hmm write failed");
   }
   if (fputs("//\n", fp) < 0) ESL_EXCEPTION_SYS(eslEWRITE, "hmm write failed");

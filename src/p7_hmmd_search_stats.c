@@ -18,6 +18,16 @@
 #include "hmmer.h"
 #include "hmmpgmd.h"
 
+/* Function: p7_hmmd_search_stats_Destroy
+   Synopsis: frees the memory used by a p7_hmmd_search_stats object 
+   Inputs:   obj, the object to be freed
+   Returns:  nothing
+*/
+void p7_search_stats_Destroy(HMMD_SEARCH_STATS *obj){
+  if(obj->hit_offsets) free(obj->hit_offsets);
+  free(obj);
+}
+
 /* Function:  p7_hmmd_search_stats_Serialize
  * Synopsis:  Serializes a HMMD_SEARCH_STATS object into a stream of bytes
  *.           that can be reliably transmitted over internet sockets
@@ -130,6 +140,7 @@ extern int p7_hmmd_search_stats_Serialize(const HMMD_SEARCH_STATS *obj, uint8_t 
       *ptr = 2;
       break;
     default:
+      printf("obj->Z_setby = %d\n", obj->Z_setby);
       ESL_EXCEPTION(eslEINVAL,"Error: unknown enum type found in HMMD_SEARCH_STATS_Serialize");
   }
   ptr += 1;
@@ -145,6 +156,7 @@ extern int p7_hmmd_search_stats_Serialize(const HMMD_SEARCH_STATS *obj, uint8_t 
       *ptr = 2;
       break;
     default:
+      printf("obj->domZ_setby = %d\n", obj->domZ_setby);
       ESL_EXCEPTION(eslEINVAL, "Error: unknown enum type found in HMMD_SEARCH_STATS_Serialize");
   }
   ptr += 1;
@@ -155,42 +167,52 @@ extern int p7_hmmd_search_stats_Serialize(const HMMD_SEARCH_STATS *obj, uint8_t 
   memcpy((void *) ptr, (void *) &network_64bit, sizeof(obj->nmodels));
   ptr += sizeof(obj->nmodels);
 
-  // Ninth field: nseqs
+  // Ninth field: nnodes
+  network_64bit = esl_hton64(obj->nnodes); 
+  memcpy((void *) ptr, (void *) &network_64bit, sizeof(obj->nnodes));
+  ptr += sizeof(obj->nnodes);
+
+  // Tenth field: nseqs
   network_64bit = esl_hton64(obj->nseqs); 
   memcpy((void *) ptr, (void *) &network_64bit, sizeof(obj->nseqs));
   ptr += sizeof(obj->nseqs);
 
-  // Tenth field: n_past_msv
+  // Eleventh field: nres
+  network_64bit = esl_hton64(obj->nres); 
+  memcpy((void *) ptr, (void *) &network_64bit, sizeof(obj->nres));
+  ptr += sizeof(obj->nres);
+
+  // Twelfth field: n_past_msv
   network_64bit = esl_hton64(obj->n_past_msv); 
   memcpy((void *) ptr, (void *) &network_64bit, sizeof(obj->n_past_msv));
   ptr += sizeof(obj->n_past_msv);
 
-  // Eleventh field: n_past_bias
+  // Thirteenth field: n_past_bias
   network_64bit = esl_hton64(obj->n_past_bias); 
   memcpy((void *) ptr, (void *) &network_64bit, sizeof(obj->n_past_bias));
   ptr += sizeof(obj->n_past_bias);
 
-  // Twelfth field: n_past_vit
+  // Fourteenth field: n_past_vit
   network_64bit = esl_hton64(obj->n_past_vit); 
   memcpy((void *) ptr, (void *) &network_64bit, sizeof(obj->n_past_vit));
   ptr += sizeof(obj->n_past_vit);
 
-  // Thirteenth field: n_past_fwd
+  // Fifeenth field: n_past_fwd
   network_64bit = esl_hton64(obj->n_past_fwd); 
   memcpy((void *) ptr, (void *) &network_64bit, sizeof(obj->n_past_fwd));
   ptr += sizeof(obj->n_past_fwd);
 
-  // Fourteenth field: nhits
+  // Sixtteenth field: nhits
   network_64bit = esl_hton64(obj->nhits); 
   memcpy((void *) ptr, (void *) &network_64bit, sizeof(obj->nhits));
   ptr += sizeof(obj->nhits);
 
-  // Fifteenth field: nreported
+  // Seventeenth field: nreported
   network_64bit = esl_hton64(obj->nreported); 
   memcpy((void *) ptr, (void *) &network_64bit, sizeof(obj->nreported));
   ptr += sizeof(obj->nreported);
 
-  // Sixteenth field: nincluded
+  // Eightteenth field: nincluded
   network_64bit = esl_hton64(obj->nincluded); 
   memcpy((void *) ptr, (void *) &network_64bit, sizeof(obj->nincluded));  
   ptr += sizeof(obj->nincluded);
@@ -318,47 +340,57 @@ extern int p7_hmmd_search_stats_Deserialize(const uint8_t *buf, uint32_t *n, HMM
   ret_obj->nmodels = esl_ntoh64(network_64bit); // Can just do assignment to uint64_t field
   ptr += sizeof(uint64_t);
 
-  //Ninth field: nseqs
+  //Ninth field: nnodes
+  memcpy(&network_64bit, ptr, sizeof(uint64_t)); // Grab the bytes out of the buffer
+  ret_obj->nnodes = esl_ntoh64(network_64bit); // Can just do assignment to uint64_t field
+  ptr += sizeof(uint64_t);
+
+  //Tenth field: nseqs
   memcpy(&network_64bit, ptr, sizeof(uint64_t)); // Grab the bytes out of the buffer
   ret_obj->nseqs = esl_ntoh64(network_64bit);
   ptr += sizeof(uint64_t);
 
-  //Tenth field: n_past_msv
+  //Eleventh field: nres
+  memcpy(&network_64bit, ptr, sizeof(uint64_t)); // Grab the bytes out of the buffer
+  ret_obj->nres = esl_ntoh64(network_64bit); // Can just do assignment to uint64_t field
+  ptr += sizeof(uint64_t);
+
+  //Twelfth field: n_past_msv
   memcpy(&network_64bit, ptr, sizeof(uint64_t)); // Grab the bytes out of the buffer
   ret_obj->n_past_msv = esl_ntoh64(network_64bit);
   ptr += sizeof(uint64_t);
 
-  //Eleventh field: n_past_bias
+  //Thirteenth field: n_past_bias
   memcpy(&network_64bit, ptr, sizeof(uint64_t)); // Grab the bytes out of the buffer
   ret_obj->n_past_bias = esl_ntoh64(network_64bit);
   ptr += sizeof(uint64_t);
 
-  //Twelfth field: n_past_vit
+  //Fourteenth field: n_past_vit
   memcpy(&network_64bit, ptr, sizeof(uint64_t)); // Grab the bytes out of the buffer
   ret_obj->n_past_vit = esl_ntoh64(network_64bit);
   ptr += sizeof(uint64_t);
 
-  //Thirteenth field: n_past_fwd
+  //Fifteenth field: n_past_fwd
   memcpy(&network_64bit, ptr, sizeof(uint64_t)); // Grab the bytes out of the buffer
   ret_obj->n_past_fwd = esl_ntoh64(network_64bit);
   ptr += sizeof(uint64_t);
 
-  //Fourteenth field: nhits
+  //Sixteenth field: nhits
   memcpy(&network_64bit, ptr, sizeof(uint64_t)); // Grab the bytes out of the buffer
   ret_obj->nhits = esl_ntoh64(network_64bit);
   ptr += sizeof(uint64_t);
 
-  //Fifteenth field: nreported
+  //Seventeenth field: nreported
   memcpy(&network_64bit, ptr, sizeof(uint64_t)); // Grab the bytes out of the buffer
   ret_obj->nreported = esl_ntoh64(network_64bit);
   ptr += sizeof(uint64_t);
 
-  //Sixteenth field: nincluded
+  //Eighteenth field: nincluded
   memcpy(&network_64bit, ptr, sizeof(uint64_t)); // Grab the bytes out of the buffer
   ret_obj->nincluded = esl_ntoh64(network_64bit);
   ptr += sizeof(uint64_t);
 
-  // seventh field: hit_offsets array, if any
+  // Nineteenth field: hit_offsets array, if any
   memcpy(&network_64bit, ptr, sizeof(uint64_t));
   ptr += sizeof(uint64_t);
   if(esl_ntoh64(network_64bit) == (uint64_t) -1){ // no hit_offsets array
@@ -441,11 +473,17 @@ static int hmmd_search_stats_Same(const HMMD_SEARCH_STATS *first, const HMMD_SEA
   if(first->nmodels != second->nmodels){
     return eslFAIL;
   }
+ if(first->nnodes!= second->nnodes){
+    return eslFAIL;
+  }
 
   if(first->nseqs != second->nseqs){
     return eslFAIL;
   }
 
+ if(first->nres!= second->nres){
+    return eslFAIL;
+  }
   if(first->n_past_msv != second->n_past_msv){
     return eslFAIL;
   }
@@ -543,7 +581,9 @@ utest_serialize()
       serial[i].Z_setby     = (enum p7_zsetby_e) rand() % p7_ZSETBY_FILEINFO;
       serial[i].domZ_setby  = (enum p7_zsetby_e) rand() % p7_ZSETBY_FILEINFO;
       serial[i].nmodels     = rand();
+      serial[i].nnodes      = rand();
       serial[i].nseqs       = rand();
+      serial[i].nres        = rand();
       serial[i].n_past_msv  = rand();
       serial[i].n_past_bias = rand();
       serial[i].n_past_vit  = rand();
