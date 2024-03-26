@@ -134,11 +134,18 @@ for line in tblfp:
 
     cmd = '{0} {1} --noali --tblout {2}/{3}.tmp --domtblout {2}/{3}.domtmp {2}/{3}.hmm {4} '.format(hmmsearch, searchopts, resultdir, msaname, fafile)
         
-    f = open('{0}/{1}.hmmer'.format(resultdir, msaname), "w")
-    if args.max: f = open('{0}/{1}.max.hmmer'.format(resultdir, msaname), "w")
+    outfile = '{0}/{1}'.format(resultdir, msaname)
+    if args.max: outfile += '.max'
+    if args.F1:  outfile += '.F1.{}'.format(args.F1)
+    if args.F2:  outfile += '.F2.{}'.format(args.F2)
+    if args.F3:  outfile += '.F3.{}'.format(args.F3)
+    outfile += '.hmmer'
+    f = open(outfile, "w")
+    
     r = subprocess.run(cmd.split(), stdout=f, stderr=subprocess.PIPE, encoding='utf-8')
     if r.returncode: sys.exit('FAILED: {}\n{}'.format(cmd, r.stderr))
-
+    f.close()
+    
     resfp = open('{0}/{1}.tmp'.format(resultdir, msaname))
     if not resfp: sys.exit('failed to open hmmsearch .tblout file {0}/{1}.tmp for reading'.format(resultdir, msaname))
     for line in resfp:
@@ -151,8 +158,7 @@ for line in tblfp:
 
         outfp.write('{0} {1} {2} {3}\n'.format(pval, bitscore, target, msaname))
     resfp.close()
-    f.close()
-
+ 
     resfp = open('{0}/{1}.domtmp'.format(resultdir, msaname))
     if not resfp: sys.exit('failed to open hmmsearch .domtblout file {0}/{1}.domtmp for reading'.format(resultdir, msaname))
     for line in resfp:
@@ -175,8 +181,7 @@ for line in tblfp:
         os.remove('{0}/{1}.sto'.format(resultdir, msaname))
         os.remove('{0}/{1}.tmp'.format(resultdir, msaname))
         os.remove('{0}/{1}.domtmp'.format(resultdir, msaname))
-        #os.remove('{0}/{1}.hmmer'.format(resultdir, msaname))
-        #if args.max: os.remove('{0}/{1}.max.hmmer'.format(resultdir, msaname))
+        #os.remove(outfile)
 
 tblfp.close()
 outfp.close()

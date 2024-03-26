@@ -21,11 +21,11 @@
 extern int p7_EvoCalibrate(P7_RATE *R, P7_HMM *hmm, P7_BUILDER *cfg_b, ESL_RANDOMNESS **byp_rng, P7_BG **byp_bg, P7_PROFILE **byp_gm, P7_OPROFILE **byp_om,
 			   int noevo_msv, int noevo_vit, int noevo_fwd, float fixtime, float tol);
 extern int p7_EvoMSVMu    (ESL_RANDOMNESS *r, P7_RATE *R, P7_HMM *hmm, P7_PROFILE *gm, P7_OPROFILE *om, P7_BG *bg,
-			    int L, int N, double lambda,               double *ret_mmu, int noevo, float fixtime, float tol);
+			   int L, int N, double lambda,               double *ret_mmu, float fixtime, int noevo, float tol);
 extern int p7_EvoViterbiMu(ESL_RANDOMNESS *r, P7_RATE *R, P7_HMM *hmm, P7_PROFILE *gm, P7_OPROFILE *om, P7_BG *bg,
-			   int L, int N, double lambda,                double *ret_vmu, int noevo, float fixtime, float tol);
+			   int L, int N, double lambda,                double *ret_vmu, float fixtime, int noevo, float tol);
 extern int p7_EvoTau      (ESL_RANDOMNESS *r, P7_RATE *R, P7_HMM *hmm, P7_PROFILE *gm, P7_OPROFILE *om, P7_BG *bg, 
-			   int L, int N, double lambda, double tailp,   double *ret_tau, int noevo, float fixtime, float tol);
+			   int L, int N, double lambda, double tailp, double *ret_tau, float fixtime, int noevo, float tol);
 
 
 #endif /*P7_EVOEVALUES_INCLUDED*/

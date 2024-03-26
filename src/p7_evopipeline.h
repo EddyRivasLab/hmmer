@@ -20,7 +20,6 @@
 struct optimize_data {
   float           time;
   int             unihit;
-  int             noevo;
   ESL_DSQ        *dsq;
   int             n;
   P7_RATE        *R;
@@ -37,17 +36,17 @@ struct optimize_data {
   int            be_verbose;
 };
 
-extern int p7_OptimizeMSVFilter(const ESL_DSQ *dsq, int n, float *ret_time,
-				P7_RATE *R, P7_HMM *hmm, P7_PROFILE *gm, P7_OPROFILE *om, P7_BG *bg, P7_OMX *oxf,
-				float *ret_usc, float fixtime, int noevo, float tol);
-extern int p7_OptimizeViterbiFilter(const ESL_DSQ *dsq, int n, float *ret_time, 
-					   P7_RATE *R, P7_HMM *hmm, P7_PROFILE *gm, P7_OPROFILE *om, P7_BG *bg, P7_OMX *oxf,
-					   float *ret_vfsc, int noevo, float fixtime, float tol);
-extern int p7_OptimizeForwardParser(const ESL_DSQ *dsq, int n, float *ret_time, 
-					   P7_RATE *R, P7_HMM *hmm, P7_PROFILE *gm, P7_OPROFILE *om, P7_BG *bg, P7_OMX *oxf,
-					   float *ret_fwdsc, int noevo, float fixtime, float tol);
+extern int p7_OptimizeMSVFilter    (const ESL_DSQ *dsq, int n, float *ret_time, P7_RATE *R,
+				    P7_HMM *hmm, P7_PROFILE *gm, P7_OPROFILE *om, P7_BG *bg, P7_OMX *oxf, float *ret_usc,
+				    float fixtime, int noevo, int msv_opt, int hmm_update, float tol);
+extern int p7_OptimizeViterbiFilter(const ESL_DSQ *dsq, int n, float *ret_time, P7_RATE *R,
+				    P7_HMM *hmm, P7_PROFILE *gm, P7_OPROFILE *om, P7_BG *bg, P7_OMX *oxf, float *ret_vfsc,
+				    float fixtime, int noevo, int vit_opt, int hmm_update, float tol);
+extern int p7_OptimizeForwardParser(const ESL_DSQ *dsq, int n, float *ret_time, P7_RATE *R,
+				    P7_HMM *hmm, P7_PROFILE *gm, P7_OPROFILE *om, P7_BG *bg, P7_OMX *oxf, float *ret_fwdsc,
+				    float fixtime, int noevo,              int hmm_update, float tol);
 extern int p7_EvoPipeline(P7_PIPELINE *pli, ESL_RANDOMNESS *r, P7_RATE *R, P7_HMM *hmm, P7_PROFILE *gm, P7_OPROFILE *om, P7_BG *bg, const ESL_SQ *sq, const ESL_SQ *ntsq,
-			  P7_TOPHITS *hitlist, int noevo, float fixtime);
+			  P7_TOPHITS *hitlist, float fixtime, int noevo, int *ret_hmm_update);
 
 #endif /*P7_EVOPIPELINE_INCLUDED*/
 

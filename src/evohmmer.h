@@ -28,7 +28,7 @@
 #define DTPOS 5.00
 
 
-enum emevol_e   { emNONE = 0, emBYRATE = 1, emBYSCMX = 2 };
+enum emevol_e  { emNONE = 0, emBYRATE = 1, emBYSCMX = 2 };
 
 typedef struct p7_rate_s {
   int      M;
@@ -86,6 +86,7 @@ extern int      p7_RateValidate(P7_RATE *R, double tol, char *errbuf);
 extern int      p7_EvolveFromRate(FILE *statfp, P7_HMM *hmm, const P7_RATE *R, const P7_BG *bg, double time, double tol, char *errbuf, int verbose);
 extern int      p7_Evolve(FILE *statfp, P7_HMM *hmm, const P7_BG *bg, const EMRATE *emR,  ESL_SCOREMATRIX *S, double time,  EVOM evomodel, 
 			  double betainf, float fixtime, double tol, char *errbuf, int verbose);
+extern int      p7_RateTest(const P7_HMM *hmm, P7_RATE *R, const P7_BG *bg, double tol, char *errbuf, int verbose);
 extern int      p7_RestoreHMMmat(P7_HMM *hmm, P7_RATE *R, char *errbuf, int verbose);
 extern int      p7_CalculatePzero(P7_RATE *R, const P7_HMM *hmm, char *errbuf, int verbose);
 extern int      p7_CalculatePinfy(P7_RATE *R, const P7_HMM *hmm, const P7_BG *bg, char *errbuf, int verbose);

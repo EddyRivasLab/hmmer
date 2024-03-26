@@ -1290,11 +1290,12 @@ mpi_worker(ESL_GETOPTS *go, struct cfg_s *cfg)
   /* Outer loop: over each query HMM in <hmmfile>. */
   while (hstatus == eslOK) 
     {
-      P7_RATE         *R       = NULL;
-      P7_PROFILE      *gm      = NULL;
-      P7_OPROFILE     *om      = NULL;       /* optimized query profile                  */
-      P7_PIPELINE     *pli     = NULL;
-      P7_TOPHITS      *th      = NULL;
+      P7_RATE         *R    = NULL;
+      P7_PROFILE      *gm  = NULL;
+      P7_OPROFILE     *om  = NULL;       /* optimized query profile                  */
+      P7_PIPELINE     *pli = NULL;
+      P7_TOPHITS      *th  = NULL;
+      int              hmm_update = FALSE;
 
       SEQ_BLOCK        block;
 
@@ -1308,7 +1309,8 @@ mpi_worker(ESL_GETOPTS *go, struct cfg_s *cfg)
 	emR = ratematrix_emrate_Create(abc);
 	ratematrix_emrate_Set(esl_opt_GetString(go, "--rmx"), (const double *)bg->f, emR, info[0].tol, errbuf, FALSE);
       }
-      if (!esl_opt_IsOn(go, "--noevo") && p7_RateCalculate(statfp, hmm, bg, emR, NULL, &R, evomodel, betainf, 0.001, errbuf, FALSE) != eslOK)  esl_fatal("%s", errbuf);
+      if (!esl_opt_IsOn(go, "--noevo") &&
+	  p7_RateCalculate(statfp, hmm, bg, emR, NULL, &R, evomodel, betainf, 0.001, errbuf, FALSE) != eslOK)  esl_fatal("%s", errbuf);
       
       status = 0;
       MPI_Send(&status, 1, MPI_INT, 0, HMMER_READY_TAG, MPI_COMM_WORLD);
@@ -1341,9 +1343,8 @@ mpi_worker(ESL_GETOPTS *go, struct cfg_s *cfg)
 	      p7_bg_SetLength(bg, dbsq->n);
 	      p7_oprofile_ReconfigLength(om, dbsq->n);
       
-	      p7_EvoPipeline(pli, cfg->r, R, hmm, gm, om, bg, dbsq, NULL, th, noevo, fixtime) != eslOK) {
-	    esl_fatal("error in p7_EvoPipeline");
- 
+	      p7_EvoPipeline(pli, cfg->r, R, hmm, gm, om, bg, dbsq, NULL, th, fixtime, noevo, &hmm_update);
+
 	      esl_sq_Reuse(dbsq);
 	      p7_pipeline_Reuse(pli);
 
@@ -1413,8 +1414,9 @@ static int
 serial_loop(WORKER_INFO *info, ESL_SQFILE *dbfp, int n_targetseqs)
 {
   int      sstatus;
-  ESL_SQ   *dbsq     = NULL;   /* one target sequence (digital)  */
-  int seq_cnt = 0;
+  ESL_SQ  *dbsq     = NULL;   /* one target sequence (digital)  */
+  int      seq_cnt = 0;
+  int      hmm_update = FALSE;
 
   dbsq = esl_sq_CreateDigital(info->om->abc);
 
@@ -1426,10 +1428,7 @@ serial_loop(WORKER_INFO *info, ESL_SQFILE *dbfp, int n_targetseqs)
       p7_ReconfigLength(info->gm, dbsq->n);
       p7_oprofile_ReconfigLength(info->om, dbsq->n);
 
-      if (p7_EvoPipeline(info->pli, info->r, info->R, info->hmm, info->gm, info->om, info->bg, dbsq, NULL, info->th,
-			 info->noevo, (float)info->fixtime) != eslOK) {
-	esl_fatal("error in p7_EvoPipeline");
-      }
+      p7_EvoPipeline(info->pli, info->r, info->R, info->hmm, info->gm, info->om, info->bg, dbsq, NULL, info->th, (float)info->fixtime, info->noevo, &hmm_update);
 
       seq_cnt++;
       esl_sq_Reuse(dbsq);
@@ -1511,7 +1510,8 @@ pipeline_thread(void *arg)
 
   ESL_SQ_BLOCK  *block = NULL;
   void          *newBlock;
-  
+  int            hmm_update = FALSE;
+
   impl_Init();
 
   obj = (ESL_THREADS *) arg;
@@ -1536,8 +1536,7 @@ pipeline_thread(void *arg)
 	  p7_ReconfigLength(info->gm, dbsq->n);
 	  p7_oprofile_ReconfigLength(info->om, dbsq->n);
 	  
-	  status = p7_EvoPipeline(info->pli, info->r, info->R, info->hmm, info->gm, info->om, info->bg, dbsq, NULL, info->th, info->noevo, (float)info->fixtime);
-	  if (status != eslOK) esl_fatal("error in p7_EvoPipeline");
+	  p7_EvoPipeline(info->pli, info->r, info->R, info->hmm, info->gm, info->om, info->bg, dbsq, NULL, info->th, (float)info->fixtime, info->noevo, &hmm_update);
 
 	  esl_sq_Reuse(dbsq);
 	  p7_pipeline_Reuse(info->pli);

@@ -205,7 +205,7 @@ p7_EvoCalibrate(P7_RATE *R, P7_HMM *hmm, P7_BUILDER *cfg_b, ESL_RANDOMNESS **byp
  */
 int
 p7_EvoMSVMu(ESL_RANDOMNESS *r, P7_RATE *R, P7_HMM *hmm, P7_PROFILE *gm, P7_OPROFILE *om, P7_BG *bg,
-	    int L, int N, double lambda, double *ret_mmu, int noevo, float fixtime, float tol)
+	    int L, int N, double lambda, double *ret_mmu, float fixtime, int noevo, float tol)
 {
   P7_OMX  *ox        = p7_omx_Create(om->M, 0, 0); /* DP matrix: 1 row version */
   P7_HMM  *ehmm      = NULL;
@@ -234,7 +234,7 @@ p7_EvoMSVMu(ESL_RANDOMNESS *r, P7_RATE *R, P7_HMM *hmm, P7_PROFILE *gm, P7_OPROF
       get_starprofile(bg, hmm, gm, om, &ehmm);
       
       time = time_star;
-      status = p7_OptimizeMSVFilter(dsq, L, &time, R, hmm, gm, om, bg, ox, &sc, noevo, fixtime, tol);
+      status = p7_OptimizeMSVFilter(dsq, L, &time, R, hmm, gm, om, bg, ox, &sc, fixtime, noevo, TRUE, TRUE, tol);
       if (status == eslERANGE) { sc = maxsc; status = eslOK; }
       if (status != eslOK)     goto ERROR;
 
@@ -285,7 +285,7 @@ p7_EvoMSVMu(ESL_RANDOMNESS *r, P7_RATE *R, P7_HMM *hmm, P7_PROFILE *gm, P7_OPROF
  */
 int
 p7_EvoViterbiMu(ESL_RANDOMNESS *r, P7_RATE *R, P7_HMM *hmm, P7_PROFILE *gm, P7_OPROFILE *om, P7_BG *bg,
-		int L, int N, double lambda, double *ret_vmu, int noevo, float fixtime, float tol)
+		int L, int N, double lambda, double *ret_vmu, float fixtime, int noevo, float tol)
 {
   P7_OMX  *ox        = p7_omx_Create(om->M, 0, 0); /* DP matrix: 1 row version */
   P7_HMM  *ehmm      = NULL;
@@ -314,7 +314,7 @@ p7_EvoViterbiMu(ESL_RANDOMNESS *r, P7_RATE *R, P7_HMM *hmm, P7_PROFILE *gm, P7_O
       get_starprofile(bg, hmm, gm, om, &ehmm);
 
       time = time_star;
-      status = p7_OptimizeViterbiFilter(dsq, L, &time, R, hmm, gm, om, bg, ox, &sc, noevo, fixtime, tol);
+      status = p7_OptimizeViterbiFilter(dsq, L, &time, R, hmm, gm, om, bg, ox, &sc, fixtime, noevo, TRUE, TRUE, tol);
       if (status == eslERANGE) { sc = maxsc; status = eslOK; }
       if (status != eslOK)     goto ERROR;
 
@@ -401,7 +401,7 @@ p7_EvoViterbiMu(ESL_RANDOMNESS *r, P7_RATE *R, P7_HMM *hmm, P7_PROFILE *gm, P7_O
  */
 int
 p7_EvoTau(ESL_RANDOMNESS *r, P7_RATE *R, P7_HMM *hmm, P7_PROFILE *gm, P7_OPROFILE *om, P7_BG *bg, 
-	  int L, int N, double lambda, double tailp, double *ret_tau, int noevo, float fixtime, float tol)
+	  int L, int N, double lambda, double tailp, double *ret_tau, float fixtime, int noevo, float tol)
 {
   P7_OMX  *ox        = p7_omx_Create(om->M, 0, L);     /* DP matrix: for ForwardParser,  L rows */
   P7_HMM  *ehmm      = NULL;
@@ -423,14 +423,14 @@ p7_EvoTau(ESL_RANDOMNESS *r, P7_RATE *R, P7_HMM *hmm, P7_PROFILE *gm, P7_OPROFIL
 
   for (i = 0; i < N; i++)
     {
-      if ((status = esl_rsq_xfIID(r, bg->f, om->abc->K, L, dsq))                                                != eslOK) goto ERROR;
+      if ((status = esl_rsq_xfIID(r, bg->f, om->abc->K, L, dsq)) != eslOK) goto ERROR;
 
       // initilize the hmm and profiles to time_star
       get_starprofile(bg, hmm, gm, om, &ehmm);
       
       time = time_star;
-      if ((status = p7_OptimizeForwardParser(dsq, L, &time, R, hmm, gm, om, bg, ox, &fsc, noevo, fixtime, tol)) != eslOK) goto ERROR;
-      if ((status = p7_bg_NullOne(bg, dsq, L, &nullsc))                                                         != eslOK) goto ERROR;   
+      if ((status = p7_OptimizeForwardParser(dsq, L, &time, R, hmm, gm, om, bg, ox, &fsc, fixtime, noevo, TRUE, tol)) != eslOK) goto ERROR;
+      if ((status = p7_bg_NullOne(bg, dsq, L, &nullsc))                                                               != eslOK) goto ERROR;   
       xv[i] = (fsc - nullsc) / eslCONST_LOG2;
       
       p7_hmm_Destroy(ehmm); ehmm = NULL;

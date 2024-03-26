@@ -1189,12 +1189,21 @@ p7_hmm_Compare(P7_HMM *h1, P7_HMM *h2, float tol)
   if (h1->M         != h2->M)         return eslFAIL;
   if (h1->flags     != h2->flags)     return eslFAIL;
   
+  printf("\n^^555 entro\n");
+
   for (k = 0; k <= h1->M; k++)	/* (it's safe to include 0 here.) */
     {
       if (esl_vec_FCompare(h1->mat[k], h2->mat[k], h1->abc->K, tol) != eslOK) return eslFAIL;
+      printf("\n^^555-1 entro\n");
       if (esl_vec_FCompare(h1->ins[k], h2->ins[k], h1->abc->K, tol) != eslOK) return eslFAIL;
+      printf("\n^^555-2 entro\n");
       if (esl_vec_FCompare(h1->t[k],   h2->t[k],   7,          tol) != eslOK) return eslFAIL;
+      printf("\n^^555-3 entro\n");
+      printf("\n^^555-3 entro\n");
     }
+      printf("\n^^555-3 entro\n");
+
+  printf("^^666 entro\n");
 
   if (strcmp(h1->name,   h2->name)   != 0) return eslFAIL;
   if (esl_strcmp(h1->comlog, h2->comlog) != 0) return eslFAIL;
@@ -1232,6 +1241,7 @@ p7_hmm_Compare(P7_HMM *h1, P7_HMM *h2, float tol)
       if (esl_FCompare_old(h1->evparam[z], h2->evparam[z], tol) != eslOK) return eslFAIL;
   }
 
+  printf("\n^^77777 got here\n");
   return eslOK;
 }
 

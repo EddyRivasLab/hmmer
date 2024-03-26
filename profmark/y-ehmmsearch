@@ -64,6 +64,7 @@ parser.add_argument('outfile',     type=str,
 # options
 parser.add_argument('--enone',   action="store_true", default=None, help='hmmbuild --enone')
 parser.add_argument('--max',     action="store_true", default=None, help='hmmsearch --max')
+parser.add_argument('--noevo',   action="store_true", default=None, help='hmmsearch --noevo')
 parser.add_argument('--verbose', action="store_true", default=None, help='does not remove intermediate files')
 parser.add_argument('--F1',      type=float, required=False, help='hmmsearch --F1')
 parser.add_argument('--F2',      type=float, required=False, help='hmmsearch --F2')
@@ -87,10 +88,11 @@ ehmmsearch   = '{}/src/ehmmsearch'.format(top_builddir)
 buildopts    = '';
 if args.enone: buildopts = '--enone '
 searchopts  = '-E 200 --cpu 1 '
-if args.max: searchopts += '--max '
-if args.F1:  searchopts += '--F1 {} '.format(args.F1)
-if args.F2:  searchopts += '--F2 {} '.format(args.F2)
-if args.F3:  searchopts += '--F3 {} '.format(args.F3)
+if args.max:   searchopts += '--max '
+if args.F1:    searchopts += '--F1 {} '.format(args.F1)
+if args.F2:    searchopts += '--F2 {} '.format(args.F2)
+if args.F3:    searchopts += '--F3 {} '.format(args.F3)
+if args.noevo: searchopts += '--noevo '
 
 if not os.path.isdir(top_builddir):   sys.exit("didn't find top_builddir at {}".format(top_builddir))
 if not os.path.isdir(top_srcdir):     sys.exit("didn't find top_srcdir at {}".format(top_srcdir))
@@ -134,10 +136,18 @@ for line in tblfp:
 
     cmd = '{0} {1} --noali --tblout {2}/{3}.tmp --domtblout {2}/{3}.domtmp {2}/{3}.hmm {4} '.format(ehmmsearch, searchopts, resultdir, msaname, fafile)
 
-    f = open('{0}/{1}.ehmmer'.format(resultdir, msaname),     "w")
-    if args.max: f = open('{0}/{1}.max.ehmmer'.format(resultdir, msaname), "w")
+    outfile = '{0}/{1}'.format(resultdir, msaname)
+    if args.max:   outfile += '.max'
+    if args.F1:    outfile += '.F1.{}'.format(args.F1)
+    if args.F2:    outfile += '.F2.{}'.format(args.F2)
+    if args.F3:    outfile += '.F3.{}'.format(args.F3)
+    if args.noevo: outfile += '.noevo'
+    outfile += '.ehmmer'
+    f = open(outfile, "w")
+    
     r = subprocess.run(cmd.split(), stdout=f, stderr=subprocess.PIPE, encoding='utf-8')
     if r.returncode: sys.exit('FAILED: {}\n{}'.format(cmd, r.stderr))
+    f.close()
 
     resfp = open('{0}/{1}.tmp'.format(resultdir, msaname))
     if not resfp: sys.exit('failed to open ehmmsearch .tblout file {0}/{1}.tmp for reading'.format(resultdir, msaname))
@@ -168,15 +178,13 @@ for line in tblfp:
 
         domoutfp.write('{0} {1} {2} {3} {4} {5} {6} {7}\n'.format(pval, bitscore, q_from, q_to, e_from, e_to, target, msaname))
     resfp.close()
-    f.close()
 
     if (args.verbose == None):
         os.remove('{0}/{1}.hmm'.format(resultdir, msaname))
         os.remove('{0}/{1}.sto'.format(resultdir, msaname))
         os.remove('{0}/{1}.tmp'.format(resultdir, msaname))
         os.remove('{0}/{1}.domtmp'.format(resultdir, msaname))
-        #os.remove('{0}/{1}.ehmmer'.format(resultdir, msaname))
-        #if args.max: os.remove('{0}/{1}.max.ehmmer'.format(resultdir, msaname))
+        #os.remove(outfile)
 
 tblfp.close()
 outfp.close()

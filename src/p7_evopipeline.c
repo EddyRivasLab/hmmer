@@ -26,7 +26,7 @@
 #include "p7_evopipeline.h"
 #include "ratematrix.h"
 
-#define OPT_TIME_STEP 0.1
+#define OPT_TIME_STEP 0.01
 #define TMAX          5.0
 #define RECALIBRATE   0
 
@@ -47,13 +47,12 @@ static inline void   optimize_unpack_paramvector      (double *p, struct optimiz
 static inline double optimize_msvfilter_func          (double *p, int np, void *dptr);
 static inline double optimize_viterbifilter_func      (double *p, int np, void *dptr);
 static inline double optimize_forwardparser_func      (double *p, int np, void *dptr);
-static inline double func_msvfilter(ESL_DSQ *dsq, int n, P7_HMM *hmm, P7_RATE *R, P7_PROFILE *gm, P7_OPROFILE *om, P7_BG *bg, P7_OMX *oxf,
-				    float time, int noevo, float tol);
+static inline double func_msvfilter    (ESL_DSQ *dsq, int n, P7_HMM *hmm, P7_RATE *R, P7_PROFILE *gm, P7_OPROFILE *om, P7_BG *bg, P7_OMX *oxf,
+					float time, int update_hmm);
 static inline double func_viterbifilter(ESL_DSQ *dsq, int n, P7_HMM *hmm, P7_RATE *R, P7_PROFILE *gm, P7_OPROFILE *om, P7_BG *bg, P7_OMX *oxf,
-					float time, int noevo, float tol);
+					float time, int update_hmm);
 static inline double func_forwardparser(ESL_DSQ *dsq, int n, P7_HMM *hmm, P7_RATE *R, P7_PROFILE *gm, P7_OPROFILE *om, P7_BG *bg, P7_OMX *oxf,
-					float time, int noevo, float tol);
-static inline int workaround_get_starprofile(P7_PIPELINE *pli, const P7_BG *bg, const P7_HMM *hmm, P7_PROFILE *gm, P7_OPROFILE *om, P7_HMM **ret_ehmm);
+					float time, int update_hmm);
 static inline int workaround_evolve_profile(double time, int n, const P7_RATE *R, P7_BG *bg, P7_HMM *hmm, P7_PROFILE *gm, P7_OPROFILE *om);
 static inline int workaround_calibrate(ESL_RANDOMNESS *r, int n, P7_BG *bg, P7_HMM *hmm, P7_PROFILE *gm, P7_OPROFILE *om);
 
@@ -99,10 +98,10 @@ static inline int workaround_calibrate(ESL_RANDOMNESS *r, int n, P7_BG *bg, P7_H
  */
 int
 p7_EvoPipeline(P7_PIPELINE *pli, ESL_RANDOMNESS *r, P7_RATE *R, P7_HMM *hmm, P7_PROFILE *gm,
-	       P7_OPROFILE *om, P7_BG *bg, const ESL_SQ *sq, const ESL_SQ *ntsq, P7_TOPHITS *hitlist, int noevo, float fixtime)
+	       P7_OPROFILE *om, P7_BG *bg, const ESL_SQ *sq, const ESL_SQ *ntsq, P7_TOPHITS *hitlist,
+	       float fixtime, int noevo, int *ret_hmm_update)
 {
-  P7_HIT          *hit     = NULL;     /* ptr to the current hit output data      */
-  P7_HMM          *ehmm    = NULL;
+  P7_HIT          *hit       = NULL;     /* ptr to the current hit output data      */
   float            time_star = 1.0;
   float            usc, vfsc, fwdsc;      /* filter scores                           */
   float            filtersc;              /* HMM null filter score                   */
@@ -118,15 +117,14 @@ p7_EvoPipeline(P7_PIPELINE *pli, ESL_RANDOMNESS *r, P7_RATE *R, P7_HMM *hmm, P7_
   float            spftime;               /* sparse forward time */
   float            tol = 0.1;
   int              Ld;                    /* # of residues in envelopes */
+  int              hmm_update = *ret_hmm_update; // do we need to update the hmm to a given time? 
+  int              vit_opt    = FALSE;
+  int              msv_opt    = FALSE;
+  int              be_verbose = FALSE;
   int              d;
-  int              be_verbose       = FALSE;
-  int              viterbi_optimize = FALSE; // optimize only the forward final score
   int              vfsc_optimized;
   int              status;
 
-  /* init */
-  time = time_star;
-  
   if (sq->n == 0) return eslOK;    /* silently skip length 0 seqs; they'd cause us all sorts of weird problems */
   if (sq->n > 100000) ESL_EXCEPTION(eslETYPE, "Target sequence length > 100K, over comparison pipeline limit.\n(Did you mean to use nhmmer/nhmmscan?)");
 
@@ -135,18 +133,17 @@ p7_EvoPipeline(P7_PIPELINE *pli, ESL_RANDOMNESS *r, P7_RATE *R, P7_HMM *hmm, P7_
   /* Base null model score (we could calculate this in NewSeq(), for a scan pipeline) */
   p7_bg_NullOne  (bg, sq->dsq, sq->n, &nullsc);
 
-  /* Make a copy of hmm into ehmm which will be evolved */
-  workaround_get_starprofile(pli, bg, hmm, gm, om, &ehmm); 
-
   /* First level filter: the MSV filter, multihit with <om> */
   // with noevo == TRUE
-  if ((status = p7_OptimizeMSVFilter(sq->dsq, sq->n, &time_star, R, ehmm, gm, om, bg, pli->oxf, &usc, fixtime, TRUE, tol)) != eslOK)      
+  time = time_star;
+  if ((status = p7_OptimizeMSVFilter(sq->dsq, sq->n, &time, R, hmm, gm, om, bg, pli->oxf, &usc, fixtime, noevo, msv_opt, hmm_update, tol)) != eslOK)      
     printf("\nsequence %s msvfilter did not optimize\n", sq->name);  
+  //printf("^^MSV %s update? %d time %f usc %f\n", sq->name, hmm_update, time, usc);
 
   seq_score = (usc - nullsc) / eslCONST_LOG2;
   P = esl_gumbel_surv(seq_score,  om->evparam[p7_MMU],  om->evparam[p7_MLAMBDA]);
   if (P > pli->F1) {
-    p7_hmm_Destroy(ehmm);
+    *ret_hmm_update = (msv_opt)? TRUE : FALSE;
     return eslOK;
   }
   
@@ -159,7 +156,7 @@ p7_EvoPipeline(P7_PIPELINE *pli, ESL_RANDOMNESS *r, P7_RATE *R, P7_HMM *hmm, P7_
       seq_score = (usc - filtersc) / eslCONST_LOG2;
       P = esl_gumbel_surv(seq_score,  om->evparam[p7_MMU],  om->evparam[p7_MLAMBDA]);
       if (P > pli->F1) {
-	p7_hmm_Destroy(ehmm);
+	*ret_hmm_update = (msv_opt)? TRUE : FALSE;
 	return eslOK;
       }
     }
@@ -178,19 +175,20 @@ p7_EvoPipeline(P7_PIPELINE *pli, ESL_RANDOMNESS *r, P7_RATE *R, P7_HMM *hmm, P7_
   vfsc_optimized = FALSE;
   if (P > pli->F2)
     {
-      time = time_star;
-      if ((status = p7_OptimizeViterbiFilter(sq->dsq, sq->n, &time, R, ehmm, gm, om, bg, pli->oxf, &vfsc, (viterbi_optimize)? noevo:TRUE, fixtime, tol)) != eslOK) 
+      time       = time_star;
+      hmm_update = (msv_opt)? TRUE:FALSE;
+      if ((status = p7_OptimizeViterbiFilter(sq->dsq, sq->n, &time, R, hmm, gm, om, bg, pli->oxf, &vfsc, fixtime, noevo, vit_opt, hmm_update, tol)) != eslOK) 
 	printf("\nsequence %s vitfilter did not optimize\n", sq->name);
-      if (viterbi_optimize) {
+      if (vit_opt) {
 	vfsc_optimized = TRUE;
 	if (time == time_star) vfsc_optimized = FALSE;
       }
 
-      //printf("^^VIT %s len %d time %f vfsc %f\n", sq->name, sq->n, time, vfsc);
+      //printf("^^VIT %s update? %d time %f vfsc %f\n", sq->name, hmm_update, time, vfsc);
       seq_score = (vfsc-filtersc) / eslCONST_LOG2;
       P  = esl_gumbel_surv(seq_score,  om->evparam[p7_VMU],  om->evparam[p7_VLAMBDA]);
       if (P > pli->F2) {
-	p7_hmm_Destroy(ehmm);
+	*ret_hmm_update = (vit_opt)? TRUE : FALSE;
 	return eslOK;
       }
     }
@@ -199,26 +197,29 @@ p7_EvoPipeline(P7_PIPELINE *pli, ESL_RANDOMNESS *r, P7_RATE *R, P7_HMM *hmm, P7_
 
   /* Parse it with Forward and obtain its real Forward score. */
   if (vfsc_optimized) {
-    fwdsc = func_forwardparser(sq->dsq, sq->n, ehmm, R, gm, om, bg, pli->oxf, time, TRUE, tol);
+    hmm_update = FALSE;
+    fwdsc = func_forwardparser(sq->dsq, sq->n, hmm, R, gm, om, bg, pli->oxf, time, hmm_update);
     //printf("^^FWD %s len %d time %f fwdsc %f\n", sq->name, sq->n, time, fwdsc);
   }
   else {
-    time = time_star;
-    if ((status = p7_OptimizeForwardParser(sq->dsq, sq->n, &time, R, ehmm, gm, om, bg, pli->oxf, &fwdsc, noevo, fixtime, tol)) != eslOK)      
+    time       = time_star;
+    hmm_update = (vit_opt)? TRUE:FALSE;
+    if ((status = p7_OptimizeForwardParser(sq->dsq, sq->n, &time, R, hmm, gm, om, bg, pli->oxf, &fwdsc, fixtime, noevo, hmm_update, tol)) != eslOK)      
       printf("\nsequence %s forwardparser did not optimize\n", sq->name);
-    //printf("^^FWD OPT %s len %d time %f fwdsc %f\n", sq->name, sq->n, time, fwdsc);
+    //printf("^^FWD OPT %s update? %d time %f fwdsc %f\n", sq->name, hmm_update, time, fwdsc);
   }
 
 #if RECALIBRATE
-  workaround_calibrate(r, sq->n, bg, ehmm, gm, om);
+  workaround_calibrate(r, sq->n, bg, hmm, gm, om);
 #endif
 
   seq_score = (fwdsc-filtersc) / eslCONST_LOG2;
   P = esl_exp_surv(seq_score,  om->evparam[p7_FTAU],  om->evparam[p7_FLAMBDA]);
-   if (P > pli->F3) {
-    p7_hmm_Destroy(ehmm);
+  if (P > pli->F3)  {
+    *ret_hmm_update = TRUE;
     return eslOK;
   }
+ 
   pli->n_past_fwd++;
   
 
@@ -228,9 +229,9 @@ p7_EvoPipeline(P7_PIPELINE *pli, ESL_RANDOMNESS *r, P7_RATE *R, P7_HMM *hmm, P7_
 
   status = p7_domaindef_ByPosteriorHeuristics(sq, ntsq, om, pli->oxf, pli->oxb, pli->fwd, pli->bck, pli->ddef, bg, FALSE, NULL, NULL, NULL);
   if (status != eslOK) ESL_FAIL(status, pli->errbuf, "domain definition workflow failure"); /* eslERANGE can happen  */
-  if (pli->ddef->nregions   == 0) return eslOK; /* score passed threshold but there's no discrete domains here       */
-  if (pli->ddef->nenvelopes == 0) return eslOK; /* rarer: region was found, stochastic clustered, no envelopes found */
-  if (pli->ddef->ndom       == 0) return eslOK; /* even rarer: envelope found, no domain identified {iss131}         */
+  if (pli->ddef->nregions   == 0) { *ret_hmm_update = TRUE; return eslOK; } /* score passed threshold but there's no discrete domains here       */
+  if (pli->ddef->nenvelopes == 0) { *ret_hmm_update = TRUE; return eslOK; } /* rarer: region was found, stochastic clustered, no envelopes found */
+  if (pli->ddef->ndom       == 0) { *ret_hmm_update = TRUE; return eslOK; } /* even rarer: envelope found, no domain identified {iss131}         */
 
 
   /* Calculate the null2-corrected per-seq score */
@@ -391,8 +392,7 @@ p7_EvoPipeline(P7_PIPELINE *pli, ESL_RANDOMNESS *r, P7_RATE *R, P7_HMM *hmm, P7_
 	  
     }
 
-  p7_hmm_Destroy(ehmm);
-  
+  *ret_hmm_update = TRUE;
   return eslOK;
 }
 
@@ -486,9 +486,9 @@ ERROR:
 
 
 int
-p7_OptimizeMSVFilter(const ESL_DSQ *dsq, int n, float *ret_time,
-		     P7_RATE *R, P7_HMM *hmm, P7_PROFILE *gm, P7_OPROFILE *om, P7_BG *bg, P7_OMX *oxf,
-		     float *ret_usc, float fixtime, int noevo, float tol)
+p7_OptimizeMSVFilter(const ESL_DSQ *dsq, int n, float *ret_time, P7_RATE *R,
+		     P7_HMM *hmm, P7_PROFILE *gm, P7_OPROFILE *om, P7_BG *bg, P7_OMX *oxf, float *ret_usc,
+		     float fixtime, int noevo, int msv_opt, int hmm_update, float tol)
 {
   struct optimize_data   data;
   ESL_MIN_CFG           *cfg   = esl_min_cfg_Create(1);
@@ -504,8 +504,8 @@ p7_OptimizeMSVFilter(const ESL_DSQ *dsq, int n, float *ret_time,
   int                    status;
 
   time_init = (isfixtime)? fixtime : *ret_time;
-  usc_init = func_msvfilter((ESL_DSQ *)dsq, n, hmm, R, gm, om, bg, oxf, time_init, noevo, tol);
-  if (noevo || isfixtime || usc_init == eslINFINITY) {
+  usc_init = func_msvfilter((ESL_DSQ *)dsq, n, hmm, R, gm, om, bg, oxf, time_init, hmm_update);
+  if (noevo || !msv_opt || isfixtime || usc_init == eslINFINITY) {
     *ret_usc  = usc_init;
     *ret_time = time_init;
     esl_min_cfg_Destroy(cfg);
@@ -532,7 +532,6 @@ p7_OptimizeMSVFilter(const ESL_DSQ *dsq, int n, float *ret_time,
  /* Copy shared info into the "data" structure
    */
   data.time       = time_init;
-  data.noevo      = noevo;
   data.dsq        = (ESL_DSQ *)dsq;
   data.n          = n;
   data.R          = (P7_RATE *)R;
@@ -590,9 +589,9 @@ p7_OptimizeMSVFilter(const ESL_DSQ *dsq, int n, float *ret_time,
 }
 
 int
-p7_OptimizeViterbiFilter(const ESL_DSQ *dsq, int n, float *ret_time,
-			 P7_RATE *R, P7_HMM *hmm, P7_PROFILE *gm, P7_OPROFILE *om, P7_BG *bg, P7_OMX *oxf,
-			 float *ret_vfsc, int noevo, float fixtime, float tol)
+p7_OptimizeViterbiFilter(const ESL_DSQ *dsq, int n, float *ret_time, P7_RATE *R,
+			 P7_HMM *hmm, P7_PROFILE *gm, P7_OPROFILE *om, P7_BG *bg, P7_OMX *oxf, float *ret_vfsc,
+			 float fixtime, int noevo, int vit_opt, int hmm_update, float tol)
 {
   struct optimize_data   data;
   ESL_MIN_CFG           *cfg   = esl_min_cfg_Create(1);
@@ -607,8 +606,8 @@ p7_OptimizeViterbiFilter(const ESL_DSQ *dsq, int n, float *ret_time,
   int                    status;
 
   time_init = (isfixtime)? fixtime : *ret_time;
-  vfsc_init = func_viterbifilter((ESL_DSQ *)dsq, n, hmm, R, gm, om, bg, oxf, time_init, TRUE, tol);
-  if (noevo || isfixtime || vfsc_init == eslINFINITY) {
+  vfsc_init = func_viterbifilter((ESL_DSQ *)dsq, n, hmm, R, gm, om, bg, oxf, time_init, hmm_update);
+  if (noevo || !vit_opt || isfixtime || vfsc_init == eslINFINITY) {
     *ret_vfsc = vfsc_init;
     *ret_time = time_init;
     esl_min_cfg_Destroy(cfg);
@@ -635,7 +634,6 @@ p7_OptimizeViterbiFilter(const ESL_DSQ *dsq, int n, float *ret_time,
  /* Copy shared info into the "data" structure
    */
   data.time       = time_init;
-  data.noevo      = noevo;
   data.dsq        = (ESL_DSQ *)dsq;
   data.n          = n;
   data.R          = (P7_RATE *)R;
@@ -692,8 +690,9 @@ p7_OptimizeViterbiFilter(const ESL_DSQ *dsq, int n, float *ret_time,
 }
 
 int
-p7_OptimizeForwardParser(const ESL_DSQ *dsq, int n, float *ret_time, P7_RATE *R, P7_HMM *hmm, P7_PROFILE *gm,
-			 P7_OPROFILE *om, P7_BG *bg, P7_OMX *oxf, float *ret_fwdsc, int noevo, float fixtime, float tol)
+p7_OptimizeForwardParser(const ESL_DSQ *dsq, int n, float *ret_time, P7_RATE *R,
+			 P7_HMM *hmm, P7_PROFILE *gm, P7_OPROFILE *om, P7_BG *bg, P7_OMX *oxf, float *ret_fwdsc,
+			 float fixtime, int noevo, int hmm_update, float tol)
 {
   struct optimize_data   data;
   ESL_MIN_CFG           *cfg   = esl_min_cfg_Create(1);
@@ -708,7 +707,7 @@ p7_OptimizeForwardParser(const ESL_DSQ *dsq, int n, float *ret_time, P7_RATE *R,
   int                    status;
 
   time_init = (isfixtime)? fixtime : *ret_time;
-  fwdsc_init = func_forwardparser((ESL_DSQ *)dsq, n, hmm, R, gm, om, bg, oxf, time_init, noevo, tol);
+  fwdsc_init = func_forwardparser((ESL_DSQ *)dsq, n, hmm, R, gm, om, bg, oxf, time_init, hmm_update);
   if (noevo || isfixtime || fwdsc_init == eslINFINITY) {
     *ret_fwdsc = fwdsc_init;
     *ret_time  = time_init;
@@ -736,7 +735,6 @@ p7_OptimizeForwardParser(const ESL_DSQ *dsq, int n, float *ret_time, P7_RATE *R,
   /* Copy shared info into the "data" structure
    */
   data.time       = time_init;
-  data.noevo      = noevo;
   data.dsq        = (ESL_DSQ *)dsq;
   data.n          = n;
   data.R          = (P7_RATE *)R;
@@ -767,7 +765,7 @@ p7_OptimizeForwardParser(const ESL_DSQ *dsq, int n, float *ret_time, P7_RATE *R,
   /* unpack the final parameter vector */
   optimize_unpack_paramvector(p, &data);
   data.fwdsc = -sc;
-  printf("END FWD OPTIMIZATION: time %f fwdsc %f --> %f\n", data.time, fwdsc_init, data.fwdsc);
+  //printf("END FWD OPTIMIZATION: time %f fwdsc %f --> %f\n", data.time, fwdsc_init, data.fwdsc);
 
   if (fwdsc_init > data.fwdsc || data.fwdsc == eslINFINITY) {
     *ret_fwdsc = fwdsc_init;
@@ -813,8 +811,7 @@ optimize_msvfilter_func(double *p, int np, void *dptr)
   
   optimize_unpack_paramvector(p, data);
   
-  data->usc = func_msvfilter(dsq, data->n, data->hmm, data->R, data->gm, data->om, data->bg, data->oxf,
-			     data->time, data->noevo, data->tol);
+  data->usc = func_msvfilter(dsq, data->n, data->hmm, data->R, data->gm, data->om, data->bg, data->oxf, data->time, TRUE);
   
   if (data->usc == eslINFINITY) data->usc = 1000.;
   return -(double)data->usc;
@@ -828,8 +825,7 @@ optimize_viterbifilter_func(double *p, int np, void *dptr)
   
   optimize_unpack_paramvector(p, data);
   
-  data->vfsc = func_viterbifilter(dsq, data->n, data->hmm, data->R, data->gm, data->om, data->bg, data->oxf,
-				  data->time, data->noevo, data->tol);
+  data->vfsc = func_viterbifilter(dsq, data->n, data->hmm, data->R, data->gm, data->om, data->bg, data->oxf, data->time, TRUE);
   
   if (data->vfsc == eslINFINITY) data->vfsc = 1000.;
   return -(double)data->vfsc;
@@ -843,8 +839,7 @@ optimize_forwardparser_func(double *p, int np, void *dptr)
   
   optimize_unpack_paramvector(p, data);
 
-  data->fwdsc = func_forwardparser(dsq, data->n, data->hmm, data->R, data->gm, data->om, data->bg, data->oxf,
-				   data->time, data->noevo, data->tol);
+  data->fwdsc = func_forwardparser(dsq, data->n, data->hmm, data->R, data->gm, data->om, data->bg, data->oxf, data->time, TRUE);
   
   return -(double)data->fwdsc;
 }
@@ -852,15 +847,12 @@ optimize_forwardparser_func(double *p, int np, void *dptr)
 
 
 static inline double
-func_msvfilter(ESL_DSQ *dsq, int n, P7_HMM *hmm, P7_RATE *R, P7_PROFILE *gm, P7_OPROFILE *om, P7_BG *bg, P7_OMX *oxf,
-	       float time, int noevo, float tol)
+func_msvfilter(ESL_DSQ *dsq, int n, P7_HMM *hmm, P7_RATE *R, P7_PROFILE *gm, P7_OPROFILE *om, P7_BG *bg, P7_OMX *oxf, float time, int hmm_update)
 {
   float  usc;
   
-  if (!noevo) {
-    /* Construct the evolved profile */
-    workaround_evolve_profile((double)time, n, R, bg, hmm, gm, om);
-  }
+  /* Construct the evolved profile */
+  if (hmm_update) workaround_evolve_profile((double)time, n, R, bg, hmm, gm, om);
   
   p7_MSVFilter(dsq, n, om, oxf, &(usc));
   
@@ -872,15 +864,12 @@ func_msvfilter(ESL_DSQ *dsq, int n, P7_HMM *hmm, P7_RATE *R, P7_PROFILE *gm, P7_
  }
 
 static inline double
-func_viterbifilter(ESL_DSQ *dsq, int n, P7_HMM *hmm, P7_RATE *R, P7_PROFILE *gm, P7_OPROFILE *om, P7_BG *bg, P7_OMX *oxf,
-		   float time, int noevo, float tol)
+func_viterbifilter(ESL_DSQ *dsq, int n, P7_HMM *hmm, P7_RATE *R, P7_PROFILE *gm, P7_OPROFILE *om, P7_BG *bg, P7_OMX *oxf, float time, int hmm_update)
 {
   float  vfsc;
   
-  if (!noevo) {
-    /* Construct the evolved profile */
-    workaround_evolve_profile((double)time, n, R, bg, hmm, gm, om);
-  }
+  /* Construct the evolved profile */
+  if (hmm_update) workaround_evolve_profile((double)time, n, R, bg, hmm, gm, om);
 
   p7_ViterbiFilter(dsq, n, om, oxf, &(vfsc));
   
@@ -892,15 +881,12 @@ func_viterbifilter(ESL_DSQ *dsq, int n, P7_HMM *hmm, P7_RATE *R, P7_PROFILE *gm,
  }
 
 static inline double
-func_forwardparser(ESL_DSQ *dsq, int n, P7_HMM *hmm, P7_RATE *R, P7_PROFILE *gm, P7_OPROFILE *om, P7_BG *bg, P7_OMX *oxf,
-		   float time, int noevo, float tol)
+func_forwardparser(ESL_DSQ *dsq, int n, P7_HMM *hmm, P7_RATE *R, P7_PROFILE *gm, P7_OPROFILE *om, P7_BG *bg, P7_OMX *oxf, float time, int hmm_update)
 {
   float   fwdsc;
 
-  if (!noevo) {
-    /* Construct the evolved profile */
-    workaround_evolve_profile((double)time, n, R, bg, hmm, gm, om);
-  }
+  /* Construct the evolved profile */
+  if (hmm_update) workaround_evolve_profile((double)time, n, R, bg, hmm, gm, om);
   
   p7_ForwardParser(dsq, n, om, oxf, &(fwdsc));
 
@@ -912,29 +898,6 @@ func_forwardparser(ESL_DSQ *dsq, int n, P7_HMM *hmm, P7_RATE *R, P7_PROFILE *gm,
  }
 
 static inline int
-workaround_get_starprofile(P7_PIPELINE *pli, const P7_BG *bg, const P7_HMM *hmm, P7_PROFILE *gm, P7_OPROFILE *om, P7_HMM **ret_ehmm)
-{  
-  P7_HMM      *ehmm = NULL;
-  int          status;
-
-  if (pli->mode == p7_SCAN_MODELS) return eslOK;
-  
-  /* Construct evolved HMM */
-  ehmm = p7_hmm_Clone(hmm);
-  
-  /* Configure a profile from the HMM */
-  p7_ProfileConfig(ehmm, bg, gm, om->L, p7_LOCAL);
-  p7_oprofile_Convert(gm, om);     /* <om> is now p7_LOCAL, multihit */
-  
-  *ret_ehmm = ehmm;
-  return eslOK;
-  
- ERROR:
-  if (ret_ehmm) p7_hmm_Destroy(ehmm);
-  return status;
-}
-
-static inline int
 workaround_evolve_profile(double time, int len, const P7_RATE *R, P7_BG *bg, P7_HMM *hmm, P7_PROFILE *gm, P7_OPROFILE *om)
 {  
   if (R == NULL) return eslOK;
@@ -944,7 +907,7 @@ workaround_evolve_profile(double time, int len, const P7_RATE *R, P7_BG *bg, P7_
   
   /* evolved profiles gm and om */
   p7_ProfileConfig(hmm, bg, gm, len, p7_LOCAL);
-  if (om) p7_oprofile_Convert(gm, om);    
+  p7_oprofile_Convert(gm, om);    
   
   return eslOK;
 }

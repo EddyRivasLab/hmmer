@@ -620,6 +620,12 @@ p7_RateCalculate(FILE *statfp, const P7_HMM *hmm, const P7_BG *bg, const EMRATE 
   if (p7_RateTransitions(hmm, R, betainf, tol, errbuf, verbose) != eslOK) { status = eslFAIL; goto ERROR; }
   if (p7_RateValidate(R, tol, errbuf)                           != eslOK) { status = eslFAIL; goto ERROR; }
 
+
+#if 0
+  status = p7_RateTest(hmm, R, bg, 0.2, errbuf, verbose);
+  if (status != eslOK) { printf("p7_RateTest() failed\n"); exit(1); }
+#endif
+  
   *ret_R = R;
   return eslOK;  
 
@@ -898,6 +904,48 @@ p7_Evolve(FILE *statfp, P7_HMM *hmm, const P7_BG *bg, const EMRATE *emR, ESL_SCO
   return eslOK;
   
  ERROR:
+  return status;
+}
+
+int
+p7_RateTest(const P7_HMM *h1, P7_RATE *R, const P7_BG *bg, double tol, char *errbuf, int verbose)
+{ 
+  P7_HMM  *h2   = p7_hmm_Clone(h1);
+  double   time = 1.0;
+  int      k;
+  int      a;
+  int      t;
+  int      status;
+
+  p7_EvolveFromRate(NULL, h2, R, bg, time, tol, errbuf, verbose);
+
+    for (k = 0; k <= h1->M; k++)	/* (it's safe to include 0 here.) */
+    {
+      if ((status = esl_vec_FCompare(h1->mat[k], h2->mat[k], h1->abc->K, tol)) != eslOK) {
+	for (a = 0; a < h1->abc->K; a ++) printf("mat[%d] %f %f diff=%f %f\n", k, h1->mat[k][a], h2->mat[k][a],
+						 fabs(h1->mat[k][a]-h2->mat[k][a]), 2.0*fabs(h1->mat[k][a]-h2->mat[k][a])/fabs(h1->mat[k][a]+h2->mat[k][a]));
+	goto ERROR;
+      }
+      
+      if ((status = esl_vec_FCompare(h1->ins[k], h2->ins[k], h1->abc->K, tol)) != eslOK) {
+	for (a = 0; a < h1->abc->K; a ++) printf("ins[%d] %f %f diff=%f %f\n", k, h1->ins[k][a], h2->ins[k][a],
+						 fabs(h1->ins[k][a]-h2->ins[k][a]), 2.0*fabs(h1->ins[k][a]-h2->ins[k][a])/fabs(h1->ins[k][a]+h2->ins[k][a]));
+	goto ERROR;
+      }
+      
+    if ((status = esl_vec_FCompare(h1->t[k],   h2->t[k],   7,          tol)) != eslOK) {
+      for (t = 0; t < 7; t ++) printf("t[%d] %f %f diff=%f %f\n", t, h1->t[k][t], h2->t[k][t],
+				      fabs(h1->t[k][t]-h2->t[k][t]), 2.0*fabs(h1->t[k][t]-h2->t[k][t])/fabs(h1->t[k][t]+h2->t[k][t]));
+	goto ERROR;
+      }
+      
+    }
+       
+  p7_hmm_Destroy(h2);
+  return eslOK;
+  
+ ERROR:
+  if (h2) p7_hmm_Destroy(h2);
   return status;
 }
 
