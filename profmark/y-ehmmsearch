@@ -62,13 +62,14 @@ parser.add_argument('fafile',      type=str,
 parser.add_argument('outfile',     type=str,
                     help='a whitespace-delimited tabular output file, one line per target sequence, described below.') 
 # options
-parser.add_argument('--enone',   action="store_true", default=None, help='hmmbuild --enone')
-parser.add_argument('--max',     action="store_true", default=None, help='hmmsearch --max')
-parser.add_argument('--noevo',   action="store_true", default=None, help='hmmsearch --noevo')
-parser.add_argument('--verbose', action="store_true", default=None, help='does not remove intermediate files')
-parser.add_argument('--F1',      type=float, required=False, help='hmmsearch --F1')
-parser.add_argument('--F2',      type=float, required=False, help='hmmsearch --F2')
-parser.add_argument('--F3',      type=float, required=False, help='hmmsearch --F3')
+parser.add_argument('--enone',       action="store_true", default=None, help='hmmbuild --enone')
+parser.add_argument('--max',         action="store_true", default=None, help='hmmsearch --max')
+parser.add_argument('--noevo',       action="store_true", default=None, help='hmmsearch --noevo')
+parser.add_argument('--recalibrate', action="store_true", default=None, help='hmmsearch --recalibrate')
+parser.add_argument('--verbose',     action="store_true", default=None, help='does not remove intermediate files')
+parser.add_argument('--F1',          type=float, required=False, help='hmmsearch --F1')
+parser.add_argument('--F2',          type=float, required=False, help='hmmsearch --F2')
+parser.add_argument('--F3',          type=float, required=False, help='hmmsearch --F3')
 
 args = parser.parse_args()
 if (len(sys.argv) < 8):
@@ -88,11 +89,12 @@ ehmmsearch   = '{}/src/ehmmsearch'.format(top_builddir)
 buildopts    = '';
 if args.enone: buildopts = '--enone '
 searchopts  = '-E 200 --cpu 1 '
-if args.max:   searchopts += '--max '
-if args.F1:    searchopts += '--F1 {} '.format(args.F1)
-if args.F2:    searchopts += '--F2 {} '.format(args.F2)
-if args.F3:    searchopts += '--F3 {} '.format(args.F3)
-if args.noevo: searchopts += '--noevo '
+if args.max:         searchopts += '--max '
+if args.F1:          searchopts += '--F1 {} '.format(args.F1)
+if args.F2:          searchopts += '--F2 {} '.format(args.F2)
+if args.F3:          searchopts += '--F3 {} '.format(args.F3)
+if args.noevo:       searchopts += '--noevo '
+if args.recalibrate: searchopts += '--recalibrate '
 
 if not os.path.isdir(top_builddir):   sys.exit("didn't find top_builddir at {}".format(top_builddir))
 if not os.path.isdir(top_srcdir):     sys.exit("didn't find top_srcdir at {}".format(top_srcdir))
@@ -137,11 +139,12 @@ for line in tblfp:
     cmd = '{0} {1} --noali --tblout {2}/{3}.tmp --domtblout {2}/{3}.domtmp {2}/{3}.hmm {4} '.format(ehmmsearch, searchopts, resultdir, msaname, fafile)
 
     outfile = '{0}/{1}'.format(resultdir, msaname)
-    if args.max:   outfile += '.max'
-    if args.F1:    outfile += '.F1.{}'.format(args.F1)
-    if args.F2:    outfile += '.F2.{}'.format(args.F2)
-    if args.F3:    outfile += '.F3.{}'.format(args.F3)
-    if args.noevo: outfile += '.noevo'
+    if args.max:         outfile += '.max'
+    if args.F1:          outfile += '.F1.{}'.format(args.F1)
+    if args.F2:          outfile += '.F2.{}'.format(args.F2)
+    if args.F3:          outfile += '.F3.{}'.format(args.F3)
+    if args.noevo:       outfile += '.noevo'
+    if args.recalibrate: outfile += '.recalibrate'
     outfile += '.ehmmer'
     f = open(outfile, "w")
     
