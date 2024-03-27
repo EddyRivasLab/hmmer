@@ -47,14 +47,13 @@ static inline void   optimize_unpack_paramvector      (double *p, struct optimiz
 static inline double optimize_msvfilter_func          (double *p, int np, void *dptr);
 static inline double optimize_viterbifilter_func      (double *p, int np, void *dptr);
 static inline double optimize_forwardparser_func      (double *p, int np, void *dptr);
-static inline double func_msvfilter    (ESL_DSQ *dsq, int n, P7_HMM *hmm, P7_RATE *R, P7_PROFILE *gm, P7_OPROFILE *om, P7_BG *bg, P7_OMX *oxf,
+static inline double func_msvfilter    (ESL_RANDOMNESS *r, ESL_DSQ *dsq, int n, P7_HMM *hmm, P7_RATE *R, P7_PROFILE *gm, P7_OPROFILE *om, P7_BG *bg, P7_OMX *oxf,
 					float time, int update_hmm);
-static inline double func_viterbifilter(ESL_DSQ *dsq, int n, P7_HMM *hmm, P7_RATE *R, P7_PROFILE *gm, P7_OPROFILE *om, P7_BG *bg, P7_OMX *oxf,
+static inline double func_viterbifilter(ESL_RANDOMNESS *r, ESL_DSQ *dsq, int n, P7_HMM *hmm, P7_RATE *R, P7_PROFILE *gm, P7_OPROFILE *om, P7_BG *bg, P7_OMX *oxf,
 					float time, int update_hmm);
-static inline double func_forwardparser(ESL_DSQ *dsq, int n, P7_HMM *hmm, P7_RATE *R, P7_PROFILE *gm, P7_OPROFILE *om, P7_BG *bg, P7_OMX *oxf,
+static inline double func_forwardparser(ESL_RANDOMNESS *r, ESL_DSQ *dsq, int n, P7_HMM *hmm, P7_RATE *R, P7_PROFILE *gm, P7_OPROFILE *om, P7_BG *bg, P7_OMX *oxf,
 					float time, int update_hmm);
-static inline int workaround_evolve_profile(double time, int n, const P7_RATE *R, P7_BG *bg, P7_HMM *hmm, P7_PROFILE *gm, P7_OPROFILE *om);
-static inline int workaround_calibrate(ESL_RANDOMNESS *r, int n, P7_BG *bg, P7_HMM *hmm, P7_PROFILE *gm, P7_OPROFILE *om);
+static inline int workaround_evolve_profile(ESL_RANDOMNESS *r, double time, int n, const P7_RATE *R, P7_BG *bg, P7_HMM *hmm, P7_PROFILE *gm, P7_OPROFILE *om);
 
 
 
@@ -136,7 +135,7 @@ p7_EvoPipeline(P7_PIPELINE *pli, ESL_RANDOMNESS *r, P7_RATE *R, P7_HMM *hmm, P7_
   /* First level filter: the MSV filter, multihit with <om> */
   // with noevo == TRUE
   time = time_star;
-  if ((status = p7_OptimizeMSVFilter(sq->dsq, sq->n, &time, R, hmm, gm, om, bg, pli->oxf, &usc, fixtime, noevo, msv_opt, hmm_update, tol)) != eslOK)      
+  if ((status = p7_OptimizeMSVFilter(r, sq->dsq, sq->n, &time, R, hmm, gm, om, bg, pli->oxf, &usc, fixtime, noevo, msv_opt, hmm_update, tol)) != eslOK)      
     printf("\nsequence %s msvfilter did not optimize\n", sq->name);  
   //printf("^^MSV %s update? %d time %f usc %f\n", sq->name, hmm_update, time, usc);
 
@@ -177,7 +176,7 @@ p7_EvoPipeline(P7_PIPELINE *pli, ESL_RANDOMNESS *r, P7_RATE *R, P7_HMM *hmm, P7_
     {
       time       = time_star;
       hmm_update = (msv_opt)? TRUE:FALSE;
-      if ((status = p7_OptimizeViterbiFilter(sq->dsq, sq->n, &time, R, hmm, gm, om, bg, pli->oxf, &vfsc, fixtime, noevo, vit_opt, hmm_update, tol)) != eslOK) 
+      if ((status = p7_OptimizeViterbiFilter(r, sq->dsq, sq->n, &time, R, hmm, gm, om, bg, pli->oxf, &vfsc, fixtime, noevo, vit_opt, hmm_update, tol)) != eslOK) 
 	printf("\nsequence %s vitfilter did not optimize\n", sq->name);
       if (vit_opt) {
 	vfsc_optimized = TRUE;
@@ -198,20 +197,16 @@ p7_EvoPipeline(P7_PIPELINE *pli, ESL_RANDOMNESS *r, P7_RATE *R, P7_HMM *hmm, P7_
   /* Parse it with Forward and obtain its real Forward score. */
   if (vfsc_optimized) {
     hmm_update = FALSE;
-    fwdsc = func_forwardparser(sq->dsq, sq->n, hmm, R, gm, om, bg, pli->oxf, time, hmm_update);
+    fwdsc = func_forwardparser(r, sq->dsq, sq->n, hmm, R, gm, om, bg, pli->oxf, time, hmm_update);
     //printf("^^FWD %s len %d time %f fwdsc %f\n", sq->name, sq->n, time, fwdsc);
   }
   else {
     time       = time_star;
     hmm_update = (vit_opt)? TRUE:FALSE;
-    if ((status = p7_OptimizeForwardParser(sq->dsq, sq->n, &time, R, hmm, gm, om, bg, pli->oxf, &fwdsc, fixtime, noevo, hmm_update, tol)) != eslOK)      
+    if ((status = p7_OptimizeForwardParser(r, sq->dsq, sq->n, &time, R, hmm, gm, om, bg, pli->oxf, &fwdsc, fixtime, noevo, hmm_update, tol)) != eslOK)      
       printf("\nsequence %s forwardparser did not optimize\n", sq->name);
     //printf("^^FWD OPT %s update? %d time %f fwdsc %f\n", sq->name, hmm_update, time, fwdsc);
   }
-
-#if RECALIBRATE
-  workaround_calibrate(r, sq->n, bg, hmm, gm, om);
-#endif
 
   seq_score = (fwdsc-filtersc) / eslCONST_LOG2;
   P = esl_exp_surv(seq_score,  om->evparam[p7_FTAU],  om->evparam[p7_FLAMBDA]);
@@ -486,7 +481,7 @@ ERROR:
 
 
 int
-p7_OptimizeMSVFilter(const ESL_DSQ *dsq, int n, float *ret_time, P7_RATE *R,
+p7_OptimizeMSVFilter(ESL_RANDOMNESS *r, const ESL_DSQ *dsq, int n, float *ret_time, P7_RATE *R,
 		     P7_HMM *hmm, P7_PROFILE *gm, P7_OPROFILE *om, P7_BG *bg, P7_OMX *oxf, float *ret_usc,
 		     float fixtime, int noevo, int msv_opt, int hmm_update, float tol)
 {
@@ -504,7 +499,7 @@ p7_OptimizeMSVFilter(const ESL_DSQ *dsq, int n, float *ret_time, P7_RATE *R,
   int                    status;
 
   time_init = (isfixtime)? fixtime : *ret_time;
-  usc_init = func_msvfilter((ESL_DSQ *)dsq, n, hmm, R, gm, om, bg, oxf, time_init, hmm_update);
+  usc_init = func_msvfilter(r, (ESL_DSQ *)dsq, n, hmm, R, gm, om, bg, oxf, time_init, hmm_update);
   if (noevo || !msv_opt || isfixtime || usc_init == eslINFINITY) {
     *ret_usc  = usc_init;
     *ret_time = time_init;
@@ -534,6 +529,7 @@ p7_OptimizeMSVFilter(const ESL_DSQ *dsq, int n, float *ret_time, P7_RATE *R,
   data.time       = time_init;
   data.dsq        = (ESL_DSQ *)dsq;
   data.n          = n;
+  data.r          = r;
   data.R          = (P7_RATE *)R;
   data.hmm        = (P7_HMM *)hmm;
   data.gm         = (P7_PROFILE *)gm;
@@ -589,7 +585,7 @@ p7_OptimizeMSVFilter(const ESL_DSQ *dsq, int n, float *ret_time, P7_RATE *R,
 }
 
 int
-p7_OptimizeViterbiFilter(const ESL_DSQ *dsq, int n, float *ret_time, P7_RATE *R,
+p7_OptimizeViterbiFilter(ESL_RANDOMNESS *r, const ESL_DSQ *dsq, int n, float *ret_time, P7_RATE *R,
 			 P7_HMM *hmm, P7_PROFILE *gm, P7_OPROFILE *om, P7_BG *bg, P7_OMX *oxf, float *ret_vfsc,
 			 float fixtime, int noevo, int vit_opt, int hmm_update, float tol)
 {
@@ -606,7 +602,7 @@ p7_OptimizeViterbiFilter(const ESL_DSQ *dsq, int n, float *ret_time, P7_RATE *R,
   int                    status;
 
   time_init = (isfixtime)? fixtime : *ret_time;
-  vfsc_init = func_viterbifilter((ESL_DSQ *)dsq, n, hmm, R, gm, om, bg, oxf, time_init, hmm_update);
+  vfsc_init = func_viterbifilter(r, (ESL_DSQ *)dsq, n, hmm, R, gm, om, bg, oxf, time_init, hmm_update);
   if (noevo || !vit_opt || isfixtime || vfsc_init == eslINFINITY) {
     *ret_vfsc = vfsc_init;
     *ret_time = time_init;
@@ -636,6 +632,7 @@ p7_OptimizeViterbiFilter(const ESL_DSQ *dsq, int n, float *ret_time, P7_RATE *R,
   data.time       = time_init;
   data.dsq        = (ESL_DSQ *)dsq;
   data.n          = n;
+  data.r          = r;
   data.R          = (P7_RATE *)R;
   data.hmm        = (P7_HMM *)hmm;
   data.gm         = (P7_PROFILE *)gm;
@@ -690,7 +687,7 @@ p7_OptimizeViterbiFilter(const ESL_DSQ *dsq, int n, float *ret_time, P7_RATE *R,
 }
 
 int
-p7_OptimizeForwardParser(const ESL_DSQ *dsq, int n, float *ret_time, P7_RATE *R,
+p7_OptimizeForwardParser(ESL_RANDOMNESS *r, const ESL_DSQ *dsq, int n, float *ret_time, P7_RATE *R,
 			 P7_HMM *hmm, P7_PROFILE *gm, P7_OPROFILE *om, P7_BG *bg, P7_OMX *oxf, float *ret_fwdsc,
 			 float fixtime, int noevo, int hmm_update, float tol)
 {
@@ -707,7 +704,7 @@ p7_OptimizeForwardParser(const ESL_DSQ *dsq, int n, float *ret_time, P7_RATE *R,
   int                    status;
 
   time_init = (isfixtime)? fixtime : *ret_time;
-  fwdsc_init = func_forwardparser((ESL_DSQ *)dsq, n, hmm, R, gm, om, bg, oxf, time_init, hmm_update);
+  fwdsc_init = func_forwardparser(r, (ESL_DSQ *)dsq, n, hmm, R, gm, om, bg, oxf, time_init, hmm_update);
   if (noevo || isfixtime || fwdsc_init == eslINFINITY) {
     *ret_fwdsc = fwdsc_init;
     *ret_time  = time_init;
@@ -737,6 +734,7 @@ p7_OptimizeForwardParser(const ESL_DSQ *dsq, int n, float *ret_time, P7_RATE *R,
   data.time       = time_init;
   data.dsq        = (ESL_DSQ *)dsq;
   data.n          = n;
+  data.r          = r;
   data.R          = (P7_RATE *)R;
   data.hmm        = (P7_HMM *)hmm;
   data.gm         = (P7_PROFILE *)gm;
@@ -811,7 +809,7 @@ optimize_msvfilter_func(double *p, int np, void *dptr)
   
   optimize_unpack_paramvector(p, data);
   
-  data->usc = func_msvfilter(dsq, data->n, data->hmm, data->R, data->gm, data->om, data->bg, data->oxf, data->time, TRUE);
+  data->usc = func_msvfilter(data->r, dsq, data->n, data->hmm, data->R, data->gm, data->om, data->bg, data->oxf, data->time, TRUE);
   
   if (data->usc == eslINFINITY) data->usc = 1000.;
   return -(double)data->usc;
@@ -825,7 +823,7 @@ optimize_viterbifilter_func(double *p, int np, void *dptr)
   
   optimize_unpack_paramvector(p, data);
   
-  data->vfsc = func_viterbifilter(dsq, data->n, data->hmm, data->R, data->gm, data->om, data->bg, data->oxf, data->time, TRUE);
+  data->vfsc = func_viterbifilter(data->r, dsq, data->n, data->hmm, data->R, data->gm, data->om, data->bg, data->oxf, data->time, TRUE);
   
   if (data->vfsc == eslINFINITY) data->vfsc = 1000.;
   return -(double)data->vfsc;
@@ -839,7 +837,7 @@ optimize_forwardparser_func(double *p, int np, void *dptr)
   
   optimize_unpack_paramvector(p, data);
 
-  data->fwdsc = func_forwardparser(dsq, data->n, data->hmm, data->R, data->gm, data->om, data->bg, data->oxf, data->time, TRUE);
+  data->fwdsc = func_forwardparser(data->r, dsq, data->n, data->hmm, data->R, data->gm, data->om, data->bg, data->oxf, data->time, TRUE);
   
   return -(double)data->fwdsc;
 }
@@ -847,12 +845,12 @@ optimize_forwardparser_func(double *p, int np, void *dptr)
 
 
 static inline double
-func_msvfilter(ESL_DSQ *dsq, int n, P7_HMM *hmm, P7_RATE *R, P7_PROFILE *gm, P7_OPROFILE *om, P7_BG *bg, P7_OMX *oxf, float time, int hmm_update)
+func_msvfilter(ESL_RANDOMNESS *r, ESL_DSQ *dsq, int n, P7_HMM *hmm, P7_RATE *R, P7_PROFILE *gm, P7_OPROFILE *om, P7_BG *bg, P7_OMX *oxf, float time, int hmm_update)
 {
   float  usc;
   
   /* Construct the evolved profile */
-  if (hmm_update) workaround_evolve_profile((double)time, n, R, bg, hmm, gm, om);
+  if (hmm_update) workaround_evolve_profile(r, (double)time, n, R, bg, hmm, gm, om);
   
   p7_MSVFilter(dsq, n, om, oxf, &(usc));
   
@@ -864,12 +862,12 @@ func_msvfilter(ESL_DSQ *dsq, int n, P7_HMM *hmm, P7_RATE *R, P7_PROFILE *gm, P7_
  }
 
 static inline double
-func_viterbifilter(ESL_DSQ *dsq, int n, P7_HMM *hmm, P7_RATE *R, P7_PROFILE *gm, P7_OPROFILE *om, P7_BG *bg, P7_OMX *oxf, float time, int hmm_update)
+func_viterbifilter(ESL_RANDOMNESS *r, ESL_DSQ *dsq, int n, P7_HMM *hmm, P7_RATE *R, P7_PROFILE *gm, P7_OPROFILE *om, P7_BG *bg, P7_OMX *oxf, float time, int hmm_update)
 {
   float  vfsc;
   
   /* Construct the evolved profile */
-  if (hmm_update) workaround_evolve_profile((double)time, n, R, bg, hmm, gm, om);
+  if (hmm_update) workaround_evolve_profile(r, (double)time, n, R, bg, hmm, gm, om);
 
   p7_ViterbiFilter(dsq, n, om, oxf, &(vfsc));
   
@@ -881,12 +879,12 @@ func_viterbifilter(ESL_DSQ *dsq, int n, P7_HMM *hmm, P7_RATE *R, P7_PROFILE *gm,
  }
 
 static inline double
-func_forwardparser(ESL_DSQ *dsq, int n, P7_HMM *hmm, P7_RATE *R, P7_PROFILE *gm, P7_OPROFILE *om, P7_BG *bg, P7_OMX *oxf, float time, int hmm_update)
+func_forwardparser(ESL_RANDOMNESS *r, ESL_DSQ *dsq, int n, P7_HMM *hmm, P7_RATE *R, P7_PROFILE *gm, P7_OPROFILE *om, P7_BG *bg, P7_OMX *oxf, float time, int hmm_update)
 {
   float   fwdsc;
 
   /* Construct the evolved profile */
-  if (hmm_update) workaround_evolve_profile((double)time, n, R, bg, hmm, gm, om);
+  if (hmm_update) workaround_evolve_profile(r, (double)time, n, R, bg, hmm, gm, om);
   
   p7_ForwardParser(dsq, n, om, oxf, &(fwdsc));
 
@@ -898,13 +896,17 @@ func_forwardparser(ESL_DSQ *dsq, int n, P7_HMM *hmm, P7_RATE *R, P7_PROFILE *gm,
  }
 
 static inline int
-workaround_evolve_profile(double time, int len, const P7_RATE *R, P7_BG *bg, P7_HMM *hmm, P7_PROFILE *gm, P7_OPROFILE *om)
+workaround_evolve_profile(ESL_RANDOMNESS *r, double time, int len, const P7_RATE *R, P7_BG *bg, P7_HMM *hmm, P7_PROFILE *gm, P7_OPROFILE *om)
 {  
   if (R == NULL) return eslOK;
   
   /* evolved HMM */
   p7_EvolveFromRate(NULL, hmm, R, bg, time, 0.0001, NULL, FALSE); 
-  
+
+#if RECALIBRATE
+  if (r) p7_Calibrate(hmm, NULL, &r, &bg, NULL, NULL);
+#endif
+
   /* evolved profiles gm and om */
   p7_ProfileConfig(hmm, bg, gm, len, p7_LOCAL);
   p7_oprofile_Convert(gm, om);    
@@ -912,17 +914,6 @@ workaround_evolve_profile(double time, int len, const P7_RATE *R, P7_BG *bg, P7_
   return eslOK;
 }
 
-static int
-workaround_calibrate(ESL_RANDOMNESS *r, int n, P7_BG *bg, P7_HMM *hmm, P7_PROFILE *gm, P7_OPROFILE *om)
-{  
-  p7_Calibrate(hmm, NULL, &r, &bg, NULL, NULL);
-
- /* evolved profiles gm and om */
-  p7_ProfileConfig(hmm, bg, gm, n, p7_LOCAL);
-  p7_oprofile_Convert(gm, om);      
-  
-  return eslOK;
-}
 
 /*****************************************************************
  * @LICENSE@

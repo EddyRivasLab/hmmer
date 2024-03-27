@@ -234,7 +234,7 @@ p7_EvoMSVMu(ESL_RANDOMNESS *r, P7_RATE *R, P7_HMM *hmm, P7_PROFILE *gm, P7_OPROF
       get_starprofile(bg, hmm, gm, om, &ehmm);
       
       time = time_star;
-      status = p7_OptimizeMSVFilter(dsq, L, &time, R, hmm, gm, om, bg, ox, &sc, fixtime, noevo, TRUE, TRUE, tol);
+      status = p7_OptimizeMSVFilter(NULL, dsq, L, &time, R, hmm, gm, om, bg, ox, &sc, fixtime, noevo, TRUE, TRUE, tol);
       if (status == eslERANGE) { sc = maxsc; status = eslOK; }
       if (status != eslOK)     goto ERROR;
 
@@ -314,7 +314,7 @@ p7_EvoViterbiMu(ESL_RANDOMNESS *r, P7_RATE *R, P7_HMM *hmm, P7_PROFILE *gm, P7_O
       get_starprofile(bg, hmm, gm, om, &ehmm);
 
       time = time_star;
-      status = p7_OptimizeViterbiFilter(dsq, L, &time, R, hmm, gm, om, bg, ox, &sc, fixtime, noevo, TRUE, TRUE, tol);
+      status = p7_OptimizeViterbiFilter(NULL, dsq, L, &time, R, hmm, gm, om, bg, ox, &sc, fixtime, noevo, TRUE, TRUE, tol);
       if (status == eslERANGE) { sc = maxsc; status = eslOK; }
       if (status != eslOK)     goto ERROR;
 
@@ -429,8 +429,8 @@ p7_EvoTau(ESL_RANDOMNESS *r, P7_RATE *R, P7_HMM *hmm, P7_PROFILE *gm, P7_OPROFIL
       get_starprofile(bg, hmm, gm, om, &ehmm);
       
       time = time_star;
-      if ((status = p7_OptimizeForwardParser(dsq, L, &time, R, hmm, gm, om, bg, ox, &fsc, fixtime, noevo, TRUE, tol)) != eslOK) goto ERROR;
-      if ((status = p7_bg_NullOne(bg, dsq, L, &nullsc))                                                               != eslOK) goto ERROR;   
+      if ((status = p7_OptimizeForwardParser(NULL, dsq, L, &time, R, hmm, gm, om, bg, ox, &fsc, fixtime, noevo, TRUE, tol)) != eslOK) goto ERROR;
+      if ((status = p7_bg_NullOne(bg, dsq, L, &nullsc))                                                                     != eslOK) goto ERROR;   
       xv[i] = (fsc - nullsc) / eslCONST_LOG2;
       
       p7_hmm_Destroy(ehmm); ehmm = NULL;
