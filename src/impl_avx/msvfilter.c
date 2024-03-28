@@ -67,10 +67,13 @@ int
 p7_MSVFilter(const ESL_DSQ *dsq, int L, const P7_OPROFILE *om, P7_OMX *ox, float *ret_sc)
 {
   float res_sse, res_avx;
-  int res;
+  int res, res2;
   res = p7_MSVFilter_sse(dsq, L, om, ox, &res_sse);
-  p7_MSVFilter_avx(dsq, L, om, ox, &res_avx);
+  res2 = p7_MSVFilter_avx(dsq, L, om, ox, &res_avx);
 
+  if(res != res2){
+    printf("Error: miss-match in MSV return codes.  SSE= %d, AVX = %d\n", res, res2);
+  }
   if(esl_FCompare(res_sse, res_avx, .01, .01) != eslOK){
     printf("Error: MSV miss-match.  SSE = %f, AVX = %f\n", res_sse, res_avx);
   }

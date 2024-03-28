@@ -79,25 +79,37 @@ p7_omx_Create(int allocM, int allocL, int allocXL)
   ox->allocQ4  = p7O_NQF(allocM);
   ox->allocQ8  = p7O_NQW(allocM);
   ox->allocQ16 = p7O_NQB(allocM);
+  ox->allocQ4_avx  = p7O_NQF_AVX(allocM);
+  ox->allocQ8_avx  = p7O_NQW_AVX(allocM);
+  ox->allocQ16_avx = p7O_NQB_AVX(allocM);
   ox->ncells   = (int64_t) ox->allocR * (int64_t) ox->allocQ4 * 4;      /* # of DP cells allocated, where 1 cell contains MDI */
 
-  ESL_ALLOC(ox->dp_mem, sizeof(__m128) * (int64_t) ox->allocR * (int64_t) ox->allocQ4 * p7X_NSCELLS + 15);  /* floats always dominate; +15 for alignment */
+  ESL_ALLOC(ox->dp_mem, sizeof(__m256) * (int64_t) ox->allocR * (int64_t) ox->allocQ4_avx * p7X_NSCELLS + 32);  /* floats always dominate; +15 for alignment */
   ESL_ALLOC(ox->dpb,    sizeof(__m128i *) * ox->allocR);
   ESL_ALLOC(ox->dpw,    sizeof(__m128i *) * ox->allocR);
   ESL_ALLOC(ox->dpf,    sizeof(__m128  *) * ox->allocR);
+  ESL_ALLOC(ox->dpb_avx,    sizeof(__m256i *) * ox->allocR);
+  ESL_ALLOC(ox->dpw_avx,    sizeof(__m256i *) * ox->allocR);
+  ESL_ALLOC(ox->dpf_avx,    sizeof(__m256  *) * ox->allocR);
 
   ox->dpb[0] = (__m128i *) ( ( (unsigned long int) ((char *) ox->dp_mem + 15) & (~0xf)));
   ox->dpw[0] = (__m128i *) ( ( (unsigned long int) ((char *) ox->dp_mem + 15) & (~0xf)));
   ox->dpf[0] = (__m128  *) ( ( (unsigned long int) ((char *) ox->dp_mem + 15) & (~0xf)));
+  ox->dpb_avx[0] = (__m256i *) ( ( (unsigned long int) ((char *) ox->dp_mem + 31) & (~0x1f)));
+  ox->dpw_avx[0] = (__m256i *) ( ( (unsigned long int) ((char *) ox->dp_mem + 31) & (~0x1f)));
+  ox->dpf_avx[0] = (__m256  *) ( ( (unsigned long int) ((char *) ox->dp_mem + 31) & (~0x1f)));
 
   for (i = 1; i <= allocL; i++) {
     ox->dpf[i] = ox->dpf[0] + (int64_t) i * (int64_t) ox->allocQ4  * p7X_NSCELLS;
     ox->dpw[i] = ox->dpw[0] + (int64_t) i * (int64_t) ox->allocQ8  * p7X_NSCELLS;
     ox->dpb[i] = ox->dpb[0] + (int64_t) i * (int64_t) ox->allocQ16;
+    ox->dpf_avx[i] = ox->dpf_avx[0] + (int64_t) i * (int64_t) ox->allocQ4_avx  * p7X_NSCELLS;
+    ox->dpw_avx[i] = ox->dpw_avx[0] + (int64_t) i * (int64_t) ox->allocQ8_avx  * p7X_NSCELLS;
+    ox->dpb_avx[i] = ox->dpb_avx[0] + (int64_t) i * (int64_t) ox->allocQ16_avx;
   }
 
   ox->allocXR = allocXL+1;
-  ESL_ALLOC(ox->x_mem,  sizeof(float) * ox->allocXR * p7X_NXCELLS + 15); 
+  ESL_ALLOC(ox->x_mem,  sizeof(float) * ox->allocXR * p7X_NXCELLS + 15);  //pad these out for 256-bit vectors
   ox->xmx = (float *) ( ( (unsigned long int) ((char *) ox->x_mem  + 15) & (~0xf)));
 
   ox->M              = 0;
@@ -141,20 +153,23 @@ p7_omx_GrowTo(P7_OMX *ox, int allocM, int allocL, int allocXL)
   int     nqf    = p7O_NQF(allocM);	   /* segment length; total # of striped vectors for uchar */
   int     nqw    = p7O_NQW(allocM);	   /* segment length; total # of striped vectors for float */
   int     nqb    = p7O_NQB(allocM);	   /* segment length; total # of striped vectors for float */
-  int64_t ncells = (int64_t) (allocL+1) * (int64_t) nqf * 4;
+  int     nqf_avx    = p7O_NQF_AVX(allocM);	   /* segment length; total # of striped vectors for uchar */
+  int     nqw_avx    = p7O_NQW_AVX(allocM);	   /* segment length; total # of striped vectors for float */
+  int     nqb_avx    = p7O_NQB_AVX(allocM);	   /* segment length; total # of striped vectors for float */
+  int64_t ncells = (int64_t) (allocL+1) * (int64_t) nqf_avx * 8;
   int     reset_row_pointers = FALSE;
   int     i;
   int     status;
  
   /* If all possible dimensions are already satisfied, the matrix is fine */
-  if (ox->allocQ4*4 >= allocM && ox->validR > allocL && ox->allocXR >= allocXL+1) return eslOK;
+  if (ox->allocQ4_avx*8 >= allocM && ox->validR > allocL && ox->allocXR >= allocXL+1) return eslOK;
 
   /* If the main matrix is too small in cells, reallocate it; 
    * and we'll need to realign/reset the row pointers later.
    */
   if (ncells > ox->ncells)
     {
-      ESL_RALLOC(ox->dp_mem, p, sizeof(__m128) * (int64_t) (allocL+1) * (int64_t) nqf * p7X_NSCELLS + 15);
+      ESL_RALLOC(ox->dp_mem, p, sizeof(__m256) * (int64_t) (allocL+1) * (int64_t) nqf_avx * p7X_NSCELLS + 31);
       ox->ncells = ncells;
       reset_row_pointers = TRUE;
     }

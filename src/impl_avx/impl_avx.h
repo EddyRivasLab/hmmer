@@ -3,16 +3,17 @@
  * 
  * SRE, Sun Nov 25 11:23:02 2007
  */
-#ifndef P7_IMPL_AVX_INCLUDED
-#define P7_IMPL_AVX_INCLUDED
+#ifndef P7_IMPL_avx_INCLUDED
+#define P7_IMPL_avx_INCLUDED
 
 #include <p7_config.h>
 
 #include "esl_alphabet.h"
 #include "esl_random.h"
-
 #include <xmmintrin.h>    /* SSE  */
 #include <emmintrin.h>    /* SSE2 */
+#include <immintrin.h>  /* AVX@ */
+
 #ifdef __SSE3__
 #include <pmmintrin.h>   /* DENORMAL_MODE */
 #endif
@@ -24,7 +25,9 @@
 #define p7O_NQB(M)   ( ESL_MAX(2, ((((M)-1) / 16) + 1)))   /* 16 uchars  */
 #define p7O_NQW(M)   ( ESL_MAX(2, ((((M)-1) / 8)  + 1)))   /*  8 words   */
 #define p7O_NQF(M)   ( ESL_MAX(2, ((((M)-1) / 4)  + 1)))   /*  4 floats  */
-
+#define p7O_NQB_AVX(M)   ( ESL_MAX(2, ((((M)-1) / 32) + 1)))   /* 32 uchars  */
+#define p7O_NQW_AVX(M)   ( ESL_MAX(2, ((((M)-1) / 16)  + 1)))   /*  16 words   */
+#define p7O_NQF_AVX(M)   ( ESL_MAX(2, ((((M)-1) / 8)  + 1)))   /*  8 floats  */
 #define p7O_EXTRA_SB 17    /* see ssvfilter.c for explanation */
 
 
@@ -74,8 +77,11 @@ enum p7o_tsc_e          { p7O_BM   = 0, p7O_MM   = 1,  p7O_IM = 2,  p7O_DM = 3, 
 
 typedef struct p7_oprofile_s {
   /* MSVFilter uses scaled, biased uchars: 16x unsigned byte vectors                 */
+
   __m128i **rbv;         /* match scores [x][q]: rm, rm[0] are allocated      */
   __m128i **sbv;         /* match scores for ssvfilter                        */
+  __m256i **rbv_avx;   // AVX versions of above
+  __m256i **sbv_avx;
   uint8_t   tbm_b;    /* constant B->Mk cost:    scaled log 2/M(M+1)       */
   uint8_t   tec_b;    /* constant E->C  cost:    scaled log 0.5            */
   uint8_t   tjb_b;    /* constant NCJ move cost: scaled log 3/(L+3)        */
@@ -86,6 +92,9 @@ typedef struct p7_oprofile_s {
   /* ViterbiFilter uses scaled swords: 8x signed 16-bit integer vectors              */
   __m128i **rwv;    /* [x][q]: rw, rw[0] are allocated  [Kp][Q8]         */
   __m128i  *twv;    /* transition score blocks          [8*Q8]           */
+  __m256i **rwv_avx;
+  __m256i  *twv_avx;
+
   int16_t   xw[p7O_NXSTATES][p7O_NXTRANS]; /* NECJ state transition costs            */
   float     scale_w;            /* score units: typically 500 / log(2), 1/500 bits   */
   int16_t   base_w;             /* offset of sword scores: typically +12000          */
@@ -95,16 +104,23 @@ typedef struct p7_oprofile_s {
   /* Forward, Backward use IEEE754 single-precision floats: 4x vectors               */
   __m128 **rfv;         /* [x][q]:  rf, rf[0] are allocated [Kp][Q4]         */
   __m128  *tfv;          /* transition probability blocks    [8*Q4]           */
+  __m256 **rfv_avx;
+  __m256  *tfv_avx;
   float    xf[p7O_NXSTATES][p7O_NXTRANS]; /* NECJ transition costs                   */
 
-  /* Our actual vector mallocs, before we align the memory                           */
+    /* Our actual vector mallocs, before we align the memory                           */
   __m128i  *rbv_mem;
   __m128i  *sbv_mem;
   __m128i  *rwv_mem;
   __m128i  *twv_mem;
   __m128   *tfv_mem;
   __m128   *rfv_mem;
-  
+  __m128i  *rbv_mem_avx;
+  __m128i  *sbv_mem_avx;
+  __m128i  *rwv_mem_avx;
+  __m128i  *twv_mem_avx;
+  __m128   *tfv_mem_avx;
+  __m128   *rfv_mem_avx;
   /* Disk offset information for hmmpfam's fast model retrieval                      */
   off_t  offs[p7_NOFFSETS];     /* p7_{MFP}OFFSET, or -1                             */
 
@@ -129,10 +145,13 @@ typedef struct p7_oprofile_s {
   int    L;      /* current configured target seq length              */
   int    M;      /* model length                                      */
   int    max_length;    /* upper bound on emitted sequence length            */
-  int    allocM;    /* maximum model length currently allocated for      */
+  int    allocM;    /* maximum model length currently allocated for SSE      */
   int    allocQ4;    /* p7_NQF(allocM): alloc size for tf, rf             */
   int    allocQ8;    /* p7_NQW(allocM): alloc size for tw, rw             */
   int    allocQ16;    /* p7_NQB(allocM): alloc size for rb                 */
+  int    allocQ4_avx; // as above, but for AVX
+  int    allocQ8_avx;
+  int    allocQ16_avx;
   int    mode;      /* currently must be p7_LOCAL                        */
   float  nj;      /* expected # of J's: 0 or 1, uni vs. multihit       */
 
@@ -188,12 +207,18 @@ typedef struct p7_omx_s {
   __m128  **dpf;    /* striped DP matrix for [0,1..L][0..Q-1][MDI], float vectors  */
   __m128i **dpw;    /* striped DP matrix for [0,1..L][0..Q-1][MDI], sword vectors  */
   __m128i **dpb;    /* striped DP matrix for [0,1..L][0..Q-1] uchar vectors        */
-  void     *dp_mem;    /* DP memory shared by <dpb>, <dpw>, <dpf>                     */
+  __m256 **dpf_avx;  //AVX versions of above
+  __m256i **dpw_avx;
+  __m256i **dpb_avx;
+  void     *dp_mem;    /* DP memory shared by <dpb>, <dpw>, <dpf>  and AVX versions     */
   int       allocR;    /* current allocated # rows in dp{uf}. allocR >= validR >= L+1 */
   int       validR;    /* current # of rows actually pointing at DP memory            */
   int       allocQ4;    /* current set row width in <dpf> quads:   allocQ4*4 >= M      */
   int       allocQ8;    /* current set row width in <dpw> octets:  allocQ8*8 >= M      */
   int       allocQ16;   /* current set row width in <dpb> 16-mers: allocQ16*16 >= M    */
+  int       allocQ4_avx; // AVX versions of above 
+  int       allocQ8_avx;    
+  int       allocQ16_avx;  
   int64_t   ncells;     /* current allocation size of <dp_mem>, in accessible cells    */
 
   /* The X states (for full,parser; or NULL, for scorer)                                       */
@@ -316,9 +341,9 @@ extern int p7_ForwardParser_sse (const ESL_DSQ *dsq, int L, const P7_OPROFILE *o
 extern int p7_Backward_sse      (const ESL_DSQ *dsq, int L, const P7_OPROFILE *om, const P7_OMX *fwd, P7_OMX *bck, float *opt_sc);
 extern int p7_BackwardParser_sse(const ESL_DSQ *dsq, int L, const P7_OPROFILE *om, const P7_OMX *fwd, P7_OMX *bck, float *opt_sc);
 extern int p7_Forward_avx       (const ESL_DSQ *dsq, int L, const P7_OPROFILE *om,                    P7_OMX *fwd, float *opt_sc);
-extern int p7_ForwardParser_avx (const ESL_DSQ *dsq, int L, const P7_OPROFILE *om,                    P7_OMX *fwd, float *opt_sc);
-extern int p7_Backward_avx      (const ESL_DSQ *dsq, int L, const P7_OPROFILE *om, const P7_OMX *fwd, P7_OMX *bck, float *opt_sc);
-extern int p7_BackwardParser_avx(const ESL_DSQ *dsq, int L, const P7_OPROFILE *om, const P7_OMX *fwd, P7_OMX *bck, float *opt_sc);
+extern int p7_ForwardParser_avx  (const ESL_DSQ *dsq, int L, const P7_OPROFILE *om,                    P7_OMX *fwd, float *opt_sc);
+extern int p7_Backward_avx       (const ESL_DSQ *dsq, int L, const P7_OPROFILE *om, const P7_OMX *fwd, P7_OMX *bck, float *opt_sc);
+extern int p7_BackwardParser_avx (const ESL_DSQ *dsq, int L, const P7_OPROFILE *om, const P7_OMX *fwd, P7_OMX *bck, float *opt_sc);
 
 /* io.c */
 extern int p7_oprofile_Write(FILE *ffp, FILE *pfp, P7_OPROFILE *om);
@@ -334,12 +359,12 @@ extern void p7_oprofile_DestroyBlock(P7_OM_BLOCK *block);
 /* ssvfilter.c */
 extern int p7_SSVFilter    (const ESL_DSQ *dsq, int L, const P7_OPROFILE *om, float *ret_sc);
 extern int p7_SSVFilter_sse    (const ESL_DSQ *dsq, int L, const P7_OPROFILE *om, float *ret_sc);
-extern int p7_SSVFilter_avx    (const ESL_DSQ *dsq, int L, const P7_OPROFILE *om, float *ret_sc);
+extern int p7_SSVFilter_avx     (const ESL_DSQ *dsq, int L, const P7_OPROFILE *om, float *ret_sc);
 
 /* msvfilter.c */
 extern int p7_MSVFilter (const ESL_DSQ *dsq, int L, const P7_OPROFILE *om, P7_OMX *ox, float *ret_sc);
 extern int p7_MSVFilter_sse (const ESL_DSQ *dsq, int L, const P7_OPROFILE *om, P7_OMX *ox, float *ret_sc);
-extern int p7_MSVFilter_avx (const ESL_DSQ *dsq, int L, const P7_OPROFILE *om, P7_OMX *ox, float *ret_sc);
+extern int p7_MSVFilter_avx  (const ESL_DSQ *dsq, int L, const P7_OPROFILE *om, P7_OMX *ox, float *ret_sc);
 extern int p7_SSVFilter_longtarget(const ESL_DSQ *dsq, int L, P7_OPROFILE *om, P7_OMX *ox, const P7_SCOREDATA *msvdata, P7_BG *bg, double P, P7_HMM_WINDOWLIST *windowlist);
 
 
@@ -357,7 +382,7 @@ extern int p7_StochasticTrace(ESL_RANDOMNESS *rng, const ESL_DSQ *dsq, int L, co
 /* vitfilter.c */
 extern int p7_ViterbiFilter(const ESL_DSQ *dsq, int L, const P7_OPROFILE *om, P7_OMX *ox, float *ret_sc);
 extern int p7_ViterbiFilter_sse(const ESL_DSQ *dsq, int L, const P7_OPROFILE *om, P7_OMX *ox, float *ret_sc);
-extern int p7_ViterbiFilter_avx(const ESL_DSQ *dsq, int L, const P7_OPROFILE *om, P7_OMX *ox, float *ret_sc);
+extern int p7_ViterbiFilter_avx (const ESL_DSQ *dsq, int L, const P7_OPROFILE *om, P7_OMX *ox, float *ret_sc);
 extern int p7_ViterbiFilter_longtarget(const ESL_DSQ *dsq, int L, const P7_OPROFILE *om, P7_OMX *ox,
                                         float filtersc, double P, P7_HMM_WINDOWLIST *windowlist);
 
