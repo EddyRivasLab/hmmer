@@ -216,7 +216,6 @@ p7_EvoPipeline(P7_PIPELINE *pli, ESL_RANDOMNESS *r, P7_RATE *R, P7_HMM *hmm, P7_
     *ret_hmm_update = TRUE;
     return eslOK;
   }
- 
   pli->n_past_fwd++;
   
 
@@ -564,26 +563,26 @@ p7_OptimizeMSVFilter(ESL_RANDOMNESS *r, const ESL_DSQ *dsq, int n, float *ret_ti
   if (usc_init > data.usc || data.usc == eslINFINITY) {
     *ret_usc  = usc_init;
     *ret_time = time_init;
+    func_msvfilter(r, (ESL_DSQ *)dsq, n, hmm, R, gm, om, bg, oxf, time_init, TRUE, recalibrate);
   }
   else {
     *ret_usc  = data.usc;
     *ret_time = data.time;
+    if (recalibrate) p7_Calibrate(hmm, NULL, &r, &bg, NULL, NULL);
   }
 
-  if (recalibrate) workaround_recalibrate(r, n, bg, hmm, gm, om);
-  
   /* clean up */
   esl_min_cfg_Destroy(cfg);
   esl_min_dat_Destroy(stats);
-  if (u   != NULL) free(u);
-  if (p   != NULL) free(p);
+  if (u != NULL) free(u);
+  if (p != NULL) free(p);
   return eslOK;
 
  ERROR:
   if (cfg)   esl_min_cfg_Destroy(cfg);
   if (stats) esl_min_dat_Destroy(stats);
-  if (p   != NULL) free(p);
-  if (u   != NULL) free(u);
+  if (p != NULL) free(p);
+  if (u != NULL) free(u);
   return status;
 }
 
@@ -667,19 +666,19 @@ p7_OptimizeViterbiFilter(ESL_RANDOMNESS *r, const ESL_DSQ *dsq, int n, float *re
   if (vfsc_init > data.vfsc || data.vfsc == eslINFINITY) {
     *ret_vfsc = vfsc_init;
     *ret_time = time_init;
+    func_viterbifilter(r, (ESL_DSQ *)dsq, n, hmm, R, gm, om, bg, oxf, time_init, TRUE, recalibrate);
   }
   else {
     *ret_vfsc = data.vfsc;
     *ret_time = data.time;
+    if (recalibrate) p7_Calibrate(hmm, NULL, &r, &bg, NULL, NULL);
   }
   
-  if (recalibrate) workaround_recalibrate(r, n, bg, hmm, gm, om);
-
   /* clean up */
   esl_min_cfg_Destroy(cfg);
   esl_min_dat_Destroy(stats);
-  if (u   != NULL) free(u);
-  if (p   != NULL) free(p);
+  if (u != NULL) free(u);
+  if (p != NULL) free(p);
   return eslOK;
 
  ERROR:
@@ -771,26 +770,26 @@ p7_OptimizeForwardParser(ESL_RANDOMNESS *r, const ESL_DSQ *dsq, int n, float *re
   if (fwdsc_init > data.fwdsc || data.fwdsc == eslINFINITY) {
     *ret_fwdsc = fwdsc_init;
     *ret_time  = time_init;
+    func_forwardparser(r, (ESL_DSQ *)dsq, n, hmm, R, gm, om, bg, oxf, time_init, TRUE, recalibrate);
   }
   else {
     *ret_fwdsc = data.fwdsc;
     *ret_time  = data.time;
+    if (recalibrate) p7_Calibrate(hmm, NULL, &r, &bg, NULL, NULL);
   }
-
-  if (recalibrate) workaround_recalibrate(r, n, bg, hmm, gm, om);
 
   /* clean up */
   esl_min_cfg_Destroy(cfg);
   esl_min_dat_Destroy(stats);
-  if (p   != NULL) free(p);
-  if (u   != NULL) free(u);
+  if (p != NULL) free(p);
+  if (u != NULL) free(u);
   return eslOK;
 
  ERROR:
   if (cfg)   esl_min_cfg_Destroy(cfg);  
   if (stats) esl_min_dat_Destroy(stats);  
-  if (p   != NULL) free(p);
-  if (u   != NULL) free(u);
+  if (p != NULL) free(p);
+  if (u != NULL) free(u);
   return status;
 }
 
@@ -916,7 +915,6 @@ workaround_evolve_profile(ESL_RANDOMNESS *r, double time, int len, const P7_RATE
   /* evolved profiles gm and om */
   p7_ProfileConfig(hmm, bg, gm, len, p7_LOCAL);
   p7_oprofile_Convert(gm, om);
-
   
 }
 
@@ -929,8 +927,8 @@ workaround_recalibrate(ESL_RANDOMNESS *r, int len, P7_BG *bg, P7_HMM *hmm, P7_PR
   p7_Calibrate(hmm, NULL, &r, &bg, NULL, NULL);
 
   /* evolved profiles gm and om */
-  p7_ProfileConfig(hmm, bg, gm, len, p7_LOCAL);
-  p7_oprofile_Convert(gm, om);
+  //p7_ProfileConfig(hmm, bg, gm, len, p7_LOCAL);
+  //p7_oprofile_Convert(gm, om);
 }
 
 
