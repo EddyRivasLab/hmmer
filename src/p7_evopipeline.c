@@ -134,10 +134,8 @@ p7_EvoPipeline(P7_PIPELINE *pli, ESL_RANDOMNESS *r, float *evparam_star, P7_RATE
   /* Base null model score (we could calculate this in NewSeq(), for a scan pipeline) */
   p7_bg_NullOne(bg, sq->dsq, sq->n, &nullsc);
 
-  if (hmm_restore) {
+  if (hmm_restore) 
     workaround_restore_profile(evparam_star, sq->n, R, bg, hmm, gm, om);
-    //if (recalibrate) p7_Calibrate(hmm, NULL, &r, &bg, NULL, NULL);
-  }
     
   /* First level filter: the MSV filter, multihit with <om> */
   time = time_star;
@@ -193,7 +191,7 @@ p7_EvoPipeline(P7_PIPELINE *pli, ESL_RANDOMNESS *r, float *evparam_star, P7_RATE
 	if (time == time_star) vfsc_optimized = FALSE;
       }
 
-      printf("^^VIT %s update? %d time %f vfsc %f\n", sq->name, hmm_evolve, time, vfsc);
+      //printf("^^VIT %s update? %d time %f vfsc %f\n", sq->name, hmm_evolve, time, vfsc);
       seq_score = (vfsc-filtersc) / eslCONST_LOG2;
       P  = esl_gumbel_surv(seq_score,  om->evparam[p7_VMU],  om->evparam[p7_VLAMBDA]);
       if (P > pli->F2) {
@@ -220,6 +218,8 @@ p7_EvoPipeline(P7_PIPELINE *pli, ESL_RANDOMNESS *r, float *evparam_star, P7_RATE
 
   seq_score = (fwdsc-filtersc) / eslCONST_LOG2;
   P = esl_exp_surv(seq_score,  om->evparam[p7_FTAU],  om->evparam[p7_FLAMBDA]);
+  //printf("^^FWD %s P %f time %f fwdsc %f filter %f score %f tau %f lambda %f\n", sq->name, P, time, fwdsc, filtersc, (fwdsc-filtersc) / eslCONST_LOG2, om->evparam[p7_FTAU],  om->evparam[p7_FLAMBDA]);
+
   if (P > pli->F3)  {
     *ret_hmm_restore = TRUE;
     return eslOK;
@@ -773,7 +773,7 @@ p7_OptimizeForwardParser(ESL_RANDOMNESS *r, const ESL_DSQ *dsq, int n, float *re
   /* unpack the final parameter vector */
   optimize_unpack_paramvector(p, &data);
   data.fwdsc = -sc;
-  //printf("END FWD OPTIMIZATION: time %f fwdsc %f --> %f\n", data.time, fwdsc_init, data.fwdsc);
+  printf("END FWD OPTIMIZATION: time %f fwdsc %f --> %f\n", data.time, fwdsc_init, data.fwdsc);
 
   if (fwdsc_init > data.fwdsc || data.fwdsc == eslINFINITY) {
     *ret_fwdsc = fwdsc_init;
@@ -931,9 +931,22 @@ workaround_calibrate_profile(ESL_RANDOMNESS *r, int len, P7_BG *bg, P7_HMM *hmm,
 {  
   p7_Calibrate(hmm, NULL, &r, NULL, NULL, NULL);
   
-  /* evolved profiles gm and om */
-  //p7_ProfileConfig(hmm, bg, gm, len, p7_LOCAL);
-  // p7_oprofile_Convert(gm, om);
+  // assign the calibration parameters to the profiles
+  om->evparam[p7_MLAMBDA] = hmm->evparam[p7_MLAMBDA];
+  om->evparam[p7_VLAMBDA] = hmm->evparam[p7_VLAMBDA];
+  om->evparam[p7_FLAMBDA] = hmm->evparam[p7_FLAMBDA];
+  om->evparam[p7_MMU]     = hmm->evparam[p7_MMU];
+  om->evparam[p7_VMU]     = hmm->evparam[p7_VMU];
+  om->evparam[p7_FTAU]    = hmm->evparam[p7_FTAU];
+
+  if (gm != NULL) {
+    gm->evparam[p7_MLAMBDA] = hmm->evparam[p7_MLAMBDA];
+    gm->evparam[p7_VLAMBDA] = hmm->evparam[p7_VLAMBDA];
+    gm->evparam[p7_FLAMBDA] = hmm->evparam[p7_FLAMBDA];
+    gm->evparam[p7_MMU]     = hmm->evparam[p7_MMU];
+    gm->evparam[p7_VMU]     = hmm->evparam[p7_VMU];
+    gm->evparam[p7_FTAU]    = hmm->evparam[p7_FTAU];
+  }
 }
 
 static inline void
