@@ -38,15 +38,15 @@ struct optimize_data {
 
 extern int p7_OptimizeMSVFilter    (ESL_RANDOMNESS *r, const ESL_DSQ *dsq, int n, float *ret_time, P7_RATE *R,
 				    P7_HMM *hmm, P7_PROFILE *gm, P7_OPROFILE *om, P7_BG *bg, P7_OMX *oxf, float *ret_usc,
-				    float fixtime, int noevo, int recalibrate, int msv_opt, int hmm_update, float tol);
+				    float fixtime, int noevo, int recalibrate, int msv_opt, int hmm_evolve, float tol);
 extern int p7_OptimizeViterbiFilter(ESL_RANDOMNESS *r, const ESL_DSQ *dsq, int n, float *ret_time, P7_RATE *R,
 				    P7_HMM *hmm, P7_PROFILE *gm, P7_OPROFILE *om, P7_BG *bg, P7_OMX *oxf, float *ret_vfsc,
-				    float fixtime, int noevo, int recalibrate, int vit_opt, int hmm_update, float tol);
+				    float fixtime, int noevo, int recalibrate, int vit_opt, int hmm_evolve, float tol);
 extern int p7_OptimizeForwardParser(ESL_RANDOMNESS *r, const ESL_DSQ *dsq, int n, float *ret_time, P7_RATE *R,
 				    P7_HMM *hmm, P7_PROFILE *gm, P7_OPROFILE *om, P7_BG *bg, P7_OMX *oxf, float *ret_fwdsc,
-				    float fixtime, int noevo, int recalibrate,              int hmm_update, float tol);
-extern int p7_EvoPipeline(P7_PIPELINE *pli, ESL_RANDOMNESS *r, P7_RATE *R, P7_HMM *hmm, P7_PROFILE *gm, P7_OPROFILE *om, P7_BG *bg, const ESL_SQ *sq, const ESL_SQ *ntsq,
-			  P7_TOPHITS *hitlist, float fixtime, int noevo, int recalibrate, int *ret_hmm_update);
+				    float fixtime, int noevo, int recalibrate,              int hmm_evolve, float tol);
+extern int p7_EvoPipeline(P7_PIPELINE *pli, ESL_RANDOMNESS *r, float *evparam_star, P7_RATE *R, P7_HMM *hmm, P7_PROFILE *gm, P7_OPROFILE *om, P7_BG *bg,
+			  const ESL_SQ *sq, const ESL_SQ *ntsq, P7_TOPHITS *hitlist, float fixtime, int noevo, int recalibrate, int *ret_hmm_restore);
 
 #endif /*P7_EVOPIPELINE_INCLUDED*/
 

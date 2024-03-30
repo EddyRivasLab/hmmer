@@ -46,16 +46,17 @@ typedef struct {
   ESL_WORK_QUEUE   *queue;
 #endif
   ESL_RANDOMNESS   *r;
-  P7_BG            *bg;	         /* null model                              */
-  P7_PIPELINE      *pli;         /* work pipeline                           */
-  P7_TOPHITS       *th;          /* top hit results                         */
-  P7_PROFILE       *gm;          /* query profile                           */
-  P7_OPROFILE      *om;          /* optimized query profile                 */
-  P7_HMM           *hmm;         /* the hmm                                     */
-  P7_RATE          *R;           /* the hmm rate                                */
-  int               noevo;       /* if TRUE do not evolve; behaves as hmmsearch */
-  int               recalibrate; /* if TRUE recalibrate the evolved HMM         */
-  double            fixtime;     /* if >= 0, do not optimize time               */
+  P7_BG            *bg;	                        /* null model                                     */
+  P7_PIPELINE      *pli;                        /* work pipeline                                  */
+  P7_TOPHITS       *th;                         /* top hit results                                */
+  P7_PROFILE       *gm;                         /* query profile                                  */
+  P7_OPROFILE      *om;                         /* optimized query profile                        */
+  P7_HMM           *hmm;                        /* the hmm                                        */
+  P7_RATE          *R;                          /* the hmm rate                                   */
+  float             evparam_star[p7_NEVPARAM];  /* to store calibration parameters of the HMMstar */
+  int               noevo;                      /* if TRUE do not evolve; behaves as hmmsearch    */
+  int               recalibrate;                /* if TRUE recalibrate the evolved HMM            */
+  double            fixtime;                    /* if >= 0, do not optimize time                  */
   double            tol;
 
 } WORKER_INFO;
@@ -486,18 +487,18 @@ serial_master(ESL_GETOPTS *go, struct cfg_s *cfg)
 
       for (i = 0; i < infocnt; ++i)
 	{
-	  info[i].pli         = NULL;
-	  info[i].th          = NULL;
-	  info[i].gm          = NULL;
-	  info[i].om          = NULL;
-	  info[i].R           = NULL;
-	  info[i].hmm         = NULL;
-	  info[i].bg          = p7_bg_Create(abc);
-	  info[i].noevo       = esl_opt_GetBoolean(go, "--noevo");
-	  info[i].recalibrate = esl_opt_GetBoolean(go, "--recalibrate");
-	  info[i].fixtime     = esl_opt_IsOn(go, "--fixtime")? esl_opt_GetReal(go, "--fixtime") : -1.0;
-	  info[i].tol         = tol;
-	  info[i].r           = cfg->r;
+	  info[i].pli          = NULL;
+	  info[i].th           = NULL;
+	  info[i].gm           = NULL;
+	  info[i].om           = NULL;
+	  info[i].R            = NULL;
+	  info[i].hmm          = NULL;
+	  info[i].bg           = p7_bg_Create(abc);
+	  info[i].noevo        = esl_opt_GetBoolean(go, "--noevo");
+	  info[i].recalibrate  = esl_opt_GetBoolean(go, "--recalibrate");
+	  info[i].fixtime      = esl_opt_IsOn(go, "--fixtime")? esl_opt_GetReal(go, "--fixtime") : -1.0;
+	  info[i].tol          = tol;
+	  info[i].r            = cfg->r;
 #ifdef HMMER_THREADS
 	  info[i].queue   = queue;
 #endif
@@ -543,9 +544,10 @@ serial_master(ESL_GETOPTS *go, struct cfg_s *cfg)
   /* Outer loop: over each query HMM in <hmmfile>. */
   while (hstatus == eslOK) 
     {
-      P7_RATE         *R       = NULL;
-      P7_PROFILE      *gm      = NULL;
-      P7_OPROFILE     *om      = NULL;       /* optimized query profile                  */
+      float        evparam_star[p7_NEVPARAM];  /* to store calibration parameters of the HMMstar */
+      P7_RATE     *R       = NULL;
+      P7_PROFILE  *gm      = NULL;
+      P7_OPROFILE *om      = NULL;            /* optimized query profile                  */
       
       nquery++;
       esl_stopwatch_Start(w);
@@ -553,6 +555,14 @@ serial_master(ESL_GETOPTS *go, struct cfg_s *cfg)
       /* Calculate the hmm rate R
        * this should be part of hmmbuild
        */
+      // store the calibration parameters
+      evparam_star[p7_MLAMBDA] = hmm->evparam[p7_MLAMBDA];
+      evparam_star[p7_VLAMBDA] = hmm->evparam[p7_MLAMBDA];
+      evparam_star[p7_FLAMBDA] = hmm->evparam[p7_MLAMBDA];
+      evparam_star[p7_MMU]     = hmm->evparam[p7_MMU];
+      evparam_star[p7_VMU]     = hmm->evparam[p7_VMU];
+      evparam_star[p7_FTAU]    = hmm->evparam[p7_FTAU];
+
       if (!esl_opt_IsOn(go, "--noevo") && 
 	  p7_RateCalculate(statfp, hmm, info[0].bg, emR, NULL, &R, evomodel, betainf, (float)info[0].fixtime, 0.001, errbuf, FALSE) != eslOK)  
 	esl_fatal("%s", errbuf);      
@@ -587,7 +597,14 @@ serial_master(ESL_GETOPTS *go, struct cfg_s *cfg)
       for (i = 0; i < infocnt; ++i)
       {
 	if (!esl_opt_IsOn(go, "--noevo")) {
-	  info[i].R   = p7_RateClone(R);
+	  info[i].R = p7_RateClone(R);
+	  
+	  info[i].evparam_star[p7_MLAMBDA] = evparam_star[p7_MLAMBDA];
+	  info[i].evparam_star[p7_VLAMBDA] = evparam_star[p7_MLAMBDA];
+	  info[i].evparam_star[p7_FLAMBDA] = evparam_star[p7_MLAMBDA];
+	  info[i].evparam_star[p7_MMU]     = evparam_star[p7_MMU];
+	  info[i].evparam_star[p7_VMU]     = evparam_star[p7_VMU];
+	  info[i].evparam_star[p7_FTAU]    = evparam_star[p7_FTAU];
 	}
 	
         /* Create processing pipeline and hit list */
@@ -1293,12 +1310,13 @@ mpi_worker(ESL_GETOPTS *go, struct cfg_s *cfg)
   /* Outer loop: over each query HMM in <hmmfile>. */
   while (hstatus == eslOK) 
     {
-      P7_RATE         *R    = NULL;
-      P7_PROFILE      *gm  = NULL;
-      P7_OPROFILE     *om  = NULL;       /* optimized query profile                  */
-      P7_PIPELINE     *pli = NULL;
-      P7_TOPHITS      *th  = NULL;
-      int              hmm_update = FALSE;
+     float            evparam_star[p7_NEVPARAM];  /* to store calibration parameters of the HMMstar */
+     P7_RATE         *R    = NULL;
+     P7_PROFILE      *gm  = NULL;
+     P7_OPROFILE     *om  = NULL;                 /* optimized query profile                  */
+     P7_PIPELINE     *pli = NULL;
+     P7_TOPHITS      *th  = NULL;
+     int              hmm_restore = FALSE;
 
       SEQ_BLOCK        block;
 
@@ -1314,7 +1332,15 @@ mpi_worker(ESL_GETOPTS *go, struct cfg_s *cfg)
       }
       if (!esl_opt_IsOn(go, "--noevo") &&
 	  p7_RateCalculate(statfp, hmm, bg, emR, NULL, &R, evomodel, betainf, 0.001, errbuf, FALSE) != eslOK)  esl_fatal("%s", errbuf);
-      
+
+      // store the calibration parameters
+      evparam_star[p7_MLAMBDA] = hmm->evparam[p7_MLAMBDA];
+      evparam_star[p7_VLAMBDA] = hmm->evparam[p7_MLAMBDA];
+      evparam_star[p7_FLAMBDA] = hmm->evparam[p7_MLAMBDA];
+      evparam_star[p7_MMU]     = hmm->evparam[p7_MMU];
+      evparam_star[p7_VMU]     = hmm->evparam[p7_VMU];
+      evparam_star[p7_FTAU]    = hmm->evparam[p7_FTAU];
+
       status = 0;
       MPI_Send(&status, 1, MPI_INT, 0, HMMER_READY_TAG, MPI_COMM_WORLD);
 
@@ -1346,7 +1372,7 @@ mpi_worker(ESL_GETOPTS *go, struct cfg_s *cfg)
 	      p7_bg_SetLength(bg, dbsq->n);
 	      p7_oprofile_ReconfigLength(om, dbsq->n);
       
-	      p7_EvoPipeline(pli, cfg->r, R, hmm, gm, om, bg, dbsq, NULL, th, fixtime, noevo, recalibrate, &hmm_update);
+	      p7_EvoPipeline(pli, cfg->r, evparam_star, R, hmm, gm, om, bg, dbsq, NULL, th, fixtime, noevo, recalibrate, &hmm_restore);
 
 	      esl_sq_Reuse(dbsq);
 	      p7_pipeline_Reuse(pli);
@@ -1419,7 +1445,7 @@ serial_loop(WORKER_INFO *info, ESL_SQFILE *dbfp, int n_targetseqs)
   int      sstatus;
   ESL_SQ  *dbsq     = NULL;   /* one target sequence (digital)  */
   int      seq_cnt = 0;
-  int      hmm_update = FALSE;
+  int      hmm_restore = FALSE;
 
   dbsq = esl_sq_CreateDigital(info->om->abc);
 
@@ -1431,8 +1457,8 @@ serial_loop(WORKER_INFO *info, ESL_SQFILE *dbfp, int n_targetseqs)
       p7_ReconfigLength(info->gm, dbsq->n);
       p7_oprofile_ReconfigLength(info->om, dbsq->n);
 
-      p7_EvoPipeline(info->pli, info->r, info->R, info->hmm, info->gm, info->om, info->bg, dbsq, NULL, info->th, (float)info->fixtime,
-		     info->noevo, info->recalibrate, &hmm_update);
+      p7_EvoPipeline(info->pli, info->r, info->evparam_star, info->R, info->hmm, info->gm, info->om, info->bg, dbsq, NULL, info->th, (float)info->fixtime,
+		     info->noevo, info->recalibrate, &hmm_restore);
 
       seq_cnt++;
       esl_sq_Reuse(dbsq);
@@ -1514,7 +1540,7 @@ pipeline_thread(void *arg)
 
   ESL_SQ_BLOCK  *block = NULL;
   void          *newBlock;
-  int            hmm_update = FALSE;
+  int            hmm_restore = FALSE;
 
   impl_Init();
 
@@ -1540,8 +1566,8 @@ pipeline_thread(void *arg)
 	  p7_ReconfigLength(info->gm, dbsq->n);
 	  p7_oprofile_ReconfigLength(info->om, dbsq->n);
 	  
-	  p7_EvoPipeline(info->pli, info->r, info->R, info->hmm, info->gm, info->om, info->bg, dbsq, NULL, info->th, (float)info->fixtime,
-			 info->noevo, info->recalibrate, &hmm_update);
+	  p7_EvoPipeline(info->pli, info->r, info->evparam_star, info->R, info->hmm, info->gm, info->om, info->bg, dbsq, NULL, info->th, (float)info->fixtime,
+			 info->noevo, info->recalibrate, &hmm_restore);
 
 	  esl_sq_Reuse(dbsq);
 	  p7_pipeline_Reuse(info->pli);
