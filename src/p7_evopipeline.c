@@ -669,7 +669,7 @@ p7_OptimizeViterbiFilter(ESL_RANDOMNESS *r, const ESL_DSQ *dsq, int n, float *re
   /* unpack the final parameter vector */
   optimize_unpack_paramvector(p, &data);
   data.vfsc = -sc;
-  printf("END VIT OPTIMIZATION: time %f vfsc %f --> %f\n", data.time, vfsc_init, data.vfsc);
+  //printf("END VIT OPTIMIZATION: time %f vfsc %f --> %f\n", data.time, vfsc_init, data.vfsc);
 
   if (vfsc_init > data.vfsc || data.vfsc == eslINFINITY) {
     *ret_vfsc = vfsc_init;
@@ -773,7 +773,7 @@ p7_OptimizeForwardParser(ESL_RANDOMNESS *r, const ESL_DSQ *dsq, int n, float *re
   /* unpack the final parameter vector */
   optimize_unpack_paramvector(p, &data);
   data.fwdsc = -sc;
-  printf("END FWD OPTIMIZATION: time %f fwdsc %f --> %f\n", data.time, fwdsc_init, data.fwdsc);
+  //printf("END FWD OPTIMIZATION: time %f fwdsc %f --> %f\n", data.time, fwdsc_init, data.fwdsc);
 
   if (fwdsc_init > data.fwdsc || data.fwdsc == eslINFINITY) {
     *ret_fwdsc = fwdsc_init;
