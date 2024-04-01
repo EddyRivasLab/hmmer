@@ -49,6 +49,7 @@ OBJS =  decoding_sse.o\
 	msvfilter.o\
 	null2.o\
 	optacc.o\
+	simdvec.o\
 	stotrace.o\
 	vitfilter_sse.o\
 	vitfilter_avx.o\

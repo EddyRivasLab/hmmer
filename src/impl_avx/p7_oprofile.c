@@ -181,7 +181,7 @@ p7_oprofile_Create(int allocM, const ESL_ALPHABET *abc)
   ESL_ALLOC(om->rwv_avx, sizeof(__m256i *) * abc->Kp); 
   ESL_ALLOC(om->rfv_avx, sizeof(__m256  *) * abc->Kp); 
 
-  /* align vector memory on 16-byte boundaries */
+  /* align vector memory on 32-byte boundaries */
 
 
   om->rbv_avx[0] = (__m256i *) (((unsigned long int) om->rbv_mem_avx + 31) & (~0x1f));
@@ -1088,11 +1088,10 @@ vf_conversion(const P7_PROFILE *gm, P7_OPROFILE *om)
   int16_t  val;
   union { __m128i v; int16_t i[8]; } tmp; /* used to align and load simd minivectors            */
 
-  int     nq_avx  = p7O_NQW_AVX(M);     /* segment length; total # of striped vectors needed            */
-  union { __m256i v; int16_t i[16]; } tmp_avx; /* used to align and load simd minivectors            */
-  if (nq_avx > om->allocQ8_avx) ESL_EXCEPTION(eslEINVAL, "optimized profile is too small to hold conversion");
   if (nq > om->allocQ8) ESL_EXCEPTION(eslEINVAL, "optimized profile is too small to hold conversion");
-
+  int     nq_avx  = p7O_NQW_AVX(M);     /* segment length; total # of striped vectors ne\eded            */
+  union { __m256i v; int16_t i[16]; } tmp_avx; /* used to align and load simd minivecto\rs            */
+  if (nq_avx > om->allocQ8_avx) ESL_EXCEPTION(eslEINVAL, "optimized profile is too small to hold conversion");
   /* First set the basis for the limited-precision scoring system. 
    * Default: 1/500 bit units, base offset 12000:  range -32768..32767 => -44768..20767 => -89.54..41.53 bits
    * See J4/138 for analysis.
@@ -1101,58 +1100,79 @@ vf_conversion(const P7_PROFILE *gm, P7_OPROFILE *om)
   om->base_w  = 12000;
 
   /* striped match scores */
-  for (x = 0; x < gm->abc->Kp; x++)
-    for (k = 1, q = 0; q < nq; q++, k++)
-      {
-	for (z = 0; z < 8; z++) tmp.i[z] = ((k+ z*nq <= M) ? wordify(om, p7P_MSC(gm, k+z*nq, x)) : -32768);
-	om->rwv[x][q]   = tmp.v;
+  for (x = 0; x < gm->abc->Kp; x++){
+    for (k = 1, q = 0; q < nq; q++, k++){
+	    for (z = 0; z < 8; z++){
+          tmp.i[z] = ((k+ z*nq <= M) ? wordify(om, p7P_MSC(gm, k+z*nq, x)) : -32768);
+        }
+	      om->rwv[x][q]   = tmp.v;
       }
 
+    for (k = 1, q = 0; q < nq_avx; q++, k++){
+      for (z = 0; z < 16; z++){
+        tmp_avx.i[z] = ((k+ z*nq_avx <= M) ? wordify(om, p7P_MSC(gm, k+z*nq_avx, x)) : -32768);
+      }
+      om->rwv_avx[x][q]   = tmp_avx.v;
+    }
+  }
   /* Transition costs, all but the DD's. */
-  for (j = 0, k = 1, q = 0; q < nq; q++, k++)
-    {
-      for (t = p7O_BM; t <= p7O_II; t++) /* this loop of 7 transitions depends on the order in p7o_tsc_e */
-	{
-	  switch (t) {
-	  case p7O_BM: tg = p7P_BM;  kb = k-1; maxval =  0; break; /* gm has tBMk stored off by one! start from k=0 not 1   */
-	  case p7O_MM: tg = p7P_MM;  kb = k-1; maxval =  0; break; /* MM, DM, IM vectors are rotated by -1, start from k=0  */
-	  case p7O_IM: tg = p7P_IM;  kb = k-1; maxval =  0; break;
-	  case p7O_DM: tg = p7P_DM;  kb = k-1; maxval =  0; break;
-	  case p7O_MD: tg = p7P_MD;  kb = k;   maxval =  0; break; /* the remaining ones are straight up  */
-	  case p7O_MI: tg = p7P_MI;  kb = k;   maxval =  0; break; 
-	  case p7O_II: tg = p7P_II;  kb = k;   maxval = -1; break; 
-	  }
+  for (j = 0, k = 1, q = 0; q < nq; q++, k++){
+    for (t = p7O_BM; t <= p7O_II; t++){ /* this loop of 7 transitions depends on the order in p7o_tsc_e */
+	
+	    switch (t) {
+	      case p7O_BM: tg = p7P_BM;  kb = k-1; maxval =  0; break; /* gm has tBMk stored off by one! start from k=0 not 1   */
+	      case p7O_MM: tg = p7P_MM;  kb = k-1; maxval =  0; break; /* MM, DM, IM vectors are rotated by -1, start from k=0  */
+	      case p7O_IM: tg = p7P_IM;  kb = k-1; maxval =  0; break;
+	      case p7O_DM: tg = p7P_DM;  kb = k-1; maxval =  0; break;
+	      case p7O_MD: tg = p7P_MD;  kb = k;   maxval =  0; break; /* the remaining ones are straight up  */
+	      case p7O_MI: tg = p7P_MI;  kb = k;   maxval =  0; break; 
+	      case p7O_II: tg = p7P_II;  kb = k;   maxval = -1; break; 
+	    }
 
-	  for (z = 0; z < 8; z++) {
-	    val      = ((kb+ z*nq < M) ? wordify(om, p7P_TSC(gm, kb+ z*nq, tg)) : -32768);
-	    tmp.i[z] = (val <= maxval) ? val : maxval; /* do not allow an II transition cost of 0, or hell may occur. */
+	    for (z = 0; z < 8; z++) {
+	      val      = ((kb+ z*nq < M) ? wordify(om, p7P_TSC(gm, kb+ z*nq, tg)) : -32768);
+	      tmp.i[z] = (val <= maxval) ? val : maxval; /* do not allow an II transition cost of 0, or hell may occur. */
+	    }
+	    om->twv[j++] = tmp.v;
 	  }
-	  om->twv[j++] = tmp.v;
-	}
-    /* striped match scores */
-  for (x = 0; x < gm->abc->Kp; x++) {
-  
-    for (k = 1, q = 0; q < nq_avx; q++, k++)
-      {
-         for (z = 0; z < 16; z++) tmp_avx.i[z] = ((k+ z*nq_avx <= M) ? wordify(om, p7P_MSC(gm, k+z*nq_avx, x)) : -32768);
-         om->rwv_avx[x][q]   = tmp_avx.v;
-      }
   }
-      for (z = 0; z < 16; z++) {
-      val      = ((kb+ z*nq_avx < M) ? wordify(om, p7P_TSC(gm, kb+ z*nq_avx, tg)) : -32768);
-      tmp_avx.i[z] = (val <= maxval) ? val : maxval; /* do not allow an II transition cost of 0, or hell may occur. */
-    }
-    om->twv_avx[j++] = tmp_avx.v;
-  }
-    
-
   /* Finally the DD's, which are at the end of the optimized tsc vector; (j is already sitting there) */
-  for (k = 1, q = 0; q < nq; q++, k++)
-    {
-      for (z = 0; z < 8; z++) tmp.i[z] = ((k+ z*nq < M) ? wordify(om, p7P_TSC(gm, k+ z*nq, p7P_DD)) : -32768);
-      om->twv[j++] = tmp.v;
+  for (k = 1, q = 0; q < nq; q++, k++){
+    for (z = 0; z < 8; z++){
+      tmp.i[z] = ((k+ z*nq < M) ? wordify(om, p7P_TSC(gm, k+ z*nq, p7P_DD)) : -32768);
     }
+    om->twv[j++] = tmp.v;
+  }
 
+  // This needs to be after the SSE DD loop, because that loop counts on the value of j at the end of 
+  // the previous loop nest
+  for (j = 0, k = 1, q = 0; q < nq_avx; q++, k++){
+    for (t = p7O_BM; t <= p7O_II; t++){ /* this loop of 7 transitions depends on the o\rder in p7o_tsc_e */
+  
+      switch (t) {
+        case p7O_BM: tg = p7P_BM;  kb = k-1; maxval =  0; break; /* gm has tLMk stored off \by one! start from k=0 not 1   */
+        case p7O_MM: tg = p7P_MM;  kb = k-1; maxval =  0; break; /* MM, DM, IM vectors are \rotated by -1, start from k=0  */
+        case p7O_IM: tg = p7P_IM;  kb = k-1; maxval =  0; break;
+        case p7O_DM: tg = p7P_DM;  kb = k-1; maxval =  0; break;
+        case p7O_MD: tg = p7P_MD;  kb = k;   maxval =  0; break; /* the remaining ones are \straight up  */
+        case p7O_MI: tg = p7P_MI;  kb = k;   maxval =  0; break;
+        case p7O_II: tg = p7P_II;  kb = k;   maxval = -1; break;
+      }
+
+      for (z = 0; z < 16; z++) {
+        val      = ((kb+ z*nq_avx < M) ? wordify(om, p7P_TSC(gm, kb+ z*nq_avx, tg)) : -32768);
+        tmp_avx.i[z] = (val <= maxval) ? val : maxval; /* do not allow an II transition c\ost of 0, or hell may occur. */
+      }
+      om->twv_avx[j++] = tmp_avx.v;
+    }
+  }
+
+  for (k = 1, q = 0; q < nq_avx; q++, k++){
+    for (z = 0; z < 16; z++){
+      tmp_avx.i[z] = ((k+ z*nq_avx < M) ? wordify(om, p7P_TSC(gm, k+ z*nq_avx, p7P_DD)) : -32768);
+    }
+      om->twv_avx[j++] = tmp_avx.v;
+  }
   /* Specials. (Actually in same order in om and gm, but we copy in general form anyway.)  */
   /* VF CC,NN,JJ transitions hardcoded zero; -3.0 nat approximation used instead; this papers
    * over a length independence problem, where the approximation weirdly outperforms the
@@ -1183,19 +1203,9 @@ vf_conversion(const P7_PROFILE *gm, P7_OPROFILE *om)
       om->ddbound_w = ESL_MAX(om->ddbound_w, ddtmp);
     }
 
-// AVX part
-
-
-    
-
-  /* Finally the DD's, which are at the end of the optimized tsc vector; (j is already sitting there) */
-  for (k = 1, q = 0; q < nq_avx; q++, k++)
-    {
-      for (z = 0; z < 16; z++) tmp_avx.i[z] = ((k+ z*nq_avx < M) ? wordify(om, p7P_TSC(gm, k+ z*nq_avx, p7P_DD)) : -32768);
-      om->twv_avx[j++] = tmp_avx.v;
-    }
   return eslOK;
 }
+
 
 
 /* fb_conversion()
@@ -1216,70 +1226,94 @@ fb_conversion(const P7_PROFILE *gm, P7_OPROFILE *om)
   int     tg;			/* transition index in gm                                       */
   int     j;			/* counter in interleaved vector arrays in the profile          */
   union { __m128 v; float x[4]; } tmp; /* used to align and load simd minivectors               */
-  union { __m256 avx; __m128 sse[2]; float x[8]; } tmp_avx;
-
-  int     nq_avx  = p7O_NQF_AVX(M);     /* segment length; total # of striped vectors needed            */
-  if (nq_avx > om->allocQ4_avx) ESL_EXCEPTION(eslEINVAL, "optimized profile is too small to hold conversion");
 
   if (nq > om->allocQ4) ESL_EXCEPTION(eslEINVAL, "optimized profile is too small to hold conversion");
 
-  /* striped match scores: start at k=1 */
-  for (x = 0; x < gm->abc->Kp; x++)
-    for (k = 1, q = 0; q < nq; q++, k++)
-      {
-	for (z = 0; z < 4; z++) tmp.x[z] = (k+ z*nq <= M) ? p7P_MSC(gm, k+z*nq, x) : -eslINFINITY;
-	om->rfv[x][q] = esl_sse_expf(tmp.v);
-      }
-  /* striped match scores: start at k=1 */
-  for (x = 0; x < gm->abc->Kp; x++)
-    for (k = 1, q = 0; q < nq_avx; q++, k++)
-      {
-        for (z = 0; z < 8; z++) tmp_avx.x[z] = (k+ z*nq_avx <= M) ? p7P_MSC(gm, k+z*nq_avx, x) : -eslINFINITY;
-        tmp_avx.sse[0] = esl_sse_expf(tmp_avx.sse[0]);  // Hack because we don't currently have AVX version of expf
-        tmp_avx.sse[1] = esl_sse_expf(tmp_avx.sse[1]);
-        om->rfv_avx[x][q] = tmp_avx.avx;
-      }
+  union { __m256 avx; __m128 sse[2]; float x[8]; } tmp_avx;
 
+  int     nq_avx  = p7O_NQF_AVX(M);     /* segment length; total # of striped vectors ne\eded            */
+  if (nq_avx > om->allocQ4_avx) ESL_EXCEPTION(eslEINVAL, "optimized profile is too small to hold conversion");
+
+  /* striped match scores: start at k=1 */
+  for (x = 0; x < gm->abc->Kp; x++){
+    for (k = 1, q = 0; q < nq; q++, k++){
+	    for (z = 0; z < 4; z++){
+         tmp.x[z] = (k+ z*nq <= M) ? p7P_MSC(gm, k+z*nq, x) : -eslINFINITY;
+      }
+	    om->rfv[x][q] = esl_sse_expf(tmp.v);
+    }
+  }
+  for (x = 0; x < gm->abc->Kp; x++){
+    for (k = 1, q = 0; q < nq_avx; q++, k++){
+      for (z = 0; z < 8; z++){
+        tmp_avx.x[z] = (k+ z*nq_avx <= M) ? p7P_MSC(gm, k+z*nq_avx, x) : -eslINFINITY;
+      }
+      tmp_avx.sse[0] = esl_sse_expf(tmp_avx.sse[0]);  // Hack because we don't curren\tly have AVX version of expf
+      tmp_avx.sse[1] = esl_sse_expf(tmp_avx.sse[1]);
+      om->rfv_avx[x][q] = tmp_avx.avx;
+    }
+  }
 
   /* Transition scores, all but the DD's. */
-  for (j = 0, k = 1, q = 0; q < nq; q++, k++)
-    {
-      for (t = p7O_BM; t <= p7O_II; t++) /* this loop of 7 transitions depends on the order in the definition of p7o_tsc_e */
-	{
-	  switch (t) {
-	  case p7O_BM: tg = p7P_BM;  kb = k-1; break; /* gm has tBMk stored off by one! start from k=0 not 1 */
-	  case p7O_MM: tg = p7P_MM;  kb = k-1; break; /* MM, DM, IM quads are rotated by -1, start from k=0  */
-	  case p7O_IM: tg = p7P_IM;  kb = k-1; break;
-	  case p7O_DM: tg = p7P_DM;  kb = k-1; break;
-	  case p7O_MD: tg = p7P_MD;  kb = k;   break; /* the remaining ones are straight up  */
-	  case p7O_MI: tg = p7P_MI;  kb = k;   break; 
-	  case p7O_II: tg = p7P_II;  kb = k;   break; 
+  for (j = 0, k = 1, q = 0; q < nq; q++, k++){
+    for (t = p7O_BM; t <= p7O_II; t++){ /* this loop of 7 transitions depends on the order in the definition of p7o_tsc_e */
+	    switch (t) {
+	      case p7O_BM: tg = p7P_BM;  kb = k-1; break; /* gm has tBMk stored off by one! start from k=0 not 1 */
+	      case p7O_MM: tg = p7P_MM;  kb = k-1; break; /* MM, DM, IM quads are rotated by -1, start from k=0  */
+	      case p7O_IM: tg = p7P_IM;  kb = k-1; break;
+	      case p7O_DM: tg = p7P_DM;  kb = k-1; break;
+	      case p7O_MD: tg = p7P_MD;  kb = k;   break; /* the remaining ones are straight up  */
+	      case p7O_MI: tg = p7P_MI;  kb = k;   break; 
+	      case p7O_II: tg = p7P_II;  kb = k;   break; 
+	    }
+
+	    for (z = 0; z < 4; z++){
+        tmp.x[z] = (kb+z*nq < M) ? p7P_TSC(gm, kb+z*nq, tg) : -eslINFINITY;
+      }
+	    om->tfv[j++] = esl_sse_expf(tmp.v);
 	  }
+  }
+    /* And finally the DD's, which are at the end of the optimized tfv vector; (j is already there) */
+  for (k = 1, q = 0; q < nq; q++, k++){
+    for (z = 0; z < 4; z++){
+      tmp.x[z] = (k+z*nq < M) ? p7P_TSC(gm, k+z*nq, p7P_DD) : -eslINFINITY;
+    }
+    om->tfv[j++] = esl_sse_expf(tmp.v);
+  }
 
-	  for (z = 0; z < 4; z++) tmp.x[z] = (kb+z*nq < M) ? p7P_TSC(gm, kb+z*nq, tg) : -eslINFINITY;
-	  om->tfv[j++] = esl_sse_expf(tmp.v);
+  // This needs to be after the SSE DD loop, because the DD loop counts on the value of j at the end of the
+  // previous loop nest
+    /* Transition scores, all but the DD's. */
+  for (j = 0, k = 1, q = 0; q < nq_avx; q++, k++){
+      for (t = p7O_BM; t <= p7O_II; t++){ /* this loop of 7 transitions depends on the o\rder in the definition of p7o_tsc_e */
+        switch (t) {
+          case p7O_BM: tg = p7P_BM;  kb = k-1; break; /* gm has tBMk stored off by one!\ start from k=0 not 1 */
+          case p7O_MM: tg = p7P_MM;  kb = k-1; break; /* MM, DM, IM quads are rotated b\y -1, start from k=0  */
+          case p7O_IM: tg = p7P_IM;  kb = k-1; break;
+          case p7O_DM: tg = p7P_DM;  kb = k-1; break;
+          case p7O_MD: tg = p7P_MD;  kb = k;   break; /* the remaining ones are straigh\t up  */
+          case p7O_MI: tg = p7P_MI;  kb = k;   break;
+          case p7O_II: tg = p7P_II;  kb = k;   break;
+        }
 
-    for (z = 0; z < 8; z++) tmp_avx.x[z] = (kb+z*nq_avx < M) ? p7P_TSC(gm, kb+z*nq_avx, tg) : -eslINFINITY;
-        tmp_avx.sse[0] = esl_sse_expf(tmp_avx.sse[0]);  // Hack because we don't currently have AVX version of expf
+        for (z = 0; z < 8; z++){
+          tmp_avx.x[z] = (kb+z*nq_avx < M) ? p7P_TSC(gm, kb+z*nq_avx, tg) : -eslINFINITY;
+        }
+        tmp_avx.sse[0] = esl_sse_expf(tmp_avx.sse[0]);  // Hack because we don't curren\tly have AVX version of expf
         tmp_avx.sse[1] = esl_sse_expf(tmp_avx.sse[1]);
         om->tfv_avx[j++] = tmp_avx.avx;
-	}
+      }
     }
 
-  /* And finally the DD's, which are at the end of the optimized tfv vector; (j is already there) */
-  for (k = 1, q = 0; q < nq; q++, k++)
-    {
-      for (z = 0; z < 4; z++) tmp.x[z] = (k+z*nq < M) ? p7P_TSC(gm, k+z*nq, p7P_DD) : -eslINFINITY;
-      om->tfv[j++] = esl_sse_expf(tmp.v);
-    }
-      for (k = 1, q = 0; q < nq_avx; q++, k++)
-    {
-  for (z = 0; z < 8; z++) tmp_avx.x[z] = (k+z*nq_avx < M) ? p7P_TSC(gm, k+z*nq_avx, p7P_DD) : -eslINFINITY;
-      tmp_avx.sse[0] = esl_sse_expf(tmp_avx.sse[0]);  // Hack because we don't currently have AVX version of expf
-      tmp_avx.sse[1] = esl_sse_expf(tmp_avx.sse[1]);
-      om->tfv_avx[j++] = tmp_avx.avx;
-    }
 
+  for (k = 1, q = 0; q < nq_avx; q++, k++){
+    for (z = 0; z < 8; z++){
+      tmp_avx.x[z] = (k+z*nq_avx < M) ? p7P_TSC(gm, k+z*nq_avx, p7P_DD) : -eslINFINITY;
+    }
+    tmp_avx.sse[0] = esl_sse_expf(tmp_avx.sse[0]);  // Hack because we don't currentl\y have AVX version of expf
+    tmp_avx.sse[1] = esl_sse_expf(tmp_avx.sse[1]);
+    om->tfv_avx[j++] = tmp_avx.avx;
+  }
   /* Specials. (These are actually in exactly the same order in om and
    *  gm, but we copy in general form anyway.)
    */
@@ -1350,6 +1384,7 @@ p7_oprofile_Convert(const P7_PROFILE *gm, P7_OPROFILE *om)
  ERROR:
   return status;
 }
+
 
 /* Function:  p7_oprofile_ReconfigLength()
  * Synopsis:  Set the target sequence length of a model.

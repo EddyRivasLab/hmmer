@@ -83,7 +83,7 @@ p7_MSVFilter_avx(const ESL_DSQ *dsq, int L, const P7_OPROFILE *om, P7_OMX *ox, f
   uint8_t  xJ;                     /* special states' scores                                    */
   int i;			   /* counter over sequence positions 1..L                      */
   int q;			   /* counter over vectors 0..nq-1                              */
-  int Q        = p7O_NQB(om->M);   /* segment length: # of vectors                              */
+  int Q        = p7O_NQB_AVX(om->M);   /* segment length: # of vectors                              */
   __m256i *dp  = ox->dpb_avx[0];	   /* we're going to use dp[0][0..q..Q-1], not {MDI}MX(q) macros*/
   __m256i *rsc;			   /* will point at om->rbv[x] for residue x[i]                 */
 

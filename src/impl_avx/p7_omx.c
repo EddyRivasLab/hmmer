@@ -84,7 +84,8 @@ p7_omx_Create(int allocM, int allocL, int allocXL)
   ox->allocQ16_avx = p7O_NQB_AVX(allocM);
   ox->ncells   = (int64_t) ox->allocR * (int64_t) ox->allocQ4 * 4;      /* # of DP cells allocated, where 1 cell contains MDI */
 
-  ESL_ALLOC(ox->dp_mem, sizeof(__m256) * (int64_t) ox->allocR * (int64_t) ox->allocQ4_avx * p7X_NSCELLS + 32);  /* floats always dominate; +15 for alignment */
+  ESL_ALLOC(ox->dp_mem, sizeof(__m128) * (int64_t) ox->allocR * (int64_t) ox->allocQ4 * p7X_NSCELLS + 15);  /* floats always dominate; +15 for alignment */
+  ESL_ALLOC(ox->dp_mem_avx, sizeof(__m256) * (int64_t) ox->allocR * (int64_t) ox->allocQ4_avx * p7X_NSCELLS + 32); 
   ESL_ALLOC(ox->dpb,    sizeof(__m128i *) * ox->allocR);
   ESL_ALLOC(ox->dpw,    sizeof(__m128i *) * ox->allocR);
   ESL_ALLOC(ox->dpf,    sizeof(__m128  *) * ox->allocR);
@@ -95,9 +96,9 @@ p7_omx_Create(int allocM, int allocL, int allocXL)
   ox->dpb[0] = (__m128i *) ( ( (unsigned long int) ((char *) ox->dp_mem + 15) & (~0xf)));
   ox->dpw[0] = (__m128i *) ( ( (unsigned long int) ((char *) ox->dp_mem + 15) & (~0xf)));
   ox->dpf[0] = (__m128  *) ( ( (unsigned long int) ((char *) ox->dp_mem + 15) & (~0xf)));
-  ox->dpb_avx[0] = (__m256i *) ( ( (unsigned long int) ((char *) ox->dp_mem + 31) & (~0x1f)));
-  ox->dpw_avx[0] = (__m256i *) ( ( (unsigned long int) ((char *) ox->dp_mem + 31) & (~0x1f)));
-  ox->dpf_avx[0] = (__m256  *) ( ( (unsigned long int) ((char *) ox->dp_mem + 31) & (~0x1f)));
+  ox->dpb_avx[0] = (__m256i *) ( ( (unsigned long int) ((char *) ox->dp_mem_avx + 31) & (~0x1f)));
+  ox->dpw_avx[0] = (__m256i *) ( ( (unsigned long int) ((char *) ox->dp_mem_avx + 31) & (~0x1f)));
+  ox->dpf_avx[0] = (__m256  *) ( ( (unsigned long int) ((char *) ox->dp_mem_avx + 31) & (~0x1f)));
 
   for (i = 1; i <= allocL; i++) {
     ox->dpf[i] = ox->dpf[0] + (int64_t) i * (int64_t) ox->allocQ4  * p7X_NSCELLS;
@@ -169,7 +170,8 @@ p7_omx_GrowTo(P7_OMX *ox, int allocM, int allocL, int allocXL)
    */
   if (ncells > ox->ncells)
     {
-      ESL_RALLOC(ox->dp_mem, p, sizeof(__m256) * (int64_t) (allocL+1) * (int64_t) nqf_avx * p7X_NSCELLS + 31);
+      ESL_RALLOC(ox->dp_mem, p, sizeof(__m128) * (int64_t) (allocL+1) * (int64_t) nqf * p7X_NSCELLS + 15);
+      ESL_RALLOC(ox->dp_mem_avx, p, sizeof(__m256) * (int64_t) (allocL+1) * (int64_t) nqf_avx * p7X_NSCELLS + 31);
       ox->ncells = ncells;
       reset_row_pointers = TRUE;
     }
@@ -190,6 +192,9 @@ p7_omx_GrowTo(P7_OMX *ox, int allocM, int allocL, int allocXL)
       ESL_RALLOC(ox->dpb, p, sizeof(__m128i *) * (allocL+1));
       ESL_RALLOC(ox->dpw, p, sizeof(__m128i *) * (allocL+1));
       ESL_RALLOC(ox->dpf, p, sizeof(__m128  *) * (allocL+1));
+      ESL_RALLOC(ox->dpb_avx, p, sizeof(__m256i *) * (allocL+1));
+      ESL_RALLOC(ox->dpw_avx, p, sizeof(__m256i *) * (allocL+1));
+      ESL_RALLOC(ox->dpf_avx, p, sizeof(__m256  *) * (allocL+1));
       ox->allocR         = allocL+1;
       reset_row_pointers = TRUE;
     }
@@ -208,6 +213,9 @@ p7_omx_GrowTo(P7_OMX *ox, int allocM, int allocL, int allocXL)
       ox->dpb[0] = (__m128i *) ( ( (unsigned long int) ((char *) ox->dp_mem + 15) & (~0xf)));
       ox->dpw[0] = (__m128i *) ( ( (unsigned long int) ((char *) ox->dp_mem + 15) & (~0xf)));
       ox->dpf[0] = (__m128  *) ( ( (unsigned long int) ((char *) ox->dp_mem + 15) & (~0xf)));
+      ox->dpb_avx[0] = (__m256i *) ( ( (unsigned long int) ((char *) ox->dp_mem_avx + 31) & (~0x1f)));
+      ox->dpw_avx[0] = (__m256i *) ( ( (unsigned long int) ((char *) ox->dp_mem_avx + 31) & (~0x1f)));
+      ox->dpf_avx[0] = (__m256  *) ( ( (unsigned long int) ((char *) ox->dp_mem_avx + 31) & (~0x1f)));
 
       ox->validR = ESL_MIN( ox->ncells / (nqf * 4), ox->allocR);
       for (i = 1; i < ox->validR; i++)
@@ -215,11 +223,18 @@ p7_omx_GrowTo(P7_OMX *ox, int allocM, int allocL, int allocXL)
 	  ox->dpb[i] = ox->dpb[0] + (int64_t) i * (int64_t) nqb;
 	  ox->dpw[i] = ox->dpw[0] + (int64_t) i * (int64_t) nqw * p7X_NSCELLS;
 	  ox->dpf[i] = ox->dpf[0] + (int64_t) i * (int64_t) nqf * p7X_NSCELLS;
+    ox->dpb_avx[i] = ox->dpb_avx[0] + (int64_t) i * (int64_t) nqb_avx;
+	  ox->dpw_avx[i] = ox->dpw_avx[0] + (int64_t) i * (int64_t) nqw_avx * p7X_NSCELLS;
+	  ox->dpf_avx[i] = ox->dpf_avx[0] + (int64_t) i * (int64_t) nqf_avx * p7X_NSCELLS;
 	}
 
       ox->allocQ4  = nqf;
       ox->allocQ8  = nqw;
       ox->allocQ16 = nqb;
+      ox->allocQ4_avx  = nqf_avx;
+      ox->allocQ8_avx  = nqw_avx;
+      ox->allocQ16_avx = nqb_avx;
+
     }
   
   ox->M = 0;
@@ -314,6 +329,11 @@ p7_omx_Destroy(P7_OMX *ox)
   if (ox->dpf     != NULL) free(ox->dpf);
   if (ox->dpw     != NULL) free(ox->dpw);
   if (ox->dpb     != NULL) free(ox->dpb);
+  if (ox->dp_mem_avx  != NULL) free(ox->dp_mem_avx);
+
+  if (ox->dpf_avx     != NULL) free(ox->dpf_avx);
+  if (ox->dpw_avx     != NULL) free(ox->dpw_avx);
+  if (ox->dpb_avx     != NULL) free(ox->dpb_avx);
   free(ox);
   return;
 }

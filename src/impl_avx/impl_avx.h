@@ -210,7 +210,8 @@ typedef struct p7_omx_s {
   __m256 **dpf_avx;  //AVX versions of above
   __m256i **dpw_avx;
   __m256i **dpb_avx;
-  void     *dp_mem;    /* DP memory shared by <dpb>, <dpw>, <dpf>  and AVX versions     */
+  void     *dp_mem;    /* DP memory shared by <dpb>, <dpw>, <dpf>     */
+  void     *dp_mem_avx;  // AVX version.  Keep avx and sse separate during testing so can compare results
   int       allocR;    /* current allocated # rows in dp{uf}. allocR >= validR >= L+1 */
   int       validR;    /* current # of rows actually pointing at DP memory            */
   int       allocQ4;    /* current set row width in <dpf> quads:   allocQ4*4 >= M      */
@@ -390,7 +391,10 @@ extern int p7_ViterbiFilter_longtarget(const ESL_DSQ *dsq, int L, const P7_OPROF
 /* vitscore.c */
 extern int p7_ViterbiScore (const ESL_DSQ *dsq, int L, const P7_OPROFILE *om, P7_OMX *ox, float *ret_sc);
 
-
+// Functionsto convert striped data from one vector size to another
+extern void p7_restripe_byte(char *source, char *dest, int length, int source_vector_length, int dest_vector_length);
+extern void p7_restripe_short(int16_t *source, int16_t *dest, int length, int source_vector_length, int dest_vector_length);
+extern void p7_restripe_float(float *source, float *dest, int length, int source_vector_length, int dest_vector_length);
 /*****************************************************************
  * 4. Implementation specific initialization
  *****************************************************************/
