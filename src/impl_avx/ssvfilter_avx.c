@@ -15,9 +15,9 @@
 
 #include <xmmintrin.h>		/* SSE  */
 #include <emmintrin.h>		/* SSE2 */
-
+#include <immintrin.h>   // AVX2
 #include "easel.h"
-#include "esl_sse.h"
+#include "esl_avx.h"
 
 #include "hmmer.h"
 #include "impl_avx.h"
@@ -35,8 +35,8 @@
 
 
 #define STEP_SINGLE(sv)                         \
-  sv   = _mm_subs_epi8(sv, *rsc); rsc++;        \
-  xEv  = _mm_max_epu8(xEv, sv);
+  sv   = _mm256_subs_epi8(sv, *rsc); rsc++;        \
+  xEv  = _mm256_max_epu8(xEv, sv);
 
 
 #define LENGTH_CHECK(label)                     \
@@ -120,10 +120,9 @@
 
 #define CONVERT_STEP(step, length_check, label, sv, pos)        \
   length_check(label)                                           \
-  rsc = om->sbv[dsq[i]] + pos;                                   \
+  rsc = om->sbv_avx[dsq[i]] + pos;                                   \
   step()                                                        \
-  sv = _mm_slli_si128(sv, 1);                                   \
-  sv = _mm_or_si128(sv, beginv);                                \
+  sv = esl_avx_rightshift_int8(sv, beginv);                                   \
   i++;
 
 
@@ -200,83 +199,82 @@
 
 
 #define RESET_1()                               \
-  register __m128i sv00 = beginv;
+  register __m256i sv00 = beginv;
 
 #define RESET_2()                               \
   RESET_1()                                     \
-  register __m128i sv01 = beginv;
+  register __m256i sv01 = beginv;
 
 #define RESET_3()                               \
   RESET_2()                                     \
-  register __m128i sv02 = beginv;
+  register __m256i sv02 = beginv;
 
 #define RESET_4()                               \
   RESET_3()                                     \
-  register __m128i sv03 = beginv;
+  register __m256i sv03 = beginv;
 
 #define RESET_5()                               \
   RESET_4()                                     \
-  register __m128i sv04 = beginv;
+  register __m256i sv04 = beginv;
 
 #define RESET_6()                               \
   RESET_5()                                     \
-  register __m128i sv05 = beginv;
+  register __m256i sv05 = beginv;
 
 #define RESET_7()                               \
   RESET_6()                                     \
-  register __m128i sv06 = beginv;
+  register __m256i sv06 = beginv;
 
 #define RESET_8()                               \
   RESET_7()                                     \
-  register __m128i sv07 = beginv;
+  register __m256i sv07 = beginv;
 
 #define RESET_9()                               \
   RESET_8()                                     \
-  register __m128i sv08 = beginv;
+  register __m256i sv08 = beginv;
 
 #define RESET_10()                              \
   RESET_9()                                     \
-  register __m128i sv09 = beginv;
+  register __m256i sv09 = beginv;
 
 #define RESET_11()                              \
   RESET_10()                                    \
-  register __m128i sv10 = beginv;
+  register __m256i sv10 = beginv;
 
 #define RESET_12()                              \
   RESET_11()                                    \
-  register __m128i sv11 = beginv;
+  register __m256i sv11 = beginv;
 
 #define RESET_13()                              \
   RESET_12()                                    \
-  register __m128i sv12 = beginv;
+  register __m256i sv12 = beginv;
 
 #define RESET_14()                              \
   RESET_13()                                    \
-  register __m128i sv13 = beginv;
+  register __m256i sv13 = beginv;
 
 #define RESET_15()                              \
   RESET_14()                                    \
-  register __m128i sv14 = beginv;
+  register __m256i sv14 = beginv;
 
 #define RESET_16()                              \
   RESET_15()                                    \
-  register __m128i sv15 = beginv;
+  register __m256i sv15 = beginv;
 
 #define RESET_17()                              \
   RESET_16()                                    \
-  register __m128i sv16 = beginv;
+  register __m256i sv16 = beginv;
 
 #define RESET_18()                              \
   RESET_17()                                    \
-  register __m128i sv17 = beginv;
+  register __m256i sv17 = beginv;
 
 
 #define CALC(reset, step, convert, width)       \
   int i;                                        \
   int i2;                                       \
   int Q        = p7O_NQB(om->M);                \
-  __m128i *rsc;                                 \
-                                                \
+  __m256i *rsc;                                 \
   int w = width;                                \
                                                 \
   dsq++;                                        \
@@ -285,7 +283,7 @@
                                                 \
   for (i = 0; i < L && i < Q - q - w; i++)      \
     {                                           \
-      rsc = om->sbv[dsq[i]] + i + q;            \
+      rsc = om->sbv_avx[dsq[i]] + i + q;            \
       step()                                    \
     }                                           \
                                                 \
@@ -297,7 +295,7 @@ done1:                                          \
    {                                            \
      for (i = 0; i < Q - w; i++)                \
        {                                        \
-         rsc = om->sbv[dsq[i2 + i]] + i;        \
+         rsc = om->sbv_avx[dsq[i2 + i]] + i;        \
          step()                                 \
        }                                        \
                                                 \
@@ -307,7 +305,7 @@ done1:                                          \
                                                 \
  for (i = 0; i2 + i < L && i < Q - w; i++)      \
    {                                            \
-     rsc = om->sbv[dsq[i2 + i]] + i;            \
+     rsc = om->sbv_avx[dsq[i2 + i]] + i;            \
      step()                                     \
    }                                            \
                                                 \
@@ -318,112 +316,112 @@ done2:                                          \
  return xEv;
 
 
-static __m128i
-calc_band_1(const ESL_DSQ *dsq, int L, const P7_OPROFILE *om, int q, __m128i beginv, register __m128i xEv)
+static __m256i
+calc_band_1(const ESL_DSQ *dsq, int L, const P7_OPROFILE *om, int q, __m256i beginv, register __m256i xEv)
 {
   CALC(RESET_1, STEP_BANDS_1, CONVERT_1, 1)
 }
 
-static __m128i
-calc_band_2(const ESL_DSQ *dsq, int L, const P7_OPROFILE *om, int q, __m128i beginv, register __m128i xEv)
+static __m256i
+calc_band_2(const ESL_DSQ *dsq, int L, const P7_OPROFILE *om, int q, __m256i beginv, register __m256i xEv)
 {
   CALC(RESET_2, STEP_BANDS_2, CONVERT_2, 2)
 }
 
-static __m128i
-calc_band_3(const ESL_DSQ *dsq, int L, const P7_OPROFILE *om, int q, __m128i beginv, register __m128i xEv)
+static __m256i
+calc_band_3(const ESL_DSQ *dsq, int L, const P7_OPROFILE *om, int q, __m256i beginv, register __m256i xEv)
 {
   CALC(RESET_3, STEP_BANDS_3, CONVERT_3, 3)
 }
 
-static __m128i
-calc_band_4(const ESL_DSQ *dsq, int L, const P7_OPROFILE *om, int q, __m128i beginv, register __m128i xEv)
+static __m256i
+calc_band_4(const ESL_DSQ *dsq, int L, const P7_OPROFILE *om, int q, __m256i beginv, register __m256i xEv)
 {
   CALC(RESET_4, STEP_BANDS_4, CONVERT_4, 4)
 }
 
-static __m128i
-calc_band_5(const ESL_DSQ *dsq, int L, const P7_OPROFILE *om, int q, __m128i beginv, register __m128i xEv)
+static __m256i
+calc_band_5(const ESL_DSQ *dsq, int L, const P7_OPROFILE *om, int q, __m256i beginv, register __m256i xEv)
 {
   CALC(RESET_5, STEP_BANDS_5, CONVERT_5, 5)
 }
 
-static __m128i
-calc_band_6(const ESL_DSQ *dsq, int L, const P7_OPROFILE *om, int q, __m128i beginv, register __m128i xEv)
+static __m256i
+calc_band_6(const ESL_DSQ *dsq, int L, const P7_OPROFILE *om, int q, __m256i beginv, register __m256i xEv)
 {
   CALC(RESET_6, STEP_BANDS_6, CONVERT_6, 6)
 }
 
 #if MAX_BANDS > 6 /* Only include needed functions to limit object file size */
-static __m128i
-calc_band_7(const ESL_DSQ *dsq, int L, const P7_OPROFILE *om, int q, __m128i beginv, register __m128i xEv)
+static __m256i
+calc_band_7(const ESL_DSQ *dsq, int L, const P7_OPROFILE *om, int q, __m256i beginv, register __m256i xEv)
 {
   CALC(RESET_7, STEP_BANDS_7, CONVERT_7, 7)
 }
 
-static __m128i
-calc_band_8(const ESL_DSQ *dsq, int L, const P7_OPROFILE *om, int q, __m128i beginv, register __m128i xEv)
+static __m256i
+calc_band_8(const ESL_DSQ *dsq, int L, const P7_OPROFILE *om, int q, __m256i beginv, register __m256i xEv)
 {
   CALC(RESET_8, STEP_BANDS_8, CONVERT_8, 8)
 }
 
-static __m128i
-calc_band_9(const ESL_DSQ *dsq, int L, const P7_OPROFILE *om, int q, __m128i beginv, register __m128i xEv)
+static __m256i
+calc_band_9(const ESL_DSQ *dsq, int L, const P7_OPROFILE *om, int q, __m256i beginv, register __m256i xEv)
 {
   CALC(RESET_9, STEP_BANDS_9, CONVERT_9, 9)
 }
 
-static __m128i
-calc_band_10(const ESL_DSQ *dsq, int L, const P7_OPROFILE *om, int q, __m128i beginv, register __m128i xEv)
+static __m256i
+calc_band_10(const ESL_DSQ *dsq, int L, const P7_OPROFILE *om, int q, __m256i beginv, register __m256i xEv)
 {
   CALC(RESET_10, STEP_BANDS_10, CONVERT_10, 10)
 }
 
-static __m128i
-calc_band_11(const ESL_DSQ *dsq, int L, const P7_OPROFILE *om, int q, __m128i beginv, register __m128i xEv)
+static __m256i
+calc_band_11(const ESL_DSQ *dsq, int L, const P7_OPROFILE *om, int q, __m256i beginv, register __m256i xEv)
 {
   CALC(RESET_11, STEP_BANDS_11, CONVERT_11, 11)
 }
 
-static __m128i
-calc_band_12(const ESL_DSQ *dsq, int L, const P7_OPROFILE *om, int q, __m128i beginv, register __m128i xEv)
+static __m256i
+calc_band_12(const ESL_DSQ *dsq, int L, const P7_OPROFILE *om, int q, __m256i beginv, register __m256i xEv)
 {
   CALC(RESET_12, STEP_BANDS_12, CONVERT_12, 12)
 }
 
-static __m128i
-calc_band_13(const ESL_DSQ *dsq, int L, const P7_OPROFILE *om, int q, __m128i beginv, register __m128i xEv)
+static __m256i
+calc_band_13(const ESL_DSQ *dsq, int L, const P7_OPROFILE *om, int q, __m256i beginv, register __m256i xEv)
 {
   CALC(RESET_13, STEP_BANDS_13, CONVERT_13, 13)
 }
 
-static __m128i
-calc_band_14(const ESL_DSQ *dsq, int L, const P7_OPROFILE *om, int q, __m128i beginv, register __m128i xEv)
+static __m256i
+calc_band_14(const ESL_DSQ *dsq, int L, const P7_OPROFILE *om, int q, __m256i beginv, register __m256i xEv)
 {
   CALC(RESET_14, STEP_BANDS_14, CONVERT_14, 14)
 }
 #endif /* MAX_BANDS > 6 */
 #if MAX_BANDS > 14
-static __m128i
-calc_band_15(const ESL_DSQ *dsq, int L, const P7_OPROFILE *om, int q, __m128i beginv, register __m128i xEv)
+static __m256i
+calc_band_15(const ESL_DSQ *dsq, int L, const P7_OPROFILE *om, int q, __m256i beginv, register __m256i xEv)
 {
   CALC(RESET_15, STEP_BANDS_15, CONVERT_15, 15)
 }
 
-static __m128i
-calc_band_16(const ESL_DSQ *dsq, int L, const P7_OPROFILE *om, int q, __m128i beginv, register __m128i xEv)
+static __m256i
+calc_band_16(const ESL_DSQ *dsq, int L, const P7_OPROFILE *om, int q, __m256i beginv, register __m256i xEv)
 {
   CALC(RESET_16, STEP_BANDS_16, CONVERT_16, 16)
 }
 
-static __m128i
-calc_band_17(const ESL_DSQ *dsq, int L, const P7_OPROFILE *om, int q, __m128i beginv, register __m128i xEv)
+static __m256i
+calc_band_17(const ESL_DSQ *dsq, int L, const P7_OPROFILE *om, int q, __m256i beginv, register __m256i xEv)
 {
   CALC(RESET_17, STEP_BANDS_17, CONVERT_17, 17)
 }
 
-static __m128i
-calc_band_18(const ESL_DSQ *dsq, int L, const P7_OPROFILE *om, int q, __m128i beginv, register __m128i xEv)
+static __m256i
+calc_band_18(const ESL_DSQ *dsq, int L, const P7_OPROFILE *om, int q, __m256i beginv, register __m256i xEv)
 {
   CALC(RESET_18, STEP_BANDS_18, CONVERT_18, 18)
 }
@@ -437,8 +435,8 @@ calc_band_18(const ESL_DSQ *dsq, int L, const P7_OPROFILE *om, int q, __m128i be
 static uint8_t
 get_xE(const ESL_DSQ *dsq, int L, const P7_OPROFILE *om)
 {
-  __m128i xEv;		           /* E state: keeps max for Mk->E as we go                     */
-  __m128i beginv;                  /* begin scores                                              */
+  __m256i xEv;		           /* E state: keeps max for Mk->E as we go                     */
+  __m256i beginv;                  /* begin scores                                              */
 
   int q;			   /* counter over vectors 0..nq-1                              */
   int Q        = p7O_NQB(om->M);   /* segment length: # of vectors                              */
@@ -449,7 +447,7 @@ get_xE(const ESL_DSQ *dsq, int L, const P7_OPROFILE *om)
   int i;                           /* counter for bands                                         */
 
   /* function pointers for the various number of vectors to use */
-  __m128i (*fs[MAX_BANDS + 1]) (const ESL_DSQ *, int, const P7_OPROFILE *, int, register __m128i, __m128i)
+  __m256i (*fs[MAX_BANDS + 1]) (const ESL_DSQ *, int, const P7_OPROFILE *, int, register __m256i, __m256i)
     = {NULL
        , calc_band_1,  calc_band_2,  calc_band_3,  calc_band_4,  calc_band_5,  calc_band_6
 #if MAX_BANDS > 6
@@ -460,7 +458,7 @@ get_xE(const ESL_DSQ *dsq, int L, const P7_OPROFILE *om)
 #endif
   };
 
-  beginv =  _mm_set1_epi8(-128);
+  beginv =  _mm256_set1_epi8(128);
   xEv    =  beginv;
 
   /* Use the highest number of bands but no more than MAX_BANDS */
@@ -474,7 +472,7 @@ get_xE(const ESL_DSQ *dsq, int L, const P7_OPROFILE *om)
     last_q = q;
   }
 
-  return esl_sse_hmax_epu8(xEv);
+  return esl_avx_hmax_epi8(xEv);
 }
 
 

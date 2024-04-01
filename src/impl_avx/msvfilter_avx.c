@@ -170,7 +170,7 @@ p7_MSVFilter_avx(const ESL_DSQ *dsq, int L, const P7_OPROFILE *om, P7_OMX *ox, f
        * to all simd elements.
        */
 
-      xEv = _mm256_set1_epi8(esl_avx_hmax_epu8(xEv));  // broadcast the max byt\e from original xEv_AVX
+      xEv = _mm256_set1_epi8(esl_avx_hmax_epi8(xEv));  // broadcast the max byt\e from original xEv_AVX
       // to all bytes of xEv_AVX
 
       /* immediately detect overflow */
