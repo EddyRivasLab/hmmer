@@ -110,7 +110,9 @@ p7_MSVFilter_avx(const ESL_DSQ *dsq, int L, const P7_OPROFILE *om, P7_OMX *ox, f
   /* Initialization. In offset unsigned arithmetic, -infinity is 0, and 0 is om->base.
    */
   biasv = _mm256_set1_epi8((int8_t) om->bias_b); /* yes, you can set1() an unsigned char vector this way */
-  for (q = 0; q < Q; q++) dp[q] = _mm256_setzero_si256();
+  for (q = 0; q < Q; q++){
+    dp[q] = _mm256_setzero_si256();
+  }
   xJ   = 0;
 
   /* saturate simd register for overflow test */
@@ -170,7 +172,7 @@ p7_MSVFilter_avx(const ESL_DSQ *dsq, int L, const P7_OPROFILE *om, P7_OMX *ox, f
        * to all simd elements.
        */
 
-      xEv = _mm256_set1_epi8(esl_avx_hmax_epi8(xEv));  // broadcast the max byt\e from original xEv_AVX
+      xEv = _mm256_set1_epi8(esl_avx_hmax_epu8(xEv));  // broadcast the max byt\e from original xEv_AVX
       // to all bytes of xEv_AVX
 
       /* immediately detect overflow */

@@ -97,7 +97,7 @@ p7_MSVFilter_sse(const ESL_DSQ *dsq, int L, const P7_OPROFILE *om, P7_OMX *ox, f
 
   /* Try highly optimized ssv filter first */
   status = p7_SSVFilter(dsq, L, om, ret_sc);
-  if (status != eslENORESULT) return status;
+  //if (status != eslENORESULT) return status;
 
   /* Initialization. In offset unsigned arithmetic, -infinity is 0, and 0 is om->base.
    */

@@ -273,7 +273,7 @@
 #define CALC(reset, step, convert, width)       \
   int i;                                        \
   int i2;                                       \
-  int Q        = p7O_NQB(om->M);                \
+  int Q        = p7O_NQB_AVX(om->M);                \
   __m256i *rsc;                                 \
   int w = width;                                \
                                                 \
@@ -439,7 +439,7 @@ get_xE(const ESL_DSQ *dsq, int L, const P7_OPROFILE *om)
   __m256i beginv;                  /* begin scores                                              */
 
   int q;			   /* counter over vectors 0..nq-1                              */
-  int Q        = p7O_NQB(om->M);   /* segment length: # of vectors                              */
+  int Q        = p7O_NQB_AVX(om->M);   /* segment length: # of vectors                              */
 
   int bands;                       /* the number of bands (rounds) to use                       */
 
