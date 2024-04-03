@@ -242,13 +242,18 @@ typedef struct p7_omx_s {
 #define MMXo(q)   (dp[(q) * p7X_NSCELLS + p7X_M])
 #define DMXo(q)   (dp[(q) * p7X_NSCELLS + p7X_D])
 #define IMXo(q)   (dp[(q) * p7X_NSCELLS + p7X_I])
+#define MMX_AVXo(q)   (dp[(q) * p7X_NSCELLS + p7X_M])
+#define DMX_AVXo(q)   (dp[(q) * p7X_NSCELLS + p7X_D])
+#define IMX_AVXo(q)   (dp[(q) * p7X_NSCELLS + p7X_I])
 #define XMXo(i,s) (xmx[(i) * p7X_NXCELLS + s])
 
 /* and this version works with a ptr to the approp DP row. */
 #define MMO(dp,q) ((dp)[(q) * p7X_NSCELLS + p7X_M])
 #define DMO(dp,q) ((dp)[(q) * p7X_NSCELLS + p7X_D])
 #define IMO(dp,q) ((dp)[(q) * p7X_NSCELLS + p7X_I])
-
+#define MMO_AVX(dp,q) ((dp)[(q) * p7X_NSCELLS + p7X_M])
+#define DMO_AVX(dp,q) ((dp)[(q) * p7X_NSCELLS + p7X_D])
+#define IMO_AVX(dp,q) ((dp)[(q) * p7X_NSCELLS + p7X_I])
 static inline float
 p7_omx_FGetMDI(const P7_OMX *ox, int s, int i, int k)
 {

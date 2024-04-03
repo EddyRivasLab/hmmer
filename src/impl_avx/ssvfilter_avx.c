@@ -122,7 +122,7 @@
   length_check(label)                                           \
   rsc = om->sbv_avx[dsq[i]] + pos;                                   \
   step()                                                        \
-  sv = esl_avx_rightshift_int8(sv, beginv);                                   \
+  sv = esl_avx_rightshift_int8(sv, _mm256_insert_epi8(_mm256_setzero_si256(), 128, 0)); \
   i++;
 
 
