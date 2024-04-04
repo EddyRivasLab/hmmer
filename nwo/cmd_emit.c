@@ -93,7 +93,7 @@ h4_cmd_emit(const char *topcmd, const ESL_SUBCMD *sub, int argc, char **argv)
   for (i = 0; i < N; i++)
     {
       h4_emit(rng, hmm, mo, sq, pi);
-      esl_sq_FormatName(sq, "sample-%d", i+1);
+      esl_sq_FormatName(sq, "%s-sample-%d", hmm->name, i+1);
       esl_sqio_Write(ofp, sq, eslSQFILE_FASTA, FALSE);
 
       if (dtblfile)
