@@ -3,7 +3,12 @@
 
 #include <h4_config.h>
 
+#include "easel.h"
+#include "esl_dsq.h"
+
 #include "h4_anchorset.h"
+#include "h4_mode.h"
+#include "h4_profile.h"
 
 /* H4_ENVELOPE
  *    Contains information about a domain's "envelope".
@@ -13,8 +18,8 @@ typedef struct {
   int   ia,   ib;	// envelope start, end on sequence   (1..L) 
   int   ka,   kb;	// ali start, end on model           (1..M) 
   int   oa,   ob;	// outer envelope start, stop on seq (1..L) 
-  float env_sc;	        // envelope raw score s_d, nats                    
-  float null2_sc;       // domain null2 score r_d, nats
+  float env_sc;	        // envelope raw score s_d, bits
+  float null2_sc;       // domain null2 score r_d, bits
   
   uint32_t flags;       // h4E_ENVSC_APPROX | h4E_IS_GLOCAL 
 } H4_ENVELOPE;
@@ -52,6 +57,8 @@ typedef struct {
 extern H4_ENVSET *h4_envset_Create(int D, int L, int M);
 extern int        h4_envset_Resize(H4_ENVSET *env, int D);
 extern int        h4_envset_CopyFromAnchorset(const H4_ANCHORSET *anch, H4_ENVSET *env);
+extern int        h4_envset_SetFromPath(const H4_PATH *pi, const ESL_DSQ *dsq, int L, const H4_PROFILE *hmm, const H4_MODE *mo, const H4_ANCHORSET *anch, H4_ENVSET *env);
+
 extern int        h4_envset_Dump(FILE *ofp, const H4_ENVSET *env);
 extern void       h4_envset_Destroy(H4_ENVSET *env);
 

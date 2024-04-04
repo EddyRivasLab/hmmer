@@ -7,7 +7,7 @@
  *   1. AEC alignment, DP fill
  *   2. Choice functions for AEC traceback.
  *   3. AEC traceback
- *   4. Experiment: coverage stats, ensemble vs Viterbi inference [was decoding-hunt]
+ *   4. Experiment: coverage stats for ensemble vs Viterbi inference
  *   5. Experiment 2: details on one profile/sequence comparison  [was decoding-study]
  *   6. Unit tests
  *   7. Test driver
@@ -324,7 +324,7 @@ reference_aec_trace(const H4_PROFILE *hmm, const H4_REFMX *mx, H4_ENVSET *env, H
 
 
 /***************************************************************** 
- * 4. Experiment: coverage stats, ensemble vs Viterbi inference
+ * 4. Experiment: coverage stats for ensemble vs Viterbi inference
  *****************************************************************/
 #ifdef h4REFERENCE_AEC_EXPERIMENT
 
@@ -332,6 +332,7 @@ reference_aec_trace(const H4_PROFILE *hmm, const H4_REFMX *mx, H4_ENVSET *env, H
 
 #include "easel.h"
 #include "esl_alphabet.h"
+#include "esl_exponential.h"
 #include "esl_getopts.h"
 #include "esl_random.h"
 #include "esl_sq.h"
@@ -353,10 +354,15 @@ reference_aec_trace(const H4_PROFILE *hmm, const H4_REFMX *mx, H4_ENVSET *env, H
 #include "reference_envelopes.h"
 #include "reference_aec.h"
 
+#include "calibrate.h"
+#include "zigar.h"
+
 static ESL_OPTIONS options[] = {
   /* name           type      default  env  range toggles reqs incomp  help                                   docgroup*/
   { "-h",         eslARG_NONE,   NULL, NULL, NULL,  NULL,   NULL,  NULL, "show brief help summary",                   0 },
-  { "--local",    eslARG_NONE,   NULL, NULL, NULL,  NULL,   NULL,  NULL, "use local mode, not dual glocal/local",     0 },
+  { "-o",      eslARG_OUTFILE,   NULL, NULL, NULL,  NULL,   NULL,  NULL, "direct output to file <f>, not stdout",     0 },
+  { "-L",         eslARG_NONE,   NULL, NULL, NULL,  NULL,   NULL,  NULL, "use local mode, not dual glocal/local",     0 },
+  { "-V",         eslARG_NONE,   NULL, NULL, NULL,  NULL,   NULL,  NULL, "infer domains by Viterbi, not ensemble",    0 },
   { "--seed",     eslARG_INT,     "0", NULL, NULL,  NULL,   NULL,  NULL, "set random number generator seed",          0 },
   { "--version",  eslARG_NONE,   NULL, NULL, NULL,  NULL,   NULL,  NULL, "show HMMER version number",                 0 },
   {  0, 0, 0, 0, 0, 0, 0, 0, 0, 0 },
@@ -365,36 +371,46 @@ static ESL_OPTIONS options[] = {
 int
 main(int argc, char **argv)
 {
-  ESL_GETOPTS    *go      = h4_CreateDefaultApp(options, 2, argc, argv, "coverage statistics, probabilistic inference vs. Viterbi", "[-options] <hmmfile> <seqfile>");
-  ESL_RANDOMNESS *rng     = esl_randomness_Create(esl_opt_GetInteger(go, "--seed"));
-  char           *hmmfile = esl_opt_GetArg(go, 1);
-  char           *seqfile = esl_opt_GetArg(go, 2);
-  int             infmt   = eslSQFILE_UNKNOWN;
-  H4_HMMFILE     *hfp     = NULL;
-  H4_PROFILE     *hmm     = NULL;
-  H4_MODE        *mo      = h4_mode_Create();
-  ESL_ALPHABET   *abc     = NULL;
-  ESL_SQFILE     *sqfp    = NULL;
-  ESL_SQ         *sq      = NULL;
-  H4_PATH        *pi      = h4_path_Create();
-  H4_REFMX       *rxf     = NULL;
-  H4_REFMX       *rxd     = NULL;
-  H4_REFMX       *afu     = NULL;
-  H4_REFMX       *afd     = NULL;
-  H4_REFMX       *apu     = NULL;
-  H4_REFMX       *apd     = NULL;
-  H4_REFMX       *aec     = NULL;
-  float          *wrk     = NULL;
-  H4_ANCHORSET   *anch    = h4_anchorset_Create(0,0,0);
-  H4_ANCHORHASH  *ah      = h4_anchorhash_Create();
-  H4_ENVSET      *env     = h4_envset_Create(0,0,0);
+  ESL_GETOPTS    *go        = h4_CreateDefaultApp(options, 2, argc, argv, "coverage statistics, probabilistic inference vs. Viterbi", "[-options] <hmmfile> <seqfile>");
+  ESL_RANDOMNESS *rng       = esl_randomness_Create(esl_opt_GetInteger(go, "--seed"));
+  char           *hmmfile   = esl_opt_GetArg(go, 1);
+  char           *seqfile   = esl_opt_GetArg(go, 2);
+  int             infmt     = eslSQFILE_UNKNOWN;
+  int             do_local  = esl_opt_GetBoolean(go, "-L");
+  int             do_vit    = esl_opt_GetBoolean(go, "-V");
+  FILE           *ofp       = stdout;
+  char           *outfile   = esl_opt_GetString(go, "-o");
+  H4_HMMFILE     *hfp       = NULL;
+  H4_PROFILE     *hmm       = NULL;
+  H4_MODE        *mo        = h4_mode_Create();
+  ESL_ALPHABET   *abc       = NULL;
+  ESL_SQFILE     *sqfp      = NULL;
+  ESL_SQ         *sq        = NULL;
+  H4_PATH        *pi        = h4_path_Create();
+  H4_REFMX       *rxf       = NULL;
+  H4_REFMX       *rxd       = NULL;
+  H4_REFMX       *afu       = NULL;
+  H4_REFMX       *afd       = NULL;
+  H4_REFMX       *apu       = NULL;
+  H4_REFMX       *apd       = NULL;
+  H4_REFMX       *aec       = NULL;
+  float          *wrk       = NULL;
+  H4_ANCHORSET   *anch      = h4_anchorset_Create(0,0,0);
+  H4_ANCHORHASH  *ah        = h4_anchorhash_Create();
+  H4_ENVSET      *env       = h4_envset_Create(0,0,0);
+  char          *zali       = NULL;
+  double         lambda, fwdtau;
   float          vsc, fsc, bsc, asc;
-  int            vdom, vfull, vcov;
-  int            pdom, pfull, pcov;
-  int            dcov50, dcov90;
+  int            d,z;
+  int            is_glocal;
   int            status;
 
-  if (esl_opt_GetBoolean(go, "--local")) h4_mode_SetLocal(mo);
+  if (do_local) h4_mode_SetLocal(mo);
+
+  if (outfile) {
+    if ((ofp = fopen(outfile, "w")) == NULL)
+      esl_fatal("Failed to open output FASTA file %s\n", outfile);
+  }
 
   status = h4_hmmfile_Open(hmmfile, NULL, &hfp);
   if (status != eslOK) esl_fatal("Error: failed to open %s for reading profile HMM(s)\n%s\n", strcmp(hmmfile, "-") == 0? "<stdin>" : hmmfile, hfp->errmsg);
@@ -408,8 +424,13 @@ main(int argc, char **argv)
   if      (status == eslENOTFOUND) esl_fatal("Failed to open %s for reading sequences\n",             strcmp(seqfile, "-") == 0 ? "<stdin>" : seqfile);
   else if (status == eslEFORMAT)   esl_fatal("Format of sequence file %s unrecognized\n",             strcmp(seqfile, "-") == 0 ? "<stdin>" : seqfile);
   else if (status != eslOK)        esl_fatal("Unexpected error opening sequence file %s (code %d)\n", strcmp(seqfile, "-") == 0 ? "<stdin>" : seqfile, status);
-
   sq = esl_sq_CreateDigital(abc);
+
+  /* Calibrate the model
+   * TK TK: this will eventually be done in hmmbuild and stored in the model
+   */
+  h4_lambda (     hmm, &lambda);
+  h4_fwd_tau(rng, hmm, /*L=*/100, /*N=*/200, lambda, 0.04, &fwdtau);
 
   rxf = h4_refmx_Create(hmm->M, 400);
   rxd = h4_refmx_Create(hmm->M, 400);
@@ -418,6 +439,11 @@ main(int argc, char **argv)
   apu = rxf;  // reusing space to conserve memory
   apd = rxd;
   aec = afu;
+
+  esl_dataheader(ofp, -20, "hmmname", 6, "hmmlen", -20, "sequence", 6, "seqlen",
+                 10, "fwd_sc", 10, "fwd_pval", 4, "ndom", 4, "d", 3, "G|L",
+                 1, "(", 6, "oa", 1, "[", 6, "ia", 6, "i0", 6, "ib", 1, "]", 6, "ob", 1, ")",
+                 1, "[", 6, "ka", 6, "k0", 6, "kb", 1, "]", 10, "env_sc", 10, "env_pval", -10, "zali", 0);
 
   while ((status = esl_sqio_Read(sqfp, sq)) != eslEOF)
     {
@@ -430,34 +456,49 @@ main(int argc, char **argv)
       h4_reference_Backward(sq->dsq, sq->n, hmm, mo, rxd,     &bsc);   
       h4_reference_Decoding(sq->dsq, sq->n, hmm, mo, rxf, rxd, rxd);   
 
-      vdom   = h4_path_GetDomainCount(pi);
-      vfull  = h4_path_GetFullDomainCount(pi, hmm->M);
-      vcov   = h4_path_GetHomologyCoverage(pi);
-      dcov50 = h4_refmx_GetDecodedDomainCoverage(rxd, 0.50);
-      dcov90 = h4_refmx_GetDecodedDomainCoverage(rxd, 0.90);
+      if (do_vit)      // infer anchors, envelopes from a single Viterbi optimal path for comparison to ensemble inference
+        {
+          h4_reference_mpas_path2anchors(pi, rxd, anch);
+          h4_envset_SetFromPath(pi, sq->dsq, sq->n, hmm, mo, anch, env);
+        }
+      else             // H4 ensemble inference
+        {
+          h4_reference_MPAS(rng, sq->dsq, sq->n, hmm, mo, rxf, rxd, pi, &wrk, ah,
+                            afu, afd, anch, &asc, NULL, NULL);
 
-      h4_reference_MPAS(rng, sq->dsq, sq->n, hmm, mo, rxf, rxd, pi, &wrk, ah,
-                        afu, afd, anch, &asc, NULL, NULL);
+          h4_reference_asc_Backward(sq->dsq, sq->n, hmm, mo, anch,           apu, apd, NULL);
+          h4_reference_asc_Decoding(sq->dsq, sq->n, hmm, mo, anch, afu, afd, apu, apd, apu, apd);
+          h4_reference_Envelopes   (sq->dsq, sq->n, hmm, mo, anch, apu, apd, afu, afd, env);
+          h4_reference_aec_Align(hmm, apu, apd, env, aec, pi);
+        }
 
-      h4_reference_asc_Backward(sq->dsq, sq->n, hmm, mo, anch,           apu, apd, NULL);
-      h4_reference_asc_Decoding(sq->dsq, sq->n, hmm, mo, anch, afu, afd, apu, apd, apu, apd);
-      h4_reference_Envelopes   (sq->dsq, sq->n, hmm, mo, anch, apu, apd, afu, afd, env);
-      h4_reference_aec_Align(hmm, apu, apd, env, aec, pi);
+      for (d = 1, z = 0; d <= env->D; d++)
+        {
+          while (pi->st[z] != h4P_L && pi->st[z] != h4P_G) z++;
+          is_glocal = (pi->st[z] == h4P_G ? TRUE : FALSE);
+          h4_zigar_Encode(pi, z, &zali);
+          z++;
+          
+          esl_fprintf(ofp, "%-20s %6d %-20s %6"PRId64" %10.2f %10.2g %4d %4d %3s ( %6d %c %6d %6d %6d %c %6d ) %c %6d %6d %6d %c %10.2f %10.2g %s\n",
+                      hmm->name, hmm->M, 
+                      sq->name,  sq->n,
+                      fsc,
+                      esl_exp_surv(fsc, fwdtau, lambda),
+                      env->D, d,
+                      is_glocal ? "G":"L",
+                      env->e[d].oa, env->e[d].ka == 1 ? '[':'.', env->e[d].ia, env->e[d].i0, env->e[d].ib, env->e[d].kb==hmm->M ? ']':'.', env->e[d].ob, 
+                      env->e[d].ka == 1 ? '[':'.', env->e[d].ka, env->e[d].k0, env->e[d].kb, env->e[d].kb==hmm->M ? ']':'.', 
+                      env->e[d].env_sc,
+                      esl_exp_surv(env->e[d].env_sc, fwdtau, lambda),
+                      zali);
+          free(zali);
+          zali = NULL;
+        }
 
-      pdom  = h4_path_GetDomainCount(pi);
-      pfull = h4_path_GetFullDomainCount(pi, hmm->M);
-      pcov  = h4_path_GetHomologyCoverage(pi);
-
-      printf("%-30s %9.2f %9.2f %9.2f %4d %4d %4d %4d %5d %5d %5d %5d\n",
-             sq->name,
-             vsc, fsc, asc,
-             vdom,  pdom,
-             vfull, pfull,
-             vcov,  pcov, dcov50, dcov90);
-      
       esl_sq_Reuse(sq);
     }
 
+  if (outfile)  fclose(ofp);
   esl_sqfile_Close(sqfp);
   h4_hmmfile_Close(hfp);
   

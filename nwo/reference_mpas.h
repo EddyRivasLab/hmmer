@@ -19,5 +19,7 @@ extern int h4_reference_MPAS(ESL_RANDOMNESS *rng, const ESL_DSQ *dsq, int L, con
                              float **byp_wrk,  H4_ANCHORHASH *ah,
                              H4_REFMX *afu, H4_REFMX *afd, H4_ANCHORSET *anch, float *ret_asc,
                              const H4_MPAS_PARAMS *prm, H4_MPAS_STATS *stats);
+extern int  h4_reference_mpas_path2anchors(const H4_PATH *pi, const H4_REFMX *rxd, H4_ANCHORSET *anch);
+
 
 #endif //h4REFERENCE_MPAS_INCLUDED

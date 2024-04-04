@@ -382,6 +382,13 @@ h4_path_GetSeqlen(const H4_PATH *pi)
 /* Function:  h4_path_GetDomainCount()
  * Synopsis:  Returns number of domains in a path
  * Incept:    SRE, Tue 06 Jul 2021 [H11/16]
+ *
+ * Purpose:   Returns the number of domains in path <pi>.
+ *
+ *            The special edge case of a zero-length homology
+ *            (N-G-D1-..-Dm-E-C or N-L-(E)-C paths; see h4_math.md)
+ *            does not count as a domain; this (and only this) case
+ *            returns 0.
  */
 int
 h4_path_GetDomainCount(const H4_PATH *pi)
@@ -389,8 +396,12 @@ h4_path_GetDomainCount(const H4_PATH *pi)
   int d = 0;
   int z;
 
+  ESL_DASSERT1(( pi->st[1] == h4P_G || pi->st[1] == h4P_L ));   // clarifying why the line below works: st[1] always L|G
+  if (pi->rle[1] == 0) return 0;                                // detect the zero-length homology edge case [h4_path.md]
+
   for (z = 0; z < pi->Z; z++)
-    if (h4_path_IsB(pi->st[z])) d++;   // h4_path_IsB() tests for h4P_L || h4P_G. H4_PATH doesn't explicitly contain h4P_B.
+    if (h4_path_IsB(pi->st[z])) d++;  // h4_path_IsB() tests for h4P_L || h4P_G. 
+                                      // H4_PATH doesn't explicitly contain h4P_B.
   return d;
 }
 
@@ -417,9 +428,12 @@ h4_path_GetFullDomainCount(const H4_PATH *pi, int M)
   int z,k,ka,kb;
   int nfull = 0;
 
+  ESL_DASSERT1(( pi->st[1] == h4P_G || pi->st[1] == h4P_L ));   // clarifying why the line below works: st[1] always L|G
+  if (pi->rle[1] == 0) return 0;                                // detect the zero-length homology edge case [h4_path.md]
+
   for (z = 0; z < pi->Z; z++)
     {
-      if      (h4_path_IsB(pi->st[z])) ka = k = pi->rle[z];  // k=1 for G
+      if      (h4_path_IsB(pi->st[z])) ka = k = pi->rle[z];  // k=1 for G. 
       else if (h4_path_IsM(pi->st[z])) k += pi->rle[z]; 
       else if (h4_path_IsD(pi->st[z])) k += pi->rle[z]; 
       else if (pi->st[z] == h4P_J || pi->st[z] == h4P_C)
@@ -446,6 +460,9 @@ h4_path_GetHomologyCoverage(const H4_PATH *pi)
   int z;
   int ncov = 0;
 
+  ESL_DASSERT1(( pi->st[1] == h4P_G || pi->st[1] == h4P_L ));   // clarifying why the line below works: st[1] always L|G
+  if (pi->rle[1] == 0) return 0;                                // detect the zero-length homology edge case [h4_path.md]
+
   for (z = 0; z < pi->Z; z++)
     {
       if      (h4_path_IsM(pi->st[z])) ncov += pi->rle[z];
@@ -465,6 +482,9 @@ h4_path_GetHomologyCoverage(const H4_PATH *pi)
  *
  *            Domains are numbered starting with 1.
  *
+ *            You can't fetch any domains from a zero-length homology edge case,
+ *            where D=0.
+ *
  * Args:      pi     - path to get domain coords from
  *            whichd - which domain to get coords for (1..D)
  *            opt_ia - optRETURN: start coord on seq (1..L)
@@ -474,7 +494,8 @@ h4_path_GetHomologyCoverage(const H4_PATH *pi)
  *
  * Returns:   <eslOK> on success.
  *
- * Throws:    <eslEINVAL> if <whichd> isn't 1..D.
+ * Throws:    <eslEINVAL> if <whichd> isn't 1..D. (Includes trying to fetch
+ *            bounds from a zero-length homology edge case.)
  */
 int
 h4_path_FetchDomainBounds(const H4_PATH *pi, int whichd, int *opt_ia, int *opt_ib, int *opt_ka, int *opt_kb)
@@ -484,6 +505,7 @@ h4_path_FetchDomainBounds(const H4_PATH *pi, int whichd, int *opt_ia, int *opt_i
   int k, z, ia, ib, ka, kb;
   int status;
   
+  if (pi->rle[1] == 0) ESL_XEXCEPTION(eslEINVAL, "can't fetch domain coords from a zero-length homology path edge case that has no domain");
   ESL_DASSERT1(( whichd > 0 ));
 
   for (z = 0; z < pi->Z; z++)
@@ -493,10 +515,10 @@ h4_path_FetchDomainBounds(const H4_PATH *pi, int whichd, int *opt_ia, int *opt_i
           if (d == whichd) { ib = i; kb = k-1; break; }
           i += pi->rle[z]-1;
         }
-      else if (h4_path_IsB(pi->st[z]))
+      else if (h4_path_IsB(pi->st[z]))   // L|G
         {
-          k = pi->rle[z];  // k=1 for G
-          if (++d == whichd) { ka = k; ia = i+1; }
+          k = pi->rle[z];      // k=1 for G. k=0 in special case of a zero-length homology, which is not counted as a domain.
+          if (k && ++d == whichd) { ka = k; ia = i+1; }   // note the `if (k)` test to exclude zero-length homologies
         }
       else if (h4_path_IsM(pi->st[z])) { i += pi->rle[z]; k += pi->rle[z]; }
       else if (h4_path_IsI(pi->st[z])) { i += pi->rle[z];                  }

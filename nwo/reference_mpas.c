@@ -31,8 +31,7 @@
 
 #include "reference_asc.h"
 #include "reference_dp.h"
-
-static int anchorset_from_path(const H4_PATH *pi, const H4_REFMX *rxd, H4_ANCHORSET *anch);
+#include "reference_mpas.h"
 
 /*****************************************************************
  * 1. MPAS algorithm
@@ -177,7 +176,7 @@ h4_reference_MPAS(ESL_RANDOMNESS *rng, const ESL_DSQ *dsq, int L, const H4_PROFI
   while (1) // ends on convergence tests at end of loop
     {
       /* First time thru, <pi> is the Viterbi path, from caller; after that, it's a stochastic sampled path */
-      anchorset_from_path(pi, rxd, anch);
+      h4_reference_mpas_path2anchors(pi, rxd, anch);
       status = h4_anchorhash_Store(ah, anch, 0, &keyidx);
 
       /* now <status> is either eslOK or eslEDUP.
@@ -289,26 +288,37 @@ h4_reference_MPAS(ESL_RANDOMNESS *rng, const ESL_DSQ *dsq, int L, const H4_PROFI
  * 2. Internal (static) functions
  *****************************************************************/
 
-/* anchorset_from_path()
- * Choose a good anchor set from a path.
+/* Function:  h4_reference_mpas_path2anchors()
+ * Synopsis:  Heuristically choose a good anchor set from a path.
+ * Incept:    SRE, Mon 11 Mar 2024
  *
- * Given a path <pi>, and posterior decoding matrix <rxd>, for every domain in <pi>
- * choose the best anchor i,k by choosing the match state (ML+MG, marginalized) with
- * highest posterior probability. Put the anchor coordinates and count into <anch>,
- * an allocated, possible empty structure provided by the caller.
+ * Purpose:   Given a path <pi>, and posterior decoding matrix <rxd>,
+ *            for every domain in <pi> choose an anchor i,k by
+ *            choosing the match state (ML+MG, marginalized) with
+ *            highest posterior probability. Put the anchor
+ *            coordinates and count into <anch>, an allocated,
+ *            possible empty structure provided by the caller.
  *
- * It's possible for a glocal domain to have no MG state at all, and only use {DI}
- * states. Such a domain is "unanchorable" and skipped. If all domains in the path
- * are unanchorable, the resulting anchorset is empty (D=0).
+ *            It's possible for a glocal domain to have no MG state at
+ *            all, and only use {DI} states. Such a domain is
+ *            "unanchorable" and skipped. If all domains in the path
+ *            are unanchorable, the resulting anchorset is empty
+ *            (D=0).
  *            
- * <anch> will be reinitialized here and may be reallocated if needed.
+ *            <anch> will be reinitialized here and may be reallocated
+ *            if needed.
  *            
  * Returns:   <eslOK> on success.
  *
  * Throws:    <eslEMEM> on reallocation failure. 
+ *
+ * Note:      Needs to be here in reference_mpas, not h4_path or
+ *            h4_anchorset, because it depends on the reference matrix
+ *            structure H4_REFMX.  We'll have a separate function for
+ *            the sparse DP version.
  */
-static int
-anchorset_from_path(const H4_PATH *pi, const H4_REFMX *rxd, H4_ANCHORSET *anch)
+int
+h4_reference_mpas_path2anchors(const H4_PATH *pi, const H4_REFMX *rxd, H4_ANCHORSET *anch)
 {
   const float *dpc;
   int          i,k,z,r;	

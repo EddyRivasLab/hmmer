@@ -19,6 +19,7 @@
 #include "h4_profile.h"
 
 #include "emit.h"
+#include "zigar.h"
 
 static ESL_OPTIONS emit_options[] = {
      /* name          type        default  env   range  toggles reqs incomp  help                                             docgroup*/
@@ -59,6 +60,9 @@ h4_cmd_emit(const char *topcmd, const ESL_SUBCMD *sub, int argc, char **argv)
   int             N       = esl_opt_GetInteger(go, "-N");
   int             i;
   int             D, d, ia, ib, ka, kb;
+  int             z;
+  int             is_glocal;
+  char           *zali    = NULL;
   int             status;
 
   status = h4_hmmfile_Open(hmmfile, NULL, &hfp);
@@ -79,8 +83,8 @@ h4_cmd_emit(const char *topcmd, const ESL_SUBCMD *sub, int argc, char **argv)
   if (dtblfile) {
     if ((dtblfp = fopen(dtblfile, "w")) == NULL)
       esl_fatal("Failed to open output domain table file %s\n", dtblfile);
+    esl_dataheader(dtblfp, -20, "hmmname", 6, "hmmlen", -20, "sequence", 6, "seqlen", 4, "ndom", 4, "d", 3, "G|L", 6, "ia", 6, "ib", 6, "ka", 6, "kb", -10, "zali", 0);
   }
-
 
   h4_mode_SetLength(mo, esl_opt_GetInteger(go, "-L"));
   if (esl_opt_GetBoolean(go, "-g") == TRUE)  h4_mode_SetGlocal(mo);
@@ -94,11 +98,22 @@ h4_cmd_emit(const char *topcmd, const ESL_SUBCMD *sub, int argc, char **argv)
 
       if (dtblfile)
         {
+          z = 0;
           D = h4_path_GetDomainCount(pi);
           for (d = 1; d <= D; d++)
             {
+              while (pi->st[z] != h4P_L && pi->st[z] != h4P_G) z++;
+              is_glocal = (pi->st[z] == h4P_G ? TRUE : FALSE);
+              h4_zigar_Encode(pi, z, &zali);
+              z++;
+     
               h4_path_FetchDomainBounds(pi, d, &ia, &ib, &ka, &kb);
-              esl_fprintf(dtblfp, "%-20s %6d %-20s %6d %4d %4d %6d %6d %6d %6d\n", sq->name, sq->n, hmm->name, hmm->M, d, D, ia, ib, ka, kb);
+              esl_fprintf(dtblfp, "%-20s %6d %-20s %6"PRId64" %4d %4d %3s %6d %6d %6d %6d %s\n",
+                          hmm->name, hmm->M, sq->name, sq->n, D, d,
+                          is_glocal ? "G" : "L",
+                          ia, ib, ka, kb, zali);
+
+              free(zali); zali = NULL;
             }
         }
     }

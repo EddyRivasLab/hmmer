@@ -184,8 +184,8 @@ main(int argc, char **argv)
 	      //printf("local %2d:  seq pos %5d..%-5d  model pos %5d..%5d\n",
 	      //d+1, tr_l->sqfrom[d], tr_l->sqto[d], tr_l->hmmfrom[d], tr_l->hmmto[d]);
 	      dom_l[d].n1 = tr_l->sqfrom[d];
-	      dom_l[d].n2   = tr_l->sqto[d];
-	      nintotal_l    += tr_l->sqto[d] - tr_l->sqfrom[d] + 1;
+	      dom_l[d].n2 = tr_l->sqto[d];
+	      nintotal_l += tr_l->sqto[d] - tr_l->sqfrom[d] + 1;
 	    }
 
 	  //p7_ReferenceMPLForward(sq->dsq, sq->n, lgm, dom_l, tr_l->ndom, mpl_l, &mplsc_l);
@@ -296,7 +296,7 @@ update_histograms(P7_REFMX *pp, P7_COORD2 *dom, int ndom, ESL_HISTOGRAM *indom, 
        *   and the d >= ndom test has to be first, to avoid evaluating dom[d].n1 for invalid d
        */
       if (d >= ndom || i < dom[d].n1) esl_histogram_Add(outdom, phomology); /* i is outside annotated domains */
-      else                               esl_histogram_Add(indom,  phomology); /* i is within annotated domain   */
+      else                            esl_histogram_Add(indom,  phomology); /* i is within annotated domain   */
       
       if (d < ndom && i == dom[d].n2) d++;
     }
@@ -312,7 +312,6 @@ count_nin_nout_above(P7_REFMX *pp, P7_COORD2 *dom, int ndom, float thresh, int *
   int   nout = 0;
   int   d    = 0;			/* index of current or next domain in <dom> */
 
-
   for (i = 1; i <= pp->L; i++)
     {
       phomology = 1.0 - (P7R_XMX(pp, i, p7R_N) + P7R_XMX(pp, i, p7R_JJ) + P7R_XMX(pp, i, p7R_CC)); /* JJ,CC, not J,C because we only want emitting J,C */
@@ -320,7 +319,7 @@ count_nin_nout_above(P7_REFMX *pp, P7_COORD2 *dom, int ndom, float thresh, int *
       if (phomology >= thresh)
 	{
 	  if (d >= ndom || i < dom[d].n1) nout++;
-	  else                               nin++;
+	  else                            nin++;
 	}
 
       if (d < ndom && i == dom[d].n2) d++;

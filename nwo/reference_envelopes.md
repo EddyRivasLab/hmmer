@@ -257,3 +257,51 @@ For $\epsilon = 0.005$, we lose up to a fraction 0.02 of the total
 mass of the ensemble we count, corresponding to a maximum LLR score
 loss of ~0.03 bits; we consider this to be a negligible score
 difference.
+
+
+## relationship between AEC sequence score and sum of envelope scores
+
+Let the length of each domain envelope be $\ell_1..\ell_D$, and a
+partial score for each domain envelope (just for those residues,
+neglecting the rest of the sequence) be $s_1..s_D$. These partial
+scores are defined to start from the N|J $\rightarrow$ B and end with
+the the E $\rightarrow$ J|C transition.
+
+In the default multihit alignment mode, $\tau_{\mathrm{NN}} =
+\tau_{\mathrm{JJ}} = \tau_{\mathrm{CC}}$, $\tau_{\mathrm{NB}} =
+\tau_{\mathrm{JB}}$, and $\tau_{\mathrm{EJ}} = \tau_{\mathrm{EC}}$.
+Thus in default mode the partial scores $s_d$ do not depend on whether
+there are other domains before or after domain d, and we can use
+$\tau_{\mathrm{XX}}$ to represent the NN=JJ=CC transitions.  The
+following calculation depends on these two conditions.
+
+Any path without domain d has exactly $\ell_d$ NN|JJ|CC transitions in
+its place.
+
+An envelope score for domain d is thus $S_d = s_d + (L-\ell_d)
+\tau_{\mathrm{XX}} + \tau_{\mathrm{CT}} - \mathrm{nullsc}$.
+
+The AEC sequence score (including all domains) is $S = \sum_d s_d + (L -
+\sum_d \ell_d) \tau_{\mathrm{XX}} + \tau_{\mathrm{CT}} -
+\mathrm{nullsc}$.
+
+The sum of the envelope scores $\sum S_d$ for all D domains thus
+accumulates extra terms that sum to exactly $ (D-1) (L
+\tau_{\mathrm{XX}} + \tau_{\mathrm{CT}} - \mathrm{nullsc})$, so:
+
+\[
+   S^{\mathrm{AEC}} = \left( \sum_d S_d \right) - (D-1) (L \tau_{\mathrm{XX}} + \tau_{\mathrm{CT}} - \mathrm{nullsc})
+\]
+
+
+
+
+
+
+
+
+
+
+
+
+

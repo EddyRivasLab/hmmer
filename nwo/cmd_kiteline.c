@@ -83,6 +83,7 @@ h4_cmd_kiteline(const char *topcmd, const ESL_SUBCMD *sub, int argc, char **argv
   double          sfP,  vfP,  ffP,  fwdP;
   int             d, z;
   char           *zali    = NULL;
+  int             is_glocal;
   int             status;
 
   h4_Init();
@@ -176,19 +177,22 @@ h4_cmd_kiteline(const char *topcmd, const ESL_SUBCMD *sub, int argc, char **argv
       for (d = 1; d <= env->D; d++)
         {
           while (pi->st[z] != h4P_L && pi->st[z] != h4P_G) z++;
+          is_glocal = (pi->st[z] == h4P_G ? TRUE : FALSE);
           h4_zigar_Encode(pi, z, &zali);
           z++;
           
-          printf("%-30s %10.2f %10.2g %4d %4d %6d %6d %6d %6d %6d %6d %6d %6d %10.2f %s\n",
-                 sq->name,
+          printf("%-20s %6d %-20s %6"PRId64" %10.2f %10.2g %4d %4d %c ( %6d %c %6d %6d %6d %c %6d ) %c %6d %6d %6d %c %10.2f %s\n",
+                 hmm->name, hmm->M, 
+                 sq->name,  sq->n,
                  fsc, fwdP,
-                 d, env->D,
-                 env->e[d].ia, env->e[d].ib, env->e[d].oa, env->e[d].ob, (int) sq->n,
-                 env->e[d].ka, env->e[d].kb, hmm->M,
+                 env->D, d,
+                 is_glocal ? 'G':'L',
+                 env->e[d].oa, env->e[d].ka == 1 ? '[':'.', env->e[d].ia, env->e[d].i0, env->e[d].ib, env->e[d].kb==hmm->M ? ']':'.', env->e[d].ob, 
+                 env->e[d].ka == 1 ? '[':'.', env->e[d].ka, env->e[d].k0, env->e[d].kb, env->e[d].kb==hmm->M ? ']':'.', 
                  env->e[d].env_sc,
                  zali);
 
-          free(zali);
+          free(zali); zali = NULL;
         }
 
     NO_HIT:

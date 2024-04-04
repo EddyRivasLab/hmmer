@@ -17,6 +17,7 @@ OBJS   = \
 	h4_mode.o             \
 	h4_mpas.o             \
 	h4_path.o             \
+	h4_pathidx.o          \
 	h4_prior.o            \
 	h4_profile.o          \
 	h4_refmx.o            \
@@ -65,6 +66,7 @@ HDRS = \
 	h4_mode.h             \
 	h4_mpas.h             \
 	h4_path.h             \
+	h4_pathidx.h          \
 	h4_prior.h            \
 	h4_profile.h          \
 	h4_refmx.h            \
@@ -98,9 +100,11 @@ HDRS = \
 
 UTESTS = \
 	h4_anchorhash_utest       \
+	h4_envset_utest           \
 	h4_hmmfile_utest          \
 	h4_mode_utest             \
 	h4_path_utest             \
+	h4_pathidx_utest          \
 	h4_profile_utest          \
 	h4_sparsemask_utest       \
 	emit_utest                \
@@ -121,6 +125,7 @@ STATS  =
 EXPERIMENTS = \
 	build_experiment           \
 	build_experiment2          \
+	reference_dp_experiment    \
 	reference_aec_experiment   \
 	reference_aec_experiment2
 

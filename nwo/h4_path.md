@@ -33,18 +33,28 @@ I'd intended to only use during development, but which got locked in.
   
 * ... thus for G states, `pi->rle[]` is indeed always 1.
 
-* A "zero length homology" path (a path with no residues in MI states
+* A "zero length homology" path (a path with no residues in M|I states
   at all) can arise as an edge case in model construction. In glocal
   mode, this can be represented by a valid glocal path as
-  NGD..DC. Model construction might also force a zero length homology
-  in local mode, and an H4 model has no such valid path. As a special
-  case, NL(E)C is accepted as a path. This is the only legal path of
-  length $Z=3$ elements. N and C can still have run lengths $>1$ with
-  residues assigned to them, so it's a zero length _homology_ path in
-  my jargon, not a zero length _sequence_ path. As a convention, a
-  zero length homology local path sets k=0 for the L->MLk entry in
-  `rle[]`. A zero-length homology path is assigned a log-odds score of
-  $-\infty$.
+  `N-G-D1-..-Dm-(E)-C`. 
+  
+  Model construction can also force a zero length homology in local
+  mode, even though the H4 model has no such valid path. As a special
+  case, `N-L-(E)-C` is accepted as a path but with zero
+  probability. This is the only legal path of length $Z=3$ elements. N
+  and C can still have run lengths $>1$ with residues assigned to
+  them, so it's a zero length _homology_ path in my jargon, not a zero
+  length _sequence_ path. As a convention, a zero length homology
+  local path sets k=0 for the L->MLk entry in `rle[]`. A zero-length
+  homology path is assigned a log-odds score of $-\infty$.
+  
+  Zero-length homologies are not counted as "domains" for functions
+  like `h4_path_GetDomainCount()` or `h4_pathidx_Build()`, and they
+  never arise from alignment inference routines, only from model
+  construction on user-input MSAs. Because this case only arises in
+  model construction (thus there cannot be any other domains in the
+  path), we can tell if an `H4_PATH` is a zero-length homology case
+  by testing `rle[1] == 0`.
 
 * Besides the zero length local homology special case, an impossible
   path (no path was found or can exist for this profile/sequence
