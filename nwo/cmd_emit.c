@@ -33,8 +33,8 @@ static ESL_OPTIONS emit_options[] = {
   { "-u",          eslARG_NONE,  FALSE,  NULL,  NULL,  NULL,  NULL, NULL, "configure profile in unihit mode (default: multihit)",   2 }, 
   
   /* other options */
-  { "--seed",      eslARG_INT,      "0", NULL, "n>=0", NULL, NULL,  NULL, "set RNG seed to <n>",                                   5 },
-  { "--domtblout", eslARG_OUTFILE, NULL, NULL,  NULL,  NULL, NULL,  NULL, "write domain location table to <f>",                    5 },
+  { "--seed",      eslARG_INT,      "0", NULL, "n>=0", NULL, NULL,  NULL, "set RNG seed to <n>",                                   3 },
+  { "--domtblout", eslARG_OUTFILE, NULL, NULL,  NULL,  NULL, NULL,  NULL, "write domain location table to <f>",                    3 },
   {  0, 0, 0, 0, 0, 0, 0, 0, 0, 0 },
 };
 
@@ -159,12 +159,8 @@ process_cmdline(const char *topcmd, const ESL_SUBCMD *sub, const ESL_OPTIONS *su
       esl_opt_DisplayHelp(stdout, go, 1, 2, 80);
       esl_printf("\noptions controlling sequence emission:\n");
       esl_opt_DisplayHelp(stdout, go, 2, 2, 80);
-      esl_printf("\noptions selecting other kinds of emission, besides sequences:\n");
-      esl_opt_DisplayHelp(stdout, go, 3, 2, 80);
-      esl_printf("\noptions controlling fancy consensus emission with -C:\n");
-      esl_opt_DisplayHelp(stdout, go, 4, 2, 80);
       esl_printf("\nother options:\n");
-      esl_opt_DisplayHelp(stdout, go, 5, 2, 80);
+      esl_opt_DisplayHelp(stdout, go, 3, 2, 80);
       exit(0);
     }
   if (esl_opt_ArgNumber(go) != sub->nargs) 
