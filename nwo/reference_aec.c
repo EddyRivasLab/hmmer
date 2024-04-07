@@ -66,7 +66,6 @@ int
 h4_reference_aec_Align(const H4_PROFILE *hmm, const H4_REFMX *apu, const H4_REFMX *apd, H4_ENVSET *env, H4_REFMX *mx, H4_PATH *pi)
 {
   int   M  = env->M;
-  int   L  = env->L;
   float xX = 0.;
   int   ia, i0, k0, ib, is_glocal;
   int   d, i, k;
@@ -74,7 +73,7 @@ h4_reference_aec_Align(const H4_PROFILE *hmm, const H4_REFMX *apu, const H4_REFM
 
   /* input validation */
   ESL_DASSERT1(( hmm->M == M && apu->M == M && apd->M == M));
-  ESL_DASSERT1(( apu->L == L && apd->L == L ));
+  ESL_DASSERT1(( apu->L == env->L && apd->L == env->L ));
   ESL_DASSERT1(( apu->type == h4R_ASC_DECODE_UP   ));
   ESL_DASSERT1(( apd->type == h4R_ASC_DECODE_DOWN ));
 
@@ -133,6 +132,8 @@ h4_reference_aec_Align(const H4_PROFILE *hmm, const H4_REFMX *apu, const H4_REFM
        * supercell of UP sector, but rarely UP sector may not
        * exist. 
        */
+      H4R_MX(mx,i0,k0-1,h4R_ML) = H4R_MX(mx,i0,k0-1,h4R_IL) = H4R_MX(mx,i0,k0-1,h4R_DL) = -eslINFINITY;  // calculation below at i0+1,k0 will look diagonally at i0,k0-1 supercell
+
       if (ia < i0) H4R_MX(mx,i0,k0,h4R_ML) = H4R_MX(apd,i0,k0,h4R_ML) + H4R_MX(apd,i0,k0,h4R_MG) + 
                                              ESL_MAX( ESL_MAX( H4_DELTAT( H4R_MX(mx,i0-1,k0-1,h4R_ML), hmm->tsc[k0-1][h4_MM]),
 				                               H4_DELTAT( H4R_MX(mx,i0-1,k0-1,h4R_IL), hmm->tsc[k0-1][h4_IM])),
