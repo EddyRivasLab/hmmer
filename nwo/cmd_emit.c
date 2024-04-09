@@ -16,6 +16,7 @@
 #include "h4_hmmfile.h"
 #include "h4_mode.h"
 #include "h4_path.h"
+#include "h4_pathidx.h"
 #include "h4_profile.h"
 
 #include "emit.h"
@@ -33,8 +34,9 @@ static ESL_OPTIONS emit_options[] = {
   { "-u",          eslARG_NONE,  FALSE,  NULL,  NULL,  NULL,  NULL, NULL, "configure profile in unihit mode (default: multihit)",   2 }, 
   
   /* other options */
-  { "--seed",      eslARG_INT,      "0", NULL, "n>=0", NULL, NULL,  NULL, "set RNG seed to <n>",                                   3 },
-  { "--domtblout", eslARG_OUTFILE, NULL, NULL,  NULL,  NULL, NULL,  NULL, "write domain location table to <f>",                    3 },
+  { "--seed",       eslARG_INT,      "0", NULL, "n>=0", NULL, NULL,  NULL, "set RNG seed to <n>",                                       3 },
+  { "--domtblout",  eslARG_OUTFILE, NULL, NULL,  NULL,  NULL, NULL,  NULL, "write domain location table to <f>",                        3 },
+  { "--noadjlocal", eslARG_NONE,    NULL, NULL,  NULL,  NULL, NULL,  NULL, "disallow adjacent local domains: must intersperse glocals", 3 },
   {  0, 0, 0, 0, 0, 0, 0, 0, 0, 0 },
 };
 
@@ -53,15 +55,15 @@ h4_cmd_emit(const char *topcmd, const ESL_SUBCMD *sub, int argc, char **argv)
   ESL_ALPHABET   *abc     = NULL;
   ESL_SQ         *sq      = NULL;
   H4_PATH        *pi      = h4_path_Create();
+  H4_PATHIDX     *pidx    = NULL;
   char           *outfile = esl_opt_GetString(go, "-o");
   char           *dtblfile= esl_opt_GetString(go, "--domtblout");
+  int             do_noadjlocal = esl_opt_GetBoolean(go, "--noadjlocal");
   FILE           *ofp     = stdout;
   FILE           *dtblfp  = NULL;
   int             N       = esl_opt_GetInteger(go, "-N");
-  int             i;
-  int             D, d, ia, ib, ka, kb;
-  int             z;
-  int             is_glocal;
+  int             i,d;
+  int             is_acceptable;
   char           *zali    = NULL;
   int             status;
 
@@ -92,26 +94,32 @@ h4_cmd_emit(const char *topcmd, const ESL_SUBCMD *sub, int argc, char **argv)
 
   for (i = 0; i < N; i++)
     {
-      h4_emit(rng, hmm, mo, sq, pi);
+      do {
+        is_acceptable = TRUE;    // unless we see otherwise
+        h4_emit(rng, hmm, mo, sq, pi);
+        h4_pathidx_Build(pi, &pidx);
+
+        /* rejection sampling: if we don't like this seq for some reason, we'll try again */
+        if (do_noadjlocal)
+          {
+            for (d = 1; d < pidx->D; d++)   // d<D so both d and d+1 are valid, curr and nxt
+              if (! pidx->is_glocal[d] && ! pidx->is_glocal[d+1])  // two local domains in a row: reject
+                { is_acceptable = FALSE; h4_pathidx_Destroy(pidx); pidx = NULL; break; }
+          }
+      } while (! is_acceptable);
+
       esl_sq_FormatName(sq, "%s-sample-%d", hmm->name, i+1);
       esl_sqio_Write(ofp, sq, eslSQFILE_FASTA, FALSE);
 
       if (dtblfile)
         {
-          z = 0;
-          D = h4_path_GetDomainCount(pi);
-          for (d = 1; d <= D; d++)
+          for (d = 1; d <= pidx->D; d++)
             {
-              while (pi->st[z] != h4P_L && pi->st[z] != h4P_G) z++;
-              is_glocal = (pi->st[z] == h4P_G ? TRUE : FALSE);
-              h4_zigar_Encode(pi, z, &zali);
-              z++;
-     
-              h4_path_FetchDomainBounds(pi, d, &ia, &ib, &ka, &kb);
+              h4_zigar_Encode(pi, pidx->za[d], &zali);
               esl_fprintf(dtblfp, "%-20s %6d %-20s %6"PRId64" %4d %4d %3s %6d %6d %6d %6d %s\n",
-                          hmm->name, hmm->M, sq->name, sq->n, D, d,
-                          is_glocal ? "G" : "L",
-                          ia, ib, ka, kb, zali);
+                          hmm->name, hmm->M, sq->name, sq->n, pidx->D, d,
+                          pidx->is_glocal[d] ? "G" : "L",
+                          pidx->ia[d], pidx->ib[d], pidx->ka[d], pidx->kb[d], zali);
 
               free(zali); zali = NULL;
             }
