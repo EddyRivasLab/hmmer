@@ -5,14 +5,15 @@
  */
 #ifndef P7_IMPL_avx_INCLUDED
 #define P7_IMPL_avx_INCLUDED
-
+#define USE_AVX512 1
 #include <p7_config.h>
 
 #include "esl_alphabet.h"
 #include "esl_random.h"
 #include <xmmintrin.h>    /* SSE  */
 #include <emmintrin.h>    /* SSE2 */
-#include <immintrin.h>  /* AVX@ */
+#include <immintrin.h>  /* AVX2 */
+#include <x86intrin.h>  /* AVX512 */
 
 #ifdef __SSE3__
 #include <pmmintrin.h>   /* DENORMAL_MODE */
@@ -28,6 +29,9 @@
 #define p7O_NQB_AVX(M)   ( ESL_MAX(2, ((((M)-1) / 32) + 1)))   /* 32 uchars  */
 #define p7O_NQW_AVX(M)   ( ESL_MAX(2, ((((M)-1) / 16)  + 1)))   /*  16 words   */
 #define p7O_NQF_AVX(M)   ( ESL_MAX(2, ((((M)-1) / 8)  + 1)))   /*  8 floats  */
+#define p7O_NQB_AVX512(M)   ( ESL_MAX(2, ((((M)-1) / 64) + 1)))   /* 64 uchars  */
+#define p7O_NQW_AVX512(M)   ( ESL_MAX(2, ((((M)-1) / 32)  + 1)))   /*  32 words   */
+#define p7O_NQF_AVX512(M)   ( ESL_MAX(2, ((((M)-1) / 16)  + 1)))   /*  16 floats  */
 #define p7O_EXTRA_SB 17    /* see ssvfilter.c for explanation */
 
 
@@ -82,6 +86,8 @@ typedef struct p7_oprofile_s {
   __m128i **sbv;         /* match scores for ssvfilter                        */
   __m256i **rbv_avx;   // AVX versions of above
   __m256i **sbv_avx;
+  __m512i **rbv_avx512;
+  __m512i **sbv_avx512;
   uint8_t   tbm_b;    /* constant B->Mk cost:    scaled log 2/M(M+1)       */
   uint8_t   tec_b;    /* constant E->C  cost:    scaled log 0.5            */
   uint8_t   tjb_b;    /* constant NCJ move cost: scaled log 3/(L+3)        */
@@ -94,6 +100,7 @@ typedef struct p7_oprofile_s {
   __m128i  *twv;    /* transition score blocks          [8*Q8]           */
   __m256i **rwv_avx;
   __m256i  *twv_avx;
+
 
   int16_t   xw[p7O_NXSTATES][p7O_NXTRANS]; /* NECJ state transition costs            */
   float     scale_w;            /* score units: typically 500 / log(2), 1/500 bits   */
@@ -115,12 +122,14 @@ typedef struct p7_oprofile_s {
   __m128i  *twv_mem;
   __m128   *tfv_mem;
   __m128   *rfv_mem;
-  __m128i  *rbv_mem_avx;
-  __m128i  *sbv_mem_avx;
-  __m128i  *rwv_mem_avx;
-  __m128i  *twv_mem_avx;
-  __m128   *tfv_mem_avx;
-  __m128   *rfv_mem_avx;
+  __m256i  *rbv_mem_avx;
+  __m256i  *sbv_mem_avx;
+  __m256i  *rwv_mem_avx;
+  __m256i  *twv_mem_avx;
+  __m256   *tfv_mem_avx;
+  __m256   *rfv_mem_avx;
+  __m512i  *rbv_mem_avx512;
+  __m512i  *sbv_mem_avx512;
   /* Disk offset information for hmmpfam's fast model retrieval                      */
   off_t  offs[p7_NOFFSETS];     /* p7_{MFP}OFFSET, or -1                             */
 
@@ -152,6 +161,9 @@ typedef struct p7_oprofile_s {
   int    allocQ4_avx; // as above, but for AVX
   int    allocQ8_avx;
   int    allocQ16_avx;
+  int    allocQ4_avx512; // as above, but for AVX512
+  int    allocQ8_avx512;
+  int    allocQ16_avx512;
   int    mode;      /* currently must be p7_LOCAL                        */
   float  nj;      /* expected # of J's: 0 or 1, uni vs. multihit       */
 
@@ -190,6 +202,7 @@ enum p7x_scells_e { p7X_M = 0, p7X_D = 1, p7X_I = 2 };
 enum p7x_xcells_e { p7X_E = 0, p7X_N = 1, p7X_J = 2, p7X_B = 3, p7X_C = 4, p7X_SCALE = 5 }; 
 #define p7X_NXCELLS 6
 
+enum simd_type_e {sse, avx, none};
 /* 
  * 
  * dpf[][] 
@@ -202,7 +215,7 @@ enum p7x_xcells_e { p7X_E = 0, p7X_N = 1, p7X_J = 2, p7X_B = 3, p7X_C = 4, p7X_S
 typedef struct p7_omx_s {
   int       M;      /* current actual model dimension                              */
   int       L;      /* current actual sequence dimension                           */
-
+  enum simd_type_e last_written_by;
   /* The main dynamic programming matrix for M,D,I states                                      */
   __m128  **dpf;    /* striped DP matrix for [0,1..L][0..Q-1][MDI], float vectors  */
   __m128i **dpw;    /* striped DP matrix for [0,1..L][0..Q-1][MDI], sword vectors  */
@@ -210,8 +223,12 @@ typedef struct p7_omx_s {
   __m256 **dpf_avx;  //AVX versions of above
   __m256i **dpw_avx;
   __m256i **dpb_avx;
+  __m512 **dpf_avx512;  //AVX versions of above
+  __m512i **dpw_avx512;
+  __m512i **dpb_avx512;
   void     *dp_mem;    /* DP memory shared by <dpb>, <dpw>, <dpf>     */
   void     *dp_mem_avx;  // AVX version.  Keep avx and sse separate during testing so can compare results
+  void     *dp_mem_avx512;  // AVX512 version.  Keep avx and sse separate during testing so can compare results
   int       allocR;    /* current allocated # rows in dp{uf}. allocR >= validR >= L+1 */
   int       validR;    /* current # of rows actually pointing at DP memory            */
   int       allocQ4;    /* current set row width in <dpf> quads:   allocQ4*4 >= M      */
@@ -220,6 +237,9 @@ typedef struct p7_omx_s {
   int       allocQ4_avx; // AVX versions of above 
   int       allocQ8_avx;    
   int       allocQ16_avx;  
+  int       allocQ4_avx512; // AVX versions of above 
+  int       allocQ8_avx512;    
+  int       allocQ16_avx512;  
   int64_t   ncells;     /* current allocation size of <dp_mem>, in accessible cells    */
 
   /* The X states (for full,parser; or NULL, for scorer)                                       */
@@ -242,18 +262,14 @@ typedef struct p7_omx_s {
 #define MMXo(q)   (dp[(q) * p7X_NSCELLS + p7X_M])
 #define DMXo(q)   (dp[(q) * p7X_NSCELLS + p7X_D])
 #define IMXo(q)   (dp[(q) * p7X_NSCELLS + p7X_I])
-#define MMX_AVXo(q)   (dp[(q) * p7X_NSCELLS + p7X_M])
-#define DMX_AVXo(q)   (dp[(q) * p7X_NSCELLS + p7X_D])
-#define IMX_AVXo(q)   (dp[(q) * p7X_NSCELLS + p7X_I])
 #define XMXo(i,s) (xmx[(i) * p7X_NXCELLS + s])
 
 /* and this version works with a ptr to the approp DP row. */
 #define MMO(dp,q) ((dp)[(q) * p7X_NSCELLS + p7X_M])
 #define DMO(dp,q) ((dp)[(q) * p7X_NSCELLS + p7X_D])
 #define IMO(dp,q) ((dp)[(q) * p7X_NSCELLS + p7X_I])
-#define MMO_AVX(dp,q) ((dp)[(q) * p7X_NSCELLS + p7X_M])
-#define DMO_AVX(dp,q) ((dp)[(q) * p7X_NSCELLS + p7X_D])
-#define IMO_AVX(dp,q) ((dp)[(q) * p7X_NSCELLS + p7X_I])
+
+
 static inline float
 p7_omx_FGetMDI(const P7_OMX *ox, int s, int i, int k)
 {
@@ -289,6 +305,8 @@ p7_omx_FSetMDI(const P7_OMX *ox, int s, int i, int k, float val)
 extern P7_OMX      *p7_omx_Create(int allocM, int allocL, int allocXL);
 extern int          p7_omx_GrowTo(P7_OMX *ox, int allocM, int allocL, int allocXL);
 extern int          p7_omx_FDeconvert(P7_OMX *ox, P7_GMX *gx);
+extern int          p7_omx_FDeconvert_sse(P7_OMX *ox, P7_GMX *gx);
+extern int          p7_omx_FDeconvert_avx(P7_OMX *ox, P7_GMX *gx);
 extern int          p7_omx_Reuse  (P7_OMX *ox);
 extern void         p7_omx_Destroy(P7_OMX *ox);
 
@@ -319,8 +337,7 @@ extern int          p7_oprofile_ReconfigMultihit  (P7_OPROFILE *om, int L);
 extern int          p7_oprofile_ReconfigUnihit    (P7_OPROFILE *om, int L);
 
 extern int          p7_oprofile_Dump(FILE *fp, const P7_OPROFILE *om);
-extern int          p7_oprofile_Sample(ESL_RANDOMNESS *r, const ESL_ALPHABET *abc, const P7_BG *bg, int M, int L,
-               P7_HMM **opt_hmm, P7_PROFILE **opt_gm, P7_OPROFILE **ret_om);
+extern int          p7_oprofile_Sample(ESL_RANDOMNESS *r, const ESL_ALPHABET *abc, const P7_BG *bg, int M, int L, P7_HMM **opt_hmm, P7_PROFILE **opt_gm, P7_OPROFILE **ret_om);
 extern int          p7_oprofile_Compare(const P7_OPROFILE *om1, const P7_OPROFILE *om2, float tol, char *errmsg);
 extern int          p7_profile_SameAsMF(const P7_OPROFILE *om, P7_PROFILE *gm);
 extern int          p7_profile_SameAsVF(const P7_OPROFILE *om, P7_PROFILE *gm);
@@ -366,11 +383,14 @@ extern void p7_oprofile_DestroyBlock(P7_OM_BLOCK *block);
 extern int p7_SSVFilter    (const ESL_DSQ *dsq, int L, const P7_OPROFILE *om, float *ret_sc);
 extern int p7_SSVFilter_sse    (const ESL_DSQ *dsq, int L, const P7_OPROFILE *om, float *ret_sc);
 extern int p7_SSVFilter_avx     (const ESL_DSQ *dsq, int L, const P7_OPROFILE *om, float *ret_sc);
+extern int p7_SSVFilter_avx512     (const ESL_DSQ *dsq, int L, const P7_OPROFILE *om, float *ret_sc);
 
 /* msvfilter.c */
 extern int p7_MSVFilter (const ESL_DSQ *dsq, int L, const P7_OPROFILE *om, P7_OMX *ox, float *ret_sc);
 extern int p7_MSVFilter_sse (const ESL_DSQ *dsq, int L, const P7_OPROFILE *om, P7_OMX *ox, float *ret_sc);
 extern int p7_MSVFilter_avx  (const ESL_DSQ *dsq, int L, const P7_OPROFILE *om, P7_OMX *ox, float *ret_sc);
+extern int p7_MSVFilter_avx512  (const ESL_DSQ *dsq, int L, const P7_OPROFILE *om, P7_OMX *ox, float *ret_sc);
+
 extern int p7_SSVFilter_longtarget(const ESL_DSQ *dsq, int L, P7_OPROFILE *om, P7_OMX *ox, const P7_SCOREDATA *msvdata, P7_BG *bg, double P, P7_HMM_WINDOWLIST *windowlist);
 
 
@@ -397,7 +417,7 @@ extern int p7_ViterbiFilter_longtarget(const ESL_DSQ *dsq, int L, const P7_OPROF
 extern int p7_ViterbiScore (const ESL_DSQ *dsq, int L, const P7_OPROFILE *om, P7_OMX *ox, float *ret_sc);
 
 // Functionsto convert striped data from one vector size to another
-extern void p7_restripe_byte(char *source, char *dest, int length, int source_vector_length, int dest_vector_length);
+extern void p7_restripe_byte(char *source, char *dest, int length, int source_vector_length, int dest_vector_length, uint8_t pad_value);
 extern void p7_restripe_short(int16_t *source, int16_t *dest, int length, int source_vector_length, int dest_vector_length);
 extern void p7_restripe_float(float *source, float *dest, int length, int source_vector_length, int dest_vector_length);
 /*****************************************************************

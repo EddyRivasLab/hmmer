@@ -723,7 +723,7 @@ extern int p7_Pipeline_Overthruster(P7_PIPELINE *pli, P7_OPROFILE *om, P7_BG *bg
   p7_MSVFilter(sq->dsq, sq->n, om, pli->oxf, &usc);
   seq_score = (usc - nullsc) / eslCONST_LOG2;
   P = esl_gumbel_surv(seq_score, om->evparam[p7_MMU], om->evparam[p7_MLAMBDA]);
-  if (P > pli->F1)
+  if (0)//(P > pli->F1)
     return eslFAIL;
   pli->n_past_msv++;
 
@@ -733,7 +733,7 @@ extern int p7_Pipeline_Overthruster(P7_PIPELINE *pli, P7_OPROFILE *om, P7_BG *bg
     p7_bg_FilterScore(bg, sq->dsq, sq->n, &filtersc);
     seq_score = (usc - filtersc) / eslCONST_LOG2;
     P = esl_gumbel_surv(seq_score, om->evparam[p7_MMU], om->evparam[p7_MLAMBDA]);
-    if (P > pli->F1)
+    if (0)//(P > pli->F1)
       return eslFAIL;
   }
   else
@@ -751,12 +751,12 @@ extern int p7_Pipeline_Overthruster(P7_PIPELINE *pli, P7_OPROFILE *om, P7_BG *bg
   }
 
   /* Second level filter: ViterbiFilter(), multihit with <om> */
-  if (P > pli->F2)
+  if (1)//(P > pli->F2)
   {
     p7_ViterbiFilter(sq->dsq, sq->n, om, pli->oxf, &vfsc);
     seq_score = (vfsc - filtersc) / eslCONST_LOG2;
     P = esl_gumbel_surv(seq_score, om->evparam[p7_VMU], om->evparam[p7_VLAMBDA]);
-    if (P > pli->F2)
+    if (0)//(P > pli->F2)
       return eslFAIL;
   }
   pli->n_past_vit++;

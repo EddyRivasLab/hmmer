@@ -32,9 +32,13 @@
  * to a buffer large enough to hold the restriped sequence of bytes. 
  * Note: the length input specifies the length of the input vector in
  * elements, which = bytes for this function.
+ * If length is less than the length of the restriped data, pads 
+ * additional elements with pad_value.  
+ * (For example, when restriping a source of length 48 with 16-element vectors 
+ * to one with 32-element vectors.)
  *****************************************************************/
 
-extern void p7_restripe_byte(char *source, char *dest, int length, int source_vector_length, int dest_vector_length){ 
+extern void p7_restripe_byte(char *source, char *dest, int length, int source_vector_length, int dest_vector_length, uint8_t pad_value){ 
 
 
   if((source_vector_length != 128) && (source_vector_length != 256) && (source_vector_length != 512)){
@@ -66,6 +70,9 @@ extern void p7_restripe_byte(char *source, char *dest, int length, int source_ve
         dest[dest_position] = source[(j * source_vector_elements) + i];
       }
     }
+  }
+  for(int k = (j*source_vector_elements)+i + 1; k < Q_dest * dest_vector_elements; k++){
+    dest[(k %Q_dest) + (k/Q_dest)] = pad_value;
   }
 
 }

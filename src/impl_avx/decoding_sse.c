@@ -32,7 +32,7 @@ p7_Decoding_sse(const P7_OPROFILE *om, const P7_OMX *oxf, P7_OMX *oxb, P7_OMX *p
 
   pp->M = M;
   pp->L = L;
-
+  pp->last_written_by = sse;
   ppv = pp->dpf[0];
   for (q = 0; q < Q; q++) {
     *ppv = _mm_setzero_ps(); ppv++;
@@ -82,38 +82,5 @@ p7_Decoding_sse(const P7_OPROFILE *om, const P7_OMX *oxf, P7_OMX *oxb, P7_OMX *p
 }
 
 
-int
-p7_DomainDecoding_sse(const P7_OPROFILE *om, const P7_OMX *oxf, const P7_OMX *oxb, P7_DOMAINDEF *ddef)
-{
-  int   L             = oxf->L;
-  float scaleproduct  = 1.0 / oxb->xmx[p7X_N];
-  float njcp;
-  int   i;
-
-  ddef->btot[0] = 0.0;
-  ddef->etot[0] = 0.0;
-  ddef->mocc[0] = 0.0;
-  for (i = 1; i <= L; i++)
-    {
-      /* scaleproduct is prod_j=0^i-2 now */
-      ddef->btot[i] = ddef->btot[i-1] +
-	(oxf->xmx[(i-1)*p7X_NXCELLS+p7X_B] * oxb->xmx[(i-1)*p7X_NXCELLS+p7X_B] * oxf->xmx[(i-1)*p7X_NXCELLS+p7X_SCALE] * scaleproduct);
-
-      if (oxb->has_own_scales) scaleproduct *= oxf->xmx[(i-1)*p7X_NXCELLS+p7X_SCALE] /  oxb->xmx[(i-1)*p7X_NXCELLS+p7X_SCALE]; 
-      /* scaleproduct is prod_j=0^i-1 now */
-
-      ddef->etot[i] = ddef->etot[i-1] +
-	(oxf->xmx[i*p7X_NXCELLS+p7X_E] * oxb->xmx[i*p7X_NXCELLS+p7X_E] * oxf->xmx[i*p7X_NXCELLS+p7X_SCALE] * scaleproduct);
-
-      njcp  = oxf->xmx[(i-1)*p7X_NXCELLS+p7X_N] * oxb->xmx[i*p7X_NXCELLS+p7X_N] * om->xf[p7O_N][p7O_LOOP] * scaleproduct;
-      njcp += oxf->xmx[(i-1)*p7X_NXCELLS+p7X_J] * oxb->xmx[i*p7X_NXCELLS+p7X_J] * om->xf[p7O_J][p7O_LOOP] * scaleproduct;
-      njcp += oxf->xmx[(i-1)*p7X_NXCELLS+p7X_C] * oxb->xmx[i*p7X_NXCELLS+p7X_C] * om->xf[p7O_C][p7O_LOOP] * scaleproduct;
-      ddef->mocc[i] = 1. - njcp;
-    }
-  ddef->L = oxf->L;
-
-  if (isinf(scaleproduct)) return eslERANGE;
-  else                     return eslOK;
-}
 /*------------------ end, posterior decoding --------------------*/
 

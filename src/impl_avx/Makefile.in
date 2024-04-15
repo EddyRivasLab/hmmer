@@ -55,6 +55,8 @@ OBJS =  decoding_sse.o\
 	vitfilter_avx.o\
 	vitfilter.o\
 	p7_omx.o\
+	p7_omx_sse.o\
+	p7_omx_avx.o\
 	p7_oprofile.o\
 	mpi.o
 

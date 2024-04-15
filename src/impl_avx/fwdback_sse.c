@@ -230,6 +230,7 @@ forward_engine(int do_full, const ESL_DSQ *dsq, int L, const P7_OPROFILE *om, P7
   __m128 *tp;			   /* will point into (and step thru) om->tfv                   */
 
   /* Initialization. */
+  ox->last_written_by = sse;
   ox->M  = om->M;
   ox->L  = L;
   ox->has_own_scales = TRUE; 	/* all forward matrices control their own scalefactors */
@@ -417,6 +418,7 @@ forward_engine(int do_full, const ESL_DSQ *dsq, int L, const P7_OPROFILE *om, P7
   else if  (isinf(xC) == 1)   ESL_EXCEPTION(eslERANGE, "forward score overflow (is infinity)");
 
   if (opt_sc != NULL) *opt_sc = ox->totscale + log(xC * om->xf[p7O_C][p7O_MOVE]);
+  
   return eslOK;
 }
 
@@ -444,6 +446,7 @@ backward_engine(int do_full, const ESL_DSQ *dsq, int L, const P7_OPROFILE *om, c
   /* initialize the L row. */
   bck->M = om->M;
   bck->L = L;
+  bck->last_written_by = sse;
   bck->has_own_scales = FALSE;	/* backwards scale factors are *usually* given by <fwd> */
   dpc    = bck->dpf[L * do_full];
   xJ     = 0.0;

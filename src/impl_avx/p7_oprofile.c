@@ -20,6 +20,7 @@
 #include <xmmintrin.h>		/* SSE  */
 #include <emmintrin.h>		/* SSE2 */
 #include <immintrin.h>  /* AVX2 */
+#include <x86intrin.h>
 #include "easel.h"
 #include "esl_random.h"
 #include "esl_sse.h"
@@ -205,6 +206,62 @@ p7_oprofile_Create(int allocM, const ESL_ALPHABET *abc)
   om->allocQ16_avx  = nqb_avx;
   om->allocQ8_avx   = nqw_avx;
   om->allocQ4_avx   = nqf_avx;
+
+// allocate the AVX512 bits.  Move this into separate functions when testing done
+   
+  int          nqb_avx512 = p7O_NQB_AVX512(allocM); /* # of uchar vectors needed for query */
+  int          nqw_avx512 = p7O_NQW_AVX512(allocM); /* # of sword vectors needed for query */
+  int          nqf_avx512 = p7O_NQF_AVX512(allocM); /* # of float vectors needed for query */
+  int          nqs_avx512 = nqb_avx512 + p7O_EXTRA_SB;
+  om->rbv_mem_avx512   = NULL;
+  om->sbv_mem_avx512   = NULL;   
+  om->rbv_avx512       = NULL;
+  om->sbv_avx512       = NULL;
+/*  om->rwv_mem_avx   = NULL;
+  om->twv_mem_avx   = NULL;
+  om->rwv_avx       = NULL;
+  om->twv_avx       = NULL;
+  om->rfv_mem_avx   = NULL;
+  om->tfv_mem_avx   = NULL;
+  om->rfv_avx       = NULL;
+  om->tfv_avx       = NULL; */
+   /* level 1 */
+  ESL_ALLOC(om->rbv_mem_avx512, sizeof(__m512i) * nqb_avx512  * abc->Kp          +63); /* +31 is for manual 32-byte alignment */
+  ESL_ALLOC(om->sbv_mem_avx512, sizeof(__m512i) * nqs_avx512  * abc->Kp          +63); 
+ /* ESL_ALLOC(om->rwv_mem_avx, sizeof(__m256i) * nqw_avx  * abc->Kp          +31);                     
+  ESL_ALLOC(om->twv_mem_avx, sizeof(__m256i) * nqw_avx  * p7O_NTRANS       +31);   
+  ESL_ALLOC(om->rfv_mem_avx, sizeof(__m256)  * nqf_avx  * abc->Kp          +31);                     
+  ESL_ALLOC(om->tfv_mem_avx, sizeof(__m256)  * nqf_avx  * p7O_NTRANS       +31);   */ 
+
+  ESL_ALLOC(om->rbv_avx512, sizeof(__m512i *) * abc->Kp); 
+  ESL_ALLOC(om->sbv_avx512, sizeof(__m512i *) * abc->Kp); 
+/*  ESL_ALLOC(om->rwv_avx, sizeof(__m256i *) * abc->Kp); 
+  ESL_ALLOC(om->rfv_avx, sizeof(__m256  *) * abc->Kp); 
+*/
+  /* align vector memory on 32-byte boundaries */
+
+
+  om->rbv_avx512[0] = (__m512i *) (((unsigned long int) om->rbv_mem_avx512 + 63) & (~0x3f));
+  om->sbv_avx512[0] = (__m512i *) (((unsigned long int) om->sbv_mem_avx512 + 63) & (~0x3f));
+  /*om->rwv_avx[0] = (__m256i *) (((unsigned long int) om->rwv_mem_avx + 31) & (~0x1f));
+  om->twv_avx    = (__m256i *) (((unsigned long int) om->twv_mem_avx + 31) & (~0x1f));
+  om->rfv_avx[0] = (__m256  *) (((unsigned long int) om->rfv_mem_avx + 31) & (~0x1f));
+  om->tfv_avx    = (__m256  *) (((unsigned long int) om->tfv_mem_avx + 31) & (~0x1f));
+*/
+
+  /* set the rest of the row pointers for match emissions */
+  for (x = 1; x < abc->Kp; x++) {
+
+    om->rbv_avx512[x] = om->rbv_avx512[0] + (x * nqb_avx512);
+    om->sbv_avx512[x] = om->sbv_avx512[0] + (x * nqs_avx512);
+  /*  om->rwv_avx[x] = om->rwv_avx[0] + (x * nqw_avx);
+    om->rfv_avx[x] = om->rfv_avx[0] + (x * nqf_avx);
+  */
+  }
+
+  om->allocQ16_avx512  = nqb_avx512;
+  om->allocQ8_avx512   = nqw_avx512;
+  om->allocQ4_avx512   = nqf_avx512;
 
   /* Remaining initializations */
   om->tbm_b     = 0;
@@ -987,6 +1044,52 @@ sf_conversion_avx(P7_OPROFILE *om)
     }
 
   return eslOK;
+}
+
+int
+sf_conversion_avx512(P7_OPROFILE *om)
+{
+   int     x;     /* counter over residues                                        */
+  int     q;      /* q counts over total # of striped vectors, 0..nq-1           */
+  int     M   = om->M;		/* length of the query                                          */
+
+  __m512i tmp_avx512;
+  __m512i tmp2_avx512;
+  int     nq_avx512  = p7O_NQB_AVX512(M);     /* segment length; total # of striped vectors needed            */
+
+
+  /* We now want to fill out om->sbv with om->rbv - bias for use in the
+   * SSV filter. The only challenge is that the om->rbv values are
+   * unsigned and generally use the whole scale while the om->sbv
+   * values are signed. To solve that problem we perform the following
+   * calculation:
+   *
+   *   ((127 + bias) - rbv) ^ 127
+   *
+   * where the subtraction is unsigned saturated and the addition is
+   * unsigned (it will not overflow, since bias is a small positive
+   * number). The f(x) = x ^ 127 combined with a change from unsigned
+   * to signed numbers have the same effect as f(x) = -x + 127. So if
+   * we regard the above as signed instead of unsigned it is equal to:
+   *
+   *   -((127 + bias) - rbv) + 127 = rbv - bias
+   *
+   * which is what we want. The reason for this slightly complex idea
+   * is that we wish the transformation to be fast, especially for
+   * hmmscan where many models are loaded.
+   */
+
+
+  tmp_avx512 = _mm512_set1_epi8((int8_t) (om->bias_b + 127));
+  tmp2_avx512  = _mm512_set1_epi8(127);
+
+  for (x = 0; x < om->abc->Kp; x++)
+    {
+      for (q = 0;  q < nq_avx512;            q++) om->sbv_avx512[x][q] = _mm512_xor_si512(_mm512_subs_epu8(tmp_avx512, om->rbv_avx512[x][q]), tmp2_avx512);
+      for (q = nq_avx512; q < nq_avx512 + p7O_EXTRA_SB; q++) om->sbv_avx512[x][q] = om->sbv_avx512[x][q % nq_avx512];
+    }
+
+  return eslOK;
 
 }
 /* mf_conversion(): 
@@ -1056,6 +1159,27 @@ mf_conversion(const P7_PROFILE *gm, P7_OPROFILE *om)
 
 
   sf_conversion_avx(om);
+
+  //avx512
+    int     nq_avx512  = p7O_NQB_AVX512(M);     /* segment length; total # of striped vectors needed    */   
+  union { __m512i v; uint8_t i[64]; } tmp_avx512; /* used to align and load simd minivectors        */        
+
+  max = 0.0;		/* maximum residue score: used for unsigned emission score bias */
+ 
+
+  if (nq_avx512 > om->allocQ16_avx512) ESL_EXCEPTION(eslEINVAL, "optimized profile is too small to hold conversion");
+
+
+  /* striped match costs: start at k=1.  */
+  for (x = 0; x < gm->abc->Kp; x++)
+    for (q = 0, k = 1; q < nq_avx512; q++, k++)
+      {
+  for (z = 0; z < 64; z++) tmp_avx512.i[z] = ((k+ z*nq_avx512 <= M) ? biased_byteify(om, p7P_MSC(gm, k+z*nq_avx512, x)) : 255);
+  om->rbv_avx512[x][q]   = tmp_avx512.v;  
+      }
+
+
+  sf_conversion_avx512(om);
 
   return eslOK;
 }

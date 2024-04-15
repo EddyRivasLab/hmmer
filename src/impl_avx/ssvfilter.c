@@ -424,8 +424,8 @@
  int
 p7_SSVFilter(const ESL_DSQ *dsq, int L, const P7_OPROFILE *om, float *ret_sc){
 
-  float res_sse, res_avx;
-  int res, res2;
+  float res_sse, res_avx, res_avx512;
+  int res, res2, res3;
 
   res = p7_SSVFilter_sse(dsq, L, om, &res_avx);
   res2 = p7_SSVFilter_avx(dsq, L, om, &res_sse);
@@ -438,6 +438,15 @@ p7_SSVFilter(const ESL_DSQ *dsq, int L, const P7_OPROFILE *om, float *ret_sc){
   if(res != eslENORESULT && (esl_FCompare(res_sse, res_avx, .01, .01) != eslOK)){
     printf("Error: SSV miss-match.  SSE = %f, AVX = %f\n", res_sse, res_avx);
   }
+  #ifdef USE_AVX512
+  res3 = p7_SSVFilter_avx512(dsq, L, om, &res_avx512);
+  if(res != res3){
+    printf("Error: miss-match in SSV return codes.  SSE= %d, AVX512 = %d\n", res, res3);
+  }
+  if(res != eslENORESULT && esl_FCompare(res_sse, res_avx512, .01, .01) != eslOK){
+    printf("Error: SSV miss-match.  SSE = %f, AVX512 = %f\n", res_sse, res_avx);
+  }
+  #endif
   *ret_sc = res_sse;
   return res;
 }

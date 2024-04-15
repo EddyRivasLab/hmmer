@@ -236,7 +236,10 @@ p7_gmx_Compare(P7_GMX *gx1, P7_GMX *gx2, float tolerance)
         if (esl_FCompare_old(gx1->dp[i][k * p7G_NSCELLS + p7G_D],  gx2->dp[i][k * p7G_NSCELLS + p7G_D], tolerance) != eslOK) return eslFAIL;
       }
       for (x = 0; x < p7G_NXCELLS; x++)
-	if (esl_FCompare_old(gx1->xmx[i * p7G_NXCELLS + x], gx2->xmx[i * p7G_NXCELLS + x], tolerance) != eslOK) return eslFAIL;
+	if (esl_FCompare_old(gx1->xmx[i * p7G_NXCELLS + x], gx2->xmx[i * p7G_NXCELLS + x], tolerance) != eslOK) {
+      printf("Failing compare at i = %d, x= %d, values were %f and %f\n", i, x,gx1->xmx[i * p7G_NXCELLS + x],  gx2->xmx[i * p7G_NXCELLS + x]);
+      return eslFAIL;  
+  }
   }
   return eslOK;	
 }

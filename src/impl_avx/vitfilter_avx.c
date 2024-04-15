@@ -132,13 +132,13 @@ p7_ViterbiFilter_avx(const ESL_DSQ *dsq, int L, const P7_OPROFILE *om, P7_OMX *o
        * Because ia32 is littlendian, this means a left bit shift.
        * Zeros shift on automatically; replace it with -32768.
        */
-      mpv = MMX_AVXo(Q-1);  
+      mpv = MMXo(Q-1);  
       mpv= esl_avx_rightshift_int16(mpv, negInfv);
 
-      dpv = DMX_AVXo(Q-1);
+      dpv = DMXo(Q-1);
       dpv = esl_avx_rightshift_int16(dpv, negInfv);
 
-      ipv = IMX_AVXo(Q-1);
+      ipv = IMXo(Q-1);
       ipv = esl_avx_rightshift_int16(ipv, negInfv);
 
       for (q = 0; q < Q; q++)
@@ -205,8 +205,8 @@ p7_ViterbiFilter_avx(const ESL_DSQ *dsq, int L, const P7_OPROFILE *om, P7_OMX *o
 	  tsc = om->twv_avx + 7*Q;	/* set tsc to start of the DD's */
 	  for (q = 0; q < Q; q++) 
 	    {
-	      DMXo(q) = _mm256_max_epi16(dcv, DMX_AVXo(q));	
-	      dcv     = _mm256_adds_epi16(DMX_AVXo(q), *tsc); tsc++;
+	      DMXo(q) = _mm256_max_epi16(dcv, DMXo(q));	
+	      dcv     = _mm256_adds_epi16(DMXo(q), *tsc); tsc++;
 	    }
 
 	  /* We may have to do up to three more passes; the check
@@ -218,9 +218,9 @@ p7_ViterbiFilter_avx(const ESL_DSQ *dsq, int L, const P7_OPROFILE *om, P7_OMX *o
 	    tsc = om->twv_avx + 7*Q;	/* set tsc to start of the DD's */
 	    for (q = 0; q < Q; q++) 
 	      {
-		if (! esl_avx_any_gt_epi16(dcv, DMX_AVXo(q))) break;
-		DMXo(q) = _mm256_max_epi16(dcv, DMX_AVXo(q));	
-		dcv     = _mm256_adds_epi16(DMX_AVXo(q), *tsc);   tsc++;
+		if (! esl_avx_any_gt_epi16(dcv, DMXo(q))) break;
+		DMXo(q) = _mm256_max_epi16(dcv, DMXo(q));	
+		dcv     = _mm256_adds_epi16(DMXo(q), *tsc);   tsc++;
 	      }	    
 	  } while (q == Q);
 	}

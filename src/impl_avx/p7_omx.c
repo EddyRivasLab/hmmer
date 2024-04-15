@@ -72,7 +72,7 @@ p7_omx_Create(int allocM, int allocL, int allocXL)
   ox->dpf    = NULL;
   ox->xmx    = NULL;
   ox->x_mem  = NULL;
-
+  ox->last_written_by = none;
   /* DP matrix will be allocated for allocL+1 rows 0,1..L; allocQ4*p7X_NSCELLS columns */
   ox->allocR   = allocL+1;
   ox->validR   = ox->allocR;
@@ -82,10 +82,14 @@ p7_omx_Create(int allocM, int allocL, int allocXL)
   ox->allocQ4_avx  = p7O_NQF_AVX(allocM);
   ox->allocQ8_avx  = p7O_NQW_AVX(allocM);
   ox->allocQ16_avx = p7O_NQB_AVX(allocM);
+  ox->allocQ4_avx512  = p7O_NQF_AVX512(allocM);
+  ox->allocQ8_avx512  = p7O_NQW_AVX512(allocM);
+  ox->allocQ16_avx512 = p7O_NQB_AVX512(allocM);
   ox->ncells   = (int64_t) ox->allocR * (int64_t) ox->allocQ4 * 4;      /* # of DP cells allocated, where 1 cell contains MDI */
 
   ESL_ALLOC(ox->dp_mem, sizeof(__m128) * (int64_t) ox->allocR * (int64_t) ox->allocQ4 * p7X_NSCELLS + 15);  /* floats always dominate; +15 for alignment */
   ESL_ALLOC(ox->dp_mem_avx, sizeof(__m256) * (int64_t) ox->allocR * (int64_t) ox->allocQ4_avx * p7X_NSCELLS + 32); 
+  ESL_ALLOC(ox->dp_mem_avx512, sizeof(__m512) * (int64_t) ox->allocR * (int64_t) ox->allocQ4_avx512 * p7X_NSCELLS + 32); 
   ESL_ALLOC(ox->dpb,    sizeof(__m128i *) * ox->allocR);
   ESL_ALLOC(ox->dpw,    sizeof(__m128i *) * ox->allocR);
   ESL_ALLOC(ox->dpf,    sizeof(__m128  *) * ox->allocR);
@@ -93,13 +97,18 @@ p7_omx_Create(int allocM, int allocL, int allocXL)
   ESL_ALLOC(ox->dpw_avx,    sizeof(__m256i *) * ox->allocR);
   ESL_ALLOC(ox->dpf_avx,    sizeof(__m256  *) * ox->allocR);
 
+  ESL_ALLOC(ox->dpb_avx,    sizeof(__m512i *) * ox->allocR);
+  ESL_ALLOC(ox->dpw_avx,    sizeof(__m512i *) * ox->allocR);
+  ESL_ALLOC(ox->dpf_avx,    sizeof(__m512  *) * ox->allocR);
   ox->dpb[0] = (__m128i *) ( ( (unsigned long int) ((char *) ox->dp_mem + 15) & (~0xf)));
   ox->dpw[0] = (__m128i *) ( ( (unsigned long int) ((char *) ox->dp_mem + 15) & (~0xf)));
   ox->dpf[0] = (__m128  *) ( ( (unsigned long int) ((char *) ox->dp_mem + 15) & (~0xf)));
   ox->dpb_avx[0] = (__m256i *) ( ( (unsigned long int) ((char *) ox->dp_mem_avx + 31) & (~0x1f)));
   ox->dpw_avx[0] = (__m256i *) ( ( (unsigned long int) ((char *) ox->dp_mem_avx + 31) & (~0x1f)));
   ox->dpf_avx[0] = (__m256  *) ( ( (unsigned long int) ((char *) ox->dp_mem_avx + 31) & (~0x1f)));
-
+  ox->dpb_avx512[0] = (__m512i *) ( ( (unsigned long int) ((char *) ox->dp_mem_avx512 + 63) & (~0x3f)));
+  ox->dpw_avx512[0] = (__m512i *) ( ( (unsigned long int) ((char *) ox->dp_mem_avx512 + 63) & (~0x3f)));
+  ox->dpf_avx512[0] = (__m512  *) ( ( (unsigned long int) ((char *) ox->dp_mem_avx512 + 31) & (~0x3f)));
   for (i = 1; i <= allocL; i++) {
     ox->dpf[i] = ox->dpf[0] + (int64_t) i * (int64_t) ox->allocQ4  * p7X_NSCELLS;
     ox->dpw[i] = ox->dpw[0] + (int64_t) i * (int64_t) ox->allocQ8  * p7X_NSCELLS;
@@ -107,6 +116,9 @@ p7_omx_Create(int allocM, int allocL, int allocXL)
     ox->dpf_avx[i] = ox->dpf_avx[0] + (int64_t) i * (int64_t) ox->allocQ4_avx  * p7X_NSCELLS;
     ox->dpw_avx[i] = ox->dpw_avx[0] + (int64_t) i * (int64_t) ox->allocQ8_avx  * p7X_NSCELLS;
     ox->dpb_avx[i] = ox->dpb_avx[0] + (int64_t) i * (int64_t) ox->allocQ16_avx;
+    ox->dpf_avx512[i] = ox->dpf_avx512[0] + (int64_t) i * (int64_t) ox->allocQ4_avx512  * p7X_NSCELLS;
+    ox->dpw_avx512[i] = ox->dpw_avx512[0] + (int64_t) i * (int64_t) ox->allocQ8_avx512  * p7X_NSCELLS;
+    ox->dpb_avx512[i] = ox->dpb_avx512[0] + (int64_t) i * (int64_t) ox->allocQ16_avx512;
   }
 
   ox->allocXR = allocXL+1;
@@ -260,30 +272,15 @@ p7_omx_GrowTo(P7_OMX *ox, int allocM, int allocL, int allocXL)
 int
 p7_omx_FDeconvert(P7_OMX *ox, P7_GMX *gx)
 {
-  int Q = p7O_NQF(ox->M);
-  int i, q, r, k;
-  union { __m128 v; float p[4]; } u;
-  float      **dp   = gx->dp;
-  float       *xmx  = gx->xmx; 			    
-
-  for (i = 0; i <= ox->L; i++)
-    {
-      MMX(i,0) = DMX(i,0) = IMX(i,0) = -eslINFINITY;
-      for (q = 0; q < Q; q++)
-	{
-	  u.v = MMO(ox->dpf[i],q);  for (r = 0; r < 4; r++) { k = (Q*r)+q+1; if (k <= ox->M) MMX(i, (Q*r)+q+1) = u.p[r]; }
-	  u.v = DMO(ox->dpf[i],q);  for (r = 0; r < 4; r++) { k = (Q*r)+q+1; if (k <= ox->M) DMX(i, (Q*r)+q+1) = u.p[r]; }
-	  u.v = IMO(ox->dpf[i],q);  for (r = 0; r < 4; r++) { k = (Q*r)+q+1; if (k <= ox->M) IMX(i, (Q*r)+q+1) = u.p[r]; }
-	}
-      XMX(i,p7G_E) = ox->xmx[i*p7X_NXCELLS+p7X_E];
-      XMX(i,p7G_N) = ox->xmx[i*p7X_NXCELLS+p7X_N];
-      XMX(i,p7G_J) = ox->xmx[i*p7X_NXCELLS+p7X_J];
-      XMX(i,p7G_B) = ox->xmx[i*p7X_NXCELLS+p7X_B];
-      XMX(i,p7G_C) = ox->xmx[i*p7X_NXCELLS+p7X_C];
-    }
-  gx->L = ox->L;
-  gx->M = ox->M;
-  return eslOK;
+  if(ox->last_written_by == none){
+    p7_Fail("Attempt to run p7_omx_FDeconvert on an ox matrix that has not been written");
+  }
+  if(ox->last_written_by == sse){
+    return(p7_omx_FDeconvert_sse(ox, gx));
+  }
+  else{
+    return(p7_omx_FDeconvert_avx(ox, gx));
+  }
 }
 
 

@@ -275,17 +275,13 @@
   int i2;                                       \
   int Q        = p7O_NQB(om->M);                \
   __m128i *rsc;                                 \
-                                                \
   int w = width;                                \
                                                 \
   dsq++;                                        \
                                                 \
   reset()                                       \
-                                                \
   for (i = 0; i < L && i < Q - q - w; i++)      \
     {                                           \
-      printf("Loop1 i = %d", i);                \
-      printf(" dsq[i]=%d\n", dsq[i]);           \
       rsc = om->sbv[dsq[i]] + i + q;            \
       step()                                    \
     }                                           \
@@ -298,8 +294,6 @@ done1:                                          \
    {                                            \
      for (i = 0; i < Q - w; i++)                \
        {                                        \
-               printf("Loop2 i+i2 = %d", i+i2);\
-               printf(" dsq[i2+i]= %d\n", dsq[i2+i]);                                 \
          rsc = om->sbv[dsq[i2 + i]] + i;        \
          step()                                 \
        }                                        \
@@ -310,8 +304,6 @@ done1:                                          \
                                                 \
  for (i = 0; i2 + i < L && i < Q - w; i++)      \
    {     \
-                      printf("Loop3 i+i2 = %d", i+i2); \
-               printf(" dsq[i2+i]= %d\n", dsq[i2+i]);                                   \
      rsc = om->sbv[dsq[i2 + i]] + i;            \
      step()                                     \
    }                                            \
