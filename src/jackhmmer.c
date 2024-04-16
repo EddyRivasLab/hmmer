@@ -614,8 +614,8 @@ serial_master(ESL_GETOPTS *go, struct cfg_s *cfg)
 
 	      if (fprintf(ofp, "@@\n")                                               < 0) ESL_EXCEPTION_SYS(eslEWRITE, "write failed");  
 	      if (fprintf(ofp, "@@ Round:                  %d\n", iteration)         < 0) ESL_EXCEPTION_SYS(eslEWRITE, "write failed");
-		  if (fprintf(ofp, "@@ Included in MSA:        %d subsequences (query + %d subseqs from %d targets)\n",
-		      msa->nseq, msa->nseq-1, kh->nkeys)                             < 0) ESL_EXCEPTION_SYS(eslEWRITE, "write failed");
+              if (fprintf(ofp, "@@ Included in MSA:        %d subsequences (query + %d subseqs from %d targets)\n",
+                          msa->nseq, msa->nseq-1, kh->nkeys)                         < 0) ESL_EXCEPTION_SYS(eslEWRITE, "write failed");
 	      if (fprintf(ofp, "@@ Model size:             %d positions\n", om->M)   < 0) ESL_EXCEPTION_SYS(eslEWRITE, "write failed");
 	      if (fprintf(ofp, "@@\n\n")                                             < 0) ESL_EXCEPTION_SYS(eslEWRITE, "write failed");
 
