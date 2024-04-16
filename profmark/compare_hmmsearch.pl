@@ -49,9 +49,11 @@ sub parse_hmm {
     my ($file, $ret_nhit, $name_ref) = @_;
 
     my $name = $file;
-    if ($name =~ /^(\S+)\./)      { $name = $1; }
-    if ($name =~ /^(\S+)\.max/)   { $name = $1; }
-    if ($name =~ /^(\S+)\.recal/) { $name = $1; }
+    if    ($name =~ /^(\S+)\.recal/) { $name = $1; }
+    elsif ($name =~ /^(\S+)\.max/)   { $name = $1; }
+    elsif ($name =~ /^(\S+)\.noevo/) { $name = $1; }
+    elsif ($name =~ /^(\S+)\./)      { $name = $1; }
+    
     print "name $name\n";
     
     open (F, "$file") || die;
