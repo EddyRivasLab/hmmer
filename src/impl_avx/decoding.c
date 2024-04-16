@@ -78,7 +78,7 @@ p7_Decoding(const P7_OPROFILE *om, const P7_OMX *oxf, P7_OMX *oxb, P7_OMX *pp)
   char *msg1 ="p7_omx_FDeconvert failed in p7_Decoding";
   char *msg2 = "SSE and AVX returned different results in p7_Decoding";
   int res1 = p7_Decoding_sse(om, oxf, oxb, pp);
-    P7_GMX      *gxp1 = p7_gmx_Create(pp->allocQ4*4, pp->validR-1);
+  /*    P7_GMX      *gxp1 = p7_gmx_Create(pp->allocQ4*4, pp->validR-1);
     if (p7_omx_FDeconvert(pp, gxp1)                    != eslOK) esl_fatal(msg1);
   P7_OMX *pp2 = p7_omx_Create(pp->allocQ4 * 4, pp->validR-1, pp->allocXR-1);
   int res2 = p7_Decoding_avx(om, oxf, oxb, pp2);
@@ -104,7 +104,7 @@ p7_Decoding(const P7_OPROFILE *om, const P7_OMX *oxf, P7_OMX *oxb, P7_OMX *pp)
 
   p7_gmx_Destroy(gxp1);
   p7_gmx_Destroy(gxp1);
-  p7_omx_Destroy(pp2);
+  p7_omx_Destroy(pp2);*/
   return(res1);
 }
 

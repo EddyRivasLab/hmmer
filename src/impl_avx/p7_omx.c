@@ -96,10 +96,9 @@ p7_omx_Create(int allocM, int allocL, int allocXL)
   ESL_ALLOC(ox->dpb_avx,    sizeof(__m256i *) * ox->allocR);
   ESL_ALLOC(ox->dpw_avx,    sizeof(__m256i *) * ox->allocR);
   ESL_ALLOC(ox->dpf_avx,    sizeof(__m256  *) * ox->allocR);
-
-  ESL_ALLOC(ox->dpb_avx,    sizeof(__m512i *) * ox->allocR);
-  ESL_ALLOC(ox->dpw_avx,    sizeof(__m512i *) * ox->allocR);
-  ESL_ALLOC(ox->dpf_avx,    sizeof(__m512  *) * ox->allocR);
+  ESL_ALLOC(ox->dpb_avx512,    sizeof(__m512i *) * ox->allocR);
+  ESL_ALLOC(ox->dpw_avx512,    sizeof(__m512i *) * ox->allocR);
+  ESL_ALLOC(ox->dpf_avx512,    sizeof(__m512  *) * ox->allocR);
   ox->dpb[0] = (__m128i *) ( ( (unsigned long int) ((char *) ox->dp_mem + 15) & (~0xf)));
   ox->dpw[0] = (__m128i *) ( ( (unsigned long int) ((char *) ox->dp_mem + 15) & (~0xf)));
   ox->dpf[0] = (__m128  *) ( ( (unsigned long int) ((char *) ox->dp_mem + 15) & (~0xf)));

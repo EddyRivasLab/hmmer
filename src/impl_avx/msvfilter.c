@@ -77,6 +77,7 @@ p7_MSVFilter(const ESL_DSQ *dsq, int L, const P7_OPROFILE *om, P7_OMX *ox, float
     printf("Error: MSV miss-match.  SSE = %f, AVX = %f\n", res_sse, res_avx);
   }
   #ifdef USE_AVX512
+
   res3 = p7_MSVFilter_avx512(dsq, L, om, ox, &res_avx512);
   if(res != res3){
     printf("Error: miss-match in MSV return codes.  SSE= %d, AVX512 = %d\n", res, res3);
@@ -84,7 +85,8 @@ p7_MSVFilter(const ESL_DSQ *dsq, int L, const P7_OPROFILE *om, P7_OMX *ox, float
   if(esl_FCompare(res_sse, res_avx512, .01, .01) != eslOK){
     printf("Error: MSV miss-match.  SSE = %f, AVX512 = %f\n", res_sse, res_avx);
   }
-  #endif
+  //printf("checking MSV avx512 %f %f\n", res_sse, res_avx512);
+#endif
   *ret_sc = res_sse;
   return res;
 }
