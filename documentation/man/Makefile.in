@@ -23,6 +23,7 @@ INSTALL     = @INSTALL@
 MANS =  hmmer\
 	hmmalign\
 	hmmbuild\
+	hmmclient\
 	hmmconvert\
 	hmmemit\
 	hmmfetch\
@@ -33,6 +34,7 @@ MANS =  hmmer\
 	hmmscan\
 	hmmsearch\
 	hmmsim\
+	hmmserver\
 	hmmstat\
 	jackhmmer\
 	hmmer-makefmdb\

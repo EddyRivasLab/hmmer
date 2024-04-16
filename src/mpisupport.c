@@ -416,6 +416,126 @@ p7_hmm_MPIRecv(int source, int tag, MPI_Comm comm, char **buf, int *nalloc, ESL_
  * 2. Communicating P7_PROFILE, a score profile.
  *****************************************************************/
 
+
+
+/* Function:  p7_profile_MPIPackSize()
+ * Synopsis:  Calculates size needed to pack a profile.
+ *
+ * Purpose:   Calculate an upper bound on the number of bytes
+ *            that <p7_pcoi9_MPIPack()> will need to pack a profile
+ *            <gm> in a packed MPI message for MPI communicator
+ *            <comm>; return that number of bytes in <*ret_n>.
+ *
+ * Returns:   <eslOK> on success, and <*ret_n> contains the answer.
+ *
+ * Throws:    <eslESYS> if an MPI call fails
+ */
+int p7_profile_MPIPackSize(P7_PROFILE *gm, MPI_Comm comm, int *ret_n){
+  int   status;
+  int   sz, n, position;
+  int   Kp;	/* alphabet size including degeneracies */
+  int   M;      /* model size in nodes */
+
+  if (gm == NULL) { 
+    if (MPI_Pack_size(1, MPI_INT, comm, &n) != 0) ESL_XEXCEPTION(eslESYS, "pack size failed");
+    Kp = M = 0;
+  } else {
+    /* This will look wasteful, but the MPI spec doesn't guarantee that 
+     * MPI_Pack_size(x, ...) + MPI_Pack_size(x, ... ) == MPI_Pack_size(2x, ...).
+     * Indeed there are some hints in the spec that that's *not* true.
+     * So we assume we must match our Pack_size calls exactly to our Pack calls.
+     */
+    Kp = gm->abc->Kp;
+    M  = gm->M;
+    n = 0;
+    if (MPI_Pack_size(                           1, MPI_INT,   comm, &sz) != 0)     ESL_XEXCEPTION(eslESYS, "pack size failed");  else n += sz*3;               /* M,mode,L        */
+    if (MPI_Pack_size(              p7P_NTRANS * M, MPI_FLOAT, comm, &sz) != 0)     ESL_XEXCEPTION(eslESYS, "pack size failed");  else n += sz;                 /* tsc             */
+    if (MPI_Pack_size(         (M+1) * Kp * p7P_NR, MPI_FLOAT, comm, &sz) != 0)     ESL_XEXCEPTION(eslESYS, "pack size failed");  else n += sz;                 /* rsc[0]          */
+    if (MPI_Pack_size(                 p7P_NXTRANS, MPI_FLOAT, comm, &sz) != 0)     ESL_XEXCEPTION(eslESYS, "pack size failed");  else n += sz*p7P_NXSTATES;    /* xsc[0..3]       */
+    if (MPI_Pack_size(                           1, MPI_FLOAT, comm, &sz) != 0)     ESL_XEXCEPTION(eslESYS, "pack size failed");  else n += sz;                 /* nj              */
+    if ((status = esl_mpi_PackOptSize(gm->name, -1, MPI_CHAR,  comm, &sz))!= eslOK) goto ERROR;                                   else n += sz;                 /* name (string)   */
+    if ((status = esl_mpi_PackOptSize(gm->acc,  -1, MPI_CHAR,  comm, &sz))!= eslOK) goto ERROR;                                   else n += sz;                 /* acc (string)    */
+    if ((status = esl_mpi_PackOptSize(gm->desc, -1, MPI_CHAR,  comm, &sz))!= eslOK) goto ERROR;                                   else n += sz;                 /* desc (string)   */
+    if (MPI_Pack_size(                       (M+2), MPI_CHAR,  comm, &sz) != 0)     ESL_XEXCEPTION(eslESYS, "pack size failed");  else n += sz*4;               /* rf,cs,mm,consensus */
+    if (MPI_Pack_size(                 p7_NEVPARAM, MPI_FLOAT, comm, &sz) != 0)     ESL_XEXCEPTION(eslESYS, "pack size failed");  else n += sz;                 /* evparam         */
+    if (MPI_Pack_size(                 p7_NCUTOFFS, MPI_FLOAT, comm, &sz) != 0)     ESL_XEXCEPTION(eslESYS, "pack size failed");  else n += sz;                /* Pfam cutoffs    */
+    if (MPI_Pack_size(                  p7_MAXABET, MPI_FLOAT, comm, &sz) != 0)    ESL_XEXCEPTION(eslESYS, "pack size failed");  else n += sz;   /* composition */
+  }
+  
+  *ret_n = n;
+  return eslOK;
+   ERROR:
+  return status;
+}
+
+/* Function:  p7_profile_MPIPack()
+ * Synopsis:  Packs a profile into MPI buffer.
+ *
+ * Purpose:   Packs profile <gm> into an MPI packed message buffer <buf>
+ *            of length <n> bytes, starting at byte position <*position>,
+ *            for MPI communicator <comm>.
+ *            
+ *            The caller must know that <buf>'s allocation of <n>
+ *            bytes is large enough to append the packed HMM at
+ *            position <*pos>. This typically requires a call to
+ *            <p7_profile_MPIPackSize()> first, and reallocation if
+ *            needed.
+ *            
+ * Returns:   <eslOK> on success; <buf> now contains the
+ *            packed <hmm>, and <*position> is set to the byte
+ *            immediately following the last byte of the HMM
+ *            in <buf>. 
+ *
+ * Throws:    <eslESYS> if an MPI call fails; or <eslEMEM> if the
+ *            buffer's length <n> was overflowed in trying to pack
+ *            <msa> into <buf>. In either case, the state of
+ *            <buf> and <*position> is undefined, and both should
+ *            be considered to be corrupted.
+ */
+int
+p7_profile_MPIPack(P7_PROFILE *gm, char *buf, int n, int *position, MPI_Comm comm)
+{
+
+  int status;
+  int   Kp;	/* alphabet size including degeneracies */
+  int   M;      /* model size in nodes */
+
+  if (gm == NULL) 
+    {
+      int   eod_code = -1;
+      if (MPI_Pack(&eod_code,                   1, MPI_INT,   buf, n, position,  comm)  != 0)     ESL_XEXCEPTION(eslESYS, "pack failed");
+    } 
+  else 
+    {   
+      Kp = gm->abc->Kp;
+      M  = gm->M;
+      if (MPI_Pack(&M,                          1, MPI_INT,   buf, n, position,  comm)  != 0)     ESL_XEXCEPTION(eslESYS, "pack failed"); 
+      if (MPI_Pack(&(gm->mode),                 1, MPI_INT,   buf, n, position,  comm)  != 0)     ESL_XEXCEPTION(eslESYS, "pack failed"); 
+      if (MPI_Pack(&(gm->L),                    1, MPI_INT,   buf, n, position,  comm)  != 0)     ESL_XEXCEPTION(eslESYS, "pack failed"); 
+      if (MPI_Pack(gm->tsc,         p7P_NTRANS *M, MPI_FLOAT, buf, n, position,  comm)  != 0)     ESL_XEXCEPTION(eslESYS, "pack failed"); 
+      if (MPI_Pack(gm->rsc[0], (M+1)* Kp * p7P_NR, MPI_FLOAT, buf, n, position,  comm)  != 0)     ESL_XEXCEPTION(eslESYS, "pack failed"); 
+      if (MPI_Pack(gm->xsc[0],        p7P_NXTRANS, MPI_FLOAT, buf, n, position,  comm)  != 0)     ESL_XEXCEPTION(eslESYS, "pack failed"); 
+      if (MPI_Pack(gm->xsc[1],        p7P_NXTRANS, MPI_FLOAT, buf, n, position,  comm)  != 0)     ESL_XEXCEPTION(eslESYS, "pack failed"); 
+      if (MPI_Pack(gm->xsc[2],        p7P_NXTRANS, MPI_FLOAT, buf, n, position,  comm)  != 0)     ESL_XEXCEPTION(eslESYS, "pack failed"); 
+      if (MPI_Pack(gm->xsc[3],        p7P_NXTRANS, MPI_FLOAT, buf, n, position,  comm)  != 0)     ESL_XEXCEPTION(eslESYS, "pack failed"); 
+      if (MPI_Pack(&(gm->nj),                   1, MPI_FLOAT, buf, n, position,  comm)  != 0)     ESL_XEXCEPTION(eslESYS, "pack failed"); 
+      if ((status = esl_mpi_PackOpt(gm->name, -1,  MPI_CHAR,  buf, n, position,  comm)) != eslOK) goto ERROR;
+      if ((status = esl_mpi_PackOpt(gm->acc,  -1,  MPI_CHAR,  buf, n, position,  comm)) != eslOK) goto ERROR; 
+      if ((status = esl_mpi_PackOpt(gm->desc, -1,  MPI_CHAR,  buf, n, position,  comm)) != eslOK) goto ERROR;
+      if (MPI_Pack(gm->rf,                    M+2, MPI_CHAR,  buf, n, position,  comm)  != 0)     ESL_XEXCEPTION(eslESYS, "pack failed"); 
+      if (MPI_Pack(gm->mm,                    M+2, MPI_CHAR,  buf, n, position,  comm)  != 0)     ESL_XEXCEPTION(eslESYS, "pack failed");
+      if (MPI_Pack(gm->cs,                    M+2, MPI_CHAR,  buf, n, position,  comm)  != 0)     ESL_XEXCEPTION(eslESYS, "pack failed"); 
+      if (MPI_Pack(gm->consensus,             M+2, MPI_CHAR,  buf, n, position,  comm)  != 0)     ESL_XEXCEPTION(eslESYS, "pack failed"); 
+      if (MPI_Pack(gm->evparam,       p7_NEVPARAM, MPI_FLOAT, buf, n, position,  comm)  != 0)     ESL_XEXCEPTION(eslESYS, "pack failed"); 
+      if (MPI_Pack(gm->cutoff,        p7_NCUTOFFS, MPI_FLOAT, buf, n, position,  comm)  != 0)     ESL_XEXCEPTION(eslESYS, "pack failed"); 
+      if (MPI_Pack(gm->compo,         p7_MAXABET,  MPI_FLOAT, buf, n, position,  comm)  != 0)     ESL_XEXCEPTION(eslESYS, "pack failed"); 
+    }
+
+  return eslOK;
+ ERROR:
+  return status;
+}
+
 /* Function:  p7_profile_MPISend()
  * Synopsis:  Send a profile as an MPI message.
  *
@@ -472,83 +592,95 @@ p7_profile_MPISend(P7_PROFILE *gm, int dest, int tag, MPI_Comm comm, char **buf,
 {
   int   status;
   int   sz, n, position;
-  int   Kp;	/* alphabet size including degeneracies */
-  int   M;      /* model size in nodes */
 
-
-
-  /* First, figure out the size of the profile */
-  if (gm == NULL) { 
-    if (MPI_Pack_size(1, MPI_INT, comm, &n) != 0) ESL_XEXCEPTION(eslESYS, "pack size failed");
-    Kp = M = 0;
-  } else {
-    /* This will look wasteful, but the MPI spec doesn't guarantee that 
-     * MPI_Pack_size(x, ...) + MPI_Pack_size(x, ... ) == MPI_Pack_size(2x, ...).
-     * Indeed there are some hints in the spec that that's *not* true.
-     * So we assume we must match our Pack_size calls exactly to our Pack calls.
-     */
-    Kp = gm->abc->Kp;
-    M  = gm->M;
-    n = 0;
-    if (MPI_Pack_size(                           1, MPI_INT,   comm, &sz) != 0)     ESL_XEXCEPTION(eslESYS, "pack size failed");  else n += sz*3;               /* M,mode,L        */
-    if (MPI_Pack_size(              p7P_NTRANS * M, MPI_FLOAT, comm, &sz) != 0)     ESL_XEXCEPTION(eslESYS, "pack size failed");  else n += sz;                 /* tsc             */
-    if (MPI_Pack_size(         (M+1) * Kp * p7P_NR, MPI_FLOAT, comm, &sz) != 0)     ESL_XEXCEPTION(eslESYS, "pack size failed");  else n += sz;                 /* rsc[0]          */
-    if (MPI_Pack_size(                 p7P_NXTRANS, MPI_FLOAT, comm, &sz) != 0)     ESL_XEXCEPTION(eslESYS, "pack size failed");  else n += sz*p7P_NXSTATES;    /* xsc[0..3]       */
-    if (MPI_Pack_size(                           1, MPI_FLOAT, comm, &sz) != 0)     ESL_XEXCEPTION(eslESYS, "pack size failed");  else n += sz;                 /* nj              */
-    if ((status = esl_mpi_PackOptSize(gm->name, -1, MPI_CHAR,  comm, &sz))!= eslOK) goto ERROR;                                   else n += sz;                 /* name (string)   */
-    if ((status = esl_mpi_PackOptSize(gm->acc,  -1, MPI_CHAR,  comm, &sz))!= eslOK) goto ERROR;                                   else n += sz;                 /* acc (string)    */
-    if ((status = esl_mpi_PackOptSize(gm->desc, -1, MPI_CHAR,  comm, &sz))!= eslOK) goto ERROR;                                   else n += sz;                 /* desc (string)   */
-    if (MPI_Pack_size(                       (M+2), MPI_CHAR,  comm, &sz) != 0)     ESL_XEXCEPTION(eslESYS, "pack size failed");  else n += sz*4;               /* rf,cs,mm,consensus */
-    if (MPI_Pack_size(                 p7_NEVPARAM, MPI_FLOAT, comm, &sz) != 0)     ESL_XEXCEPTION(eslESYS, "pack size failed");  else n += sz;                 /* evparam         */
-    if (MPI_Pack_size(                 p7_NCUTOFFS, MPI_FLOAT, comm, &sz) != 0)     ESL_XEXCEPTION(eslESYS, "pack size failed");  else n += sz;                 /* Pfam cutoffs    */
+  if (p7_profile_MPIPackSize(gm, comm, &n) != eslOK){
+    ESL_XEXCEPTION(eslESYS, "pack size failed");
   }
-  
+
+
   /* Make sure the buffer is allocated appropriately */
   if (*buf == NULL || n > *nalloc) {
     void *tmp;
     ESL_RALLOC(*buf, tmp, sizeof(char) * n);
     *nalloc = n; 
   }
-
+  
   /* Pack the profile into the buffer */
   position = 0;
-  if (gm == NULL) 
-    {
-      int   eod_code = -1;
-      if (MPI_Pack(&eod_code,                   1, MPI_INT,   *buf, n, &position,  comm)  != 0)     ESL_XEXCEPTION(eslESYS, "pack failed");
-    } 
-  else 
-    {    
-      if (MPI_Pack(&M,                          1, MPI_INT,   *buf, n, &position,  comm)  != 0)     ESL_XEXCEPTION(eslESYS, "pack failed"); 
-      if (MPI_Pack(&(gm->mode),                 1, MPI_INT,   *buf, n, &position,  comm)  != 0)     ESL_XEXCEPTION(eslESYS, "pack failed"); 
-      if (MPI_Pack(&(gm->L),                    1, MPI_INT,   *buf, n, &position,  comm)  != 0)     ESL_XEXCEPTION(eslESYS, "pack failed"); 
-      if (MPI_Pack(gm->tsc,         p7P_NTRANS *M, MPI_FLOAT, *buf, n, &position,  comm)  != 0)     ESL_XEXCEPTION(eslESYS, "pack failed"); 
-      if (MPI_Pack(gm->rsc[0], (M+1)* Kp * p7P_NR, MPI_FLOAT, *buf, n, &position,  comm)  != 0)     ESL_XEXCEPTION(eslESYS, "pack failed"); 
-      if (MPI_Pack(gm->xsc[0],        p7P_NXTRANS, MPI_FLOAT, *buf, n, &position,  comm)  != 0)     ESL_XEXCEPTION(eslESYS, "pack failed"); 
-      if (MPI_Pack(gm->xsc[1],        p7P_NXTRANS, MPI_FLOAT, *buf, n, &position,  comm)  != 0)     ESL_XEXCEPTION(eslESYS, "pack failed"); 
-      if (MPI_Pack(gm->xsc[2],        p7P_NXTRANS, MPI_FLOAT, *buf, n, &position,  comm)  != 0)     ESL_XEXCEPTION(eslESYS, "pack failed"); 
-      if (MPI_Pack(gm->xsc[3],        p7P_NXTRANS, MPI_FLOAT, *buf, n, &position,  comm)  != 0)     ESL_XEXCEPTION(eslESYS, "pack failed"); 
-      if (MPI_Pack(&(gm->nj),                   1, MPI_FLOAT, *buf, n, &position,  comm)  != 0)     ESL_XEXCEPTION(eslESYS, "pack failed"); 
-      if ((status = esl_mpi_PackOpt(gm->name, -1,  MPI_CHAR,  *buf, n, &position,  comm)) != eslOK) goto ERROR;
-      if ((status = esl_mpi_PackOpt(gm->acc,  -1,  MPI_CHAR,  *buf, n, &position,  comm)) != eslOK) goto ERROR; 
-      if ((status = esl_mpi_PackOpt(gm->desc, -1,  MPI_CHAR,  *buf, n, &position,  comm)) != eslOK) goto ERROR;
-      if (MPI_Pack(gm->rf,                    M+2, MPI_CHAR,  *buf, n, &position,  comm)  != 0)     ESL_XEXCEPTION(eslESYS, "pack failed"); 
-      if (MPI_Pack(gm->mm,                    M+2, MPI_CHAR,  *buf, n, &position,  comm)  != 0)     ESL_XEXCEPTION(eslESYS, "pack failed");
-      if (MPI_Pack(gm->cs,                    M+2, MPI_CHAR,  *buf, n, &position,  comm)  != 0)     ESL_XEXCEPTION(eslESYS, "pack failed"); 
-      if (MPI_Pack(gm->consensus,             M+2, MPI_CHAR,  *buf, n, &position,  comm)  != 0)     ESL_XEXCEPTION(eslESYS, "pack failed"); 
-      if (MPI_Pack(gm->evparam,       p7_NEVPARAM, MPI_FLOAT, *buf, n, &position,  comm)  != 0)     ESL_XEXCEPTION(eslESYS, "pack failed"); 
-      if (MPI_Pack(gm->cutoff,        p7_NCUTOFFS, MPI_FLOAT, *buf, n, &position,  comm)  != 0)     ESL_XEXCEPTION(eslESYS, "pack failed"); 
-      if (MPI_Pack(gm->compo,         p7_MAXABET,  MPI_FLOAT, *buf, n, &position,  comm)  != 0)     ESL_XEXCEPTION(eslESYS, "pack failed"); 
-    }
+  if(p7_profile_MPIPack(gm, *buf, n, &position, comm) != eslOK){
+        ESL_XEXCEPTION(eslESYS, "packing profile failed");
+  }
 
   /* Send the packed profile to destination  */
   MPI_Send(*buf, n, MPI_PACKED, dest, tag, comm);
+  
+
   return eslOK;
   
  ERROR:
   return status;
 }
 
+/* Function:  p7_profile_MPIUnpack()
+ * Synopsis:  Unpacks a profile from an MPI buffer.
+ *
+ * Purpose:   Unpack a newly allocated profile from MPI packed buffer
+ *            <buf>, starting from position <*pos>, where the total length
+ *            of the buffer in bytes is <n>. 
+ *           
+ *
+ * Returns:   <eslOK> on success. <*pos> is updated to the position of
+ *            the next element in <buf> to unpack (if any). <*ret_profile>
+ *            contains a newly allocated profile, which the caller is
+ *            responsible for free'ing.  If <*abc> was passed as
+ *            <NULL>, it now points to an <ESL_ALPHABET> object that
+ *            was allocated here; caller is responsible for free'ing
+ *            this.
+
+ * Throws:    <eslESYS> on an MPI call failure. <eslEMEM> on allocation failure.
+ *            In either case, <*ret_hmm> is <NULL>, and the state of <buf>
+ *            and <*pos> is undefined and should be considered to be corrupted.
+ */
+int p7_profile_MPIUnpack(char *buf, int n, int *position, MPI_Comm comm, ESL_ALPHABET **abc, P7_PROFILE **ret_profile)
+{
+  int         M;
+  int status;
+  P7_PROFILE *gm;
+  if (MPI_Unpack(buf, n, position, &M,                            1, MPI_INT,   comm) != 0) ESL_XEXCEPTION(eslESYS, "unpack failed");
+  if (M == -1) { *ret_profile = NULL; return eslEOD; }
+
+  if ((gm = p7_profile_Create(M, *abc)) == NULL) { status = eslEMEM; goto ERROR; }
+  if (MPI_Unpack(buf, n, position, &(gm->mode),                   1, MPI_INT,   comm) != 0) ESL_XEXCEPTION(eslESYS, "unpack failed");
+  if (MPI_Unpack(buf, n, position, &(gm->L),                      1, MPI_INT,   comm) != 0) ESL_XEXCEPTION(eslESYS, "unpack failed");
+  if (MPI_Unpack(buf, n, position, gm->tsc,            p7P_NTRANS*M, MPI_FLOAT, comm) != 0) ESL_XEXCEPTION(eslESYS, "unpack failed");
+  if (MPI_Unpack(buf, n, position, gm->rsc[0], p7P_NR*(M+1)*(*abc)->Kp, MPI_FLOAT, comm) != 0) ESL_XEXCEPTION(eslESYS, "unpack failed");
+  if (MPI_Unpack(buf, n, position, gm->xsc[0],          p7P_NXTRANS, MPI_FLOAT, comm) != 0) ESL_XEXCEPTION(eslESYS, "unpack failed");  
+  if (MPI_Unpack(buf, n, position, gm->xsc[1],          p7P_NXTRANS, MPI_FLOAT, comm) != 0) ESL_XEXCEPTION(eslESYS, "unpack failed");  
+  if (MPI_Unpack(buf, n, position, gm->xsc[2],          p7P_NXTRANS, MPI_FLOAT, comm) != 0) ESL_XEXCEPTION(eslESYS, "unpack failed");  
+  if (MPI_Unpack(buf, n, position, gm->xsc[3],          p7P_NXTRANS, MPI_FLOAT, comm) != 0) ESL_XEXCEPTION(eslESYS, "unpack failed");  
+  if (MPI_Unpack(buf, n, position, &(gm->nj),                     1, MPI_FLOAT, comm) != 0) ESL_XEXCEPTION(eslESYS, "unpack failed");  
+
+  if ((status = esl_mpi_UnpackOpt(buf, n, position,  (void**)&(gm->name),  NULL, MPI_CHAR,  comm)) != eslOK) goto ERROR;
+  if ((status = esl_mpi_UnpackOpt(buf, n, position,  (void**)&(gm->acc),   NULL, MPI_CHAR,  comm)) != eslOK) goto ERROR;
+  if ((status = esl_mpi_UnpackOpt(buf, n, position,  (void**)&(gm->desc),  NULL, MPI_CHAR,  comm)) != eslOK) goto ERROR;
+
+  if (MPI_Unpack(buf, n, position, gm->rf,                      M+2, MPI_CHAR,  comm) != 0) ESL_XEXCEPTION(eslESYS, "unpack failed");
+  if (MPI_Unpack(buf, n, position, gm->mm,                      M+2, MPI_CHAR,  comm) != 0) ESL_XEXCEPTION(eslESYS, "unpack failed");
+  if (MPI_Unpack(buf, n, position, gm->cs,                      M+2, MPI_CHAR,  comm) != 0) ESL_XEXCEPTION(eslESYS, "unpack failed");
+  if (MPI_Unpack(buf, n, position, gm->consensus,               M+2, MPI_CHAR,  comm) != 0) ESL_XEXCEPTION(eslESYS, "unpack failed");
+  if (MPI_Unpack(buf, n, position, gm->evparam,         p7_NEVPARAM, MPI_FLOAT, comm) != 0) ESL_XEXCEPTION(eslESYS, "unpack failed");
+  if (MPI_Unpack(buf, n, position, gm->cutoff,          p7_NCUTOFFS, MPI_FLOAT, comm) != 0) ESL_XEXCEPTION(eslESYS, "unpack failed");
+  if (MPI_Unpack(buf, n, position, gm->compo,           p7_MAXABET, MPI_FLOAT, comm) != 0) ESL_XEXCEPTION(eslESYS, "unpack failed");
+  
+  gm->abc = *abc;
+  gm->M   = M;
+  *ret_profile = gm;
+  return eslOK;
+ ERROR:
+  if (gm  != NULL) p7_profile_Destroy(gm);
+  *ret_profile = NULL;
+  return status;
+}
 
 /* Function:  p7_profile_MPIRecv()
  * Synopsis:  Receive a profile as an MPI message.
@@ -588,7 +720,7 @@ p7_profile_MPIRecv(int source, int tag, MPI_Comm comm, const ESL_ALPHABET *abc, 
   int         n;
   int         position;
   MPI_Status  mpistatus;
-  int         M;
+
 
   /* Probe first, because we need to know if our buffer is big enough.
    */
@@ -607,37 +739,13 @@ p7_profile_MPIRecv(int source, int tag, MPI_Comm comm, const ESL_ALPHABET *abc, 
 
   /* Unpack it - watching out for the EOD signal of M = -1. */
   position = 0;
-  if (MPI_Unpack(*buf, n, &position, &M,                            1, MPI_INT,   comm) != 0) ESL_XEXCEPTION(eslESYS, "unpack failed");
-  if (M == -1) { *ret_gm = NULL; return eslEOD; }
-
-  if ((gm = p7_profile_Create(M, abc)) == NULL) { status = eslEMEM; goto ERROR; }
-  if (MPI_Unpack(*buf, n, &position, &(gm->mode),                   1, MPI_INT,   comm) != 0) ESL_XEXCEPTION(eslESYS, "unpack failed");
-  if (MPI_Unpack(*buf, n, &position, &(gm->L),                      1, MPI_INT,   comm) != 0) ESL_XEXCEPTION(eslESYS, "unpack failed");
-  if (MPI_Unpack(*buf, n, &position, gm->tsc,            p7P_NTRANS*M, MPI_FLOAT, comm) != 0) ESL_XEXCEPTION(eslESYS, "unpack failed");
-  if (MPI_Unpack(*buf, n, &position, gm->rsc[0], p7P_NR*(M+1)*abc->Kp, MPI_FLOAT, comm) != 0) ESL_XEXCEPTION(eslESYS, "unpack failed");
-  if (MPI_Unpack(*buf, n, &position, gm->xsc[0],          p7P_NXTRANS, MPI_FLOAT, comm) != 0) ESL_XEXCEPTION(eslESYS, "unpack failed");  
-  if (MPI_Unpack(*buf, n, &position, gm->xsc[1],          p7P_NXTRANS, MPI_FLOAT, comm) != 0) ESL_XEXCEPTION(eslESYS, "unpack failed");  
-  if (MPI_Unpack(*buf, n, &position, gm->xsc[2],          p7P_NXTRANS, MPI_FLOAT, comm) != 0) ESL_XEXCEPTION(eslESYS, "unpack failed");  
-  if (MPI_Unpack(*buf, n, &position, gm->xsc[3],          p7P_NXTRANS, MPI_FLOAT, comm) != 0) ESL_XEXCEPTION(eslESYS, "unpack failed");  
-  if (MPI_Unpack(*buf, n, &position, &(gm->nj),                     1, MPI_FLOAT, comm) != 0) ESL_XEXCEPTION(eslESYS, "unpack failed");  
-
-  if ((status = esl_mpi_UnpackOpt(  *buf, n, &position,  (void**)&(gm->name),  NULL, MPI_CHAR,  comm)) != eslOK) goto ERROR;
-  if ((status = esl_mpi_UnpackOpt(  *buf, n, &position,  (void**)&(gm->acc),   NULL, MPI_CHAR,  comm)) != eslOK) goto ERROR;
-  if ((status = esl_mpi_UnpackOpt(  *buf, n, &position,  (void**)&(gm->desc),  NULL, MPI_CHAR,  comm)) != eslOK) goto ERROR;
-
-  if (MPI_Unpack(*buf, n, &position, gm->rf,                      M+2, MPI_CHAR,  comm) != 0) ESL_XEXCEPTION(eslESYS, "unpack failed");
-  if (MPI_Unpack(*buf, n, &position, gm->mm,                      M+2, MPI_CHAR,  comm) != 0) ESL_XEXCEPTION(eslESYS, "unpack failed");
-  if (MPI_Unpack(*buf, n, &position, gm->cs,                      M+2, MPI_CHAR,  comm) != 0) ESL_XEXCEPTION(eslESYS, "unpack failed");
-  if (MPI_Unpack(*buf, n, &position, gm->consensus,               M+2, MPI_CHAR,  comm) != 0) ESL_XEXCEPTION(eslESYS, "unpack failed");
-  if (MPI_Unpack(*buf, n, &position, gm->evparam,         p7_NEVPARAM, MPI_FLOAT, comm) != 0) ESL_XEXCEPTION(eslESYS, "unpack failed");
-  if (MPI_Unpack(*buf, n, &position, gm->cutoff,          p7_NCUTOFFS, MPI_FLOAT, comm) != 0) ESL_XEXCEPTION(eslESYS, "unpack failed");
-  if (MPI_Unpack(*buf, n, &position, gm->compo,           p7_NCUTOFFS, MPI_FLOAT, comm) != 0) ESL_XEXCEPTION(eslESYS, "unpack failed");
-  
-  gm->abc = abc;
-  gm->M   = M;
+  if(p7_profile_MPIUnpack(*buf, n, &position, comm, (ESL_ALPHABET **) &abc, &gm) != eslOK){
+    ESL_XEXCEPTION(eslESYS, "unpack failed");
+  }
   *ret_gm = gm;
-  return eslOK;
+  
 
+  return eslOK;
  ERROR:
   if (gm  != NULL) p7_profile_Destroy(gm);
   *ret_gm = NULL;
@@ -1606,6 +1714,10 @@ main(int argc, char **argv)
  *****************************************************************/
 #ifdef p7MPISUPPORT_TESTDRIVE
 
+/* note: this utest will typically fail if run under gdb, because it requires the master 
+    and worker's HMMS to have been created in the same second and thus have the same 
+    creation time.
+*/
 static void
 utest_HMMSendRecv(int my_rank, int nproc)
 {
@@ -1727,8 +1839,7 @@ static ESL_OPTIONS options[] = {
 static char usage[]  = "[-options]";
 static char banner[] = "test driver for mpisupport.c";
 
-int
-main(int argc, char **argv)
+int main(int argc, char **argv)
 {
   ESL_GETOPTS *go = p7_CreateDefaultApp(options, 0, argc, argv, banner, usage);
   int          stalling = FALSE;

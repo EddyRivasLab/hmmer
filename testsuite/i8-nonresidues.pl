@@ -50,7 +50,7 @@ if ($? != 0) { die "FAIL: hmmsearch failed on first test sequence\n"; }
 # Verify.
 if ($h3::ndomtbl    != 2)      { printf("FAIL: expected two lines in domtbl; saw %d\n",    $h3::ndomtbl);    exit 1; }
 if ($h3::ndom[0]    != 2)      { printf("FAIL: expected two domains; saw %d\n",            $h3::ndom[0]);    exit 1; }
-if ($h3::seqsc[0]   != "45.8") { printf("FAIL: expected seq score of 41.8; saw %s\n",      $h3::seqsc[0]);   exit 1; }
+if ($h3::seqsc[0]   != "45.8") { printf("FAIL: expected seq score of 45.8; saw %s\n",      $h3::seqsc[0]);   exit 1; }
 if ($h3::seqbias[0] != "11.8") { printf("FAIL: expected seq bias of 11.8; saw %s\n",       $h3::seqbias[0]); exit 1; }
 if ($h3::domsc[0]   != "23.6") { printf("FAIL: expected domain 1 score of 23.6; saw %s\n", $h3::domsc[0]);   exit 1; }
 if ($h3::domsc[1]   != "28.2") { printf("FAIL: expected domain 1 score of 28.2; saw %s\n", $h3::domsc[1]);   exit 1; }

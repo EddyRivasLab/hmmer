@@ -1,3 +1,4 @@
+
 /* hmmsearch: search profile HMM(s) against a sequence database.
  *
  * To do:
@@ -491,9 +492,8 @@ serial_master(ESL_GETOPTS *go, struct cfg_s *cfg)
       /* Convert to an optimized model */
       gm = p7_profile_Create (hmm->M, abc);
       om = p7_oprofile_Create(hmm->M, abc);
-      p7_ProfileConfig(hmm, info->bg, gm, 100, p7_LOCAL); /* 100 is a dummy length for now; and MSVFilter requires local mode */
+      p7_ProfileConfig(hmm, info->bg, gm,100, p7_LOCAL); /* 100 is a dummy length for now; and MSVFilter requires local mode */
       p7_oprofile_Convert(gm, om);                  /* <om> is now p7_LOCAL, multihit */
-
       for (i = 0; i < infocnt; ++i)
       {
         /* Create processing pipeline and hit list */
@@ -1152,7 +1152,7 @@ mpi_worker(ESL_GETOPTS *go, struct cfg_s *cfg)
   char             errbuf[eslERRBUFSIZE];
 
   w = esl_stopwatch_Create();
-
+printf("Starting mpi_worker on node %d\n",cfg->my_rank);
   /* Open the target sequence database */
   status = esl_sqfile_Open(cfg->dbfile, dbfmt, p7_SEQDBENV, &dbfp);
   if      (status == eslENOTFOUND) mpi_failure("Failed to open sequence file %s for reading\n",          cfg->dbfile);

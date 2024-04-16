@@ -63,6 +63,11 @@ MANPAGES_DAEMON = \
 	hmmpgmd.man     \
 	hmmpgmd_shard.man
 
+MANPAGES_SERVER = \
+	hmmclient.man   \
+	hmmserver.man		\
+
+
 # ./configure puts Easel .man pages in ${top_builddir}/easel/miniapps
 EASEL_MANPAGES = \
 	esl-afetch.man     \
@@ -100,6 +105,7 @@ TEXFILES =\
 	macros.tex       \
 	main.tex         \
 	pipeline.tex     \
+	server.tex			\
 	tabular.tex      \
 	titlepage.tex    \
 	titlepage_daemon.tex \
@@ -107,7 +113,7 @@ TEXFILES =\
 
 .PHONY: pdf manpages clean distclean TAGS
 
-pdf:    Userguide.pdf Daemon_userguide.pdf
+pdf:    Userguide.pdf Daemon_userguide.pdf Server_userguide.pdf
 
 # We add ${srcdir} to TEXINPUTS, etc so we can build userguide in a build tree, with input files in source tree.
 Userguide.pdf: manpages ${TEXFILES}
@@ -132,12 +138,24 @@ Daemon_userguide.pdf: manpages ${TEXFILES}
 	@TEXINPUTS=${TEXINPUTS}:${srcdir} pdflatex daemon                                >> latex.log 2>&1 
 	@mv daemon.pdf Daemon_userguide.pdf
 
+Server_userguide.pdf: manpages ${TEXFILES}
+	@for prog in pdflatex bibtex; do \
+	  command -v $$prog >/dev/null 2>&1 || { echo >&2 "$$prog is required to build Userguide, but it's not installed. Aborting."; exit 1; } \
+	done
+	@echo "     LATEX Server_userguide.pdf  (see latex.log for output)"
+	@TEXINPUTS=${TEXINPUTS}:${srcdir} pdflatex server                               >  latex.log 2>&1 
+	@BIBINPUTS=${BIBINPUTS}:${srcdir} BSTINPUTS=${BSTINPUTS}:${srcdir} bibtex main >> latex.log 2>&1 
+	@TEXINPUTS=${TEXINPUTS}:${srcdir} pdflatex server                                >> latex.log 2>&1 
+	@TEXINPUTS=${TEXINPUTS}:${srcdir} pdflatex server                                >> latex.log 2>&1 
+	@mv server.pdf Server_userguide.pdf
+
 # manpages: convert man pages to LaTeX chapter in User Guide.
 #    uses PolyglotMan 3.2 "rman", and rmanprocess.py script in easel's devkit
 manpages:
 	@command -v ${RMAN} >/dev/null 2>&1 || { echo >&2 "${RMAN} is required to build Userguide, but it's not installed. Aborting."; exit 1; }
 	@echo '%% Manual pages chapter automatically generated. Do not edit.'           > manpages.tex
 	@echo '%% Manual pages chapter automatically generated. Do not edit.'           > manpages_daemon.tex
+	@echo '%% Manual pages chapter automatically generated. Do not edit.'           > manpages_server.tex
 	@echo '%% Easel miniapps manpage chapter automatically generated. Do not edit.' > easel_manpages.tex
 	@for file in ${MANPAGES}; do\
 	   ${RMAN} -f latex2e ../man/$$file 2>/dev/null | ${RMANPROCESS} >> manpages.tex ;\
@@ -148,7 +166,9 @@ manpages:
 	@for file in ${MANPAGES_DAEMON}; do\
 	   ${RMAN} -f latex2e ../man/$$file 2>/dev/null | ${RMANPROCESS} >> manpages_daemon.tex ;\
 	done
-
+	@for file in ${MANPAGES_SERVER}; do\
+	   ${RMAN} -f latex2e ../man/$$file 2>/dev/null | ${RMANPROCESS} >> manpages_server.tex ;\
+	done
 clean:
 	${QUIET_SUBDIR0}inclusions   ${QUIET_SUBDIR1} clean
 	-rm -f latex.log
@@ -167,7 +187,7 @@ distclean: clean
 	   done ;\
 	fi
 	-rm -f titlepage.tex copyright.tex manpages.tex easel_manpages.tex
-	-rm -f manpages_daemon.tex titlepage_daemon.tex
+	-rm -f manpages_daemon.tex titlepage_daemon.tex titlepage_server.tex
 	-rm -f Userguide.pdf
 	-rm -f Daemon_userguide.pdf
 	-rm -f Makefile
