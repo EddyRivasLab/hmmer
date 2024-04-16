@@ -1323,7 +1323,7 @@ thread_worker_FM(void *arg)
 }
 #else // provide dummy functions 
 static void thread_director_FM(WORKER_INFO *info, ESL_THREADS *obj, ESL_WORK_QUEUE *queue) { exit(1); }
-static void thread_workerFM(void *arg) { exit(1); }
+static void thread_worker_FM(void *arg) { exit(1); }
 #endif 
 
 

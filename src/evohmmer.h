@@ -21,7 +21,7 @@
 #define NDTS  30
 #define NDTL  1
 #define NDTR  1
-#define NDT   NDTS+NDTL+NDTR
+#define NDT   NDTS+NDTL+2*NDTR
 #define DTMIN 0.01
 #define DTMAX 5.50
 #define DTPRE 0.05

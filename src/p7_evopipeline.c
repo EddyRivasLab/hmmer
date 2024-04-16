@@ -148,7 +148,7 @@ p7_EvoPipeline(P7_PIPELINE *pli, ESL_RANDOMNESS *r, float *evparam_star, P7_RATE
   seq_score = (usc - nullsc) / eslCONST_LOG2;
   P = esl_gumbel_surv(seq_score,  om->evparam[p7_MMU],  om->evparam[p7_MLAMBDA]);
  if (P > pli->F1) {
-    *ret_hmm_restore = (msv_opt)? TRUE : FALSE;
+    *ret_hmm_restore = (msv_opt && time != time_star)? TRUE : FALSE;
     return eslOK;
   }
   
@@ -162,7 +162,7 @@ p7_EvoPipeline(P7_PIPELINE *pli, ESL_RANDOMNESS *r, float *evparam_star, P7_RATE
       P = esl_gumbel_surv(seq_score,  om->evparam[p7_MMU],  om->evparam[p7_MLAMBDA]);
       //printf("^^BIAS %s P %f F1 %f usc %f filtersc %f score %f\n", sq->name, P, pli->F1, usc, filtersc, seq_score);
       if (P > pli->F1) {
-	*ret_hmm_restore = (msv_opt)? TRUE : FALSE;
+	*ret_hmm_restore = (msv_opt && time != time_star)? TRUE : FALSE;
 	return eslOK;
       }
     }
@@ -195,7 +195,7 @@ p7_EvoPipeline(P7_PIPELINE *pli, ESL_RANDOMNESS *r, float *evparam_star, P7_RATE
       seq_score = (vfsc-filtersc) / eslCONST_LOG2;
       P  = esl_gumbel_surv(seq_score,  om->evparam[p7_VMU],  om->evparam[p7_VLAMBDA]);
       if (P > pli->F2) {
-	*ret_hmm_restore = (vit_opt)? TRUE : FALSE;
+	*ret_hmm_restore = (vit_opt && time != time_star)? TRUE : FALSE;
 	return eslOK;
       }
     }
@@ -221,7 +221,7 @@ p7_EvoPipeline(P7_PIPELINE *pli, ESL_RANDOMNESS *r, float *evparam_star, P7_RATE
   //printf("^^FWD %s P %f time %f fwdsc %f filter %f score %f tau %f lambda %f\n", sq->name, P, time, fwdsc, filtersc, (fwdsc-filtersc) / eslCONST_LOG2, om->evparam[p7_FTAU],  om->evparam[p7_FLAMBDA]);
 
   if (P > pli->F3)  {
-    *ret_hmm_restore = TRUE;
+    *ret_hmm_restore = (time != time_star)? TRUE:FALSE;
     return eslOK;
   }
   pli->n_past_fwd++;
@@ -233,9 +233,9 @@ p7_EvoPipeline(P7_PIPELINE *pli, ESL_RANDOMNESS *r, float *evparam_star, P7_RATE
 
   status = p7_domaindef_ByPosteriorHeuristics(sq, ntsq, om, pli->oxf, pli->oxb, pli->fwd, pli->bck, pli->ddef, bg, FALSE, NULL, NULL, NULL);
   if (status != eslOK) ESL_FAIL(status, pli->errbuf, "domain definition workflow failure"); /* eslERANGE can happen  */
-  if (pli->ddef->nregions   == 0) { *ret_hmm_restore = TRUE; return eslOK; } /* score passed threshold but there's no discrete domains here       */
-  if (pli->ddef->nenvelopes == 0) { *ret_hmm_restore = TRUE; return eslOK; } /* rarer: region was found, stochastic clustered, no envelopes found */
-  if (pli->ddef->ndom       == 0) { *ret_hmm_restore = TRUE; return eslOK; } /* even rarer: envelope found, no domain identified {iss131}         */
+  if (pli->ddef->nregions   == 0) { *ret_hmm_restore = (time != time_star)? TRUE:FALSE; return eslOK; } /* score passed threshold but there's no discrete domains here       */
+  if (pli->ddef->nenvelopes == 0) { *ret_hmm_restore = (time != time_star)? TRUE:FALSE; return eslOK; } /* rarer: region was found, stochastic clustered, no envelopes found */
+  if (pli->ddef->ndom       == 0) { *ret_hmm_restore = (time != time_star)? TRUE:FALSE; return eslOK; } /* even rarer: envelope found, no domain identified {iss131}         */
 
 
   /* Calculate the null2-corrected per-seq score */

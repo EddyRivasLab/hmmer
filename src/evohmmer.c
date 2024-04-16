@@ -121,8 +121,10 @@ p7_RateCreate(int M, const ESL_ALPHABET *abc, EVOM evomodel, float fixtime, floa
       for (t = 1; t <= ndtl; t ++) 
 	R->dtval[t] = R->dtval[t-1] + (float)(dtpre-dtmin)/(float)ndtl;
       for (t = ndtl+1; t < ndtl+1+ndts; t ++) 
-	R->dtval[t] = R->dtval[t-1] + (float)(dtpos-dtpre)/(float)(ndts-1);
-      for (t = ndtl+1+ndts; t < ndt; t ++) 
+	R->dtval[t] = R->dtval[t-1] + (float)(1.0-dtpre)/(float)(ndts-1);
+      for (t = ndtl+1+ndts; t < ndtl+1+2*ndts; t ++) 
+	R->dtval[t] = R->dtval[t-1] + (float)(dtpos-1.0)/(float)(ndts-1);
+      for (t = ndtl+1+2*ndts; t < ndt; t ++) 
 	R->dtval[t] = R->dtval[t-1] + (float)(dtmax-dtpos)/(float)ndtr;
     }
     
@@ -761,13 +763,12 @@ p7_EvolveFromRate(FILE *statfp, P7_HMM *hmm, const P7_RATE *R, const P7_BG *bg, 
     }
     if (t < 0) dtselect = R->ndt;	
   }
-
+  
   for (k = 0; k <= hmm->M; k++)
     {
       /* pmat */ 
       for (i = 0; i < hmm->abc->K; i ++) 
 	hmm->mat[k][i] = (dtselect < R->ndt)? R->pdt[dtselect][k][i] : R->pstar[k][i];	    
-      //esl_vec_FDump(stdout, hmm->mat[k], R->abc_r->K, NULL);
       /* pins */ 
       esl_vec_FCopy(R->ins[k], R->abc_r->K, hmm->ins[k]);
     }
