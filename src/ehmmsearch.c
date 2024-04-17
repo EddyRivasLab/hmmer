@@ -1333,7 +1333,7 @@ mpi_worker(ESL_GETOPTS *go, struct cfg_s *cfg)
 	ratematrix_emrate_Set(esl_opt_GetString(go, "--rmx"), (const double *)bg->f, hmmrate->emR, info[0].tol, errbuf, FALSE);
       }
       if (!esl_opt_IsOn(go, "--noevo") &&
-	  p7_RateConstruct(statfp, hmm, bg, hmmrate, &R, errbuf, FALSE) != eslOK)
+	  p7_RateConstruct(hmm, bg, hmmrate, &R, errbuf, FALSE) != eslOK)
 	esl_fatal("%s", errbuf);
 
       // store the calibration parameters

@@ -774,7 +774,7 @@ workaround_evolve_profile(ESL_RANDOMNESS *r, double time, int len, const P7_RATE
   if (R == NULL) return;
   
   /* evolved HMM */
-  p7_EvolveFromRate(NULL, hmm, R, bg, time, 0.0001, NULL, FALSE); 
+  p7_EvolveFromRate(NULL, hmm, R, bg, time, NULL, FALSE); 
 
   if (calibrate) p7_Calibrate(hmm, NULL, &r, NULL, NULL, NULL);
   
@@ -813,7 +813,7 @@ workaround_restore_profile(float *evparam_star, int len, const P7_RATE *R, P7_BG
   if (R == NULL) return;
   
   /* evolved HMM */
-  p7_EvolveFromRate(NULL, hmm, R, bg, 1.0, 0.0001, NULL, FALSE); 
+  p7_EvolveFromRate(NULL, hmm, R, bg, 1.0, NULL, FALSE); 
 
   /* evolved profiles gm and om */
   p7_ProfileConfig(hmm, bg, gm, len, p7_LOCAL);
