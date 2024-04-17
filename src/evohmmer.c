@@ -53,6 +53,46 @@ static double er_MeanRelativeEntropy(float **vec, int M, float *f, int K);
  *
  */            
 P7_RATE *
+p7_RateCreateBare(const ESL_ALPHABET *abc, EVOM evomodel, float fixtime, float betainf)
+{ 
+  P7_RATE *R = NULL;
+  int      status;
+
+  ESL_ALLOC(R, sizeof(P7_RATE));
+
+  R->name     = NULL;
+  R->acc      = NULL;
+  R->desc     = NULL;
+
+  R->M        = 0; // will be set up later
+  R->abc_r    = abc;
+  R->betainf  = betainf;
+  R->fixtime  = fixtime;
+  R->evomodel = evomodel;
+  if (!(R->evomodel == AIF || R->evomodel == AGAX)) {
+    free(R);
+    return NULL;
+  }
+
+  R->pzero    = NULL;
+  R->pstar    = NULL;
+  R->pinfy    = NULL;
+  R->ins      = NULL;
+
+  R->dtval = NULL;
+  R->Pdt   = NULL;
+  R->pdt   = NULL;
+
+  /* the rates for transition probabilities */
+  R->e1R = NULL;
+ 
+  return R;
+
+ ERROR:
+  return NULL;
+}
+
+P7_RATE *
 p7_RateCreate(int M, const ESL_ALPHABET *abc, EVOM evomodel, float fixtime, float betainf)
 { 
   P7_RATE *R = NULL;
@@ -65,31 +105,9 @@ p7_RateCreate(int M, const ESL_ALPHABET *abc, EVOM evomodel, float fixtime, floa
   int      t;
   int      status;
 
-  ESL_ALLOC(R, sizeof(P7_RATE));
-
-  R->name     = NULL;
-  R->acc      = NULL;
-  R->desc     = NULL;
-
-  R->evomodel = UN; /* evolutionary model unknown at this point */
-  R->M        = M;
-  R->abc_r    = abc;
-  R->betainf  = betainf;
-  R->pzero    = NULL;
-  R->pstar    = NULL;
-  R->pinfy    = NULL;
-  R->ins      = NULL;
-  R->evomodel = evomodel;
-  if (!(evomodel == AIF || evomodel == AGAX)) {
-    free(R);
-    return NULL;
-  }
-
-  R->fixtime = fixtime;
- 
-  R->dtval = NULL;
-  R->Pdt   = NULL;
-  R->pdt   = NULL;
+  R    = p7_RateCreateBare(abc, evomodel, fixtime, betainf);
+  R->M = M;
+  
   if (abc != NULL) {
     /* store the match emissions form the training set */
     ESL_ALLOC(R->pzero,    sizeof(float *) * (M+1)         );  R->pzero[0] = NULL;
@@ -109,10 +127,10 @@ p7_RateCreate(int M, const ESL_ALPHABET *abc, EVOM evomodel, float fixtime, floa
     ndts   = (isfixtime)? 0 : NDTS;
     ndtl   = (isfixtime)? 0 : NDTL;
     ndtr   = (isfixtime)? 0 : NDTR;
-    dtmin  = (isfixtime)? fixtime : DTMIN;
-    dtmax  = (isfixtime)? fixtime : DTMAX;
-    dtpre  = (isfixtime)? fixtime : DTPRE;
-    dtpos  = (isfixtime)? fixtime : DTPOS;
+    dtmin  = (isfixtime)? R->fixtime : DTMIN;
+    dtmax  = (isfixtime)? R->fixtime : DTMAX;
+    dtpre  = (isfixtime)? R->fixtime : DTPRE;
+    dtpos  = (isfixtime)? R->fixtime : DTPOS;
     R->ndt = ndt;
 
     if (ndt > 0) {
@@ -144,10 +162,9 @@ p7_RateCreate(int M, const ESL_ALPHABET *abc, EVOM evomodel, float fixtime, floa
   }
 
   /* the rates for transition probabilities */
-  R->e1R = NULL;
   ESL_ALLOC(R->e1R, sizeof(E1_RATE *) * (M+1));
   for (m = 0; m <= M; m ++) {   
-     R->e1R[m] = e1_rate_Create(abc, evomodel);
+     R->e1R[m] = e1_rate_Create(abc, R->evomodel);
    }
 
   return R;
@@ -157,8 +174,7 @@ p7_RateCreate(int M, const ESL_ALPHABET *abc, EVOM evomodel, float fixtime, floa
 }
 
 int 
-p7_RateCreateWithEmRate(int M, const ESL_ALPHABET *abc, const P7_BG *bg, const EMRATE *emR, const ESL_SCOREMATRIX *S, P7_RATE **ret_R, EVOM evomodel, 
-			float fixtime, float betainf, double tol, char *errbuf, int verbose)
+p7_RateCreateWithEmRate(int M, const ESL_ALPHABET *abc, const P7_BG *bg, HMMRATE *hmmrate, P7_RATE **ret_R, char *errbuf, int verbose)
 { 
   enum emevol_e  emevol;
   P7_RATE       *R = NULL;
@@ -166,12 +182,13 @@ p7_RateCreateWithEmRate(int M, const ESL_ALPHABET *abc, const P7_BG *bg, const E
   int            status;
 
   /* the emissions rate matrix, if provided */
-  if      (S && emR) emevol = emBYRATE; /* if both given, use the rate, it is faster */
-  else if (S)        emevol = emBYSCMX;
-  else if (emR)      emevol = emBYRATE;
-  else               emevol = emNONE;
+  if      (hmmrate->S && hmmrate->emR) emevol = emBYRATE; /* if both given, use the rate, it is faster */
+  else if (hmmrate->S)                 emevol = emBYSCMX;
+  else if (hmmrate->emR)               emevol = emBYRATE;
+  else                                 emevol = emNONE;
 
-  R = p7_RateCreate(M, (emevol == emNONE)? NULL : abc, evomodel, fixtime, betainf); if (R == NULL) { status = eslEMEM; goto ERROR; }
+  R = p7_RateCreate(M, (emevol == emNONE)? NULL : abc, hmmrate->evomodel, hmmrate->fixtime, hmmrate->betainf);
+  if (R == NULL) { status = eslEMEM; goto ERROR; }
  
   switch(emevol) {
   case emBYSCMX: 
@@ -179,7 +196,7 @@ p7_RateCreateWithEmRate(int M, const ESL_ALPHABET *abc, const P7_BG *bg, const E
     break;
   case emBYRATE: 
     for (m = 0; m <= R->M; m ++) 
-      ratematrix_emrate_Copy(emR, R->e1R[m]->em);
+      ratematrix_emrate_Copy(hmmrate->emR, R->e1R[m]->em);
    break;
   case emNONE: 
     R->e1R = NULL;
@@ -436,7 +453,7 @@ p7_RateValidate(P7_RATE *R, double tol, char *errbuf)
   if (R == NULL) return eslOK;
 
   if (R->evomodel == UN) ESL_XFAIL(eslFAIL, errbuf, "Unknown evomodel for this rate");
-  if (R->M <= 0) ESL_XFAIL(eslFAIL, errbuf, "Rate has bad dimensions");
+  if (R->M < 0) ESL_XFAIL(eslFAIL, errbuf, "Rate has bad dimensions");
   
   if (R->pzero) {
     for (m = 0; m <= R->M; m ++) {
@@ -507,31 +524,106 @@ p7_RateValidate(P7_RATE *R, double tol, char *errbuf)
  * 
  * Note:      
  *
- */            
+ */                       
 int 
-p7_RateCalculate(FILE *statfp, const P7_HMM *hmm, const P7_BG *bg, const EMRATE *emR, const ESL_SCOREMATRIX *S, P7_RATE **ret_R, EVOM evomodel,
-		 double betainf, float fixtime, double tol, char *errbuf, int verbose)
+p7_RateCalculate(const P7_HMM *hmm, const P7_BG *bg, HMMRATE *hmmrate, P7_RATE *R, char *errbuf, int verbose)
 { 
   enum emevol_e  emevol;
-  P7_RATE       *R = NULL;
   double         time;
+  int            M = hmm->M;
+  int            ndt;
+  int            ndtl, ndtr, ndts;
+  float          dtpre, dtpos;
+  float          dtmin, dtmax;
+  int            isfixtime = (hmmrate->fixtime >= 0.0)? TRUE : FALSE;
   int            t;
   int            m;
   int            i, j;
   int            status;
 
-  /* the emissions rate matrix, if provided */
-  if      (S && emR) emevol = emBYRATE; /* if both given, use the rate, it is faster */
-  else if (S)        emevol = emBYSCMX;
-  else if (emR)      emevol = emBYRATE;
-  else               emevol = emNONE;
-
-  if ((status = p7_RateCreateWithEmRate(hmm->M, hmm->abc, bg, emR, S, &R, evomodel, fixtime, (float)betainf, tol, errbuf, verbose)) != eslOK) goto ERROR;
- 
   if ((status = esl_strdup(hmm->name,   -1, &(R->name)))   != eslOK) goto ERROR;
   if ((status = esl_strdup(hmm->acc,    -1, &(R->acc)))    != eslOK) goto ERROR;
   if ((status = esl_strdup(hmm->desc,   -1, &(R->desc)))   != eslOK) goto ERROR;
  
+  if (R->abc_r != NULL) {
+    /* store the match emissions form the training set */
+    ESL_ALLOC(R->pzero,    sizeof(float *) * (M+1)         );  R->pzero[0] = NULL;
+    ESL_ALLOC(R->pstar,    sizeof(float *) * (M+1)         );  R->pstar[0] = NULL;
+    ESL_ALLOC(R->pinfy,    sizeof(float *) * (M+1)         );  R->pinfy[0] = NULL;
+    ESL_ALLOC(R->ins,      sizeof(float *) * (M+1)         );  R->ins[0]   = NULL;
+    ESL_ALLOC(R->pzero[0], sizeof(float  ) * (M+1) * R->abc_r->K);
+    ESL_ALLOC(R->pstar[0], sizeof(float  ) * (M+1) * R->abc_r->K);
+    ESL_ALLOC(R->pinfy[0], sizeof(float  ) * (M+1) * R->abc_r->K);
+    ESL_ALLOC(R->ins[0],   sizeof(float  ) * (M+1) * R->abc_r->K);
+    for (m = 1; m <= M; m ++) R->pzero[m] = R->pzero[0] + R->abc_r->K * m;
+    for (m = 1; m <= M; m ++) R->pstar[m] = R->pstar[0] + R->abc_r->K * m;
+    for (m = 1; m <= M; m ++) R->pinfy[m] = R->pinfy[0] + R->abc_r->K * m;
+    for (m = 1; m <= M; m ++) R->ins[m]   = R->ins[0]   + R->abc_r->K * m;
+
+    ndt    = (isfixtime)? 1 : NDT;
+    ndts   = (isfixtime)? 0 : NDTS;
+    ndtl   = (isfixtime)? 0 : NDTL;
+    ndtr   = (isfixtime)? 0 : NDTR;
+    dtmin  = (isfixtime)? R->fixtime : DTMIN;
+    dtmax  = (isfixtime)? R->fixtime : DTMAX;
+    dtpre  = (isfixtime)? R->fixtime : DTPRE;
+    dtpos  = (isfixtime)? R->fixtime : DTPOS;
+    R->ndt = ndt;
+
+    if (ndt > 0) {
+      ESL_ALLOC(R->dtval, sizeof(float) * (ndt));      
+      R->dtval[0] = dtmin;
+      for (t = 1; t <= ndtl; t ++) 
+	R->dtval[t] = R->dtval[t-1] + (float)(dtpre-dtmin)/(float)ndtl;
+      for (t = ndtl+1; t < ndtl+1+ndts; t ++) 
+	R->dtval[t] = R->dtval[t-1] + (float)(1.0-dtpre)/(float)(ndts-1);
+      for (t = ndtl+1+ndts; t < ndtl+1+2*ndts; t ++) 
+	R->dtval[t] = R->dtval[t-1] + (float)(dtpos-1.0)/(float)(ndts-1);
+      for (t = ndtl+1+2*ndts; t < ndt; t ++) 
+	R->dtval[t] = R->dtval[t-1] + (float)(dtmax-dtpos)/(float)ndtr;
+    }
+    
+    ESL_ALLOC(R->Pdt, sizeof(ESL_DMATRIX **) * (ndt));  
+    ESL_ALLOC(R->pdt, sizeof(float       **) * (ndt));  
+    for (t = 0; t < ndt; t ++) {
+      ESL_ALLOC(R->Pdt[t], sizeof(ESL_DMATRIX *) * (M+1) );  R->Pdt[t][0] = NULL;
+      ESL_ALLOC(R->pdt[t], sizeof(float       *) * (M+1) );  R->pdt[t][0] = NULL;
+      
+      for (m = 0; m <= M; m ++) 
+	R->Pdt[t][m] = esl_dmatrix_Create(R->abc_r->K, R->abc_r->K);
+    
+      ESL_ALLOC(R->pdt[t][0],   sizeof(float   ) * (M+1) * R->abc_r->K);
+      for (m = 1; m <= M; m ++) R->pdt[t][m] = R->pdt[t][0] + R->abc_r->K * m;
+
+    } 
+  }
+
+  /* the rates for transition probabilities */
+  ESL_ALLOC(R->e1R, sizeof(E1_RATE *) * (M+1));
+  for (m = 0; m <= M; m ++) {   
+     R->e1R[m] = e1_rate_Create(R->abc_r, R->evomodel);
+   }
+
+  /* the emissions rate matrix, if provided */
+  if      (hmmrate->S && hmmrate->emR) emevol = emBYRATE; /* if both given, use the rate, it is faster */
+  else if (hmmrate->S)                 emevol = emBYSCMX;
+  else if (hmmrate->emR)               emevol = emBYRATE;
+  else                                 emevol = emNONE;
+
+  switch(emevol) {
+  case emBYSCMX: 
+    printf("not integrated yet\n"); status = eslFAIL; goto ERROR;
+    break;
+  case emBYRATE: 
+    for (m = 0; m <= R->M; m ++) 
+      ratematrix_emrate_Copy(hmmrate->emR, R->e1R[m]->em);
+   break;
+  case emNONE: 
+    R->e1R = NULL;
+    break;
+  default: printf("not such type of emission evolution\n"); status = eslFAIL; goto ERROR;
+  }
+
   switch(emevol) {
   case emBYSCMX: 
     printf("not integrated yet\n"); status = eslFAIL; goto ERROR;
@@ -552,11 +644,14 @@ p7_RateCalculate(FILE *statfp, const P7_HMM *hmm, const P7_BG *bg, const EMRATE 
     status = p7_CalculatePinfy(R, hmm, bg, errbuf, verbose);
    if (status != eslOK) goto ERROR;
 
-    if (statfp) {
-      fprintf(statfp, "%*s time\tME\tMRE\n", (int)strlen(hmm->name), "#anchor hmm");
-      fprintf(statfp, "%s %4.4f\t%2.4f\t%2.4f \n", hmm->name, 0.0,         er_MeanEntropy(R->pzero, R->M, R->abc_r->K), er_MeanRelativeEntropy(R->pzero, R->M, bg->f, R->abc_r->K));
-      fprintf(statfp, "%s %4.4f\t%2.4f\t%2.4f \n", hmm->name, 1.0,         p7_MeanMatchEntropy(hmm),                    p7_MeanMatchRelativeEntropy(hmm, bg));
-      fprintf(statfp, "%s %4.4f\t%2.4f\t%2.4f \n", hmm->name, eslINFINITY, er_MeanEntropy(R->pinfy, R->M, R->abc_r->K), er_MeanRelativeEntropy(R->pinfy, R->M, bg->f, R->abc_r->K));
+    if (hmmrate->statfp) {
+      fprintf(hmmrate->statfp, "%*s time\tME\tMRE\n", (int)strlen(hmm->name), "#anchor hmm");
+      fprintf(hmmrate->statfp, "%s %4.4f\t%2.4f\t%2.4f \n",
+	      hmm->name, 0.0,         er_MeanEntropy(R->pzero, R->M, R->abc_r->K), er_MeanRelativeEntropy(R->pzero, R->M, bg->f, R->abc_r->K));
+      fprintf(hmmrate->statfp, "%s %4.4f\t%2.4f\t%2.4f \n",
+	      hmm->name, 1.0,         p7_MeanMatchEntropy(hmm),                    p7_MeanMatchRelativeEntropy(hmm, bg));
+      fprintf(hmmrate->statfp, "%s %4.4f\t%2.4f\t%2.4f \n",
+	      hmm->name, eslINFINITY, er_MeanEntropy(R->pinfy, R->M, R->abc_r->K), er_MeanRelativeEntropy(R->pinfy, R->M, bg->f, R->abc_r->K));
     }
 
     for (m = 0; m <= R->M; m ++) {
@@ -571,13 +666,12 @@ p7_RateCalculate(FILE *statfp, const P7_HMM *hmm, const P7_BG *bg, const EMRATE 
     for (t = 0; t < R->ndt; t ++) {
       if (R->dtval[t] < 1.0) time = R->dtval[t] / (1.0 - R->dtval[t]);
       else                   time = R->dtval[t] - 1.0;
-      //printf("#[%d/%d] discrete %f time %f\n", t, R->ndt, R->dtval[t], time);
 
       for (m = 0; m <= R->M; m ++) {
  	if (R->dtval[t] < 1.0)
-	  status = ratematrix_CalculateConditionalsFromRate(time, R->e1R[m]->em->Qstar, R->Pdt[t][m], tol, errbuf, verbose);
+	  status = ratematrix_CalculateConditionalsFromRate(time, R->e1R[m]->em->Qstar, R->Pdt[t][m], hmmrate->tol, errbuf, verbose);
 	else 
-	  status = ratematrix_CalculateConditionalsFromRate(time, R->e1R[m]->em->Qinfy, R->Pdt[t][m], tol, errbuf, verbose);
+	  status = ratematrix_CalculateConditionalsFromRate(time, R->e1R[m]->em->Qinfy, R->Pdt[t][m], hmmrate->tol, errbuf, verbose);
 	
 	esl_vec_FSet(R->pdt[t][m], hmm->abc->K, 0.0);	
 	for (i = 0; i < hmm->abc->K; i ++) 
@@ -619,8 +713,137 @@ p7_RateCalculate(FILE *statfp, const P7_HMM *hmm, const P7_BG *bg, const EMRATE 
   default: printf("not such type of emission evolution\n"); status = eslFAIL; goto ERROR;
   }
 
-  if (p7_RateTransitions(hmm, R, betainf, tol, errbuf, verbose) != eslOK) { status = eslFAIL; goto ERROR; }
-  if (p7_RateValidate(R, tol, errbuf)                           != eslOK) { status = eslFAIL; goto ERROR; }
+  if (p7_RateTransitions(hmm, R, hmmrate->betainf, hmmrate->tol, errbuf, verbose) != eslOK) { status = eslFAIL; goto ERROR; }
+  if (p7_RateValidate(R, hmmrate->tol, errbuf)                                    != eslOK) { status = eslFAIL; goto ERROR; }
+
+
+#if 0
+  status = p7_RateTest(hmm, R, bg, 0.2, errbuf, verbose);
+  if (status != eslOK) { printf("p7_RateTest() failed\n"); exit(1); }
+#endif
+  
+  return eslOK;  
+
+ ERROR:
+  return status;
+}
+
+
+int 
+p7_RateConstruct(const P7_HMM *hmm, const P7_BG *bg, HMMRATE *hmmrate, P7_RATE **ret_R, char *errbuf, int verbose)
+{ 
+  enum emevol_e  emevol;
+  P7_RATE       *R = NULL;
+  double         time;
+  int            t;
+  int            m;
+  int            i, j;
+  int            status;
+
+  /* the emissions rate matrix, if provided */
+  if      (hmmrate->S && hmmrate->emR) emevol = emBYRATE; /* if both given, use the rate, it is faster */
+  else if (hmmrate->S)                 emevol = emBYSCMX;
+  else if (hmmrate->emR)               emevol = emBYRATE;
+  else                                 emevol = emNONE;
+
+  if ((status = p7_RateCreateWithEmRate(hmm->M, hmm->abc, bg, hmmrate, &R, errbuf, verbose)) != eslOK) goto ERROR;
+ 
+  if ((status = esl_strdup(hmm->name,   -1, &(R->name)))   != eslOK) goto ERROR;
+  if ((status = esl_strdup(hmm->acc,    -1, &(R->acc)))    != eslOK) goto ERROR;
+  if ((status = esl_strdup(hmm->desc,   -1, &(R->desc)))   != eslOK) goto ERROR;
+ 
+  switch(emevol) {
+  case emBYSCMX: 
+    printf("not integrated yet\n"); status = eslFAIL; goto ERROR;
+    break;
+  case emBYRATE:
+    for (m = 0; m <= R->M; m ++) 
+      esl_vec_FCopy(hmm->mat[m], R->abc_r->K, R->pstar[m]);
+
+    /* increase the information content of the match emission to pzero */
+    status = p7_CalculatePzero(R, hmm, errbuf, verbose);
+    if (status != eslOK) goto ERROR;
+
+    /* assign the given match emission to pstar */
+    for (m = 0; m <= R->M; m ++) 
+      esl_vec_FCopy(hmm->mat[m], R->abc_r->K, R->pstar[m]);
+ 
+    /* calculate pinfy */
+    status = p7_CalculatePinfy(R, hmm, bg, errbuf, verbose);
+   if (status != eslOK) goto ERROR;
+
+    if (hmmrate->statfp) {
+      fprintf(hmmrate->statfp, "%*s time\tME\tMRE\n", (int)strlen(hmm->name), "#anchor hmm");
+      fprintf(hmmrate->statfp, "%s %4.4f\t%2.4f\t%2.4f \n",
+	      hmm->name, 0.0,         er_MeanEntropy(R->pzero, R->M, R->abc_r->K), er_MeanRelativeEntropy(R->pzero, R->M, bg->f, R->abc_r->K));
+      fprintf(hmmrate->statfp, "%s %4.4f\t%2.4f\t%2.4f \n",
+	      hmm->name, 1.0,         p7_MeanMatchEntropy(hmm),                    p7_MeanMatchRelativeEntropy(hmm, bg));
+      fprintf(hmmrate->statfp, "%s %4.4f\t%2.4f\t%2.4f \n",
+	      hmm->name, eslINFINITY, er_MeanEntropy(R->pinfy, R->M, R->abc_r->K), er_MeanRelativeEntropy(R->pinfy, R->M, bg->f, R->abc_r->K));
+    }
+
+    for (m = 0; m <= R->M; m ++) {
+      ratematrix_FRateFromExchange(R->e1R[m]->em->E, R->pstar[m], R->e1R[m]->em->Qstar);
+      ratematrix_FRateFromExchange(R->e1R[m]->em->E, R->pinfy[m], R->e1R[m]->em->Qinfy);
+    }    
+    
+    /* assign the given ins emission to inst */
+    for (m = 0; m <= R->M; m ++) 
+      esl_vec_FCopy(hmm->ins[m], R->abc_r->K, R->ins[m]);
+    
+    for (t = 0; t < R->ndt; t ++) {
+      if (R->dtval[t] < 1.0) time = R->dtval[t] / (1.0 - R->dtval[t]);
+      else                   time = R->dtval[t] - 1.0;
+      //printf("#[%d/%d] discrete %f time %f\n", t, R->ndt, R->dtval[t], time);
+
+      for (m = 0; m <= R->M; m ++) {
+ 	if (R->dtval[t] < 1.0)
+	  status = ratematrix_CalculateConditionalsFromRate(time, R->e1R[m]->em->Qstar, R->Pdt[t][m], hmmrate->tol, errbuf, verbose);
+	else 
+	  status = ratematrix_CalculateConditionalsFromRate(time, R->e1R[m]->em->Qinfy, R->Pdt[t][m], hmmrate->tol, errbuf, verbose);
+	
+	esl_vec_FSet(R->pdt[t][m], hmm->abc->K, 0.0);	
+	for (i = 0; i < hmm->abc->K; i ++) 
+	  for (j = 0; j < hmm->abc->K; j ++) 
+	    R->pdt[t][m][i] += (R->dtval[t] < 1.0)? R->Pdt[t][m]->mx[j][i] * R->pzero[m][j] : R->Pdt[t][m]->mx[j][i] * R->pstar[m][j];	
+
+	esl_vec_FNorm(R->pdt[t][m], hmm->abc->K);
+     }
+    }
+    
+ #if 0
+    double  *psat_star = NULL;
+    double  *psat_infy = NULL;
+    for (m = 0; m <= R->M; m ++) {
+      printf("\nm=%d\n", m);
+      esl_vec_FDump(stdout, R->pzero[m], R->abc_r->K, NULL);
+      esl_vec_FDump(stdout, R->pstar[m], R->abc_r->K, NULL);
+      esl_vec_FDump(stdout, R->pinfy[m], R->abc_r->K, NULL);   
+      esl_vec_FDump(stdout, R->ins[m],   R->abc_r->K, NULL);   
+ 
+      for (t = 0; t < R->ndt; t ++) {
+	esl_vec_FDump(stdout, R->pdt[t][m], R->abc_r->K, NULL);
+      }
+#if 0
+      ratematrix_SaturationTime(R->e1R[m].em->Qstar, NULL, &psat_star, tol, errbuf, verbose);
+      ratematrix_SaturationTime(R->e1R[m].em->Qinfy, NULL, &psat_infy, tol, errbuf, verbose);
+      esl_vec_FDump(stdout, psat_star, R->abc_r->K, NULL);
+      esl_vec_FDump(stdout, psat_infy, R->abc_r->K, NULL);
+      free(psat_star); psat_star = NULL;
+      free(psat_infy); psat_infy = NULL;
+#endif
+    }
+#endif
+
+   break;
+  case emNONE: 
+    R->e1R = NULL;
+    break;
+  default: printf("not such type of emission evolution\n"); status = eslFAIL; goto ERROR;
+  }
+
+  if (p7_RateTransitions(hmm, R, hmmrate->betainf, hmmrate->tol, errbuf, verbose) != eslOK) { status = eslFAIL; goto ERROR; }
+  if (p7_RateValidate(R, hmmrate->tol, errbuf)                                    != eslOK) { status = eslFAIL; goto ERROR; }
 
 
 #if 0
@@ -892,14 +1115,13 @@ p7_EvolveFromRate(FILE *statfp, P7_HMM *hmm, const P7_RATE *R, const P7_BG *bg, 
  *
  */            
 int
-p7_Evolve(FILE *statfp, P7_HMM *hmm, const P7_BG *bg, const EMRATE *emR, ESL_SCOREMATRIX *S, double time, EVOM evomodel, double betainf, float fixtime, 
-	  double tol, char *errbuf, int verbose)
+p7_Evolve(P7_HMM *hmm, const P7_BG *bg, double time, HMMRATE *hmmrate, char *errbuf, int verbose)
 { 
   P7_RATE *R = NULL;
   int      status;
   
-  if ((status = p7_RateCalculate(statfp, hmm, bg, emR, S, &R, evomodel, betainf, fixtime, tol, errbuf, verbose)) != eslOK) goto ERROR; 
-  if ((status = p7_EvolveFromRate(statfp, hmm, R, bg, time,                               tol, errbuf, verbose)) != eslOK) goto ERROR; 
+  if ((status = p7_RateConstruct(hmm, bg, hmmrate, &R, errbuf, verbose))                             != eslOK) goto ERROR; 
+  if ((status = p7_EvolveFromRate(hmmrate->statfp, hmm, R, bg, time, hmmrate->tol, errbuf, verbose)) != eslOK) goto ERROR; 
   
   if (R != NULL) p7_RateDestroy(R);
   return eslOK;

@@ -42,14 +42,10 @@ typedef struct {
 #endif /*HMMER_THREADS*/
   P7_BG	          *bg;
   P7_BUILDER      *bld;
-  EVOM             evomodel;
-  float            betainf;
-  EMRATE          *emR;
+  HMMRATE         *hmmrate;
   int              noevo_msv;       /* if TRUE do not evolve; behaves as hmmbuild  */
   int              noevo_vit;       /* if TRUE do not evolve; behaves as hmmbuild  */
   int              noevo_fwd;       /* if TRUE do not evolve; behaves as hmmbuild  */
-  double           fixtime;         /* if >= 0, do not optimize time               */
-  double           tol;
 } WORKER_INFO;
 
 #ifdef HMMER_THREADS
@@ -203,10 +199,7 @@ struct cfg_s {
   int           nali;		/* which # alignment this is in file (only valid in serial mode)   */
   int           nnamed;		/* number of alignments that had their own names */
 
-  EMRATE       *emR;
-  EVOM          evomodel;
-  float         betainf;
-  double        tol;
+  HMMRATE      *hmmrate;  
 
   int           do_mpi;		/* TRUE if we're doing MPI parallelization */
   int           nproc;		/* how many MPI processes, total */
@@ -533,8 +526,9 @@ usual_master(const ESL_GETOPTS *go, struct cfg_s *cfg)
   ESL_THREADS     *threadObj= NULL;
   ESL_WORK_QUEUE  *queue    = NULL;
 #endif
-  EMRATE          *emR      = NULL;
-  double           tol = 1e-2;
+  
+  HMMRATE         *hmmrate = NULL;  
+
   double           popen;
   double           pextend;
   int              i;
@@ -575,11 +569,18 @@ usual_master(const ESL_GETOPTS *go, struct cfg_s *cfg)
     }
   else cfg->postmsafp = NULL;
 
-  cfg->evomodel = e1_rate_Evomodel(esl_opt_GetString(go, "--evomodel"));
-  cfg->betainf  = esl_opt_GetReal(go, "--betainf");
-  
+  /* the evolutionary model */
+  ESL_ALLOC(hmmrate, sizeof(HMMRATE));
+  hmmrate->emR = NULL;
+  hmmrate->S   = NULL;
+  hmmrate->evomodel = e1_rate_Evomodel(esl_opt_GetString(go, "--evomodel"));
+  hmmrate->betainf  = esl_opt_GetReal(go, "--betainf");
+  hmmrate->fixtime  = esl_opt_IsOn(go, "--fixtime")? esl_opt_GetReal(go, "--fixtime") : -1.0;
+  if ( esl_opt_IsOn(go, "--statfile") ) {
+    if ((hmmrate->statfp = fopen(esl_opt_GetString(go, "--statfile"), "w")) == NULL) esl_fatal("Failed to open stats file %s", esl_opt_GetString(go, "--statfile"));
+  } else hmmrate->statfp = stdout;
   /* other options */
-  tol = esl_opt_GetReal(go, "--tol");
+  hmmrate->tol = esl_opt_GetReal(go, "--tol");
 
   /* Looks like the i/o is set up successfully...
    * Initial output to the user
@@ -597,15 +598,15 @@ usual_master(const ESL_GETOPTS *go, struct cfg_s *cfg)
     for (k = 0; k < cfg->abc->K; k ++) 
       f[k] = (double)bg->f[k];
     
-    emR = ratematrix_emrate_Create(cfg->abc, 1);
+    hmmrate->emR = ratematrix_emrate_Create(cfg->abc, 1);
     if (esl_opt_IsOn(go, "--mx")) {
-      ratematrix_emrate_Set(esl_opt_GetString(go, "--mx"), NULL, f, &emR[0], TRUE, tol, errbuf, FALSE);
+      ratematrix_emrate_Set(esl_opt_GetString(go, "--mx"), NULL, f, &hmmrate->emR[0], TRUE, hmmrate->tol, errbuf, FALSE);
     }
     else if (esl_opt_IsOn(go, "--mxfile")) {
       /* TODO: read mx from a file */
     }
     else {
-      ratematrix_emrate_Set("BLOSUM62", NULL, f, &emR[0], TRUE, tol, errbuf, FALSE);
+      ratematrix_emrate_Set("BLOSUM62", NULL, f, &hmmrate->emR[0], TRUE, hmmrate->tol, errbuf, FALSE);
     }
 
     p7_bg_Destroy(bg);
@@ -629,14 +630,10 @@ usual_master(const ESL_GETOPTS *go, struct cfg_s *cfg)
   {
       info[i].bg        = p7_bg_Create(cfg->abc);
       info[i].bld       = p7_builder_Create(go, cfg->abc);
-      info[i].emR       = emR;
-      info[i].evomodel  = cfg->evomodel;
-      info[i].betainf   = cfg->betainf;
+      info[i].hmmrate   = hmmrate;
       info[i].noevo_msv = esl_opt_GetBoolean(go, "--noevo_msv");
       info[i].noevo_vit = esl_opt_GetBoolean(go, "--noevo_vit");
       info[i].noevo_fwd = esl_opt_GetBoolean(go, "--noevo_fwd");
-      info[i].fixtime   = esl_opt_IsOn(go, "--fixtime")? esl_opt_GetReal(go, "--fixtime") : -1.0;
-      info[i].tol       = tol;
 
       if (info[i].bld == NULL)  p7_Fail("p7_builder_Create failed");
 
@@ -728,7 +725,9 @@ usual_master(const ESL_GETOPTS *go, struct cfg_s *cfg)
   }
 #endif
 
-  if (emR) ratematrix_emrate_Destroy(emR, 1);
+  if (hmmrate) {
+    if (hmmrate->emR) ratematrix_emrate_Destroy(hmmrate->emR, 1);
+  }
   free(info);
   return eslOK;
 
@@ -1129,15 +1128,15 @@ serial_loop(WORKER_INFO *info, struct cfg_s *cfg, const ESL_GETOPTS *go)
       /*         bg   new-HMM trarr gm   om  */
       if ( msa->nseq == 1 && esl_opt_IsUsed(go, "--singlemx")) {
         if ((status = esl_sq_FetchFromMSA(msa, 0, &sq)) != eslOK) p7_Fail("build failed: %s", bld->errbuf);
-        if ((status = p7_EvoSingleBuilder(info->bld, sq, info->bg, info->emR, info->evomodel, info->betainf, &hmm, NULL, NULL, NULL,
-					  info->noevo_msv, info->noevo_vit, info->noevo_fwd, info->fixtime, info->tol)) != eslOK)
+        if ((status = p7_EvoSingleBuilder(info->bld, sq, info->bg, info->hmmrate, &hmm, NULL, NULL, NULL,
+					  info->noevo_msv, info->noevo_vit, info->noevo_fwd)) != eslOK)
 	  p7_Fail("build failed: %s", bld->errbuf);
         esl_sq_Destroy(sq);
         sq = NULL;
         hmm->eff_nseq = 1;
       } else {
-        if ((status = p7_EvoBuilder(info->bld, msa, info->bg, info->emR, info->evomodel, info->betainf, &hmm, NULL, NULL, NULL, postmsa_ptr,
-				    info->noevo_msv, info->noevo_vit, info->noevo_fwd, info->fixtime, info->tol)) != eslOK)
+        if ((status = p7_EvoBuilder(info->bld, msa, info->bg, info->hmmrate, &hmm, NULL, NULL, NULL, postmsa_ptr,
+				    info->noevo_msv, info->noevo_vit, info->noevo_fwd)) != eslOK)
 	  p7_Fail("build failed: %s", bld->errbuf);
 
         //if not --singlemx, but the user set the popen/pextend flags, override the computed gap params now:
@@ -1323,16 +1322,16 @@ pipeline_thread(void *arg)
         status = esl_sq_FetchFromMSA(item->msa, 0, &sq);
         if (status != eslOK) p7_Fail("build failed: %s", info->bld->errbuf);
 
-        status = p7_EvoSingleBuilder(info->bld, sq, info->bg, info->emR, info->evomodel, info->betainf, &item->hmm, NULL, NULL, NULL,
-				     info->noevo_msv, info->noevo_vit, info->noevo_fwd, info->fixtime, info->tol);
+        status = p7_EvoSingleBuilder(info->bld, sq, info->bg, info->hmmrate, &item->hmm, NULL, NULL, NULL,
+				     info->noevo_msv, info->noevo_vit, info->noevo_fwd);
         if (status != eslOK) p7_Fail("build failed: %s", info->bld->errbuf);
 
         esl_sq_Destroy(sq);
         sq = NULL;
         item->hmm->eff_nseq = 1;
       } else {
-	status = p7_EvoBuilder(info->bld, item->msa, info->bg, info->emR, info->evomodel, info->betainf, &item->hmm, NULL, NULL, NULL, &item->postmsa,
-			       info->noevo_msv, info->noevo_vit, info->noevo_fwd, info->fixtime, info->tol);
+	status = p7_EvoBuilder(info->bld, item->msa, info->bg, info->hmmrate, &item->hmm, NULL, NULL, NULL, &item->postmsa,
+			       info->noevo_msv, info->noevo_vit, info->noevo_fwd);
         if (status != eslOK) p7_Fail("build failed: %s", info->bld->errbuf);
 
         //if not --singlemx, but the user set the popen/pextend flags, override the computed gap params now:

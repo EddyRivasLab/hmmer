@@ -399,11 +399,7 @@ serial_master(ESL_GETOPTS *go, struct cfg_s *cfg)
   int              sstatus  = eslOK;
   int              i;
 
-  EMRATE          *emR      = NULL;
-  EVOM             evomodel;
-  float            betainf;
-  double           tol      = 1e-2;
-  FILE            *statfp   = NULL;	          /* stats output stream                     */
+  HMMRATE         *hmmrate = NULL;  
 
   int              ncpus    = 0;
 
@@ -454,15 +450,18 @@ serial_master(ESL_GETOPTS *go, struct cfg_s *cfg)
   if (esl_opt_IsOn(go, "--domtblout")) { if ((domtblfp = fopen(esl_opt_GetString(go, "--domtblout"), "w")) == NULL)  esl_fatal("Failed to open tabular per-dom output file %s for writing\n", esl_opt_GetString(go, "--domtblout")); }
   if (esl_opt_IsOn(go, "--pfamtblout")){ if ((pfamtblfp = fopen(esl_opt_GetString(go, "--pfamtblout"), "w")) == NULL)  esl_fatal("Failed to open pfam-style tabular output file %s for writing\n", esl_opt_GetString(go, "--pfamtblout")); }
 
-  evomodel = e1_rate_Evomodel(esl_opt_GetString(go, "--evomodel"));
-  betainf  = esl_opt_GetReal(go, "--betainf");
-  
+  /* the evolutionary model */
+  ESL_ALLOC(hmmrate, sizeof(HMMRATE));
+  hmmrate->emR = NULL;
+  hmmrate->S   = NULL;
+  hmmrate->evomodel = e1_rate_Evomodel(esl_opt_GetString(go, "--evomodel"));
+  hmmrate->betainf  = esl_opt_GetReal(go, "--betainf");
+  hmmrate->fixtime  = esl_opt_IsOn(go, "--fixtime")? esl_opt_GetReal(go, "--fixtime") : -1.0;
   if ( esl_opt_IsOn(go, "--statfile") ) {
-    if ((statfp = fopen(esl_opt_GetString(go, "--statfile"), "w")) == NULL) esl_fatal("Failed to open stats file %s", esl_opt_GetString(go, "--statfile"));
-  } else statfp = stdout;
-
+    if ((hmmrate->statfp = fopen(esl_opt_GetString(go, "--statfile"), "w")) == NULL) esl_fatal("Failed to open stats file %s", esl_opt_GetString(go, "--statfile"));
+  } else hmmrate->statfp = stdout;
   /* other options */
-  tol    = esl_opt_GetReal   (go, "--tol");
+  hmmrate->tol = esl_opt_GetReal(go, "--tol");
   
 #ifdef HMMER_THREADS
   /* initialize thread data */
@@ -497,7 +496,7 @@ serial_master(ESL_GETOPTS *go, struct cfg_s *cfg)
 	  info[i].noevo        = esl_opt_GetBoolean(go, "--noevo");
 	  info[i].recalibrate  = esl_opt_GetBoolean(go, "--recalibrate");
 	  info[i].fixtime      = esl_opt_IsOn(go, "--fixtime")? esl_opt_GetReal(go, "--fixtime") : -1.0;
-	  info[i].tol          = tol;
+	  info[i].tol          = hmmrate->tol;
 	  info[i].r            = cfg->r;
 #ifdef HMMER_THREADS
 	  info[i].queue   = queue;
@@ -527,15 +526,15 @@ serial_master(ESL_GETOPTS *go, struct cfg_s *cfg)
       f[k] = (double)info[0].bg->f[k];
     }
 
-    emR = ratematrix_emrate_Create(abc, 1);
+    hmmrate->emR = ratematrix_emrate_Create(abc, 1);
     if (esl_opt_IsOn(go, "--mx")) {
-      ratematrix_emrate_Set(esl_opt_GetString(go, "--mx"), NULL, f, &emR[0], TRUE, info[0].tol, errbuf, FALSE);
+      ratematrix_emrate_Set(esl_opt_GetString(go, "--mx"), NULL, f, &hmmrate->emR[0], TRUE, hmmrate->tol, errbuf, FALSE);
     }
     else if (esl_opt_IsOn(go, "--mxfile")) {
       /* TODO: read mx from a file */
     }
     else {
-      ratematrix_emrate_Set("BLOSUM62", NULL, f, &emR[0], TRUE, info[0].tol, errbuf, FALSE);
+      ratematrix_emrate_Set("BLOSUM62", NULL, f, &hmmrate->emR[0], TRUE, hmmrate->tol, errbuf, FALSE);
     }
 
     if (f) free(f);
@@ -564,7 +563,7 @@ serial_master(ESL_GETOPTS *go, struct cfg_s *cfg)
       evparam_star[p7_FTAU]    = hmm->evparam[p7_FTAU];
 
       if (!esl_opt_IsOn(go, "--noevo") && 
-	  p7_RateCalculate(statfp, hmm, info[0].bg, emR, NULL, &R, evomodel, betainf, (float)info[0].fixtime, 0.001, errbuf, FALSE) != eslOK)  
+	  p7_RateConstruct(hmm, info[0].bg, hmmrate, &R, errbuf, FALSE) != eslOK)  
 	esl_fatal("%s", errbuf);      
 
       /* seqfile may need to be rewound (multiquery mode) */
@@ -725,7 +724,10 @@ serial_master(ESL_GETOPTS *go, struct cfg_s *cfg)
 
   /* Cleanup - prepare for exit
    */
-  if (emR) ratematrix_emrate_Destroy(emR, 1);
+  if (hmmrate) {
+    if (hmmrate->emR) ratematrix_emrate_Destroy(hmmrate->emR, 1);
+    free(hmmrate);
+  }
 
   for (i = 0; i < infocnt; ++i)
     p7_bg_Destroy(info[i].bg);
@@ -1271,10 +1273,7 @@ mpi_worker(ESL_GETOPTS *go, struct cfg_s *cfg)
   int              hstatus  = eslOK;
   int              sstatus  = eslOK;
 
-  EMRATE          *emR      = NULL;
-  EVOM             evomodel;
-  float            betainf;
-  FILE            *statfip = NULL;
+  HMMRATE         *hmmrate = NULL;
 
   char            *mpi_buf  = NULL;              /* buffer used to pack/unpack structures           */
   int              mpi_size = 0;                 /* size of the allocated buffer                    */
@@ -1323,15 +1322,19 @@ mpi_worker(ESL_GETOPTS *go, struct cfg_s *cfg)
       esl_stopwatch_Start(w);
 
       /* Calculate the hmm rate 
-       * this should be part of hmmbuild
        */
-      betainf  = esl_opt_GetReal(go, "--betainf");
+      ESL_ALLOC(hmmrate, sizeof(HMMRATE));
+      hmmrate->emR = NULL;
+      hmmrate->S   = NULL;
+      hmmrate->fixtime  = esl_opt_IsOn(go, "--fixtime")? esl_opt_GetReal(go, "--fixtime") : -1.0;
+      hmmrate->betainf  = esl_opt_GetReal(go, "--betainf");
       if (esl_opt_IsUsed(go, "-R")) {
-	emR = ratematrix_emrate_Create(abc);
-	ratematrix_emrate_Set(esl_opt_GetString(go, "--rmx"), (const double *)bg->f, emR, info[0].tol, errbuf, FALSE);
+	hmmrate->emR = ratematrix_emrate_Create(abc);
+	ratematrix_emrate_Set(esl_opt_GetString(go, "--rmx"), (const double *)bg->f, hmmrate->emR, info[0].tol, errbuf, FALSE);
       }
       if (!esl_opt_IsOn(go, "--noevo") &&
-	  p7_RateCalculate(statfp, hmm, bg, emR, NULL, &R, evomodel, betainf, 0.001, errbuf, FALSE) != eslOK)  esl_fatal("%s", errbuf);
+	  p7_RateConstruct(statfp, hmm, bg, hmmrate, &R, errbuf, FALSE) != eslOK)
+	esl_fatal("%s", errbuf);
 
       // store the calibration parameters
       evparam_star[p7_MLAMBDA] = hmm->evparam[p7_MLAMBDA];

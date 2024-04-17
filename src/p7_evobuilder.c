@@ -75,9 +75,9 @@ static int    make_post_msa        (P7_BUILDER *bld, const ESL_MSA *premsa, cons
  * Xref:      J4/30.
  */
 int
-p7_EvoBuilder(P7_BUILDER *bld, ESL_MSA *msa, P7_BG *bg, EMRATE *emR, EVOM evomodel, float betainf, 
+p7_EvoBuilder(P7_BUILDER *bld, ESL_MSA *msa, P7_BG *bg, HMMRATE *hmmrate,
 	      P7_HMM **opt_hmm, P7_TRACE ***opt_trarr, P7_PROFILE **opt_gm, P7_OPROFILE **opt_om,
-	      ESL_MSA **opt_postmsa, int noevo_msv, int noevo_vit, int noevo_fwd, float fixtime, float tol)
+	      ESL_MSA **opt_postmsa, int noevo_msv, int noevo_vit, int noevo_fwd)
 {
   int i,j;
   uint32_t    checksum = 0;	/* checksum calculated for the input MSA. hmmalign --mapali verifies against this. */
@@ -103,10 +103,10 @@ p7_EvoBuilder(P7_BUILDER *bld, ESL_MSA *msa, P7_BG *bg, EMRATE *emR, EVOM evomod
   if ((status =  annotate             (bld, msa, hmm))                                        != eslOK) goto ERROR;
 
   if (!noevo_fwd) 
-    if ((status = p7_RateCalculate(NULL, hmm, bg, emR, NULL, &R, evomodel, betainf, fixtime, 0.001, NULL, FALSE)) != eslOK) goto ERROR;
+    if ((status = p7_RateConstruct(hmm, bg, hmmrate, &R, NULL, FALSE)) != eslOK) goto ERROR;
 
-  if ((status =  evo_calibrate(bld, R, hmm, bg, opt_gm, opt_om, noevo_msv, noevo_vit, noevo_fwd, fixtime, tol)) != eslOK) goto ERROR;
-  if ((status =  make_post_msa(bld, msa, hmm, tr, opt_postmsa))                                                 != eslOK) goto ERROR;
+  if ((status =  evo_calibrate(bld, R, hmm, bg, opt_gm, opt_om, noevo_msv, noevo_vit, noevo_fwd, hmmrate->fixtime, hmmrate->tol)) != eslOK) goto ERROR;
+  if ((status =  make_post_msa(bld, msa, hmm, tr, opt_postmsa))                                                                   != eslOK) goto ERROR;
 
   //force masked positions to background  (it'll be close already, so no relevant impact on weighting)
   if (hmm->mm != NULL)
@@ -163,9 +163,9 @@ p7_EvoBuilder(P7_BUILDER *bld, ESL_MSA *msa, P7_BG *bg, EMRATE *emR, EVOM evomod
  *            <eslEINVAL> if <bld> isn't properly configured somehow.
  */
 int
-p7_EvoSingleBuilder(P7_BUILDER *bld, ESL_SQ *sq, P7_BG *bg, EMRATE *emR, EVOM evomodel, float betainf, 
+p7_EvoSingleBuilder(P7_BUILDER *bld, ESL_SQ *sq, P7_BG *bg, HMMRATE *hmmrate,
 		    P7_HMM **opt_hmm, P7_TRACE **opt_tr, P7_PROFILE **opt_gm, P7_OPROFILE **opt_om,
-		    int noevo_msv, int noevo_vit, int noevo_fwd, float fixtime, float tol)
+		    int noevo_msv, int noevo_vit, int noevo_fwd)
 {
   P7_HMM   *hmm = NULL;
   P7_RATE  *R   = NULL;
@@ -180,8 +180,8 @@ p7_EvoSingleBuilder(P7_BUILDER *bld, ESL_SQ *sq, P7_BG *bg, EMRATE *emR, EVOM ev
   if ((status = p7_hmm_SetComposition(hmm))                                                                       != eslOK) goto ERROR;
   if ((status = p7_hmm_SetConsensus(hmm, sq))                                                                     != eslOK) goto ERROR;
   if (!noevo_fwd) 
-    if ((status = p7_RateCalculate(NULL, hmm, bg, emR, NULL, &R, evomodel, betainf, fixtime, 0.001, NULL, FALSE)) != eslOK) goto ERROR;
-  if ((status = evo_calibrate(bld, R, hmm, bg, opt_gm, opt_om, noevo_msv, noevo_vit, noevo_fwd, fixtime, tol))    != eslOK) goto ERROR;
+    if ((status = p7_RateConstruct(hmm, bg, hmmrate, &R, NULL, FALSE)) != eslOK) goto ERROR;
+  if ((status = evo_calibrate(bld, R, hmm, bg, opt_gm, opt_om, noevo_msv, noevo_vit, noevo_fwd, hmmrate->fixtime, hmmrate->tol)) != eslOK) goto ERROR;
 
   if ( bld->abc->type == eslDNA ||  bld->abc->type == eslRNA ) {
     if (bld->w_len > 0)           hmm->max_length = bld->w_len;

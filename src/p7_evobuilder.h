@@ -18,14 +18,12 @@
 #include "evohmmer.h"
 
 /* p7_evobuilder.c */
-extern int p7_EvoBuilder      (P7_BUILDER *bld, ESL_MSA *msa, P7_BG *bg,
-			       EMRATE *emR, EVOM evomodel, float betainf, 
+extern int p7_EvoBuilder      (P7_BUILDER *bld, ESL_MSA *msa, P7_BG *bg, HMMRATE *hmmrate, 
 			       P7_HMM **opt_hmm, P7_TRACE ***opt_trarr, P7_PROFILE **opt_gm, P7_OPROFILE **opt_om, ESL_MSA **opt_postmsa,
-			       int noevo_msv, int noevo_vit, int noevo_fwd, float fixtime, float tol);
-extern int p7_EvoSingleBuilder(P7_BUILDER *bld, ESL_SQ *sq,   P7_BG *bg,
-			       EMRATE *emR, EVOM evomodel, float betainf, 
+			       int noevo_msv, int noevo_vit, int noevo_fwd);
+extern int p7_EvoSingleBuilder(P7_BUILDER *bld, ESL_SQ *sq,   P7_BG *bg, HMMRATE *hmmrate,
 			       P7_HMM **opt_hmm, P7_TRACE  **opt_tr,    P7_PROFILE **opt_gm, P7_OPROFILE **opt_om,
-			       int noevo_msv, int noevo_vit, int noevo_fwd, float fixtime, float tol); 
+			       int noevo_msv, int noevo_vit, int noevo_fwd); 
 
 
 #endif /*P7_EVOBUILDER_INCLUDED*/
