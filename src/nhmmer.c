@@ -249,7 +249,9 @@ static int             add_id_length(ID_LENGTH_LIST *list, int id, int L);
 static int             assign_Lengths(P7_TOPHITS *th, ID_LENGTH_LIST *id_length_list);
 
 static void          assign_msa_name(struct cfg_s *cfg, ESL_MSA *msa);
+#ifdef p7ENABLE_FMINDEX
 static P7_SCOREDATA *create_fm_scoredata(struct cfg_s *cfg, P7_PROFILE *gm, P7_OPROFILE *om);
+#endif
 static void          output_optional_msa(FILE *afp, P7_HMM *hmm, P7_TOPHITS *th);
 
 
@@ -1427,6 +1429,7 @@ assign_msa_name(struct cfg_s *cfg, ESL_MSA *msa)
   else esl_msa_SetName(msa, "query", -1);
 }
 
+#ifdef p7ENABLE_FMINDEX
 /* set_fm_scoredata()
  *
  * TJW: "capture a measure of score density multiplied by something I
@@ -1457,7 +1460,7 @@ create_fm_scoredata(struct cfg_s *cfg, P7_PROFILE *gm, P7_OPROFILE *om)
   cfg->fmdb->sc_thresh_ratio = ESL_MIN(best_sc_avg/7.0, 1.0); // (SRE: 7.0 is mysterious here)
   return p7_hmm_ScoreDataCreate(om, gm);
 }  
-
+#endif
 
 static void
 output_optional_msa(FILE *afp, P7_HMM *hmm, P7_TOPHITS *th)
