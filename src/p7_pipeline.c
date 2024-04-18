@@ -831,7 +831,6 @@ extern int p7_Pipeline_Overthruster(P7_PIPELINE *pli, P7_OPROFILE *om, P7_BG *bg
     float seq_score;             /* the corrected per-seq bit score */
     float sum_score;             /* the corrected reconstruction score for the seq */
     float pre_score, pre2_score; /* uncorrected bit scores for seq */
-    double P;                    /* P-value of a hit */
     double lnP;                  /* log P-value of a hit */
     int Ld;                      /* # of residues in envelopes */
     int d;

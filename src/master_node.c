@@ -87,6 +87,23 @@ static void parse_lock_errors(int errortype){
   return;
 }
 #endif
+
+#ifdef CHECK_MUTEXES
+#define CHECKED_PTHREAD_MUTEX_UNLOCK(lock) \
+  lock_retval = pthread_mutex_unlock(lock); \
+  parse_lock_errors(lock_retval, workernode->my_rank);
+
+#define CHECKED_PTHREAD_MUTEX_LOCK
+  lock_retval = pthread_mutex_lock(lock);\
+  parse_lock_errors(lock_retval, workernode->my_rank);
+#endif
+#ifndef CHECK_MUTEXES
+#define CHECKED_PTHREAD_MUTEX_UNLOCK(lock)\
+  pthread_mutex_unlock(lock);
+
+#define CHECKED_PTHREAD_MUTEX_LOCK(lock)\
+  pthread_mutex_lock(lock);
+#endif
 /* Functions to communicate with the client via sockets.  Taken from the original hmmpgmd*/
 typedef struct {
   int             sock_fd;
@@ -106,7 +123,7 @@ typedef struct {
   int                 db_cnt;
   int                 errors;
 } SEARCH_RESULTS;
-
+#ifdef HAVE_MPI
 static P7_SERVER_QUEUE_DATA * p7_server_queue_data_Create(){
   P7_SERVER_QUEUE_DATA *query;
   int status;
@@ -131,8 +148,9 @@ ERROR:
   p7_Die("Unable to allocate memory in p7_server_queue_data_Create()\n");
   return NULL; // Never get here, but silences compiler warning
 }
+#endif
 
-
+#ifdef HAVE_MPI
 static void p7_server_queue_data_Destroy(P7_SERVER_QUEUE_DATA *query){
   if(query->hmm != NULL){
     p7_hmm_Destroy(query->hmm);
@@ -151,7 +169,9 @@ static void p7_server_queue_data_Destroy(P7_SERVER_QUEUE_DATA *query){
   }
   free(query);
 }
+#endif
 
+#ifdef HAVE_MPI
 static void
 init_results(SEARCH_RESULTS *results)
 {
@@ -194,7 +214,8 @@ hit_sorter2(const void *p1, const void *p2)
 
   return cmp;
 }
-
+#endif
+#ifdef HAVE_MPI
 static void
 forward_results(P7_SERVER_QUEUE_DATA *query, SEARCH_RESULTS *results)
 {
@@ -379,7 +400,7 @@ forward_results(P7_SERVER_QUEUE_DATA *query, SEARCH_RESULTS *results)
   init_results(results);
   return;
 }
-
+#endif
 static void print_client_msg(int fd, int status, char *format, va_list ap)
 {
   uint32_t nalloc =0;
@@ -412,7 +433,7 @@ static void print_client_msg(int fd, int status, char *format, va_list ap)
 
   free(buf);
 }
-
+#ifdef HAVE_MPI
 static void
 client_msg(int fd, int status, char *format, ...)
 {
@@ -422,7 +443,7 @@ client_msg(int fd, int status, char *format, ...)
   print_client_msg(fd, status, format, ap);
   va_end(ap);
 }
-
+#endif
 static void
 client_msg_longjmp(int fd, int status, jmp_buf *env, char *format, ...)
 {
@@ -470,6 +491,7 @@ void check_phmmer_jackhmmer_only_flags(ESL_GETOPTS *opts, int fd, jmp_buf *jmp_e
            client_msg_longjmp(fd, eslEFORMAT, jmp_env, "Error: --Eft option may only be used when searching a sequence against a sequence database");
   }
 }
+#ifdef HAVE_MPI
 static void
 process_ServerCmd(char *ptr, CLIENTSIDE_ARGS *data, ESL_GETOPTS *opts)
 {
@@ -560,9 +582,9 @@ process_ServerCmd(char *ptr, CLIENTSIDE_ARGS *data, ESL_GETOPTS *opts)
   esl_getopts_Destroy(opts);
   free(cmd);
 }
+#endif
 
-
-
+#ifdef HAVE_MPI
 static void *clientside_thread(void *arg)  // new version that reads exactly one command from a client
 {
 
@@ -917,7 +939,9 @@ static void *clientside_thread(void *arg)  // new version that reads exactly one
   free(data);
   pthread_exit(NULL);
 }
+#endif
 
+#ifdef HAVE_MPI
 static void *client_comm_thread(void *arg)
 {
   int                  n;
@@ -949,7 +973,8 @@ static void *client_comm_thread(void *arg)
     if ((n = pthread_create(&thread_id, NULL, clientside_thread, targs)) != 0) LOG_FATAL_MSG("thread create", n);
   }
 }
-
+#endif
+ #ifdef HAVE_MPI
 static void
 setup_clientside_comm(CLIENTSIDE_ARGS *args)
 {
@@ -992,7 +1017,7 @@ setup_clientside_comm(CLIENTSIDE_ARGS *args)
 
   if ((n = pthread_create(&thread_id, NULL, client_comm_thread, (void *)args)) != 0) LOG_FATAL_MSG("socket", n);
 }
-
+#endif
 
 
 //#define HAVE_MPI
@@ -1234,10 +1259,13 @@ void p7_server_message_Destroy(P7_SERVER_MESSAGE *message){
 int process_search(P7_SERVER_MASTERNODE_STATE *masternode, P7_SERVER_QUEUE_DATA *query, MPI_Datatype *server_mpitypes){
   #ifndef HAVE_MPI
   p7_Fail("process_search requires MPI and HMMER was compiled without MPI support");
+  return eslFAIL;
 #endif
 
 #ifdef HAVE_MPI
+#ifdef CHECK_MUTEXES
   int lock_retval;
+#endif
   struct timeval start, end;
   int status;
   P7_SERVER_COMMAND the_command;
@@ -1452,25 +1480,17 @@ int process_search(P7_SERVER_MASTERNODE_STATE *masternode, P7_SERVER_QUEUE_DATA 
 
 
   // Synchronize with the hit processing thread
-  lock_retval = pthread_mutex_lock(&(masternode->hit_wait_lock));
-  #ifdef CHECK_MUTEXES
-    parse_lock_errors(lock_retval);
-  #endif
-  lock_retval = pthread_mutex_lock(&(masternode->worker_nodes_done_lock));
-  #ifdef CHECK_MUTEXES
-    parse_lock_errors(lock_retval);
-  #endif
+  CHECKED_PTHREAD_MUTEX_LOCK(&(masternode->hit_wait_lock));
+
+  CHECKED_PTHREAD_MUTEX_LOCK(&(masternode->worker_nodes_done_lock));
+
   masternode->worker_nodes_done = 0;  // None of the workers are finished at search start time
-  lock_retval = pthread_mutex_unlock(&(masternode->worker_nodes_done_lock));
-  #ifdef CHECK_MUTEXES
-    parse_lock_errors(lock_retval);
-  #endif
+  CHECKED_PTHREAD_MUTEX_UNLOCK(&(masternode->worker_nodes_done_lock));
+
   masternode->worker_stats_received = 0; // and none have sent pipeline statistics
   pthread_cond_broadcast(&(masternode->start)); // signal hit processing thread to start
-  lock_retval = pthread_mutex_unlock(&(masternode->hit_wait_lock));
-  #ifdef CHECK_MUTEXES
-    parse_lock_errors(lock_retval);
-  #endif
+  CHECKED_PTHREAD_MUTEX_UNLOCK(&(masternode->hit_wait_lock));
+
 
   // Prep to send the options string to the workers
   the_command.options_length = strlen(query->optsstring) +1;
@@ -1485,25 +1505,17 @@ int process_search(P7_SERVER_MASTERNODE_STATE *masternode, P7_SERVER_QUEUE_DATA 
 
 
   // loop here until all of the workers are done with the search
-  lock_retval = pthread_mutex_lock(&(masternode->worker_nodes_done_lock));
-  #ifdef CHECK_MUTEXES
-    parse_lock_errors(lock_retval);
-  #endif
+  CHECKED_PTHREAD_MUTEX_LOCK(&(masternode->worker_nodes_done_lock));
+
   while((masternode->worker_nodes_done < masternode->num_worker_nodes) || (masternode->worker_stats_received < masternode->num_worker_nodes)){
-    lock_retval = pthread_mutex_unlock(&(masternode->worker_nodes_done_lock));
-     #ifdef CHECK_MUTEXES
-    parse_lock_errors(lock_retval);
-  #endif
+    CHECKED_PTHREAD_MUTEX_UNLOCK(&(masternode->worker_nodes_done_lock));
+
     p7_masternode_message_handler(masternode, buffer_handle, server_mpitypes, query->opts);  //Poll for incoming messages
-    lock_retval = pthread_mutex_lock(&(masternode->worker_nodes_done_lock));
-    #ifdef CHECK_MUTEXES
-      parse_lock_errors(lock_retval);
-    #endif
+    CHECKED_PTHREAD_MUTEX_LOCK(&(masternode->worker_nodes_done_lock));
+
   }
-  lock_retval = pthread_mutex_unlock(&(masternode->worker_nodes_done_lock));
-    #ifdef CHECK_MUTEXES
-    parse_lock_errors(lock_retval);
-  #endif
+  CHECKED_PTHREAD_MUTEX_UNLOCK(&(masternode->worker_nodes_done_lock));
+
   if(*buffer_handle != NULL){ // need to clean up that buffer
     p7_server_message_Destroy(*buffer_handle); 
   }
@@ -1568,16 +1580,12 @@ int process_search(P7_SERVER_MASTERNODE_STATE *masternode, P7_SERVER_QUEUE_DATA 
 
   forward_results(query, &results); 
   p7_pipeline_Destroy(masternode->pipeline);
-  lock_retval = pthread_mutex_lock(&(masternode->master_tophits_lock));
-  #ifdef CHECK_MUTEXES
-    parse_lock_errors(lock_retval);
-  #endif
+  CHECKED_PTHREAD_MUTEX_LOCK(&(masternode->master_tophits_lock));
+
   p7_tophits_Destroy(masternode->tophits);
   masternode->tophits = p7_tophits_Create();
-  lock_retval = pthread_mutex_unlock(&(masternode->master_tophits_lock));
-    #ifdef CHECK_MUTEXES
-    parse_lock_errors(lock_retval);
-  #endif
+  CHECKED_PTHREAD_MUTEX_UNLOCK(&(masternode->master_tophits_lock));
+
   if(bg != NULL){
     p7_bg_Destroy(bg);
     bg = NULL;
@@ -1595,27 +1603,28 @@ int process_search(P7_SERVER_MASTERNODE_STATE *masternode, P7_SERVER_QUEUE_DATA 
 }
 
 void process_shutdown(P7_SERVER_MASTERNODE_STATE *masternode, P7_SERVER_QUEUE_DATA *query, MPI_Datatype *server_mpitypes){
-  P7_SERVER_COMMAND the_command;
-  int lock_retval;
-  the_command.type = P7_SERVER_SHUTDOWN_WORKERS;
+
 #ifndef HAVE_MPI
   p7_Fail("process_shutdown requires MPI and HMMER was compiled without MPI support");
 #endif
 
 #ifdef HAVE_MPI
+  P7_SERVER_COMMAND the_command;
+#ifdef CHECK_MUTEXES
+  int lock_retval;
+#endif
+  the_command.type = P7_SERVER_SHUTDOWN_WORKERS;
 #ifdef DEBUG_COMMANDS
   printf("Master node processing shutdown\n");
 #endif
   MPI_Bcast(&the_command, 1, server_mpitypes[P7_SERVER_COMMAND_MPITYPE], 0, MPI_COMM_WORLD);
-  lock_retval = pthread_mutex_lock(&(masternode->hit_wait_lock));
-  #ifdef CHECK_MUTEXES
-    parse_lock_errors(lock_retval);
-  #endif
+
+  CHECKED_PTHREAD_MUTEX_LOCK(&(masternode->hit_wait_lock));
+
   masternode->shutdown = 1;
-  lock_retval = pthread_mutex_unlock(&(masternode->hit_wait_lock));
-  #ifdef CHECK_MUTEXES
-    parse_lock_errors(lock_retval);
-  #endif
+
+  CHECKED_PTHREAD_MUTEX_UNLOCK(&(masternode->hit_wait_lock));
+
   pthread_cond_broadcast(&(masternode->start));
 
   HMMD_SEARCH_STATUS sstatus;
@@ -1660,15 +1669,18 @@ void process_shutdown(P7_SERVER_MASTERNODE_STATE *masternode, P7_SERVER_QUEUE_DA
 #endif
 }
 void process_contents(P7_SERVER_MASTERNODE_STATE *masternode, P7_SERVER_QUEUE_DATA *query, MPI_Datatype *server_mpitypes){
-  P7_SERVER_COMMAND the_command;
-  int lock_retval;
-  the_command.type = P7_SERVER_SHUTDOWN_WORKERS;
-  int status;
+
 #ifndef HAVE_MPI
   p7_Fail("process_contents requires MPI and HMMER was compiled without MPI support");
 #endif
 
 #ifdef HAVE_MPI
+
+#ifdef CHECK_MUTEXES
+  int lock_retval;
+#endif
+
+  int status;
 #ifdef DEBUG_COMMANDS
   printf("Master node processing contents request\n");
 #endif
@@ -1777,6 +1789,8 @@ void process_contents(P7_SERVER_MASTERNODE_STATE *masternode, P7_SERVER_QUEUE_DA
  */
 void p7_server_master_node_main(int argc, char ** argv, MPI_Datatype *server_mpitypes, ESL_GETOPTS *go){
 #ifndef HAVE_MPI
+  ESL_GETOPTS *go2 = esl_getopts_Create(server_Client_Options); // hack to silence compiler warning
+  esl_getopts_Destroy(go2);
   p7_Fail("P7_master_node_main requires MPI and HMMER was compiled without MPI support");
 #endif
 
@@ -1795,7 +1809,9 @@ void p7_server_master_node_main(int argc, char ** argv, MPI_Datatype *server_mpi
     printf("Master node is running on: %s\n", p->ai_canonname);
   }
   freeaddrinfo(info);
+  #ifdef CHEC_MUTEXES
   int lock_retval;
+  #endif
   // For now, we only use one shard.  This will change in the future
   int num_shards = esl_opt_GetInteger(go, "--num_shards");
   int num_dbs = esl_opt_GetInteger(go, "--num_dbs"); 
@@ -1857,17 +1873,12 @@ void p7_server_master_node_main(int argc, char ** argv, MPI_Datatype *server_mpi
 
   int hit_thread_running =0;
   while(!hit_thread_running){ // This is overkill, but makes the thread sanitizer happy and only happens once on startup
-   lock_retval = pthread_mutex_lock(&(masternode->hit_thread_start_lock));
-  #ifdef CHECK_MUTEXES
-    parse_lock_errors(lock_retval);
-  #endif
+    CHECKED_PTHREAD_MUTEX_LOCK(&(masternode->hit_thread_start_lock));
+
     if(masternode->hit_thread_ready){
       hit_thread_running =1;
     }
-    lock_retval = pthread_mutex_unlock(&(masternode->hit_thread_start_lock));
-      #ifdef CHECK_MUTEXES
-    parse_lock_errors(lock_retval);
-  #endif
+    CHECKED_PTHREAD_MUTEX_UNLOCK(&(masternode->hit_thread_start_lock));
   }
 
     /* initialize the search stack, set it up for interthread communication  */
@@ -1938,6 +1949,7 @@ void p7_server_master_node_main(int argc, char ** argv, MPI_Datatype *server_mpi
 void *p7_server_master_hit_thread(void *argument){
   #ifndef HAVE_MPI
   p7_Fail("P7_master_hit_thread requires MPI and HMMER was compiled without MPI support");
+  pthread_exit(NULL);
 #endif
 
 #ifdef HAVE_MPI
@@ -1945,22 +1957,15 @@ void *p7_server_master_hit_thread(void *argument){
   P7_SERVER_MASTERNODE_HIT_THREAD_ARGUMENT *the_argument;
   the_argument = (P7_SERVER_MASTERNODE_HIT_THREAD_ARGUMENT *) argument;
   P7_SERVER_MASTERNODE_STATE *masternode = the_argument->masternode;
+  #ifdef CHECK_MUTEXES
   int lock_retval;
-  lock_retval = pthread_mutex_lock(&(masternode->hit_wait_lock));
-  #ifdef CHECK_MUTEXES
-    parse_lock_errors(lock_retval);
   #endif
-
-  lock_retval = pthread_mutex_lock(&(masternode->hit_thread_start_lock)); // This lock/unlock is unnecessary because only one thread ever
+  CHECKED_PTHREAD_MUTEX_LOCK(&(masternode->hit_wait_lock));
+  CHECKED_PTHREAD_MUTEX_LOCK(&(masternode->hit_thread_start_lock)); // This lock/unlock is unnecessary because only one thread ever
   // writes this value, but it makes sanitize-threads happy
-  #ifdef CHECK_MUTEXES
-    parse_lock_errors(lock_retval);
-  #endif
+
   masternode->hit_thread_ready = 1;
-  lock_retval = pthread_mutex_unlock(&(masternode->hit_thread_start_lock));
-  #ifdef CHECK_MUTEXES
-    parse_lock_errors(lock_retval);
-  #endif
+  CHECKED_PTHREAD_MUTEX_UNLOCK(&(masternode->hit_thread_start_lock));
 
   while(1){ // loop until master tells us to exit
     pthread_cond_wait(&(masternode->start), &(masternode->hit_wait_lock)); // wait until master tells us to go
@@ -1971,19 +1976,13 @@ void *p7_server_master_hit_thread(void *argument){
     }
     
     // If we weren't told to exit, we're doing a search, so loop until all of the worker nodes are done with the search
-    lock_retval = pthread_mutex_lock(&(masternode->worker_nodes_done_lock));
-  #ifdef CHECK_MUTEXES
-    parse_lock_errors(lock_retval);
-  #endif
+    CHECKED_PTHREAD_MUTEX_LOCK(&(masternode->worker_nodes_done_lock));
+
     while(masternode->worker_nodes_done < masternode->num_worker_nodes){
-      lock_retval = pthread_mutex_unlock(&(masternode->worker_nodes_done_lock));
-        #ifdef CHECK_MUTEXES
-    parse_lock_errors(lock_retval);
-  #endif
-      lock_retval = pthread_mutex_lock(&(masternode->full_hit_message_pool_lock));
-  #ifdef CHECK_MUTEXES
-      parse_lock_errors(lock_retval);
-  #endif
+      CHECKED_PTHREAD_MUTEX_UNLOCK(&(masternode->worker_nodes_done_lock));
+
+      CHECKED_PTHREAD_MUTEX_LOCK(&(masternode->full_hit_message_pool_lock));
+
       if(masternode->full_hit_message_pool != NULL){
         // There's at least one message of hits for us to handle
         P7_SERVER_MESSAGE *the_message, *prev;
@@ -2004,64 +2003,44 @@ void *p7_server_master_hit_thread(void *argument){
           prev->next = NULL;
         }
 
-        lock_retval = pthread_mutex_unlock(&(masternode->full_hit_message_pool_lock));
-          #ifdef CHECK_MUTEXES
-    parse_lock_errors(lock_retval);
-  #endif
-	      lock_retval = pthread_mutex_lock(&(masternode->master_tophits_lock));
-    #ifdef CHECK_MUTEXES
-        parse_lock_errors(lock_retval);
-  #endif
+        CHECKED_PTHREAD_MUTEX_UNLOCK(&(masternode->full_hit_message_pool_lock));
+        CHECKED_PTHREAD_MUTEX_LOCK(&(masternode->master_tophits_lock));
+
         p7_tophits_Merge(masternode->tophits, the_message->tophits);
-	      lock_retval = pthread_mutex_unlock(&(masternode->master_tophits_lock));
-          #ifdef CHECK_MUTEXES
-    parse_lock_errors(lock_retval);
-  #endif
+	      CHECKED_PTHREAD_MUTEX_UNLOCK(&(masternode->master_tophits_lock));
+
         p7_tophits_Destroy(the_message->tophits);
         the_message->tophits = NULL;
         if(the_message->status.MPI_TAG == HMMER_HIT_FINAL_MPI_TAG){
           //this hit message was the last one from a thread, so increment the number of threads that have finished
-          lock_retval = pthread_mutex_lock(&(masternode->worker_nodes_done_lock));
-      #ifdef CHECK_MUTEXES
-          parse_lock_errors(lock_retval);
-      #endif
+          CHECKED_PTHREAD_MUTEX_LOCK(&(masternode->worker_nodes_done_lock));
+
           masternode->worker_nodes_done++; //we're the only thread that changes this during a search, so no need to lock
-          lock_retval = pthread_mutex_unlock(&(masternode->worker_nodes_done_lock));  
-          #ifdef CHECK_MUTEXES
-    parse_lock_errors(lock_retval);
-  #endif
+          CHECKED_PTHREAD_MUTEX_UNLOCK(&(masternode->worker_nodes_done_lock));  
+
         }
 
         // Put the message back on the empty list now that we've dealt with it.
-        lock_retval = pthread_mutex_lock(&(masternode->empty_hit_message_pool_lock));
-      #ifdef CHECK_MUTEXES
-        parse_lock_errors(lock_retval);
-      #endif
+        CHECKED_PTHREAD_MUTEX_LOCK(&(masternode->empty_hit_message_pool_lock));
+ 
         the_message->next = (P7_SERVER_MESSAGE *) masternode->empty_hit_message_pool;
         masternode->empty_hit_message_pool = the_message;
 
-        lock_retval = pthread_mutex_unlock(&(masternode->empty_hit_message_pool_lock));
-          #ifdef CHECK_MUTEXES
-    parse_lock_errors(lock_retval);
-  #endif
+        CHECKED_PTHREAD_MUTEX_UNLOCK(&(masternode->empty_hit_message_pool_lock));
+
       }
       else{
-        lock_retval = pthread_mutex_unlock(&(masternode->full_hit_message_pool_lock));
-          #ifdef CHECK_MUTEXES
-    parse_lock_errors(lock_retval);
-  #endif
+        CHECKED_PTHREAD_MUTEX_UNLOCK(&(masternode->full_hit_message_pool_lock));
+
       }
-    lock_retval = pthread_mutex_lock(&(masternode->worker_nodes_done_lock));
-    #ifdef CHECK_MUTEXES
-      parse_lock_errors(lock_retval);
-    #endif
+    CHECKED_PTHREAD_MUTEX_LOCK(&(masternode->worker_nodes_done_lock));
+
     }
-    lock_retval = pthread_mutex_unlock(&(masternode->worker_nodes_done_lock));
-      #ifdef CHECK_MUTEXES
-    parse_lock_errors(lock_retval);
-  #endif
+    CHECKED_PTHREAD_MUTEX_UNLOCK(&(masternode->worker_nodes_done_lock));
+
   }
   p7_Fail("Master node hit thread somehow reached unreachable end point\n");
+  pthread_exit(NULL);
   #endif
 }
 
@@ -2092,13 +2071,13 @@ void p7_masternode_message_handler(P7_SERVER_MASTERNODE_STATE *masternode, P7_SE
 
 #ifdef HAVE_MPI
   P7_PIPELINE *temp_pipeline;
+  #ifdef CHECK_MUTEXES
   int lock_retval;
+  #endif
   if(*buffer_handle == NULL){
     //Try to grab a message buffer from the empty message pool
-    lock_retval = pthread_mutex_lock(&(masternode->empty_hit_message_pool_lock));
-    #ifdef CHECK_MUTEXES
-    parse_lock_errors(lock_retval);
-    #endif
+    CHECKED_PTHREAD_MUTEX_LOCK(&(masternode->empty_hit_message_pool_lock));
+
     if(masternode->empty_hit_message_pool != NULL){
       (*buffer_handle) = (P7_SERVER_MESSAGE *) masternode->empty_hit_message_pool;
       masternode->empty_hit_message_pool = (*buffer_handle)->next;
@@ -2109,10 +2088,8 @@ void p7_masternode_message_handler(P7_SERVER_MASTERNODE_STATE *masternode, P7_SE
         p7_Fail("Unable to allocate memory in p7_masternode_message_handler\n");
       }
     }
-    lock_retval = pthread_mutex_unlock(&(masternode->empty_hit_message_pool_lock));
-      #ifdef CHECK_MUTEXES
-    parse_lock_errors(lock_retval);
-  #endif
+    CHECKED_PTHREAD_MUTEX_UNLOCK(&(masternode->empty_hit_message_pool_lock));
+
   }
 
   //Now, we have a buffer to potentially receive the message into
@@ -2155,18 +2132,14 @@ void p7_masternode_message_handler(P7_SERVER_MASTERNODE_STATE *masternode, P7_SE
       p7_tophits_MPIRecv((*buffer_handle)->status.MPI_SOURCE, (*buffer_handle)->status.MPI_TAG, MPI_COMM_WORLD, &((*buffer_handle)->buffer), &((*buffer_handle)->buffer_alloc), &((*buffer_handle)->tophits));
 
       // Put the message in the list for the hit thread to process
-      int lock_retval = pthread_mutex_lock(&(masternode->full_hit_message_pool_lock));
-  #ifdef CHECK_MUTEXES
-      parse_lock_errors(lock_retval);
-  #endif
-        (*buffer_handle)->next = (P7_SERVER_MESSAGE *) masternode->full_hit_message_pool;
-        masternode->full_hit_message_pool = *buffer_handle;
-        (*buffer_handle) = NULL;  // Make sure we grab a new buffer next time
-        lock_retval= pthread_mutex_unlock(&(masternode->full_hit_message_pool_lock));
-          #ifdef CHECK_MUTEXES
-    parse_lock_errors(lock_retval);
-  #endif
-        break;
+      CHECKED_PTHREAD_MUTEX_LOCK(&(masternode->full_hit_message_pool_lock));
+
+      (*buffer_handle)->next = (P7_SERVER_MESSAGE *) masternode->full_hit_message_pool;
+      masternode->full_hit_message_pool = *buffer_handle;
+      (*buffer_handle) = NULL;  // Make sure we grab a new buffer next time
+      CHECKED_PTHREAD_MUTEX_UNLOCK(&(masternode->full_hit_message_pool_lock));
+
+      break;
       case HMMER_WORK_REQUEST_TAG:
         // Work request messages can be handled quickly, so process them directly.
         
