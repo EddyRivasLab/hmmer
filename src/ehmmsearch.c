@@ -56,9 +56,6 @@ typedef struct {
   float             evparam_star[p7_NEVPARAM];  /* to store calibration parameters of the HMMstar */
   int               noevo;                      /* if TRUE do not evolve; behaves as hmmsearch    */
   int               recalibrate;                /* if TRUE recalibrate the evolved HMM            */
-  double            fixtime;                    /* if >= 0, do not optimize time                  */
-  double            tol;
-
 } WORKER_INFO;
 
 #define REPOPTS     "-E,-T,--cut_ga,--cut_nc,--cut_tc"
@@ -422,6 +419,7 @@ serial_master(ESL_GETOPTS *go, struct cfg_s *cfg)
     if (dbfmt == eslSQFILE_UNKNOWN) p7_Fail("%s is not a recognized sequence database file format\n", esl_opt_GetString(go, "--tformat"));
   }
 
+  
   /* Open the target sequence database */
   status = esl_sqfile_Open(cfg->dbfile, dbfmt, p7_SEQDBENV, &dbfp);
   if      (status == eslENOTFOUND) p7_Fail("Failed to open sequence file %s for reading\n",          cfg->dbfile);
@@ -495,8 +493,6 @@ serial_master(ESL_GETOPTS *go, struct cfg_s *cfg)
 	  info[i].bg           = p7_bg_Create(abc);
 	  info[i].noevo        = esl_opt_GetBoolean(go, "--noevo");
 	  info[i].recalibrate  = esl_opt_GetBoolean(go, "--recalibrate");
-	  info[i].fixtime      = esl_opt_IsOn(go, "--fixtime")? esl_opt_GetReal(go, "--fixtime") : -1.0;
-	  info[i].tol          = hmmrate->tol;
 	  info[i].r            = cfg->r;
 #ifdef HMMER_THREADS
 	  info[i].queue   = queue;
@@ -552,9 +548,22 @@ serial_master(ESL_GETOPTS *go, struct cfg_s *cfg)
       esl_stopwatch_Start(w);
 
       /* Calculate the hmm rate R
-       * this should be part of hmmbuild
        */
-      // store the calibration parameters
+      // both versions work.
+      // p7_RateConstruct() builds the whole hmm rate R here, and passes it to the evopipeline.
+      // p7_RateCreate() does the minimal allocation of the  R structure.
+      //
+      // In the EvoPipeline, p7_RateCalculate() checks if the R needs allocation[(p7_RateAllocate() ],  and calculates all values, otherwise it does nothimg. 
+      //
+      // p7_RateConstruct() is more convenient for ehmmsearch,
+      // p7_RateCreate()    is more convenient for ehmmscan
+      //
+      if (!esl_opt_IsOn(go, "--noevo")) {
+	if (p7_RateConstruct(hmm, info[0].bg, hmmrate, &R, errbuf, FALSE) != eslOK) esl_fatal("%s", errbuf);
+	//R = p7_RateCreate(hmm->abc, hmm->M, hmmrate->emR, hmmrate->S, hmmrate->evomodel, hmmrate->fixtime, hmmrate->betainf, hmmrate->tol);
+      }
+      
+      // store the calibration parametersb at t^star
       evparam_star[p7_MLAMBDA] = hmm->evparam[p7_MLAMBDA];
       evparam_star[p7_VLAMBDA] = hmm->evparam[p7_MLAMBDA];
       evparam_star[p7_FLAMBDA] = hmm->evparam[p7_MLAMBDA];
@@ -562,10 +571,7 @@ serial_master(ESL_GETOPTS *go, struct cfg_s *cfg)
       evparam_star[p7_VMU]     = hmm->evparam[p7_VMU];
       evparam_star[p7_FTAU]    = hmm->evparam[p7_FTAU];
 
-      if (!esl_opt_IsOn(go, "--noevo") && 
-	  p7_RateConstruct(hmm, info[0].bg, hmmrate, &R, errbuf, FALSE) != eslOK)  
-	esl_fatal("%s", errbuf);      
-
+ 	
       /* seqfile may need to be rewound (multiquery mode) */
       if (nquery > 1)
       {
@@ -702,7 +708,7 @@ serial_master(ESL_GETOPTS *go, struct cfg_s *cfg)
       p7_profile_Destroy(gm);
       p7_hmm_Destroy(hmm);
       if (R)   p7_RateDestroy(R);
-
+ 
       hstatus = p7_hmmfile_Read(hfp, &abc, &hmm);
     } /* end outer loop over query HMMs */
 
@@ -1332,11 +1338,25 @@ mpi_worker(ESL_GETOPTS *go, struct cfg_s *cfg)
 	hmmrate->emR = ratematrix_emrate_Create(abc);
 	ratematrix_emrate_Set(esl_opt_GetString(go, "--rmx"), (const double *)bg->f, hmmrate->emR, info[0].tol, errbuf, FALSE);
       }
-      if (!esl_opt_IsOn(go, "--noevo") &&
-	  p7_RateConstruct(hmm, bg, hmmrate, &R, errbuf, FALSE) != eslOK)
-	esl_fatal("%s", errbuf);
 
-      // store the calibration parameters
+      /* Calculate the hmm rate R
+       */
+      // both versions work.
+      // p7_RateConstruct() builds the whole hmm rate R here, and passes it to the evopipeline.
+      // p7_RateCreate() does the minimal allocation of the  R structure.
+      //
+      // In the EvoPipeline, p7_RateCalculate() checks if the R needs allocation[(p7_RateAllocate() ],  and calculates all values, otherwise it does nothimg. 
+      //
+      // p7_RateConstruct() is more convenient for ehmmsearch,
+      // p7_RateCreate()    is more convenient for ehmmscan
+      //
+      if (!esl_opt_IsOn(go, "--noevo")) {
+      if (!esl_opt_IsOn(go, "--noevo")) {
+	if (p7_RateConstruct(hmm, info[0].bg, hmmrate, &R, errbuf, FALSE) != eslOK) esl_fatal("%s", errbuf);
+	//R = p7_RateCreate(hmm->abc, hmm->M, hmmrate->emR, hmmrate->S, hmmrate->evomodel, hmmrate->fixtime, hmmrate->betainf, hmmrate->tol);
+      }
+
+      // store the calibration parameters at t^star
       evparam_star[p7_MLAMBDA] = hmm->evparam[p7_MLAMBDA];
       evparam_star[p7_VLAMBDA] = hmm->evparam[p7_MLAMBDA];
       evparam_star[p7_FLAMBDA] = hmm->evparam[p7_MLAMBDA];
@@ -1460,7 +1480,7 @@ serial_loop(WORKER_INFO *info, ESL_SQFILE *dbfp, int n_targetseqs)
       p7_ReconfigLength(info->gm, dbsq->n);
       p7_oprofile_ReconfigLength(info->om, dbsq->n);
 
-      p7_EvoPipeline(info->pli, info->r, info->evparam_star, info->R, info->hmm, info->gm, info->om, info->bg, dbsq, NULL, info->th, (float)info->fixtime,
+      p7_EvoPipeline(info->pli, info->r, info->evparam_star, info->R, info->hmm, info->gm, info->om, info->bg, dbsq, NULL, info->th,
 		     info->noevo, info->recalibrate, &hmm_restore);
 
       seq_cnt++;
@@ -1569,7 +1589,7 @@ pipeline_thread(void *arg)
 	  p7_ReconfigLength(info->gm, dbsq->n);
 	  p7_oprofile_ReconfigLength(info->om, dbsq->n);
 	  
-	  p7_EvoPipeline(info->pli, info->r, info->evparam_star, info->R, info->hmm, info->gm, info->om, info->bg, dbsq, NULL, info->th, (float)info->fixtime,
+	  p7_EvoPipeline(info->pli, info->r, info->evparam_star, info->R, info->hmm, info->gm, info->om, info->bg, dbsq, NULL, info->th,
 			 info->noevo, info->recalibrate, &hmm_restore);
 
 	  esl_sq_Reuse(dbsq);

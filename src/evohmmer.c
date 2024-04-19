@@ -93,6 +93,7 @@ p7_RateCreate(const ESL_ALPHABET *abc, int M, EMRATE *emR, ESL_SCOREMATRIX *S, E
   R->e1R  = NULL;
 
   R->allocated = FALSE;
+  R->done      = FALSE;
   
   return R;
 
@@ -114,10 +115,11 @@ p7_RateAllocate(P7_RATE *R)
   int   status;
 
   if (R == NULL) return eslFAIL;
+  if (R->allocated) return eslOK;
+  
   if (R->M == 0) return eslFAIL;
   if (R->abc_r == NULL) return eslFAIL;
 
-  if (R->allocated) return eslOK;
   
   /* store the match emissions form the training set */
   ESL_ALLOC(R->pzero,    sizeof(float *) * (M+1)         );  R->pzero[0] = NULL;
@@ -257,7 +259,8 @@ p7_RateCopy(P7_RATE *R, P7_RATE *Rcopy)
   Rcopy->emR       = R->emR;
   Rcopy->S         = R->S;
   Rcopy->allocated = R->allocated;
-  if (!R->allocated) return eslOK; // do not go further is nothing is allocated  yet in the rate
+  Rcopy->done      = R->done;
+  if (!R->allocated || !R->done) return eslOK; // do not go further is nothing is allocated  yet in the rate
   
   if ((status = esl_strdup(R->name,   -1, &(Rcopy->name)))   != eslOK) goto ERROR;
   if ((status = esl_strdup(R->acc,    -1, &(Rcopy->acc)))    != eslOK) goto ERROR;
@@ -332,35 +335,52 @@ p7_RateDestroy(P7_RATE *R)
 
   if (R == NULL) return;
 
-  if (R->name)      free(R->name);
-  if (R->acc)       free(R->acc);
-  if (R->desc)      free(R->desc);
+  if (R->name) free(R->name);
+  if (R->acc)  free(R->acc);
+  if (R->desc) free(R->desc);
 
-  if (R->emR) ratematrix_emrate_Destroy(R->emR, 1);
-      
-  if (R->pzero[0] != NULL) free(R->pzero[0]);
-  if (R->pzero    != NULL) free(R->pzero);
-  if (R->pstar[0] != NULL) free(R->pstar[0]);
-  if (R->pstar    != NULL) free(R->pstar);
-  if (R->pinfy[0] != NULL) free(R->pinfy[0]);
-  if (R->pinfy    != NULL) free(R->pinfy);
-  if (R->ins[0]   != NULL) free(R->ins[0]);
-  if (R->ins      != NULL) free(R->ins);
+  if (R->pzero    != NULL) {
+    if (R->pzero[0] != NULL) free(R->pzero[0]);
+    free(R->pzero);
+  }
+  if (R->pstar    != NULL) {
+    if (R->pstar[0] != NULL) free(R->pstar[0]);
+    free(R->pstar);
+  }
+  if (R->pinfy    != NULL) { 
+    if (R->pinfy[0] != NULL) free(R->pinfy[0]);
+    free(R->pinfy);
+  }
+  if (R->ins      != NULL) {
+    if (R->ins[0]   != NULL) free(R->ins[0]);
+    free(R->ins);
+  }
   if (R->dtval    != NULL) free(R->dtval);
-  for (t = 0; t < R->ndt; t ++) {
-    for (m = 0; m <= R->M; m ++) 
-      if (R->Pdt[t][m] != NULL) esl_dmatrix_Destroy(R->Pdt[t][m]);
-    
-    if (R->Pdt[t]    != NULL) free(R->Pdt[t]);
-    if (R->pdt[t][0] != NULL) free(R->pdt[t][0]);
-    if (R->pdt[t]    != NULL) free(R->pdt[t]);
-  } 
-  if (R->Pdt       != NULL) free(R->Pdt);
-  if (R->pdt       != NULL) free(R->pdt);
+  
+  if (R->Pdt != NULL) {
+    for (t = 0; t < R->ndt; t ++) {
+      for (m = 0; m <= R->M; m ++) 
+	if (R->Pdt[t][m] != NULL) esl_dmatrix_Destroy(R->Pdt[t][m]);
+      if (R->Pdt[t]    != NULL) free(R->Pdt[t]);
+    }
+    free(R->Pdt);
+  }
 
-  for (m = 0; m <= R->M; m ++) 
-    e1_rate_Destroy(R->e1R[m]);
-  free(R->e1R);
+  if (R->pdt != NULL) {
+    for (t = 0; t < R->ndt; t ++) {
+      if (R->pdt[t] != NULL) {
+	if (R->pdt[t][0] != NULL) free(R->pdt[t][0]);
+	free(R->pdt[t]);
+      }
+    }
+    free(R->pdt);
+  }
+
+  if (R->e1R) {
+    for (m = 0; m <= R->M; m ++) 
+      e1_rate_Destroy(R->e1R[m]);
+    free(R->e1R);
+  }
 
   free(R); 
 }
@@ -507,7 +527,7 @@ p7_RateValidate(P7_RATE *R, char *errbuf)
  * Note:      
  *
  */                       
-int 
+extern int 
 p7_RateCalculate(const P7_HMM *hmm, const P7_BG *bg, P7_RATE *R, char *errbuf, int verbose)
 { 
   enum emevol_e  emevol;
@@ -523,6 +543,8 @@ p7_RateCalculate(const P7_HMM *hmm, const P7_BG *bg, P7_RATE *R, char *errbuf, i
   int            i, j;
   int            status;
 
+  if (R->done) return eslOK;
+  
   // check if we need to allocate 
   status = p7_RateAllocate(R);
   if (status != eslOK) goto ERROR;
@@ -635,9 +657,10 @@ p7_RateCalculate(const P7_HMM *hmm, const P7_BG *bg, P7_RATE *R, char *errbuf, i
 
 #if 0
   status = p7_RateTest(hmm, R, bg, 0.2, errbuf, verbose);
-  if (status != eslOK) { printf("p7_RateTest() failed\n"); exit(1); }
+  if (status != eslOK) { printf("p7_RateTest() failed\n"); goto ERROR; }
 #endif
-  
+
+  R->done = TRUE;
   return eslOK;  
 
  ERROR:

@@ -53,6 +53,7 @@ typedef struct p7_rate_s {
   ESL_SCOREMATRIX *S;           // a fixed scoring matrix
 
   int      allocated;           /* true if all pointers below this are already allocated */
+  int      done;                /* true if all pointers below this are already calculated */
   
   char     *name;               /* name of the model                     (mandatory)      */ /* String, \0-terminated   */
   char     *acc;	        /* accession number of model (Pfam)      (optional: NULL) */ /* String, \0-terminated   */

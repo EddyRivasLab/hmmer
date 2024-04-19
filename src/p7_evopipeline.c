@@ -26,7 +26,7 @@
 #include "p7_evopipeline.h"
 #include "ratematrix.h"
 
-#define OPT_TIME_STEP 0.01
+#define OPT_TIME_STEP 0.5
 #define TMAX          5.0
 
 /* Struct used to pass a collection of useful temporary objects around
@@ -97,7 +97,7 @@ static inline void workaround_restore_profile(float *evparam_star, int len, cons
  *            been careful enough about. [SRE H9/4]
  */
 extern int p7_EvoPipeline_Overthruster(P7_PIPELINE *pli, ESL_RANDOMNESS *r, float *evparam_star, P7_RATE *R, P7_HMM *hmm, P7_PROFILE *gm,
-				       P7_OPROFILE *om, P7_BG *bg, const ESL_SQ *sq, float fixtime, int noevo, int recalibrate,
+				       P7_OPROFILE *om, P7_BG *bg, const ESL_SQ *sq, int noevo, int recalibrate,
 				       int *ret_hmm_restore, float *ret_fwdsc, float *ret_nullsc)
 {
   float            time_star = 1.0;
@@ -111,8 +111,8 @@ extern int p7_EvoPipeline_Overthruster(P7_PIPELINE *pli, ESL_RANDOMNESS *r, floa
   float            spftime;               /* sparse forward time */
   float            tol = 0.1;
   int              hmm_restore = *ret_hmm_restore; // do we need to restore the HMM to tstar? 
-  int              vit_opt    = FALSE;
   int              msv_opt    = FALSE;
+  int              vit_opt    = FALSE;
   int              be_verbose = FALSE;
   int              hmm_evolve;
   int              vfsc_optimized;
@@ -133,7 +133,7 @@ extern int p7_EvoPipeline_Overthruster(P7_PIPELINE *pli, ESL_RANDOMNESS *r, floa
   /* First level filter: the MSV filter, multihit with <om> */
   time = time_star;
   hmm_evolve = FALSE;
-  if ((status = p7_OptimizeMSVFilter(r, sq->dsq, sq->n, &time, R, hmm, gm, om, bg, pli->oxf, &usc, fixtime, noevo, recalibrate,
+  if ((status = p7_OptimizeMSVFilter(r, sq->dsq, sq->n, &time, R, hmm, gm, om, bg, pli->oxf, &usc, R->fixtime, noevo, recalibrate,
 				     msv_opt, hmm_evolve, tol)) != eslOK)      
     printf("\nsequence %s msvfilter did not optimize\n", sq->name);  
   //printf("^^MSV %s evolve? %d time %f usc %f\n", sq->name, hmm_evolve, time, usc);
@@ -177,7 +177,7 @@ extern int p7_EvoPipeline_Overthruster(P7_PIPELINE *pli, ESL_RANDOMNESS *r, floa
     {
       time       = time_star;
       hmm_evolve = (msv_opt)? TRUE:FALSE;
-      if ((status = p7_OptimizeViterbiFilter(r, sq->dsq, sq->n, &time, R, hmm, gm, om, bg, pli->oxf, &vfsc, fixtime, noevo, recalibrate,
+      if ((status = p7_OptimizeViterbiFilter(r, sq->dsq, sq->n, &time, R, hmm, gm, om, bg, pli->oxf, &vfsc, R->fixtime, noevo, recalibrate,
 					     vit_opt, hmm_evolve, tol)) != eslOK) 
 	printf("\nsequence %s vitfilter did not optimize\n", sq->name);
       if (vit_opt) {
@@ -205,7 +205,7 @@ extern int p7_EvoPipeline_Overthruster(P7_PIPELINE *pli, ESL_RANDOMNESS *r, floa
   else {
     time       = time_star;
     hmm_evolve = (vit_opt)? TRUE:FALSE;
-    if ((status = p7_OptimizeForwardParser(r, sq->dsq, sq->n, &time, R, hmm, gm, om, bg, pli->oxf, &fwdsc, fixtime, noevo, recalibrate, hmm_evolve, tol)) != eslOK)      
+    if ((status = p7_OptimizeForwardParser(r, sq->dsq, sq->n, &time, R, hmm, gm, om, bg, pli->oxf, &fwdsc, R->fixtime, noevo, recalibrate, hmm_evolve, tol)) != eslOK)      
       printf("\nsequence %s forwardparser did not optimize\n", sq->name);
     //printf("^^FWD OPT %s updated? %d time %f fwdsc %f filter %f score %f\n", sq->name, hmm_restore, time, fwdsc, filtersc, (fwdsc-filtersc) / eslCONST_LOG2);
   }
@@ -238,14 +238,14 @@ extern int p7_EvoPipeline_Overthruster(P7_PIPELINE *pli, ESL_RANDOMNESS *r, floa
  *            insertion.
  */
 extern int p7_EvoPipeline(P7_PIPELINE *pli, ESL_RANDOMNESS *r, float *evparam_star, P7_RATE *R, P7_HMM *hmm, P7_PROFILE *gm,
-	       P7_OPROFILE *om, P7_BG *bg, const ESL_SQ *sq, const ESL_SQ *ntsq, P7_TOPHITS *hitlist,
-	       float fixtime, int noevo, int recalibrate, int *ret_hmm_restore)
+			  P7_OPROFILE *om, P7_BG *bg, const ESL_SQ *sq, const ESL_SQ *ntsq, P7_TOPHITS *hitlist,
+			  int noevo, int recalibrate, int *ret_hmm_restore)
 {
   int status;
   float fwdsc;
   float nullsc;
 
-  status = p7_EvoPipeline_Overthruster(pli, r, evparam_star, R, hmm, gm, om, bg, sq, fixtime, noevo, recalibrate, ret_hmm_restore, &fwdsc, &nullsc);
+  status = p7_EvoPipeline_Overthruster(pli, r, evparam_star, R, hmm, gm, om, bg, sq, noevo, recalibrate, ret_hmm_restore, &fwdsc, &nullsc);
   if (status == eslOK){ //run the main stage
     return (p7_Pipeline_Mainstage(pli, om, bg, sq, ntsq, hitlist, fwdsc, nullsc));
   }
@@ -374,6 +374,9 @@ p7_OptimizeMSVFilter(ESL_RANDOMNESS *r, const ESL_DSQ *dsq, int n, float *ret_ti
     esl_min_dat_Destroy(stats);
     return eslOK;
   }
+
+  // check if the Rate need to be calculated
+  p7_RateCalculate(hmm, bg, R, NULL, FALSE);
   
   // adjust tolerances
 #if 1
@@ -479,6 +482,9 @@ p7_OptimizeViterbiFilter(ESL_RANDOMNESS *r, const ESL_DSQ *dsq, int n, float *re
     return eslOK;
   }
 
+  // check if the Rate need to be calculated
+  p7_RateCalculate(hmm, bg, R, NULL, FALSE);
+
   // adjust tolerances
 #if 1
   cfg->cg_rtol    = tol;
@@ -581,6 +587,9 @@ p7_OptimizeForwardParser(ESL_RANDOMNESS *r, const ESL_DSQ *dsq, int n, float *re
     esl_min_dat_Destroy(stats);
     return eslOK;
   }
+
+  // check if the Rate need to be calculated
+  p7_RateCalculate(hmm, bg, R, NULL, FALSE);
 
   // adjust tolerances
 #if 1
