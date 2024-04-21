@@ -54,8 +54,7 @@ typedef struct {
   P7_HMM           *hmm;                        /* the hmm                                        */
   P7_RATE          *R;                          /* the hmm rate                                   */
   float             evparam_star[p7_NEVPARAM];  /* to store calibration parameters of the HMMstar */
-  int               noevo;                      /* if TRUE do not evolve; behaves as hmmsearch    */
-  int               recalibrate;                /* if TRUE recalibrate the evolved HMM            */
+  EVOPIPE_OPT       evopipe_opt;
 } WORKER_INFO;
 
 #define REPOPTS     "-E,-T,--cut_ga,--cut_nc,--cut_tc"
@@ -63,6 +62,9 @@ typedef struct {
 #define INCOPTS     "--incE,--incT,--cut_ga,--cut_nc,--cut_tc"
 #define INCDOMOPTS  "--incdomE,--incdomT,--cut_ga,--cut_nc,--cut_tc"
 #define THRESHOPTS  "-E,-T,--domE,--domT,--incE,--incT,--incdomE,--incdomT,--cut_ga,--cut_nc,--cut_tc"
+#define MSVTOPTS    "--msv_none,--msv_brac,--msv_grad"
+#define VITTOPTS    "--vit_none,--vit_brac,--vit_grad"
+#define FWDTOPTS    "--fwd_none,--fwd_brac,--fwd_grad"
 
 #if defined (HMMER_THREADS) && defined (HMMER_MPI)
 #define CPUOPTS     "--mpi"
@@ -107,6 +109,15 @@ static ESL_OPTIONS options[] = {
   { "--nobias",     eslARG_NONE,   NULL,  NULL, NULL,    NULL,  NULL, "--max",          "turn off composition bias filter",                             7 },
 /* evolutionary options */
   { "--noevo",      eslARG_NONE,   FALSE, NULL, NULL,    NULL,  NULL,  "--mx,--mxfile", "do not evolve",                                                3 },
+  { "--msv_none",   eslARG_NONE,   FALSE, NULL, NULL,MSVTOPTS,  NULL,  NULL,            "MSV - do not evolve",                                          3 },
+  { "--msv_brac",   eslARG_NONE,  "TRUE", NULL, NULL,MSVTOPTS,  NULL,  NULL,            "MSV - evolve in a bracket [default]",                          3 },
+  { "--msv_grad",   eslARG_NONE,   FALSE, NULL, NULL,MSVTOPTS,  NULL,  NULL,            "MSV - evolve by gradient descent",                             3 },
+  { "--vit_none",   eslARG_NONE,   FALSE, NULL, NULL,VITTOPTS,  NULL,  NULL,            "VIT - do not evolve",                                          3 },
+  { "--vit_brac",   eslARG_NONE,  "TRUE", NULL, NULL,VITTOPTS,  NULL,  NULL,            "VIT - evolve in a bracket [default]",                          3 },
+  { "--vit_grad",   eslARG_NONE,   FALSE, NULL, NULL,VITTOPTS,  NULL,  NULL,            "VIT - evolve by gradient descent",                             3 },
+  { "--fwd_none",   eslARG_NONE,   FALSE, NULL, NULL,FWDTOPTS,  NULL,  NULL,            "FWD - do not evolve",                                          3 },
+  { "--fwd_brac",   eslARG_NONE,   FALSE, NULL, NULL,FWDTOPTS,  NULL,  NULL,            "FWD - evolve in a bracket",                                    3 },
+  { "--fwd_grad",   eslARG_NONE,  "TRUE", NULL, NULL,FWDTOPTS,  NULL,  NULL,            "FWD - evolve by gradient descent [default]",                   3 },
   { "--fixtime",    eslARG_REAL,    NULL, NULL, "x>=0",  NULL,  NULL,  NULL,            "TRUE: use a fix time for the evolutionary models of a pair",   3 },
   { "--recalibrate",eslARG_NONE,   FALSE, NULL, NULL,    NULL,  NULL,  NULL,             "recalibrate the evolved HMM",                                 3 },
   { "--mx",         eslARG_STRING,  NULL, NULL, NULL,    NULL,  NULL,  "--mxfile",      "substitution rate matrix choice (of some built-in matrices)",  3 },
@@ -484,16 +495,31 @@ serial_master(ESL_GETOPTS *go, struct cfg_s *cfg)
 
       for (i = 0; i < infocnt; ++i)
 	{
-	  info[i].pli          = NULL;
-	  info[i].th           = NULL;
-	  info[i].gm           = NULL;
-	  info[i].om           = NULL;
-	  info[i].R            = NULL;
-	  info[i].hmm          = NULL;
-	  info[i].bg           = p7_bg_Create(abc);
-	  info[i].noevo        = esl_opt_GetBoolean(go, "--noevo");
-	  info[i].recalibrate  = esl_opt_GetBoolean(go, "--recalibrate");
-	  info[i].r            = cfg->r;
+	  info[i].pli = NULL;
+	  info[i].th  = NULL;
+	  info[i].gm  = NULL;
+	  info[i].om  = NULL;
+	  info[i].R   = NULL;
+	  info[i].hmm = NULL;
+	  info[i].bg  = p7_bg_Create(abc);
+	  info[i].evopipe_opt.fixtime     = hmmrate->fixtime;
+	  if      (esl_opt_GetBoolean(go, "--msv_none"))  { info[i].evopipe_opt.MSV_topt = TIMEOPT_NONE; }
+ 	  else if (esl_opt_GetBoolean(go, "--msv_brac"))  { info[i].evopipe_opt.MSV_topt = TIMEOPT_BRAC; }
+ 	  else if (esl_opt_GetBoolean(go, "--msv_grad"))  { info[i].evopipe_opt.MSV_topt = TIMEOPT_GRAD; }
+ 	  if      (esl_opt_GetBoolean(go, "--vit_none"))  { info[i].evopipe_opt.VIT_topt = TIMEOPT_NONE; }
+ 	  else if (esl_opt_GetBoolean(go, "--vit_brac"))  { info[i].evopipe_opt.VIT_topt = TIMEOPT_BRAC; }
+ 	  else if (esl_opt_GetBoolean(go, "--vit_grad"))  { info[i].evopipe_opt.VIT_topt = TIMEOPT_GRAD; }
+ 	  if      (esl_opt_GetBoolean(go, "--fwd_none"))  { info[i].evopipe_opt.FWD_topt = TIMEOPT_NONE; }
+ 	  else if (esl_opt_GetBoolean(go, "--fwd_brac"))  { info[i].evopipe_opt.FWD_topt = TIMEOPT_BRAC; }
+ 	  else if (esl_opt_GetBoolean(go, "--fwd_grad"))  { info[i].evopipe_opt.FWD_topt = TIMEOPT_GRAD; }	  
+	  info[i].evopipe_opt.noevo       = esl_opt_GetBoolean(go, "--noevo");
+	  if (info[i].evopipe_opt.noevo) {
+	    info[i].evopipe_opt.MSV_topt = TIMEOPT_NONE;
+	    info[i].evopipe_opt.VIT_topt = TIMEOPT_NONE;
+	    info[i].evopipe_opt.FWD_topt = TIMEOPT_NONE;
+	  }
+	  info[i].evopipe_opt.recalibrate = esl_opt_GetBoolean(go, "--recalibrate");
+	  info[i].r                       = cfg->r;
 #ifdef HMMER_THREADS
 	  info[i].queue   = queue;
 #endif
@@ -1280,6 +1306,7 @@ mpi_worker(ESL_GETOPTS *go, struct cfg_s *cfg)
   int              sstatus  = eslOK;
 
   HMMRATE         *hmmrate = NULL;
+  EVOPIPE_OPT      evopipe_opt;
 
   char            *mpi_buf  = NULL;              /* buffer used to pack/unpack structures           */
   int              mpi_size = 0;                 /* size of the allocated buffer                    */
@@ -1339,6 +1366,24 @@ mpi_worker(ESL_GETOPTS *go, struct cfg_s *cfg)
 	ratematrix_emrate_Set(esl_opt_GetString(go, "--rmx"), (const double *)bg->f, hmmrate->emR, info[0].tol, errbuf, FALSE);
       }
 
+      evopipe_opt.fixtime = hmmrate->fixtime;
+      if      (esl_opt_GetBoolean(go, "--msv_none"))  { evopipe_opt.MSV_topt = TIMEOPT_NONE; }
+      else if (esl_opt_GetBoolean(go, "--msv_brac"))  { evopipe_opt.MSV_topt = TIMEOPT_BRAC; }
+      else if (esl_opt_GetBoolean(go, "--msv_grad"))  { evopipe_opt.MSV_topt = TIMEOPT_GRAD; }
+      if      (esl_opt_GetBoolean(go, "--vit_none"))  { evopipe_opt.VIT_topt = TIMEOPT_NONE; }
+      else if (esl_opt_GetBoolean(go, "--vit_brac"))  { evopipe_opt.VIT_topt = TIMEOPT_BRAC; }
+      else if (esl_opt_GetBoolean(go, "--vit_grad"))  { evopipe_opt.VIT_topt = TIMEOPT_GRAD; }
+      if      (esl_opt_GetBoolean(go, "--fwd_none"))  { evopipe_opt.FWD_topt = TIMEOPT_NONE; }
+      else if (esl_opt_GetBoolean(go, "--fwd_brac"))  { evopipe_opt.FWD_topt = TIMEOPT_BRAC; }
+      else if (esl_opt_GetBoolean(go, "--fwd_grad"))  { evopipe_opt.FWD_topt = TIMEOPT_GRAD; }	  
+      evopipe_opt.noevo = esl_opt_GetBoolean(go, "--noevo");
+      if (evopipe_opt.noevo) {
+	evopipe_opt.MSV_topt = TIMEOPT_NONE;
+	evopipe_opt.VIT_topt = TIMEOPT_NONE;
+	evopipe_opt.FWD_topt = TIMEOPT_NONE;
+      }
+      evopipe_opt.recalibrate = esl_opt_GetBoolean(go, "--recalibrate");
+      
       /* Calculate the hmm rate R
        */
       // both versions work.
@@ -1350,8 +1395,7 @@ mpi_worker(ESL_GETOPTS *go, struct cfg_s *cfg)
       // p7_RateConstruct() is more convenient for ehmmsearch,
       // p7_RateCreate()    is more convenient for ehmmscan
       //
-      if (!esl_opt_IsOn(go, "--noevo")) {
-      if (!esl_opt_IsOn(go, "--noevo")) {
+      if (!evopipe_opt.noevo) {
 	if (p7_RateConstruct(hmm, info[0].bg, hmmrate, &R, errbuf, FALSE) != eslOK) esl_fatal("%s", errbuf);
 	//R = p7_RateCreate(hmm->abc, hmm->M, hmmrate->emR, hmmrate->S, hmmrate->evomodel, hmmrate->fixtime, hmmrate->betainf, hmmrate->tol);
       }
@@ -1395,7 +1439,7 @@ mpi_worker(ESL_GETOPTS *go, struct cfg_s *cfg)
 	      p7_bg_SetLength(bg, dbsq->n);
 	      p7_oprofile_ReconfigLength(om, dbsq->n);
       
-	      p7_EvoPipeline(pli, cfg->r, evparam_star, R, hmm, gm, om, bg, dbsq, NULL, th, fixtime, noevo, recalibrate, &hmm_restore);
+	      p7_EvoPipeline(pli, cfg->r, evparam_star, evopipe_opt, R, hmm, gm, om, bg, dbsq, NULL, th, &hmm_restore);
 
 	      esl_sq_Reuse(dbsq);
 	      p7_pipeline_Reuse(pli);
@@ -1480,8 +1524,8 @@ serial_loop(WORKER_INFO *info, ESL_SQFILE *dbfp, int n_targetseqs)
       p7_ReconfigLength(info->gm, dbsq->n);
       p7_oprofile_ReconfigLength(info->om, dbsq->n);
 
-      p7_EvoPipeline(info->pli, info->r, info->evparam_star, info->R, info->hmm, info->gm, info->om, info->bg, dbsq, NULL, info->th,
-		     info->noevo, info->recalibrate, &hmm_restore);
+      p7_EvoPipeline(info->pli, info->r, info->evparam_star, info->evopipe_opt, info->R, info->hmm, info->gm, info->om, info->bg,
+		     dbsq, NULL, info->th, &hmm_restore);
 
       seq_cnt++;
       esl_sq_Reuse(dbsq);
@@ -1589,8 +1633,8 @@ pipeline_thread(void *arg)
 	  p7_ReconfigLength(info->gm, dbsq->n);
 	  p7_oprofile_ReconfigLength(info->om, dbsq->n);
 	  
-	  p7_EvoPipeline(info->pli, info->r, info->evparam_star, info->R, info->hmm, info->gm, info->om, info->bg, dbsq, NULL, info->th,
-			 info->noevo, info->recalibrate, &hmm_restore);
+	  p7_EvoPipeline(info->pli, info->r, info->evparam_star, info->evopipe_opt, info->R, info->hmm, info->gm, info->om, info->bg,
+			 dbsq, NULL, info->th, &hmm_restore);
 
 	  esl_sq_Reuse(dbsq);
 	  p7_pipeline_Reuse(info->pli);

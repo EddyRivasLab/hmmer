@@ -17,6 +17,22 @@
 
 #include "evohmmer.h"
 
+enum timeopt_e {
+  TIMEOPT_NONE = 0, // do not optimize the time 
+  TIMEOPT_BRAC = 1, // do a simple bracketing by two points aroung tstar
+  TIMEOPT_GRAD = 2, // gradient descent optimization
+  TIMEOPT_BOTH = 3  // bracketing followed by gradient descent optimization
+};
+
+typedef struct {
+  float          fixtime;
+  int            noevo;
+  int            recalibrate;
+  enum timeopt_e MSV_topt;
+  enum timeopt_e VIT_topt;
+  enum timeopt_e FWD_topt;
+} EVOPIPE_OPT;
+
 struct optimize_data {
   float            time;
   int              unihit;
@@ -28,28 +44,29 @@ struct optimize_data {
   P7_OPROFILE     *om;
   P7_BG           *bg;
   P7_OMX          *oxf;
-  float           usc;
-  float           vfsc;
-  float           fwdsc;
-  double          tol;
-  char           *errbuf;
-  int             be_verbose;
+  float            usc;
+  float            vfsc;
+  float            fwdsc;
+  double           tol;
+  char            *errbuf;
+  int              be_verbose;
 };
 
-extern int p7_OptimizeMSVFilter    (ESL_RANDOMNESS *r, const ESL_DSQ *dsq, int n, float *ret_time, P7_RATE *R,
+extern int p7_OptimizeMSVFilter    (ESL_RANDOMNESS *r, EVOPIPE_OPT evopipe_opt, const ESL_DSQ *dsq, int n, float *ret_time, P7_RATE *R,
 				    P7_HMM *hmm, P7_PROFILE *gm, P7_OPROFILE *om, P7_BG *bg, P7_OMX *oxf, float *ret_usc,
-				    float fixtime, int noevo, int recalibrate, int msv_opt, int hmm_evolve, float tol);
-extern int p7_OptimizeViterbiFilter(ESL_RANDOMNESS *r, const ESL_DSQ *dsq, int n, float *ret_time, P7_RATE *R,
+				    float nullsc, float filtersc, float F1, int hmm_evolve, float tol);
+extern int p7_OptimizeViterbiFilter(ESL_RANDOMNESS *r, EVOPIPE_OPT evopipe_opt, const ESL_DSQ *dsq, int n, float *ret_time, P7_RATE *R,
 				    P7_HMM *hmm, P7_PROFILE *gm, P7_OPROFILE *om, P7_BG *bg, P7_OMX *oxf, float *ret_vfsc,
-				    float fixtime, int noevo, int recalibrate, int vit_opt, int hmm_evolve, float tol);
-extern int p7_OptimizeForwardParser(ESL_RANDOMNESS *r, const ESL_DSQ *dsq, int n, float *ret_time, P7_RATE *R,
+				    float filtersc, float F2, int hmm_evolve, float tol);
+extern int p7_OptimizeForwardParser(ESL_RANDOMNESS *r, EVOPIPE_OPT evopipe_opt, const ESL_DSQ *dsq, int n, float *ret_time, P7_RATE *R,
 				    P7_HMM *hmm, P7_PROFILE *gm, P7_OPROFILE *om, P7_BG *bg, P7_OMX *oxf, float *ret_fwdsc,
-				    float fixtime, int noevo, int recalibrate,              int hmm_evolve, float tol);
-extern int p7_EvoPipeline_Overthruster(P7_PIPELINE *pli, ESL_RANDOMNESS *r, float *evparam_star, P7_RATE *R, P7_HMM *hmm, P7_PROFILE *gm,
-				       P7_OPROFILE *om, P7_BG *bg, const ESL_SQ *sq, int noevo, int recalibrate,
+				    float filtersc, float F3, int hmm_evolve, float tol);
+extern int p7_EvoPipeline_Overthruster(P7_PIPELINE *pli, ESL_RANDOMNESS *r, float *evparam_star, EVOPIPE_OPT evopipe_opt,
+				       P7_RATE *R, P7_HMM *hmm, P7_PROFILE *gm, P7_OPROFILE *om, P7_BG *bg, const ESL_SQ *sq, 
 				       int *ret_hmm_restore, float *ret_fwdsc, float *ret_nullsc);
-extern int p7_EvoPipeline(P7_PIPELINE *pli, ESL_RANDOMNESS *r, float *evparam_star, P7_RATE *R, P7_HMM *hmm, P7_PROFILE *gm, P7_OPROFILE *om, P7_BG *bg,
-			    const ESL_SQ *sq, const ESL_SQ *ntsq, P7_TOPHITS *hitlist, int noevo, int recalibrate, int *ret_hmm_restore);
+extern int p7_EvoPipeline(P7_PIPELINE *pli, ESL_RANDOMNESS *r, float *evparam_star, EVOPIPE_OPT evopipe_opt,
+			  P7_RATE *R, P7_HMM *hmm, P7_PROFILE *gm, P7_OPROFILE *om, P7_BG *bg,
+			  const ESL_SQ *sq, const ESL_SQ *ntsq, P7_TOPHITS *hitlist, int *ret_hmm_restore);
 
 #endif /*P7_EVOPIPELINE_INCLUDED*/
 

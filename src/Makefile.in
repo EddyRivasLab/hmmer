@@ -66,9 +66,9 @@ PROGS = alimask\
 	nhmmer\
 	nhmmscan\
 	hmmer-makefmdb\
-	ehmmemit\
-	ehmmscan\
 	ehmmsearch\
+	#ehmmscan\
+	ehmmemit\
 	ejackhmmer\
 	ephmmer\
 	ehmmbuild\
@@ -97,9 +97,9 @@ PROGOBJS =\
 	nhmmer.o\
 	nhmmscan.o\
 	hmmer-makefmdb.o\
-	ehmmemit.o\
-	ehmmscan.o\
 	ehmmsearch.o\
+	#ehmmemit.o\
+	ehmmscan.o\
 	ejackhmmer.o\
 	ephmmer.o\
 
@@ -125,8 +125,8 @@ HDRS =  hmmer.h \
 	p7_evopipeline.h\
 	p7_etophits_output_tabular.h\
 	ratematrix.h\
-	evo_evalues.h\
 	p7_hmmcache.h \
+	#evo_evalues.h\
 
 OBJS =  build.o\
 	cachedb.o\
@@ -202,7 +202,7 @@ OBJS =  build.o\
 	ratematrix.o\
 	ratebuilder.o\
 	ratematrix.o\
-	p7_evobuilder.o\
+	#p7_evobuilder.o\
 	evo_evalues.o\
 #	island.o\
 

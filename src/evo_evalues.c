@@ -60,7 +60,7 @@ static inline int get_starprofile(const P7_BG *bg, const P7_HMM *hmm, P7_PROFILE
  * Xref:      J4/41
  */
 int
-p7_EvoCalibrate(P7_RATE *R, P7_HMM *hmm, P7_BUILDER *cfg_b, ESL_RANDOMNESS **byp_rng, P7_BG **byp_bg, P7_PROFILE **byp_gm, P7_OPROFILE **byp_om,
+p7_EvoCalibrate(EVOPIPE_OPT evopipe_opt, P7_RATE *R, P7_HMM *hmm, P7_BUILDER *cfg_b, ESL_RANDOMNESS **byp_rng, P7_BG **byp_bg, P7_PROFILE **byp_gm, P7_OPROFILE **byp_om,
 		int noevo_msv, int noevo_vit, int noevo_fwd, float fixtime, float tol)
 {
   P7_BG          *bg     = (esl_byp_IsProvided(byp_bg)  ? *byp_bg  : NULL); 
@@ -204,7 +204,7 @@ p7_EvoCalibrate(P7_RATE *R, P7_HMM *hmm, P7_BUILDER *cfg_b, ESL_RANDOMNESS **byp
  *            eventually - need to be sure that fix applies here too.
  */
 int
-p7_EvoMSVMu(ESL_RANDOMNESS *r, P7_RATE *R, P7_HMM *hmm, P7_PROFILE *gm, P7_OPROFILE *om, P7_BG *bg,
+p7_EvoMSVMu(ESL_RANDOMNESS *r, EVOPIPE_OPT evopipe_opt, P7_RATE *R, P7_HMM *hmm, P7_PROFILE *gm, P7_OPROFILE *om, P7_BG *bg,
 	    int L, int N, double lambda, double *ret_mmu, float fixtime, int noevo, float tol)
 {
   P7_OMX  *ox        = p7_omx_Create(om->M, 0, 0); /* DP matrix: 1 row version */
@@ -234,7 +234,7 @@ p7_EvoMSVMu(ESL_RANDOMNESS *r, P7_RATE *R, P7_HMM *hmm, P7_PROFILE *gm, P7_OPROF
       get_starprofile(bg, hmm, gm, om, &ehmm);
       
       time = time_star;
-      status = p7_OptimizeMSVFilter(NULL, dsq, L, &time, R, hmm, gm, om, bg, ox, &sc, fixtime, noevo, FALSE, TRUE, TRUE, tol);
+      status = p7_OptimizeMSVFilter(NULL, evopipe_opt, dsq, L, &time, R, hmm, gm, om, bg, ox, &sc, FALSE, TRUE, FALSE, nullsc, 0.02, TRUE, tol);
       if (status == eslERANGE) { sc = maxsc; status = eslOK; }
       if (status != eslOK)     goto ERROR;
 
@@ -284,7 +284,7 @@ p7_EvoMSVMu(ESL_RANDOMNESS *r, P7_RATE *R, P7_HMM *hmm, P7_PROFILE *gm, P7_OPROF
  * Throws:    (no abnormal error conditions)
  */
 int
-p7_EvoViterbiMu(ESL_RANDOMNESS *r, P7_RATE *R, P7_HMM *hmm, P7_PROFILE *gm, P7_OPROFILE *om, P7_BG *bg,
+p7_EvoViterbiMu(ESL_RANDOMNESS *r, EVOPIPE_OPT evopipe_opt, P7_RATE *R, P7_HMM *hmm, P7_PROFILE *gm, P7_OPROFILE *om, P7_BG *bg,
 		int L, int N, double lambda, double *ret_vmu, float fixtime, int noevo, float tol)
 {
   P7_OMX  *ox        = p7_omx_Create(om->M, 0, 0); /* DP matrix: 1 row version */
@@ -314,7 +314,7 @@ p7_EvoViterbiMu(ESL_RANDOMNESS *r, P7_RATE *R, P7_HMM *hmm, P7_PROFILE *gm, P7_O
       get_starprofile(bg, hmm, gm, om, &ehmm);
 
       time = time_star;
-      status = p7_OptimizeViterbiFilter(NULL, dsq, L, &time, R, hmm, gm, om, bg, ox, &sc, fixtime, noevo, FALSE, TRUE, TRUE, tol);
+      status = p7_OptimizeViterbiFilter(NULL, evopipe_opt, dsq, L, &time, R, hmm, gm, om, bg, ox, &sc, fixtime, noevo, FALSE, TRUE, TRUE, tol);
       if (status == eslERANGE) { sc = maxsc; status = eslOK; }
       if (status != eslOK)     goto ERROR;
 
@@ -400,7 +400,7 @@ p7_EvoViterbiMu(ESL_RANDOMNESS *r, P7_RATE *R, P7_HMM *hmm, P7_PROFILE *gm, P7_O
  * Throws:    <eslEMEM> on allocation error, and <*ret_fv> is 0.
  */
 int
-p7_EvoTau(ESL_RANDOMNESS *r, P7_RATE *R, P7_HMM *hmm, P7_PROFILE *gm, P7_OPROFILE *om, P7_BG *bg, 
+p7_EvoTau(ESL_RANDOMNESS *r, EVOPIPE_OPT evopipe_opt, P7_RATE *R, P7_HMM *hmm, P7_PROFILE *gm, P7_OPROFILE *om, P7_BG *bg, 
 	  int L, int N, double lambda, double tailp, double *ret_tau, float fixtime, int noevo, float tol)
 {
   P7_OMX  *ox        = p7_omx_Create(om->M, 0, L);     /* DP matrix: for ForwardParser,  L rows */
@@ -429,7 +429,7 @@ p7_EvoTau(ESL_RANDOMNESS *r, P7_RATE *R, P7_HMM *hmm, P7_PROFILE *gm, P7_OPROFIL
       get_starprofile(bg, hmm, gm, om, &ehmm);
       
       time = time_star;
-      if ((status = p7_OptimizeForwardParser(NULL, dsq, L, &time, R, hmm, gm, om, bg, ox, &fsc, fixtime, noevo, FALSE, TRUE, tol)) != eslOK) goto ERROR;
+      if ((status = p7_OptimizeForwardParser(NULL, evopipe_opt, dsq, L, &time, R, hmm, gm, om, bg, ox, &fsc, FALSE, TRUE, tol)) != eslOK) goto ERROR;
       if ((status = p7_bg_NullOne(bg, dsq, L, &nullsc))                                                                            != eslOK) goto ERROR;   
       xv[i] = (fsc - nullsc) / eslCONST_LOG2;
       
