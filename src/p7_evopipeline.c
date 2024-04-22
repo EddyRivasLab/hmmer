@@ -442,11 +442,11 @@ p7_OptimizeViterbiFilter(ESL_RANDOMNESS *r, EVOPIPE_OPT evopipe_opt, const ESL_D
   float                  time;
   double                 seq_score;
   double                 P;
-  float                  F2_brac = 2.0*F2;
+  float                  F2_brac = 5.0*F2;
   float                  F2_grad = 1.5*F2;
   enum timeopt_e         VIT_topt = evopipe_opt.VIT_topt;
   int                    isfixtime = (evopipe_opt.fixtime >= 0.0)? TRUE : FALSE;
-  int                    np;
+  int                    np = 1;
   int                    status;
 
   time_init = (isfixtime)? evopipe_opt.fixtime : *ret_time;
