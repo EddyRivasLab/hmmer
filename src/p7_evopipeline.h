@@ -16,6 +16,8 @@
 #include "esl_stopwatch.h"
 
 #include "evohmmer.h"
+#include "minimize.h"
+
 
 enum timeopt_e {
   TIMEOPT_NONE = 0, // do not optimize the time 
@@ -52,13 +54,16 @@ struct optimize_data {
   int              be_verbose;
 };
 
-extern int p7_OptimizeMSVFilter    (ESL_RANDOMNESS *r, EVOPIPE_OPT evopipe_opt, const ESL_DSQ *dsq, int n, float *ret_time, P7_RATE *R,
+extern int p7_OptimizeMSVFilter    (ESL_RANDOMNESS *r, ESL_MIN_CFG *cfg, ESL_MIN_DAT *stats, EVOPIPE_OPT evopipe_opt,
+				    const ESL_DSQ *dsq, int n, float *ret_time, P7_RATE *R,
 				    P7_HMM *hmm, P7_PROFILE *gm, P7_OPROFILE *om, P7_BG *bg, P7_OMX *oxf, float *ret_usc,
 				    float nullsc, float filtersc, float F1, int hmm_evolve, float tol);
-extern int p7_OptimizeViterbiFilter(ESL_RANDOMNESS *r, EVOPIPE_OPT evopipe_opt, const ESL_DSQ *dsq, int n, float *ret_time, P7_RATE *R,
+extern int p7_OptimizeViterbiFilter(ESL_RANDOMNESS *r, ESL_MIN_CFG *cfg, ESL_MIN_DAT *stats, EVOPIPE_OPT evopipe_opt,
+				    const ESL_DSQ *dsq, int n, float *ret_time, P7_RATE *R,
 				    P7_HMM *hmm, P7_PROFILE *gm, P7_OPROFILE *om, P7_BG *bg, P7_OMX *oxf, float *ret_vfsc,
 				    float filtersc, float F2, int hmm_evolve, float tol);
-extern int p7_OptimizeForwardParser(ESL_RANDOMNESS *r, EVOPIPE_OPT evopipe_opt, const ESL_DSQ *dsq, int n, float *ret_time, P7_RATE *R,
+extern int p7_OptimizeForwardParser(ESL_RANDOMNESS *r, ESL_MIN_CFG *cfg, ESL_MIN_DAT *stats, EVOPIPE_OPT evopipe_opt,
+				    const ESL_DSQ *dsq, int n, float *ret_time, P7_RATE *R,
 				    P7_HMM *hmm, P7_PROFILE *gm, P7_OPROFILE *om, P7_BG *bg, P7_OMX *oxf, float *ret_fwdsc,
 				    float filtersc, float F3, int hmm_evolve, float tol);
 extern int p7_EvoPipeline_Overthruster(P7_PIPELINE *pli, ESL_RANDOMNESS *r, float *evparam_star, EVOPIPE_OPT evopipe_opt,

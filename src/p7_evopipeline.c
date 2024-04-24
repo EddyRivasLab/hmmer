@@ -115,9 +115,20 @@ extern int p7_EvoPipeline_Overthruster(P7_PIPELINE *pli, ESL_RANDOMNESS *r, floa
   int              hmm_evolve;
   int              vfsc_optimized;
   int              status;
+  ESL_MIN_CFG     *cfg   = esl_min_cfg_Create(1);
+  ESL_MIN_DAT     *stats = esl_min_dat_Create(cfg);
+
+  // adjust tolerances
+#if 1
+  cfg->cg_rtol    = tol;
+  cfg->cg_atol    = tol;
+  cfg->brent_rtol = tol;
+  cfg->brent_atol = tol;
+  cfg->deriv_step = OPT_TIME_STEP;
+#endif
 
   if (sq->n == 0)
-    return eslFAIL; /* silently skip length 0 seqs; they'd cause us all sorts of weird problems */
+    goto ERROR; /* silently skip length 0 seqs; they'd cause us all sorts of weird problems */
   if (sq->n > 100000) ESL_EXCEPTION(eslETYPE, "Target sequence length > 100K, over comparison pipeline limit.\n(Did you mean to use nhmmer/nhmmscan?)");
 
   p7_omx_GrowTo(pli->oxf, om->M, 0, sq->n);    /* expand the one-row omx if needed */
@@ -134,7 +145,7 @@ extern int p7_EvoPipeline_Overthruster(P7_PIPELINE *pli, ESL_RANDOMNESS *r, floa
   /* First level filter: the MSV filter, multihit with <om> */
   time = time_star;
   hmm_evolve = FALSE;
-  if ((status = p7_OptimizeMSVFilter(r, evopipe_opt, sq->dsq, sq->n, &time, R, hmm, gm, om, bg, pli->oxf, &usc, nullsc, filtersc, pli->F1, hmm_evolve, tol)) != eslOK)      
+  if ((status = p7_OptimizeMSVFilter(r, cfg, stats, evopipe_opt, sq->dsq, sq->n, &time, R, hmm, gm, om, bg, pli->oxf, &usc, nullsc, filtersc, pli->F1, hmm_evolve, tol)) != eslOK)      
     printf("\nsequence %s msvfilter did not optimize\n", sq->name);  
   //printf("^^MSV %s evolve? %d time %f usc %f\n", sq->name, hmm_evolve, time, usc);
 
@@ -142,7 +153,7 @@ extern int p7_EvoPipeline_Overthruster(P7_PIPELINE *pli, ESL_RANDOMNESS *r, floa
   P = esl_gumbel_surv(seq_score,  om->evparam[p7_MMU],  om->evparam[p7_MLAMBDA]);
   if (P > pli->F1) {
     *ret_hmm_restore = (evopipe_opt.MSV_topt != TIMEOPT_NONE && time != time_star)? TRUE : FALSE;
-    return eslFAIL;
+    goto ERROR;
   }
   pli->n_past_msv++;
 
@@ -154,7 +165,7 @@ extern int p7_EvoPipeline_Overthruster(P7_PIPELINE *pli, ESL_RANDOMNESS *r, floa
       //printf("^^BIAS %s P %f F1 %f usc %f filtersc %f score %f\n", sq->name, P, pli->F1, usc, filtersc, seq_score);
       if (P > pli->F1) {
 	*ret_hmm_restore = (evopipe_opt.MSV_topt != TIMEOPT_NONE && time != time_star)? TRUE : FALSE;
-	return eslFAIL;
+	goto ERROR;
       }
     }
   else filtersc = nullsc;
@@ -175,7 +186,7 @@ extern int p7_EvoPipeline_Overthruster(P7_PIPELINE *pli, ESL_RANDOMNESS *r, floa
   if (P > pli->F2)
     {
       hmm_evolve = (evopipe_opt.MSV_topt != TIMEOPT_NONE)? TRUE:FALSE;
-      if ((status = p7_OptimizeViterbiFilter(r, evopipe_opt, sq->dsq, sq->n, &time, R, hmm, gm, om, bg, pli->oxf, &vfsc, filtersc, pli->F2, hmm_evolve, tol)) != eslOK) 
+      if ((status = p7_OptimizeViterbiFilter(r, cfg, stats, evopipe_opt, sq->dsq, sq->n, &time, R, hmm, gm, om, bg, pli->oxf, &vfsc, filtersc, pli->F2, hmm_evolve, tol)) != eslOK) 
 	printf("\nsequence %s vitfilter did not optimize\n", sq->name);
       if (evopipe_opt.VIT_topt != TIMEOPT_NONE) {
 	vfsc_optimized = TRUE;
@@ -187,7 +198,7 @@ extern int p7_EvoPipeline_Overthruster(P7_PIPELINE *pli, ESL_RANDOMNESS *r, floa
       P  = esl_gumbel_surv(seq_score,  om->evparam[p7_VMU],  om->evparam[p7_VLAMBDA]);
       if (P > pli->F2) {
 	*ret_hmm_restore = (evopipe_opt.VIT_topt != TIMEOPT_NONE && time != time_star)? TRUE : FALSE;
-	return eslFAIL;
+	goto ERROR;
       }
     }
   pli->n_past_vit++;
@@ -201,7 +212,7 @@ extern int p7_EvoPipeline_Overthruster(P7_PIPELINE *pli, ESL_RANDOMNESS *r, floa
   }
   else {
     hmm_evolve = (evopipe_opt.VIT_topt != TIMEOPT_NONE)? TRUE:FALSE;
-    if ((status = p7_OptimizeForwardParser(r, evopipe_opt, sq->dsq, sq->n, &time, R, hmm, gm, om, bg, pli->oxf, &fwdsc, filtersc, pli->F3, hmm_evolve, tol)) != eslOK)      
+    if ((status = p7_OptimizeForwardParser(r, cfg, stats, evopipe_opt, sq->dsq, sq->n, &time, R, hmm, gm, om, bg, pli->oxf, &fwdsc, filtersc, pli->F3, hmm_evolve, tol)) != eslOK)      
       printf("\nsequence %s forwardparser did not optimize\n", sq->name);
     //printf("^^FWD OPT %s updated? %d time %f fwdsc %f filter %f score %f\n", sq->name, hmm_restore, time, fwdsc, filtersc, (fwdsc-filtersc) / eslCONST_LOG2);
   }
@@ -212,14 +223,23 @@ extern int p7_EvoPipeline_Overthruster(P7_PIPELINE *pli, ESL_RANDOMNESS *r, floa
 
   if (P > pli->F3)  {
     *ret_hmm_restore = (time != time_star)? TRUE:FALSE;
-    return eslFAIL;
+    goto ERROR;
   }
   pli->n_past_fwd++;
   
   *ret_hmm_restore = TRUE;
-  *ret_fwdsc = fwdsc;
+  *ret_fwdsc  = fwdsc;
   *ret_nullsc = nullsc;
+  
+  if (cfg)   esl_min_cfg_Destroy(cfg);
+  if (stats) esl_min_dat_Destroy(stats);
   return eslOK; // if we get this far, we passed all the filters and should proceed to the main stage
+
+ ERROR:
+  if (cfg)   esl_min_cfg_Destroy(cfg);
+  if (stats) esl_min_dat_Destroy(stats);
+  return eslFAIL;
+
 }
 
 /* Function:  p7_Pipeline()
@@ -257,13 +277,12 @@ extern int p7_EvoPipeline(P7_PIPELINE *pli, ESL_RANDOMNESS *r, float *evparam_st
 /*------------------- end, pipeline API -------------------------*/
 
 extern int
-p7_OptimizeMSVFilter(ESL_RANDOMNESS *r, EVOPIPE_OPT evopipe_opt, const ESL_DSQ *dsq, int n, float *ret_time, P7_RATE *R,
+p7_OptimizeMSVFilter(ESL_RANDOMNESS *r, ESL_MIN_CFG *cfg, ESL_MIN_DAT *stats, EVOPIPE_OPT evopipe_opt,
+		     const ESL_DSQ *dsq, int n, float *ret_time, P7_RATE *R,
 		     P7_HMM *hmm, P7_PROFILE *gm, P7_OPROFILE *om, P7_BG *bg, P7_OMX *oxf, float *ret_usc,
 		     float nullsc, float filtersc, float F1, int hmm_evolve, float tol)
 {
   struct optimize_data   data;
-  ESL_MIN_CFG           *cfg   = esl_min_cfg_Create(1);
-  ESL_MIN_DAT           *stats = esl_min_dat_Create(cfg);
   double                *p = NULL;	       /* parameter vector                        */
   double                *u = NULL;             /* max initial step size vector            */
   double                *wrk = NULL;           /* 4 tmp vectors of length nbranches       */
@@ -289,15 +308,6 @@ p7_OptimizeMSVFilter(ESL_RANDOMNESS *r, EVOPIPE_OPT evopipe_opt, const ESL_DSQ *
   seq_score = (usc_init - ESL_MAX(nullsc,filtersc)) / eslCONST_LOG2;
   P = esl_gumbel_surv(seq_score,  om->evparam[p7_MMU],  om->evparam[p7_MLAMBDA]);
   if (P <= F1) MSV_topt = TIMEOPT_NONE;
-
-  // adjust tolerances
-#if 1
-  cfg->cg_rtol    = tol;
-  cfg->cg_atol    = tol;
-  cfg->brent_rtol = tol;
-  cfg->brent_atol = tol;
-  cfg->deriv_step = OPT_TIME_STEP;
-#endif
 
   switch(MSV_topt) {
   case TIMEOPT_NONE:
@@ -410,15 +420,11 @@ p7_OptimizeMSVFilter(ESL_RANDOMNESS *r, EVOPIPE_OPT evopipe_opt, const ESL_DSQ *
   } // end of the switch over time optimization options
   
   /* clean up */
-  esl_min_cfg_Destroy(cfg);
-  esl_min_dat_Destroy(stats);
   if (u != NULL) free(u);
   if (p != NULL) free(p);
   return eslOK;
 
  ERROR:
-  if (cfg)   esl_min_cfg_Destroy(cfg);
-  if (stats) esl_min_dat_Destroy(stats);
   if (p != NULL) free(p);
   if (u != NULL) free(u);
   return status;
@@ -426,13 +432,12 @@ p7_OptimizeMSVFilter(ESL_RANDOMNESS *r, EVOPIPE_OPT evopipe_opt, const ESL_DSQ *
 
 
 extern int
-p7_OptimizeViterbiFilter(ESL_RANDOMNESS *r, EVOPIPE_OPT evopipe_opt, const ESL_DSQ *dsq, int n, float *ret_time, P7_RATE *R,
+p7_OptimizeViterbiFilter(ESL_RANDOMNESS *r, ESL_MIN_CFG *cfg, ESL_MIN_DAT *stats, EVOPIPE_OPT evopipe_opt,
+			 const ESL_DSQ *dsq, int n, float *ret_time, P7_RATE *R,
 			 P7_HMM *hmm, P7_PROFILE *gm, P7_OPROFILE *om, P7_BG *bg, P7_OMX *oxf, float *ret_vfsc,
 			 float filtersc, float F2, int hmm_evolve, float tol)
 {
   struct optimize_data   data;
-  ESL_MIN_CFG           *cfg   = esl_min_cfg_Create(1);
-  ESL_MIN_DAT           *stats = esl_min_dat_Create(cfg);
   double                *p = NULL;	       /* parameter vector                        */
   double                *u = NULL;             /* max initial step size vector            */
   double                 sc;
@@ -457,15 +462,6 @@ p7_OptimizeViterbiFilter(ESL_RANDOMNESS *r, EVOPIPE_OPT evopipe_opt, const ESL_D
   seq_score = (vfsc_init - filtersc) / eslCONST_LOG2;
   P = esl_gumbel_surv(seq_score,  om->evparam[p7_VMU],  om->evparam[p7_VLAMBDA]);
   if (P < F2) VIT_topt = TIMEOPT_NONE;
-
-  // adjust tolerances
-#if 1
-  cfg->cg_rtol    = tol;
-  cfg->cg_atol    = tol;
-  cfg->brent_rtol = tol;
-  cfg->brent_atol = tol;
-  cfg->deriv_step = OPT_TIME_STEP;
-#endif
 
   switch(VIT_topt) {
   case TIMEOPT_NONE:
@@ -578,28 +574,23 @@ p7_OptimizeViterbiFilter(ESL_RANDOMNESS *r, EVOPIPE_OPT evopipe_opt, const ESL_D
   } // end of the switch over time optimization options
 
   /* clean up */
-  esl_min_cfg_Destroy(cfg);
-  esl_min_dat_Destroy(stats);
   if (u != NULL) free(u);
   if (p != NULL) free(p);
   return eslOK;
 
  ERROR:
-  if (cfg)   esl_min_cfg_Destroy(cfg);
-  if (stats) esl_min_dat_Destroy(stats);
   if (p   != NULL) free(p);
   if (u   != NULL) free(u);
   return status;
 }
 
 int
-p7_OptimizeForwardParser(ESL_RANDOMNESS *r, EVOPIPE_OPT evopipe_opt, const ESL_DSQ *dsq, int n, float *ret_time, P7_RATE *R,
+p7_OptimizeForwardParser(ESL_RANDOMNESS *r, ESL_MIN_CFG *cfg, ESL_MIN_DAT *stats, EVOPIPE_OPT evopipe_opt,
+			 const ESL_DSQ *dsq, int n, float *ret_time, P7_RATE *R,
 			 P7_HMM *hmm, P7_PROFILE *gm, P7_OPROFILE *om, P7_BG *bg, P7_OMX *oxf, float *ret_fwdsc,
 			 float filtersc, float F3, int hmm_evolve, float tol)
 {
   struct optimize_data   data;
-  ESL_MIN_CFG           *cfg   = esl_min_cfg_Create(1);
-  ESL_MIN_DAT           *stats = esl_min_dat_Create(cfg);
   double                *p = NULL;	       /* parameter vector                      */
   double                *u = NULL;             /* max initial step size vector          */
   double                 sc;
@@ -623,15 +614,6 @@ p7_OptimizeForwardParser(ESL_RANDOMNESS *r, EVOPIPE_OPT evopipe_opt, const ESL_D
   // this is NOT a filter; if the score is already good enough, we don't need to optimize
   seq_score = (fwdsc_init - filtersc) / eslCONST_LOG2;
   P = esl_exp_surv(seq_score,  om->evparam[p7_FTAU],  om->evparam[p7_FLAMBDA]);
-
-  // adjust tolerances
-#if 1
-  cfg->cg_rtol    = tol;
-  cfg->cg_atol    = tol;
-  cfg->brent_rtol = tol;
-  cfg->brent_atol = tol;
-  cfg->deriv_step = OPT_TIME_STEP;
-#endif
 
   switch(FWD_topt) {
   case TIMEOPT_NONE:
@@ -740,15 +722,11 @@ p7_OptimizeForwardParser(ESL_RANDOMNESS *r, EVOPIPE_OPT evopipe_opt, const ESL_D
   } // end of the switch over time optimization options
  
   /* clean up */
-  esl_min_cfg_Destroy(cfg);
-  esl_min_dat_Destroy(stats);
   if (p != NULL) free(p);
   if (u != NULL) free(u);
   return eslOK;
 
  ERROR:
-  if (cfg)   esl_min_cfg_Destroy(cfg);  
-  if (stats) esl_min_dat_Destroy(stats);  
   if (p != NULL) free(p);
   if (u != NULL) free(u);
   return status;

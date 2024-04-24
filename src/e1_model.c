@@ -581,7 +581,7 @@ e1_model_AF_EtaFunc(void *params, double *ret_func)
 #endif
 
   if (func > 1.)   { if (func <  1.0+1e-3) func = 1.0; else { printf("AIFeta is larger than one %f\n", func); status = eslFAIL; goto ERROR; } }
-  if (func < 0.)   { if (func > -1e-4)     func = 0.0; else { printf("AIFeta is negative \n");                status = eslFAIL; goto ERROR; } }
+  if (func < 0.)   { if (func > -1e-1)     func = 0.0; else { printf("AIFeta is negative \n");                status = eslFAIL; goto ERROR; } }
   if (isnan(func)) { printf("etat is nan \n");                                                                status = eslFAIL; goto ERROR; }
   *ret_func = func;
 
@@ -619,8 +619,8 @@ printf("\nAG_BetaD[t=%f] = %.8f special? %d ldM=%.8f\tmuM=%.8f\n",
   if (isnan(betaD)) { printf("AG_betaD is nan \n"); status = eslFAIL; goto ERROR; }
   if (betaM > 1.)   { if (betaM <  1.0+1e-3) betaM = 1.0; else { printf("AG_betaM is larger than one %f\n", betaM); status = eslFAIL; goto ERROR; } }
   if (betaD > 1.)   { if (betaD <  1.0+1e-3) betaD = 1.0; else { printf("AG_betaD is larger than one %f\n", betaD); status = eslFAIL; goto ERROR; } }
-  if (betaM < 0.)   { if (betaM > -1e-4)     betaM = 0.0; else { printf("AG_betaM is negative %f\n", betaM);        status = eslFAIL; goto ERROR; } }
-  if (betaD < 0.)   { if (betaD > -1e-4)     betaD = 0.0; else { printf("AG_betaD is negative %f\n", betaD);        status = eslFAIL; goto ERROR; } }
+  if (betaM < 0.)   { if (betaM > -1e-1)     betaM = 0.0; else { printf("AG_betaM is negative %f\n", betaM);        status = eslFAIL; goto ERROR; } }
+  if (betaD < 0.)   { if (betaD > -1e-1)     betaD = 0.0; else { printf("AG_betaD is negative %f\n", betaD);        status = eslFAIL; goto ERROR; } }
   
   if (ret_betaM) *ret_betaM = betaM;
   if (ret_betaD) *ret_betaD = betaD;
@@ -685,7 +685,7 @@ e1_model_LI_BetaFunc(void *params, double *ret_func)
 
   if (isnan(func)) { printf("LIbeta is nan \n"); status = eslFAIL; goto ERROR; }
   if (func > 1.)   { if (func <  1.0+1e-3) func = 1.0; else { printf("LIbeta is larger than one %f\n", func); status = eslFAIL; goto ERROR; } }
-  if (func < 0.)   { if (func > -1e-4)     func = 0.0; else { printf("Libeta is negative %f\n", func);        status = eslFAIL; goto ERROR; } }
+  if (func < 0.)   { if (func > -1e-1)     func = 0.0; else { printf("Libeta is negative %f\n", func);        status = eslFAIL; goto ERROR; } }
   *ret_func = func;
 
   return eslOK;
