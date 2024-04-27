@@ -841,7 +841,7 @@ extern int p7_Pipeline_Overthruster(P7_PIPELINE *pli, P7_OPROFILE *om, P7_BG *bg
   p7_omx_GrowTo(pli->oxb, om->M, 0, sq->n);
   p7_BackwardParser(sq->dsq, sq->n, om, pli->oxf, pli->oxb, NULL);
  
-    status = p7_domaindef_ByPosteriorHeuristics(sq, ntsq, om, pli->oxf, pli->oxb, pli->fwd, pli->bck, pli->ddef, bg, FALSE, NULL, NULL, NULL);
+  status = p7_domaindef_ByPosteriorHeuristics(sq, ntsq, om, pli->oxf, pli->oxb, pli->fwd, pli->bck, pli->ddef, bg, FALSE, NULL, NULL, NULL);
   if (status != eslOK) ESL_FAIL(status, pli->errbuf, "domain definition workflow failure"); /* eslERANGE can happen  */
   if (pli->ddef->nregions   == 0) return eslOK; /* score passed threshold but there's no discrete domains here       */
   if (pli->ddef->nenvelopes == 0) return eslOK; /* rarer: region was found, stochastic clustered, no envelopes found */
@@ -857,7 +857,6 @@ extern int p7_Pipeline_Overthruster(P7_PIPELINE *pli, P7_OPROFILE *om, P7_BG *bg
   else seqbias = 0.0;
   pre_score =  (fwdsc - nullsc) / eslCONST_LOG2; 
   seq_score =  (fwdsc - (nullsc + seqbias)) / eslCONST_LOG2;
-
   
   /* Calculate the "reconstruction score": estimated
    * per-sequence score as sum of individual domains,

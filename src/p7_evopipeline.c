@@ -97,7 +97,7 @@ static inline void workaround_restore_profile(float *evparam_star, int len, cons
  *            been careful enough about. [SRE H9/4]
  */
 extern int p7_EvoPipeline_Overthruster(P7_PIPELINE *pli, ESL_RANDOMNESS *r, float *evparam_star, EVOPIPE_OPT evopipe_opt,
-				       P7_RATE *R, P7_HMM *hmm, P7_PROFILE *gm, P7_OPROFILE *om, P7_BG *bg, const ESL_SQ *sq,
+				       P7_RATE *R, P7_HMM *hmm, P7_PROFILE *gm, P7_OPROFILE *om, P7_BG *bg, const ESL_SQ *sq, const ESL_SQ *ntsq, 
 				       int *ret_hmm_restore, float *ret_fwdsc, float *ret_nullsc)
 {
   float            time_star = 1.0;
@@ -147,10 +147,10 @@ extern int p7_EvoPipeline_Overthruster(P7_PIPELINE *pli, ESL_RANDOMNESS *r, floa
   hmm_evolve = FALSE;
   if ((status = p7_OptimizeMSVFilter(r, cfg, stats, evopipe_opt, sq->dsq, sq->n, &time, R, hmm, gm, om, bg, pli->oxf, &usc, nullsc, filtersc, pli->F1, hmm_evolve, tol)) != eslOK)      
     printf("\nsequence %s msvfilter did not optimize\n", sq->name);  
-  //printf("^^MSV %s evolve? %d time %f usc %f\n", sq->name, hmm_evolve, time, usc);
 
   seq_score = (usc - nullsc) / eslCONST_LOG2;
   P = esl_gumbel_surv(seq_score,  om->evparam[p7_MMU],  om->evparam[p7_MLAMBDA]);
+  //printf("^^MSV %s evolve? %d time %f usc %f nullsc %f seq_score %f\n", sq->name, hmm_evolve, time, usc, nullsc, seq_score);
   if (P > pli->F1) {
     *ret_hmm_restore = (evopipe_opt.MSV_topt != TIMEOPT_NONE && time != time_star)? TRUE : FALSE;
     goto ERROR;
@@ -211,7 +211,7 @@ extern int p7_EvoPipeline_Overthruster(P7_PIPELINE *pli, ESL_RANDOMNESS *r, floa
     //printf("^^FWD %s len %d time %f fwdsc %f\n", sq->name, sq->n, time, fwdsc);
   }
   else {
-    hmm_evolve = (evopipe_opt.VIT_topt != TIMEOPT_NONE)? TRUE:FALSE;
+    hmm_evolve = (evopipe_opt.FWD_topt != TIMEOPT_NONE)? TRUE:FALSE;
     if ((status = p7_OptimizeForwardParser(r, cfg, stats, evopipe_opt, sq->dsq, sq->n, &time, R, hmm, gm, om, bg, pli->oxf, &fwdsc, filtersc, pli->F3, hmm_evolve, tol)) != eslOK)      
       printf("\nsequence %s forwardparser did not optimize\n", sq->name);
     //printf("^^FWD OPT %s updated? %d time %f fwdsc %f filter %f score %f\n", sq->name, hmm_restore, time, fwdsc, filtersc, (fwdsc-filtersc) / eslCONST_LOG2);
@@ -226,10 +226,10 @@ extern int p7_EvoPipeline_Overthruster(P7_PIPELINE *pli, ESL_RANDOMNESS *r, floa
     goto ERROR;
   }
   pli->n_past_fwd++;
-  
+
   *ret_hmm_restore = TRUE;
-  *ret_fwdsc  = fwdsc;
-  *ret_nullsc = nullsc;
+  *ret_fwdsc       = fwdsc;
+  *ret_nullsc      = nullsc;
   
   if (cfg)   esl_min_cfg_Destroy(cfg);
   if (stats) esl_min_dat_Destroy(stats);
@@ -241,6 +241,7 @@ extern int p7_EvoPipeline_Overthruster(P7_PIPELINE *pli, ESL_RANDOMNESS *r, floa
   return eslFAIL;
 
 }
+
 
 /* Function:  p7_Pipeline()
  * Synopsis:  HMMER3's accelerated seq/profile comparison pipeline.
@@ -260,7 +261,7 @@ extern int p7_EvoPipeline(P7_PIPELINE *pli, ESL_RANDOMNESS *r, float *evparam_st
   float fwdsc;
   float nullsc;
 
-  status = p7_EvoPipeline_Overthruster(pli, r, evparam_star, evopipe_opt, R, hmm, gm, om, bg, sq, ret_hmm_restore, &fwdsc, &nullsc);
+  status = p7_EvoPipeline_Overthruster(pli, r, evparam_star, evopipe_opt, R, hmm, gm, om, bg, sq, ntsq, ret_hmm_restore, &fwdsc, &nullsc);
   if (status == eslOK){ //run the main stage
     return (p7_Pipeline_Mainstage(pli, om, bg, sq, ntsq, hitlist, fwdsc, nullsc));
   }
@@ -343,11 +344,9 @@ p7_OptimizeMSVFilter(ESL_RANDOMNESS *r, ESL_MIN_CFG *cfg, ESL_MIN_DAT *stats, EV
       else {
 	*ret_usc  = usc_init;
 	*ret_time = time_init;
+	func_msvfilter(r, (ESL_DSQ *)dsq, n, hmm, R, gm, om, bg, oxf, time_init, TRUE, evopipe_opt.recalibrate);
       }
     }
-    
-    // done with this brac optimization
-    if (evopipe_opt.recalibrate) workaround_calibrate_profile(r, n, bg, hmm, gm, om);
     break;
 
   case TIMEOPT_GRAD:
@@ -397,7 +396,7 @@ p7_OptimizeMSVFilter(ESL_RANDOMNESS *r, ESL_MIN_CFG *cfg, ESL_MIN_DAT *stats, EV
     
     /* unpack the final parameter vector */
     optimize_unpack_paramvector(p, &data);
-    data.usc = -sc;
+    data.usc = func_msvfilter(r, (ESL_DSQ *)dsq, n, hmm, R, gm, om, bg, oxf, data.time, TRUE, evopipe_opt.recalibrate);
     //printf("END MSV OPTIMIZATION: time %f usc %f --> %f\n", data.time, usc_init, data.usc);
     
     if (usc_init > data.usc || data.usc == eslINFINITY) {
@@ -408,7 +407,6 @@ p7_OptimizeMSVFilter(ESL_RANDOMNESS *r, ESL_MIN_CFG *cfg, ESL_MIN_DAT *stats, EV
     else {
       *ret_usc  = data.usc;
       *ret_time = data.time;
-      if (evopipe_opt.recalibrate) workaround_calibrate_profile(r, n, bg, hmm, gm, om);
     }
 
   case TIMEOPT_BOTH:
@@ -490,17 +488,15 @@ p7_OptimizeViterbiFilter(ESL_RANDOMNESS *r, ESL_MIN_CFG *cfg, ESL_MIN_DAT *stats
       time = time_init + cfg->deriv_step;
       vfsc = func_viterbifilter(r, (ESL_DSQ *)dsq, n, hmm, R, gm, om, bg, oxf, time, TRUE, evopipe_opt.recalibrate);
       if (vfsc > vfsc_init) {
-	*ret_vfsc  = vfsc;
+	*ret_vfsc = vfsc;
 	*ret_time = time;
       }
       else {
 	*ret_vfsc = vfsc_init;
 	*ret_time = time_init;
+	func_viterbifilter(r, (ESL_DSQ *)dsq, n, hmm, R, gm, om, bg, oxf, time_init, TRUE, evopipe_opt.recalibrate);
       }
     }
-    
-    // done with this brac optimization
-    if (evopipe_opt.recalibrate) workaround_calibrate_profile(r, n, bg, hmm, gm, om);
     break;
     
   case TIMEOPT_GRAD:
@@ -549,7 +545,7 @@ p7_OptimizeViterbiFilter(ESL_RANDOMNESS *r, ESL_MIN_CFG *cfg, ESL_MIN_DAT *stats
     
     /* unpack the final parameter vector */
     optimize_unpack_paramvector(p, &data);
-    data.vfsc = -sc;
+    data.vfsc = func_viterbifilter(r, (ESL_DSQ *)dsq, n, hmm, R, gm, om, bg, oxf, data.time, TRUE, evopipe_opt.recalibrate);
     //printf("END VIT OPTIMIZATION: time %f vfsc %f --> %f\n", data.time, vfsc_init, data.vfsc);
     
     if (vfsc_init > data.vfsc || data.vfsc == eslINFINITY) {
@@ -560,7 +556,6 @@ p7_OptimizeViterbiFilter(ESL_RANDOMNESS *r, ESL_MIN_CFG *cfg, ESL_MIN_DAT *stats
     else {
       *ret_vfsc = data.vfsc;
       *ret_time = data.time;
-      if (evopipe_opt.recalibrate) workaround_calibrate_profile(r, n, bg, hmm, gm, om);
     }
     break;
     
@@ -647,11 +642,9 @@ p7_OptimizeForwardParser(ESL_RANDOMNESS *r, ESL_MIN_CFG *cfg, ESL_MIN_DAT *stats
       else {
 	*ret_fwdsc = fwdsc_init;
 	*ret_time  = time_init;
-      }
+	func_forwardparser(r, (ESL_DSQ *)dsq, n, hmm, R, gm, om, bg, oxf, time_init, TRUE, evopipe_opt.recalibrate);
+     }
     }
-    
-    // done with this bracket optimization
-    if (evopipe_opt.recalibrate) workaround_calibrate_profile(r, n, bg, hmm, gm, om);
     break;
     
   case TIMEOPT_GRAD:
@@ -700,7 +693,7 @@ p7_OptimizeForwardParser(ESL_RANDOMNESS *r, ESL_MIN_CFG *cfg, ESL_MIN_DAT *stats
     
     /* unpack the final parameter vector */
     optimize_unpack_paramvector(p, &data);
-    data.fwdsc = -sc;
+    data.fwdsc = func_forwardparser(r, (ESL_DSQ *)dsq, n, hmm, R, gm, om, bg, oxf, data.time, TRUE, evopipe_opt.recalibrate);
     //printf("END FWD OPTIMIZATION: time %f fwdsc %f --> %f\n", data.time, fwdsc_init, data.fwdsc);
     
     if (fwdsc_init > data.fwdsc || data.fwdsc == eslINFINITY) {
@@ -711,7 +704,6 @@ p7_OptimizeForwardParser(ESL_RANDOMNESS *r, ESL_MIN_CFG *cfg, ESL_MIN_DAT *stats
     else {
       *ret_fwdsc = data.fwdsc;
       *ret_time  = data.time;
-      if (evopipe_opt.recalibrate) workaround_calibrate_profile(r, n, bg, hmm, gm, om);
     }
     break;
     
@@ -910,7 +902,6 @@ workaround_restore_profile(float *evparam_star, int len, const P7_RATE *R, P7_BG
     gm->evparam[p7_FTAU]    = evparam_star[p7_FTAU];
   }
 }
-
 
 
 /*****************************************************************
