@@ -112,8 +112,6 @@ extern int p7_EvoPipeline_Overthruster(P7_PIPELINE *pli, ESL_RANDOMNESS *r, floa
   float            tol = 0.1;
   int              hmm_restore = *ret_hmm_restore; // do we need to restore the HMM to tstar? 
   int              be_verbose  = FALSE;
-  int              hmm_evolve;
-  int              vfsc_optimized;
   int              status;
   ESL_MIN_CFG     *cfg   = esl_min_cfg_Create(1);
   ESL_MIN_DAT     *stats = esl_min_dat_Create(cfg);
@@ -144,13 +142,12 @@ extern int p7_EvoPipeline_Overthruster(P7_PIPELINE *pli, ESL_RANDOMNESS *r, floa
     
   /* First level filter: the MSV filter, multihit with <om> */
   time = time_star;
-  hmm_evolve = FALSE;
-  if ((status = p7_OptimizeMSVFilter(r, cfg, stats, evopipe_opt, sq->dsq, sq->n, &time, R, hmm, gm, om, bg, pli->oxf, &usc, nullsc, filtersc, pli->F1, hmm_evolve, tol)) != eslOK)      
+  if ((status = p7_OptimizeMSVFilter(r, cfg, stats, evopipe_opt, sq->dsq, sq->n, &time, R, hmm, gm, om, bg, pli->oxf, &usc, nullsc, filtersc, pli->F1, tol)) != eslOK)      
     printf("\nsequence %s msvfilter did not optimize\n", sq->name);  
 
   seq_score = (usc - nullsc) / eslCONST_LOG2;
   P = esl_gumbel_surv(seq_score,  om->evparam[p7_MMU],  om->evparam[p7_MLAMBDA]);
-  //printf("^^MSV %s evolve? %d time %f usc %f nullsc %f seq_score %f\n", sq->name, hmm_evolve, time, usc, nullsc, seq_score);
+  //printf("^^MSV %s P %f time %f usc %f nullsc %f seq_score %f\n", sq->name, P, time, usc, nullsc, seq_score);
   if (P > pli->F1) {
     *ret_hmm_restore = (evopipe_opt.MSV_topt != TIMEOPT_NONE && time != time_star)? TRUE : FALSE;
     goto ERROR;
@@ -182,18 +179,12 @@ extern int p7_EvoPipeline_Overthruster(P7_PIPELINE *pli, ESL_RANDOMNESS *r, floa
     }
   
   /* Second level filter: ViterbiFilter(), multihit with <om> */
-  vfsc_optimized = FALSE;
   if (P > pli->F2)
     {
-      hmm_evolve = (evopipe_opt.MSV_topt != TIMEOPT_NONE)? TRUE:FALSE;
-      if ((status = p7_OptimizeViterbiFilter(r, cfg, stats, evopipe_opt, sq->dsq, sq->n, &time, R, hmm, gm, om, bg, pli->oxf, &vfsc, filtersc, pli->F2, hmm_evolve, tol)) != eslOK) 
+      if ((status = p7_OptimizeViterbiFilter(r, cfg, stats, evopipe_opt, sq->dsq, sq->n, &time, R, hmm, gm, om, bg, pli->oxf, &vfsc, filtersc, pli->F2, tol)) != eslOK) 
 	printf("\nsequence %s vitfilter did not optimize\n", sq->name);
-      if (evopipe_opt.VIT_topt != TIMEOPT_NONE) {
-	vfsc_optimized = TRUE;
-	if (time == time_star) vfsc_optimized = FALSE;
-      }
 
-      //printf("^^VIT %s update? %d time %f vfsc %f\n", sq->name, hmm_evolve, time, vfsc);
+      //printf("^^VIT %s time %f vfsc %f\n", sq->name, time, vfsc);
       seq_score = (vfsc-filtersc) / eslCONST_LOG2;
       P  = esl_gumbel_surv(seq_score,  om->evparam[p7_VMU],  om->evparam[p7_VLAMBDA]);
       if (P > pli->F2) {
@@ -205,17 +196,9 @@ extern int p7_EvoPipeline_Overthruster(P7_PIPELINE *pli, ESL_RANDOMNESS *r, floa
 
 
   /* Parse it with Forward and obtain its real Forward score. */
-  if (vfsc_optimized) {
-    hmm_evolve = FALSE;
-    fwdsc = func_forwardparser(NULL, sq->dsq, sq->n, hmm, R, gm, om, bg, pli->oxf, time, hmm_evolve, FALSE);
-    //printf("^^FWD %s len %d time %f fwdsc %f\n", sq->name, sq->n, time, fwdsc);
-  }
-  else {
-    hmm_evolve = (evopipe_opt.FWD_topt != TIMEOPT_NONE)? TRUE:FALSE;
-    if ((status = p7_OptimizeForwardParser(r, cfg, stats, evopipe_opt, sq->dsq, sq->n, &time, R, hmm, gm, om, bg, pli->oxf, &fwdsc, filtersc, pli->F3, hmm_evolve, tol)) != eslOK)      
+  if ((status = p7_OptimizeForwardParser(r, cfg, stats, evopipe_opt, sq->dsq, sq->n, &time, R, hmm, gm, om, bg, pli->oxf, &fwdsc, filtersc, pli->F3, tol)) != eslOK)      
       printf("\nsequence %s forwardparser did not optimize\n", sq->name);
-    //printf("^^FWD OPT %s updated? %d time %f fwdsc %f filter %f score %f\n", sq->name, hmm_restore, time, fwdsc, filtersc, (fwdsc-filtersc) / eslCONST_LOG2);
-  }
+  //printf("^^FWD OPT %s updated? %d time %f fwdsc %f filter %f score %f\n", sq->name, hmm_restore, time, fwdsc, filtersc, (fwdsc-filtersc) / eslCONST_LOG2);
 
   seq_score = (fwdsc-filtersc) / eslCONST_LOG2;
   P = esl_exp_surv(seq_score,  om->evparam[p7_FTAU],  om->evparam[p7_FLAMBDA]);
@@ -281,7 +264,7 @@ extern int
 p7_OptimizeMSVFilter(ESL_RANDOMNESS *r, ESL_MIN_CFG *cfg, ESL_MIN_DAT *stats, EVOPIPE_OPT evopipe_opt,
 		     const ESL_DSQ *dsq, int n, float *ret_time, P7_RATE *R,
 		     P7_HMM *hmm, P7_PROFILE *gm, P7_OPROFILE *om, P7_BG *bg, P7_OMX *oxf, float *ret_usc,
-		     float nullsc, float filtersc, float F1, int hmm_evolve, float tol)
+		     float nullsc, float filtersc, float F1, float tol)
 {
   struct optimize_data   data;
   double                *p = NULL;	       /* parameter vector                        */
@@ -296,15 +279,16 @@ p7_OptimizeMSVFilter(ESL_RANDOMNESS *r, ESL_MIN_CFG *cfg, ESL_MIN_DAT *stats, EV
   float                  F1_grad = 1.5*F1;
   float                  time_init;
   float                  time;
-  enum timeopt_e         MSV_topt = evopipe_opt.MSV_topt;
-  int                    isfixtime = (evopipe_opt.fixtime >= 0.0)? TRUE : FALSE;
+  enum timeopt_e         MSV_topt   = evopipe_opt.MSV_topt;
+  int                    isfixtime  = (evopipe_opt.fixtime >= 0.0)? TRUE : FALSE;
+  int                    hmm_evolve = (isfixtime || MSV_topt != TIMEOPT_NONE)? TRUE:FALSE;
   int                    np = 1;
   int                    status;
 
   time_init = (isfixtime)? evopipe_opt.fixtime : *ret_time;
   usc_init  = func_msvfilter(r, (ESL_DSQ *)dsq, n, hmm, R, gm, om, bg, oxf, time_init, hmm_evolve, evopipe_opt.recalibrate);
   if (usc_init == eslINFINITY) MSV_topt = TIMEOPT_NONE;
-
+  
   // this is a filter; if the score is already good enough, we don't need to optimize
   seq_score = (usc_init - ESL_MAX(nullsc,filtersc)) / eslCONST_LOG2;
   P = esl_gumbel_surv(seq_score,  om->evparam[p7_MMU],  om->evparam[p7_MLAMBDA]);
@@ -433,7 +417,7 @@ extern int
 p7_OptimizeViterbiFilter(ESL_RANDOMNESS *r, ESL_MIN_CFG *cfg, ESL_MIN_DAT *stats, EVOPIPE_OPT evopipe_opt,
 			 const ESL_DSQ *dsq, int n, float *ret_time, P7_RATE *R,
 			 P7_HMM *hmm, P7_PROFILE *gm, P7_OPROFILE *om, P7_BG *bg, P7_OMX *oxf, float *ret_vfsc,
-			 float filtersc, float F2, int hmm_evolve, float tol)
+			 float filtersc, float F2, float tol)
 {
   struct optimize_data   data;
   double                *p = NULL;	       /* parameter vector                        */
@@ -447,14 +431,15 @@ p7_OptimizeViterbiFilter(ESL_RANDOMNESS *r, ESL_MIN_CFG *cfg, ESL_MIN_DAT *stats
   double                 P;
   float                  F2_brac = 5.0*F2;
   float                  F2_grad = 1.5*F2;
-  enum timeopt_e         VIT_topt = evopipe_opt.VIT_topt;
-  int                    isfixtime = (evopipe_opt.fixtime >= 0.0)? TRUE : FALSE;
+  enum timeopt_e         VIT_topt   = evopipe_opt.VIT_topt;
+  int                    isfixtime  = (evopipe_opt.fixtime >= 0.0)? TRUE : FALSE;
+  int                    hmm_evolve = (isfixtime || VIT_topt != TIMEOPT_NONE)? TRUE:FALSE;;
   int                    np = 1;
   int                    status;
 
   time_init = (isfixtime)? evopipe_opt.fixtime : *ret_time;
   vfsc_init = func_viterbifilter(r, (ESL_DSQ *)dsq, n, hmm, R, gm, om, bg, oxf, time_init, hmm_evolve, FALSE);
-  if (vfsc_init == eslINFINITY) VIT_topt = TIMEOPT_NONE;
+  if (isfixtime || vfsc_init == eslINFINITY) VIT_topt = TIMEOPT_NONE;
 
   // this is a filter; if the score is already good enough, we don't need to optimize
   seq_score = (vfsc_init - filtersc) / eslCONST_LOG2;
@@ -583,7 +568,7 @@ int
 p7_OptimizeForwardParser(ESL_RANDOMNESS *r, ESL_MIN_CFG *cfg, ESL_MIN_DAT *stats, EVOPIPE_OPT evopipe_opt,
 			 const ESL_DSQ *dsq, int n, float *ret_time, P7_RATE *R,
 			 P7_HMM *hmm, P7_PROFILE *gm, P7_OPROFILE *om, P7_BG *bg, P7_OMX *oxf, float *ret_fwdsc,
-			 float filtersc, float F3, int hmm_evolve, float tol)
+			 float filtersc, float F3, float tol)
 {
   struct optimize_data   data;
   double                *p = NULL;	       /* parameter vector                      */
@@ -597,14 +582,15 @@ p7_OptimizeForwardParser(ESL_RANDOMNESS *r, ESL_MIN_CFG *cfg, ESL_MIN_DAT *stats
   float                  time;
   float                  F3_brac = 2.0*F3;
   float                  F3_grad = 1.0;
-  enum timeopt_e         FWD_topt = evopipe_opt.FWD_topt;
-  int                    isfixtime = (evopipe_opt.fixtime >= 0.0)? TRUE : FALSE;
+  enum timeopt_e         FWD_topt  = evopipe_opt.FWD_topt;
+  int                    isfixtime  = (evopipe_opt.fixtime >= 0.0)? TRUE : FALSE;
+  int                    hmm_evolve = (isfixtime || FWD_topt != TIMEOPT_NONE)? TRUE:FALSE;;
   int                    np = 1;
   int                    status;
 
   time_init = (isfixtime)? evopipe_opt.fixtime : *ret_time;
   fwdsc_init = func_forwardparser(r, (ESL_DSQ *)dsq, n, hmm, R, gm, om, bg, oxf, time_init, hmm_evolve, FALSE);
-  if (fwdsc_init == eslINFINITY) FWD_topt = TIMEOPT_NONE;
+  if (isfixtime || fwdsc_init == eslINFINITY) FWD_topt = TIMEOPT_NONE;
 
   // this is NOT a filter; if the score is already good enough, we don't need to optimize
   seq_score = (fwdsc_init - filtersc) / eslCONST_LOG2;
@@ -613,7 +599,7 @@ p7_OptimizeForwardParser(ESL_RANDOMNESS *r, ESL_MIN_CFG *cfg, ESL_MIN_DAT *stats
   switch(FWD_topt) {
   case TIMEOPT_NONE:
     *ret_fwdsc = fwdsc_init;
-    *ret_time = time_init;
+    *ret_time  = time_init;
     break;
 
   case TIMEOPT_BRAC:

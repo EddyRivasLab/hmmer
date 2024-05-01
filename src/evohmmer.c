@@ -855,6 +855,10 @@ p7_EvolveFromRate(FILE *statfp, P7_HMM *hmm, const P7_RATE *R, const P7_BG *bg, 
     }
     else {
       eta = e1R->sI;
+      // hack to have t_II = 0 for time = 0
+      if (time < 1.0) {
+	eta *= (exp(time) - 1.0) / (exp(1.0) - 1.0);
+      }
 
       if (time < eslINFINITY) {
 	gammaM = 1.0 - exp(-e1R->muA[e1R_S] * time);

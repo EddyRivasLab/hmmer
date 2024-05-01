@@ -511,7 +511,13 @@ serial_master(ESL_GETOPTS *go, struct cfg_s *cfg)
  	  else if (esl_opt_GetBoolean(go, "--vit_grad"))  { info[i].evopipe_opt.VIT_topt = TIMEOPT_GRAD; }
  	  if      (esl_opt_GetBoolean(go, "--fwd_none"))  { info[i].evopipe_opt.FWD_topt = TIMEOPT_NONE; }
  	  else if (esl_opt_GetBoolean(go, "--fwd_brac"))  { info[i].evopipe_opt.FWD_topt = TIMEOPT_BRAC; }
- 	  else if (esl_opt_GetBoolean(go, "--fwd_grad"))  { info[i].evopipe_opt.FWD_topt = TIMEOPT_GRAD; }	  
+ 	  else if (esl_opt_GetBoolean(go, "--fwd_grad"))  { info[i].evopipe_opt.FWD_topt = TIMEOPT_GRAD; }
+	  if (hmmrate->fixtime >= 0) {
+	    info[i].evopipe_opt.MSV_topt = TIMEOPT_NONE;
+	    info[i].evopipe_opt.VIT_topt = TIMEOPT_NONE;
+	    info[i].evopipe_opt.FWD_topt = TIMEOPT_NONE;
+	  }
+	  
 	  info[i].evopipe_opt.noevo       = esl_opt_GetBoolean(go, "--noevo");
 	  if (info[i].evopipe_opt.noevo) {
 	    info[i].evopipe_opt.MSV_topt = TIMEOPT_NONE;
@@ -1359,14 +1365,12 @@ mpi_worker(ESL_GETOPTS *go, struct cfg_s *cfg)
       ESL_ALLOC(hmmrate, sizeof(HMMRATE));
       hmmrate->emR = NULL;
       hmmrate->S   = NULL;
-      hmmrate->fixtime  = esl_opt_IsOn(go, "--fixtime")? esl_opt_GetReal(go, "--fixtime") : -1.0;
       hmmrate->betainf  = esl_opt_GetReal(go, "--betainf");
       if (esl_opt_IsUsed(go, "-R")) {
 	hmmrate->emR = ratematrix_emrate_Create(abc);
 	ratematrix_emrate_Set(esl_opt_GetString(go, "--rmx"), (const double *)bg->f, hmmrate->emR, info[0].tol, errbuf, FALSE);
       }
 
-      evopipe_opt.fixtime = hmmrate->fixtime;
       if      (esl_opt_GetBoolean(go, "--msv_none"))  { evopipe_opt.MSV_topt = TIMEOPT_NONE; }
       else if (esl_opt_GetBoolean(go, "--msv_brac"))  { evopipe_opt.MSV_topt = TIMEOPT_BRAC; }
       else if (esl_opt_GetBoolean(go, "--msv_grad"))  { evopipe_opt.MSV_topt = TIMEOPT_GRAD; }
@@ -1375,9 +1379,11 @@ mpi_worker(ESL_GETOPTS *go, struct cfg_s *cfg)
       else if (esl_opt_GetBoolean(go, "--vit_grad"))  { evopipe_opt.VIT_topt = TIMEOPT_GRAD; }
       if      (esl_opt_GetBoolean(go, "--fwd_none"))  { evopipe_opt.FWD_topt = TIMEOPT_NONE; }
       else if (esl_opt_GetBoolean(go, "--fwd_brac"))  { evopipe_opt.FWD_topt = TIMEOPT_BRAC; }
-      else if (esl_opt_GetBoolean(go, "--fwd_grad"))  { evopipe_opt.FWD_topt = TIMEOPT_GRAD; }	  
+      else if (esl_opt_GetBoolean(go, "--fwd_grad"))  { evopipe_opt.FWD_topt = TIMEOPT_GRAD; }
+      
+      evopipe_opt.fixtime = hmmrate->fixtime;
       evopipe_opt.noevo = esl_opt_GetBoolean(go, "--noevo");
-      if (evopipe_opt.noevo) {
+      if (evopipe_opt.noevo || evopipe_opt.fixtime >= 0.0) {
 	evopipe_opt.MSV_topt = TIMEOPT_NONE;
 	evopipe_opt.VIT_topt = TIMEOPT_NONE;
 	evopipe_opt.FWD_topt = TIMEOPT_NONE;
