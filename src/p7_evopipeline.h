@@ -68,7 +68,9 @@ extern int p7_OptimizeForwardParser(ESL_RANDOMNESS *r, ESL_MIN_CFG *cfg, ESL_MIN
 				    float filtersc, float F3, float tol);
 extern int p7_EvoPipeline_Overthruster(P7_PIPELINE *pli, ESL_RANDOMNESS *r, float *evparam_star, EVOPIPE_OPT evopipe_opt,
 				       P7_RATE *R, P7_HMM *hmm, P7_PROFILE *gm, P7_OPROFILE *om, P7_BG *bg, const ESL_SQ *sq, const ESL_SQ *ntsq, 
-				       int *ret_hmm_restore, float *ret_fwdsc, float *ret_nullsc);
+				       int *ret_hmm_restore, float *ret_fwdsc, float *ret_nullsc, float *ret_time);
+extern int p7_EvoPipeline_Mainstage(P7_PIPELINE * pli, P7_OPROFILE * om, P7_BG * bg, const ESL_SQ *sq, const ESL_SQ *ntsq, P7_TOPHITS *hitlist,
+				    float fwdsc, float nullsc, float time);
 extern int p7_EvoPipeline(P7_PIPELINE *pli, ESL_RANDOMNESS *r, float *evparam_star, EVOPIPE_OPT evopipe_opt,
 			  P7_RATE *R, P7_HMM *hmm, P7_PROFILE *gm, P7_OPROFILE *om, P7_BG *bg,
 			  const ESL_SQ *sq, const ESL_SQ *ntsq, P7_TOPHITS *hitlist, int *ret_hmm_restore);

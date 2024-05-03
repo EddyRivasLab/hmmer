@@ -98,7 +98,7 @@ static inline void workaround_restore_profile(float *evparam_star, int len, cons
  */
 extern int p7_EvoPipeline_Overthruster(P7_PIPELINE *pli, ESL_RANDOMNESS *r, float *evparam_star, EVOPIPE_OPT evopipe_opt,
 				       P7_RATE *R, P7_HMM *hmm, P7_PROFILE *gm, P7_OPROFILE *om, P7_BG *bg, const ESL_SQ *sq, const ESL_SQ *ntsq, 
-				       int *ret_hmm_restore, float *ret_fwdsc, float *ret_nullsc)
+				       int *ret_hmm_restore, float *ret_fwdsc, float *ret_nullsc, float *ret_time)
 {
   float            time_star = 1.0;
   float            usc, vfsc, fwdsc;         /* filter scores                           */
@@ -136,7 +136,7 @@ extern int p7_EvoPipeline_Overthruster(P7_PIPELINE *pli, ESL_RANDOMNESS *r, floa
 
   // the bias composition score
   if (pli->do_biasfilter) p7_bg_FilterScore(bg, sq->dsq, sq->n, &filtersc);
- 
+
   if (hmm_restore) 
     workaround_restore_profile(evparam_star, sq->n, R, bg, hmm, gm, om);
     
@@ -147,9 +147,13 @@ extern int p7_EvoPipeline_Overthruster(P7_PIPELINE *pli, ESL_RANDOMNESS *r, floa
 
   seq_score = (usc - nullsc) / eslCONST_LOG2;
   P = esl_gumbel_surv(seq_score,  om->evparam[p7_MMU],  om->evparam[p7_MLAMBDA]);
-  //printf("^^MSV %s P %f time %f usc %f nullsc %f seq_score %f\n", sq->name, P, time, usc, nullsc, seq_score);
+#if 0
+  printf("^^MSV %s P %f F1 %f time %f usc %f nullsc %f seq_score %f tau %f lambda %f\n",
+	 sq->name, P, pli->F1, time, usc, nullsc, seq_score, om->evparam[p7_MMU],  om->evparam[p7_MLAMBDA]);
+#endif
   if (P > pli->F1) {
     *ret_hmm_restore = (evopipe_opt.MSV_topt != TIMEOPT_NONE && time != time_star)? TRUE : FALSE;
+    *ret_time = time;
     goto ERROR;
   }
   pli->n_past_msv++;
@@ -159,9 +163,12 @@ extern int p7_EvoPipeline_Overthruster(P7_PIPELINE *pli, ESL_RANDOMNESS *r, floa
     {
       seq_score = (usc - filtersc) / eslCONST_LOG2;
       P = esl_gumbel_surv(seq_score,  om->evparam[p7_MMU],  om->evparam[p7_MLAMBDA]);
-      //printf("^^BIAS %s P %f F1 %f usc %f filtersc %f score %f\n", sq->name, P, pli->F1, usc, filtersc, seq_score);
+#if 0
+      printf("^^BIAS %s P %f F1 %f usc %f filtersc %f score %f\n", sq->name, P, pli->F1, usc, filtersc, seq_score);
+#endif
       if (P > pli->F1) {
 	*ret_hmm_restore = (evopipe_opt.MSV_topt != TIMEOPT_NONE && time != time_star)? TRUE : FALSE;
+	*ret_time = time;
 	goto ERROR;
       }
     }
@@ -183,12 +190,15 @@ extern int p7_EvoPipeline_Overthruster(P7_PIPELINE *pli, ESL_RANDOMNESS *r, floa
     {
       if ((status = p7_OptimizeViterbiFilter(r, cfg, stats, evopipe_opt, sq->dsq, sq->n, &time, R, hmm, gm, om, bg, pli->oxf, &vfsc, filtersc, pli->F2, tol)) != eslOK) 
 	printf("\nsequence %s vitfilter did not optimize\n", sq->name);
-
-      //printf("^^VIT %s time %f vfsc %f\n", sq->name, time, vfsc);
       seq_score = (vfsc-filtersc) / eslCONST_LOG2;
       P  = esl_gumbel_surv(seq_score,  om->evparam[p7_VMU],  om->evparam[p7_VLAMBDA]);
+#if 0
+  printf("^^VIT %s P %f F2 %f time %f fwdsc %f filter %f score %f tau %f lambda %f\n",
+	 sq->name, P, pli->F2, time, vfsc, filtersc, (vfsc-filtersc) / eslCONST_LOG2, om->evparam[p7_VMU],  om->evparam[p7_VLAMBDA]);
+#endif
       if (P > pli->F2) {
 	*ret_hmm_restore = (evopipe_opt.VIT_topt != TIMEOPT_NONE && time != time_star)? TRUE : FALSE;
+	*ret_time = time;
 	goto ERROR;
       }
     }
@@ -198,14 +208,15 @@ extern int p7_EvoPipeline_Overthruster(P7_PIPELINE *pli, ESL_RANDOMNESS *r, floa
   /* Parse it with Forward and obtain its real Forward score. */
   if ((status = p7_OptimizeForwardParser(r, cfg, stats, evopipe_opt, sq->dsq, sq->n, &time, R, hmm, gm, om, bg, pli->oxf, &fwdsc, filtersc, pli->F3, tol)) != eslOK)      
       printf("\nsequence %s forwardparser did not optimize\n", sq->name);
-  //printf("^^FWD OPT %s updated? %d time %f fwdsc %f filter %f score %f\n", sq->name, hmm_restore, time, fwdsc, filtersc, (fwdsc-filtersc) / eslCONST_LOG2);
-
   seq_score = (fwdsc-filtersc) / eslCONST_LOG2;
   P = esl_exp_surv(seq_score,  om->evparam[p7_FTAU],  om->evparam[p7_FLAMBDA]);
-  //printf("^^FWD %s P %f time %f fwdsc %f filter %f score %f tau %f lambda %f\n", sq->name, P, time, fwdsc, filtersc, (fwdsc-filtersc) / eslCONST_LOG2, om->evparam[p7_FTAU],  om->evparam[p7_FLAMBDA]);
-
+#if 0
+  printf("^^FWD %s P %f F3 %f time %f fwdsc %f filter %f score %f tau %f lambda %f\n",
+	 sq->name, P, pli->F3, time, fwdsc, filtersc, (fwdsc-filtersc) / eslCONST_LOG2, om->evparam[p7_FTAU],  om->evparam[p7_FLAMBDA]);
+#endif
   if (P > pli->F3)  {
     *ret_hmm_restore = (time != time_star)? TRUE:FALSE;
+    *ret_time = time;
     goto ERROR;
   }
   pli->n_past_fwd++;
@@ -213,6 +224,8 @@ extern int p7_EvoPipeline_Overthruster(P7_PIPELINE *pli, ESL_RANDOMNESS *r, floa
   *ret_hmm_restore = TRUE;
   *ret_fwdsc       = fwdsc;
   *ret_nullsc      = nullsc;
+  *ret_time        = time;
+
   
   if (cfg)   esl_min_cfg_Destroy(cfg);
   if (stats) esl_min_dat_Destroy(stats);
@@ -225,6 +238,229 @@ extern int p7_EvoPipeline_Overthruster(P7_PIPELINE *pli, ESL_RANDOMNESS *r, floa
 
 }
 
+  /* Function:  p7_Pipeline_Mainstage()
+   * Synopsis:  HMMER3's accelerated seq/profile comparison pipeline.
+   *
+   * Purpose:   Run the main stage of HMMER's accelerated comparison
+   *            pipeline to determine if a hit really has occurred  
+   *            and update the hitlist accordingly.
+   *
+   * Returns:   <eslOK> on success. If a significant hit is obtained,
+   *            its information is added to the growing <hitlist>.
+   *
+   *            <eslEINVAL> if (in a scan pipeline) we're supposed to
+   *            set GA/TC/NC bit score thresholds but the model doesn't
+   *            have any.
+   *
+   *            <eslERANGE> on numerical overflow errors in the
+   *            optimized vector implementations; particularly in
+   *            posterior decoding. I don't believe this is possible for
+   *            multihit local models, but I'm set up to catch it
+   *            anyway. We may emit a warning to the user, but cleanly
+   *            skip the problematic sequence and continue.
+   *
+   * Throws:    <eslEMEM> on allocation failure.
+   *
+   *            <eslETYPE> if <sq> is more than 100K long, which can
+   *            happen when someone uses hmmsearch/hmmscan instead of
+   *            nhmmer/nhmmscan on a genome DNA seq db.
+   *
+   * Xref:      J4/25.
+   *
+   * Note:      Error handling needs improvement. The <eslETYPE> exception
+   *            was added as a late bugfix. It really should be an <eslEINVAL>
+   *            normal error (because it's a user error). But then we need
+   *            all our p7_Pipeline() calls to check their return status
+   *            and handle normal errors appropriately, which we haven't
+   *            been careful enough about. [SRE H9/4]
+   */
+extern
+int p7_EvoPipeline_Mainstage(P7_PIPELINE * pli, P7_OPROFILE * om, P7_BG * bg, const ESL_SQ *sq, const ESL_SQ *ntsq, P7_TOPHITS *hitlist, float fwdsc, float nullsc, float time)
+  {
+    P7_HIT *hit = NULL;     /* ptr to the current hit output data      */                    
+    float seqbias;
+    float seq_score;             /* the corrected per-seq bit score */
+    float sum_score;             /* the corrected reconstruction score for the seq */
+    float pre_score, pre2_score; /* uncorrected bit scores for seq */
+    double P;                    /* P-value of a hit */
+    double lnP;                  /* log P-value of a hit */
+    int Ld;                      /* # of residues in envelopes */
+    int d;
+    int status;
+
+  /* Run a Backwards parser pass, and hand it to domain definition workflow */
+  p7_omx_GrowTo(pli->oxb, om->M, 0, sq->n);
+  p7_BackwardParser(sq->dsq, sq->n, om, pli->oxf, pli->oxb, NULL);
+ 
+  status = p7_domaindef_ByPosteriorHeuristics(sq, ntsq, om, pli->oxf, pli->oxb, pli->fwd, pli->bck, pli->ddef, bg, FALSE, NULL, NULL, NULL);
+  if (status != eslOK) ESL_FAIL(status, pli->errbuf, "domain definition workflow failure"); /* eslERANGE can happen  */
+  if (pli->ddef->nregions   == 0) return eslOK; /* score passed threshold but there's no discrete domains here       */
+  if (pli->ddef->nenvelopes == 0) return eslOK; /* rarer: region was found, stochastic clustered, no envelopes found */
+  if (pli->ddef->ndom       == 0) return eslOK; /* even rarer: envelope found, no domain identified {iss131}         */
+
+
+  /* Calculate the null2-corrected per-seq score */
+  if (pli->do_null2)
+    {
+      seqbias = esl_vec_FSum(pli->ddef->n2sc, sq->n+1);
+      seqbias = p7_FLogsum(0.0, log(bg->omega) + seqbias);
+    }
+  else seqbias = 0.0;
+  pre_score =  (fwdsc - nullsc) / eslCONST_LOG2; 
+  seq_score =  (fwdsc - (nullsc + seqbias)) / eslCONST_LOG2;
+  
+  /* Calculate the "reconstruction score": estimated
+   * per-sequence score as sum of individual domains,
+   * discounting domains that aren't significant after they're
+   * null-corrected.
+   */
+  sum_score = 0.0f;
+  seqbias   = 0.0f;
+
+  Ld        = 0;  
+  if (pli->do_null2) 
+    {
+      for (d = 0; d < pli->ddef->ndom; d++) 
+	{
+	  if (pli->ddef->dcl[d].envsc - pli->ddef->dcl[d].domcorrection > 0.0)
+	    {
+	      sum_score += pli->ddef->dcl[d].envsc;         /* NATS */
+	      Ld        += pli->ddef->dcl[d].jenv  - pli->ddef->dcl[d].ienv + 1;
+	      seqbias   += pli->ddef->dcl[d].domcorrection; /* NATS */  
+	    }
+	}
+      seqbias = p7_FLogsum(0.0, log(bg->omega) + seqbias);  /* NATS */
+    }
+  else 
+    {
+      for (d = 0; d < pli->ddef->ndom; d++) 
+	{
+	  if (pli->ddef->dcl[d].envsc > 0.0)
+	    {
+	      sum_score += pli->ddef->dcl[d].envsc;      /* NATS */
+	      Ld        += pli->ddef->dcl[d].jenv  - pli->ddef->dcl[d].ienv + 1;
+	    }
+	}
+      seqbias = 0.0;
+    }    
+  sum_score += (sq->n-Ld) * log((float) sq->n / (float) (sq->n+3)); /* NATS */
+  pre2_score = (sum_score - nullsc) / eslCONST_LOG2;                /* BITS */
+  sum_score  = (sum_score - (nullsc + seqbias)) / eslCONST_LOG2;    /* BITS */
+
+  /* A special case: let sum_score override the seq_score when it's better, and it includes at least 1 domain */
+  if (Ld > 0 && sum_score > seq_score)
+    {
+      seq_score = sum_score;
+      pre_score = pre2_score;
+    }
+
+  /* Apply thresholding and determine whether to put this
+   * target into the hit list. E-value thresholding may
+   * only be a lower bound for now, so this list may be longer
+   * than eventually reported.
+   */
+  lnP =  esl_exp_logsurv (seq_score,  om->evparam[p7_FTAU], om->evparam[p7_FLAMBDA]);
+  if (p7_pli_TargetReportable(pli, seq_score, lnP))
+    {
+      p7_tophits_CreateNextHit(hitlist, &hit);
+      if (pli->mode == p7_SEARCH_SEQS) {
+        if (                       (status  = esl_strdup(sq->name, -1, &(hit->name)))  != eslOK) ESL_EXCEPTION(eslEMEM, "allocation failure");
+        if (sq->acc[0]  != '\0' && (status  = esl_strdup(sq->acc,  -1, &(hit->acc)))   != eslOK) ESL_EXCEPTION(eslEMEM, "allocation failure");
+        if (sq->desc[0] != '\0' && (status  = esl_strdup(sq->desc, -1, &(hit->desc)))  != eslOK) ESL_EXCEPTION(eslEMEM, "allocation failure");
+      } else {
+        if ((status  = esl_strdup(om->name, -1, &(hit->name)))  != eslOK) esl_fatal("allocation failure");
+        if ((status  = esl_strdup(om->acc,  -1, &(hit->acc)))   != eslOK) esl_fatal("allocation failure");
+        if ((status  = esl_strdup(om->desc, -1, &(hit->desc)))  != eslOK) esl_fatal("allocation failure");
+      } 
+      hit->ndom       = pli->ddef->ndom;
+      hit->nexpected  = pli->ddef->nexpected;
+      hit->nregions   = pli->ddef->nregions;
+      hit->nclustered = pli->ddef->nclustered;
+      hit->noverlaps  = pli->ddef->noverlaps;
+      hit->nenvelopes = pli->ddef->nenvelopes;
+
+      hit->time       = time;
+      
+      hit->pre_score  = pre_score; /* BITS */
+      hit->pre_lnP    = esl_exp_logsurv (hit->pre_score,  om->evparam[p7_FTAU], om->evparam[p7_FLAMBDA]);
+
+      hit->score      = seq_score; /* BITS */
+      hit->lnP        = lnP;
+      hit->sortkey    = pli->inc_by_E ? -lnP : seq_score; /* per-seq output sorts on bit score if inclusion is by score  */
+
+      hit->sum_score  = sum_score; /* BITS */
+      hit->sum_lnP    = esl_exp_logsurv (hit->sum_score,  om->evparam[p7_FTAU], om->evparam[p7_FLAMBDA]);
+
+      /* Transfer all domain coordinates (unthresholded for
+       * now) with their alignment displays to the hit list,
+       * associated with the sequence. Domain reporting will
+       * be thresholded after complete hit list is collected,
+       * because we probably need to know # of significant
+       * hits found to set domZ, and thence threshold and
+       * count reported domains.
+       */
+      hit->dcl         = pli->ddef->dcl;
+      pli->ddef->dcl   = NULL;
+      hit->best_domain = 0;
+      for (d = 0; d < hit->ndom; d++)
+      {
+        Ld = hit->dcl[d].jenv - hit->dcl[d].ienv + 1;
+        hit->dcl[d].bitscore = hit->dcl[d].envsc + (sq->n-Ld) * log((float) sq->n / (float) (sq->n+3)); /* NATS, for the moment... */
+        hit->dcl[d].dombias  = (pli->do_null2 ? p7_FLogsum(0.0, log(bg->omega) + hit->dcl[d].domcorrection) : 0.0); /* NATS, and will stay so */
+        hit->dcl[d].bitscore = (hit->dcl[d].bitscore - (nullsc + hit->dcl[d].dombias)) / eslCONST_LOG2; /* now BITS, as it should be */
+        hit->dcl[d].lnP      = esl_exp_logsurv (hit->dcl[d].bitscore,  om->evparam[p7_FTAU], om->evparam[p7_FLAMBDA]);
+
+        if (hit->dcl[d].bitscore > hit->dcl[hit->best_domain].bitscore) hit->best_domain = d;
+      }
+
+      /* If we're using model-specific bit score thresholds (GA | TC |
+       * NC) and we're in an hmmscan pipeline (mode = p7_SCAN_MODELS),
+       * then we *must* apply those reporting or inclusion thresholds
+       * now, because this model is about to go away; we won't have
+       * its thresholds after all targets have been processed.
+       * 
+       * If we're using E-value thresholds and we don't know the
+       * search space size (Z_setby or domZ_setby =
+       * p7_ZSETBY_NTARGETS), we *cannot* apply those thresholds now,
+       * and we *must* wait until all targets have been processed
+       * (see p7_tophits_Threshold()).
+       * 
+       * For any other thresholding, it doesn't matter whether we do
+       * it here (model-specifically) or at the end (in
+       * p7_tophits_Threshold()). 
+       * 
+       * What we actually do, then, is to set the flags if we're using
+       * model-specific score thresholds (regardless of whether we're
+       * in a scan or a search pipeline); otherwise we leave it to 
+       * p7_tophits_Threshold(). p7_tophits_Threshold() is always
+       * responsible for *counting* the reported, included sequences.
+       * 
+       * [xref J5/92]
+       */
+      if (pli->use_bit_cutoffs)
+      {
+        if (p7_pli_TargetReportable(pli, hit->score, hit->lnP))
+        {
+          hit->flags |= p7_IS_REPORTED;
+          if (p7_pli_TargetIncludable(pli, hit->score, hit->lnP))
+            hit->flags |= p7_IS_INCLUDED;
+        }
+
+        for (d = 0; d < hit->ndom; d++)
+        {
+          if (p7_pli_DomainReportable(pli, hit->dcl[d].bitscore, hit->dcl[d].lnP))
+          {
+            hit->dcl[d].is_reported = TRUE;
+            if (p7_pli_DomainIncludable(pli, hit->dcl[d].bitscore, hit->dcl[d].lnP))
+              hit->dcl[d].is_included = TRUE;
+          }
+        }
+      }
+	  
+    }
+
+  return eslOK;
+}
 
 /* Function:  p7_Pipeline()
  * Synopsis:  HMMER3's accelerated seq/profile comparison pipeline.
@@ -243,10 +479,11 @@ extern int p7_EvoPipeline(P7_PIPELINE *pli, ESL_RANDOMNESS *r, float *evparam_st
   int status;
   float fwdsc;
   float nullsc;
+  float time;
 
-  status = p7_EvoPipeline_Overthruster(pli, r, evparam_star, evopipe_opt, R, hmm, gm, om, bg, sq, ntsq, ret_hmm_restore, &fwdsc, &nullsc);
+  status = p7_EvoPipeline_Overthruster(pli, r, evparam_star, evopipe_opt, R, hmm, gm, om, bg, sq, ntsq, ret_hmm_restore, &fwdsc, &nullsc, &time);
   if (status == eslOK){ //run the main stage
-    return (p7_Pipeline_Mainstage(pli, om, bg, sq, ntsq, hitlist, fwdsc, nullsc));
+    return p7_EvoPipeline_Mainstage(pli, om, bg, sq, ntsq, hitlist, fwdsc, nullsc, time);
   }
   if (status == eslFAIL){  /* overthruster status of eslFAIL indicates that the thruster completed 
                               correctly, but the comparison did not score highly enough to proceed,

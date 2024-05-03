@@ -123,7 +123,7 @@ HDRS =  hmmer.h \
 	evohmmer.h\
 	minimize.h\
 	p7_evopipeline.h\
-	p7_etophits_output_tabular.h\
+	p7_evotophits.h\
 	ratematrix.h\
 	p7_hmmcache.h \
 	#evo_evalues.h\
@@ -198,7 +198,7 @@ OBJS =  build.o\
 	evohmmer.o\
 	minimize.o\
 	p7_evopipeline.o\
-	p7_etophits_output_tabular.o\
+	p7_evotophits.o\
 	ratematrix.o\
 	ratebuilder.o\
 	ratematrix.o\
