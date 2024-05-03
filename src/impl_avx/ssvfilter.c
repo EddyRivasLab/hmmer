@@ -427,8 +427,8 @@ p7_SSVFilter(const ESL_DSQ *dsq, int L, const P7_OPROFILE *om, float *ret_sc){
   float res_sse, res_avx, res_avx512;
   int res, res2, res3;
 
-  res = p7_SSVFilter_sse(dsq, L, om, &res_avx);
-  res2 = p7_SSVFilter_avx(dsq, L, om, &res_sse);
+  res = p7_SSVFilter_avx512(dsq, L, om, &res_sse);
+  res2 = p7_SSVFilter_sse_unrolled(dsq, L, om, &res_avx);
 
   if(res != res2){
     printf("Error: SSV calls returned different results: %d %d\n", res, res2);

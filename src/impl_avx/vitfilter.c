@@ -38,7 +38,7 @@ float res_sse, res_avx;
 int res;
 
 res = p7_ViterbiFilter_sse(dsq, L, om, ox, &res_sse);
-p7_ViterbiFilter_avx(dsq, L, om, ox, &res_avx);
+p7_ViterbiFilter_avx512(dsq, L, om, ox, &res_avx);
 
 if(esl_FCompare(res_sse, res_avx, .01, .01) != eslOK){
   printf("Error: Viterbi Filter miss-match.  SSE = %f, AVX = %f\n", res_sse, res_avx);

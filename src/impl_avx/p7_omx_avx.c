@@ -6,7 +6,7 @@ p7_omx_FDeconvert_avx(P7_OMX *ox, P7_GMX *gx)
 {
   int Q = p7O_NQF_AVX(ox->M);
   int i, q, r, k;
-  union { __m256 v; float p[4]; } u;
+  union { __m256 v; float p[8]; } u;
   float      **dp   = gx->dp;
   float       *xmx  = gx->xmx; 			    
 

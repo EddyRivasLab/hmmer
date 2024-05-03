@@ -247,7 +247,7 @@
 
 #define RESET_13()                              \
   RESET_12()                                    \
-  register __m128i sv12 = beginv;
+ register __m128i sv12 = beginv;
 
 #define RESET_14()                              \
   RESET_13()                                    \
@@ -269,7 +269,219 @@
   RESET_17()                                    \
   register __m128i sv17 = beginv;
 
+//Applies 4:1 loop unrolling to improve performance
+#define CALC_UNROLLED(reset, step, convert, width)       \
+  int i;                                        \
+  int i2;                                       \
+  int Q        = p7O_NQB(om->M);                \
+  __m128i *rsc;                                 \
+                                                \
+  __m128i low_byte_128 = _mm_setzero_si128(); \
+  low_byte_128 = _mm_insert_epi16(low_byte_128, 128, 0); \
+  int w = width;                                \
+  dsq++;                                        \
+                                                \
+  reset()                                       \
+  int num_iters; \
+  if (L <= Q- q -w){ \
+        num_iters = L;  \
+  }  \
+  else{  \
+        num_iters = Q -q -w; \
+  } \
+  i = 0; \
+  while(num_iters >=4){ \
+        rsc = om->sbv[dsq[i]] + i + q;            \
+    step()    \
+    i++; \
+        rsc = om->sbv[dsq[i]] + i + q;            \
+    step()    \
+    i++; \
+    rsc = om->sbv[dsq[i]] + i + q;            \
+    step()    \
+    i++; \
+    rsc = om->sbv[dsq[i]] + i + q;            \
+    step()    \
+    i++; \
+    num_iters -= 4; \
+  } \
+  while(num_iters >0){ \
+          rsc = om->sbv[dsq[i]] + i + q;            \
+      step()                                 \
+      i++; \
+      num_iters--; \
+  }  \
+  i = Q - q - w;                                \
+  convert(step, LENGTH_CHECK, done1)            \
+done1:                                          \
+ for (i2 = Q - q; i2 < L - Q; i2 += Q)          \
+   {                                            \
+        i = 0; \
+        num_iters = Q - w; \
+        while (num_iters >= 4){  \
+       rsc = om->sbv[dsq[i2 + i]] + i;        \
+       step() \
+       i++; \
+       rsc = om->sbv[dsq[i2 + i]] + i;        \
+       step() \
+       i++; \
+       rsc = om->sbv[dsq[i2 + i]] + i;        \
+       step() \
+       i++; \
+       rsc = om->sbv[dsq[i2 + i]] + i;        \
+       step() \
+       i++; \
+       num_iters-= 4; \
+        }\
+        while(num_iters > 0){ \
+                 rsc = om->sbv[dsq[i2 + i]] + i;        \
+         step()    \
+         i++; \
+         num_iters--;      \
+        } \
+                                               \
+     i += i2;                                   \
+     convert(step, NO_CHECK, ) \
+   }                                            \
+if((L - i2) < (Q-w)){			   \
+        num_iters = L -i2; \
+        } \
+ else{  \
+        num_iters = Q - w; \
+ } \
+ i = 0; \
+ while (num_iters >= 4){ \
+     rsc = om->sbv[dsq[i2 + i]] + i;            \
+     step()                                     \
+     i+= 1;  \
+     rsc = om->sbv[dsq[i2 + i]] + i;            \
+     step()                                     \
+     i+= 1;  \
+     rsc = om->sbv[dsq[i2 + i]] + i;            \
+     step()                                     \
+     i+= 1;  \
+     rsc = om->sbv[dsq[i2 + i]] + i;            \
+     step()                                     \
+     i+= 1;  \
+     num_iters -= 4; \
+   }                                            \
+   while(num_iters > 0) {  \
+         rsc = om->sbv[dsq[i2 + i]] + i;            \
+     step()                                     \
+     i+= 1;  \
+     num_iters--; \
+   } \
+ i+=i2;                                         \
+ convert(step, LENGTH_CHECK, done2)             \
+done2:                                          \
+        return xEv;
 
+#define CALC_UNROLLED(reset, step, convert, width)	\
+  int i;                                        \
+  int i2;                                       \
+  int Q        = p7O_NQB(om->M);                \
+  __m128i *rsc;                                 \
+                                                \
+  __m128i low_byte_128 = _mm_setzero_si128(); \
+  low_byte_128 = _mm_insert_epi16(low_byte_128, 128, 0); \
+  int w = width;                                \
+  dsq++;                                        \
+                                                \
+  reset()                                       \
+  int num_iters; \
+  if (L <= Q- q -w){ \
+        num_iters = L;  \
+  }  \
+  else{  \
+        num_iters = Q -q -w; \
+  } \
+  i = 0; \
+  while(num_iters >=4){ \
+        rsc = om->sbv[dsq[i]] + i + q;            \
+    step()    \
+    i++; \
+        rsc = om->sbv[dsq[i]] + i + q;            \
+    step()    \
+    i++; \
+    rsc = om->sbv[dsq[i]] + i + q;            \
+    step()    \
+    i++; \
+    rsc = om->sbv[dsq[i]] + i + q;            \
+    step()    \
+    i++; \
+    num_iters -= 4; \
+  } \
+  while(num_iters >0){ \
+          rsc = om->sbv[dsq[i]] + i + q;            \
+      step()                                 \
+      i++; \
+      num_iters--; \
+  }  \
+  i = Q - q - w;                                \
+  convert(step, LENGTH_CHECK, done1)            \
+done1:                                          \
+ for (i2 = Q - q; i2 < L - Q; i2 += Q)          \
+   {                                            \
+        i = 0; \
+        num_iters = Q - w; \
+        while (num_iters >= 4){  \
+       rsc = om->sbv[dsq[i2 + i]] + i;        \
+       step() \
+       i++; \
+       rsc = om->sbv[dsq[i2 + i]] + i;        \
+       step() \
+       i++; \
+       rsc = om->sbv[dsq[i2 + i]] + i;        \
+       step() \
+       i++; \
+       rsc = om->sbv[dsq[i2 + i]] + i;        \
+       step() \
+       i++; \
+       num_iters-= 4; \
+        }\
+        while(num_iters > 0){ \
+                 rsc = om->sbv[dsq[i2 + i]] + i;        \
+         step()    \
+         i++; \
+         num_iters--;      \
+        } \
+                                               \
+     i += i2;                                   \
+     convert(step, NO_CHECK, ) \
+   }                                            \
+if((L - i2) < (Q-w)){			   \
+        num_iters = L -i2; \
+        } \
+ else{  \
+        num_iters = Q - w; \
+ } \
+ i = 0; \
+ while (num_iters >= 4){ \
+     rsc = om->sbv[dsq[i2 + i]] + i;            \
+     step()                                     \
+     i+= 1;  \
+     rsc = om->sbv[dsq[i2 + i]] + i;            \
+     step()                                     \
+     i+= 1;  \
+     rsc = om->sbv[dsq[i2 + i]] + i;            \
+     step()                                     \
+     i+= 1;  \
+     rsc = om->sbv[dsq[i2 + i]] + i;            \
+     step()                                     \
+     i+= 1;  \
+     num_iters -= 4; \
+   }                                            \
+   while(num_iters > 0) {  \
+         rsc = om->sbv[dsq[i2 + i]] + i;            \
+     step()                                     \
+     i+= 1;  \
+     num_iters--; \
+   } \
+ i+=i2;                                         \
+ convert(step, LENGTH_CHECK, done2)             \
+done2:                                          \
+        return xEv;
+	
 #define CALC(reset, step, convert, width)       \
   int i;                                        \
   int i2;                                       \
@@ -426,6 +638,117 @@ calc_band_18(const ESL_DSQ *dsq, int L, const P7_OPROFILE *om, int q, __m128i be
 }
 #endif /* MAX_BANDS > 14 */
 
+static __m128i
+calc_band_unrolled_1(const ESL_DSQ *dsq, int L, const P7_OPROFILE *om, int q, __m128i beginv, register __m128i xEv)
+{
+  CALC_UNROLLED(RESET_1, STEP_BANDS_1, CONVERT_1, 1)
+}
+
+static __m128i
+calc_band_unrolled_2(const ESL_DSQ *dsq, int L, const P7_OPROFILE *om, int q, __m128i beginv, register __m128i xEv)
+{
+  CALC_UNROLLED(RESET_2, STEP_BANDS_2, CONVERT_2, 2)
+}
+
+static __m128i
+calc_band_unrolled_3(const ESL_DSQ *dsq, int L, const P7_OPROFILE *om, int q, __m128i beginv, register __m128i xEv)
+{
+  CALC_UNROLLED(RESET_3, STEP_BANDS_3, CONVERT_3, 3)
+}
+
+static __m128i
+calc_band_unrolled_4(const ESL_DSQ *dsq, int L, const P7_OPROFILE *om, int q, __m128i beginv, register __m128i xEv)
+{
+  CALC_UNROLLED(RESET_4, STEP_BANDS_4, CONVERT_4, 4)
+}
+
+static __m128i
+calc_band_unrolled_5(const ESL_DSQ *dsq, int L, const P7_OPROFILE *om, int q, __m128i beginv, register __m128i xEv)
+{
+  CALC_UNROLLED(RESET_5, STEP_BANDS_5, CONVERT_5, 5)
+}
+
+static __m128i
+calc_band_unrolled_6(const ESL_DSQ *dsq, int L, const P7_OPROFILE *om, int q, __m128i beginv, register __m128i xEv)
+{
+  CALC_UNROLLED(RESET_6, STEP_BANDS_6, CONVERT_6, 6)
+}
+
+#if MAX_BANDS > 6 /* Only include needed functions to limit object file size */
+static __m128i
+calc_band_unrolled_7(const ESL_DSQ *dsq, int L, const P7_OPROFILE *om, int q, __m128i beginv, register __m128i xEv)
+{
+  CALC_UNROLLED(RESET_7, STEP_BANDS_7, CONVERT_7, 7)
+}
+
+static __m128i
+calc_band_unrolled_8(const ESL_DSQ *dsq, int L, const P7_OPROFILE *om, int q, __m128i beginv, register __m128i xEv)
+{
+  CALC_UNROLLED(RESET_8, STEP_BANDS_8, CONVERT_8, 8)
+}
+
+static __m128i
+calc_band_unrolled_9(const ESL_DSQ *dsq, int L, const P7_OPROFILE *om, int q, __m128i beginv, register __m128i xEv)
+{
+  CALC_UNROLLED(RESET_9, STEP_BANDS_9, CONVERT_9, 9)
+}
+
+static __m128i
+calc_band_unrolled_10(const ESL_DSQ *dsq, int L, const P7_OPROFILE *om, int q, __m128i beginv, register __m128i xEv)
+{
+  CALC_UNROLLED(RESET_10, STEP_BANDS_10, CONVERT_10, 10)
+}
+
+static __m128i
+calc_band_unrolled_11(const ESL_DSQ *dsq, int L, const P7_OPROFILE *om, int q, __m128i beginv, register __m128i xEv)
+{
+  CALC_UNROLLED(RESET_11, STEP_BANDS_11, CONVERT_11, 11)
+}
+
+static __m128i
+calc_band_unrolled_12(const ESL_DSQ *dsq, int L, const P7_OPROFILE *om, int q, __m128i beginv, register __m128i xEv)
+{
+  CALC_UNROLLED(RESET_12, STEP_BANDS_12, CONVERT_12, 12)
+}
+
+static __m128i
+calc_band_unrolled_13(const ESL_DSQ *dsq, int L, const P7_OPROFILE *om, int q, __m128i beginv, register __m128i xEv)
+{
+  CALC_UNROLLED(RESET_13, STEP_BANDS_13, CONVERT_13, 13)
+}
+
+static __m128i
+calc_band_unrolled_14(const ESL_DSQ *dsq, int L, const P7_OPROFILE *om, int q, __m128i beginv, register __m128i xEv)
+{
+  CALC_UNROLLED(RESET_14, STEP_BANDS_14, CONVERT_14, 14)
+}
+#endif /* MAX_BANDS > 6 */
+#if MAX_BANDS > 14
+static __m128i
+calc_band_unrolled_15(const ESL_DSQ *dsq, int L, const P7_OPROFILE *om, int q, __m128i beginv, register __m128i xEv)
+{
+  CALC_UNROLLED(RESET_15, STEP_BANDS_15, CONVERT_15, 15)
+}
+
+static __m128i
+calc_band_unrolled_16(const ESL_DSQ *dsq, int L, const P7_OPROFILE *om, int q, __m128i beginv, register __m128i xEv)
+{
+  CALC_UNROLLED(RESET_16, STEP_BANDS_16, CONVERT_16, 16)
+}
+
+static __m128i
+calc_band_unrolled_17(const ESL_DSQ *dsq, int L, const P7_OPROFILE *om, int q, __m128i beginv, register __m128i xEv)
+{
+  CALC_UNROLLED(RESET_17, STEP_BANDS_17, CONVERT_17, 17)
+}
+
+static __m128i
+calc_band_unrolled_18(const ESL_DSQ *dsq, int L, const P7_OPROFILE *om, int q, __m128i beginv, register __m128i xEv)
+{
+  CALC_UNROLLED(RESET_18, STEP_BANDS_18, CONVERT_18, 18)
+}
+#endif /* MAX_BANDS > 14 */
+
 
 /*****************************************************************
  * 1. p7_SSVFilter() implementation
@@ -474,6 +797,49 @@ get_xE(const ESL_DSQ *dsq, int L, const P7_OPROFILE *om)
   return esl_sse_hmax_epu8(xEv);
 }
 
+static uint8_t
+get_xE_unrolled(const ESL_DSQ *dsq, int L, const P7_OPROFILE *om)
+{
+  __m128i xEv;		           /* E state: keeps max for Mk->E as we go                     */
+  __m128i beginv;                  /* begin scores                                              */
+
+  int q;			   /* counter over vectors 0..nq-1                              */
+  int Q        = p7O_NQB(om->M);   /* segment length: # of vectors                              */
+
+  int bands;                       /* the number of bands (rounds) to use                       */
+
+  int last_q = 0;                  /* for saving the last q value to find band width            */
+  int i;                           /* counter for bands                                         */
+
+  /* function pointers for the various number of vectors to use */
+  __m128i (*fs[MAX_BANDS + 1]) (const ESL_DSQ *, int, const P7_OPROFILE *, int, register __m128i, __m128i)
+    = {NULL
+       , calc_band_unrolled_1,  calc_band_unrolled_2,  calc_band_unrolled_3,  calc_band_unrolled_4,  calc_band_unrolled_5,  calc_band_unrolled_6
+#if MAX_BANDS > 6
+       , calc_band_unrolled_7,  calc_band_unrolled_8,  calc_band_unrolled_9,  calc_band_unrolled_10, calc_band_unrolled_11, calc_band_unrolled_12, calc_band_unrolled_13, calc_band_unrolled_14
+#endif
+#if MAX_BANDS > 14
+       , calc_band_unrolled_15, calc_band_unrolled_16, calc_band_unrolled_17, calc_band_unrolled_18
+#endif
+  };
+
+  beginv =  _mm_set1_epi8(-128);
+  xEv    =  beginv;
+
+  /* Use the highest number of bands but no more than MAX_BANDS */
+  bands = (Q + MAX_BANDS - 1) / MAX_BANDS;
+
+  for (i = 0; i < bands; i++) {
+    q = (Q * (i + 1)) / bands;
+
+    xEv = fs[q-last_q](dsq, L, om, last_q, beginv, xEv);
+
+    last_q = q;
+  }
+
+  return esl_sse_hmax_epu8(xEv);
+}
+
 
 int
 p7_SSVFilter_sse(const ESL_DSQ *dsq, int L, const P7_OPROFILE *om, float *ret_sc)
@@ -489,6 +855,57 @@ p7_SSVFilter_sse(const ESL_DSQ *dsq, int L, const P7_OPROFILE *om, float *ret_sc
   }
 
   xE = get_xE(dsq, L, om);
+
+  if (xE >= 255 - om->bias_b)
+    {
+      /* We have an overflow. */
+      *ret_sc = eslINFINITY;
+      if (om->base_b - om->tjb_b - om->tbm_b < 128) 
+        {
+          /* The original MSV filter may not overflow, so we are not sure our result is correct */
+          return eslENORESULT;
+        }
+
+      /* We know that the overflow will also occur in the original MSV filter */
+      return eslERANGE;
+    }
+
+  xE += om->base_b - om->tjb_b - om->tbm_b;
+  xE -= 128;
+
+  if (xE >= 255 - om->bias_b)
+    {
+      /* We know that the result will overflow in the original MSV filter */
+      *ret_sc = eslINFINITY;
+      return eslERANGE;
+    }
+
+  xJ = xE - om->tec_b;
+
+  if (xJ > om->base_b)  return eslENORESULT; /* The J state could have been used, so doubt about score */
+
+  /* finally C->T, and add our missing precision on the NN,CC,JJ back */
+  *ret_sc = ((float) (xJ - om->tjb_b) - (float) om->base_b);
+  *ret_sc /= om->scale_b;
+  *ret_sc -= 3.0; /* that's ~ L \log \frac{L}{L+3}, for our NN,CC,JJ */
+
+  return eslOK;
+}
+
+int
+p7_SSVFilter_sse_unrolled(const ESL_DSQ *dsq, int L, const P7_OPROFILE *om, float *ret_sc)
+{
+  /* Use 16 bit values to avoid overflow due to moved baseline */
+  uint16_t  xE;
+  uint16_t  xJ;
+
+  if (om->tjb_b + om->tbm_b + om->tec_b + om->bias_b >= 127) {
+    /* the optimizations are not guaranteed to work under these
+       conditions (see comments at start of file) */
+    return eslENORESULT;
+  }
+
+  xE = get_xE_unrolled(dsq, L, om);
 
   if (xE >= 255 - om->bias_b)
     {

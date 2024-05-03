@@ -96,7 +96,7 @@ p7_ViterbiFilter_avx(const ESL_DSQ *dsq, int L, const P7_OPROFILE *om, P7_OMX *o
   __m256i negInfv;
 
   /* Check that the DP matrix is ok for us. */
-  if (Q > ox->allocQ8)                                 ESL_EXCEPTION(eslEINVAL, "DP matrix allocated too small");
+  if (Q > ox->allocQ8_avx)                                 ESL_EXCEPTION(eslEINVAL, "DP matrix allocated too small");
   if (om->mode != p7_LOCAL && om->mode != p7_UNILOCAL) ESL_EXCEPTION(eslEINVAL, "Fast filter only works for local alignment");
   ox->M   = om->M;
 

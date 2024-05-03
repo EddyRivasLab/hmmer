@@ -100,8 +100,9 @@ typedef struct p7_oprofile_s {
   __m128i  *twv;    /* transition score blocks          [8*Q8]           */
   __m256i **rwv_avx;
   __m256i  *twv_avx;
-
-
+  __m512i **rwv_avx512;
+  __m512i  *twv_avx512;
+  
   int16_t   xw[p7O_NXSTATES][p7O_NXTRANS]; /* NECJ state transition costs            */
   float     scale_w;            /* score units: typically 500 / log(2), 1/500 bits   */
   int16_t   base_w;             /* offset of sword scores: typically +12000          */
@@ -113,6 +114,9 @@ typedef struct p7_oprofile_s {
   __m128  *tfv;          /* transition probability blocks    [8*Q4]           */
   __m256 **rfv_avx;
   __m256  *tfv_avx;
+  __m512 **rfv_avx512;
+  __m512  *tfv_avx512;
+
   float    xf[p7O_NXSTATES][p7O_NXTRANS]; /* NECJ transition costs                   */
 
     /* Our actual vector mallocs, before we align the memory                           */
@@ -130,6 +134,11 @@ typedef struct p7_oprofile_s {
   __m256   *rfv_mem_avx;
   __m512i  *rbv_mem_avx512;
   __m512i  *sbv_mem_avx512;
+  __m512i  *rwv_mem_avx512;
+  __m512i  *twv_mem_avx512;
+  __m512   *tfv_mem_avx512;
+  __m512   *rfv_mem_avx512;
+
   /* Disk offset information for hmmpfam's fast model retrieval                      */
   off_t  offs[p7_NOFFSETS];     /* p7_{MFP}OFFSET, or -1                             */
 
@@ -202,7 +211,7 @@ enum p7x_scells_e { p7X_M = 0, p7X_D = 1, p7X_I = 2 };
 enum p7x_xcells_e { p7X_E = 0, p7X_N = 1, p7X_J = 2, p7X_B = 3, p7X_C = 4, p7X_SCALE = 5 }; 
 #define p7X_NXCELLS 6
 
-enum simd_type_e {sse, avx, none};
+enum simd_type_e {sse, avx, avx512, none};
 /* 
  * 
  * dpf[][] 
@@ -307,6 +316,7 @@ extern int          p7_omx_GrowTo(P7_OMX *ox, int allocM, int allocL, int allocX
 extern int          p7_omx_FDeconvert(P7_OMX *ox, P7_GMX *gx);
 extern int          p7_omx_FDeconvert_sse(P7_OMX *ox, P7_GMX *gx);
 extern int          p7_omx_FDeconvert_avx(P7_OMX *ox, P7_GMX *gx);
+extern int          p7_omx_FDeconvert_avx512(P7_OMX *ox, P7_GMX *gx);
 extern int          p7_omx_Reuse  (P7_OMX *ox);
 extern void         p7_omx_Destroy(P7_OMX *ox);
 
@@ -382,8 +392,11 @@ extern void p7_oprofile_DestroyBlock(P7_OM_BLOCK *block);
 /* ssvfilter.c */
 extern int p7_SSVFilter    (const ESL_DSQ *dsq, int L, const P7_OPROFILE *om, float *ret_sc);
 extern int p7_SSVFilter_sse    (const ESL_DSQ *dsq, int L, const P7_OPROFILE *om, float *ret_sc);
+extern int p7_SSVFilter_sse_unrolled    (const ESL_DSQ *dsq, int L, const P7_OPROFILE *om, float *ret_sc);
 extern int p7_SSVFilter_avx     (const ESL_DSQ *dsq, int L, const P7_OPROFILE *om, float *ret_sc);
+extern int p7_SSVFilter_avx_unrolled     (const ESL_DSQ *dsq, int L, const P7_OPROFILE *om, float *ret_sc);
 extern int p7_SSVFilter_avx512     (const ESL_DSQ *dsq, int L, const P7_OPROFILE *om, float *ret_sc);
+extern int p7_SSVFilter_avx512_unrolled     (const ESL_DSQ *dsq, int L, const P7_OPROFILE *om, float *ret_sc);
 
 /* msvfilter.c */
 extern int p7_MSVFilter (const ESL_DSQ *dsq, int L, const P7_OPROFILE *om, P7_OMX *ox, float *ret_sc);
@@ -409,6 +422,7 @@ extern int p7_StochasticTrace(ESL_RANDOMNESS *rng, const ESL_DSQ *dsq, int L, co
 extern int p7_ViterbiFilter(const ESL_DSQ *dsq, int L, const P7_OPROFILE *om, P7_OMX *ox, float *ret_sc);
 extern int p7_ViterbiFilter_sse(const ESL_DSQ *dsq, int L, const P7_OPROFILE *om, P7_OMX *ox, float *ret_sc);
 extern int p7_ViterbiFilter_avx (const ESL_DSQ *dsq, int L, const P7_OPROFILE *om, P7_OMX *ox, float *ret_sc);
+extern int p7_ViterbiFilter_avx512 (const ESL_DSQ *dsq, int L, const P7_OPROFILE *om, P7_OMX *ox, float *ret_sc);
 extern int p7_ViterbiFilter_longtarget(const ESL_DSQ *dsq, int L, const P7_OPROFILE *om, P7_OMX *ox,
                                         float filtersc, double P, P7_HMM_WINDOWLIST *windowlist);
 

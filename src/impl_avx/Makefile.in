@@ -53,10 +53,12 @@ OBJS =  decoding_sse.o\
 	stotrace.o\
 	vitfilter_sse.o\
 	vitfilter_avx.o\
+	vitfilter_avx512.o\
 	vitfilter.o\
 	p7_omx.o\
 	p7_omx_sse.o\
 	p7_omx_avx.o\
+	p7_omx_avx512.o\
 	p7_oprofile.o\
 	mpi.o
 

@@ -89,7 +89,7 @@ p7_omx_Create(int allocM, int allocL, int allocXL)
 
   ESL_ALLOC(ox->dp_mem, sizeof(__m128) * (int64_t) ox->allocR * (int64_t) ox->allocQ4 * p7X_NSCELLS + 15);  /* floats always dominate; +15 for alignment */
   ESL_ALLOC(ox->dp_mem_avx, sizeof(__m256) * (int64_t) ox->allocR * (int64_t) ox->allocQ4_avx * p7X_NSCELLS + 32); 
-  ESL_ALLOC(ox->dp_mem_avx512, sizeof(__m512) * (int64_t) ox->allocR * (int64_t) ox->allocQ4_avx512 * p7X_NSCELLS + 32); 
+  ESL_ALLOC(ox->dp_mem_avx512, sizeof(__m512) * (int64_t) ox->allocR * (int64_t) ox->allocQ4_avx512 * p7X_NSCELLS + 63); 
   ESL_ALLOC(ox->dpb,    sizeof(__m128i *) * ox->allocR);
   ESL_ALLOC(ox->dpw,    sizeof(__m128i *) * ox->allocR);
   ESL_ALLOC(ox->dpf,    sizeof(__m128  *) * ox->allocR);
@@ -107,7 +107,7 @@ p7_omx_Create(int allocM, int allocL, int allocXL)
   ox->dpf_avx[0] = (__m256  *) ( ( (unsigned long int) ((char *) ox->dp_mem_avx + 31) & (~0x1f)));
   ox->dpb_avx512[0] = (__m512i *) ( ( (unsigned long int) ((char *) ox->dp_mem_avx512 + 63) & (~0x3f)));
   ox->dpw_avx512[0] = (__m512i *) ( ( (unsigned long int) ((char *) ox->dp_mem_avx512 + 63) & (~0x3f)));
-  ox->dpf_avx512[0] = (__m512  *) ( ( (unsigned long int) ((char *) ox->dp_mem_avx512 + 31) & (~0x3f)));
+  ox->dpf_avx512[0] = (__m512  *) ( ( (unsigned long int) ((char *) ox->dp_mem_avx512 + 63) & (~0x3f)));
   for (i = 1; i <= allocL; i++) {
     ox->dpf[i] = ox->dpf[0] + (int64_t) i * (int64_t) ox->allocQ4  * p7X_NSCELLS;
     ox->dpw[i] = ox->dpw[0] + (int64_t) i * (int64_t) ox->allocQ8  * p7X_NSCELLS;
@@ -121,7 +121,7 @@ p7_omx_Create(int allocM, int allocL, int allocXL)
   }
 
   ox->allocXR = allocXL+1;
-  ESL_ALLOC(ox->x_mem,  sizeof(float) * ox->allocXR * p7X_NXCELLS + 15);  //pad these out for 256-bit vectors
+  ESL_ALLOC(ox->x_mem,  sizeof(float) * ox->allocXR * p7X_NXCELLS + 15);  //pad these out for 512-bit vectors
   ox->xmx = (float *) ( ( (unsigned long int) ((char *) ox->x_mem  + 15) & (~0xf)));
 
   ox->M              = 0;
@@ -168,6 +168,10 @@ p7_omx_GrowTo(P7_OMX *ox, int allocM, int allocL, int allocXL)
   int     nqf_avx    = p7O_NQF_AVX(allocM);	   /* segment length; total # of striped vectors for uchar */
   int     nqw_avx    = p7O_NQW_AVX(allocM);	   /* segment length; total # of striped vectors for float */
   int     nqb_avx    = p7O_NQB_AVX(allocM);	   /* segment length; total # of striped vectors for float */
+
+  int     nqf_avx512    = p7O_NQF_AVX512(allocM);        /* segment length; total # of striped\ vectors for uchar */
+  int     nqw_avx512    = p7O_NQW_AVX512(allocM);        /* segment length; total # of striped\ vectors for float */
+  int     nqb_avx512    = p7O_NQB_AVX512(allocM);        /* segment length; total # of striped\ vectors for float */
   int64_t ncells = (int64_t) (allocL+1) * (int64_t) nqf_avx * 8;
   int     reset_row_pointers = FALSE;
   int     i;
@@ -183,6 +187,7 @@ p7_omx_GrowTo(P7_OMX *ox, int allocM, int allocL, int allocXL)
     {
       ESL_RALLOC(ox->dp_mem, p, sizeof(__m128) * (int64_t) (allocL+1) * (int64_t) nqf * p7X_NSCELLS + 15);
       ESL_RALLOC(ox->dp_mem_avx, p, sizeof(__m256) * (int64_t) (allocL+1) * (int64_t) nqf_avx * p7X_NSCELLS + 31);
+      ESL_RALLOC(ox->dp_mem_avx512, p, sizeof(__m512) * (int64_t) (allocL+1) * (int64_t) nqf_avx512 * p7X_NSCELLS + 63);
       ox->ncells = ncells;
       reset_row_pointers = TRUE;
     }
@@ -206,6 +211,9 @@ p7_omx_GrowTo(P7_OMX *ox, int allocM, int allocL, int allocXL)
       ESL_RALLOC(ox->dpb_avx, p, sizeof(__m256i *) * (allocL+1));
       ESL_RALLOC(ox->dpw_avx, p, sizeof(__m256i *) * (allocL+1));
       ESL_RALLOC(ox->dpf_avx, p, sizeof(__m256  *) * (allocL+1));
+      ESL_RALLOC(ox->dpb_avx512, p, sizeof(__m512i *) * (allocL+1));
+      ESL_RALLOC(ox->dpw_avx512, p, sizeof(__m512i *) * (allocL+1));
+      ESL_RALLOC(ox->dpf_avx512, p, sizeof(__m512  *) * (allocL+1));
       ox->allocR         = allocL+1;
       reset_row_pointers = TRUE;
     }
@@ -227,6 +235,9 @@ p7_omx_GrowTo(P7_OMX *ox, int allocM, int allocL, int allocXL)
       ox->dpb_avx[0] = (__m256i *) ( ( (unsigned long int) ((char *) ox->dp_mem_avx + 31) & (~0x1f)));
       ox->dpw_avx[0] = (__m256i *) ( ( (unsigned long int) ((char *) ox->dp_mem_avx + 31) & (~0x1f)));
       ox->dpf_avx[0] = (__m256  *) ( ( (unsigned long int) ((char *) ox->dp_mem_avx + 31) & (~0x1f)));
+      ox->dpb_avx512[0] = (__m512i *) ( ( (unsigned long int) ((char *) ox->dp_mem_avx512 + 63) & (~0x3f)));
+      ox->dpw_avx512[0] = (__m512i *) ( ( (unsigned long int) ((char *) ox->dp_mem_avx512 + 63) & (~0x3f)));
+      ox->dpf_avx512[0] = (__m512  *) ( ( (unsigned long int) ((char *) ox->dp_mem_avx512 + 63) & (~0x3f)));
 
       ox->validR = ESL_MIN( ox->ncells / (nqf * 4), ox->allocR);
       for (i = 1; i < ox->validR; i++)
@@ -234,9 +245,12 @@ p7_omx_GrowTo(P7_OMX *ox, int allocM, int allocL, int allocXL)
 	  ox->dpb[i] = ox->dpb[0] + (int64_t) i * (int64_t) nqb;
 	  ox->dpw[i] = ox->dpw[0] + (int64_t) i * (int64_t) nqw * p7X_NSCELLS;
 	  ox->dpf[i] = ox->dpf[0] + (int64_t) i * (int64_t) nqf * p7X_NSCELLS;
-    ox->dpb_avx[i] = ox->dpb_avx[0] + (int64_t) i * (int64_t) nqb_avx;
+	  ox->dpb_avx[i] = ox->dpb_avx[0] + (int64_t) i * (int64_t) nqb_avx;
 	  ox->dpw_avx[i] = ox->dpw_avx[0] + (int64_t) i * (int64_t) nqw_avx * p7X_NSCELLS;
 	  ox->dpf_avx[i] = ox->dpf_avx[0] + (int64_t) i * (int64_t) nqf_avx * p7X_NSCELLS;
+	  ox->dpb_avx512[i] = ox->dpb_avx512[0] + (int64_t) i * (int64_t) nqb_avx512;
+	  ox->dpw_avx512[i] = ox->dpw_avx512[0] + (int64_t) i * (int64_t) nqw_avx512 * p7X_NSCELLS;
+	  ox->dpf_avx512[i] = ox->dpf_avx512[0] + (int64_t) i * (int64_t) nqf_avx512 * p7X_NSCELLS;
 	}
 
       ox->allocQ4  = nqf;
@@ -245,6 +259,9 @@ p7_omx_GrowTo(P7_OMX *ox, int allocM, int allocL, int allocXL)
       ox->allocQ4_avx  = nqf_avx;
       ox->allocQ8_avx  = nqw_avx;
       ox->allocQ16_avx = nqb_avx;
+      ox->allocQ4_avx512  = nqf_avx512;
+      ox->allocQ8_avx512  = nqw_avx512;
+      ox->allocQ16_avx512 = nqb_avx512;
 
     }
   
@@ -278,7 +295,12 @@ p7_omx_FDeconvert(P7_OMX *ox, P7_GMX *gx)
     return(p7_omx_FDeconvert_sse(ox, gx));
   }
   else{
-    return(p7_omx_FDeconvert_avx(ox, gx));
+    if(ox->last_written_by == avx){
+      return(p7_omx_FDeconvert_avx(ox, gx));
+    }
+    else{
+      return(p7_omx_FDeconvert_avx512(ox, gx));
+    }
   }
 }
 
@@ -326,10 +348,13 @@ p7_omx_Destroy(P7_OMX *ox)
   if (ox->dpw     != NULL) free(ox->dpw);
   if (ox->dpb     != NULL) free(ox->dpb);
   if (ox->dp_mem_avx  != NULL) free(ox->dp_mem_avx);
-
   if (ox->dpf_avx     != NULL) free(ox->dpf_avx);
   if (ox->dpw_avx     != NULL) free(ox->dpw_avx);
   if (ox->dpb_avx     != NULL) free(ox->dpb_avx);
+  if (ox->dp_mem_avx512  != NULL) free(ox->dp_mem_avx512);
+  if (ox->dpf_avx512     != NULL) free(ox->dpf_avx512);
+  if (ox->dpw_avx512     != NULL) free(ox->dpw_avx512);
+  if (ox->dpb_avx512     != NULL) free(ox->dpb_avx512);
   free(ox);
   return;
 }

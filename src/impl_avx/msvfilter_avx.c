@@ -102,7 +102,7 @@ p7_MSVFilter_avx(const ESL_DSQ *dsq, int L, const P7_OPROFILE *om, P7_OMX *ox, f
   ox->M   = om->M;
 
   /* Try highly optimized ssv filter first */
-  status = p7_SSVFilter(dsq, L, om, ret_sc);
+  //status = p7_SSVFilter(dsq, L, om, ret_sc);
 
   // uncomment when done testing MSV
   //if (status != eslENORESULT) return status;
