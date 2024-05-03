@@ -432,7 +432,7 @@ p7_hmm_MPIRecv(int source, int tag, MPI_Comm comm, char **buf, int *nalloc, ESL_
  */
 int p7_profile_MPIPackSize(P7_PROFILE *gm, MPI_Comm comm, int *ret_n){
   int   status;
-  int   sz, n, position;
+  int   sz, n;
   int   Kp;	/* alphabet size including degeneracies */
   int   M;      /* model size in nodes */
 
@@ -591,7 +591,7 @@ int
 p7_profile_MPISend(P7_PROFILE *gm, int dest, int tag, MPI_Comm comm, char **buf, int *nalloc)
 {
   int   status;
-  int   sz, n, position;
+  int   n, position;
 
   if (p7_profile_MPIPackSize(gm, comm, &n) != eslOK){
     ESL_XEXCEPTION(eslESYS, "pack size failed");

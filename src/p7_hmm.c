@@ -1395,7 +1395,7 @@ extern int p7_hmm_Serialize(const P7_HMM *hmm, uint8_t **buf, uint32_t *n, uint3
     return eslEINVAL;
   }
   int status;
-  uint64_t host_64bit, network_64bit;
+  uint64_t network_64bit;
   uint32_t flags = 0;
   //Step 1: figure out how much memory the serialized object will occupy and resize the buffer if needed
   uint64_t ser_size = 0;
@@ -1518,58 +1518,58 @@ extern int p7_hmm_Serialize(const P7_HMM *hmm, uint8_t **buf, uint32_t *n, uint3
     ptr2 += 1; // units = 32-bit words 
   }
   //name field.  Strings don't care about endianess, because they're arrays of single-byte quantities
-  strcpy(ptr, hmm->name);
+  strcpy((char *) ptr, hmm->name);
   ptr+= strlen(hmm->name)+1;
 
   //acc field, if present
   if(hmm->flags & p7H_ACC){
-    strcpy(ptr, hmm->acc);
+    strcpy((char *) ptr, hmm->acc);
     ptr += strlen(hmm->acc) +1;
   }
 
   // desc field, if present
   if(hmm->flags & p7H_DESC){
-    strcpy(ptr, hmm->desc);
+    strcpy((char *) ptr, hmm->desc);
     ptr += strlen(hmm->desc) +1;
   }
 
   //rf field
   if(hmm->flags & p7H_RF){
-    strcpy(ptr, hmm->rf);
+    strcpy((char *) ptr, hmm->rf);
     ptr+= strlen(hmm->rf)+1;
   }
 
   // mm field
   if(hmm->flags & p7H_MMASK){
-    strcpy(ptr, hmm->mm);
+    strcpy((char *) ptr, hmm->mm);
     ptr += strlen(hmm->mm)+1;
   }
   //consensus field
   if(hmm->flags & p7H_CONS){
-    strcpy(ptr, hmm->consensus);
+    strcpy((char *) ptr, hmm->consensus);
     ptr += strlen(hmm->consensus)+1;
   }
   //cs field
   if(hmm->flags & p7H_CS){
-    strcpy(ptr, hmm->cs);
+    strcpy((char *) ptr, hmm->cs);
     ptr += strlen(hmm->cs)+1;
   }
 
   //ca field 
   if(hmm->flags & p7H_CA){
-    strcpy(ptr, hmm->ca);
+    strcpy((char *) ptr, hmm->ca);
     ptr += strlen(hmm->ca)+1;
   }
 
   // comlog (command line) field
   if(hmm->comlog != NULL){
-    strcpy(ptr, hmm->comlog);
+    strcpy((char *) ptr, hmm->comlog);
     ptr += strlen(hmm->comlog) +1;
   }
 
   //nseq field
   network_32bit = esl_hton32(hmm->nseq);
-  memcpy(ptr, &network_32bit, sizeof(uint32_t));
+  memcpy((char *) ptr, &network_32bit, sizeof(uint32_t));
   ptr += sizeof(uint32_t);
 
   //eff_nseq (needs care because is float)
@@ -1586,7 +1586,7 @@ extern int p7_hmm_Serialize(const P7_HMM *hmm, uint8_t **buf, uint32_t *n, uint3
 
   //ctime field (optional)
   if(hmm->ctime != NULL){
-    strcpy(ptr, hmm->ctime);
+    strcpy((char *) ptr, hmm->ctime);
     ptr += strlen(hmm->ctime) +1;
   }
 
@@ -1676,7 +1676,7 @@ extern int p7_hmm_Deserialize(const uint8_t *buf, uint32_t *n, ESL_ALPHABET *abc
   uint8_t *ptr;
   uint32_t network_32bit; // holds 32-bit values in network order 
   uint32_t host_32bit; //variable to hold 32-bit values after conversion to host order
-  uint64_t network_64bit, host_64bit;
+  uint64_t network_64bit;
   int status;
   uint32_t flags;  //flags that tell us what fields in the hmm are valid.  Not the flags field of the HMM
   uint32_t type;  // type of the HMM's alphabet
@@ -1751,65 +1751,65 @@ extern int p7_hmm_Deserialize(const uint8_t *buf, uint32_t *n, ESL_ALPHABET *abc
   }
 
   //name field
-  ESL_ALLOC(hmm->name, strlen(ptr)+1);
-  strcpy(hmm->name, ptr);
+  ESL_ALLOC(hmm->name, strlen((char *)ptr)+1);
+  strcpy(hmm->name, (char *)ptr);
   ptr += strlen(hmm->name)+1;
 
   //Acc field (optional)
   if(flags & p7H_ACC){
-    ESL_ALLOC(hmm->acc, strlen(ptr)+1);
+    ESL_ALLOC(hmm->acc, strlen((char *) ptr)+1);
   
-    strcpy(hmm->acc, ptr);
+    strcpy(hmm->acc, (char *)ptr);
     ptr += strlen(hmm->acc)+1;
   }
   //Desc field (optional)
   if(flags & p7H_DESC){
-    ESL_ALLOC(hmm->desc, strlen(ptr)+1);
+    ESL_ALLOC(hmm->desc, strlen((char *) ptr)+1);
   
-    strcpy(hmm->desc, ptr);
+    strcpy(hmm->desc, (char *)ptr);
     ptr += strlen(hmm->desc)+1;
   }
 
   //rf field
   if(flags & p7H_RF){
-    ESL_ALLOC(hmm->rf, strlen(ptr)+1);
-    strcpy(hmm->rf, ptr);
+    ESL_ALLOC(hmm->rf, strlen((char *) ptr)+1);
+    strcpy(hmm->rf,(char *) ptr);
     ptr+= strlen(hmm->rf)+1;
   }
 
   //mm field
   if(flags & p7H_MMASK){
-    ESL_ALLOC(hmm->mm, strlen(ptr)+1);
-    strcpy(hmm->mm, ptr);
+    ESL_ALLOC(hmm->mm, strlen((char *) ptr)+1);
+    strcpy(hmm->mm, (char *) ptr);
     ptr+= strlen(hmm->mm)+1;
   }
 
   //consensus field
   if(flags & p7H_CONS){
-    ESL_ALLOC(hmm->consensus, strlen(ptr)+1);
-    strcpy(hmm->consensus, ptr);
+    ESL_ALLOC(hmm->consensus, strlen((char *) ptr)+1);
+    strcpy(hmm->consensus, (char *)ptr);
     ptr+= strlen(hmm->consensus)+1;
   }
 
   //cs field
   if(flags & p7H_CS){
-    ESL_ALLOC(hmm->cs, strlen(ptr)+1);
-    strcpy(hmm->cs, ptr);
+    ESL_ALLOC(hmm->cs, strlen((char *) ptr)+1);
+    strcpy(hmm->cs, (char *) ptr);
     ptr+= strlen(hmm->cs)+1;
   }
   
   //ca field
   if(flags & p7H_CA){
-    ESL_ALLOC(hmm->ca, strlen(ptr)+1);
-    strcpy(hmm->ca, ptr);
+    ESL_ALLOC(hmm->ca, strlen((char *) ptr)+1);
+    strcpy(hmm->ca, (char *) ptr);
     ptr+= strlen(hmm->ca)+1;
   }
 
   //comlog field (optional)
   if(flags & p7H_COMLOG){
-    ESL_ALLOC(hmm->comlog, strlen(ptr)+1);
+    ESL_ALLOC(hmm->comlog, strlen((char *) ptr)+1);
   
-    strcpy(hmm->comlog, ptr);
+    strcpy(hmm->comlog, (char *) ptr);
     ptr += strlen(hmm->comlog)+1;
   }
 
@@ -1831,9 +1831,9 @@ extern int p7_hmm_Deserialize(const uint8_t *buf, uint32_t *n, ESL_ALPHABET *abc
 
   //ctime
   if(flags & p7H_CTIME){
-    ESL_ALLOC(hmm->ctime, strlen(ptr)+1);
-    strcpy(hmm->ctime, ptr);
-    ptr += strlen(ptr) +1;
+    ESL_ALLOC(hmm->ctime, strlen((char *) ptr)+1);
+    strcpy(hmm->ctime, (char *) ptr);
+    ptr += strlen((char *) ptr) +1;
   }
 
   //map field
@@ -1999,9 +1999,9 @@ utest_synchronize(ESL_GETOPTS *go, ESL_RANDOMNESS *r, ESL_ALPHABET *abc)
 {
   char *hmm_filename;
   uint8_t *buffer;
-  int buflength = 10;
-  int pos = 0;
-  int pos2 = 0;
+  uint32_t buflength = 10;
+  uint32_t pos = 0;
+  uint32_t pos2 = 0;
   int status;
   P7_HMMFILE      *hfp      = NULL;
   P7_HMM          *hmm      = NULL;

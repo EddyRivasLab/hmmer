@@ -59,6 +59,23 @@ static void parse_lock_errors(int errortype, int rank){
   return;
 }
 #endif
+
+#ifdef CHECK_MUTEXES
+#define CHECKED_PTHREAD_MUTEX_UNLOCK(lock) \
+  lock_retval = pthread_mutex_unlock(lock); \
+  parse_lock_errors(lock_retval, workernode->my_rank);
+
+#define CHECKED_PTHREAD_MUTEX_LOCK
+  lock_retval = pthread_mutex_lock(lock);\
+  parse_lock_errors(lock_retval, workernode->my_rank);
+#endif
+#ifndef CHECK_MUTEXES
+#define CHECKED_PTHREAD_MUTEX_UNLOCK(lock)\
+  pthread_mutex_unlock(lock);
+
+#define CHECKED_PTHREAD_MUTEX_LOCK(lock)\
+  pthread_mutex_lock(lock);
+#endif
 // Forward declarations for static functions
 static int worker_thread_front_end_search_loop(P7_SERVER_WORKERNODE_STATE *workernode, uint32_t my_id);
 static void worker_thread_back_end_sequence_search_loop(P7_SERVER_WORKERNODE_STATE *workernode, uint32_t my_id);
@@ -70,10 +87,12 @@ static void workernode_put_backend_queue_entry_in_pool(P7_SERVER_WORKERNODE_STAT
 static void workernode_put_backend_queue_entry_in_queue(P7_SERVER_WORKERNODE_STATE *workernode, P7_BACKEND_QUEUE_ENTRY *the_entry);
 static uint64_t worker_thread_get_chunk(P7_SERVER_WORKERNODE_STATE *workernode, uint32_t my_id, volatile uint64_t *start, volatile uint64_t *end);
 static int32_t worker_thread_steal(P7_SERVER_WORKERNODE_STATE *workernode, uint32_t my_id);
+static int server_set_shard(P7_SERVER_WORKERNODE_STATE *workernode, P7_SHARD *the_shard, uint32_t database_id);
+#ifdef HAVE_MPI
 static void workernode_request_Work(uint32_t my_shard);
 static void workernode_wait_for_Work(P7_SERVER_CHUNK_REPLY *the_reply, MPI_Datatype *server_mpitypes);
-static int server_set_shard(P7_SERVER_WORKERNODE_STATE *workernode, P7_SHARD *the_shard, uint32_t database_id);
 static int workernode_perform_search_or_scan(P7_SERVER_WORKERNODE_STATE *workernode, P7_SERVER_COMMAND *the_command, ESL_ALPHABET *abc, MPI_Datatype *server_mpitypes);
+#endif
 /* Tuning parameters */
 
 /*! WORK_REQUEST_THRESHOLD determines the minimum amount of work that can remain in the worker node's global queue without triggering
@@ -298,8 +317,10 @@ ERROR:
  * \returns Nothing 
  */
 void p7_server_workernode_Destroy(P7_SERVER_WORKERNODE_STATE *workernode){
-  int i, lock_retval;
-
+  int i;
+  #ifdef CHECK_MUTEXES
+  lock_retval;
+  #endif
   // Wait for all the worker threads to terminate before we start freeing memory
    for(i = 0; i < workernode->num_threads; i++){
     pthread_join(workernode->thread_objs[i], NULL); 
@@ -354,10 +375,9 @@ void p7_server_workernode_Destroy(P7_SERVER_WORKERNODE_STATE *workernode){
   pthread_mutex_destroy(&(workernode->wait_lock));
 
   // Clean up the model we're comparing to, if it exists
-  lock_retval = pthread_mutex_lock(&(workernode->search_definition_lock));
-   #ifdef CHECK_MUTEXES
-    parse_lock_errors(lock_retval, workernode->my_rank);
-  #endif
+ CHECKED_PTHREAD_MUTEX_LOCK(&(workernode->search_definition_lock))
+
+  
   if(workernode->compare_model != NULL){
     P7_PROFILE *the_model = workernode->compare_model;
     p7_profile_Destroy(the_model);
@@ -367,10 +387,8 @@ void p7_server_workernode_Destroy(P7_SERVER_WORKERNODE_STATE *workernode){
   if(workernode->compare_sequence){
     free(workernode->compare_sequence);
   }
-  lock_retval = pthread_mutex_unlock(&(workernode->search_definition_lock));
-  #ifdef CHECK_MUTEXES
-    parse_lock_errors(lock_retval, workernode->my_rank);
-  #endif
+  CHECKED_PTHREAD_MUTEX_UNLOCK(&(workernode->search_definition_lock));
+
   free(workernode->global_queue);
   p7_tophits_Destroy(workernode->tophits);
   //finally, free the workernode structure itself
@@ -414,7 +432,10 @@ int p7_server_workernode_Setup(uint32_t num_databases, char **database_names, ui
   FILE *datafile;
   char id_string[14];
   id_string[13] = '\0';
-  int i, lock_retval;
+  int i;
+  #ifdef CHECK_MUTEXES
+  lock_retval;
+  #endif
 #ifdef DEBUG_SHARDS
   printf("workernode setup saw %d shards, my_shard = %d\n", num_shards, my_shard);
 #endif
@@ -480,27 +501,23 @@ int p7_server_workernode_Setup(uint32_t num_databases, char **database_names, ui
 
 
   //Wait for the worker threads to be ready
-  lock_retval = pthread_mutex_lock(&((*workernode)->wait_lock));
-  #ifdef CHECK_MUTEXES
-    parse_lock_errors(lock_retval, (*workernode)->my_rank);
-  #endif
+
+  CHECKED_PTHREAD_MUTEX_LOCK(&((*workernode)->wait_lock));
+
   while((*workernode)->num_waiting != (*workernode)->num_threads){  // This unlock-lock in a loop is really painful, but seems to be the pthreads-approved way
   // of waiting for a counter to reach a value.  Fortunately, we only do it once, at server startup, so the overall impact is small
-    lock_retval = pthread_mutex_unlock(&((*workernode)->wait_lock));
-   #ifdef CHECK_MUTEXES
-    parse_lock_errors(lock_retval, (*workernode)->my_rank);
-  #endif
-    lock_retval = pthread_mutex_lock(&((*workernode)->wait_lock));
-       #ifdef CHECK_MUTEXES
-    parse_lock_errors(lock_retval, (*workernode)->my_rank);
-  #endif
+
+  CHECKED_PTHREAD_MUTEX_UNLOCK(&((*workernode)->wait_lock))
+
+
+  CHECKED_PTHREAD_MUTEX_LOCK(&((*workernode)->wait_lock))
+
   }
   (*workernode)->ready_to_start =1;
   p7_server_workernode_release_threads(*workernode);
-  lock_retval = pthread_mutex_unlock(&((*workernode)->wait_lock));
-     #ifdef CHECK_MUTEXES
-    parse_lock_errors(lock_retval, (*workernode)->my_rank);
-  #endif
+
+  CHECKED_PTHREAD_MUTEX_UNLOCK(&((*workernode)->wait_lock));
+
   return eslOK;  // if we get this far, everything went ok.
 }
 
@@ -529,29 +546,20 @@ int p7_server_workernode_Setup(uint32_t num_databases, char **database_names, ui
  *  Note that this implies that some other function must check the validity of any user inputs before passing them to this function
 */
 int p7_server_workernode_start_hmm_vs_amino_db(P7_SERVER_WORKERNODE_STATE *workernode, uint32_t database, uint64_t start_object, uint64_t end_object, P7_PROFILE *compare_model){
-  int lock_retval;
-  lock_retval = pthread_mutex_lock(&(workernode->search_definition_lock));
+  CHECKED_PTHREAD_MUTEX_LOCK(&(workernode->search_definition_lock));
   if(workernode->search_type != IDLE){
     p7_Die("p7_server_workernode_start_hmm_vs_amino_db attempted to set up a new operation on a worker node while an old one was still in progress");
   }
-  lock_retval = pthread_mutex_unlock(&(workernode->search_definition_lock));   // unlock here to guarantee no lock cycles
-   #ifdef CHECK_MUTEXES
-    parse_lock_errors(lock_retval, workernode->my_rank);
-  #endif
+  CHECKED_PTHREAD_MUTEX_UNLOCK(&(workernode->search_definition_lock));   // unlock here to guarantee no lock cycles
+
   int i;
-  lock_retval = pthread_mutex_lock(&(workernode->steal_lock));
-     #ifdef CHECK_MUTEXES
-    parse_lock_errors(lock_retval, workernode->my_rank);
-  #endif
+  CHECKED_PTHREAD_MUTEX_LOCK(&(workernode->steal_lock))
   workernode->no_steal = 0;  // reset this to allow stealing work for the new search
-  lock_retval = pthread_mutex_unlock(&(workernode->steal_lock));
-   #ifdef CHECK_MUTEXES
-    parse_lock_errors(lock_retval, workernode->my_rank);
-  #endif
-  lock_retval = pthread_mutex_lock(&(workernode->search_definition_lock));
-     #ifdef CHECK_MUTEXES
-    parse_lock_errors(lock_retval, workernode->my_rank);
-  #endif
+
+  CHECKED_PTHREAD_MUTEX_UNLOCK(&(workernode->steal_lock));
+
+  CHECKED_PTHREAD_MUTEX_LOCK(&(workernode->search_definition_lock))
+
   //install the model we'll be comparing against
   workernode->compare_model = compare_model;
   workernode->search_type = SEQUENCE_SEARCH;
@@ -565,10 +573,9 @@ int p7_server_workernode_start_hmm_vs_amino_db(P7_SERVER_WORKERNODE_STATE *worke
     p7_Die("Attempt to set up amino acid comparision against non-amino database in p7_server_workernode_start_hmm_vs_amino_db");
   }
   workernode->compare_database = database;
-  lock_retval = pthread_mutex_unlock(&(workernode->search_definition_lock));
-     #ifdef CHECK_MUTEXES
-    parse_lock_errors(lock_retval, workernode->my_rank);
-  #endif
+
+  CHECKED_PTHREAD_MUTEX_UNLOCK(&(workernode->search_definition_lock));
+ 
   // Grab this to avoid multiple re-indexing
   P7_SHARD *the_shard = workernode->database_shards[database];
  
@@ -595,15 +602,11 @@ int p7_server_workernode_start_hmm_vs_amino_db(P7_SERVER_WORKERNODE_STATE *worke
 
   // Set up thread state
   for(i = 0; i < workernode->num_threads; i++){
-    lock_retval = pthread_mutex_lock(&(workernode->thread_state[i].mode_lock));
-       #ifdef CHECK_MUTEXES
-    parse_lock_errors(lock_retval, workernode->my_rank);
-  #endif
+    CHECKED_PTHREAD_MUTEX_LOCK(&(workernode->thread_state[i].mode_lock))
     workernode->thread_state[i].mode = FRONTEND; // all threads start out processing front-end comparisons
-    lock_retval = pthread_mutex_unlock(&(workernode->thread_state[i].mode_lock));
-       #ifdef CHECK_MUTEXES
-    parse_lock_errors(lock_retval, workernode->my_rank);
-  #endif
+
+    CHECKED_PTHREAD_MUTEX_UNLOCK(&(workernode->thread_state[i].mode_lock));
+
     workernode->thread_state[i].comparisons_queued = 0; // reset this
     workernode->thread_state[i].stats_pipeline = p7_pipeline_Create(workernode->commandline_options, 100, 100, FALSE, p7_SEARCH_SEQS);
     if(workernode->thread_state[i].stats_pipeline == NULL){
@@ -624,17 +627,15 @@ int p7_server_workernode_start_hmm_vs_amino_db(P7_SERVER_WORKERNODE_STATE *worke
   
   // At start of search, we haven't requested any more work from the master node, shouldn't request any more work, and haven't been told that the
   // master node is out of work
-  lock_retval = pthread_mutex_lock(&(workernode->work_request_lock));
-     #ifdef CHECK_MUTEXES
-    parse_lock_errors(lock_retval, workernode->my_rank);
-  #endif
+
+  CHECKED_PTHREAD_MUTEX_LOCK(&(workernode->work_request_lock))
+
   workernode->work_requested = 0; 
   workernode->request_work = 0;
   workernode->master_queue_empty =0;
-  lock_retval = pthread_mutex_unlock(&(workernode->work_request_lock));
-     #ifdef CHECK_MUTEXES
-    parse_lock_errors(lock_retval, workernode->my_rank);
-  #endif
+
+  CHECKED_PTHREAD_MUTEX_UNLOCK(&(workernode->work_request_lock));
+
   // if we get this far, we have failed to fail, and have therefore succeeded
   return (eslOK);
 }
@@ -655,19 +656,16 @@ int p7_server_workernode_start_hmm_vs_amino_db(P7_SERVER_WORKERNODE_STATE *worke
  */
 
 int p7_server_workernode_add_work(P7_SERVER_WORKERNODE_STATE *workernode, uint64_t start_object, uint64_t end_object){
-  int lock_retval;
-  lock_retval = pthread_mutex_lock(&(workernode->global_queue_lock));
-     #ifdef CHECK_MUTEXES
-    parse_lock_errors(lock_retval, workernode->my_rank);
-  #endif
+
+  CHECKED_PTHREAD_MUTEX_LOCK(&(workernode->global_queue_lock));
+
   if(workernode->global_queue == NULL){
     printf("Found NULL global queue in p7_server_workernode_add_work_hmm_vs_amino_db\n");
   }
   int i;
-  lock_retval = pthread_mutex_lock(&(workernode->search_definition_lock));
-     #ifdef CHECK_MUTEXES
-    parse_lock_errors(lock_retval, workernode->my_rank);
-  #endif
+
+  CHECKED_PTHREAD_MUTEX_LOCK(&(workernode->search_definition_lock));
+
   //Tell the worker node not to do any start-of-search work
   if(workernode->search_type == SEQUENCE_SEARCH  || workernode->search_type == SEQUENCE_SEARCH_CONTINUE){
     workernode->search_type = SEQUENCE_SEARCH_CONTINUE;
@@ -675,11 +673,9 @@ int p7_server_workernode_add_work(P7_SERVER_WORKERNODE_STATE *workernode, uint64
   else{
     workernode->search_type = HMM_SEARCH_CONTINUE;
   }
-  
-  lock_retval = pthread_mutex_unlock(&(workernode->search_definition_lock));
-     #ifdef CHECK_MUTEXES
-    parse_lock_errors(lock_retval, workernode->my_rank);
-  #endif
+
+  CHECKED_PTHREAD_MUTEX_UNLOCK(&(workernode->search_definition_lock));
+
   // recompute the amount of work that each worker thread should grab at a time
   workernode->chunk_size = ((end_object - start_object) / (workernode->num_threads) * 16);
   if(workernode->chunk_size < 1){
@@ -727,19 +723,14 @@ int p7_server_workernode_add_work(P7_SERVER_WORKERNODE_STATE *workernode, uint64
     print_work_queue(workernode->global_queue);
   #endif
 
-  lock_retval = pthread_mutex_unlock(&(workernode->global_queue_lock)); // release lock
-     #ifdef CHECK_MUTEXES
-    parse_lock_errors(lock_retval, workernode->my_rank);
-  #endif
-  lock_retval = pthread_mutex_lock(&(workernode->steal_lock));
-     #ifdef CHECK_MUTEXES
-    parse_lock_errors(lock_retval, workernode->my_rank);
-  #endif
+  CHECKED_PTHREAD_MUTEX_UNLOCK(&(workernode->global_queue_lock)); // release lock
+
+  CHECKED_PTHREAD_MUTEX_LOCK(&(workernode->steal_lock));
+
   workernode->no_steal = 0;  // reset this to allow stealing work for the new search
-  lock_retval = pthread_mutex_unlock(&(workernode->steal_lock));
-     #ifdef CHECK_MUTEXES
-    parse_lock_errors(lock_retval, workernode->my_rank);
-  #endif
+
+  CHECKED_PTHREAD_MUTEX_UNLOCK(&(workernode->steal_lock));
+
   return (eslOK);
 }
 
@@ -762,31 +753,25 @@ int p7_server_workernode_add_work(P7_SERVER_WORKERNODE_STATE *workernode, uint64
  * if it fails.
  */
 int p7_server_workernode_start_amino_vs_hmm_db(P7_SERVER_WORKERNODE_STATE *workernode, uint32_t database, uint64_t start_object, uint64_t end_object, ESL_SQ *compare_sequence){
+  #ifdef CHECK_MUTEXES 
   int lock_retval;
-  lock_retval = pthread_mutex_lock(&(workernode->search_definition_lock));
-     #ifdef CHECK_MUTEXES
-    parse_lock_errors(lock_retval, workernode->my_rank);
-  #endif
+  #endif 
+  CHECKED_PTHREAD_MUTEX_LOCK(&(workernode->search_definition_lock));
+
   if(workernode->search_type != IDLE){
     p7_Die("p7_server_workernode_start_amino_vs_hmm_db attempted to set up a new operation on a worker node while an old one was still in progress");
   }
-  lock_retval = pthread_mutex_unlock(&(workernode->search_definition_lock));
-   #ifdef CHECK_MUTEXES
-    parse_lock_errors(lock_retval, workernode->my_rank);
-  #endif
-  lock_retval = pthread_mutex_lock(&(workernode->steal_lock));
-     #ifdef CHECK_MUTEXES
-    parse_lock_errors(lock_retval, workernode->my_rank);
-  #endif
+ 
+  CHECKED_PTHREAD_MUTEX_UNLOCK(&(workernode->search_definition_lock));
+ 
+  CHECKED_PTHREAD_MUTEX_LOCK(&(workernode->steal_lock));
+   
   workernode->no_steal = 0;  // reset this to allow stealing work for the new search
-  lock_retval = pthread_mutex_unlock(&(workernode->steal_lock));
-     #ifdef CHECK_MUTEXES
-    parse_lock_errors(lock_retval, workernode->my_rank);
-  #endif
-  lock_retval = pthread_mutex_lock(&(workernode->search_definition_lock));
-     #ifdef CHECK_MUTEXES
-    parse_lock_errors(lock_retval, workernode->my_rank);
-  #endif
+ 
+  CHECKED_PTHREAD_MUTEX_UNLOCK(&(workernode->steal_lock));
+
+  CHECKED_PTHREAD_MUTEX_LOCK(&(workernode->search_definition_lock));
+
   //install the model we'll be comparing against
   workernode->compare_sequence = compare_sequence;
   workernode->compare_L = compare_sequence->L;
@@ -800,10 +785,9 @@ int p7_server_workernode_start_amino_vs_hmm_db(P7_SERVER_WORKERNODE_STATE *worke
     p7_Die("Attempt to set up amino acid comparision against non-HMM database in p7_server_workernode_start_amino_vs_hmm_db");
   }
   workernode->compare_database = database;
-  lock_retval = pthread_mutex_unlock(&(workernode->search_definition_lock));
-     #ifdef CHECK_MUTEXES
-    parse_lock_errors(lock_retval, workernode->my_rank);
-  #endif
+ 
+  CHECKED_PTHREAD_MUTEX_UNLOCK(&(workernode->search_definition_lock));
+
   // Grab this to avoid multiple re-indexing
   P7_SHARD *the_shard = workernode->database_shards[database];
 
@@ -828,15 +812,13 @@ int p7_server_workernode_start_amino_vs_hmm_db(P7_SERVER_WORKERNODE_STATE *worke
 
   // Set up thread state
   for(int i = 0; i < workernode->num_threads; i++){
-    lock_retval = pthread_mutex_lock(&(workernode->thread_state[i].mode_lock));
-       #ifdef CHECK_MUTEXES
-    parse_lock_errors(lock_retval, workernode->my_rank);
-  #endif
+
+  CHECKED_PTHREAD_MUTEX_LOCK(&(workernode->thread_state[i].mode_lock));
+ 
     workernode->thread_state[i].mode = FRONTEND; // all threads start out processing front-end comparisons
-    lock_retval = pthread_mutex_unlock(&(workernode->thread_state[i].mode_lock));
-       #ifdef CHECK_MUTEXES
-    parse_lock_errors(lock_retval, workernode->my_rank);
-  #endif
+
+    CHECKED_PTHREAD_MUTEX_UNLOCK(&(workernode->thread_state[i].mode_lock));
+
     workernode->thread_state[i].comparisons_queued = 0; // reset this
     workernode->thread_state[i].stats_pipeline = p7_pipeline_Create(workernode->commandline_options, 100, 100, FALSE, p7_SCAN_MODELS);
     if(workernode->thread_state[i].stats_pipeline == NULL){
@@ -844,17 +826,15 @@ int p7_server_workernode_start_amino_vs_hmm_db(P7_SERVER_WORKERNODE_STATE *worke
     }
   }
   workernode->num_backend_threads = 0;
-  lock_retval = pthread_mutex_lock(&(workernode->work_request_lock));
-     #ifdef CHECK_MUTEXES
-    parse_lock_errors(lock_retval, workernode->my_rank);
-  #endif
+
+  CHECKED_PTHREAD_MUTEX_LOCK(&(workernode->work_request_lock));
+
   workernode->work_requested = 0; // no work has been requested thus far
   workernode->request_work = 0;
   workernode->master_queue_empty =0;
-  lock_retval = pthread_mutex_unlock(&(workernode->work_request_lock));
-     #ifdef CHECK_MUTEXES
-    parse_lock_errors(lock_retval, workernode->my_rank);
-  #endif
+
+  CHECKED_PTHREAD_MUTEX_UNLOCK(&(workernode->work_request_lock));
+
   return (eslOK);
 }
 
@@ -936,12 +916,12 @@ int p7_server_workernode_release_threads(P7_SERVER_WORKERNODE_STATE *workernode)
  *  \warning Caller is responsible for making sure that all worker threads have completed their work before calling this function.
 */
 void p7_server_workernode_end_search(P7_SERVER_WORKERNODE_STATE *workernode){
+  #ifdef CHECK_MUTEXES
   int lock_retval;
-  lock_retval = pthread_mutex_lock(&(workernode->wait_lock)); //prevent race condition between
-  // worker threads reading and us destroying structures
-   #ifdef CHECK_MUTEXES
-    parse_lock_errors(lock_retval, workernode->my_rank);
   #endif
+  CHECKED_PTHREAD_MUTEX_LOCK(&(workernode->wait_lock)); //prevent race condition between
+  // worker threads reading and us destroying structures
+
 //check code that verifies that all sequences were processed.  Will only work in a configuration with one worker node
 #ifdef TEST_SEQUENCES   
  uint64_t index;
@@ -953,10 +933,9 @@ void p7_server_workernode_end_search(P7_SERVER_WORKERNODE_STATE *workernode){
   free(workernode->sequences_processed);
 #endif
   int i;
-  lock_retval = pthread_mutex_lock(&(workernode->search_definition_lock));
-     #ifdef CHECK_MUTEXES
-    parse_lock_errors(lock_retval, workernode->my_rank);
-  #endif
+
+  CHECKED_PTHREAD_MUTEX_LOCK(&(workernode->search_definition_lock));
+ 
   // Destroy or recycle models
   for(i = 0; i < workernode->num_threads; i++){
     p7_profile_Destroy(workernode->thread_state[i].gm);
@@ -974,16 +953,14 @@ void p7_server_workernode_end_search(P7_SERVER_WORKERNODE_STATE *workernode){
   }
   // First, mark the node idle
   workernode->search_type = IDLE;
-  lock_retval = pthread_mutex_unlock(&(workernode->search_definition_lock));
-     #ifdef CHECK_MUTEXES
-    parse_lock_errors(lock_retval, workernode->my_rank);
-  #endif
+
+  CHECKED_PTHREAD_MUTEX_UNLOCK(&(workernode->search_definition_lock));
+
   p7_tophits_Destroy(workernode->tophits);
   workernode->tophits = p7_tophits_Create(); // Create new tophits for next search
-  lock_retval = pthread_mutex_unlock(&(workernode->wait_lock)); 
-     #ifdef CHECK_MUTEXES
-    parse_lock_errors(lock_retval, workernode->my_rank);
-  #endif
+
+  CHECKED_PTHREAD_MUTEX_UNLOCK(&(workernode->wait_lock)); 
+
 }
 
 
@@ -1012,22 +989,20 @@ void *p7_server_worker_thread(void *worker_argument){
   if(temp_abc == NULL){
     p7_Die("Unable to allocate memory in p7_server_worker_thread\n");
   }
+  #ifdef CHECK_MUTEXES
   int lock_retval;
-  // Tell the master thread that we're awake and ready to go
-  lock_retval = pthread_mutex_lock(&(workernode->wait_lock));
-     #ifdef CHECK_MUTEXES
-    parse_lock_errors(lock_retval, workernode->my_rank);
   #endif
+  // Tell the master thread that we're awake and ready to go
+  CHECKED_PTHREAD_MUTEX_LOCK(&(workernode->wait_lock));
+
 
   workernode->num_waiting +=1;  //mark that we're now waiting for the go signal
   while(workernode->ready_to_start ==0){ // catch spurious wakeup
     pthread_cond_wait(&(workernode->start), &(workernode->wait_lock));
   }
-  
-  lock_retval = pthread_mutex_unlock(&(workernode->wait_lock));
-   #ifdef CHECK_MUTEXES
-    parse_lock_errors(lock_retval, workernode->my_rank);
-  #endif
+
+  CHECKED_PTHREAD_MUTEX_UNLOCK(&(workernode->wait_lock));
+
   struct timeval start_time;
   // Main work loop.  The thread remains in this loop until it is told to terminate.
   while(!workernode->shutdown){
@@ -1037,22 +1012,21 @@ void *p7_server_worker_thread(void *worker_argument){
     /* Doing a cond_wait on workernode->start after we just did one before entering this loop looks a little strange,
        but we do it because the first call uses workernode->start to pause until all the worker threads are ready during startup.
        Once startup is over, we use workernode->start to signal that a new search or new work assignment has arrived */
-    lock_retval = pthread_mutex_lock(&(workernode->wait_lock));
-       #ifdef CHECK_MUTEXES
-    parse_lock_errors(lock_retval, workernode->my_rank);
-  #endif
+
+    CHECKED_PTHREAD_MUTEX_LOCK(&(workernode->wait_lock));
+
     workernode->num_waiting +=1;  //mark that we're now waiting for the go signal
     my_releases = workernode->num_releases; // Grab the global release count so we can wait for the next one, since we may miss releases if we're busy with work
     while(workernode->num_releases <= my_releases){ // catch spurious wakeup
       pthread_cond_wait(&(workernode->start), &(workernode->wait_lock)); // wait until master tells us to go
     }  
 
-    lock_retval = pthread_mutex_unlock(&(workernode->wait_lock));  // We come out of pthread_cond_wait holding the lock
+
+    CHECKED_PTHREAD_MUTEX_UNLOCK(&(workernode->wait_lock));  // We come out of pthread_cond_wait holding the lock
     gettimeofday(&start_time, NULL);
-    lock_retval = pthread_mutex_lock(&(workernode->search_definition_lock));
-       #ifdef CHECK_MUTEXES
-    parse_lock_errors(lock_retval, workernode->my_rank);
-  #endif
+
+    CHECKED_PTHREAD_MUTEX_LOCK(&(workernode->search_definition_lock));
+
     switch(workernode->search_type){ // do the right thing for each search type
       case SEQUENCE_SEARCH:
       case SEQUENCE_SEARCH_CONTINUE:     
@@ -1072,10 +1046,9 @@ void *p7_server_worker_thread(void *worker_argument){
           }
           p7_profile_Copy(workernode->compare_model, workernode->thread_state[my_id].gm);
         }
-        lock_retval = pthread_mutex_unlock(&(workernode->search_definition_lock));
-               #ifdef CHECK_MUTEXES
-    parse_lock_errors(lock_retval, workernode->my_rank);
-  #endif
+
+        CHECKED_PTHREAD_MUTEX_UNLOCK(&(workernode->search_definition_lock));
+
         if(workernode->thread_state[my_id].om == NULL){
           workernode->thread_state[my_id].om = p7_oprofile_Create(workernode->thread_state[my_id].gm->M, workernode->thread_state[my_id].gm->abc);      
           if(workernode->thread_state[my_id].om == NULL){
@@ -1087,25 +1060,22 @@ void *p7_server_worker_thread(void *worker_argument){
         }
 
         stop = 0;
-        while(stop == 0){  // There's still some work left to do on the current search
-          lock_retval = pthread_mutex_lock(&(workernode->thread_state[my_id].mode_lock));
-             #ifdef CHECK_MUTEXES
-    parse_lock_errors(lock_retval, workernode->my_rank);
-  #endif
+        while(stop == 0){  // There's still some work left to do on the current search)
+
+          CHECKED_PTHREAD_MUTEX_LOCK(&(workernode->thread_state[my_id].mode_lock));
+
           switch(workernode->thread_state[my_id].mode){
             case FRONTEND:
-              lock_retval = pthread_mutex_unlock(&(workernode->thread_state[my_id].mode_lock));
-                 #ifdef CHECK_MUTEXES
-    parse_lock_errors(lock_retval, workernode->my_rank);
-  #endif
+
+              CHECKED_PTHREAD_MUTEX_UNLOCK(&(workernode->thread_state[my_id].mode_lock));
+
               // process front-end searches until we either run out of work or are told to switch to back-end
               stop = worker_thread_front_end_search_loop(workernode, my_id);
               break;
             case BACKEND:
-              lock_retval = pthread_mutex_unlock(&(workernode->thread_state[my_id].mode_lock));
-                 #ifdef CHECK_MUTEXES
-    parse_lock_errors(lock_retval, workernode->my_rank);
-  #endif
+
+              CHECKED_PTHREAD_MUTEX_UNLOCK(&(workernode->thread_state[my_id].mode_lock));
+ 
               // Call the back end search loop to process comparisons that require long searches until there aren't any
               // left in the queue
               worker_thread_back_end_sequence_search_loop(workernode, my_id);
@@ -1123,30 +1093,26 @@ void *p7_server_worker_thread(void *worker_argument){
             p7_Die("Unable to allocate memory in p7_server_worker_thread\n");
           }
         }
-        lock_retval = pthread_mutex_unlock(&(workernode->search_definition_lock));
-           #ifdef CHECK_MUTEXES
-    parse_lock_errors(lock_retval, workernode->my_rank);
-  #endif
+
+        CHECKED_PTHREAD_MUTEX_UNLOCK(&(workernode->search_definition_lock));
+
         stop = 0;
         while(stop == 0){  // There's still some work left to do on the current search
-          lock_retval = pthread_mutex_lock(&(workernode->thread_state[my_id].mode_lock));
-             #ifdef CHECK_MUTEXES
-    parse_lock_errors(lock_retval, workernode->my_rank);
-  #endif
+
+          CHECKED_PTHREAD_MUTEX_LOCK(&(workernode->thread_state[my_id].mode_lock));
+
           switch(workernode->thread_state[my_id].mode){
             case FRONTEND:
-              lock_retval = pthread_mutex_unlock(&(workernode->thread_state[my_id].mode_lock));
-                 #ifdef CHECK_MUTEXES
-    parse_lock_errors(lock_retval, workernode->my_rank);
-  #endif
+   
+              CHECKED_PTHREAD_MUTEX_UNLOCK(&(workernode->thread_state[my_id].mode_lock));
+
               // process front-end searches until we either run out of work or are told to switch to back-end
               stop = worker_thread_front_end_search_loop(workernode, my_id);
               break;
             case BACKEND:
-              lock_retval = pthread_mutex_unlock(&(workernode->thread_state[my_id].mode_lock));
-                 #ifdef CHECK_MUTEXES
-    parse_lock_errors(lock_retval, workernode->my_rank);
-  #endif
+
+              CHECKED_PTHREAD_MUTEX_UNLOCK(&(workernode->thread_state[my_id].mode_lock));
+
               // Call the back end search loop to process comparisons that require long searches until there aren't any
               // left in the queue
               worker_thread_back_end_sequence_search_loop(workernode, my_id);
@@ -1155,10 +1121,9 @@ void *p7_server_worker_thread(void *worker_argument){
         }
         break;
       case SHUTDOWN:
-        lock_retval = pthread_mutex_unlock(&(workernode->search_definition_lock));
-  #ifdef CHECK_MUTEXES
-        parse_lock_errors(lock_retval, workernode->my_rank);
-  #endif
+
+        CHECKED_PTHREAD_MUTEX_UNLOCK(&(workernode->search_definition_lock));
+
         printf("Worker thread %d on rank %d saw workernode->shutdown\n", my_id, workernode->my_rank);
         break;  // Go to end of loop, next iteration will catch that we have shutdown set
       case IDLE:
@@ -1190,12 +1155,16 @@ void *p7_server_worker_thread(void *worker_argument){
 void p7_server_workernode_main(int argc, char **argv, int my_rank, MPI_Datatype *server_mpitypes, ESL_GETOPTS *go){
 
 #ifndef HAVE_MPI
+      ESL_GETOPTS *go2 = esl_getopts_Create(server_Client_Options); // hack to silence compiler warning
+      esl_getopts_Destroy(go2);
       p7_Die("Attempt to start workernode_main when HMMER was compiled without MPI support");
 #endif
 #ifdef HAVE_MPI
 
   int status; // return code from ESL routines
+  #ifdef CHECK_MUTEXES
   int lock_retval;
+  #endif
   // FIXME: change this to handle variable numbers of databases once we specify the server UI
 
   impl_Init();                  /* processor specific initialization */
@@ -1257,17 +1226,13 @@ void p7_server_workernode_main(int argc, char **argv, int my_rank, MPI_Datatype 
         break; 
       case P7_SERVER_SHUTDOWN_WORKERS:
       // master wants to shut down the workers.
-        lock_retval = pthread_mutex_lock(&(workernode->wait_lock));
-           #ifdef CHECK_MUTEXES
-    parse_lock_errors(lock_retval, workernode->my_rank);
-  #endif
+        CHECKED_PTHREAD_MUTEX_LOCK(&(workernode->wait_lock));
+
         workernode->shutdown = 1; // tell threads to shut down
         workernode->search_type = SHUTDOWN;
         p7_server_workernode_release_threads(workernode); // release any waiting threads to process the shutdown
-        lock_retval = pthread_mutex_unlock(&(workernode->wait_lock));
-           #ifdef CHECK_MUTEXES
-    parse_lock_errors(lock_retval, workernode->my_rank);
-  #endif
+        CHECKED_PTHREAD_MUTEX_UNLOCK(&(workernode->wait_lock));
+
         p7_server_workernode_Destroy(workernode);
         MPI_Barrier(MPI_COMM_WORLD);  //Barrier here because shutdown seems to get screwed up if master node exits early
         MPI_Finalize();
@@ -1319,14 +1284,15 @@ static int worker_thread_front_end_search_loop(P7_SERVER_WORKERNODE_STATE *worke
   ESL_SQ* compare_sequence;
   uint32_t compare_database;
   P7_SEARCH_TYPE search_type;
+  #ifdef CHECK_MUTEXES
   int lock_retval;
+  #endif
   if ((workernode->thread_state[my_id].pipeline != NULL)){
     p7_Die("Illegal state at start of worker_thread_front_end_search_loop");
   }
-  lock_retval = pthread_mutex_lock(&(workernode->search_definition_lock));
-     #ifdef CHECK_MUTEXES
-    parse_lock_errors(lock_retval, workernode->my_rank);
-  #endif
+
+  CHECKED_PTHREAD_MUTEX_LOCK(&(workernode->search_definition_lock));
+
   if((workernode->search_type == SEQUENCE_SEARCH) || (workernode->search_type == SEQUENCE_SEARCH_CONTINUE)){
     workernode->thread_state[my_id].pipeline = p7_pipeline_Create(workernode->commandline_options, 100, 100, FALSE, p7_SEARCH_SEQS);
     if(workernode->thread_state[my_id].pipeline == NULL){
@@ -1346,18 +1312,17 @@ static int worker_thread_front_end_search_loop(P7_SERVER_WORKERNODE_STATE *worke
   compare_sequence = workernode->compare_sequence;
   compare_database = workernode->compare_database;
   search_type = workernode->search_type;
-  lock_retval = pthread_mutex_unlock(&(workernode->search_definition_lock));
-     #ifdef CHECK_MUTEXES
-    parse_lock_errors(lock_retval, workernode->my_rank);
-  #endif
+  
+
+  CHECKED_PTHREAD_MUTEX_UNLOCK(&(workernode->search_definition_lock));
+
   while(1){ // Iterate forever, we'll return from the function rather than exiting this loop
  
 
     // Try to grab some work from the global queue
-    lock_retval = pthread_mutex_lock(&(workernode->work[my_id].lock));
-       #ifdef CHECK_MUTEXES
-    parse_lock_errors(lock_retval, workernode->my_rank);
-  #endif
+
+    CHECKED_PTHREAD_MUTEX_LOCK(&(workernode->work[my_id].lock));
+
     workernode->work[my_id].start = -1; //Mark our local queue empty here so that stealing works correctly.
     // Could do it at end of chunk, but that would require another lock-unlock sequence
 
@@ -1371,67 +1336,56 @@ static int worker_thread_front_end_search_loop(P7_SERVER_WORKERNODE_STATE *worke
       printf("Worker thread %d starting chunk from %ld to %ld\n", my_id, workernode->work[my_id].start, workernode->work[my_id].end);
     } 
 #endif
-    lock_retval = pthread_mutex_unlock(&(workernode->work[my_id].lock)); // release lock
-   #ifdef CHECK_MUTEXES
-    parse_lock_errors(lock_retval, workernode->my_rank);
-  #endif
+
+
+    CHECKED_PTHREAD_MUTEX_UNLOCK(&(workernode->work[my_id].lock)); // release lock
+
     if(!work_on_global){
     // there was no work on the global queue, so try to steal
       if(!worker_thread_steal(workernode, my_id)){
         // no more work, stop looping
-        lock_retval = pthread_mutex_lock(&(workernode->backend_queue_lock));
-           #ifdef CHECK_MUTEXES
-    parse_lock_errors(lock_retval, workernode->my_rank);
-  #endif
+
+        CHECKED_PTHREAD_MUTEX_LOCK(&(workernode->backend_queue_lock));
+
         if(workernode->backend_queue_depth == 0){
-            lock_retval = pthread_mutex_unlock(&(workernode->backend_queue_lock));
-               #ifdef CHECK_MUTEXES
-    parse_lock_errors(lock_retval, workernode->my_rank);
-  #endif
+   
+            CHECKED_PTHREAD_MUTEX_UNLOCK(&(workernode->backend_queue_lock));
+
         // There are also no backend queue entries to process
           if(workernode->thread_state[my_id].pipeline != NULL){
             //Merge stats into running list and clean up the current pipeline
-            lock_retval = pthread_mutex_lock(&(workernode->thread_state[my_id].pipeline_lock));
-               #ifdef CHECK_MUTEXES
-    parse_lock_errors(lock_retval, workernode->my_rank);
-  #endif
+           
+            CHECKED_PTHREAD_MUTEX_LOCK(&(workernode->thread_state[my_id].pipeline_lock));
+
             p7_pipeline_Merge(workernode->thread_state[my_id].stats_pipeline, workernode->thread_state[my_id].pipeline);
             p7_pipeline_Destroy(workernode->thread_state[my_id].pipeline); // scrub the engine for next time
-            lock_retval = pthread_mutex_unlock(&(workernode->thread_state[my_id].pipeline_lock));  
-               #ifdef CHECK_MUTEXES
-    parse_lock_errors(lock_retval, workernode->my_rank);
-  #endif
+
+            CHECKED_PTHREAD_MUTEX_UNLOCK(&(workernode->thread_state[my_id].pipeline_lock));  
+
             workernode->thread_state[my_id].pipeline = NULL;
           }      
         return 1;
         }
         else{
-          lock_retval = pthread_mutex_unlock(&(workernode->backend_queue_lock));
-             #ifdef CHECK_MUTEXES
-    parse_lock_errors(lock_retval, workernode->my_rank);
-  #endif
+
+          CHECKED_PTHREAD_MUTEX_UNLOCK(&(workernode->backend_queue_lock));
+
           // there are backend queue entries to process, switch to backend mode to handle them
-          lock_retval = pthread_mutex_lock(&(workernode->backend_threads_lock));
-             #ifdef CHECK_MUTEXES
-    parse_lock_errors(lock_retval, workernode->my_rank);
-  #endif
-          lock_retval = pthread_mutex_lock(&(workernode->thread_state[my_id].mode_lock));
-             #ifdef CHECK_MUTEXES
-    parse_lock_errors(lock_retval, workernode->my_rank);
-  #endif
+
+          CHECKED_PTHREAD_MUTEX_LOCK(&(workernode->backend_threads_lock));
+
+          CHECKED_PTHREAD_MUTEX_LOCK(&(workernode->thread_state[my_id].mode_lock));
+
           if(workernode->thread_state[my_id].mode == FRONTEND){
             // someone hasn't already set me to BACKEND
             workernode->num_backend_threads += 1;
             workernode->thread_state[my_id].mode = BACKEND;
           }
-          lock_retval = pthread_mutex_unlock(&(workernode->thread_state[my_id].mode_lock));
-             #ifdef CHECK_MUTEXES
-    parse_lock_errors(lock_retval, workernode->my_rank);
-  #endif
-          lock_retval = pthread_mutex_unlock(&(workernode->backend_threads_lock));
-             #ifdef CHECK_MUTEXES
-    parse_lock_errors(lock_retval, workernode->my_rank);
-  #endif
+
+          CHECKED_PTHREAD_MUTEX_UNLOCK(&(workernode->thread_state[my_id].mode_lock));
+
+          CHECKED_PTHREAD_MUTEX_UNLOCK(&(workernode->backend_threads_lock));
+
           if(workernode->thread_state[my_id].pipeline != NULL){
             //Merge stats into running list and clean up the current pipeline
             p7_pipeline_Merge(workernode->thread_state[my_id].stats_pipeline, workernode->thread_state[my_id].pipeline);
@@ -1443,18 +1397,15 @@ static int worker_thread_front_end_search_loop(P7_SERVER_WORKERNODE_STATE *worke
         }
       }
       else{
-        lock_retval = pthread_mutex_lock(&(workernode->work[my_id].lock));
-           #ifdef CHECK_MUTEXES
-    parse_lock_errors(lock_retval, workernode->my_rank);
-  #endif
+
+        CHECKED_PTHREAD_MUTEX_LOCK(&(workernode->work[my_id].lock));
+
         // grab the start and end pointers from our work queue
         start = workernode->work[my_id].start;
         end = workernode->work[my_id].end;
+      
+        CHECKED_PTHREAD_MUTEX_UNLOCK(&(workernode->work[my_id].lock)); // release lock
 
-        lock_retval = pthread_mutex_unlock(&(workernode->work[my_id].lock)); // release lock
-           #ifdef CHECK_MUTEXES
-    parse_lock_errors(lock_retval, workernode->my_rank);
-  #endif
       } 
     }
           
@@ -1463,19 +1414,17 @@ static int worker_thread_front_end_search_loop(P7_SERVER_WORKERNODE_STATE *worke
       P7_OPROFILE *search_om = NULL;
 
       //printf("Worker %d from rank %d got chunk ranging from %lu to %lu\n", my_id, workernode->my_rank, start, end);
-      
-      lock_retval = pthread_mutex_lock(&(workernode->work[my_id].lock));
-         #ifdef CHECK_MUTEXES
-    parse_lock_errors(lock_retval, workernode->my_rank);
-  #endif
+
+      CHECKED_PTHREAD_MUTEX_LOCK(&(workernode->work[my_id].lock));
+
       while(workernode->work[my_id].start<= workernode->work[my_id].end){
 
         start = workernode->work[my_id].start;
         workernode->work[my_id].start = start+1;
-        lock_retval = pthread_mutex_unlock(&(workernode->work[my_id].lock));
-   #ifdef CHECK_MUTEXES
-    parse_lock_errors(lock_retval, workernode->my_rank);
-  #endif
+
+    
+        CHECKED_PTHREAD_MUTEX_UNLOCK(&(workernode->work[my_id].lock));
+
         if((search_type == SEQUENCE_SEARCH) || (search_type == SEQUENCE_SEARCH_CONTINUE)){
           search_sequence = (ESL_SQ *) workernode->database_shards[compare_database]->contents[start];
           p7_bg_SetLength(workernode->thread_state[my_id].bg, search_sequence->L);           
@@ -1506,20 +1455,19 @@ static int worker_thread_front_end_search_loop(P7_SERVER_WORKERNODE_STATE *worke
         else{ // push the current operation on the long comparison queue and go on to the next sequence
 
           // First, check to make sure that someone else hasn't stolen the comparison
-          lock_retval = pthread_mutex_lock(&(workernode->work[my_id].lock));
-             #ifdef CHECK_MUTEXES
-    parse_lock_errors(lock_retval, workernode->my_rank);
-  #endif
+        
+
+          CHECKED_PTHREAD_MUTEX_LOCK(&(workernode->work[my_id].lock));
+
           // grab the start and end pointers from our work queue
           end = workernode->work[my_id].end;
           
           
 
           if(start <= end){ // sequence hadn't been stolen
-            lock_retval = pthread_mutex_unlock(&(workernode->work[my_id].lock)); // release lock
-   #ifdef CHECK_MUTEXES
-    parse_lock_errors(lock_retval, workernode->my_rank);
-  #endif
+
+            CHECKED_PTHREAD_MUTEX_UNLOCK(&(workernode->work[my_id].lock)); // release lock
+
             // get an entry to put this comparison in
             P7_BACKEND_QUEUE_ENTRY * the_entry = workernode_get_backend_queue_entry_from_pool(workernode);
 
@@ -1556,64 +1504,48 @@ static int worker_thread_front_end_search_loop(P7_SERVER_WORKERNODE_STATE *worke
             the_entry->next = NULL;
             the_entry->fwdsc = fwdsc;
             the_entry->nullsc = nullsc;
-            lock_retval = pthread_mutex_lock(&(workernode->thread_state[my_id].mode_lock));
-               #ifdef CHECK_MUTEXES
-    parse_lock_errors(lock_retval, workernode->my_rank);
-  #endif
+            
+            CHECKED_PTHREAD_MUTEX_LOCK(&(workernode->thread_state[my_id].mode_lock));
+
             workernode->thread_state[my_id].comparisons_queued += 1;
-            lock_retval = pthread_mutex_unlock(&(workernode->thread_state[my_id].mode_lock));
-               #ifdef CHECK_MUTEXES
-    parse_lock_errors(lock_retval, workernode->my_rank);
-  #endif
+
+            CHECKED_PTHREAD_MUTEX_UNLOCK(&(workernode->thread_state[my_id].mode_lock));
+
             // put the entry in the queue
             workernode_put_backend_queue_entry_in_queue(workernode, the_entry);
-            lock_retval = pthread_mutex_lock(&(workernode->backend_threads_lock));
-               #ifdef CHECK_MUTEXES
-    parse_lock_errors(lock_retval, workernode->my_rank);
-  #endif
-            lock_retval = pthread_mutex_lock(&(workernode->backend_queue_lock));
-               #ifdef CHECK_MUTEXES
-    parse_lock_errors(lock_retval, workernode->my_rank);
-  #endif
+
+            CHECKED_PTHREAD_MUTEX_LOCK(&(workernode->backend_threads_lock));
+
+            CHECKED_PTHREAD_MUTEX_LOCK(&(workernode->backend_queue_lock));
+
             if (workernode->backend_queue_depth > (workernode->num_backend_threads << BACKEND_INCREMENT_FACTOR)){
-              lock_retval = pthread_mutex_unlock(&(workernode->backend_queue_lock));
-                 #ifdef CHECK_MUTEXES
-    parse_lock_errors(lock_retval, workernode->my_rank);
-  #endif
-              lock_retval = pthread_mutex_unlock(&(workernode->backend_threads_lock));
-                 #ifdef CHECK_MUTEXES
-    parse_lock_errors(lock_retval, workernode->my_rank);
-  #endif
+
+              CHECKED_PTHREAD_MUTEX_UNLOCK(&(workernode->backend_queue_lock));
+
+              CHECKED_PTHREAD_MUTEX_UNLOCK(&(workernode->backend_threads_lock));
+
               // There are too many back-end comparisons waiting in the queue, so switch a thread from frontend to backend
               workernode_increase_backend_threads(workernode);
             }
             else{
-              lock_retval = pthread_mutex_unlock(&(workernode->backend_queue_lock));
-                 #ifdef CHECK_MUTEXES
-    parse_lock_errors(lock_retval, workernode->my_rank);
-  #endif
-              lock_retval = pthread_mutex_unlock(&(workernode->backend_threads_lock));
-                 #ifdef CHECK_MUTEXES
-    parse_lock_errors(lock_retval, workernode->my_rank);
-  #endif
+      
+              CHECKED_PTHREAD_MUTEX_UNLOCK(&(workernode->backend_queue_lock));
+
+              CHECKED_PTHREAD_MUTEX_UNLOCK(&(workernode->backend_threads_lock));
             }
           }
           else{
-            lock_retval = pthread_mutex_unlock(&(workernode->work[my_id].lock)); // release lock in two places to guarantee work not stolen before we make decision
-               #ifdef CHECK_MUTEXES
-    parse_lock_errors(lock_retval, workernode->my_rank);
-  #endif
+
+            CHECKED_PTHREAD_MUTEX_UNLOCK(&(workernode->work[my_id].lock)); // release lock in two places to guarantee work not stolen before we make decision
+
           }
         }
-        lock_retval = pthread_mutex_lock(&(workernode->work[my_id].lock)); //Lock this here to preserve invariant that threads can't 
+
+        CHECKED_PTHREAD_MUTEX_LOCK(&(workernode->work[my_id].lock)); //Lock this here to preserve invariant that threads can't 
         //acquire work[id].lock while holding thread_state[id].mode_lock
-           #ifdef CHECK_MUTEXES
-    parse_lock_errors(lock_retval, workernode->my_rank);
-  #endif
-        lock_retval = pthread_mutex_lock(&(workernode->thread_state[my_id].mode_lock));
-           #ifdef CHECK_MUTEXES
-    parse_lock_errors(lock_retval, workernode->my_rank);
-  #endif
+   
+        CHECKED_PTHREAD_MUTEX_LOCK(&(workernode->thread_state[my_id].mode_lock));
+
         if(workernode->thread_state[my_id].mode == BACKEND){
         // need to switch modes.
           //printf("Worker %d from node %d switching to back-end\n", my_id, workernode->my_rank);
@@ -1628,10 +1560,9 @@ static int worker_thread_front_end_search_loop(P7_SERVER_WORKERNODE_STATE *worke
 
           if(start <= end){
             // there was still work left on our queue, so push it back on the global queue
-            lock_retval = pthread_mutex_lock(&(workernode->global_queue_lock));
-   #ifdef CHECK_MUTEXES
-    parse_lock_errors(lock_retval, workernode->my_rank);
-  #endif
+
+            CHECKED_PTHREAD_MUTEX_LOCK(&(workernode->global_queue_lock));
+
             // Grab a work chunk to use
             P7_WORK_CHUNK *temp = workernode->global_chunk_pool;
             if(temp == NULL){ // allocate more chunks
@@ -1659,7 +1590,7 @@ static int worker_thread_front_end_search_loop(P7_SERVER_WORKERNODE_STATE *worke
             workernode->global_queue->start = start;
             workernode->global_queue->end = end;
 
-            lock_retval = pthread_mutex_unlock(&(workernode->global_queue_lock)); // release lock  
+            CHECKED_PTHREAD_MUTEX_UNLOCK(&(workernode->global_queue_lock)); // release lock  
 
              
           }
@@ -1668,24 +1599,18 @@ static int worker_thread_front_end_search_loop(P7_SERVER_WORKERNODE_STATE *worke
           //and free the current pipeline
           p7_pipeline_Destroy(workernode->thread_state[my_id].pipeline);
           workernode->thread_state[my_id].pipeline = NULL;
-          lock_retval = pthread_mutex_unlock(&(workernode->thread_state[my_id].mode_lock));
-             #ifdef CHECK_MUTEXES
-    parse_lock_errors(lock_retval, workernode->my_rank);
-  #endif
-          lock_retval = pthread_mutex_unlock(&(workernode->work[my_id].lock));
-             #ifdef CHECK_MUTEXES
-    parse_lock_errors(lock_retval, workernode->my_rank);
-  #endif
+
+          CHECKED_PTHREAD_MUTEX_UNLOCK(&(workernode->thread_state[my_id].mode_lock));
+
+          CHECKED_PTHREAD_MUTEX_UNLOCK(&(workernode->work[my_id].lock));
+
           return(0);
         }
-        lock_retval = pthread_mutex_unlock(&(workernode->thread_state[my_id].mode_lock));
-           #ifdef CHECK_MUTEXES
-    parse_lock_errors(lock_retval, workernode->my_rank);
-  #endif
-        lock_retval = pthread_mutex_unlock(&(workernode->work[my_id].lock));
-           #ifdef CHECK_MUTEXES
-    parse_lock_errors(lock_retval, workernode->my_rank);
-  #endif
+
+        CHECKED_PTHREAD_MUTEX_UNLOCK(&(workernode->thread_state[my_id].mode_lock));
+
+        CHECKED_PTHREAD_MUTEX_UNLOCK(&(workernode->work[my_id].lock));
+
       /* believe these are now redundant
         // if we get this far, we weren't switched to the backend, so go on to the next sequence or back to look for more work
         search_sequence = (ESL_SQ *) workernode->database_shards[compare_database]->contents[start];
@@ -1693,15 +1618,13 @@ static int worker_thread_front_end_search_loop(P7_SERVER_WORKERNODE_STATE *worke
         // type because it's faster than a conditional to see which one we need to set
       */
         p7_pipeline_Reuse(workernode->thread_state[my_id].pipeline);
-        lock_retval = pthread_mutex_lock(&(workernode->work[my_id].lock));
-           #ifdef CHECK_MUTEXES
-    parse_lock_errors(lock_retval, workernode->my_rank);
-  #endif
+
+        CHECKED_PTHREAD_MUTEX_LOCK(&(workernode->work[my_id].lock));
+
       }
-    lock_retval = pthread_mutex_unlock(&(workernode->work[my_id].lock));
-       #ifdef CHECK_MUTEXES
-    parse_lock_errors(lock_retval, workernode->my_rank); 
-  #endif 
+
+    CHECKED_PTHREAD_MUTEX_UNLOCK(&(workernode->work[my_id].lock));
+
     }
   }
 }
@@ -1719,22 +1642,22 @@ static void worker_thread_back_end_sequence_search_loop(P7_SERVER_WORKERNODE_STA
 
   // Grab a sequence to work on
   P7_BACKEND_QUEUE_ENTRY *the_entry = workernode_get_backend_queue_entry_from_queue(workernode);
+  #ifdef CHECK_MUTEXES
   int lock_retval;
-  while(the_entry != NULL){
-    lock_retval = pthread_mutex_lock(&(workernode->search_definition_lock));
-       #ifdef CHECK_MUTEXES
-    parse_lock_errors(lock_retval, workernode->my_rank);
   #endif
+  while(the_entry != NULL){
+
+    CHECKED_PTHREAD_MUTEX_LOCK(&(workernode->search_definition_lock));
+
     // There's a comparison in the queue, so do the backend comparison 
     if(workernode->search_type == SEQUENCE_SEARCH ||workernode->search_type == SEQUENCE_SEARCH_CONTINUE){
       // operate on the worker thread's OM, not the one in the command, to prevent two threads from using the same 
       // om structure simultaneously.  This isn't an issue during scans, because each om only gets examined once
       the_entry->om = workernode->thread_state[my_id].om;
     }
-    lock_retval = pthread_mutex_unlock(&(workernode->search_definition_lock));
-       #ifdef CHECK_MUTEXES
-    parse_lock_errors(lock_retval, workernode->my_rank);
-  #endif
+
+    CHECKED_PTHREAD_MUTEX_UNLOCK(&(workernode->search_definition_lock));
+
     P7_PIPELINE *temp_pipeline = the_entry->pipeline;
     the_entry->pipeline = NULL;
     workernode->thread_state[my_id].pipeline = temp_pipeline;
@@ -1743,15 +1666,13 @@ static void worker_thread_back_end_sequence_search_loop(P7_SERVER_WORKERNODE_STA
     p7_pli_NewModel(workernode->thread_state[my_id].pipeline, the_entry->om, workernode->thread_state[my_id].bg);
     p7_bg_SetLength(workernode->thread_state[my_id].bg, the_entry->sequence->L);           
     p7_oprofile_ReconfigLength(the_entry->om, the_entry->sequence->L);
-    lock_retval = pthread_mutex_lock(&(workernode->thread_state[my_id].hits_lock));
-       #ifdef CHECK_MUTEXES
-    parse_lock_errors(lock_retval, workernode->my_rank);
-  #endif
+
+    CHECKED_PTHREAD_MUTEX_LOCK(&(workernode->thread_state[my_id].hits_lock));
+
     p7_Pipeline_Mainstage(workernode->thread_state[my_id].pipeline, the_entry->om, workernode->thread_state[my_id].bg, the_entry->sequence, NULL, workernode->thread_state[my_id].tophits , the_entry->fwdsc, the_entry->nullsc); 
-    lock_retval = pthread_mutex_unlock(&(workernode->thread_state[my_id].hits_lock));
-   #ifdef CHECK_MUTEXES
-    parse_lock_errors(lock_retval, workernode->my_rank);
-  #endif
+
+    CHECKED_PTHREAD_MUTEX_UNLOCK(&(workernode->thread_state[my_id].hits_lock));
+
 #ifdef TEST_SEQUENCES 
       // Record that we processed this sequence
       workernode->sequences_processed[the_entry->seq_id] = 1;
@@ -1764,37 +1685,29 @@ static void worker_thread_back_end_sequence_search_loop(P7_SERVER_WORKERNODE_STA
   }
 
   //If we get here, the queue of backend entries is empty, so switch back to processing frontend entries
-  lock_retval = pthread_mutex_lock(&(workernode->backend_threads_lock));
-     #ifdef CHECK_MUTEXES
-    parse_lock_errors(lock_retval, workernode->my_rank);
-  #endif
-  lock_retval = pthread_mutex_lock(&(workernode->backend_queue_lock));
-     #ifdef CHECK_MUTEXES
-    parse_lock_errors(lock_retval, workernode->my_rank);
-  #endif
+
+  CHECKED_PTHREAD_MUTEX_LOCK(&(workernode->backend_threads_lock));
+
+  CHECKED_PTHREAD_MUTEX_LOCK(&(workernode->backend_queue_lock));
+
   if(workernode->backend_queue == NULL){  // Check this while we have the lock to prevent a race condition between 
     // enqueuing an entry in an empty backend queue and the last backend thread deciding there's no front-end work to do.
     // If we don't switch to front-end mode, we'll just call this function again immediately
-    lock_retval = pthread_mutex_lock(&(workernode->thread_state[my_id].mode_lock));
-       #ifdef CHECK_MUTEXES
-    parse_lock_errors(lock_retval, workernode->my_rank);
-  #endif
+
+    CHECKED_PTHREAD_MUTEX_LOCK(&(workernode->thread_state[my_id].mode_lock));
+
     //printf("Worker %d from node %d switching to front-end\n", my_id, workernode->my_rank);
     workernode->thread_state[my_id].mode = FRONTEND; // change my mode to frontend
-    lock_retval = pthread_mutex_unlock(&(workernode->thread_state[my_id].mode_lock));
-       #ifdef CHECK_MUTEXES
-    parse_lock_errors(lock_retval, workernode->my_rank);
-  #endif
+
+    CHECKED_PTHREAD_MUTEX_UNLOCK(&(workernode->thread_state[my_id].mode_lock));
+
     workernode->num_backend_threads -= 1;
     }
-  lock_retval = pthread_mutex_unlock(&(workernode->backend_queue_lock));
-     #ifdef CHECK_MUTEXES
-    parse_lock_errors(lock_retval, workernode->my_rank);
-  #endif
-  lock_retval = pthread_mutex_unlock(&(workernode->backend_threads_lock));
-     #ifdef CHECK_MUTEXES
-    parse_lock_errors(lock_retval, workernode->my_rank);
-  #endif
+
+  CHECKED_PTHREAD_MUTEX_UNLOCK(&(workernode->backend_queue_lock));
+
+  CHECKED_PTHREAD_MUTEX_UNLOCK(&(workernode->backend_threads_lock));
+
   return;
 }
 
@@ -1808,52 +1721,47 @@ static void worker_thread_back_end_sequence_search_loop(P7_SERVER_WORKERNODE_STA
  *  /returns Nothing
  */
 static void workernode_increase_backend_threads(P7_SERVER_WORKERNODE_STATE *workernode){
+  #ifdef CHECK_MUTEXES
   int lock_retval;
-  lock_retval = pthread_mutex_lock(&(workernode->backend_threads_lock));
-   #ifdef CHECK_MUTEXES
-    parse_lock_errors(lock_retval, workernode->my_rank);
   #endif
+  CHECKED_PTHREAD_MUTEX_LOCK(&(workernode->backend_threads_lock));
+
   // find the thread with the fewest hits queued, because we want to prioritize processing high-hit regions
   uint32_t which_thread;
   uint64_t fewest_hits = -1;
   uint32_t fewest_hits_thread = -1;
 
   for(which_thread = 0; which_thread < workernode->num_threads; which_thread++){
-    lock_retval = pthread_mutex_lock(&(workernode->thread_state[which_thread].mode_lock));
-       #ifdef CHECK_MUTEXES
-    parse_lock_errors(lock_retval, workernode->my_rank);
-  #endif
+
+    CHECKED_PTHREAD_MUTEX_LOCK(&(workernode->thread_state[which_thread].mode_lock));
+
     if((workernode->thread_state[which_thread].mode == FRONTEND) &&(workernode->thread_state[which_thread].comparisons_queued < fewest_hits)){
       // this thread is processing front-end queries and has queued fewer hits than any other front-end thread
       fewest_hits_thread = which_thread;
       fewest_hits = workernode->thread_state[which_thread].comparisons_queued;
     }
-    lock_retval = pthread_mutex_unlock(&(workernode->thread_state[which_thread].mode_lock));
-       #ifdef CHECK_MUTEXES
-    parse_lock_errors(lock_retval, workernode->my_rank);
-  #endif
+
+    CHECKED_PTHREAD_MUTEX_UNLOCK(&(workernode->thread_state[which_thread].mode_lock));
+
   }
   if(fewest_hits_thread != -1){
     // We found a thread to switch to
-    lock_retval = pthread_mutex_lock(&(workernode->thread_state[fewest_hits_thread].mode_lock));
-           #ifdef CHECK_MUTEXES
-    parse_lock_errors(lock_retval, workernode->my_rank);
-  #endif
+
+    CHECKED_PTHREAD_MUTEX_LOCK(&(workernode->thread_state[fewest_hits_thread].mode_lock));
+
     workernode->thread_state[fewest_hits_thread].mode = BACKEND;
-    lock_retval = pthread_mutex_unlock(&(workernode->thread_state[fewest_hits_thread].mode_lock));
-         #ifdef CHECK_MUTEXES
-    parse_lock_errors(lock_retval, workernode->my_rank);
-  #endif  
+
+    CHECKED_PTHREAD_MUTEX_UNLOCK(&(workernode->thread_state[fewest_hits_thread].mode_lock));
+ 
     workernode->num_backend_threads +=1;
   }
   // If we didn't find a thread to switch to, all worker threads must be in back-end mode or about to change to back-end mode
   // so don't do anything
 
   // Unlock the backend_threads_lock before we exit
-  lock_retval = pthread_mutex_unlock(&(workernode->backend_threads_lock));
-         #ifdef CHECK_MUTEXES
-    parse_lock_errors(lock_retval, workernode->my_rank);
-  #endif
+
+  CHECKED_PTHREAD_MUTEX_UNLOCK(&(workernode->backend_threads_lock));
+
   return;
 
 }
@@ -1902,12 +1810,13 @@ ERROR:
 static P7_BACKEND_QUEUE_ENTRY *workernode_get_backend_queue_entry_from_pool(P7_SERVER_WORKERNODE_STATE *workernode){
   
   P7_BACKEND_QUEUE_ENTRY *the_entry;
+  #ifdef CHECK_MUTEXES
   int lock_retval;
-  // lock the backend pool to prevent multiple threads getting the same entry.
-  lock_retval = pthread_mutex_lock(&(workernode->backend_pool_lock));
-       #ifdef CHECK_MUTEXES
-    parse_lock_errors(lock_retval, workernode->my_rank);
   #endif
+  // lock the backend pool to prevent multiple threads getting the same entry.
+  CHECKED_PTHREAD_MUTEX_LOCK(&(workernode->backend_pool_lock));
+  
+
   if(workernode->backend_pool == NULL){  // There are no free entries, so allocate some more.
     workernode->backend_pool = workernode_backend_pool_Create(workernode->num_threads * 10, workernode->commandline_options);
   
@@ -1919,10 +1828,8 @@ static P7_BACKEND_QUEUE_ENTRY *workernode_get_backend_queue_entry_from_pool(P7_S
   the_entry = workernode->backend_pool;
   workernode->backend_pool = workernode->backend_pool->next;
 
-   lock_retval = pthread_mutex_unlock(&(workernode->backend_pool_lock));
-          #ifdef CHECK_MUTEXES
-    parse_lock_errors(lock_retval, workernode->my_rank);
-  #endif
+   CHECKED_PTHREAD_MUTEX_UNLOCK(&(workernode->backend_pool_lock));
+
   return(the_entry);
 }
 
@@ -1935,11 +1842,11 @@ static P7_BACKEND_QUEUE_ENTRY *workernode_get_backend_queue_entry_from_pool(P7_S
  */
 static P7_BACKEND_QUEUE_ENTRY *workernode_get_backend_queue_entry_from_queue(P7_SERVER_WORKERNODE_STATE *workernode){
   P7_BACKEND_QUEUE_ENTRY *the_entry;
+  #ifdef CHECK_MUTEXES
   int lock_retval;
-  lock_retval = pthread_mutex_lock(&(workernode->backend_queue_lock));
-         #ifdef CHECK_MUTEXES
-    parse_lock_errors(lock_retval, workernode->my_rank);
   #endif
+  CHECKED_PTHREAD_MUTEX_LOCK(&(workernode->backend_queue_lock));
+
   // Grab the head of the queue
   the_entry = workernode->backend_queue;
 
@@ -1954,10 +1861,9 @@ static P7_BACKEND_QUEUE_ENTRY *workernode_get_backend_queue_entry_from_queue(P7_
     the_entry->next = NULL; // Prevent the caller from following the queue's chain
     workernode->backend_queue_depth -= 1;  // if there was a valid entry in the queue, decrement the count of operations in the queue
   }
-  lock_retval = pthread_mutex_unlock(&(workernode->backend_queue_lock));
-       #ifdef CHECK_MUTEXES
-    parse_lock_errors(lock_retval, workernode->my_rank);
-  #endif
+
+  CHECKED_PTHREAD_MUTEX_UNLOCK(&(workernode->backend_queue_lock));
+
   return(the_entry);
 }
 
@@ -1968,18 +1874,17 @@ static P7_BACKEND_QUEUE_ENTRY *workernode_get_backend_queue_entry_from_queue(P7_
  *  \returns Nothing.
  */ 
 static void workernode_put_backend_queue_entry_in_pool(P7_SERVER_WORKERNODE_STATE *workernode, P7_BACKEND_QUEUE_ENTRY *the_entry){
+  #ifdef CHECK_MUTEXES
   int lock_retval;
-  lock_retval = pthread_mutex_lock(&(workernode->backend_pool_lock));
-       #ifdef CHECK_MUTEXES
-    parse_lock_errors(lock_retval, workernode->my_rank);
   #endif
+  CHECKED_PTHREAD_MUTEX_LOCK(&(workernode->backend_pool_lock));
+
   // Make the_entry the new head of the pool
   the_entry->next = workernode->backend_pool;
   workernode->backend_pool = the_entry;
-  lock_retval = pthread_mutex_unlock(&(workernode->backend_pool_lock));
-         #ifdef CHECK_MUTEXES
-    parse_lock_errors(lock_retval, workernode->my_rank);
-  #endif
+
+  CHECKED_PTHREAD_MUTEX_UNLOCK(&(workernode->backend_pool_lock));
+
 }
 
 
@@ -1992,18 +1897,16 @@ static void workernode_put_backend_queue_entry_in_pool(P7_SERVER_WORKERNODE_STAT
  *  \returns Nothing.
  */
 static void workernode_put_backend_queue_entry_in_queue(P7_SERVER_WORKERNODE_STATE *workernode, P7_BACKEND_QUEUE_ENTRY *the_entry){
+  #ifdef CHECK_MUTEXES
   int lock_retval;
-  lock_retval = pthread_mutex_lock(&(workernode->backend_queue_lock));
-         #ifdef CHECK_MUTEXES
-    parse_lock_errors(lock_retval, workernode->my_rank);
   #endif
+
   the_entry->next = workernode->backend_queue;
   workernode->backend_queue = the_entry;
   workernode->backend_queue_depth +=1 ; // increment the count of operations in the queue
-  lock_retval = pthread_mutex_unlock(&(workernode->backend_queue_lock));
-         #ifdef CHECK_MUTEXES
-    parse_lock_errors(lock_retval, workernode->my_rank);
-  #endif
+
+  CHECKED_PTHREAD_MUTEX_UNLOCK(&(workernode->backend_queue_lock));
+
 }
  
 
@@ -2018,11 +1921,11 @@ static void workernode_put_backend_queue_entry_in_queue(P7_SERVER_WORKERNODE_STA
  *  \returns 1 if there was a chunk of work to get, 0 otherwise.  Calls p7_Die() to exit the program if unable to complete.
  */
 static uint64_t worker_thread_get_chunk(P7_SERVER_WORKERNODE_STATE *workernode, uint32_t my_id, volatile uint64_t *start, volatile uint64_t *end){
+  #ifdef CHECK_MUTEXES
   int lock_retval;
-  lock_retval = pthread_mutex_lock(&(workernode->global_queue_lock));
-       #ifdef CHECK_MUTEXES
-    parse_lock_errors(lock_retval, workernode->my_rank);
-  #endif
+  #endif 
+  CHECKED_PTHREAD_MUTEX_LOCK(&(workernode->global_queue_lock));
+
   // sanity check
   if(workernode->global_queue == NULL){
     p7_Die("Found NULL global queue in worker_thread_get_chunk\n");
@@ -2042,25 +1945,19 @@ static uint64_t worker_thread_get_chunk(P7_SERVER_WORKERNODE_STATE *workernode, 
       workernode->global_queue = temp;
     }
     else{
-      // work queue is empty
-      lock_retval = pthread_mutex_unlock(&(workernode->global_queue_lock));
-             #ifdef CHECK_MUTEXES
-    parse_lock_errors(lock_retval, workernode->my_rank);
-  #endif
-      lock_retval = pthread_mutex_lock(&(workernode->work_request_lock));
-       #ifdef CHECK_MUTEXES
-    parse_lock_errors(lock_retval, workernode->my_rank);
-  #endif
+      // work queue is empty    
+      CHECKED_PTHREAD_MUTEX_UNLOCK(&(workernode->global_queue_lock));
+
+      CHECKED_PTHREAD_MUTEX_LOCK(&(workernode->work_request_lock));
+
       if(!workernode->work_requested && !workernode->master_queue_empty && !workernode->request_work){
         // We aren't waiting for the master node to send work, the master node hasn't told us it's out of work, and nobody else has set 
         // the flag telling the main thread to request work, so we should set the work request flag.
         workernode->request_work = 1;
 
       }
-      lock_retval = pthread_mutex_unlock(&(workernode->work_request_lock));
-             #ifdef CHECK_MUTEXES
-    parse_lock_errors(lock_retval, workernode->my_rank);
-  #endif
+
+      CHECKED_PTHREAD_MUTEX_UNLOCK(&(workernode->work_request_lock));
       return(0);
     }
   }
@@ -2070,16 +1967,14 @@ static uint64_t worker_thread_get_chunk(P7_SERVER_WORKERNODE_STATE *workernode, 
   my_start = workernode->global_queue->start;
   if(my_start+ workernode->chunk_size < workernode->global_queue->end){
     // there's more than one chunk of work left in the global queue, so grab one and advance the start pointer
-    lock_retval = pthread_mutex_lock(&(workernode->search_definition_lock));
-           #ifdef CHECK_MUTEXES
-    parse_lock_errors(lock_retval, workernode->my_rank);
-  #endif
+
+    CHECKED_PTHREAD_MUTEX_LOCK(&(workernode->search_definition_lock));
+
     my_end  = my_start+ workernode->chunk_size;
     workernode->global_queue->start = my_end+1;
-    lock_retval = pthread_mutex_unlock(&(workernode->search_definition_lock));
-           #ifdef CHECK_MUTEXES
-    parse_lock_errors(lock_retval, workernode->my_rank);
-  #endif
+
+    CHECKED_PTHREAD_MUTEX_UNLOCK(&(workernode->search_definition_lock));
+
   }
   else{
     // one chunk or less left to grab, so take all the work and pop the head work chunk off of the list;
@@ -2113,10 +2008,9 @@ static uint64_t worker_thread_get_chunk(P7_SERVER_WORKERNODE_STATE *workernode, 
       queue_depth += 1;
     }
   }
-  lock_retval = pthread_mutex_lock(&(workernode->work_request_lock));
-         #ifdef CHECK_MUTEXES
-    parse_lock_errors(lock_retval, workernode->my_rank);
-  #endif
+
+  CHECKED_PTHREAD_MUTEX_LOCK(&(workernode->work_request_lock));
+
   if(need_more_work && !workernode->work_requested && !workernode->master_queue_empty && !workernode->request_work){
     // We need more work and nobody else has requested some
   
@@ -2125,10 +2019,9 @@ static uint64_t worker_thread_get_chunk(P7_SERVER_WORKERNODE_STATE *workernode, 
       workernode->request_work = 1;
     }
   }
-  lock_retval = pthread_mutex_unlock(&(workernode->work_request_lock));
-         #ifdef CHECK_MUTEXES
-    parse_lock_errors(lock_retval, workernode->my_rank);
-  #endif
+ 
+  CHECKED_PTHREAD_MUTEX_UNLOCK(&(workernode->work_request_lock));
+
   // Return the start and end of the grabbed work chunk through start, end
   *start = my_start;
   *end = my_end;
@@ -2136,10 +2029,9 @@ static uint64_t worker_thread_get_chunk(P7_SERVER_WORKERNODE_STATE *workernode, 
   printf("Worker %d on node %d just got work chunk from %lu to %lu off of master queue, leaving state: ", my_id, workernode->my_rank, *start, *end);
   print_work_queue(workernode->global_queue);
   #endif
-  lock_retval = pthread_mutex_unlock(&(workernode->global_queue_lock));
-         #ifdef CHECK_MUTEXES
-    parse_lock_errors(lock_retval, workernode->my_rank);
-  #endif
+
+  CHECKED_PTHREAD_MUTEX_UNLOCK(&(workernode->global_queue_lock));
+
   return(1); // signal that we found work
 }
 
@@ -2156,32 +2048,29 @@ static uint64_t worker_thread_get_chunk(P7_SERVER_WORKERNODE_STATE *workernode, 
  */ 
 int32_t worker_thread_steal(P7_SERVER_WORKERNODE_STATE *workernode, uint32_t my_id){
   int victim_id = -1; // which thread are we going to steal from
-  int i, lock_retval;
-  lock_retval = pthread_mutex_lock(&(workernode->steal_lock));  // Only let one thread try to steal at a time to prevent deadlocks in the
+  int i;
+  #ifdef CHECK_MUTEXES
+  lock_retval;
+  #endif 
+  CHECKED_PTHREAD_MUTEX_LOCK(&(workernode->steal_lock));  // Only let one thread try to steal at a time to prevent deadlocks in the
    // workernode->work[x].lock s.
-          #ifdef CHECK_MUTEXES
-    parse_lock_errors(lock_retval, workernode->my_rank);
-  #endif
+
   #ifdef DEBUG_STEAL
     printf("Worker %d on node %d starting steal.\n", my_id, workernode->my_rank);
   #endif
 
-  lock_retval = pthread_mutex_lock(&(workernode->work[my_id].lock));
-         #ifdef CHECK_MUTEXES
-    parse_lock_errors(lock_retval, workernode->my_rank);
-  #endif
+  CHECKED_PTHREAD_MUTEX_LOCK(&(workernode->work[my_id].lock));
+
   if(workernode->work[my_id].start <= workernode->work[my_id].end){
     p7_Die("Thread %d tried to steal when it still had work on its queue\n", my_id);
   }
-  lock_retval = pthread_mutex_unlock(&(workernode->work[my_id].lock));
-         #ifdef CHECK_MUTEXES
-    parse_lock_errors(lock_retval, workernode->my_rank);
-  #endif
+
+  CHECKED_PTHREAD_MUTEX_UNLOCK(&(workernode->work[my_id].lock));
+
   if(workernode->no_steal){
-    lock_retval = pthread_mutex_unlock(&(workernode->steal_lock));
-           #ifdef CHECK_MUTEXES
-    parse_lock_errors(lock_retval, workernode->my_rank);
-  #endif
+
+    CHECKED_PTHREAD_MUTEX_UNLOCK(&(workernode->steal_lock));
+
     #ifdef DEBUG_STEAL
       printf("Worker %d on node %d ending steal because workernode->no_steal was set.\n", my_id, workernode->my_rank);
     #endif
@@ -2192,14 +2081,11 @@ int32_t worker_thread_steal(P7_SERVER_WORKERNODE_STATE *workernode, uint32_t my_
   int64_t stealable_work = 0;
 
   for(i = 0; i < workernode->num_threads; i++){
-    lock_retval = pthread_mutex_lock(&(workernode->work[i].lock));
-           #ifdef CHECK_MUTEXES
-    parse_lock_errors(lock_retval, workernode->my_rank);
-  #endif
-    lock_retval = pthread_mutex_lock(&(workernode->thread_state[i].mode_lock));
-           #ifdef CHECK_MUTEXES
-    parse_lock_errors(lock_retval, workernode->my_rank);
-  #endif
+
+    CHECKED_PTHREAD_MUTEX_LOCK(&(workernode->work[i].lock));
+
+    CHECKED_PTHREAD_MUTEX_LOCK(&(workernode->thread_state[i].mode_lock));
+
     if((workernode->work[i].start != -1) && (workernode->work[i].start < workernode->work[i].end) && (workernode->thread_state[i].mode == FRONTEND)){ 
     // There's some stealable work in the potential victim's queue.
       stealable_work = workernode->work[i].end - workernode->work[i].start;
@@ -2208,14 +2094,11 @@ int32_t worker_thread_steal(P7_SERVER_WORKERNODE_STATE *workernode, uint32_t my_
         victim_id = i;
       }
     }
-    lock_retval = pthread_mutex_unlock(&(workernode->thread_state[i].mode_lock));
-           #ifdef CHECK_MUTEXES
-    parse_lock_errors(lock_retval, workernode->my_rank);
-  #endif
-    lock_retval = pthread_mutex_unlock(&(workernode->work[i].lock));
-           #ifdef CHECK_MUTEXES
-    parse_lock_errors(lock_retval, workernode->my_rank);
-  #endif
+
+    CHECKED_PTHREAD_MUTEX_UNLOCK(&(workernode->thread_state[i].mode_lock));
+
+    CHECKED_PTHREAD_MUTEX_UNLOCK(&(workernode->work[i].lock));
+
   }
 
   if(victim_id == -1){
@@ -2224,22 +2107,18 @@ int32_t worker_thread_steal(P7_SERVER_WORKERNODE_STATE *workernode, uint32_t my_
     #ifdef DEBUG_STEAL
       printf("Worker %d on node %d ending steal and setting workernode->no_steal because it couldn't find work to steal.\n", my_id, workernode->my_rank);
     #endif
-    lock_retval = pthread_mutex_unlock(&(workernode->steal_lock));
-           #ifdef CHECK_MUTEXES
-    parse_lock_errors(lock_retval, workernode->my_rank);
-  #endif
+
+    CHECKED_PTHREAD_MUTEX_UNLOCK(&(workernode->steal_lock));
+
     return 0;
   }
 
   // If we get this far, we found someone to steal from.
-  lock_retval = pthread_mutex_lock(&(workernode->work[my_id].lock));
-         #ifdef CHECK_MUTEXES
-    parse_lock_errors(lock_retval, workernode->my_rank);
-  #endif
-  lock_retval = pthread_mutex_lock(&(workernode->work[victim_id].lock));
-         #ifdef CHECK_MUTEXES
-    parse_lock_errors(lock_retval, workernode->my_rank);
-  #endif
+
+  CHECKED_PTHREAD_MUTEX_LOCK(&(workernode->work[my_id].lock));
+
+  CHECKED_PTHREAD_MUTEX_LOCK(&(workernode->work[victim_id].lock));
+
 
   // steal the lower half of the work from the victim's work queue if possible
   if((workernode->work[victim_id].start >= workernode->work[victim_id].end) || (workernode->work[victim_id].start == (uint64_t) -1) || workernode->thread_state[victim_id].mode != FRONTEND){
@@ -2247,18 +2126,13 @@ int32_t worker_thread_steal(P7_SERVER_WORKERNODE_STATE *workernode, uint32_t my_
   #ifdef DEBUG_STEAL
       printf("Worker %d on node %d ending steal because someone had already stolen the work it planned to steal.\n", my_id, workernode->my_rank);
 #endif
-    lock_retval = pthread_mutex_unlock(&(workernode->work[victim_id].lock));
-           #ifdef CHECK_MUTEXES
-    parse_lock_errors(lock_retval, workernode->my_rank);
-  #endif
-    lock_retval = pthread_mutex_unlock(&(workernode->work[my_id].lock));
-           #ifdef CHECK_MUTEXES
-    parse_lock_errors(lock_retval, workernode->my_rank);
-  #endif
-    lock_retval = pthread_mutex_unlock(&(workernode->steal_lock));
-           #ifdef CHECK_MUTEXES
-    parse_lock_errors(lock_retval, workernode->my_rank);
-  #endif
+
+    CHECKED_PTHREAD_MUTEX_UNLOCK(&(workernode->work[victim_id].lock));
+
+    CHECKED_PTHREAD_MUTEX_UNLOCK(&(workernode->work[my_id].lock));
+
+    CHECKED_PTHREAD_MUTEX_UNLOCK(&(workernode->steal_lock));
+
     return(worker_thread_steal(workernode, my_id));  
   }
 
@@ -2287,22 +2161,21 @@ int32_t worker_thread_steal(P7_SERVER_WORKERNODE_STATE *workernode, uint32_t my_
   workernode->work[my_id].end = my_new_end;
 
   // unlock the victim's work queue so it can proceed
- lock_retval = pthread_mutex_unlock(&(workernode->work[victim_id].lock));
-       #ifdef CHECK_MUTEXES
-    parse_lock_errors(lock_retval, workernode->my_rank);
-  #endif
+  #ifdef CHECK_MUTEXES
+ lock_retval = 
+ #endif 
+ CHECKED_PTHREAD_MUTEX_UNLOCK(&(workernode->work[victim_id].lock));
+
   // release the lock on my local queue
-  lock_retval = pthread_mutex_unlock(&(workernode->work[my_id].lock));
-         #ifdef CHECK_MUTEXES
-    parse_lock_errors(lock_retval, workernode->my_rank);
-  #endif
+
+  CHECKED_PTHREAD_MUTEX_UNLOCK(&(workernode->work[my_id].lock));
+
 #ifdef DEBUG_STEAL
   printf("Worker %d on node %d just stole work from %lu to %lu from worker %d\n", my_id, workernode->my_rank, my_new_start, my_new_end, victim_id);
 #endif
-  lock_retval = pthread_mutex_unlock(&(workernode->steal_lock));
-       #ifdef CHECK_MUTEXES
-    parse_lock_errors(lock_retval, workernode->my_rank);
-  #endif
+
+  CHECKED_PTHREAD_MUTEX_UNLOCK(&(workernode->steal_lock));
+
   return 1;
 }
 
@@ -2316,20 +2189,17 @@ int32_t worker_thread_steal(P7_SERVER_WORKERNODE_STATE *workernode, uint32_t my_
  *  promises that only one thread per node will call MPI commands, so calling this function from a worker
  *  thread could lead to undefined behavior.
  */
-static void workernode_request_Work(uint32_t my_shard){
-#ifndef HAVE_MPI
-      p7_Die("Attempt to call workernode_request_Work when HMMER was compiled without MPI support");
-#endif
 #ifdef HAVE_MPI
+static void workernode_request_Work(uint32_t my_shard){
+
   uint32_t buf=0;
   buf = my_shard;  // copy this into a place we can take the address of
 
   if ( MPI_Send(&buf, 1, MPI_UNSIGNED, 0, HMMER_WORK_REQUEST_TAG, MPI_COMM_WORLD) != MPI_SUCCESS){
     p7_Die("MPI send failed in workernode_request_Work");
   }
-#endif
 }
-
+#endif
 // workernode_wait_for_work
 // NOTE!! Only call this procedure from the main (control) thread.  It receives MPI messages, and we've told
 // MPI that only one thread per node will do that
@@ -2345,40 +2215,40 @@ static void workernode_request_Work(uint32_t my_shard){
  *  promises that only one thread per node will call MPI commands, so calling this function from a worker
  *  thread could lead to undefined behavior.
  */
-static void workernode_wait_for_Work(P7_SERVER_CHUNK_REPLY *the_reply, MPI_Datatype *server_mpitypes){
-#ifndef HAVE_MPI
-      p7_Die("Attempt to call workernode_wait_for_Work when HMMER was compiled without MPI support");
-#endif
 #ifdef HAVE_MPI
+static void workernode_wait_for_Work(P7_SERVER_CHUNK_REPLY *the_reply, MPI_Datatype *server_mpitypes){
+
+
   MPI_Status status;
   // Wait for a reply message from the master node
   if(MPI_Recv(the_reply, 1, server_mpitypes[P7_SERVER_CHUNK_REPLY_MPITYPE], 0, HMMER_WORK_REPLY_TAG, MPI_COMM_WORLD, &status) != MPI_SUCCESS){
           p7_Die("MPI_Recv failed in p7_masternode_message_handler\n");
         }
   return; // return data gets passed through the_reply
-#endif
-}
 
+}
+#endif
 typedef enum{
   run,
   done,
   null_search
 } SEARCH_PROGRESS_ENUM;
 
+#ifdef HAVE_MPI
 // workernode_perform_search_or_scan
 // NOTE !! Only call this procedure from the main (control) thread.  It sends and receives MPI messages, and we've told
 // MPI that only one thread per node will do that
 static int workernode_perform_search_or_scan(P7_SERVER_WORKERNODE_STATE *workernode, P7_SERVER_COMMAND *the_command, ESL_ALPHABET *abc, MPI_Datatype *server_mpitypes){
-#ifndef HAVE_MPI
-      p7_Die("Attempt to call workernode_perform_search_or_scan when HMMER was compiled without MPI support");
-#endif
-#ifdef HAVE_MPI
+
   int status; 
   char *compare_obj_buff;
   P7_PROFILE *gm=NULL;
   ESL_SQ *seq=NULL;
   int temp_pos =0;
+  #ifdef CHECK_MUTEXES
   int lock_retval;
+#endif
+
   int works_requested=0; 
   int works_received=0;
   SEARCH_PROGRESS_ENUM stop=run; 
@@ -2432,15 +2302,12 @@ static int workernode_perform_search_or_scan(P7_SERVER_WORKERNODE_STATE *workern
       p7_server_workernode_start_amino_vs_hmm_db(workernode, the_command->db, work_reply.start, work_reply.end, seq);
     }
 
-    lock_retval = pthread_mutex_lock(&(workernode->wait_lock));
-           #ifdef CHECK_MUTEXES
-    parse_lock_errors(lock_retval, workernode->my_rank);
-  #endif
+    CHECKED_PTHREAD_MUTEX_LOCK(&(workernode->wait_lock));
+
     p7_server_workernode_release_threads(workernode);
-    lock_retval = pthread_mutex_unlock(&(workernode->wait_lock));
-           #ifdef CHECK_MUTEXES
-    parse_lock_errors(lock_retval, workernode->my_rank);
-  #endif
+    
+    CHECKED_PTHREAD_MUTEX_UNLOCK(&(workernode->wait_lock));
+
   }
   else{ // Starting search where this node doesn't have any work to do, so just skip directly to end of search 
   // by setting stop = null_search.  This will cause the end-of-search code to not try to send hits back to the master node
@@ -2452,29 +2319,25 @@ static int workernode_perform_search_or_scan(P7_SERVER_WORKERNODE_STATE *workern
 
   }
   while(stop == run){ //there's still work to do on this search
-    lock_retval = pthread_mutex_lock(&(workernode->wait_lock));  // Yes, we just unlocked this on first entry to loop, but need to lock it on subsequent iterations
-           #ifdef CHECK_MUTEXES
-    parse_lock_errors(lock_retval, workernode->my_rank);
-  #endif
+
+    CHECKED_PTHREAD_MUTEX_LOCK(&(workernode->wait_lock));  // Yes, we just unlocked this on first entry to loop, but need to lock it on subsequent iterations
+
     while(workernode->num_waiting != workernode->num_threads){ 
     // at least one worker thread is still working, so go through the tasks
     // the main thread is responsible for
-      lock_retval = pthread_mutex_unlock(&(workernode->wait_lock));
-             #ifdef CHECK_MUTEXES
-    parse_lock_errors(lock_retval, workernode->my_rank);
-  #endif
+
+      CHECKED_PTHREAD_MUTEX_UNLOCK(&(workernode->wait_lock));
+
       int thread;
             
       // Task 1: check for incoming work from the master node
-      lock_retval = pthread_mutex_lock(&(workernode->work_request_lock));
-             #ifdef CHECK_MUTEXES
-    parse_lock_errors(lock_retval, workernode->my_rank);
-  #endif
+
+      CHECKED_PTHREAD_MUTEX_LOCK(&(workernode->work_request_lock));
+
       if(workernode->work_requested){ // We've asked for work, see if it's arrived
-        lock_retval = pthread_mutex_unlock(&(workernode->work_request_lock));
-               #ifdef CHECK_MUTEXES
-    parse_lock_errors(lock_retval, workernode->my_rank);
-  #endif
+
+        CHECKED_PTHREAD_MUTEX_UNLOCK(&(workernode->work_request_lock));
+
         int found_message = 0;
         MPI_Status temp_status;
             
@@ -2493,55 +2356,37 @@ static int workernode_perform_search_or_scan(P7_SERVER_WORKERNODE_STATE *workern
             printf("Workernode %d received chunk from %lu to %lu\n", workernode->my_rank, work_reply.start, work_reply.end); 
 #endif
             p7_server_workernode_add_work(workernode, work_reply.start, work_reply.end);
-            lock_retval = pthread_mutex_lock(&(workernode->wait_lock));
-                   #ifdef CHECK_MUTEXES
-    parse_lock_errors(lock_retval, workernode->my_rank);
-  #endif
+            CHECKED_PTHREAD_MUTEX_LOCK(&(workernode->wait_lock));
+
             p7_server_workernode_release_threads(workernode); // tell any paused threads to start up again
-            lock_retval = pthread_mutex_unlock(&(workernode->wait_lock));
-                   #ifdef CHECK_MUTEXES
-    parse_lock_errors(lock_retval, workernode->my_rank);
-  #endif
+            CHECKED_PTHREAD_MUTEX_UNLOCK(&(workernode->wait_lock));
           }
           else{
 #ifdef DEBUG_MASTER_CHUNKS
             printf("Workernode %d received message that masternode was out of work during normal polling\n", workernode->my_rank); 
 #endif
-            lock_retval = pthread_mutex_lock(&(workernode->work_request_lock));
-                   #ifdef CHECK_MUTEXES
-    parse_lock_errors(lock_retval, workernode->my_rank);
-  #endif
+       
+            CHECKED_PTHREAD_MUTEX_LOCK(&(workernode->work_request_lock));
+
             workernode->master_queue_empty = 1;  // The master is out of work to give
-            lock_retval = pthread_mutex_unlock(&(workernode->work_request_lock));
-                   #ifdef CHECK_MUTEXES
-    parse_lock_errors(lock_retval, workernode->my_rank);
-  #endif
+
+            CHECKED_PTHREAD_MUTEX_UNLOCK(&(workernode->work_request_lock));
+
           }
 
-          lock_retval = pthread_mutex_lock(&(workernode->work_request_lock));   
-                     #ifdef CHECK_MUTEXES
-    parse_lock_errors(lock_retval, workernode->my_rank);
-  #endif
+          CHECKED_PTHREAD_MUTEX_LOCK(&(workernode->work_request_lock));   
+
           workernode->work_requested = 0; // no more pending work
-          lock_retval = pthread_mutex_unlock(&(workernode->work_request_lock));
-                 #ifdef CHECK_MUTEXES
-    parse_lock_errors(lock_retval, workernode->my_rank);
-  #endif
-  
+          CHECKED_PTHREAD_MUTEX_UNLOCK(&(workernode->work_request_lock));
         }          
       }
       else{
-        lock_retval = pthread_mutex_unlock(&(workernode->work_request_lock));
-               #ifdef CHECK_MUTEXES
-    parse_lock_errors(lock_retval, workernode->my_rank);
-  #endif
+        CHECKED_PTHREAD_MUTEX_UNLOCK(&(workernode->work_request_lock));
       }
 
       // Task 2: Request more work from the master node when necessary
-      lock_retval = pthread_mutex_lock(&(workernode->work_request_lock));
-             #ifdef CHECK_MUTEXES
-    parse_lock_errors(lock_retval, workernode->my_rank);
-  #endif
+      CHECKED_PTHREAD_MUTEX_LOCK(&(workernode->work_request_lock));
+
       if(workernode->request_work && !workernode->master_queue_empty){ // Our queue is low, so request work
               
         workernode_request_Work(workernode->my_shard);
@@ -2551,28 +2396,21 @@ static int workernode_perform_search_or_scan(P7_SERVER_WORKERNODE_STATE *workern
         workernode->request_work = 0;  // We've requested work
         workernode->work_requested = 1; // flag so that we check for incoming work
       }
-      lock_retval = pthread_mutex_unlock(&(workernode->work_request_lock));
-       #ifdef CHECK_MUTEXES
-    parse_lock_errors(lock_retval, workernode->my_rank);
-  #endif
+      CHECKED_PTHREAD_MUTEX_UNLOCK(&(workernode->work_request_lock));
+
       // Task 3: Move any hits that the worker threads have found into the node's hit list and send them to the master if we 
       // have enough to make that worthwhile
       P7_TOPHITS *hits;
       for(thread = 0; thread < workernode->num_threads; thread++){
-        lock_retval = pthread_mutex_lock(&(workernode->thread_state[thread].hits_lock));
-               #ifdef CHECK_MUTEXES
-    parse_lock_errors(lock_retval, workernode->my_rank);
-  #endif
+        CHECKED_PTHREAD_MUTEX_LOCK(&(workernode->thread_state[thread].hits_lock));
+
         if(workernode->thread_state[thread].tophits->N > 50){
           // This thread has enough hits that we should merge them into the node tree
           
           // grab the hits out of the worker thread
           hits = workernode->thread_state[thread].tophits;
           workernode->thread_state[thread].tophits= p7_tophits_Create();
-          lock_retval = pthread_mutex_unlock(&(workernode->thread_state[thread].hits_lock));
-                 #ifdef CHECK_MUTEXES
-    parse_lock_errors(lock_retval, workernode->my_rank);
-  #endif
+          CHECKED_PTHREAD_MUTEX_UNLOCK(&(workernode->thread_state[thread].hits_lock));
           p7_tophits_Merge(workernode->tophits, hits);
           p7_tophits_Destroy(hits); // tophits_Merge mangles the second tophits
 #ifdef DEBUG_HITS
@@ -2580,10 +2418,7 @@ static int workernode_perform_search_or_scan(P7_SERVER_WORKERNODE_STATE *workern
 #endif
         }
         else{
-          lock_retval = pthread_mutex_unlock(&(workernode->thread_state[thread].hits_lock));
-                 #ifdef CHECK_MUTEXES
-    parse_lock_errors(lock_retval, workernode->my_rank);
-  #endif
+          CHECKED_PTHREAD_MUTEX_UNLOCK(&(workernode->thread_state[thread].hits_lock));
         }
       }
       if(workernode->tophits->N > 1000){ // Arbitrary number, but seems to work fine
@@ -2599,93 +2434,65 @@ static int workernode_perform_search_or_scan(P7_SERVER_WORKERNODE_STATE *workern
         workernode->tophits = p7_tophits_Create();            
 
       }
-    lock_retval = pthread_mutex_lock(&(workernode->wait_lock)); // lock this because we read workernode->num_waiting to decide whether loop terminates
-           #ifdef CHECK_MUTEXES
-    parse_lock_errors(lock_retval, workernode->my_rank);
-  #endif
+    CHECKED_PTHREAD_MUTEX_LOCK(&(workernode->wait_lock)); // lock this because we read workernode->num_waiting to decide whether loop terminates
+
     }
 
-    lock_retval = pthread_mutex_unlock(&(workernode->wait_lock));  // Yes, we just locked this, but we need to have the lock at the start of the loop.
-       #ifdef CHECK_MUTEXES
-    parse_lock_errors(lock_retval, workernode->my_rank);
-  #endif
+    CHECKED_PTHREAD_MUTEX_UNLOCK(&(workernode->wait_lock));  // Yes, we just locked this, but we need to have the lock at the start of the loop.
+
     // When we get here, all of the worker threads have run out of work to do, so request more work unless the master node has told us its
     // out of work or we've already sent a request 
-    lock_retval = pthread_mutex_lock(&(workernode->work_request_lock));
-           #ifdef CHECK_MUTEXES
-    parse_lock_errors(lock_retval, workernode->my_rank);
-  #endif
+    CHECKED_PTHREAD_MUTEX_LOCK(&(workernode->work_request_lock));
+
     if(!workernode->master_queue_empty){
       if(!workernode->work_requested){
         // nobody has sent a request already, so send one
         workernode_request_Work(workernode->my_shard);
         works_requested++;
       }
-      lock_retval = pthread_mutex_unlock(&(workernode->work_request_lock));
-             #ifdef CHECK_MUTEXES
-    parse_lock_errors(lock_retval, workernode->my_rank);
-  #endif
+      CHECKED_PTHREAD_MUTEX_UNLOCK(&(workernode->work_request_lock));
+
       // Request sent, wait for more work.
       workernode_wait_for_Work(&work_reply, server_mpitypes);
       works_received++;
       //printf("Workernode received chunk from %lu to %lu\n", work_reply.start, work_reply.end);
-      lock_retval = pthread_mutex_lock(&(workernode->work_request_lock));
-       #ifdef CHECK_MUTEXES
-    parse_lock_errors(lock_retval, workernode->my_rank);
-  #endif
+      CHECKED_PTHREAD_MUTEX_LOCK(&(workernode->work_request_lock));
+
       workernode->work_requested = 0; // we've processed the outstanding request
-      lock_retval = pthread_mutex_unlock(&(workernode->work_request_lock));
-       #ifdef CHECK_MUTEXES
-    parse_lock_errors(lock_retval, workernode->my_rank);
-  #endif
+      CHECKED_PTHREAD_MUTEX_UNLOCK(&(workernode->work_request_lock));
+
       if(work_reply.start != -1){
         //We got more work from the master node
         p7_server_workernode_add_work(workernode, work_reply.start, work_reply.end);
 #ifdef DEBUG_MASTER_CHUNKS
         printf("Workernode %d received chunk from %lu to %lu\n", workernode->my_rank, work_reply.start, work_reply.end);
 #endif
-        lock_retval = pthread_mutex_lock(&(workernode->wait_lock));
-               #ifdef CHECK_MUTEXES
-    parse_lock_errors(lock_retval, workernode->my_rank);
-  #endif
+        CHECKED_PTHREAD_MUTEX_LOCK(&(workernode->wait_lock));
+
         p7_server_workernode_release_threads(workernode); // tell any paused threads to go
-        lock_retval = pthread_mutex_unlock(&(workernode->wait_lock));
-               #ifdef CHECK_MUTEXES
-    parse_lock_errors(lock_retval, workernode->my_rank);
-  #endif
+        CHECKED_PTHREAD_MUTEX_UNLOCK(&(workernode->wait_lock));
+
       }
       else{
         // Master has no work left, double-check we have nothing else to do
-        lock_retval = pthread_mutex_lock(&(workernode->global_queue_lock));
-               #ifdef CHECK_MUTEXES
-    parse_lock_errors(lock_retval, workernode->my_rank);
-  #endif
+        CHECKED_PTHREAD_MUTEX_LOCK(&(workernode->global_queue_lock));
+
 #ifdef DEBUG_MASTER_CHUNKS
         printf("Workernode %d received message that masternode was out of work during final request.  Top chunk on work queue had start = %lu and end = %lu\n", workernode->my_rank, workernode->global_queue->start, workernode->global_queue->end); 
 #endif
         if(workernode->global_queue->start != -1){
-          lock_retval = pthread_mutex_unlock(&(workernode->global_queue_lock));
-                 #ifdef CHECK_MUTEXES
-    parse_lock_errors(lock_retval, workernode->my_rank);
-  #endif
+          CHECKED_PTHREAD_MUTEX_UNLOCK(&(workernode->global_queue_lock));
+
 #ifdef DEBUG_MASTER_CHUNKS
           printf("Workernode %d found work on master queue after out-of-work message, re-releasing threads\n", workernode->my_rank); 
 #endif
-          lock_retval = pthread_mutex_lock(&(workernode->wait_lock));
-                 #ifdef CHECK_MUTEXES
-    parse_lock_errors(lock_retval, workernode->my_rank);
-  #endif
+          CHECKED_PTHREAD_MUTEX_LOCK(&(workernode->wait_lock));
+
           p7_server_workernode_release_threads(workernode); // tell any paused threads to go
-          lock_retval = pthread_mutex_unlock(&(workernode->wait_lock));
-                 #ifdef CHECK_MUTEXES
-    parse_lock_errors(lock_retval, workernode->my_rank);
-  #endif
+          CHECKED_PTHREAD_MUTEX_UNLOCK(&(workernode->wait_lock));
         }
         else{ // really are out of work, end search
-          lock_retval = pthread_mutex_unlock(&(workernode->global_queue_lock));
-                 #ifdef CHECK_MUTEXES
-    parse_lock_errors(lock_retval, workernode->my_rank);
-  #endif
+          CHECKED_PTHREAD_MUTEX_UNLOCK(&(workernode->global_queue_lock));
           stop = done;
         }
         
@@ -2693,15 +2500,11 @@ static int workernode_perform_search_or_scan(P7_SERVER_WORKERNODE_STATE *workern
     }
     else{ // We've gotten an out-of-work message from the master, make sure that no work arrived before it that 
     // still needs to be done
-      lock_retval = pthread_mutex_unlock(&(workernode->work_request_lock));
-             #ifdef CHECK_MUTEXES
-    parse_lock_errors(lock_retval, workernode->my_rank);
-  #endif
+      CHECKED_PTHREAD_MUTEX_UNLOCK(&(workernode->work_request_lock));
+
       // See if there's any work in the queue
-      lock_retval = pthread_mutex_lock(&(workernode->global_queue_lock));
-             #ifdef CHECK_MUTEXES
-    parse_lock_errors(lock_retval, workernode->my_rank);
-  #endif
+      CHECKED_PTHREAD_MUTEX_LOCK(&(workernode->global_queue_lock));
+
       while((workernode->global_queue->end < workernode->global_queue->start) &&(workernode->global_queue->next != NULL)){
         // there's no work in the object at the front of the queue, but there are more objects
         //pop the head off of the list of work chunks
@@ -2714,52 +2517,40 @@ static int workernode_perform_search_or_scan(P7_SERVER_WORKERNODE_STATE *workern
         workernode->global_queue = temp;
       }
       if(workernode->global_queue->end >= workernode->global_queue->start){
-        lock_retval = pthread_mutex_unlock(&(workernode->global_queue_lock));
-               #ifdef CHECK_MUTEXES
-    parse_lock_errors(lock_retval, workernode->my_rank);
-  #endif
+        CHECKED_PTHREAD_MUTEX_UNLOCK(&(workernode->global_queue_lock));
+
         // There is some work left in the master queue, so re-release the threads to complete it
         // Yes, we may have just checked this but the loop above ends either when we find a work object with work left to do
         // or when we run out of work objects
         #ifdef DEBUG_MASTER_CHUNKS
         printf("Workernode %d found work on its work queue after masternode sent out-of-work message, re-releasing worker threads\n", workernode->my_rank); 
         #endif
-        lock_retval = pthread_mutex_lock(&(workernode->wait_lock));
-               #ifdef CHECK_MUTEXES
-    parse_lock_errors(lock_retval, workernode->my_rank);
-  #endif
+        CHECKED_PTHREAD_MUTEX_LOCK(&(workernode->wait_lock));
+
         p7_server_workernode_release_threads(workernode); // tell any paused threads to go
-        lock_retval = pthread_mutex_unlock(&(workernode->wait_lock));
-               #ifdef CHECK_MUTEXES
-    parse_lock_errors(lock_retval, workernode->my_rank);
-  #endif
+        CHECKED_PTHREAD_MUTEX_UNLOCK(&(workernode->wait_lock));
+
       }
       else{ // There really is no more work to do
-        lock_retval = pthread_mutex_unlock(&(workernode->global_queue_lock));
-               #ifdef CHECK_MUTEXES
-    parse_lock_errors(lock_retval, workernode->my_rank);
-  #endif
+        CHECKED_PTHREAD_MUTEX_UNLOCK(&(workernode->global_queue_lock));
         stop = done;
       }
     }
   }
+
   // Sanity checks: Did we get as many work chunks back as we requested, and did we somehow get out of the main work loop with 
   // a request for more work pending?
   if(works_requested != works_received){
     p7_Die("Rank %d had work request/receive mis-match %u vs. %u\n", workernode->my_rank, works_requested, works_received);
   }
-  lock_retval = pthread_mutex_lock(&(workernode->work_request_lock));
-         #ifdef CHECK_MUTEXES
-    parse_lock_errors(lock_retval, workernode->my_rank);
-  #endif
+  CHECKED_PTHREAD_MUTEX_LOCK(&(workernode->work_request_lock));
+
   if(workernode->work_requested){
     p7_Die("Rank %d had work request outstanding at end of search\n", workernode->my_rank);
   }
-  lock_retval = pthread_mutex_unlock(&(workernode->work_request_lock));
-       #ifdef CHECK_MUTEXES
-    parse_lock_errors(lock_retval, workernode->my_rank);
-  #endif
-   P7_PIPELINE *pli;
+  CHECKED_PTHREAD_MUTEX_UNLOCK(&(workernode->work_request_lock));
+
+  P7_PIPELINE *pli;
   if(the_command->type == P7_SERVER_HMM_VS_SEQUENCES){
     pli = p7_pipeline_Create(workernode->commandline_options, 100, 100, FALSE, p7_SEARCH_SEQS);
   }
@@ -2773,30 +2564,21 @@ static int workernode_perform_search_or_scan(P7_SERVER_WORKERNODE_STATE *workern
     P7_TOPHITS *hits;
   
     for(thread = 0; thread < workernode->num_threads; thread++){
-      lock_retval = pthread_mutex_lock(&(workernode->thread_state[thread].pipeline_lock));
-             #ifdef CHECK_MUTEXES
-    parse_lock_errors(lock_retval, workernode->my_rank);
-  #endif
+      CHECKED_PTHREAD_MUTEX_LOCK(&(workernode->thread_state[thread].pipeline_lock));
+
       p7_pipeline_Merge(pli, workernode->thread_state[thread].stats_pipeline);
       p7_pipeline_Destroy(workernode->thread_state[thread].stats_pipeline);
-      lock_retval = pthread_mutex_unlock(&(workernode->thread_state[thread].pipeline_lock));
-             #ifdef CHECK_MUTEXES
-    parse_lock_errors(lock_retval, workernode->my_rank);
-  #endif
+      CHECKED_PTHREAD_MUTEX_UNLOCK(&(workernode->thread_state[thread].pipeline_lock));
+
       workernode->thread_state[thread].stats_pipeline=NULL;
       if(workernode->thread_state[thread].tophits->N > 0){
         // This thread has hits that we need to put in the tree
-        lock_retval = pthread_mutex_lock(&(workernode->thread_state[thread].hits_lock));
-               #ifdef CHECK_MUTEXES
-    parse_lock_errors(lock_retval, workernode->my_rank);
-  #endif
+        CHECKED_PTHREAD_MUTEX_LOCK(&(workernode->thread_state[thread].hits_lock));
         // grab the hits out of the workernode
         hits = workernode->thread_state[thread].tophits;
         workernode->thread_state[thread].tophits = p7_tophits_Create();
-        lock_retval = pthread_mutex_unlock(&(workernode->thread_state[thread].hits_lock));
-               #ifdef CHECK_MUTEXES
-    parse_lock_errors(lock_retval, workernode->my_rank);
-  #endif
+        CHECKED_PTHREAD_MUTEX_UNLOCK(&(workernode->thread_state[thread].hits_lock));
+
         p7_tophits_Merge(workernode->tophits, hits);
         p7_tophits_Destroy(hits); // tophits_Merge mangles the second tophits
       }
@@ -2831,5 +2613,6 @@ ERROR:
     free(optsstring);
   }
   return eslEMEM;
-#endif
+
 }
+#endif

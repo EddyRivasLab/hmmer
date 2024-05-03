@@ -38,11 +38,13 @@ static char banner[] = "hmmserver, the server version of HMMER 3";
  
 //! Main function for the hmmserver program
 int main(int argc, char **argv){
-
+    ESL_GETOPTS *dummy = esl_getopts_Create(server_Client_Options);  //Silly, but silences a compiler warning
+    esl_getopts_Destroy(dummy);
 #ifndef HAVE_MPI
 	printf("Hmmserver was compiled without MPI support, and does nothing without that support\n");
 #endif	
 #ifdef HAVE_MPI
+
     ESL_GETOPTS *go = p7_CreateDefaultApp(options, -1, argc, argv, banner, usage);
     if(esl_opt_ArgNumber(go) != esl_opt_GetInteger(go, "--num_dbs")){
         p7_Fail("Error: number of database files provided as arguments not equal to the value passed to --num_dbs");

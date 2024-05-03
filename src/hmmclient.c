@@ -290,7 +290,7 @@ main(int argc, char **argv)
   int rem = MAX_READ_LEN;
   uint32_t cmdlen = MAX_READ_LEN;
   int optslen;
-  char *query_name=NULL, *query_accession=NULL, *query_obj=NULL, *query_desc=NULL;
+  char *query_name=NULL, *query_accession=NULL, *query_desc=NULL;
   P7_HMM *query_hmm=NULL;
   ESL_SQ *query_seq = NULL;
   ESL_MSA *query_msa = NULL;
@@ -313,7 +313,7 @@ main(int argc, char **argv)
   ESL_STOPWATCH   *w;
   ESL_MSA *msa = NULL;
   ESL_KEYHASH     *kh       = NULL;		  /* hash of previous top hits' ranks                */
-  int query_len=0;
+
   P7_BG           *bg       = NULL;		  /* null model */
   P7_TRACE   *qtr=NULL;
   uint32_t send_command_length=0;
@@ -645,9 +645,6 @@ main(int argc, char **argv)
   if (esl_opt_IsOn(go, "--pfamtblout")){ if ((pfamtblfp = fopen(esl_opt_GetString(go, "--pfamtblout"), "w")) == NULL)  esl_fatal("Failed to open pfam-style tabular output file %s for writing\n", esl_opt_GetString(go, "--pfamtblout")); }
 
   // Now process the input query file
-  query_len = 0;
-  int read_len = 0;
-  int found_next_sequence=0;
   int done = 0;
   int nquery =0;
   int msas_named = 0;
