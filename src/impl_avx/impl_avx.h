@@ -321,9 +321,15 @@ extern int          p7_omx_Reuse  (P7_OMX *ox);
 extern void         p7_omx_Destroy(P7_OMX *ox);
 
 extern int          p7_omx_SetDumpMode(FILE *fp, P7_OMX *ox, int truefalse);
-extern int          p7_omx_DumpMFRow(P7_OMX *ox, int rowi, uint8_t xE, uint8_t xN, uint8_t xJ, uint8_t xB, uint8_t xC);
-extern int          p7_omx_DumpVFRow(P7_OMX *ox, int rowi, int16_t xE, int16_t xN, int16_t xJ, int16_t xB, int16_t xC);
-extern int          p7_omx_DumpFBRow(P7_OMX *ox, int logify, int rowi, int width, int precision, float xE, float xN, float xJ, float xB, float xC);
+extern int          p7_omx_DumpMFRow_sse(P7_OMX *ox, int rowi, uint8_t xE, uint8_t xN, uint8_t xJ, uint8_t xB, uint8_t xC);
+extern int          p7_omx_DumpVFRow_sse(P7_OMX *ox, int rowi, int16_t xE, int16_t xN, int16_t xJ, int16_t xB, int16_t xC);
+extern int          p7_omx_DumpFBRow_sse(P7_OMX *ox, int logify, int rowi, int width, int precision, float xE, float xN, float xJ, float xB, float xC);
+extern int          p7_omx_DumpMFRow_avx(P7_OMX *ox, int rowi, uint8_t xE, uint8_t xN, uint8_t xJ, uint8_t xB, uint8_t xC);
+extern int          p7_omx_DumpVFRow_avx(P7_OMX *ox, int rowi, int16_t xE, int16_t xN, int16_t xJ, int16_t xB, int16_t xC);
+extern int          p7_omx_DumpFBRow_avx(P7_OMX *ox, int logify, int rowi, int width, int precision, float xE, float xN, float xJ, float xB, float xC);
+extern int          p7_omx_DumpMFRow_avx512(P7_OMX *ox, int rowi, uint8_t xE, uint8_t xN, uint8_t xJ, uint8_t xB, uint8_t xC);
+extern int          p7_omx_DumpVFRow_avx512(P7_OMX *ox, int rowi, int16_t xE, int16_t xN, int16_t xJ, int16_t xB, int16_t xC);
+extern int          p7_omx_DumpFBRow_avx512(P7_OMX *ox, int logify, int rowi, int width, int precision, float xE, float xN, float xJ, float xB, float xC);
 
 
 
@@ -377,6 +383,12 @@ extern int p7_Forward_avx       (const ESL_DSQ *dsq, int L, const P7_OPROFILE *o
 extern int p7_ForwardParser_avx  (const ESL_DSQ *dsq, int L, const P7_OPROFILE *om,                    P7_OMX *fwd, float *opt_sc);
 extern int p7_Backward_avx       (const ESL_DSQ *dsq, int L, const P7_OPROFILE *om, const P7_OMX *fwd, P7_OMX *bck, float *opt_sc);
 extern int p7_BackwardParser_avx (const ESL_DSQ *dsq, int L, const P7_OPROFILE *om, const P7_OMX *fwd, P7_OMX *bck, float *opt_sc);
+extern int p7_Forward_avx512       (const ESL_DSQ *dsq, int L, const P7_OPROFILE *om,                    P7_OMX *fwd, float *opt_sc);
+extern int p7_ForwardParser_avx512  (const ESL_DSQ *dsq, int L, const P7_OPROFILE *om,                    P7_OMX *fwd, float *opt_sc);
+extern int p7_Backward_avx512       (const ESL_DSQ *dsq, int L, const P7_OPROFILE *om, const P7_OMX *fwd, P7_OMX *bck, float *opt_sc);
+extern int p7_BackwardParser_avx512 (const ESL_DSQ *dsq, int L, const P7_OPROFILE *om, const P7_OMX *fwd, P7_OMX *bck, float *opt_sc);
+
+
 
 /* io.c */
 extern int p7_oprofile_Write(FILE *ffp, FILE *pfp, P7_OPROFILE *om);

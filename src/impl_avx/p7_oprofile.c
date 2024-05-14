@@ -24,6 +24,8 @@
 #include "easel.h"
 #include "esl_random.h"
 #include "esl_sse.h"
+#include "esl_avx.h"
+#include "esl_avx512.h"
 #include "esl_vectorops.h"
 
 #include "hmmer.h"
@@ -403,13 +405,6 @@ p7_oprofile_Sizeof(P7_OPROFILE *om)
   n  += sizeof(char) * (om->allocM+2);            /* om->cs        */
   n  += sizeof(char) * (om->allocM+2);            /* om->consensus */
 
-  int    nqb_avx = om->allocQ16_avx;  /* # of uchar vectors needed for query */
-  int    nqw_avx = om->allocQ8_avx;     /* # of sword vectors needed for query */
-  int    nqf_avx = om->allocQ4_avx;     /* # of float vectors needed for query */
-  int    nqs_avx = nqb_avx + p7O_EXTRA_SB;
-
-
-
   // avx part, move into separate function once filters working.
   /* Stuff below exactly mirrors the malloc()'s in
    * p7_oprofile_Create(); so even though we could
@@ -417,6 +412,11 @@ p7_oprofile_Sizeof(P7_OPROFILE *om)
    * w/ one:one correspondence to _Create(), for
    * maintainability and clarity.
    */
+  int    nqb_avx = om->allocQ16_avx;  /* # of uchar vectors needed for query */
+  int    nqw_avx = om->allocQ8_avx;     /* # of sword vectors needed for query */
+  int    nqf_avx = om->allocQ4_avx;     /* # of float vectors needed for query */
+  int    nqs_avx = nqb_avx + p7O_EXTRA_SB;
+
   n  += sizeof(__m256i) * nqb_avx  * om->abc->Kp +31; /* om->rbv_mem_avx   */
   n  += sizeof(__m256i) * nqs_avx  * om->abc->Kp +31; /* om->sbv_mem_avx   */
   n  += sizeof(__m256i) * nqw_avx  * om->abc->Kp +31; /* om->rwv_mem_avx   */
@@ -428,6 +428,27 @@ p7_oprofile_Sizeof(P7_OPROFILE *om)
   n  += sizeof(__m256i *) * om->abc->Kp;          /* om->sbv_avx       */
   n  += sizeof(__m256i *) * om->abc->Kp;          /* om->rwv_avx       */
    n  += sizeof(__m256  *) * om->abc->Kp;          /* om->rfv_avx       */
+
+
+  int    nqb_avx512 = om->allocQ16_avx512;  /* # of uchar vectors needed for query */
+  int    nqw_avx512 = om->allocQ8_avx512;     /* # of sword vectors needed for query */
+  int    nqf_avx512 = om->allocQ4_avx512;     /* # of float vectors needed for query */
+  int    nqs_avx512 = nqb_avx512 + p7O_EXTRA_SB;
+
+
+
+
+   n  += sizeof(__m512i) * nqb_avx512  * om->abc->Kp +31; /* om->rbv_mem_avx   */
+  n  += sizeof(__m512i) * nqs_avx512  * om->abc->Kp +31; /* om->sbv_mem_avx   */
+  n  += sizeof(__m512i) * nqw_avx512  * om->abc->Kp +31; /* om->rwv_mem_avx   */
+  n  += sizeof(__m512i) * nqw_avx512  * p7O_NTRANS  +31; /* om->twv_mem_avx   */
+  n  += sizeof(__m512)  * nqf_avx512  * om->abc->Kp +31; /* om->rfv_mem_avx   */
+  n  += sizeof(__m512)  * nqf_avx512  * p7O_NTRANS  +31; /* om->tfv_mem_avx  */
+  
+  n  += sizeof(__m512i *) * om->abc->Kp;          /* om->rbv_avx       */
+  n  += sizeof(__m512i *) * om->abc->Kp;          /* om->sbv_avx       */
+  n  += sizeof(__m512i *) * om->abc->Kp;          /* om->rwv_avx       */
+   n  += sizeof(__m512  *) * om->abc->Kp;          /* om->rfv_avx       */
   return n;
 }
 
@@ -1481,11 +1502,18 @@ fb_conversion(const P7_PROFILE *gm, P7_OPROFILE *om)
 
   if (nq > om->allocQ4) ESL_EXCEPTION(eslEINVAL, "optimized profile is too small to hold conversion");
 
-  union { __m256 avx; __m128 sse[2]; float x[8]; } tmp_avx;
+  union { __m256 v; float x[8]; } tmp_avx;
+    
 
   int     nq_avx  = p7O_NQF_AVX(M);     /* segment length; total # of striped vectors ne\eded            */
   if (nq_avx > om->allocQ4_avx) ESL_EXCEPTION(eslEINVAL, "optimized profile is too small to hold conversion");
 
+  union { __m512 v; float x[16]; } tmp_avx512;
+  int     nq_avx512  = p7O_NQF_AVX512(M);     /* segment length; total # of striped vectors ne\eded            */
+  if (nq_avx512 > om->allocQ4_avx512) ESL_EXCEPTION(eslEINVAL, "optimized profile is too small to hold conversion");
+
+
+  
   /* striped match scores: start at k=1 */
   for (x = 0; x < gm->abc->Kp; x++){
     for (k = 1, q = 0; q < nq; q++, k++){
@@ -1494,16 +1522,22 @@ fb_conversion(const P7_PROFILE *gm, P7_OPROFILE *om)
       }
 	    om->rfv[x][q] = esl_sse_expf(tmp.v);
     }
-  }
-  for (x = 0; x < gm->abc->Kp; x++){
-    for (k = 1, q = 0; q < nq_avx; q++, k++){
+  
+   for (k = 1, q = 0; q < nq_avx; q++, k++){
       for (z = 0; z < 8; z++){
         tmp_avx.x[z] = (k+ z*nq_avx <= M) ? p7P_MSC(gm, k+z*nq_avx, x) : -eslINFINITY;
       }
-      tmp_avx.sse[0] = esl_sse_expf(tmp_avx.sse[0]);  // Hack because we don't curren\tly have AVX version of expf
-      tmp_avx.sse[1] = esl_sse_expf(tmp_avx.sse[1]);
-      om->rfv_avx[x][q] = tmp_avx.avx;
-    }
+      tmp_avx.v = esl_avx_expf(tmp_avx.v);
+      om->rfv_avx[x][q] = tmp_avx.v;
+   }
+
+   for (k = 1, q = 0; q < nq_avx512; q++, k++){
+      for (z = 0; z < 16; z++){
+        tmp_avx512.x[z] = (k+ z*nq_avx512 <= M) ? p7P_MSC(gm, k+z*nq_avx512, x) : -eslINFINITY;
+      }
+      tmp_avx512.v = esl_avx512_expf(tmp_avx512.v);
+      om->rfv_avx512[x][q] = tmp_avx512.v;
+   }
   }
 
   /* Transition scores, all but the DD's. */
@@ -1551,9 +1585,8 @@ fb_conversion(const P7_PROFILE *gm, P7_OPROFILE *om)
         for (z = 0; z < 8; z++){
           tmp_avx.x[z] = (kb+z*nq_avx < M) ? p7P_TSC(gm, kb+z*nq_avx, tg) : -eslINFINITY;
         }
-        tmp_avx.sse[0] = esl_sse_expf(tmp_avx.sse[0]);  // Hack because we don't curren\tly have AVX version of expf
-        tmp_avx.sse[1] = esl_sse_expf(tmp_avx.sse[1]);
-        om->tfv_avx[j++] = tmp_avx.avx;
+        tmp_avx.v = esl_avx_expf(tmp_avx.v);
+        om->tfv_avx[j++] = tmp_avx.v;
       }
     }
 
@@ -1562,10 +1595,44 @@ fb_conversion(const P7_PROFILE *gm, P7_OPROFILE *om)
     for (z = 0; z < 8; z++){
       tmp_avx.x[z] = (k+z*nq_avx < M) ? p7P_TSC(gm, k+z*nq_avx, p7P_DD) : -eslINFINITY;
     }
-    tmp_avx.sse[0] = esl_sse_expf(tmp_avx.sse[0]);  // Hack because we don't currentl\y have AVX version of expf
-    tmp_avx.sse[1] = esl_sse_expf(tmp_avx.sse[1]);
-    om->tfv_avx[j++] = tmp_avx.avx;
+    tmp_avx.v = esl_avx_expf(tmp_avx.v);
+    om->tfv_avx[j++] = tmp_avx.v;
   }
+
+// This needs to be after the AVX DD loop, because the DD loop counts on the value of j at the end of the
+  // previous loop nest
+    /* Transition scores, all but the DD's. */
+  for (j = 0, k = 1, q = 0; q < nq_avx512; q++, k++){
+      for (t = p7O_BM; t <= p7O_II; t++){ /* this loop of 7 transitions depends on the order in the definition of p7o_tsc_e */
+        switch (t) {
+          case p7O_BM: tg = p7P_BM;  kb = k-1; break; /* gm has tBMk stored off by one! start from k=0 not 1 */
+          case p7O_MM: tg = p7P_MM;  kb = k-1; break; /* MM, DM, IM quads are rotated by -1, start from k=0  */
+          case p7O_IM: tg = p7P_IM;  kb = k-1; break;
+          case p7O_DM: tg = p7P_DM;  kb = k-1; break;
+          case p7O_MD: tg = p7P_MD;  kb = k;   break; /* the remaining ones are straight up  */
+          case p7O_MI: tg = p7P_MI;  kb = k;   break;
+          case p7O_II: tg = p7P_II;  kb = k;   break;
+        }
+
+        for (z = 0; z < 16; z++){
+          tmp_avx512.x[z] = (kb+z*nq_avx512 < M) ? p7P_TSC(gm, kb+z*nq_avx512, tg) : -eslINFINITY;
+        }
+        tmp_avx512.v = esl_avx512_expf(tmp_avx512.v); 
+        om->tfv_avx512[j++] = tmp_avx512.v;
+      }
+    }
+
+
+  for (k = 1, q = 0; q < nq_avx512; q++, k++){
+    for (z = 0; z < 16; z++){
+      tmp_avx512.x[z] = (k+z*nq_avx512 < M) ? p7P_TSC(gm, k+z*nq_avx512, p7P_DD) : -eslINFINITY;
+    }
+    tmp_avx512.v = esl_avx512_expf(tmp_avx512.v);  
+    om->tfv_avx512[j++] = tmp_avx512.v;
+  }
+
+
+  
   /* Specials. (These are actually in exactly the same order in om and
    *  gm, but we copy in general form anyway.)
    */

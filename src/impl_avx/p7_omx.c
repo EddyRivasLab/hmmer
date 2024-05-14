@@ -437,7 +437,7 @@ p7_omx_SetDumpMode(FILE *fp, P7_OMX *ox, int truefalse)
  * Throws:    <eslEMEM> on allocation failure. 
  */
 int
-p7_omx_DumpMFRow(P7_OMX *ox, int rowi, uint8_t xE, uint8_t xN, uint8_t xJ, uint8_t xB, uint8_t xC)
+p7_omx_DumpMFRow_sse(P7_OMX *ox, int rowi, uint8_t xE, uint8_t xN, uint8_t xJ, uint8_t xB, uint8_t xC)
 {
   __m128i *dp = ox->dpb[0];	
   int      M  = ox->M;
@@ -490,6 +490,114 @@ ERROR:
   return status;
 }
 
+int
+p7_omx_DumpMFRow_avx(P7_OMX *ox, int rowi, uint8_t xE, uint8_t xN, uint8_t xJ, uint8_t xB, uint8_t xC)
+{
+  __m256i *dp = ox->dpb_avx[0];	
+  int      M  = ox->M;
+  int      Q  = p7O_NQB_AVX(M);
+  uint8_t *v  = NULL;		/* array of unstriped scores  */
+  int      q,z,k;
+  union { __m256i v; uint8_t i[32]; } tmp;
+  int      status;
+
+  ESL_ALLOC(v, sizeof(unsigned char) * ((Q*32)+1));
+  v[0] = 0;
+
+  /* Header (if we're on the 0th row)  */
+  if (rowi == 0)
+    {
+      fprintf(ox->dfp, "       ");
+      for (k = 0; k <= M;  k++) fprintf(ox->dfp, "%3d ", k);
+      fprintf(ox->dfp, "%3s %3s %3s %3s %3s\n", "E", "N", "J", "B", "C");
+      fprintf(ox->dfp, "       ");
+      for (k = 0; k <= M+5;  k++) fprintf(ox->dfp, "%3s ", "---");
+      fprintf(ox->dfp, "\n");
+    }
+
+  /* Unpack and unstripe, then print M's. */
+  for (q = 0; q < Q; q++) {
+    tmp.v = dp[q];
+    for (z = 0; z < 32; z++) v[q+Q*z+1] = tmp.i[z];
+  }
+  fprintf(ox->dfp, "%4d M ", rowi);
+  for (k = 0; k <= M; k++) fprintf(ox->dfp, "%3d ", v[k]);
+
+  /* The specials */
+  fprintf(ox->dfp, "%3d %3d %3d %3d %3d\n", xE, xN, xJ, xB, xC);
+
+  /* I's are all 0's; print just to facilitate comparison. */
+  fprintf(ox->dfp, "%4d I ", rowi);
+  for (k = 0; k <= M; k++) fprintf(ox->dfp, "%3d ", 0);
+  fprintf(ox->dfp, "\n");
+
+  /* D's are all 0's too */
+  fprintf(ox->dfp, "%4d D ", rowi);
+  for (k = 0; k <= M; k++) fprintf(ox->dfp, "%3d ", 0);
+  fprintf(ox->dfp, "\n\n");
+
+  free(v);
+  return eslOK;
+
+ERROR:
+  free(v);
+  return status;
+}
+
+int
+p7_omx_DumpMFRow_avx512(P7_OMX *ox, int rowi, uint8_t xE, uint8_t xN, uint8_t xJ, uint8_t xB, uint8_t xC)
+{
+  __m512i *dp = ox->dpb_avx512[0];	
+  int      M  = ox->M;
+  int      Q  = p7O_NQB_AVX512(M);
+  uint8_t *v  = NULL;		/* array of unstriped scores  */
+  int      q,z,k;
+  union { __m512i v; uint8_t i[64]; } tmp;
+  int      status;
+
+  ESL_ALLOC(v, sizeof(unsigned char) * ((Q*64)+1));
+  v[0] = 0;
+
+  /* Header (if we're on the 0th row)  */
+  if (rowi == 0)
+    {
+      fprintf(ox->dfp, "       ");
+      for (k = 0; k <= M;  k++) fprintf(ox->dfp, "%3d ", k);
+      fprintf(ox->dfp, "%3s %3s %3s %3s %3s\n", "E", "N", "J", "B", "C");
+      fprintf(ox->dfp, "       ");
+      for (k = 0; k <= M+5;  k++) fprintf(ox->dfp, "%3s ", "---");
+      fprintf(ox->dfp, "\n");
+    }
+
+  /* Unpack and unstripe, then print M's. */
+  for (q = 0; q < Q; q++) {
+    tmp.v = dp[q];
+    for (z = 0; z < 64; z++) v[q+Q*z+1] = tmp.i[z];
+  }
+  fprintf(ox->dfp, "%4d M ", rowi);
+  for (k = 0; k <= M; k++) fprintf(ox->dfp, "%3d ", v[k]);
+
+  /* The specials */
+  fprintf(ox->dfp, "%3d %3d %3d %3d %3d\n", xE, xN, xJ, xB, xC);
+
+  /* I's are all 0's; print just to facilitate comparison. */
+  fprintf(ox->dfp, "%4d I ", rowi);
+  for (k = 0; k <= M; k++) fprintf(ox->dfp, "%3d ", 0);
+  fprintf(ox->dfp, "\n");
+
+  /* D's are all 0's too */
+  fprintf(ox->dfp, "%4d D ", rowi);
+  for (k = 0; k <= M; k++) fprintf(ox->dfp, "%3d ", 0);
+  fprintf(ox->dfp, "\n\n");
+
+  free(v);
+  return eslOK;
+
+ERROR:
+  free(v);
+  return status;
+}
+
 
 /* Function:  p7_omx_DumpVFRow()
  * Synopsis:  Dump current row of ViterbiFilter (int16) part of <ox> matrix.
@@ -509,8 +617,9 @@ ERROR:
  *
  * Throws:    <eslEMEM> on allocation failure.
  */
+
 int
-p7_omx_DumpVFRow(P7_OMX *ox, int rowi, int16_t xE, int16_t xN, int16_t xJ, int16_t xB, int16_t xC)
+p7_omx_DumpVFRow_sse(P7_OMX *ox, int rowi, int16_t xE, int16_t xN, int16_t xJ, int16_t xB, int16_t xC)
 {
   __m128i *dp = ox->dpw[0];	/* must set <dp> before using {MDI}MX macros */
   int      M  = ox->M;
@@ -572,6 +681,132 @@ ERROR:
   return status;
 
 }
+int
+p7_omx_DumpVFRow_avx(P7_OMX *ox, int rowi, int16_t xE, int16_t xN, int16_t xJ, int16_t xB, int16_t xC)
+{
+  __m256i *dp = ox->dpw_avx[0];	/* must set <dp> before using {MDI}MX macros */
+  int      M  = ox->M;
+  int      Q  = p7O_NQW_AVX(M);
+  int16_t *v  = NULL;		/* array of unstriped, uninterleaved scores  */
+  int      q,z,k;
+  union { __m256i v; int16_t i[16]; } tmp;
+  int      status;
+
+  ESL_ALLOC(v, sizeof(int16_t) * ((Q*16)+1));
+  v[0] = 0;
+
+  /* Header (if we're on the 0th row)
+   */
+  if (rowi == 0)
+    {
+      fprintf(ox->dfp, "       ");
+      for (k = 0; k <= M;  k++) fprintf(ox->dfp, "%6d ", k);
+      fprintf(ox->dfp, "%6s %6s %6s %6s %6s\n", "E", "N", "J", "B", "C");
+      fprintf(ox->dfp, "       ");
+      for (k = 0; k <= M+5;  k++) fprintf(ox->dfp, "%6s ", "------");
+      fprintf(ox->dfp, "\n");
+    }
+
+  /* Unpack and unstripe, then print M's. */
+  for (q = 0; q < Q; q++) {
+    tmp.v = MMXo(q);
+    for (z = 0; z < 16; z++) v[q+Q*z+1] = tmp.i[z];
+  }
+  fprintf(ox->dfp, "%4d M ", rowi);
+  for (k = 0; k <= M; k++) fprintf(ox->dfp, "%6d ", v[k]);
+
+  /* The specials */
+  fprintf(ox->dfp, "%6d %6d %6d %6d %6d\n", xE, xN, xJ, xB, xC);
+
+  /* Unpack and unstripe, then print I's. */
+  for (q = 0; q < Q; q++) {
+    tmp.v = IMXo(q);
+    for (z = 0; z < 16; z++) v[q+Q*z+1] = tmp.i[z];
+  }
+  fprintf(ox->dfp, "%4d I ", rowi);
+  for (k = 0; k <= M; k++) fprintf(ox->dfp, "%6d ", v[k]);
+  fprintf(ox->dfp, "\n");
+
+  /* Unpack, unstripe, then print D's. */
+  for (q = 0; q < Q; q++) {
+    tmp.v = DMXo(q);
+    for (z = 0; z < 16; z++) v[q+Q*z+1] = tmp.i[z];
+  }
+  fprintf(ox->dfp, "%4d D ", rowi);
+  for (k = 0; k <= M; k++) fprintf(ox->dfp, "%6d ", v[k]);
+  fprintf(ox->dfp, "\n\n");
+
+  free(v);
+  return eslOK;
+
+ERROR:
+  free(v);
+  return status;
+
+}
+int
+p7_omx_DumpVFRow_avx512(P7_OMX *ox, int rowi, int16_t xE, int16_t xN, int16_t xJ, int16_t xB, int16_t xC)
+{
+  __m512i *dp = ox->dpw_avx512[0];	/* must set <dp> before using {MDI}MX macros */
+  int      M  = ox->M;
+  int      Q  = p7O_NQW_AVX512(M);
+  int16_t *v  = NULL;		/* array of unstriped, uninterleaved scores  */
+  int      q,z,k;
+  union { __m512i v; int16_t i[32]; } tmp;
+  int      status;
+
+  ESL_ALLOC(v, sizeof(int16_t) * ((Q*32)+1));
+  v[0] = 0;
+
+  /* Header (if we're on the 0th row)
+   */
+  if (rowi == 0)
+    {
+      fprintf(ox->dfp, "       ");
+      for (k = 0; k <= M;  k++) fprintf(ox->dfp, "%6d ", k);
+      fprintf(ox->dfp, "%6s %6s %6s %6s %6s\n", "E", "N", "J", "B", "C");
+      fprintf(ox->dfp, "       ");
+      for (k = 0; k <= M+5;  k++) fprintf(ox->dfp, "%6s ", "------");
+      fprintf(ox->dfp, "\n");
+    }
+
+  /* Unpack and unstripe, then print M's. */
+  for (q = 0; q < Q; q++) {
+    tmp.v = MMXo(q);
+    for (z = 0; z < 32; z++) v[q+Q*z+1] = tmp.i[z];
+  }
+  fprintf(ox->dfp, "%4d M ", rowi);
+  for (k = 0; k <= M; k++) fprintf(ox->dfp, "%6d ", v[k]);
+
+  /* The specials */
+  fprintf(ox->dfp, "%6d %6d %6d %6d %6d\n", xE, xN, xJ, xB, xC);
+
+  /* Unpack and unstripe, then print I's. */
+  for (q = 0; q < Q; q++) {
+    tmp.v = IMXo(q);
+    for (z = 0; z < 32; z++) v[q+Q*z+1] = tmp.i[z];
+  }
+  fprintf(ox->dfp, "%4d I ", rowi);
+  for (k = 0; k <= M; k++) fprintf(ox->dfp, "%6d ", v[k]);
+  fprintf(ox->dfp, "\n");
+
+  /* Unpack, unstripe, then print D's. */
+  for (q = 0; q < Q; q++) {
+    tmp.v = DMXo(q);
+    for (z = 0; z < 32; z++) v[q+Q*z+1] = tmp.i[z];
+  }
+  fprintf(ox->dfp, "%4d D ", rowi);
+  for (k = 0; k <= M; k++) fprintf(ox->dfp, "%6d ", v[k]);
+  fprintf(ox->dfp, "\n\n");
+
+  free(v);
+  return eslOK;
+
+ERROR:
+  free(v);
+  return status;
+
+}
 
 /* Function:  p7_omx_DumpFBRow()
  * Synopsis:  Dump one row from float part of a DP matrix.
@@ -600,7 +835,7 @@ ERROR:
  * Throws:    <eslEMEM> on allocation failure.  
  */
 int
-p7_omx_DumpFBRow(P7_OMX *ox, int logify, int rowi, int width, int precision, float xE, float xN, float xJ, float xB, float xC)
+p7_omx_DumpFBRow_sse(P7_OMX *ox, int logify, int rowi, int width, int precision, float xE, float xN, float xJ, float xB, float xC)
 {
   __m128 *dp;
   int      M  = ox->M;
@@ -659,6 +894,154 @@ p7_omx_DumpFBRow(P7_OMX *ox, int logify, int rowi, int width, int precision, flo
   for (q = 0; q < Q; q++) {
     tmp.v = DMXo(q);
     for (z = 0; z < 4; z++) v[q+Q*z+1] = tmp.x[z];
+  }
+  fprintf(ox->dfp, "%3d D ", rowi);
+  if (logify) for (k = 0; k <= M; k++) fprintf(ox->dfp, "%*.*f ", width, precision, v[k] == 0. ? -eslINFINITY : log(v[k]));
+  else        for (k = 0; k <= M; k++) fprintf(ox->dfp, "%*.*f ", width, precision, v[k]);
+  fprintf(ox->dfp, "\n\n");
+
+  free(v);
+  return eslOK;
+
+ERROR:
+  free(v);
+  return status;
+}
+
+int
+p7_omx_DumpFBRow_avx(P7_OMX *ox, int logify, int rowi, int width, int precision, float xE, float xN, float xJ, float xB, float xC)
+{
+  __m256 *dp;
+  int      M  = ox->M;
+  int      Q  = p7O_NQF_AVX(M);
+  float   *v  = NULL;		/* array of uninterleaved, unstriped scores  */
+  int      q,z,k;
+  union { __m256 v; float x[8]; } tmp;
+  int      status;
+
+  dp = (ox->allocR == 1) ? ox->dpf_avx[0] : ox->dpf_avx[rowi];	  /* must set <dp> before using {MDI}MX macros */
+
+  ESL_ALLOC(v, sizeof(float) * ((Q*8)+1));
+  v[0] = 0.;
+
+  if (rowi == 0)
+    {
+      fprintf(ox->dfp, "      ");
+      for (k = 0; k <= M;  k++) fprintf(ox->dfp, "%*d ", width, k);
+      fprintf(ox->dfp, "%*s %*s %*s %*s %*s\n", width, "E", width, "N", width, "J", width, "B", width, "C");
+      fprintf(ox->dfp, "      ");
+      for (k = 0; k <= M+5;  k++) fprintf(ox->dfp, "%*s ", width, "--------");
+      fprintf(ox->dfp, "\n");
+    }
+
+  /* Unpack, unstripe, then print M's. */
+  for (q = 0; q < Q; q++) {
+    tmp.v = MMXo(q);
+    for (z = 0; z < 8; z++) v[q+Q*z+1] = tmp.x[z];
+  }
+  fprintf(ox->dfp, "%3d M ", rowi);
+  if (logify) for (k = 0; k <= M; k++) fprintf(ox->dfp, "%*.*f ", width, precision, v[k] == 0. ? -eslINFINITY : log(v[k]));
+  else        for (k = 0; k <= M; k++) fprintf(ox->dfp, "%*.*f ", width, precision, v[k]);
+
+ /* The specials */
+  if (logify) fprintf(ox->dfp, "%*.*f %*.*f %*.*f %*.*f %*.*f\n",
+		      width, precision, xE == 0. ? -eslINFINITY : log(xE),
+		      width, precision, xN == 0. ? -eslINFINITY : log(xN),
+		      width, precision, xJ == 0. ? -eslINFINITY : log(xJ),
+		      width, precision, xB == 0. ? -eslINFINITY : log(xB), 
+		      width, precision, xC == 0. ? -eslINFINITY : log(xC));
+  else        fprintf(ox->dfp, "%*.*f %*.*f %*.*f %*.*f %*.*f\n",
+		      width, precision, xE,   width, precision, xN, width, precision, xJ, 
+		      width, precision, xB,   width, precision, xC);
+
+  /* Unpack, unstripe, then print I's. */
+  for (q = 0; q < Q; q++) {
+    tmp.v = IMXo(q);
+    for (z = 0; z < 8; z++) v[q+Q*z+1] = tmp.x[z];
+  }
+  fprintf(ox->dfp, "%3d I ", rowi);
+  if (logify) for (k = 0; k <= M; k++) fprintf(ox->dfp, "%*.*f ", width, precision, v[k] == 0. ? -eslINFINITY : log(v[k]));
+  else        for (k = 0; k <= M; k++) fprintf(ox->dfp, "%*.*f ", width, precision, v[k]);
+  fprintf(ox->dfp, "\n");
+
+  /* Unpack, unstripe, then print D's. */
+  for (q = 0; q < Q; q++) {
+    tmp.v = DMXo(q);
+    for (z = 0; z < 8; z++) v[q+Q*z+1] = tmp.x[z];
+  }
+  fprintf(ox->dfp, "%3d D ", rowi);
+  if (logify) for (k = 0; k <= M; k++) fprintf(ox->dfp, "%*.*f ", width, precision, v[k] == 0. ? -eslINFINITY : log(v[k]));
+  else        for (k = 0; k <= M; k++) fprintf(ox->dfp, "%*.*f ", width, precision, v[k]);
+  fprintf(ox->dfp, "\n\n");
+
+  free(v);
+  return eslOK;
+
+ERROR:
+  free(v);
+  return status;
+}
+
+int
+p7_omx_DumpFBRow_avx512(P7_OMX *ox, int logify, int rowi, int width, int precision, float xE, float xN, float xJ, float xB, float xC)
+{
+  __m512 *dp;
+  int      M  = ox->M;
+  int      Q  = p7O_NQF_AVX512(M);
+  float   *v  = NULL;		/* array of uninterleaved, unstriped scores  */
+  int      q,z,k;
+  union { __m512 v; float x[16]; } tmp;
+  int      status;
+
+  dp = (ox->allocR == 1) ? ox->dpf_avx512[0] :	ox->dpf_avx512[rowi];	  /* must set <dp> before using {MDI}MX macros */
+
+  ESL_ALLOC(v, sizeof(float) * ((Q*16)+1));
+  v[0] = 0.;
+
+  if (rowi == 0)
+    {
+      fprintf(ox->dfp, "      ");
+      for (k = 0; k <= M;  k++) fprintf(ox->dfp, "%*d ", width, k);
+      fprintf(ox->dfp, "%*s %*s %*s %*s %*s\n", width, "E", width, "N", width, "J", width, "B", width, "C");
+      fprintf(ox->dfp, "      ");
+      for (k = 0; k <= M+5;  k++) fprintf(ox->dfp, "%*s ", width, "--------");
+      fprintf(ox->dfp, "\n");
+    }
+
+  /* Unpack, unstripe, then print M's. */
+  for (q = 0; q < Q; q++) {
+    tmp.v = MMXo(q);
+    for (z = 0; z < 16; z++) v[q+Q*z+1] = tmp.x[z];
+  }
+  fprintf(ox->dfp, "%3d M ", rowi);
+  if (logify) for (k = 0; k <= M; k++) fprintf(ox->dfp, "%*.*f ", width, precision, v[k] == 0. ? -eslINFINITY : log(v[k]));
+  else        for (k = 0; k <= M; k++) fprintf(ox->dfp, "%*.*f ", width, precision, v[k]);
+
+ /* The specials */
+  if (logify) fprintf(ox->dfp, "%*.*f %*.*f %*.*f %*.*f %*.*f\n",
+		      width, precision, xE == 0. ? -eslINFINITY : log(xE),
+		      width, precision, xN == 0. ? -eslINFINITY : log(xN),
+		      width, precision, xJ == 0. ? -eslINFINITY : log(xJ),
+		      width, precision, xB == 0. ? -eslINFINITY : log(xB), 
+		      width, precision, xC == 0. ? -eslINFINITY : log(xC));
+  else        fprintf(ox->dfp, "%*.*f %*.*f %*.*f %*.*f %*.*f\n",
+		      width, precision, xE,   width, precision, xN, width, precision, xJ, 
+		      width, precision, xB,   width, precision, xC);
+
+  /* Unpack, unstripe, then print I's. */
+  for (q = 0; q < Q; q++) {
+    tmp.v = IMXo(q);
+    for (z = 0; z < 16; z++) v[q+Q*z+1] = tmp.x[z];
+  }
+  fprintf(ox->dfp, "%3d I ", rowi);
+  if (logify) for (k = 0; k <= M; k++) fprintf(ox->dfp, "%*.*f ", width, precision, v[k] == 0. ? -eslINFINITY : log(v[k]));
+  else        for (k = 0; k <= M; k++) fprintf(ox->dfp, "%*.*f ", width, precision, v[k]);
+  fprintf(ox->dfp, "\n");
+
+  /* Unpack, unstripe, then print D's. */
+  for (q = 0; q < Q; q++) {
+    tmp.v = DMXo(q);
+    for (z = 0; z < 16; z++) v[q+Q*z+1] = tmp.x[z];
   }
   fprintf(ox->dfp, "%3d D ", rowi);
   if (logify) for (k = 0; k <= M; k++) fprintf(ox->dfp, "%*.*f ", width, precision, v[k] == 0. ? -eslINFINITY : log(v[k]));

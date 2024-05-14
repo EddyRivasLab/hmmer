@@ -148,7 +148,7 @@ forward_engine(int do_full, const ESL_DSQ *dsq, int L, const P7_OPROFILE *om, P7
   ox->totscale       = 0.0;
 
 #if eslDEBUGLEVEL > 0
-  if (ox->debugging) p7_omx_DumpFBRow(ox, TRUE, 0, 9, 5, xE, xN, xJ, xB, xC);	/* logify=TRUE, <rowi>=0, width=8, precision=5*/
+  if (ox->debugging) p7_omx_DumpFBRow_avx(ox, TRUE, 0, 9, 5, xE, xN, xJ, xB, xC);	/* logify=TRUE, <rowi>=0, width=8, precision=5*/
 #endif
 
   for (i = 1; i <= L; i++)
@@ -303,7 +303,7 @@ forward_engine(int do_full, const ESL_DSQ *dsq, int L, const P7_OPROFILE *om, P7
       ox->xmx[i*p7X_NXCELLS+p7X_C] = xC;
 
 #if eslDEBUGLEVEL > 0
-      if (ox->debugging) p7_omx_DumpFBRow(ox, TRUE, i, 9, 5, xE, xN, xJ, xB, xC);	/* logify=TRUE, <rowi>=i, width=9, precision=5*/
+      if (ox->debugging) p7_omx_DumpFBRow_avx(ox, TRUE, i, 9, 5, xE, xN, xJ, xB, xC);	/* logify=TRUE, <rowi>=i, width=9, precision=5*/
 #endif
     } /* end loop over sequence residues 1..L */
 
@@ -380,7 +380,7 @@ backward_engine(int do_full, const ESL_DSQ *dsq, int L, const P7_OPROFILE *om, c
     }
   /* now MD init */
   tp  = om->tfv_avx + 7*Q - 3;	                        /* <*tp> now the [4 8 12 x] Mk->Dk+1 quad    */
-  dcv = esl_avx_leftshiftz_float(dcv);
+  dcv = esl_avx_leftshiftz_float(DMO(dpc,0));
   for (q = Q-1; q >= 0; q--)
     {
       MMO(dpc,q) = _mm256_add_ps(MMO(dpc,q), _mm256_mul_ps(dcv, *tp)); tp -= 7;
@@ -413,7 +413,7 @@ backward_engine(int do_full, const ESL_DSQ *dsq, int L, const P7_OPROFILE *om, c
   bck->xmx[L*p7X_NXCELLS+p7X_C] = xC;
 
 #if eslDEBUGLEVEL > 0
-  if (bck->debugging) p7_omx_DumpFBRow(bck, TRUE, L, 9, 4, xE, xN, xJ, xB, xC);	/* logify=TRUE, <rowi>=L, width=9, precision=4*/
+  if (bck->debugging) p7_omx_DumpFBRow_avx(bck, TRUE, L, 9, 4, xE, xN, xJ, xB, xC);	/* logify=TRUE, <rowi>=L, width=9, precision=4*/
 #endif
 
   /* main recursion */
@@ -538,7 +538,7 @@ backward_engine(int do_full, const ESL_DSQ *dsq, int L, const P7_OPROFILE *om, c
       bck->xmx[i*p7X_NXCELLS+p7X_C] = xC;
 
 #if eslDEBUGLEVEL > 0
-      if (bck->debugging) p7_omx_DumpFBRow(bck, TRUE, i, 9, 4, xE, xN, xJ, xB, xC);	/* logify=TRUE, <rowi>=i, width=9, precision=4*/
+      if (bck->debugging) p7_omx_DumpFBRow_avx(bck, TRUE, i, 9, 4, xE, xN, xJ, xB, xC);	/* logify=TRUE, <rowi>=i, width=9, precision=4*/
 #endif
     } /* thus ends the loop over sequence positions i */
 
@@ -569,7 +569,7 @@ backward_engine(int do_full, const ESL_DSQ *dsq, int L, const P7_OPROFILE *om, c
   dpc = bck->dpf_avx[0];
   for (q = 0; q < Q; q++) /* Not strictly necessary, but if someone's looking at DP matrices, this is nice to do: */
     MMO(dpc,q) = DMO(dpc,q) = IMO(dpc,q) = zerov;
-  if (bck->debugging) p7_omx_DumpFBRow(bck, TRUE, 0, 9, 4, bck->xmx[p7X_E], bck->xmx[p7X_N],  bck->xmx[p7X_J], bck->xmx[p7X_B],  bck->xmx[p7X_C]);	/* logify=TRUE, <rowi>=0, width=9, precision=4*/
+  if (bck->debugging) p7_omx_DumpFBRow_avx(bck, TRUE, 0, 9, 4, bck->xmx[p7X_E], bck->xmx[p7X_N],  bck->xmx[p7X_J], bck->xmx[p7X_B],  bck->xmx[p7X_C]);	/* logify=TRUE, <rowi>=0, width=9, precision=4*/
 #endif
 
   if       (isnan(xN))        ESL_EXCEPTION(eslERANGE, "backward score is NaN");

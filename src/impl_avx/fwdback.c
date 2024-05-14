@@ -94,15 +94,18 @@ p7_Forward(const ESL_DSQ *dsq, int L, const P7_OPROFILE *om, P7_OMX *ox, float *
   if (! p7_oprofile_IsLocal(om)) ESL_EXCEPTION(eslEINVAL, "Forward implementation makes assumptions that only work for local alignment");
 #endif
 
-  float res_sse, res_avx;
+  float res_sse, res_avx, res_avx512;;
   int ret;
 
   ret=p7_Forward_sse(dsq, L, om, ox, &res_sse);
   p7_Forward_avx(dsq, L, om, ox, &res_avx);
+  p7_Forward_avx512(dsq, L, om, ox, &res_avx512);
 
-  
   if(esl_FCompare(res_sse, res_avx, .01, .01) != eslOK){
     printf("Error: p7_Forward miss-match.  SSE = %f, AVX = %f\n", res_sse, res_avx);
+  }
+  if(esl_FCompare(res_sse, res_avx512, .01, .01) != eslOK){
+    printf("Error: p7_Forward miss-match.  SSE = %f, AVX512 = %f\n", res_sse, res_avx512);
   }
   if(opt_sc != NULL){
     *opt_sc = res_sse;
@@ -148,15 +151,19 @@ p7_ForwardParser(const ESL_DSQ *dsq, int L, const P7_OPROFILE *om, P7_OMX *ox, f
   if (L     >= ox->allocXR)      ESL_EXCEPTION(eslEINVAL, "DP matrix allocated too small (too few X rows)");
   if (! p7_oprofile_IsLocal(om)) ESL_EXCEPTION(eslEINVAL, "Forward implementation makes assumptions that only work for local alignment");
 #endif
-  float res_sse, res_avx;
+  float res_sse, res_avx, res_avx512;
   int ret;
 
   ret=p7_ForwardParser_sse(dsq, L, om, ox, &res_sse);
   p7_ForwardParser_avx(dsq, L, om, ox, &res_avx);
+  p7_ForwardParser_avx512(dsq, L, om, ox, &res_avx512);
 
   
-  if(esl_FCompare(res_sse, res_avx, .01, .01) != eslOK){
-    printf("Error: p7_ForwardParser miss-match.  SSE = %f, AVX = %f\n", res_sse, res_avx);
+    if(esl_FCompare(res_sse, res_avx, .01, .01) != eslOK){
+    printf("Error: p7_Forward miss-match.  SSE = %f, AVX = %f\n", res_sse, res_avx);
+  }
+  if(esl_FCompare(res_sse, res_avx512, .01, .01) != eslOK){
+    printf("Error: p7_Forward miss-match.  SSE = %f, AVX512 = %f\n", res_sse, res_avx512);
   }
     if(opt_sc != NULL){
     *opt_sc = res_sse;
@@ -221,15 +228,19 @@ p7_Backward(const ESL_DSQ *dsq, int L, const P7_OPROFILE *om, const P7_OMX *fwd,
   if (! p7_oprofile_IsLocal(om))  ESL_EXCEPTION(eslEINVAL, "Forward implementation makes assumptions that only work for local alignment");
 #endif
 
-  float res_sse, res_avx;
+  float res_sse, res_avx, res_avx512;
   int ret;
 
   ret=p7_Backward_sse(dsq, L, om, fwd, bck, &res_sse);
   p7_Backward_avx(dsq, L, om, fwd, bck, &res_avx);
+  p7_Backward_avx512(dsq, L, om, fwd, bck, &res_avx512);
 
   
-  if(esl_FCompare(res_sse, res_avx, .01, .01) != eslOK){
-    printf("Error: p7_Backward miss-match.  SSE = %f, AVX = %f\n", res_sse, res_avx);
+    if(esl_FCompare(res_sse, res_avx, .01, .01) != eslOK){
+    printf("Error: p7_Forward miss-match.  SSE = %f, AVX = %f\n", res_sse, res_avx);
+  }
+  if(esl_FCompare(res_sse, res_avx512, .01, .01) != eslOK){
+    printf("Error: p7_Forward miss-match.  SSE = %f, AVX512 = %f\n", res_sse, res_avx512);
   }
     if(opt_sc != NULL){
     *opt_sc = res_sse;
@@ -280,15 +291,19 @@ p7_BackwardParser(const ESL_DSQ *dsq, int L, const P7_OPROFILE *om, const P7_OMX
   if (! p7_oprofile_IsLocal(om))  ESL_EXCEPTION(eslEINVAL, "Forward implementation makes assumptions that only work for local alignment");
 #endif
 
-  float res_sse, res_avx;
+  float res_sse, res_avx, res_avx512;
   int ret;
 
   ret=p7_BackwardParser_sse(dsq, L, om, fwd, bck, &res_sse);
   p7_BackwardParser_avx(dsq, L, om, fwd, bck, &res_avx);
+  p7_BackwardParser_avx512(dsq, L, om, fwd, bck, &res_avx512);
 
   
-  if(esl_FCompare(res_sse, res_avx, .01, .01) != eslOK){
-    printf("Error: p7_BackwardParser miss-match.  SSE = %f, AVX = %f\n", res_sse, res_avx);
+    if(esl_FCompare(res_sse, res_avx, .01, .01) != eslOK){
+    printf("Error: p7_Forward miss-match.  SSE = %f, AVX = %f\n", res_sse, res_avx);
+  }
+  if(esl_FCompare(res_sse, res_avx512, .01, .01) != eslOK){
+    printf("Error: p7_Forward miss-match.  SSE = %f, AVX512 = %f\n", res_sse, res_avx512);
   }
     if(opt_sc != NULL){
     *opt_sc = res_sse;
@@ -473,12 +488,15 @@ utest_fwdback(ESL_RANDOMNESS *r, ESL_ALPHABET *abc, P7_BG *bg, int M, int L, int
   p7_FLogsumInit();
   if (p7_FLogsumError(-0.4, -0.5) > 0.0001) tolerance = 1.0;  /* weaker test against GForward()   */
   else tolerance = 0.0001;   /* stronger test: FLogsum() is in slow exact mode. */
-
+  /* Debugging settings -- remove to set output back to normal */
+  //p7_omx_SetDumpMode(stdout, bck, 1);
+  /* End debugging settings */
+  
   p7_oprofile_Sample(r, abc, bg, M, L, &hmm, &gm, &om);
   while (N--)
     {
-      esl_rsq_xfIID(r, bg->f, abc->K, L, dsq);
 
+      esl_rsq_xfIID(r, bg->f, abc->K, L, dsq);
       p7_Forward       (dsq, L, om, oxf,      &fsc1);
       p7_Backward      (dsq, L, om, oxf, oxb, &bsc1);
       p7_ForwardParser (dsq, L, om, fwd,      &fsc2);

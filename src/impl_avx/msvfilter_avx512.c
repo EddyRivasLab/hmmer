@@ -133,7 +133,7 @@ p7_MSVFilter_avx512(const ESL_DSQ *dsq, int L, const P7_OPROFILE *om, P7_OMX *ox
       xJ = _mm256_extract_epi8(xtemp, 0);
       xtemp = _mm512_extracti32x8_epi32(xBv, 0);
       xB = _mm256_extract_epi8(xtemp, 0);
-      p7_omx_DumpMFRow(ox, 0, 0, 0, xJ, xB, xJ);
+      p7_omx_DumpMFRow_avx512(ox, 0, 0, 0, xJ, xB, xJ);
   }
 #endif
 
@@ -199,7 +199,7 @@ p7_MSVFilter_avx512(const ESL_DSQ *dsq, int L, const P7_OPROFILE *om, P7_OMX *ox
         xB = _mm256_extract_epi8(xtemp, 0);
 	xtemp = _mm512_extracti32x8_epi32(xEv, 0);
         xE = _mm256_extract_epi8(xtemp, 0);
-        p7_omx_DumpMFRow(ox, i, xE, 0, xJ, xB, xJ);
+        p7_omx_DumpMFRow_avx512(ox, i, xE, 0, xJ, xB, xJ);
       }
 #endif
   } /* end loop over sequence residues 1..L */
