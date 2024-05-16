@@ -110,12 +110,17 @@
 #undef _LARGE_FILES
 #undef _LARGEFILE_SOURCE
 
-/* Choice of optimized implementation (one and only one must be set)
+/* Choice of optimized implementation.  For non-x86 processors, exactly one
+ * must be set.  For x86, eslENABLE_SSE, eslENABLE_AVX, and eslENABLE_AVX512
+ * identify the SIMD instructions that the _compiler_ can handle, so multiple
+ * of these defines may be set, and the decision of what x86 SIMD ISA to use 
+ * is made at runtime. 
  * These are also identically defined in Easel esl_config.h.in
  */
 #undef eslENABLE_NEON
 #undef eslENABLE_SSE
 #undef eslENABLE_AVX
+#undef eslENABLE_AVX512
 #undef eslENABLE_VMX
 /* System headers
  */

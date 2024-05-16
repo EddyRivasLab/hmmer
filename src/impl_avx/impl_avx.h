@@ -7,7 +7,7 @@
 #define P7_IMPL_avx_INCLUDED
 #define USE_AVX512 1
 #include <p7_config.h>
-
+#include <esl_config.h>
 #include "esl_alphabet.h"
 #include "esl_random.h"
 #include <xmmintrin.h>    /* SSE  */
