@@ -803,8 +803,8 @@ p7_EvolveFromRate(FILE *statfp, P7_HMM *hmm, const P7_RATE *R, const P7_BG *bg, 
   int               i;
   int               status;
 
-
-  if (R->M != hmm->M) ESL_XFAIL(eslFAIL, errbuf, "Rate dim (%d) does not correspond to HMM dim (%d)", R->M, hmm->M);
+  if (time < 0.0) ESL_XFAIL(eslFAIL, errbuf, "Not a valid time (%f)\n", time);
+  if (R->M != hmm->M) ESL_XFAIL(eslFAIL, errbuf, "Rate dim (%d) does not correspond to HMM dim (%d)\n", R->M, hmm->M);
   
   if (hmm->name) free(hmm->name); hmm->name = NULL;
   if (hmm->acc)  free(hmm->acc);  hmm->acc  = NULL;
@@ -882,8 +882,9 @@ p7_EvolveFromRate(FILE *statfp, P7_HMM *hmm, const P7_RATE *R, const P7_BG *bg, 
       if (R->evomodel == AGA) p.rateparam.sI = e1R->sI;          
       p.special_case   = FALSE;
     
-      if (e1_model_AG_BetaFunc(&p, &betaM, &betaD) != eslOK) ESL_XFAIL(eslFAIL, p.errbuf, "AGA_betaM failed for m=%d", m);
-    }
+      status = e1_model_AG_BetaFunc(&p, &betaM, &betaD);
+      if (status != eslOK) ESL_XFAIL(eslFAIL, p.errbuf, "AGA_betaM failed for m=%d", m);
+     }
   
     /* Assign fundamental probabilities to the HMM transitions (avoid absolute zeros) */
     hmm->t[m][p7H_MI] = (betaM       > fsmall)? betaM                  : fsmall;

@@ -956,7 +956,7 @@ optimize_pack_paramvector(double *p, struct optimize_data *data)
 static inline void
 optimize_unpack_paramvector(double *p, struct optimize_data *data)
 {
-  data->time = (p[0] < 0.0)? exp(p[0]) : ((p[0] + 1.0 < TMAX)? p[0] + 1.0 : TMAX); 
+  data->time = (p[0] < 0.0)? exp(p[0]) : ((p[0] + 1.0 < TMAX)? p[0] + 1.0 : TMAX);
 }
 
 static inline double

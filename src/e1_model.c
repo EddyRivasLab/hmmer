@@ -97,7 +97,7 @@ e1_model_Create(E1_RATE *R, float time, const float *fmatch, const float *fins, 
     evom->sub      = ratematrix_ConditionalsFromRate(evom->time, R->em->Qstar, tol, NULL, verbose);
     if (evom->sub == NULL) ESL_XFAIL(eslFAIL, errbuf, "couldn't calculate evosubs\n");
     evom->fsubsite = (fmatch)? ratematrix_FFreqSubsPerSite(evom->sub, (float *)fmatch) : ratematrix_DFreqSubsPerSite(evom->sub, R->em->f);
-    //printf("time %f freq subsite %f\n", time, evom->fsubsite);
+    printf("^^time %f freq subsite %f\n", time, evom->fsubsite);
   
     if (fins != NULL) {
       ESL_ALLOC(evom->ins, sizeof(float) * abc->K);
@@ -599,7 +599,7 @@ e1_model_AG_BetaFunc(void *params, double *ret_betaM, double *ret_betaD)
   double betaM;
   double betaD;
   double LdM, LdD;
-  int    status;
+  int    status = eslOK;
   
   if (p->time == 0.0)  { if (ret_betaM) *ret_betaM = 0.0; if (ret_betaD) *ret_betaD = 0.0; return eslOK; } /* special case time = 0 */
   
@@ -611,23 +611,20 @@ e1_model_AG_BetaFunc(void *params, double *ret_betaM, double *ret_betaD)
 #if 0
 printf("\nAG_BetaM[t=%f] = %.8f special? %d ldM=%.8f\tmuM=%.8f\n", 
 	 p->time, betaM, p->special_case, p->rateparam.ldEM, p->rateparam.muEM);
-printf("\nAG_BetaD[t=%f] = %.8f special? %d ldM=%.8f\tmuM=%.8f\n", 
+printf("AG_BetaD[t=%f] = %.8f special? %d ldM=%.8f\tmuM=%.8f\n", 
 	 p->time, betaD, p->special_case, p->rateparam.ldED, p->rateparam.muED);
 #endif
 
-  if (isnan(betaM)) { printf("AG_betaM is nan \n"); status = eslFAIL; goto ERROR; }
-  if (isnan(betaD)) { printf("AG_betaD is nan \n"); status = eslFAIL; goto ERROR; }
-  if (betaM > 1.)   { if (betaM <  1.0+1e-3) betaM = 1.0; else { printf("AG_betaM is larger than one %f\n", betaM); status = eslFAIL; goto ERROR; } }
-  if (betaD > 1.)   { if (betaD <  1.0+1e-3) betaD = 1.0; else { printf("AG_betaD is larger than one %f\n", betaD); status = eslFAIL; goto ERROR; } }
-  if (betaM < 0.)   { if (betaM > -1e-1)     betaM = 0.0; else { printf("AG_betaM is negative %f\n", betaM);        status = eslFAIL; goto ERROR; } }
-  if (betaD < 0.)   { if (betaD > -1e-1)     betaD = 0.0; else { printf("AG_betaD is negative %f\n", betaD);        status = eslFAIL; goto ERROR; } }
+  if (isnan(betaM)) { printf("AG_betaM is nan \n"); status = eslFAIL; }
+  if (isnan(betaD)) { printf("AG_betaD is nan \n"); status = eslFAIL; }
+  if (betaM > 1.)   { if (betaM <  1.0+1e-3) betaM = 1.0; else { printf("AG_betaM is larger than one %f\n", betaM); status = eslFAIL; } }
+  if (betaD > 1.)   { if (betaD <  1.0+1e-3) betaD = 1.0; else { printf("AG_betaD is larger than one %f\n", betaD); status = eslFAIL; } }
+  if (betaM < 0.)   { if (betaM > -1e-1)     betaM = 0.0; else { printf("AG_betaM is negative %f\n", betaM);        status = eslFAIL; } }
+  if (betaD < 0.)   { if (betaD > -1e-1)     betaD = 0.0; else { printf("AG_betaD is negative %f\n", betaD);        status = eslFAIL; } }
   
   if (ret_betaM) *ret_betaM = betaM;
   if (ret_betaD) *ret_betaD = betaD;
 
-  return eslOK;
-
- ERROR:
   return status;
 }      
 
@@ -896,7 +893,7 @@ e1_model_transitions_AGA(E1_MODEL *evom, E1_RATE *R, int L, float tol, char *err
   if (gammaM < 0. || gammaM > 1.0 || isnan(gammaM)) { printf("gammaM failed %f\n", gammaM); goto ERROR; }
   if (gammaD < 0. || gammaD > 1.0 || isnan(gammaD)) { printf("gammaD failed %f\n", gammaD); goto ERROR; }
   if (gammaI < 0. || gammaI > 1.0 || isnan(gammaI)) { printf("gammaI failed %f\n", gammaI); goto ERROR; }
-  e1_model_AG_BetaFunc(&p, &betaM, &betaD);  
+  e1_model_AG_BetaFunc(&p, &betaM, &betaD);
   if (betaM  < 0. || betaM  > 1.0 || isnan(betaM))  { printf("betaM failed %f\n",  betaM);  goto ERROR; }
   if (betaD  < 0. || betaD  > 1.0 || isnan(betaD))  { printf("betaD failed %f\n",  betaD);  goto ERROR; }
   
@@ -912,6 +909,7 @@ e1_model_transitions_AGA(E1_MODEL *evom, E1_RATE *R, int L, float tol, char *err
     evom->t[e1H_DS] = (1.0 - betaD) * (1.0 - gammaD);
     evom->t[e1H_IS] = (1.0 - R->sI) * (1.0 - gammaI);
   }
+
   
   if (evom->mode == e2_JOINT) {
     evom->t[e1H_BD] =                 (1.0 - betaM) * gammaM * R->p;
