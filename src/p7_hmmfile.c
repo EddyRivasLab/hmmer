@@ -1256,6 +1256,7 @@ read_asc30hmm(P7_HMMFILE *hfp, ESL_ALPHABET **ret_abc, P7_HMM **opt_hmm)
   off_t         offset = 0;
   int           status;
   uint32_t      statstracker = 0;
+  int           saw_alph = FALSE;
 
   hfp->errbuf[0]    = '\0';
   hfp->rr_errbuf[0] = '\0';
@@ -1328,6 +1329,7 @@ read_asc30hmm(P7_HMMFILE *hfp, ESL_ALPHABET **ret_abc, P7_HMM **opt_hmm)
             ESL_XFAIL(eslEINCOMPAT,hfp->errbuf,"Alphabet type mismatch: was %s, but current HMM says %s", esl_abc_DecodeType( (*ret_abc)->type), tok1);
 	  abc = *ret_abc;
 	}
+        saw_alph = TRUE;
       } 
 
       else if (strcmp(tag, "RF") == 0) {
@@ -1469,12 +1471,12 @@ read_asc30hmm(P7_HMMFILE *hfp, ESL_ALPHABET **ret_abc, P7_HMM **opt_hmm)
         break;
     } /* end, loop over possible header tags */
 
-  if (status != eslOK) goto ERROR;
+  if (status != eslOK)           goto ERROR;
+  if (! saw_alph || !abc)        ESL_XFAIL(eslEFORMAT, hfp->errbuf, "No alphabet defined (no ALPH line?)");
 
   /* If we saw one STATS line, we need all 3. (True for both 3/a and 3/b formats) */
   if      (statstracker == 0x7) hmm->flags |= p7H_STATS;
   else if (statstracker != 0x0) ESL_XFAIL(eslEFORMAT, hfp->errbuf, "Missing one or more STATS parameter lines");
-
   
   /* Skip main model header lines; allocate body of HMM now that K,M are known */
   if ((status = esl_fileparser_NextLine(hfp->efp))                            != eslOK)  ESL_XFAIL(eslEFORMAT, hfp->errbuf, "Premature end of data before main model section");
