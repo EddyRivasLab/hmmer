@@ -17,24 +17,15 @@
 #include <string.h>
 #include <math.h>		/* roundf() */
 
-#include <xmmintrin.h>		/* SSE  */
-#include <emmintrin.h>		/* SSE2 */
-#include <immintrin.h>  /* AVX2 */
-#include <x86intrin.h>
+
 #include "easel.h"
 #include "esl_random.h"
-#include "esl_sse.h"
-#include "esl_avx.h"
-#include "esl_avx512.h"
+#include "esl_cpu.h"
 #include "esl_vectorops.h"
 
 #include "hmmer.h"
 #include "impl_avx.h"
 
-static uint8_t unbiased_byteify(P7_OPROFILE *om, float sc);
-static uint8_t biased_byteify(P7_OPROFILE *om, float sc);
-static int16_t wordify(P7_OPROFILE *om, float sc);
-static int     sf_conversion(P7_OPROFILE *om);
 
 /*****************************************************************
  * 1. The P7_OPROFILE structure: a score profile.
@@ -48,252 +39,57 @@ static int     sf_conversion(P7_OPROFILE *om);
  *
  * Throws:    <NULL> on allocation error.
  */
-P7_OPROFILE *
-p7_oprofile_Create(int allocM, const ESL_ALPHABET *abc)
-{
-  int          status;
-  P7_OPROFILE *om  = NULL;
-  int          nqb = p7O_NQB(allocM); /* # of uchar vectors needed for query */
-  int          nqw = p7O_NQW(allocM); /* # of sword vectors needed for query */
-  int          nqf = p7O_NQF(allocM); /* # of float vectors needed for query */
-  int          nqs = nqb + p7O_EXTRA_SB;
-  int          x;
 
+static P7_OPROFILE *p7_oprofile_Create_Dispatcher(int allocM, const ESL_ALPHABET *abc);
 
-  /* level 0 */
-  ESL_ALLOC(om, sizeof(P7_OPROFILE));
-  om->rbv_mem = NULL;
-  om->sbv_mem = NULL;
-  om->rwv_mem = NULL;
-  om->twv_mem = NULL;
-  om->rfv_mem = NULL;
-  om->tfv_mem = NULL;
-  om->rbv     = NULL;
-  om->sbv     = NULL;
-  om->rwv     = NULL;
-  om->twv     = NULL;
-  om->rfv     = NULL;
-  om->tfv     = NULL;
-  om->clone   = 0;
+P7_OPROFILE * (*p7_oprofile_Create)(int allocM, const ESL_ALPHABET *abc) = p7_oprofile_Create_Dispatcher;
 
-  /* level 1 */
-  ESL_ALLOC(om->rbv_mem, sizeof(__m128i) * nqb  * abc->Kp          +15); /* +15 is for manual 16-byte alignment */
-  ESL_ALLOC(om->sbv_mem, sizeof(__m128i) * nqs  * abc->Kp          +15); 
-  ESL_ALLOC(om->rwv_mem, sizeof(__m128i) * nqw  * abc->Kp          +15);                     
-  ESL_ALLOC(om->twv_mem, sizeof(__m128i) * nqw  * p7O_NTRANS       +15);   
-  ESL_ALLOC(om->rfv_mem, sizeof(__m128)  * nqf  * abc->Kp          +15);                     
-  ESL_ALLOC(om->tfv_mem, sizeof(__m128)  * nqf  * p7O_NTRANS       +15);    
+P7_OPROFILE * p7_oprofile_Create_Dispatcher(int allocM, const ESL_ALPHABET *abc){
+#ifdef P7_TEST_ALL_SIMD
+ p7_oprofile_Create = p7_oprofile_Create_test_all;
+ return p7_oprofile_Create_test_all(allocM, abc);
+ 
+#endif
 
-  ESL_ALLOC(om->rbv, sizeof(__m128i *) * abc->Kp); 
-  ESL_ALLOC(om->sbv, sizeof(__m128i *) * abc->Kp); 
-  ESL_ALLOC(om->rwv, sizeof(__m128i *) * abc->Kp); 
-  ESL_ALLOC(om->rfv, sizeof(__m128  *) * abc->Kp); 
+#ifdef P7_TEST_SSE_AVX
+ p7_oprofile_Create = p7_oprofile_Create_test_sse_avx;
+ return p7_oprofile_Create_test_sse_avx(allocM, abc);  
+#endif
 
-  /* align vector memory on 16-byte boundaries */
-  om->rbv[0] = (__m128i *) (((unsigned long int) om->rbv_mem + 15) & (~0xf));
-  om->sbv[0] = (__m128i *) (((unsigned long int) om->sbv_mem + 15) & (~0xf));
-  om->rwv[0] = (__m128i *) (((unsigned long int) om->rwv_mem + 15) & (~0xf));
-  om->twv    = (__m128i *) (((unsigned long int) om->twv_mem + 15) & (~0xf));
-  om->rfv[0] = (__m128  *) (((unsigned long int) om->rfv_mem + 15) & (~0xf));
-  om->tfv    = (__m128  *) (((unsigned long int) om->tfv_mem + 15) & (~0xf));
+#ifdef eslENABLE_AVX512  // Fastest first.
+ if (esl_cpu_has_avx512())
+   {
+     p7_oprofile_Create = p7_oprofile_Create_avx512;
+     return p7_oprofile_Create_avx512(allocM, abc);
+   }
+#endif
 
-  /* set the rest of the row pointers for match emissions */
-  for (x = 1; x < abc->Kp; x++) {
-    om->rbv[x] = om->rbv[0] + (x * nqb);
-    om->sbv[x] = om->sbv[0] + (x * nqs);
-    om->rwv[x] = om->rwv[0] + (x * nqw);
-    om->rfv[x] = om->rfv[0] + (x * nqf);
-  }
-  om->allocQ16  = nqb;
-  om->allocQ8   = nqw;
-  om->allocQ4   = nqf;
+#ifdef eslENABLE_AVX
+  if (esl_cpu_has_avx())
+    {
+     p7_oprofile_Create = p7_oprofile_Create_avx;
+     return p7_oprofile_Create_avx(allocM, abc); 
+    }
+#endif
 
-  /* Remaining initializations */
-  om->tbm_b     = 0;
-  om->tec_b     = 0;
-  om->tjb_b     = 0;
-  om->scale_b   = 0.0f;
-  om->base_b    = 0;
-  om->bias_b    = 0;
+#ifdef eslENABLE_SSE
+  if (esl_cpu_has_sse4())
+    {
+      p7_oprofile_Create = p7_oprofile_Create_sse;
+      return p7_oprofile_Create_sse(allocM, abc);
+    }
+#endif
 
-  om->scale_w      = 0.0f;
-  om->base_w       = 0;
-  om->ddbound_w    = 0;
-  om->ncj_roundoff = 0.0f;	
-
-  for (x = 0; x < p7_NOFFSETS; x++) om->offs[x]    = -1;
-  for (x = 0; x < p7_NEVPARAM; x++) om->evparam[x] = p7_EVPARAM_UNSET;
-  for (x = 0; x < p7_NCUTOFFS; x++) om->cutoff[x]  = p7_CUTOFF_UNSET;
-  for (x = 0; x < p7_MAXABET;  x++) om->compo[x]   = p7_COMPO_UNSET;
-
-  om->name      = NULL;
-  om->acc       = NULL;
-  om->desc      = NULL;
-
-  /* in a P7_OPROFILE, we always allocate for the optional RF, CS annotation.  
-   * we only rely on the leading \0 to signal that it's unused, but 
-   * we initialize all this memory to zeros to shut valgrind up about 
-   * fwrite'ing uninitialized memory in the io functions.
-   */
-  ESL_ALLOC(om->rf,          sizeof(char) * (allocM+2));
-  ESL_ALLOC(om->mm,          sizeof(char) * (allocM+2));
-  ESL_ALLOC(om->cs,          sizeof(char) * (allocM+2));
-  ESL_ALLOC(om->consensus,   sizeof(char) * (allocM+2));
-  memset(om->rf,       '\0', sizeof(char) * (allocM+2));
-  memset(om->mm,       '\0', sizeof(char) * (allocM+2));
-  memset(om->cs,       '\0', sizeof(char) * (allocM+2));
-  memset(om->consensus,'\0', sizeof(char) * (allocM+2));
-
-  om->abc        = abc;
-  om->L          = 0;
-  om->M          = 0;
-  om->max_length = -1;
-  om->allocM     = allocM;
-  om->mode       = p7_NO_MODE;
-  om->nj         = 0.0f;
-
-
-  // allocate the AVX bits.  Move this into separate functions when testing done
-   
-  int          nqb_avx = p7O_NQB_AVX(allocM); /* # of uchar vectors needed for query */
-  int          nqw_avx = p7O_NQW_AVX(allocM); /* # of sword vectors needed for query */
-  int          nqf_avx = p7O_NQF_AVX(allocM); /* # of float vectors needed for query */
-  int          nqs_avx = nqb_avx + p7O_EXTRA_SB;
-  om->rbv_mem_avx   = NULL;
-  om->sbv_mem_avx   = NULL;   
-  om->rbv_avx       = NULL;
-  om->sbv_avx       = NULL;
-  om->rwv_mem_avx   = NULL;
-  om->twv_mem_avx   = NULL;
-  om->rwv_avx       = NULL;
-  om->twv_avx       = NULL;
-  om->rfv_mem_avx   = NULL;
-  om->tfv_mem_avx   = NULL;
-  om->rfv_avx       = NULL;
-  om->tfv_avx       = NULL;
-   /* level 1 */
-  ESL_ALLOC(om->rbv_mem_avx, sizeof(__m256i) * nqb_avx  * abc->Kp          +31); /* +31 is for manual 32-byte alignment */
-  ESL_ALLOC(om->sbv_mem_avx, sizeof(__m256i) * nqs_avx  * abc->Kp          +31); 
-  ESL_ALLOC(om->rwv_mem_avx, sizeof(__m256i) * nqw_avx  * abc->Kp          +31);                     
-  ESL_ALLOC(om->twv_mem_avx, sizeof(__m256i) * nqw_avx  * p7O_NTRANS       +31);   
-  ESL_ALLOC(om->rfv_mem_avx, sizeof(__m256)  * nqf_avx  * abc->Kp          +31);                     
-  ESL_ALLOC(om->tfv_mem_avx, sizeof(__m256)  * nqf_avx  * p7O_NTRANS       +31);    
-
-  ESL_ALLOC(om->rbv_avx, sizeof(__m256i *) * abc->Kp); 
-  ESL_ALLOC(om->sbv_avx, sizeof(__m256i *) * abc->Kp); 
-  ESL_ALLOC(om->rwv_avx, sizeof(__m256i *) * abc->Kp); 
-  ESL_ALLOC(om->rfv_avx, sizeof(__m256  *) * abc->Kp); 
-
-  /* align vector memory on 32-byte boundaries */
-
-
-  om->rbv_avx[0] = (__m256i *) (((unsigned long int) om->rbv_mem_avx + 31) & (~0x1f));
-  om->sbv_avx[0] = (__m256i *) (((unsigned long int) om->sbv_mem_avx + 31) & (~0x1f));
-  om->rwv_avx[0] = (__m256i *) (((unsigned long int) om->rwv_mem_avx + 31) & (~0x1f));
-  om->twv_avx    = (__m256i *) (((unsigned long int) om->twv_mem_avx + 31) & (~0x1f));
-  om->rfv_avx[0] = (__m256  *) (((unsigned long int) om->rfv_mem_avx + 31) & (~0x1f));
-  om->tfv_avx    = (__m256  *) (((unsigned long int) om->tfv_mem_avx + 31) & (~0x1f));
-
-
-  /* set the rest of the row pointers for match emissions */
-  for (x = 1; x < abc->Kp; x++) {
-
-    om->rbv_avx[x] = om->rbv_avx[0] + (x * nqb_avx);
-    om->sbv_avx[x] = om->sbv_avx[0] + (x * nqs_avx);
-    om->rwv_avx[x] = om->rwv_avx[0] + (x * nqw_avx);
-    om->rfv_avx[x] = om->rfv_avx[0] + (x * nqf_avx);
-
-  }
-
-  om->allocQ16_avx  = nqb_avx;
-  om->allocQ8_avx   = nqw_avx;
-  om->allocQ4_avx   = nqf_avx;
-
-// allocate the AVX512 bits.  Move this into separate functions when testing done
-   
-  int          nqb_avx512 = p7O_NQB_AVX512(allocM); /* # of uchar vectors needed for query */
-  int          nqw_avx512 = p7O_NQW_AVX512(allocM); /* # of sword vectors needed for query */
-  int          nqf_avx512 = p7O_NQF_AVX512(allocM); /* # of float vectors needed for query */
-  int          nqs_avx512 = nqb_avx512 + p7O_EXTRA_SB;
-  om->rbv_mem_avx512   = NULL;
-  om->sbv_mem_avx512   = NULL;   
-  om->rbv_avx512       = NULL;
-  om->sbv_avx512       = NULL;
-  om->rwv_mem_avx512   = NULL;
-  om->twv_mem_avx512   = NULL;
-  om->rwv_avx512       = NULL;
-  om->twv_avx512       = NULL;
-  om->rfv_mem_avx512   = NULL;
-  om->tfv_mem_avx512   = NULL;
-  om->rfv_avx512       = NULL;
-  om->tfv_avx512       = NULL;
-   /* level 1 */
-  ESL_ALLOC(om->rbv_mem_avx512, sizeof(__m512i) * nqb_avx512  * abc->Kp          +63);
-  /* +63 is for manual 32-byte alignment */
-  ESL_ALLOC(om->sbv_mem_avx512, sizeof(__m512i) * nqs_avx512  * abc->Kp          +63); 
-  ESL_ALLOC(om->rwv_mem_avx512, sizeof(__m512i) * nqw_avx512  * abc->Kp          +63); 
-  ESL_ALLOC(om->twv_mem_avx512, sizeof(__m512i) * nqw_avx512  * p7O_NTRANS       +63);   
-  ESL_ALLOC(om->rfv_mem_avx512, sizeof(__m512)  * nqf_avx512  * abc->Kp          +63);
-  ESL_ALLOC(om->tfv_mem_avx512, sizeof(__m512)  * nqf_avx512  * p7O_NTRANS       +63);
-
-  ESL_ALLOC(om->rbv_avx512, sizeof(__m512i *) * abc->Kp); 
-  ESL_ALLOC(om->sbv_avx512, sizeof(__m512i *) * abc->Kp); 
-  ESL_ALLOC(om->rwv_avx512, sizeof(__m512i *) * abc->Kp); 
-  ESL_ALLOC(om->rfv_avx512, sizeof(__m512  *) * abc->Kp); 
-  /* align vector memory on 32-byte boundaries */
-
-
-  om->rbv_avx512[0] = (__m512i *) (((unsigned long int) om->rbv_mem_avx512 + 63) & (~0x3f));
-  om->sbv_avx512[0] = (__m512i *) (((unsigned long int) om->sbv_mem_avx512 + 63) & (~0x3f));
-  om->rwv_avx512[0] = (__m512i *) (((unsigned long int) om->rwv_mem_avx512 + 63) & (~0x3f));
-  om->twv_avx512    = (__m512i *) (((unsigned long int) om->twv_mem_avx512 + 63) & (~0x3f));
-  om->rfv_avx512[0] = (__m512  *) (((unsigned long int) om->rfv_mem_avx512 + 63) & (~0x3f));
-  om->tfv_avx512    = (__m512  *) (((unsigned long int) om->tfv_mem_avx512 + 63) & (~0x3f));
-
-
-  /* set the rest of the row pointers for match emissions */
-  for (x = 1; x < abc->Kp; x++) {
-
-    om->rbv_avx512[x] = om->rbv_avx512[0] + (x * nqb_avx512);
-    om->sbv_avx512[x] = om->sbv_avx512[0] + (x * nqs_avx512);
-    om->rwv_avx512[x] = om->rwv_avx512[0] + (x * nqw_avx512);
-    om->rfv_avx512[x] = om->rfv_avx512[0] + (x * nqf_avx512);
-  
-  }
-
-  om->allocQ16_avx512  = nqb_avx512;
-  om->allocQ8_avx512   = nqw_avx512;
-  om->allocQ4_avx512   = nqf_avx512;
-
-  /* Remaining initializations */
-  om->tbm_b     = 0;
-  om->tec_b     = 0;
-  om->tjb_b     = 0;
-  om->scale_b   = 0.0f;
-  om->base_b    = 0;
-  om->bias_b    = 0;
-
-  om->scale_w      = 0.0f;
-  om->base_w       = 0;
-  om->ddbound_w    = 0;
-  om->ncj_roundoff = 0.0f;	
-
-  for (x = 0; x < p7_NOFFSETS; x++) om->offs[x]    = -1;
-  for (x = 0; x < p7_NEVPARAM; x++) om->evparam[x] = p7_EVPARAM_UNSET;
-  for (x = 0; x < p7_NCUTOFFS; x++) om->cutoff[x]  = p7_CUTOFF_UNSET;
-  for (x = 0; x < p7_MAXABET;  x++) om->compo[x]   = p7_COMPO_UNSET;
-
-  return om;
-
- ERROR:
-  p7_oprofile_Destroy(om);
-  return NULL;
+  p7_Die("p7_oprofile_Create_dispatcher found no vector implementation - that shouldn't happen.");
+  return(NULL);
 }
+
 
 /* Function:  p7_oprofile_IsLocal()
  * Synopsis:  Returns TRUE if profile is in local alignment mode.
  * Incept:    SRE, Sat Aug 16 08:46:00 2008 [Janelia]
  */
+//This function does not need separate versions for different x86 SIMD ISAs
 int
 p7_oprofile_IsLocal(const P7_OPROFILE *om)
 {
@@ -307,62 +103,48 @@ p7_oprofile_IsLocal(const P7_OPROFILE *om)
  * Synopsis:  Frees an optimized profile structure.
  * Incept:    SRE, Sun Nov 25 12:22:21 2007 [Casa de Gatos]
  */
-void
-p7_oprofile_Destroy(P7_OPROFILE *om)
+static void p7_oprofile_Destroy_Dispatcher(P7_OPROFILE *om);
+
+void (*p7_oprofile_Destroy)(P7_OPROFILE *om) = p7_oprofile_Destroy_Dispatcher;
+
+void p7_oprofile_Destroy_Dispatcher(P7_OPROFILE *om)
 {
-  if (om == NULL) return;
-
-  if (om->clone == 0)
-    {
-      if (om->rbv_mem   != NULL) free(om->rbv_mem);
-      if (om->sbv_mem   != NULL) free(om->sbv_mem);
-      if (om->rwv_mem   != NULL) free(om->rwv_mem);
-      if (om->twv_mem   != NULL) free(om->twv_mem);
-      if (om->rfv_mem   != NULL) free(om->rfv_mem);
-      if (om->tfv_mem   != NULL) free(om->tfv_mem);
-      if (om->rbv       != NULL) free(om->rbv);
-      if (om->sbv       != NULL) free(om->sbv);
-      if (om->rwv       != NULL) free(om->rwv);
-      if (om->rfv       != NULL) free(om->rfv);
-      if (om->name      != NULL) free(om->name);
-      if (om->acc       != NULL) free(om->acc);
-      if (om->desc      != NULL) free(om->desc);
-      if (om->rf        != NULL) free(om->rf);
-      if (om->mm        != NULL) free(om->mm);
-      if (om->cs        != NULL) free(om->cs);
-      if (om->consensus != NULL) free(om->consensus);
-    }
-
-  //avx part.  move into separate function once filters verified working
-  if (! om->clone)
-    {
-      if (om->rbv_mem_avx)   free(om->rbv_mem_avx);
-      if (om->sbv_mem_avx)   free(om->sbv_mem_avx);    
-      if (om->rwv_mem_avx)   free(om->rwv_mem_avx);
-      if (om->twv_mem_avx)   free(om->twv_mem_avx);
-         if (om->rfv_mem_avx)   free(om->rfv_mem_avx);
-      if (om->tfv_mem_avx)   free(om->tfv_mem_avx);
+#ifdef P7_TEST_ALL_SIMD
+ p7_oprofile_Destroy = p7_oprofile_Destroy_test_all;
+ p7_oprofile_Destroy_test_all(om);
  
-      if (om->rbv_avx)       free(om->rbv_avx);
-      if (om->sbv_avx)       free(om->sbv_avx);
-      if (om->rwv_avx)       free(om->rwv_avx);
-      if (om->rfv_avx)       free(om->rfv_avx);
-    }
-  if (! om->clone)
-    {
-      if (om->rbv_mem_avx512)   free(om->rbv_mem_avx512);
-      if (om->sbv_mem_avx512)   free(om->sbv_mem_avx512);
-      if (om->rwv_mem_avx512)   free(om->rwv_mem_avx512);
-      if (om->twv_mem_avx512)   free(om->twv_mem_avx512);
-      if (om->rfv_mem_avx512)   free(om->rfv_mem_avx512);
-      if (om->tfv_mem_avx512)   free(om->tfv_mem_avx512);
+#endif
 
-      if (om->rbv_avx512)       free(om->rbv_avx512);
-      if (om->sbv_avx512)       free(om->sbv_avx512);
-      if (om->rwv_avx512)       free(om->rwv_avx512);
-      if (om->rfv_avx512)       free(om->rfv_avx512);
+#ifdef P7_TEST_SSE_AVX
+ p7_oprofile_Destroy = p7_oprofile_Destroy_test_sse_avx;
+ p7_oprofile_Destroy_test_sse_avx(om);  
+#endif
+
+#ifdef eslENABLE_AVX512  // Fastest first.
+ if (esl_cpu_has_avx512())
+   {
+     p7_oprofile_Destroy = p7_oprofile_Destroy_avx512;
+     p7_oprofile_Destroy_avx512(om);
+   }
+#endif
+
+#ifdef eslENABLE_AVX
+  if (esl_cpu_has_avx())
+    {
+     p7_oprofile_Destroy = p7_oprofile_Destroy_avx;
+     p7_oprofile_Destroy_avx(om); 
     }
-  free(om);
+#endif
+
+#ifdef eslENABLE_SSE
+  if (esl_cpu_has_sse4())
+    {
+      p7_oprofile_Destroy = p7_oprofile_Destroy_sse;
+      p7_oprofile_Destroy_sse(om);
+    }
+#endif
+
+  p7_Die("p7_oprofile_Destroy_dispatcher found no vector implementation - that shouldn't happen.");
 }
 
 /* Function:  p7_oprofile_Sizeof()
@@ -372,363 +154,108 @@ p7_oprofile_Destroy(P7_OPROFILE *om)
  * Purpose:   Returns the allocated size of a <P7_OPROFILE>,
  *            in bytes.
  */
-size_t
-p7_oprofile_Sizeof(P7_OPROFILE *om)
-{
-  size_t n   = 0;
-  int    nqb = om->allocQ16;	/* # of uchar vectors needed for query */
-  int    nqw = om->allocQ8;     /* # of sword vectors needed for query */
-  int    nqf = om->allocQ4;     /* # of float vectors needed for query */
-  int    nqs = nqb + p7O_EXTRA_SB;
 
-  /* Stuff below exactly mirrors the malloc()'s in
-   * p7_oprofile_Create(); so even though we could
-   * write this more compactly, leave it like this
-   * w/ one:one correspondence to _Create(), for
-   * maintainability and clarity.
-   */
-  n  += sizeof(P7_OPROFILE);
-  n  += sizeof(__m128i) * nqb  * om->abc->Kp +15; /* om->rbv_mem   */
-  n  += sizeof(__m128i) * nqs  * om->abc->Kp +15; /* om->sbv_mem   */
-  n  += sizeof(__m128i) * nqw  * om->abc->Kp +15; /* om->rwv_mem   */
-  n  += sizeof(__m128i) * nqw  * p7O_NTRANS  +15; /* om->twv_mem   */
-  n  += sizeof(__m128)  * nqf  * om->abc->Kp +15; /* om->rfv_mem   */
-  n  += sizeof(__m128)  * nqf  * p7O_NTRANS  +15; /* om->tfv_mem   */
-  
-  n  += sizeof(__m128i *) * om->abc->Kp;          /* om->rbv       */
-  n  += sizeof(__m128i *) * om->abc->Kp;          /* om->sbv       */
-  n  += sizeof(__m128i *) * om->abc->Kp;          /* om->rwv       */
-  n  += sizeof(__m128  *) * om->abc->Kp;          /* om->rfv       */
-  
-  n  += sizeof(char) * (om->allocM+2);            /* om->rf        */
-  n  += sizeof(char) * (om->allocM+2);            /* om->mm        */
-  n  += sizeof(char) * (om->allocM+2);            /* om->cs        */
-  n  += sizeof(char) * (om->allocM+2);            /* om->consensus */
+size_t p7_oprofile_Sizeof_Dispatcher(P7_OPROFILE *om);
 
-  // avx part, move into separate function once filters working.
-  /* Stuff below exactly mirrors the malloc()'s in
-   * p7_oprofile_Create(); so even though we could
-   * write this more compactly, leave it like this
-   * w/ one:one correspondence to _Create(), for
-   * maintainability and clarity.
-   */
-  int    nqb_avx = om->allocQ16_avx;  /* # of uchar vectors needed for query */
-  int    nqw_avx = om->allocQ8_avx;     /* # of sword vectors needed for query */
-  int    nqf_avx = om->allocQ4_avx;     /* # of float vectors needed for query */
-  int    nqs_avx = nqb_avx + p7O_EXTRA_SB;
+size_t (*p7_oprofile_Sizeof)(P7_OPROFILE *om) = p7_oprofile_Sizeof_Dispatcher;
 
-  n  += sizeof(__m256i) * nqb_avx  * om->abc->Kp +31; /* om->rbv_mem_avx   */
-  n  += sizeof(__m256i) * nqs_avx  * om->abc->Kp +31; /* om->sbv_mem_avx   */
-  n  += sizeof(__m256i) * nqw_avx  * om->abc->Kp +31; /* om->rwv_mem_avx   */
-  n  += sizeof(__m256i) * nqw_avx  * p7O_NTRANS  +31; /* om->twv_mem_avx   */
-  n  += sizeof(__m256)  * nqf_avx  * om->abc->Kp +31; /* om->rfv_mem_avx   */
-  n  += sizeof(__m256)  * nqf_avx  * p7O_NTRANS  +31; /* om->tfv_mem_avx  */
-  
-  n  += sizeof(__m256i *) * om->abc->Kp;          /* om->rbv_avx       */
-  n  += sizeof(__m256i *) * om->abc->Kp;          /* om->sbv_avx       */
-  n  += sizeof(__m256i *) * om->abc->Kp;          /* om->rwv_avx       */
-   n  += sizeof(__m256  *) * om->abc->Kp;          /* om->rfv_avx       */
+size_t p7_oprofile_Sizeof_Dispatcher(P7_OPROFILE *om){
+#ifdef P7_TEST_ALL_SIMD
+ p7_oprofile_Sizeof = p7_oprofile_Sizeof_test_all;
+ return p7_oprofile_Sizeof_test_all(om);
+ 
+#endif
 
+#ifdef P7_TEST_SSE_AVX
+ p7_oprofile_Sizeof = p7_oprofile_Sizeof_test_sse_avx;
+ return p7_oprofile_Sizeof_test_sse_avx(om);  
+#endif
 
-  int    nqb_avx512 = om->allocQ16_avx512;  /* # of uchar vectors needed for query */
-  int    nqw_avx512 = om->allocQ8_avx512;     /* # of sword vectors needed for query */
-  int    nqf_avx512 = om->allocQ4_avx512;     /* # of float vectors needed for query */
-  int    nqs_avx512 = nqb_avx512 + p7O_EXTRA_SB;
+#ifdef eslENABLE_AVX512  // Fastest first.
+ if (esl_cpu_has_avx512())
+   {
+     p7_oprofile_Sizeof = p7_oprofile_Sizeof_avx512;
+     return p7_oprofile_Sizeof_avx512(om);
+   }
+#endif
 
+#ifdef eslENABLE_AVX
+  if (esl_cpu_has_avx())
+    {
+     p7_oprofile_Sizeof = p7_oprofile_Sizeof_avx;
+     return p7_oprofile_Sizeof_avx(om); 
+    }
+#endif
 
+#ifdef eslENABLE_SSE
+  if (esl_cpu_has_sse4())
+    {
+      p7_oprofile_Sizeof = p7_oprofile_Sizeof_sse;
+      return p7_oprofile_Sizeof_sse(om);
+    }
+#endif
 
-
-   n  += sizeof(__m512i) * nqb_avx512  * om->abc->Kp +31; /* om->rbv_mem_avx   */
-  n  += sizeof(__m512i) * nqs_avx512  * om->abc->Kp +31; /* om->sbv_mem_avx   */
-  n  += sizeof(__m512i) * nqw_avx512  * om->abc->Kp +31; /* om->rwv_mem_avx   */
-  n  += sizeof(__m512i) * nqw_avx512  * p7O_NTRANS  +31; /* om->twv_mem_avx   */
-  n  += sizeof(__m512)  * nqf_avx512  * om->abc->Kp +31; /* om->rfv_mem_avx   */
-  n  += sizeof(__m512)  * nqf_avx512  * p7O_NTRANS  +31; /* om->tfv_mem_avx  */
-  
-  n  += sizeof(__m512i *) * om->abc->Kp;          /* om->rbv_avx       */
-  n  += sizeof(__m512i *) * om->abc->Kp;          /* om->sbv_avx       */
-  n  += sizeof(__m512i *) * om->abc->Kp;          /* om->rwv_avx       */
-   n  += sizeof(__m512  *) * om->abc->Kp;          /* om->rfv_avx       */
-  return n;
+  p7_Die("p7_oprofile_Sizeof_dispatcher found no vector implementation - that shouldn't happen.");
+  return -1;
 }
 
 
+
 /* TODO: this is not following the _Copy interface guidelines; it's a _Clone */
-/* TODO: its documentation header is a cut/paste of _Create; FIXME */
 /* Function:  p7_oprofile_Copy()
- * Synopsis:  Allocate an optimized profile structure.
+ * Synopsis:  Perform a full copy of a P7_Oprofile structure
  * Incept:    SRE, Sun Nov 25 12:03:19 2007 [Casa de Gatos]
  *
- * Purpose:   Allocate for profiles of up to <allocM> nodes for digital alphabet <abc>.
+ * Purpose:   Creates a copy of the input data structure.
  *
  * Throws:    <NULL> on allocation error.
  */
-P7_OPROFILE *
-p7_oprofile_Copy(P7_OPROFILE *om1)
-{
-  int           x, y;
-  int           status;
+static P7_OPROFILE * p7_oprofile_Copy_Dispatcher(P7_OPROFILE *om1);
 
-  int           nqb  = p7O_NQB(om1->allocM); /* # of uchar vectors needed for query */
-  int           nqw  = p7O_NQW(om1->allocM); /* # of sword vectors needed for query */
-  int           nqf  = p7O_NQF(om1->allocM); /* # of float vectors needed for query */
-  int           nqs  = nqb + p7O_EXTRA_SB;
+P7_OPROFILE * (*p7_oprofile_Copy)(P7_OPROFILE *om1)= p7_oprofile_Copy_Dispatcher;
 
-  size_t        size = sizeof(char) * (om1->allocM+2);
-
-  P7_OPROFILE  *om2  = NULL;
-  
-  const ESL_ALPHABET *abc = om1->abc;
-
-  /* level 0 */
-  ESL_ALLOC(om2, sizeof(P7_OPROFILE));
-  om2->rbv_mem = NULL;
-  om2->sbv_mem = NULL;
-  om2->rwv_mem = NULL;
-  om2->twv_mem = NULL;
-  om2->rfv_mem = NULL;
-  om2->tfv_mem = NULL;
-  om2->rbv     = NULL;
-  om2->sbv     = NULL;
-  om2->rwv     = NULL;
-  om2->twv     = NULL;
-  om2->rfv     = NULL;
-  om2->tfv     = NULL;
-
-  /* level 1 */
-  ESL_ALLOC(om2->rbv_mem, sizeof(__m128i) * nqb  * abc->Kp    +15);	/* +15 is for manual 16-byte alignment */
-  ESL_ALLOC(om2->sbv_mem, sizeof(__m128i) * nqs  * abc->Kp    +15);
-  ESL_ALLOC(om2->rwv_mem, sizeof(__m128i) * nqw  * abc->Kp    +15);                     
-  ESL_ALLOC(om2->twv_mem, sizeof(__m128i) * nqw  * p7O_NTRANS +15);   
-  ESL_ALLOC(om2->rfv_mem, sizeof(__m128)  * nqf  * abc->Kp    +15);                     
-  ESL_ALLOC(om2->tfv_mem, sizeof(__m128)  * nqf  * p7O_NTRANS +15);    
-
-  ESL_ALLOC(om2->rbv, sizeof(__m128i *) * abc->Kp); 
-  ESL_ALLOC(om2->sbv, sizeof(__m128i *) * abc->Kp); 
-  ESL_ALLOC(om2->rwv, sizeof(__m128i *) * abc->Kp); 
-  ESL_ALLOC(om2->rfv, sizeof(__m128  *) * abc->Kp); 
-
-  /* align vector memory on 16-byte boundaries */
-  om2->rbv[0] = (__m128i *) (((unsigned long int) om2->rbv_mem + 15) & (~0xf));
-  om2->sbv[0] = (__m128i *) (((unsigned long int) om2->sbv_mem + 15) & (~0xf));
-  om2->rwv[0] = (__m128i *) (((unsigned long int) om2->rwv_mem + 15) & (~0xf));
-  om2->twv    = (__m128i *) (((unsigned long int) om2->twv_mem + 15) & (~0xf));
-  om2->rfv[0] = (__m128  *) (((unsigned long int) om2->rfv_mem + 15) & (~0xf));
-  om2->tfv    = (__m128  *) (((unsigned long int) om2->tfv_mem + 15) & (~0xf));
-
-  /* copy the vector data */
-  memcpy(om2->rbv[0], om1->rbv[0], sizeof(__m128i) * nqb  * abc->Kp);
-  memcpy(om2->sbv[0], om1->sbv[0], sizeof(__m128i) * nqs  * abc->Kp);
-  memcpy(om2->rwv[0], om1->rwv[0], sizeof(__m128i) * nqw  * abc->Kp);
-  memcpy(om2->rfv[0], om1->rfv[0], sizeof(__m128i) * nqf  * abc->Kp);
-
-  /* set the rest of the row pointers for match emissions */
-  for (x = 1; x < abc->Kp; x++) {
-    om2->rbv[x] = om2->rbv[0] + (x * nqb);
-    om2->sbv[x] = om2->sbv[0] + (x * nqs);
-    om2->rwv[x] = om2->rwv[0] + (x * nqw);
-    om2->rfv[x] = om2->rfv[0] + (x * nqf);
-  }
-  om2->allocQ16  = nqb;
-  om2->allocQ8   = nqw;
-  om2->allocQ4   = nqf;
-
-  /* Remaining initializations */
-  om2->tbm_b     = om1->tbm_b;
-  om2->tec_b     = om1->tec_b;
-  om2->tjb_b     = om1->tjb_b;
-  om2->scale_b   = om1->scale_b;
-  om2->base_b    = om1->base_b;
-  om2->bias_b    = om1->bias_b;
-
-  om2->scale_w      = om1->scale_w;
-  om2->base_w       = om1->base_w;
-  om2->ddbound_w    = om1->ddbound_w;
-  om2->ncj_roundoff = om1->ncj_roundoff;	
-
-  for (x = 0; x < p7_NOFFSETS; x++) om2->offs[x]    = om1->offs[x];
-  for (x = 0; x < p7_NEVPARAM; x++) om2->evparam[x] = om1->evparam[x];
-  for (x = 0; x < p7_NCUTOFFS; x++) om2->cutoff[x]  = om1->cutoff[x];
-  for (x = 0; x < p7_MAXABET;  x++) om2->compo[x]   = om1->compo[x];
-
-  for (x = 0; x < nqw  * p7O_NTRANS; ++x) om2->twv[x] = om1->twv[x];
-  for (x = 0; x < nqf  * p7O_NTRANS; ++x) om2->tfv[x] = om1->tfv[x];
-
-  for (x = 0; x < p7O_NXSTATES; x++)
-    for (y = 0; y < p7O_NXTRANS; y++)
-      {
-	om2->xw[x][y] = om1->xw[x][y];
-	om2->xf[x][y] = om1->xf[x][y];
-      }
-
-  if ((status = esl_strdup(om1->name, -1, &om2->name)) != eslOK) goto ERROR;
-  if ((status = esl_strdup(om1->acc,  -1, &om2->acc))  != eslOK) goto ERROR;
-  if ((status = esl_strdup(om1->desc, -1, &om2->desc)) != eslOK) goto ERROR;
-
-  /* in a P7_OPROFILE, we always allocate for the optional RF, CS annotation.  
-   * we only rely on the leading \0 to signal that it's unused, but 
-   * we initialize all this memory to zeros to shut valgrind up about 
-   * fwrite'ing uninitialized memory in the io functions.
-   */
-  ESL_ALLOC(om2->rf,          size);
-  ESL_ALLOC(om2->mm,          size);
-  ESL_ALLOC(om2->cs,          size);
-  ESL_ALLOC(om2->consensus,   size);
-
-  memcpy(om2->rf,        om1->rf,        size);
-  memcpy(om2->mm,        om1->mm,        size);
-  memcpy(om2->cs,        om1->cs,        size);
-  memcpy(om2->consensus, om1->consensus, size);
-
-  om2->abc       = om1->abc;
-  om2->L         = om1->L;
-  om2->M         = om1->M;
-  om2->allocM    = om1->allocM;
-  om2->mode      = om1->mode;
-  om2->nj        = om1->nj;
-  om2->max_length   = om1->max_length;
-
-  om2->clone     = om1->clone;
-
-  //AVX part, move into separate function 
-   int           nqb_avx  =p7O_NQB_AVX(om1->allocM); /* # of uchar vectors needed for query */
-  int           nqw_avx  = p7O_NQW_AVX(om1->allocM); /* # of sword vectors needed for query */
-  int           nqf_avx  = p7O_NQF_AVX(om1->allocM); /* # of float vectors needed for query */
-  int           nqs_avx  = nqb_avx + p7O_EXTRA_SB;
-    om2->rbv_mem_avx   = NULL;
-  om2->sbv_mem_avx   = NULL;
-  om2->rwv_mem_avx   = NULL;
-  om2->twv_mem_avx   = NULL;
-   om2->rfv_mem_avx   = NULL;
-  om2->tfv_mem_avx   = NULL;
-  
-  om2->rbv_avx       = NULL;
-  om2->sbv_avx       = NULL; 
-  om2->rwv_avx       = NULL;
-  om2->twv_avx       = NULL;
-    om2->rfv_avx       = NULL;
-  om2->tfv_avx       = NULL;
-
-   /* level 1 */
+P7_OPROFILE * p7_oprofile_Copy_Dispatcher(P7_OPROFILE *om1){
+#ifdef P7_TEST_ALL_SIMD
+ p7_oprofile_Copy = p7_oprofile_Copy_test_all;
+ return p7_oprofile_Copy_test_all(om1);
  
-  ESL_ALLOC(om2->rbv_mem_avx, sizeof(__m256i) * nqb_avx  * abc->Kp    +31); /* +31 is for manual 32-byte alignment */
-  ESL_ALLOC(om2->sbv_mem_avx, sizeof(__m256i) * nqs_avx  * abc->Kp    +31);
-  ESL_ALLOC(om2->rwv_mem_avx, sizeof(__m256i) * nqw_avx  * abc->Kp    +31);                     
-  ESL_ALLOC(om2->twv_mem_avx, sizeof(__m256i) * nqw_avx  * p7O_NTRANS +31);  
-   ESL_ALLOC(om2->rfv_mem_avx, sizeof(__m256)  * nqf_avx  * abc->Kp    +31);                     
-  ESL_ALLOC(om2->tfv_mem_avx, sizeof(__m256)  * nqf_avx  * p7O_NTRANS +31);     
+#endif
 
-  ESL_ALLOC(om2->rbv_avx, sizeof(__m256i *) * abc->Kp); 
-  ESL_ALLOC(om2->sbv_avx, sizeof(__m256i *) * abc->Kp);
-  ESL_ALLOC(om2->rwv_avx, sizeof(__m256i *) * abc->Kp);  
-    ESL_ALLOC(om2->rfv_avx, sizeof(__m256  *) * abc->Kp); 
+#ifdef P7_TEST_SSE_AVX
+ p7_oprofile_Copy = p7_oprofile_Copy_test_sse_avx;
+ return p7_oprofile_Copy_test_sse_avx(om1);  
+#endif
 
-  /* align vector memory on vector size boundaries */
+#ifdef eslENABLE_AVX512  // Fastest first.
+ if (esl_cpu_has_avx512())
+   {
+     p7_oprofile_Copy = p7_oprofile_Copy_avx512;
+     return p7_oprofile_Copy_avx512(om1);
+   }
+#endif
 
-  om2->rbv_avx[0] = (__m256i *) (((unsigned long int) om2->rbv_mem_avx + 31) & (~0x1f));
-  om2->sbv_avx[0] = (__m256i *) (((unsigned long int) om2->sbv_mem_avx + 31) & (~0x1f));
-  memcpy(om2->rbv_avx[0], om1->rbv_avx[0], sizeof(__m256i) * nqb_avx  * abc->Kp);
-  memcpy(om2->sbv_avx[0], om1->sbv_avx[0], sizeof(__m256i) * nqs_avx  * abc->Kp);
-  om2->rwv_avx[0] = (__m256i *) (((unsigned long int) om2->rwv_mem_avx + 31) & (~0x1f));
-  om2->twv_avx    = (__m256i *) (((unsigned long int) om2->twv_mem_avx + 31) & (~0x1f));
-  memcpy(om2->rwv_avx[0], om1->rwv_avx[0], sizeof(__m256i) * nqw_avx  * abc->Kp);
-  om2->rfv_avx[0] = (__m256  *) (((unsigned long int) om2->rfv_mem_avx + 31) & (~0x1f));
-  om2->tfv_avx    = (__m256  *) (((unsigned long int) om2->tfv_mem_avx + 31) & (~0x1f));
+#ifdef eslENABLE_AVX
+  if (esl_cpu_has_avx())
+    {
+     p7_oprofile_Copy = p7_oprofile_Copy_avx;
+     return p7_oprofile_Copy_avx(om1); 
+    }
+#endif
 
-  /* copy the vector data */
+#ifdef eslENABLE_SSE
+  if (esl_cpu_has_sse4())
+    {
+      p7_oprofile_Copy = p7_oprofile_Copy_sse;
+      return p7_oprofile_Copy_sse(om1);
+    }
+#endif
 
- 
-  memcpy(om2->rfv_avx[0], om1->rfv_avx[0], sizeof(__m256i) * nqf_avx  * abc->Kp);
-/* set the rest of the row pointers for match emissions */
-  for (x = 1; x < abc->Kp; x++) {
- 
-    om2->rbv_avx[x] = om2->rbv_avx[0] + (x * nqb_avx);
-    om2->sbv_avx[x] = om2->sbv_avx[0] + (x * nqs_avx);
-    om2->rwv_avx[x] = om2->rwv_avx[0] + (x * nqw_avx);
-    om2->rfv_avx[x] = om2->rfv_avx[0] + (x * nqf_avx);
- 
-  }
-  
-  om2->allocQ16_avx  = nqb_avx;
-  om2->allocQ8_avx   = nqw_avx;
-  om2->allocQ4_avx   = nqf_avx;
-    for (x = 0; x < nqw_avx  * p7O_NTRANS; ++x) om2->twv_avx[x] = om1->twv_avx[x];
-  for (x = 0; x < nqf_avx  * p7O_NTRANS; ++x) om2->tfv_avx[x] = om1->tfv_avx[x];
-  //AVX512 part, move into separate function 
-  int           nqb_avx512  =p7O_NQB_AVX512(om1->allocM); /* # of uchar vectors needed for query */
-  int           nqw_avx512  = p7O_NQW_AVX512(om1->allocM); /* # of sword vectors needed for query */
-  int           nqf_avx512  = p7O_NQF_AVX512(om1->allocM); /* # of float vectors needed for query */
-  int           nqs_avx512  = nqb_avx512 + p7O_EXTRA_SB;
-  om2->rbv_mem_avx512   = NULL;
-  om2->sbv_mem_avx512   = NULL;
-  om2->rwv_mem_avx512   = NULL;
-  om2->twv_mem_avx512   = NULL;
-  om2->rfv_mem_avx512   = NULL;
-  om2->tfv_mem_avx512   = NULL;
-  
-  om2->rbv_avx512       = NULL;
-  om2->sbv_avx512       = NULL; 
-  om2->rwv_avx512       = NULL;
-  om2->twv_avx512       = NULL;
-    om2->rfv_avx512       = NULL;
-  om2->tfv_avx512       = NULL;
-
-   /* level 1 */
- 
-  ESL_ALLOC(om2->rbv_mem_avx512, sizeof(__m512i) * nqb_avx512  * abc->Kp    +63);
-  /* +63 is for manual 32-byte alignment */
-  ESL_ALLOC(om2->sbv_mem_avx512, sizeof(__m512i) * nqs_avx512  * abc->Kp    +63);
-  ESL_ALLOC(om2->rwv_mem_avx512, sizeof(__m512i) * nqw_avx512  * abc->Kp    +63);  
-  ESL_ALLOC(om2->twv_mem_avx512, sizeof(__m512i) * nqw_avx512  * p7O_NTRANS +63);  
-  ESL_ALLOC(om2->rfv_mem_avx512, sizeof(__m512)  * nqf_avx512  * abc->Kp    +63);
-  ESL_ALLOC(om2->tfv_mem_avx512, sizeof(__m512)  * nqf_avx512  * p7O_NTRANS +63);     
-
-  ESL_ALLOC(om2->rbv_avx512, sizeof(__m512i *) * abc->Kp); 
-  ESL_ALLOC(om2->sbv_avx512, sizeof(__m512i *) * abc->Kp);
-  ESL_ALLOC(om2->rwv_avx512, sizeof(__m512i *) * abc->Kp);  
-  ESL_ALLOC(om2->rfv_avx512, sizeof(__m512  *) * abc->Kp); 
-
-  /* align vector memory on vector size boundaries */
-
-  om2->rbv_avx512[0] = (__m512i *) (((unsigned long int) om2->rbv_mem_avx512 + 63) & (~0x3f));
-  om2->sbv_avx512[0] = (__m512i *) (((unsigned long int) om2->sbv_mem_avx512 + 63) & (~0x3f));
-  memcpy(om2->rbv_avx512[0], om1->rbv_avx512[0], sizeof(__m512i) * nqb_avx  * abc->Kp);
-  memcpy(om2->sbv_avx512[0], om1->sbv_avx512[0], sizeof(__m512i) * nqs_avx  * abc->Kp);
-  om2->rwv_avx512[0] = (__m512i *) (((unsigned long int) om2->rwv_mem_avx512 + 63) & (~0x3f));
-  om2->twv_avx512    = (__m512i *) (((unsigned long int) om2->twv_mem_avx512 + 63) & (~0x3f));
-  memcpy(om2->rwv_avx512[0], om1->rwv_avx512[0], sizeof(__m512i) * nqw_avx512  * abc->Kp);
-  om2->rfv_avx512[0] = (__m512  *) (((unsigned long int) om2->rfv_mem_avx512 + 63) & (~0x3f));
-  om2->tfv_avx512    = (__m512  *) (((unsigned long int) om2->tfv_mem_avx512 + 63) & (~0x3f));
-
-  /* copy the vector data */
-
- 
-  memcpy(om2->rfv_avx512[0], om1->rfv_avx512[0], sizeof(__m512i) * nqf_avx512  * abc->Kp);
-/* set the rest of the row pointers for match emissions */
-  for (x = 1; x < abc->Kp; x++) {
- 
-    om2->rbv_avx512[x] = om2->rbv_avx512[0] + (x * nqb_avx512);
-    om2->sbv_avx512[x] = om2->sbv_avx512[0] + (x * nqs_avx512);
-    om2->rwv_avx512[x] = om2->rwv_avx512[0] + (x * nqw_avx512);
-    om2->rfv_avx512[x] = om2->rfv_avx512[0] + (x * nqf_avx512);
- 
-  }
-  
-  om2->allocQ16_avx512  = nqb_avx512;
-  om2->allocQ8_avx512   = nqw_avx512;
-  om2->allocQ4_avx512   = nqf_avx512;
-    for (x = 0; x < nqw_avx512  * p7O_NTRANS; ++x) om2->twv_avx512[x] = om1->twv_avx512[x];
-  for (x = 0; x < nqf_avx512  * p7O_NTRANS; ++x) om2->tfv_avx512[x] = om1->tfv_avx512[x];
-
-  return om2;
-
- ERROR:
-  p7_oprofile_Destroy(om2);
+  p7_Die("p7_oprofile_Copy_dispatcher found no vector implementation - that shouldn't happen.");
   return NULL;
 }
 
 /* Function:  p7_oprofile_Clone()
- * Synopsis:  Allocate a cloned copy of the optimized profile structure.  All
+ * Synopsis:  Allocate a cloned copy of  the optimized profile structure.  All
  *            allocated memory from the original profile is not reallocated.
  *            The cloned copy will point to the same memory as the original.
  * Incept:    SRE, Sun Nov 25 12:03:19 2007 [Casa de Gatos]
@@ -737,6 +264,8 @@ p7_oprofile_Copy(P7_OPROFILE *om1)
  *
  * Throws:    <NULL> on allocation error.
  */
+
+//This function does not require variants for each of the x86 SIMD ISAs
 P7_OPROFILE *
 p7_oprofile_Clone(const P7_OPROFILE *om1)
 {
@@ -773,56 +302,53 @@ p7_oprofile_Clone(const P7_OPROFILE *om1)
  *                              p7_oprofile_GetFwdEmissionArray() ).
  *            sc_arr            Preallocated array of at least Kp*4 floats
  */
+
+static int p7_oprofile_UpdateFwdEmissionScores_Dispatcher(P7_OPROFILE *om, P7_BG *bg, float *fwd_emissions, float *sc_arr);
+
+
 int
-p7_oprofile_UpdateFwdEmissionScores(P7_OPROFILE *om, P7_BG *bg, float *fwd_emissions, float *sc_arr)
-{
-  int     M   = om->M;    /* length of the query                                          */
-  int     k, q, x, z;
-  int     nq  = p7O_NQF(M);     /* segment length; total # of striped vectors needed            */
-  int     K   = om->abc->K;
-  int     Kp  = om->abc->Kp;
-  union   { __m128 v; float x[4]; } tmp; /* used to align and load simd minivectors               */
+(* p7_oprofile_UpdateFwdEmissionScores)(P7_OPROFILE *om, P7_BG *bg, float *fwd_emissions, float *sc_arr) = p7_oprofile_UpdateFwdEmissionScores_Dispatcher;
 
+static int p7_oprofile_UpdateFwdEmissionScores_Dispatcher(P7_OPROFILE *om, P7_BG *bg, float *fwd_emissions, float *sc_arr){
 
-  for (k = 1, q = 0; q < nq; q++, k++) {
+#ifdef P7_TEST_ALL_SIMD
+ p7_oprofile_UpdateFwdEmissionScores = p7_oprofile_UpdateFwdEmissionScores_test_all;
+ return p7_oprofile_UpdateFwdEmissionScores_test_all(om, bg, fwd_emissions, sc_arr);
+ 
+#endif
 
-    //First compute the core characters of the alphabet
-    for (x = 0; x < K; x++) {
-      for (z = 0; z < 4; z++) {
-        if (k+ z*nq <= M)  sc_arr[z*Kp + x] =  (om->mm && om->mm[(k+z*nq)]=='m') ? 0 : log( (double)(fwd_emissions[Kp * (k+z*nq) + x])/bg->f[x]);
-        else               sc_arr[z*Kp + x] =  -eslINFINITY;
+#ifdef P7_TEST_SSE_AVX
+ p7_oprofile_UpdateFwdEmissionScores = p7_oprofile_UpdateFwdEmissionScores_test_sse_avx;
+ return p7_oprofile_UpdateFwdEmissionScores_test_sse_avx(om, bg, fwd_emissions, sc_arr);  
+#endif
 
-        tmp.x[z] = sc_arr[z*Kp + x];
-      }
-      om->rfv[x][q] = esl_sse_expf(tmp.v);
+#ifdef eslENABLE_AVX512  // Fastest first.
+ if (esl_cpu_has_avx512())
+   {
+     p7_oprofile_UpdateFwdEmissionScores = p7_oprofile_UpdateFwdEmissionScores_avx512;
+     return p7_oprofile_UpdateFwdEmissionScores_avx512(om, bg, fwd_emissions, sc_arr);
+   }
+#endif
 
+#ifdef eslENABLE_AVX
+  if (esl_cpu_has_avx())
+    {
+     p7_oprofile_UpdateFwdEmissionScores = p7_oprofile_UpdateFwdEmissionScores_avx;
+     return p7_oprofile_UpdateFwdEmissionScores_avx(om, bg, fwd_emissions, sc_arr); 
     }
+#endif
 
-    /* gap, nonresidue, and missing data residue codes don't get set by FExpectScVec(), 
-     * so do them
-     */
-    for (z = 0; z < 4; z++)
-      {
-	sc_arr[z*Kp + K]        = -eslINFINITY; /* gap char -     */
-	sc_arr[z*Kp + (Kp - 2)] = -eslINFINITY; /* nonresidue *   */
-	sc_arr[z*Kp + (Kp - 1)] = -eslINFINITY; /* missing data ~ */
-      }
-
-    // Then compute corresponding scores for ambiguity codes.
-    for (z = 0; z < 4; z++)
-      esl_abc_FExpectScVec(om->abc, sc_arr+(z*Kp), bg->f);
-
-    //finish off the interleaved values
-    for (x = K; x < Kp; x++) {
-      for (z = 0; z < 4; z++)
-         tmp.x[z] = sc_arr[z*Kp + x];  // computed in FExpectScVec call above
-      om->rfv[x][q] = esl_sse_expf(tmp.v);
+#ifdef eslENABLE_SSE
+  if (esl_cpu_has_sse4())
+    {
+      p7_oprofile_UpdateFwdEmissionScores = p7_oprofile_UpdateFwdEmissionScores_sse;
+      return p7_oprofile_UpdateFwdEmissionScores_sse(om, bg, fwd_emissions, sc_arr);
     }
-  }
+#endif
 
-  return eslOK;
+  p7_Die("p7_oprofile_UpdateFwdEmissionScores_dispatcher found no vector implementation - that shouldn't happen.");
+  return eslFAIL;
 }
-
 
 /* Function:  p7_oprofile_UpdateVitEmissionScores()
  * Synopsis:  Update the Viterbi part of the optimized profile match
@@ -840,58 +366,50 @@ p7_oprofile_UpdateFwdEmissionScores(P7_OPROFILE *om, P7_BG *bg, float *fwd_emiss
  *                              p7_oprofile_GetFwdEmissionArray() ).
  *            sc_arr            Preallocated array of at least Kp*8 floats
  */
-int
-p7_oprofile_UpdateVitEmissionScores(P7_OPROFILE *om, P7_BG *bg, float *fwd_emissions, float *sc_arr)
-{
-  int     M   = om->M;    /* length of the query                                          */
-  int     k, q, x, z;
-  int     nq  = p7O_NQW(M);     /* segment length; total # of striped vectors needed            */
-  int     K   = om->abc->K;
-  int     Kp  = om->abc->Kp;
-  int     idx;
-  union   { __m128i v; int16_t i[8]; } tmp; /* used to align and load simd minivectors            */
+static int p7_oprofile_UpdateVitEmissionScores_Dispatcher(P7_OPROFILE *om, P7_BG *bg, float *fwd_emissions, float *sc_arr);
 
-  for (k = 1, q = 0; q < nq; q++, k++) {
+int (*p7_oprofile_UpdateVitEmissionScores)(P7_OPROFILE *om, P7_BG *bg, float *fwd_emissions, float *sc_arr) = p7_oprofile_UpdateVitEmissionScores_Dispatcher;
 
-    //First compute the core characters of the alphabet
-    for (x = 0; x < K; x++) {
-      for (z = 0; z < 8; z++) {
-        idx = z*Kp + x;
-        if (k+ z*nq <= M)  {
-          sc_arr[idx] = (om->mm && om->mm[(k+z*nq)]=='m') ? 0 : log( (double)(fwd_emissions[Kp * (k+z*nq) + x])/bg->f[x]);
-          tmp.i[z]    = wordify(om, sc_arr[idx]);
-        }
-        else
-        {
-          sc_arr[idx] =  -eslINFINITY;
-          tmp.i[z]    =  -32768;
-        }
+static int p7_oprofile_UpdateVitEmissionScores_Dispatcher(P7_OPROFILE *om, P7_BG *bg, float *fwd_emissions, float *sc_arr){
 
-      }
-      om->rwv[x][q] = tmp.v;
+#ifdef P7_TEST_ALL_SIMD
+ p7_oprofile_UpdateVitEmissionScores = p7_oprofile_UpdateVitEmissionScores_test_all;
+ return p7_oprofile_UpdateVitEmissionScores_test_all(om, bg, fwd_emissions, sc_arr);
+ 
+#endif
 
+#ifdef P7_TEST_SSE_AVX
+ p7_oprofile_UpdateVitEmissionScores = p7_oprofile_UpdateVitEmissionScores_test_sse_avx;
+ return p7_oprofile_UpdateVitEmissionScores_test_sse_avx(om, bg, fwd_emissions, sc_arr);  
+#endif
+
+#ifdef eslENABLE_AVX512  // Fastest first.
+ if (esl_cpu_has_avx512())
+   {
+     p7_oprofile_UpdateVitEmissionScores = p7_oprofile_UpdateVitEmissionScores_avx512;
+     return p7_oprofile_UpdateVitEmissionScores_avx512(om, bg, fwd_emissions, sc_arr);
+   }
+#endif
+
+#ifdef eslENABLE_AVX
+  if (esl_cpu_has_avx())
+    {
+     p7_oprofile_UpdateVitEmissionScores = p7_oprofile_UpdateVitEmissionScores_avx;
+     return p7_oprofile_UpdateVitEmissionScores_avx(om, bg, fwd_emissions, sc_arr); 
     }
+#endif
 
-    // Then compute corresponding scores for ambiguity codes.
-    for (z = 0; z < 8; z++)
-      esl_abc_FExpectScVec(om->abc, sc_arr+(z*Kp), bg->f);
-
-    //finish off the interleaved values
-    for (x = K; x < Kp; x++) {
-      for (z = 0; z < 8; z++) {
-        idx = z*Kp + x;
-        if (x==K || x>Kp-3 || sc_arr[idx] == -eslINFINITY)
-          tmp.i[z]  =  -32768;
-        else
-          tmp.i[z]  = wordify(om, sc_arr[idx]);
-      }
-      om->rwv[x][q] = tmp.v;
+#ifdef eslENABLE_SSE
+  if (esl_cpu_has_sse4())
+    {
+      p7_oprofile_UpdateVitEmissionScores = p7_oprofile_UpdateVitEmissionScores_sse;
+      return p7_oprofile_UpdateVitEmissionScores_sse(om, bg, fwd_emissions, sc_arr);
     }
-  }
+#endif
 
-  return eslOK;
+  p7_Die("p7_oprofile_UpdateVitEmissionScores_dispatcher found no vector implementation - that shouldn't happen.");
+  return eslFAIL;
 }
-
 
 
 /* Function:  p7_oprofile_UpdateMSVEmissionScores()
@@ -910,81 +428,52 @@ p7_oprofile_UpdateVitEmissionScores(P7_OPROFILE *om, P7_BG *bg, float *fwd_emiss
  *                              p7_oprofile_GetFwdEmissionArray() ).
  *            sc_arr            Preallocated array of at least Kp*16 floats
  */
+static int
+p7_oprofile_UpdateMSVEmissionScores_Dispatcher(P7_OPROFILE *om, P7_BG *bg, float *fwd_emissions, float *sc_arr);
+
 int
-p7_oprofile_UpdateMSVEmissionScores(P7_OPROFILE *om, P7_BG *bg, float *fwd_emissions, float *sc_arr)
-{
-  int     M   = om->M;    /* length of the query                                          */
-  int     k, q, x, z;
-  int     nq  = p7O_NQB(M);     /* segment length; total # of striped vectors needed            */
-  int     K   = om->abc->K;
-  int     Kp  = om->abc->Kp;
-  int     idx;
-  float   max = 0.0;    /* maximum residue score: used for unsigned emission score bias */
-  union   { __m128i v; uint8_t i[16]; } tmp; /* used to align and load simd minivectors           */
+(*p7_oprofile_UpdateMSVEmissionScores)(P7_OPROFILE *om, P7_BG *bg, float *fwd_emissions, float *sc_arr) = p7_oprofile_UpdateMSVEmissionScores_Dispatcher;
 
+static int p7_oprofile_UpdateMSVEmissionScores_Dispatcher(P7_OPROFILE *om, P7_BG *bg, float *fwd_emissions, float *sc_arr){
 
-  /* First we determine the basis for the limited-precision MSVFilter scoring system.
-   * Default: 1/3 bit units, base offset 190:  range 0..255 => -190..65 => -63.3..21.7 bits
-   * See J2/66, J4/138 for analysis.
-   * This depends on having computed scores. I do this in a first pass, to get the max
-   * score ... then re-compute those scores so they can be converted to 8bit scores
-   */
-  for (k = 1, q = 0; q < nq; q++, k++) {
-    for (x = 0; x < K; x++) {
-      for (z = 0; z < 16; z++) {
-        idx = z*Kp + x;
-        if (k+ z*nq <= M && !(om->mm && om->mm[(k+z*nq)]=='m'))
-          max = ESL_MAX(max, log( (double)(fwd_emissions[Kp * (k+z*nq) + x])/bg->f[x]));
-      }
+#ifdef P7_TEST_ALL_SIMD
+ p7_oprofile_UpdateMSVEmissionScores = p7_oprofile_UpdateMSVEmissionScores_test_all;
+ return p7_oprofile_UpdateMSVEmissionScores_test_all(om, bg, fwd_emissions, sc_arr);
+ 
+#endif
+
+#ifdef P7_TEST_SSE_AVX
+ p7_oprofile_UpdateMSVEmissionScores = p7_oprofile_UpdateMSVEmissionScores_test_sse_avx;
+ return p7_oprofile_UpdateMSVEmissionScores_test_sse_avx(om, bg, fwd_emissions, sc_arr);  
+#endif
+
+#ifdef eslENABLE_AVX512  // Fastest first.
+ if (esl_cpu_has_avx512())
+   {
+     p7_oprofile_UpdateMSVEmissionScores = p7_oprofile_UpdateMSVEmissionScores_avx512;
+     return p7_oprofile_UpdateMSVEmissionScores_avx512(om, bg, fwd_emissions, sc_arr);
+   }
+#endif
+
+#ifdef eslENABLE_AVX
+  if (esl_cpu_has_avx())
+    {
+     p7_oprofile_UpdateMSVEmissionScores = p7_oprofile_UpdateMSVEmissionScores_avx;
+     return p7_oprofile_UpdateMSVEmissionScores_avx(om, bg, fwd_emissions, sc_arr); 
     }
-  }
-  om->scale_b = 3.0 / eslCONST_LOG2;                    /* scores in units of third-bits */
-  om->base_b  = 190;
-  om->bias_b  = unbiased_byteify(om, -1.0 * max);
+#endif
 
-  for (k = 1, q = 0; q < nq; q++, k++) {
-
-    //First compute the core characters of the alphabet
-    for (x = 0; x < K; x++) {
-      for (z = 0; z < 16; z++) {
-        idx = z*Kp + x;
-        if (k+ z*nq <= M)  {
-          sc_arr[idx] = (om->mm && om->mm[(k+z*nq)]=='m') ? 0 : log( (double)(fwd_emissions[Kp * (k+z*nq) + x])/bg->f[x]);
-          tmp.i[z]    = biased_byteify(om, sc_arr[idx]);
-        }
-        else
-        {
-          sc_arr[idx] =  -eslINFINITY;
-          tmp.i[z]    =  255;
-        }
-
-      }
-      om->rbv[x][q] = tmp.v;
-
+#ifdef eslENABLE_SSE
+  if (esl_cpu_has_sse4())
+    {
+      p7_oprofile_UpdateMSVEmissionScores = p7_oprofile_UpdateMSVEmissionScores_sse;
+      return p7_oprofile_UpdateMSVEmissionScores_sse(om, bg, fwd_emissions, sc_arr);
     }
+#endif
 
-    // Then compute corresponding scores for ambiguity codes.
-    for (z = 0; z < 16; z++)
-      esl_abc_FExpectScVec(om->abc, sc_arr+(z*Kp), bg->f);
-
-    //finish off the interleaved values
-    for (x = K; x < Kp; x++) {
-      for (z = 0; z < 16; z++) {
-        idx = z*Kp + x;
-        if (x==K || x>Kp-3 || sc_arr[idx] == -eslINFINITY)
-          tmp.i[z]  =  255;
-        else
-          tmp.i[z]  = biased_byteify(om, sc_arr[idx]);
-      }
-      om->rbv[x][q] = tmp.v;
-    }
-  }
-
-  sf_conversion(om);
-
-  return eslOK;
+  p7_Die("p7_oprofile_UpdateMSVEmissionScores_dispatcher found no vector implementation - that shouldn't happen.");
+  return eslFAIL;
 }
-
 
 /*----------------- end, P7_OPROFILE structure ------------------*/
 
@@ -993,25 +482,6 @@ p7_oprofile_UpdateMSVEmissionScores(P7_OPROFILE *om, P7_BG *bg, float *fwd_emiss
 /*****************************************************************
  * 2. Conversion from generic P7_PROFILE to optimized P7_OPROFILE
  *****************************************************************/
-
-/* biased_byteify()
- * Converts original log-odds residue score to a rounded biased uchar cost.
- * Match emission scores for MSVFilter get this treatment.
- * e.g. a score of +3.2, with scale 3.0 and bias 12, becomes 2.
- *    3.2*3 = 9.6; rounded = 10; bias-10 = 2.
- * When used, we add the bias, then subtract this cost.
- * (A cost of +255 is our -infinity "prohibited event")
- */
-static uint8_t
-biased_byteify(P7_OPROFILE *om, float sc)
-{
-  uint8_t b;
-
-  sc  = -1.0f * roundf(om->scale_b * sc);                          /* ugh. sc is now an integer cost represented in a float...           */
-  b   = (sc > 255 - om->bias_b) ? 255 : (uint8_t) sc + om->bias_b; /* and now we cast, saturate, and bias it to an unsigned char cost... */
-  return b;
-}
- 
 /* unbiased_byteify()
  * Convert original transition score to a rounded uchar cost
  * Transition scores for MSVFilter get this treatment.
@@ -1043,613 +513,6 @@ wordify(P7_OPROFILE *om, float sc)
   else return (int16_t) sc;
 }
 
-
-/* sf_conversion():
- * Author: Bjarne Knudsen
- * 
- * Generates the SSVFilter() parts of the profile <om> scores
- * from the completed MSV score.  This includes calculating 
- * special versions of the match scores for using the the
- * ssv filter.
- *
- * Returns:   <eslOK> on success.
- *
- * Throws:    (no abnormal error conditions)
- */
-static int
-sf_conversion(P7_OPROFILE *om)
-{
-  int     M   = om->M;		/* length of the query                                          */
-  int     nq  = p7O_NQB(M);     /* segment length; total # of striped vectors needed            */
-  int     x;			/* counter over residues                                        */
-  int     q;			/* q counts over total # of striped vectors, 0..nq-1            */
-  __m128i tmp;
-  __m128i tmp2;
-
-  /* We now want to fill out om->sbv with om->rbv - bias for use in the
-   * SSV filter. The only challenge is that the om->rbv values are
-   * unsigned and generally use the whole scale while the om->sbv
-   * values are signed. To solve that problem we perform the following
-   * calculation:
-   *
-   *   ((127 + bias) - rbv) ^ 127
-   *
-   * where the subtraction is unsigned saturated and the addition is
-   * unsigned (it will not overflow, since bias is a small positive
-   * number). The f(x) = x ^ 127 combined with a change from unsigned
-   * to signed numbers have the same effect as f(x) = -x + 127. So if
-   * we regard the above as signed instead of unsigned it is equal to:
-   *
-   *   -((127 + bias) - rbv) + 127 = rbv - bias
-   *
-   * which is what we want. The reason for this slightly complex idea
-   * is that we wish the transformation to be fast, especially for
-   * hmmscan where many models are loaded.
-   */
-
-  tmp = _mm_set1_epi8((int8_t) (om->bias_b + 127));
-  tmp2  = _mm_set1_epi8(127);
-
-  for (x = 0; x < om->abc->Kp; x++)
-    {
-      for (q = 0;  q < nq;            q++) om->sbv[x][q] = _mm_xor_si128(_mm_subs_epu8(tmp, om->rbv[x][q]), tmp2);
-      for (q = nq; q < nq + p7O_EXTRA_SB; q++) om->sbv[x][q] = om->sbv[x][q % nq];
-    }
-
-  return eslOK;
-}
-
-int
-sf_conversion_avx(P7_OPROFILE *om)
-{
-   int     x;     /* counter over residues                                        */
-  int     q;      /* q counts over total # of striped vectors, 0..nq-1           */
-  int     M   = om->M;		/* length of the query                                          */
-
-  __m256i tmp_avx;
-  __m256i tmp2_avx;
-  int     nq_avx  = p7O_NQB_AVX(M);     /* segment length; total # of striped vectors needed            */
-
-
-  /* We now want to fill out om->sbv with om->rbv - bias for use in the
-   * SSV filter. The only challenge is that the om->rbv values are
-   * unsigned and generally use the whole scale while the om->sbv
-   * values are signed. To solve that problem we perform the following
-   * calculation:
-   *
-   *   ((127 + bias) - rbv) ^ 127
-   *
-   * where the subtraction is unsigned saturated and the addition is
-   * unsigned (it will not overflow, since bias is a small positive
-   * number). The f(x) = x ^ 127 combined with a change from unsigned
-   * to signed numbers have the same effect as f(x) = -x + 127. So if
-   * we regard the above as signed instead of unsigned it is equal to:
-   *
-   *   -((127 + bias) - rbv) + 127 = rbv - bias
-   *
-   * which is what we want. The reason for this slightly complex idea
-   * is that we wish the transformation to be fast, especially for
-   * hmmscan where many models are loaded.
-   */
-
-
-  tmp_avx = _mm256_set1_epi8((int8_t) (om->bias_b + 127));
-  tmp2_avx  = _mm256_set1_epi8(127);
-
-  for (x = 0; x < om->abc->Kp; x++)
-    {
-      for (q = 0;  q < nq_avx;            q++) om->sbv_avx[x][q] = _mm256_xor_si256(_mm256_subs_epu8(tmp_avx, om->rbv_avx[x][q]), tmp2_avx);
-      for (q = nq_avx; q < nq_avx + p7O_EXTRA_SB; q++) om->sbv_avx[x][q] = om->sbv_avx[x][q % nq_avx];
-    }
-
-  return eslOK;
-}
-
-int
-sf_conversion_avx512(P7_OPROFILE *om)
-{
-   int     x;     /* counter over residues                                        */
-  int     q;      /* q counts over total # of striped vectors, 0..nq-1           */
-  int     M   = om->M;		/* length of the query                                          */
-
-  __m512i tmp_avx512;
-  __m512i tmp2_avx512;
-  int     nq_avx512  = p7O_NQB_AVX512(M);     /* segment length; total # of striped vectors needed            */
-
-
-  /* We now want to fill out om->sbv with om->rbv - bias for use in the
-   * SSV filter. The only challenge is that the om->rbv values are
-   * unsigned and generally use the whole scale while the om->sbv
-   * values are signed. To solve that problem we perform the following
-   * calculation:
-   *
-   *   ((127 + bias) - rbv) ^ 127
-   *
-   * where the subtraction is unsigned saturated and the addition is
-   * unsigned (it will not overflow, since bias is a small positive
-   * number). The f(x) = x ^ 127 combined with a change from unsigned
-   * to signed numbers have the same effect as f(x) = -x + 127. So if
-   * we regard the above as signed instead of unsigned it is equal to:
-   *
-   *   -((127 + bias) - rbv) + 127 = rbv - bias
-   *
-   * which is what we want. The reason for this slightly complex idea
-   * is that we wish the transformation to be fast, especially for
-   * hmmscan where many models are loaded.
-   */
-
-
-  tmp_avx512 = _mm512_set1_epi8((int8_t) (om->bias_b + 127));
-  tmp2_avx512  = _mm512_set1_epi8(127);
-
-  for (x = 0; x < om->abc->Kp; x++)
-    {
-      for (q = 0;  q < nq_avx512;            q++) om->sbv_avx512[x][q] = _mm512_xor_si512(_mm512_subs_epu8(tmp_avx512, om->rbv_avx512[x][q]), tmp2_avx512);
-      for (q = nq_avx512; q < nq_avx512 + p7O_EXTRA_SB; q++) om->sbv_avx512[x][q] = om->sbv_avx512[x][q % nq_avx512];
-    }
-
-  return eslOK;
-
-}
-/* mf_conversion(): 
- * 
- * This builds the MSVFilter() parts of the profile <om>, scores
- * in lspace uchars (16-way parallel), by rescaling, rounding, and
- * casting the scores in <gm>.
- * 
- * Returns <eslOK> on success;
- * throws <eslEINVAL> if <om> hasn't been allocated properly.
- */
-static int
-mf_conversion(const P7_PROFILE *gm, P7_OPROFILE *om)
-{
-  int     M   = gm->M;		/* length of the query                                          */
-  int     nq  = p7O_NQB(M);     /* segment length; total # of striped vectors needed            */
-  float   max = 0.0;		/* maximum residue score: used for unsigned emission score bias */
-  int     x;			/* counter over residues                                        */
-  int     q;			/* q counts over total # of striped vectors, 0..nq-1            */
-  int     k;			/* the usual counter over model nodes 1..M                      */
-  int     z;			/* counter within elements of one SIMD minivector               */
-  union { __m128i v; uint8_t i[16]; } tmp; /* used to align and load simd minivectors           */
-
-  if (nq > om->allocQ16) ESL_EXCEPTION(eslEINVAL, "optimized profile is too small to hold conversion");
-
-  /* First we determine the basis for the limited-precision MSVFilter scoring system. 
-   * Default: 1/3 bit units, base offset 190:  range 0..255 => -190..65 => -63.3..21.7 bits
-   * See J2/66, J4/138 for analysis.
-   */
-  for (x = 0; x < gm->abc->K; x++)  max = ESL_MAX(max, esl_vec_FMax(gm->rsc[x], (M+1)*2));
-  om->scale_b = 3.0 / eslCONST_LOG2;                    /* scores in units of third-bits */
-  om->base_b  = 190;
-  om->bias_b  = unbiased_byteify(om, -1.0 * max);
-
-  /* striped match costs: start at k=1.  */
-  for (x = 0; x < gm->abc->Kp; x++)
-  {
-    for (q = 0, k = 1; q < nq; q++, k++)
-    {
-      for (z = 0; z < 16; z++) tmp.i[z] = ((k+ z*nq <= M) ? biased_byteify(om, p7P_MSC(gm, k+z*nq, x)) : 255);
-      om->rbv[x][q]   = tmp.v;
-    }
-  }
-
-  /* transition costs */
-  om->tbm_b = unbiased_byteify(om, logf(2.0f / ((float) gm->M * (float) (gm->M+1)))); /* constant B->Mk penalty        */
-  om->tec_b = unbiased_byteify(om, logf(0.5f));                                       /* constant multihit E->C = E->J */
-  om->tjb_b = unbiased_byteify(om, logf(3.0f / (float) (gm->L+3))); /* this adopts the L setting of the parent profile */
-
-  sf_conversion(om);
-  int     nq_avx  = p7O_NQB_AVX(M);     /* segment length; total # of striped vectors needed    */   
-  union { __m256i v; uint8_t i[32]; } tmp_avx; /* used to align and load simd minivectors        */        
-
-  max = 0.0;		/* maximum residue score: used for unsigned emission score bias */
- 
-
-  if (nq_avx > om->allocQ16_avx) ESL_EXCEPTION(eslEINVAL, "optimized profile is too small to hold conversion");
-
-
-  /* striped match costs: start at k=1.  */
-  for (x = 0; x < gm->abc->Kp; x++)
-    for (q = 0, k = 1; q < nq_avx; q++, k++)
-      {
-  for (z = 0; z < 32; z++) tmp_avx.i[z] = ((k+ z*nq_avx <= M) ? biased_byteify(om, p7P_MSC(gm, k+z*nq_avx, x)) : 255);
-  om->rbv_avx[x][q]   = tmp_avx.v;  
-      }
-
-
-  sf_conversion_avx(om);
-
-  //avx512
-    int     nq_avx512  = p7O_NQB_AVX512(M);     /* segment length; total # of striped vectors needed    */   
-  union { __m512i v; uint8_t i[64]; } tmp_avx512; /* used to align and load simd minivectors        */        
-
-  max = 0.0;		/* maximum residue score: used for unsigned emission score bias */
- 
-
-  if (nq_avx512 > om->allocQ16_avx512) ESL_EXCEPTION(eslEINVAL, "optimized profile is too small to hold conversion");
-
-
-  /* striped match costs: start at k=1.  */
-  for (x = 0; x < gm->abc->Kp; x++)
-    for (q = 0, k = 1; q < nq_avx512; q++, k++)
-      {
-  for (z = 0; z < 64; z++) tmp_avx512.i[z] = ((k+ z*nq_avx512 <= M) ? biased_byteify(om, p7P_MSC(gm, k+z*nq_avx512, x)) : 255);
-  om->rbv_avx512[x][q]   = tmp_avx512.v;  
-      }
-
-
-  sf_conversion_avx512(om);
-
-  return eslOK;
-}
-
-
-/* vf_conversion(): 
- * 
- * This builds the ViterbiFilter() parts of the profile <om>, scores
- * in lspace swords (8-way parallel), by rescaling, rounding, and
- * casting the scores in <gm>.
- * 
- * Returns <eslOK> on success;
- * throws <eslEINVAL> if <om> hasn't been allocated properly.
- */
-static int
-vf_conversion(const P7_PROFILE *gm, P7_OPROFILE *om)
-{
-  int     M   = gm->M;		/* length of the query                                          */
-  int     nq  = p7O_NQW(M);     /* segment length; total # of striped vectors needed            */
-  int     x;			/* counter over residues                                        */
-  int     q;			/* q counts over total # of striped vectors, 0..nq-1            */
-  int     k;			/* the usual counter over model nodes 1..M                      */
-  int     kb;			/* possibly offset base k for loading om's TSC vectors          */
-  int     z;			/* counter within elements of one SIMD minivector               */
-  int     t;			/* counter over transitions 0..7 = p7O_{BM,MM,IM,DM,MD,MI,II,DD}*/
-  int     tg;			/* transition index in gm                                       */
-  int     j;			/* counter in interleaved vector arrays in the profile          */
-  int     ddtmp;		/* used in finding worst DD transition bound                    */
-  int16_t  maxval;		/* used to prevent zero cost II                                 */
-  int16_t  val;
-  union { __m128i v; int16_t i[8]; } tmp; /* used to align and load simd minivectors            */
-
-  if (nq > om->allocQ8) ESL_EXCEPTION(eslEINVAL, "optimized profile is too small to hold conversion");
-  int     nq_avx  = p7O_NQW_AVX(M);     /* segment length; total # of striped vectors ne\eded            */
-  int     nq_avx512 = p7O_NQW_AVX512(M);
-  union { __m256i v; int16_t i[16]; } tmp_avx; /* used to align and load simd minivecto\rs            */
-  union { __m512i v; int16_t i[32];} tmp_avx512;
-  if (nq_avx > om->allocQ8_avx) ESL_EXCEPTION(eslEINVAL, "optimized profile is too small to hold conversion");
-  if (nq_avx512 > om->allocQ8_avx512) ESL_EXCEPTION(eslEINVAL, "optimized profile is too small to hold conversion");
-
-  /* First set the basis for the limited-precision scoring system. 
-   * Default: 1/500 bit units, base offset 12000:  range -32768..32767 => -44768..20767 => -89.54..41.53 bits
-   * See J4/138 for analysis.
-   */
-  om->scale_w = 500.0 / eslCONST_LOG2;
-  om->base_w  = 12000;
-
-  /* striped match scores */
-  for (x = 0; x < gm->abc->Kp; x++){
-    for (k = 1, q = 0; q < nq; q++, k++){
-	    for (z = 0; z < 8; z++){
-          tmp.i[z] = ((k+ z*nq <= M) ? wordify(om, p7P_MSC(gm, k+z*nq, x)) : -32768);
-        }
-	      om->rwv[x][q]   = tmp.v;
-    }
-  
-
-    for (k = 1, q = 0; q < nq_avx; q++, k++){
-      for (z = 0; z < 16; z++){
-        tmp_avx.i[z] = ((k+ z*nq_avx <= M) ? wordify(om, p7P_MSC(gm, k+z*nq_avx, x)) : -32768);
-      }
-      om->rwv_avx[x][q]   = tmp_avx.v;
-    }
-
-    for (k = 1, q = 0; q < nq_avx512; q++, k++){
-      for (z = 0; z < 32; z++){
-        tmp_avx512.i[z] = ((k+ z*nq_avx512 <= M) ? wordify(om, p7P_MSC(gm, k+z*nq_avx512, x)) : -32768);
-      }
-      om->rwv_avx512[x][q]   = tmp_avx512.v;
-    }
-  }
-      
-   
-    
-  /* Transition costs, all but the DD's. */
-  for (j = 0, k = 1, q = 0; q < nq; q++, k++){
-    for (t = p7O_BM; t <= p7O_II; t++){ /* this loop of 7 transitions depends on the order in p7o_tsc_e */
-	
-	    switch (t) {
-	      case p7O_BM: tg = p7P_BM;  kb = k-1; maxval =  0; break; /* gm has tBMk stored off by one! start from k=0 not 1   */
-	      case p7O_MM: tg = p7P_MM;  kb = k-1; maxval =  0; break; /* MM, DM, IM vectors are rotated by -1, start from k=0  */
-	      case p7O_IM: tg = p7P_IM;  kb = k-1; maxval =  0; break;
-	      case p7O_DM: tg = p7P_DM;  kb = k-1; maxval =  0; break;
-	      case p7O_MD: tg = p7P_MD;  kb = k;   maxval =  0; break; /* the remaining ones are straight up  */
-	      case p7O_MI: tg = p7P_MI;  kb = k;   maxval =  0; break; 
-	      case p7O_II: tg = p7P_II;  kb = k;   maxval = -1; break; 
-	    }
-
-	    for (z = 0; z < 8; z++) {
-	      val      = ((kb+ z*nq < M) ? wordify(om, p7P_TSC(gm, kb+ z*nq, tg)) : -32768);
-	      tmp.i[z] = (val <= maxval) ? val : maxval; /* do not allow an II transition cost of 0, or hell may occur. */
-	    }
-	    om->twv[j++] = tmp.v;
-	  }
-  }
-  /* Finally the DD's, which are at the end of the optimized tsc vector; (j is already sitting there) */
-  for (k = 1, q = 0; q < nq; q++, k++){
-    for (z = 0; z < 8; z++){
-      tmp.i[z] = ((k+ z*nq < M) ? wordify(om, p7P_TSC(gm, k+ z*nq, p7P_DD)) : -32768);
-    }
-    om->twv[j++] = tmp.v;
-  }
-
-  // This needs to be after the SSE  DD loop, because that loop counts on the value of j at the end of 
-  // the previous loop nest
-  for (j = 0, k = 1, q = 0; q < nq_avx512; q++, k++){
-    for (t = p7O_BM; t <= p7O_II; t++){ /* this loop of 7 transitions depends on the o\rder in p7o_tsc_e */
-  
-      switch (t) {
-        case p7O_BM: tg = p7P_BM;  kb = k-1; maxval =  0; break; /* gm has tLMk stored off \by one! start from k=0 not 1   */
-        case p7O_MM: tg = p7P_MM;  kb = k-1; maxval =  0; break; /* MM, DM, IM vectors are \rotated by -1, start from k=0  */
-        case p7O_IM: tg = p7P_IM;  kb = k-1; maxval =  0; break;
-        case p7O_DM: tg = p7P_DM;  kb = k-1; maxval =  0; break;
-        case p7O_MD: tg = p7P_MD;  kb = k;   maxval =  0; break; /* the remaining ones are \straight up  */
-        case p7O_MI: tg = p7P_MI;  kb = k;   maxval =  0; break;
-        case p7O_II: tg = p7P_II;  kb = k;   maxval = -1; break;
-      }
-
-      for (z = 0; z < 32; z++) {
-        val      = ((kb+ z*nq_avx512 < M) ? wordify(om, p7P_TSC(gm, kb+ z*nq_avx512, tg)) : -32768);
-        tmp_avx512.i[z] = (val <= maxval) ? val : maxval; /* do not allow an II transition c\ost of 0, or hell may occur. */
-      }
-      om->twv_avx512[j++] = tmp_avx512.v;
-    }
-  }
-
-  for (k = 1, q = 0; q < nq_avx512; q++, k++){
-    for (z = 0; z < 32; z++){
-      tmp_avx512.i[z] = ((k+ z*nq_avx512 < M) ? wordify(om, p7P_TSC(gm, k+ z*nq_avx512, p7P_DD)) : -32768);
-    }
-      om->twv_avx512[j++] = tmp_avx512.v;
-  }
-
-    // This needs to be after the AVX512 DD loop, because that loop counts on the value of j at the end of 
-  // the previous loop nest
-  for (j = 0, k = 1, q = 0; q < nq_avx; q++, k++){
-    for (t = p7O_BM; t <= p7O_II; t++){ /* this loop of 7 transitions depends on the o\rder in p7o_tsc_e */
-  
-      switch (t) {
-        case p7O_BM: tg = p7P_BM;  kb = k-1; maxval =  0; break; /* gm has tLMk stored off \by one! start from k=0 not 1   */
-        case p7O_MM: tg = p7P_MM;  kb = k-1; maxval =  0; break; /* MM, DM, IM vectors are \rotated by -1, start from k=0  */
-        case p7O_IM: tg = p7P_IM;  kb = k-1; maxval =  0; break;
-        case p7O_DM: tg = p7P_DM;  kb = k-1; maxval =  0; break;
-        case p7O_MD: tg = p7P_MD;  kb = k;   maxval =  0; break; /* the remaining ones are \straight up  */
-        case p7O_MI: tg = p7P_MI;  kb = k;   maxval =  0; break;
-        case p7O_II: tg = p7P_II;  kb = k;   maxval = -1; break;
-      }
-
-      for (z = 0; z < 16; z++) {
-        val      = ((kb+ z*nq_avx < M) ? wordify(om, p7P_TSC(gm, kb+ z*nq_avx, tg)) : -32768);
-        tmp_avx.i[z] = (val <= maxval) ? val : maxval; /* do not allow an II transition c\ost of 0, or hell may occur. */
-      }
-      om->twv_avx[j++] = tmp_avx.v;
-    }
-  }
-
-  for (k = 1, q = 0; q < nq_avx; q++, k++){
-    for (z = 0; z < 16; z++){
-      tmp_avx.i[z] = ((k+ z*nq_avx < M) ? wordify(om, p7P_TSC(gm, k+ z*nq_avx, p7P_DD)) : -32768);
-    }
-      om->twv_avx[j++] = tmp_avx.v;
-  }
-
-
-
-
-
-  
-  /* Specials. (Actually in same order in om and gm, but we copy in general form anyway.)  */
-  /* VF CC,NN,JJ transitions hardcoded zero; -3.0 nat approximation used instead; this papers
-   * over a length independence problem, where the approximation weirdly outperforms the
-   * exact solution, probably indicating that the model's Pascal distribution is problematic,
-   * and the "approximation" is in fact closer to the One True Model, the mythic H4 supermodel.
-   * [xref J5/36] 
-   */
-  om->xw[p7O_E][p7O_LOOP] = wordify(om, gm->xsc[p7P_E][p7P_LOOP]);  
-  om->xw[p7O_E][p7O_MOVE] = wordify(om, gm->xsc[p7P_E][p7P_MOVE]);
-  om->xw[p7O_N][p7O_MOVE] = wordify(om, gm->xsc[p7P_N][p7P_MOVE]);
-  om->xw[p7O_N][p7O_LOOP] = 0;                                        /* was wordify(om, gm->xsc[p7P_N][p7P_LOOP]); */
-  om->xw[p7O_C][p7O_MOVE] = wordify(om, gm->xsc[p7P_C][p7P_MOVE]);
-  om->xw[p7O_C][p7O_LOOP] = 0;                                        /* was wordify(om, gm->xsc[p7P_C][p7P_LOOP]); */
-  om->xw[p7O_J][p7O_MOVE] = wordify(om, gm->xsc[p7P_J][p7P_MOVE]);
-  om->xw[p7O_J][p7O_LOOP] = 0;                                        /* was wordify(om, gm->xsc[p7P_J][p7P_LOOP]); */
-
-  om->ncj_roundoff = 0.0; /* goes along with NN=CC=JJ=0, -3.0 nat approximation */
-                          /* otherwise, would be = om->scale_w * gm->xsc[p7P_N][p7P_LOOP] -  om->xw[p7O_N][p7O_LOOP];   */
-			  /* see J4/150 for discussion of VF error suppression, superceded by the -3.0 nat approximation */
-
-  /* Transition score bound for "lazy F" DD path evaluation (xref J2/52) */
-  om->ddbound_w = -32768;	
-  for (k = 2; k < M-1; k++) 
-    {
-      ddtmp         = (int) wordify(om, p7P_TSC(gm, k,   p7P_DD));
-      ddtmp        += (int) wordify(om, p7P_TSC(gm, k+1, p7P_DM));
-      ddtmp        -= (int) wordify(om, p7P_TSC(gm, k+1, p7P_BM));
-      om->ddbound_w = ESL_MAX(om->ddbound_w, ddtmp);
-    }
-
-  return eslOK;
-}
-
-
-/* fb_conversion()
- * This builds the Forward/Backward part of the optimized profile <om>,
- * where we use odds ratios (not log-odds scores).
- */
-static int
-fb_conversion(const P7_PROFILE *gm, P7_OPROFILE *om)
-{
-  int     M   = gm->M;		/* length of the query                                          */
-  int     nq  = p7O_NQF(M);     /* segment length; total # of striped vectors needed            */
-  int     x;			/* counter over residues                                        */
-  int     q;			/* q counts over total # of striped vectors, 0..nq-1            */
-  int     k;			/* the usual counter over model nodes 1..M                      */
-  int     kb;			/* possibly offset base k for loading om's TSC vectors          */
-  int     z;			/* counter within elements of one SIMD minivector               */
-  int     t;			/* counter over transitions 0..7 = p7O_{BM,MM,IM,DM,MD,MI,II,DD}*/
-  int     tg;			/* transition index in gm                                       */
-  int     j;			/* counter in interleaved vector arrays in the profile          */
-  union { __m128 v; float x[4]; } tmp; /* used to align and load simd minivectors               */
-
-  if (nq > om->allocQ4) ESL_EXCEPTION(eslEINVAL, "optimized profile is too small to hold conversion");
-
-  union { __m256 v; float x[8]; } tmp_avx;
-    
-
-  int     nq_avx  = p7O_NQF_AVX(M);     /* segment length; total # of striped vectors ne\eded            */
-  if (nq_avx > om->allocQ4_avx) ESL_EXCEPTION(eslEINVAL, "optimized profile is too small to hold conversion");
-
-  union { __m512 v; float x[16]; } tmp_avx512;
-  int     nq_avx512  = p7O_NQF_AVX512(M);     /* segment length; total # of striped vectors ne\eded            */
-  if (nq_avx512 > om->allocQ4_avx512) ESL_EXCEPTION(eslEINVAL, "optimized profile is too small to hold conversion");
-
-
-  
-  /* striped match scores: start at k=1 */
-  for (x = 0; x < gm->abc->Kp; x++){
-    for (k = 1, q = 0; q < nq; q++, k++){
-	    for (z = 0; z < 4; z++){
-         tmp.x[z] = (k+ z*nq <= M) ? p7P_MSC(gm, k+z*nq, x) : -eslINFINITY;
-      }
-	    om->rfv[x][q] = esl_sse_expf(tmp.v);
-    }
-  
-   for (k = 1, q = 0; q < nq_avx; q++, k++){
-      for (z = 0; z < 8; z++){
-        tmp_avx.x[z] = (k+ z*nq_avx <= M) ? p7P_MSC(gm, k+z*nq_avx, x) : -eslINFINITY;
-      }
-      tmp_avx.v = esl_avx_expf(tmp_avx.v);
-      om->rfv_avx[x][q] = tmp_avx.v;
-   }
-
-   for (k = 1, q = 0; q < nq_avx512; q++, k++){
-      for (z = 0; z < 16; z++){
-        tmp_avx512.x[z] = (k+ z*nq_avx512 <= M) ? p7P_MSC(gm, k+z*nq_avx512, x) : -eslINFINITY;
-      }
-      tmp_avx512.v = esl_avx512_expf(tmp_avx512.v);
-      om->rfv_avx512[x][q] = tmp_avx512.v;
-   }
-  }
-
-  /* Transition scores, all but the DD's. */
-  for (j = 0, k = 1, q = 0; q < nq; q++, k++){
-    for (t = p7O_BM; t <= p7O_II; t++){ /* this loop of 7 transitions depends on the order in the definition of p7o_tsc_e */
-	    switch (t) {
-	      case p7O_BM: tg = p7P_BM;  kb = k-1; break; /* gm has tBMk stored off by one! start from k=0 not 1 */
-	      case p7O_MM: tg = p7P_MM;  kb = k-1; break; /* MM, DM, IM quads are rotated by -1, start from k=0  */
-	      case p7O_IM: tg = p7P_IM;  kb = k-1; break;
-	      case p7O_DM: tg = p7P_DM;  kb = k-1; break;
-	      case p7O_MD: tg = p7P_MD;  kb = k;   break; /* the remaining ones are straight up  */
-	      case p7O_MI: tg = p7P_MI;  kb = k;   break; 
-	      case p7O_II: tg = p7P_II;  kb = k;   break; 
-	    }
-
-	    for (z = 0; z < 4; z++){
-        tmp.x[z] = (kb+z*nq < M) ? p7P_TSC(gm, kb+z*nq, tg) : -eslINFINITY;
-      }
-	    om->tfv[j++] = esl_sse_expf(tmp.v);
-	  }
-  }
-    /* And finally the DD's, which are at the end of the optimized tfv vector; (j is already there) */
-  for (k = 1, q = 0; q < nq; q++, k++){
-    for (z = 0; z < 4; z++){
-      tmp.x[z] = (k+z*nq < M) ? p7P_TSC(gm, k+z*nq, p7P_DD) : -eslINFINITY;
-    }
-    om->tfv[j++] = esl_sse_expf(tmp.v);
-  }
-
-  // This needs to be after the SSE DD loop, because the DD loop counts on the value of j at the end of the
-  // previous loop nest
-    /* Transition scores, all but the DD's. */
-  for (j = 0, k = 1, q = 0; q < nq_avx; q++, k++){
-      for (t = p7O_BM; t <= p7O_II; t++){ /* this loop of 7 transitions depends on the o\rder in the definition of p7o_tsc_e */
-        switch (t) {
-          case p7O_BM: tg = p7P_BM;  kb = k-1; break; /* gm has tBMk stored off by one!\ start from k=0 not 1 */
-          case p7O_MM: tg = p7P_MM;  kb = k-1; break; /* MM, DM, IM quads are rotated b\y -1, start from k=0  */
-          case p7O_IM: tg = p7P_IM;  kb = k-1; break;
-          case p7O_DM: tg = p7P_DM;  kb = k-1; break;
-          case p7O_MD: tg = p7P_MD;  kb = k;   break; /* the remaining ones are straigh\t up  */
-          case p7O_MI: tg = p7P_MI;  kb = k;   break;
-          case p7O_II: tg = p7P_II;  kb = k;   break;
-        }
-
-        for (z = 0; z < 8; z++){
-          tmp_avx.x[z] = (kb+z*nq_avx < M) ? p7P_TSC(gm, kb+z*nq_avx, tg) : -eslINFINITY;
-        }
-        tmp_avx.v = esl_avx_expf(tmp_avx.v);
-        om->tfv_avx[j++] = tmp_avx.v;
-      }
-    }
-
-
-  for (k = 1, q = 0; q < nq_avx; q++, k++){
-    for (z = 0; z < 8; z++){
-      tmp_avx.x[z] = (k+z*nq_avx < M) ? p7P_TSC(gm, k+z*nq_avx, p7P_DD) : -eslINFINITY;
-    }
-    tmp_avx.v = esl_avx_expf(tmp_avx.v);
-    om->tfv_avx[j++] = tmp_avx.v;
-  }
-
-// This needs to be after the AVX DD loop, because the DD loop counts on the value of j at the end of the
-  // previous loop nest
-    /* Transition scores, all but the DD's. */
-  for (j = 0, k = 1, q = 0; q < nq_avx512; q++, k++){
-      for (t = p7O_BM; t <= p7O_II; t++){ /* this loop of 7 transitions depends on the order in the definition of p7o_tsc_e */
-        switch (t) {
-          case p7O_BM: tg = p7P_BM;  kb = k-1; break; /* gm has tBMk stored off by one! start from k=0 not 1 */
-          case p7O_MM: tg = p7P_MM;  kb = k-1; break; /* MM, DM, IM quads are rotated by -1, start from k=0  */
-          case p7O_IM: tg = p7P_IM;  kb = k-1; break;
-          case p7O_DM: tg = p7P_DM;  kb = k-1; break;
-          case p7O_MD: tg = p7P_MD;  kb = k;   break; /* the remaining ones are straight up  */
-          case p7O_MI: tg = p7P_MI;  kb = k;   break;
-          case p7O_II: tg = p7P_II;  kb = k;   break;
-        }
-
-        for (z = 0; z < 16; z++){
-          tmp_avx512.x[z] = (kb+z*nq_avx512 < M) ? p7P_TSC(gm, kb+z*nq_avx512, tg) : -eslINFINITY;
-        }
-        tmp_avx512.v = esl_avx512_expf(tmp_avx512.v); 
-        om->tfv_avx512[j++] = tmp_avx512.v;
-      }
-    }
-
-
-  for (k = 1, q = 0; q < nq_avx512; q++, k++){
-    for (z = 0; z < 16; z++){
-      tmp_avx512.x[z] = (k+z*nq_avx512 < M) ? p7P_TSC(gm, k+z*nq_avx512, p7P_DD) : -eslINFINITY;
-    }
-    tmp_avx512.v = esl_avx512_expf(tmp_avx512.v);  
-    om->tfv_avx512[j++] = tmp_avx512.v;
-  }
-
-
-  
-  /* Specials. (These are actually in exactly the same order in om and
-   *  gm, but we copy in general form anyway.)
-   */
-  om->xf[p7O_E][p7O_LOOP] = expf(gm->xsc[p7P_E][p7P_LOOP]);  
-  om->xf[p7O_E][p7O_MOVE] = expf(gm->xsc[p7P_E][p7P_MOVE]);
-  om->xf[p7O_N][p7O_LOOP] = expf(gm->xsc[p7P_N][p7P_LOOP]);
-  om->xf[p7O_N][p7O_MOVE] = expf(gm->xsc[p7P_N][p7P_MOVE]);
-  om->xf[p7O_C][p7O_LOOP] = expf(gm->xsc[p7P_C][p7P_LOOP]);
-  om->xf[p7O_C][p7O_MOVE] = expf(gm->xsc[p7P_C][p7P_MOVE]);
-  om->xf[p7O_J][p7O_LOOP] = expf(gm->xsc[p7P_J][p7P_LOOP]);
-  om->xf[p7O_J][p7O_MOVE] = expf(gm->xsc[p7P_J][p7P_MOVE]);
-
-  return eslOK;
-}
-
-
-
 /* Function:  p7_oprofile_Convert()
  * Synopsis:  Converts standard profile to an optimized one.
  * Incept:    SRE, Mon Nov 26 07:38:57 2007 [Janelia]
@@ -1666,43 +529,51 @@ fb_conversion(const P7_PROFILE *gm, P7_OPROFILE *om)
  * Throws:    <eslEINVAL> if <gm>, <om> aren't compatible. 
  *            <eslEMEM> on allocation failure.
  */
-int
-p7_oprofile_Convert(const P7_PROFILE *gm, P7_OPROFILE *om)
-{
-  int status, z;
 
-  /* Set these first so they are available in the following calls */
-  om->mode       = gm->mode;
-  om->L          = gm->L;
-  om->M          = gm->M;
-  om->nj         = gm->nj;
-  om->max_length = gm->max_length;
+static int p7_oprofile_Convert_Dispatcher(const P7_PROFILE *gm, P7_OPROFILE *om);
 
-  if (gm->abc->type != om->abc->type)  ESL_EXCEPTION(eslEINVAL, "alphabets of the two profiles don't match");  
-  if (gm->M         >  om->allocM)     ESL_EXCEPTION(eslEINVAL, "oprofile is too small");  
+int (*p7_oprofile_Convert)(const P7_PROFILE *gm, P7_OPROFILE *om) = p7_oprofile_Convert_Dispatcher;
 
-  if ((status =  mf_conversion(gm, om)) != eslOK) return status;   /* MSVFilter()'s information     */
-  if ((status =  vf_conversion(gm, om)) != eslOK) return status;   /* ViterbiFilter()'s information */
-  if ((status =  fb_conversion(gm, om)) != eslOK) return status;   /* ForwardFilter()'s information */
+static int p7_oprofile_Convert_Dispatcher(const P7_PROFILE *gm, P7_OPROFILE *om){
 
-  if (om->name != NULL) free(om->name);
-  if (om->acc  != NULL) free(om->acc);
-  if (om->desc != NULL) free(om->desc);
-  if ((status = esl_strdup(gm->name, -1, &(om->name))) != eslOK) goto ERROR;
-  if ((status = esl_strdup(gm->acc,  -1, &(om->acc)))  != eslOK) goto ERROR;
-  if ((status = esl_strdup(gm->desc, -1, &(om->desc))) != eslOK) goto ERROR;
-  strcpy(om->rf,        gm->rf);
-  strcpy(om->mm,        gm->mm);
-  strcpy(om->cs,        gm->cs);
-  strcpy(om->consensus, gm->consensus);
-  for (z = 0; z < p7_NEVPARAM; z++) om->evparam[z] = gm->evparam[z];
-  for (z = 0; z < p7_NCUTOFFS; z++) om->cutoff[z]  = gm->cutoff[z];
-  for (z = 0; z < p7_MAXABET;  z++) om->compo[z]   = gm->compo[z];
 
-  return eslOK;
+#ifdef P7_TEST_ALL_SIMD
+ p7_oprofile_Convert = p7_oprofile_Convert_test_all;
+ return p7_oprofile_Convert_test_all(gm, om);
+ 
+#endif
 
- ERROR:
-  return status;
+#ifdef P7_TEST_SSE_AVX
+ p7_oprofile_Convert = p7_oprofile_Convert_test_sse_avx;
+ return p7_oprofile_Convert_test_sse_avx(gm, om);  
+#endif
+
+#ifdef eslENABLE_AVX512  // Fastest first.
+ if (esl_cpu_has_avx512())
+   {
+     p7_oprofile_Convert = p7_oprofile_Convert_avx512;
+     return p7_oprofile_Convert_avx512(gm, om);
+   }
+#endif
+
+#ifdef eslENABLE_AVX
+  if (esl_cpu_has_avx())
+    {
+     p7_oprofile_Convert = p7_oprofile_Convert_avx;
+     return p7_oprofile_Convert_avx(gm, om); 
+    }
+#endif
+
+#ifdef eslENABLE_SSE
+  if (esl_cpu_has_sse4())
+    {
+      p7_oprofile_Convert = p7_oprofile_Convert_sse;
+      return p7_oprofile_Convert_sse(gm, om);
+    }
+#endif
+
+  p7_Die("p7_oprofile_Convert_dispatcher found no vector implementation - that shouldn't happen.");
+  return eslFAIL;
 }
 
 
@@ -1873,25 +744,54 @@ p7_oprofile_ReconfigUnihit(P7_OPROFILE *om, int L)
  *
  * Throws:    (no abnormal error conditions)
  */
+static int
+p7_oprofile_GetFwdTransitionArray_Dispatcher(const P7_OPROFILE *om, int type, float *arr );
+
 int
-p7_oprofile_GetFwdTransitionArray(const P7_OPROFILE *om, int type, float *arr )
-{
-  int     nq  = p7O_NQF(om->M);     /* # of striped vectors needed            */
-  int i, j;
-  union { __m128 v; float x[4]; } tmp; /* used to align and read simd minivectors               */
+(* p7_oprofile_GetFwdTransitionArray)(const P7_OPROFILE *om, int type, float *arr ) = p7_oprofile_GetFwdTransitionArray_Dispatcher;
 
+static int
+p7_oprofile_GetFwdTransitionArray_Dispatcher(const P7_OPROFILE *om, int type, float *arr ){
 
-  for (i=0; i<nq; i++) {
-    // because DD transitions are held at the end of the tfv array
-    tmp.v = om->tfv[ (type==p7O_DD ?  nq*7+i :  type+7*i) ];
-    for (j=0; j<4; j++)
-      if ( i+1+ j*nq < om->M+1)
-        arr[i+1+ j*nq]      = tmp.x[j];
-  }
+  #ifdef P7_TEST_ALL_SIMD
+ p7_oprofile_GetFwdTransitionArray = p7_oprofile_GetFwdTransitionArray_test_all;
+ return p7_oprofile_GetFwdTransitionArray_test_all(om, type, arr);
+ 
+#endif
 
-  return eslOK;
+#ifdef P7_TEST_SSE_AVX
+ p7_oprofile_GetFwdTransitionArray = p7_oprofile_GetFwdTransitionArray_test_sse_avx;
+ return p7_oprofile_GetFwdTransitionArray_test_sse_avx(om, type, arr);  
+#endif
 
+#ifdef eslENABLE_AVX512  // Fastest first.
+ if (esl_cpu_has_avx512())
+   {
+     p7_oprofile_GetFwdTransitionArray = p7_oprofile_GetFwdTransitionArray_avx512;
+     return p7_oprofile_GetFwdTransitionArray_avx512(om, type, arr);
+   }
+#endif
+
+#ifdef eslENABLE_AVX
+  if (esl_cpu_has_avx())
+    {
+     p7_oprofile_GetFwdTransitionArray = p7_oprofile_GetFwdTransitionArray_avx;
+     return p7_oprofile_GetFwdTransitionArray_avx(om, type, arr); 
+    }
+#endif
+
+#ifdef eslENABLE_SSE
+  if (esl_cpu_has_sse4())
+    {
+      p7_oprofile_GetFwdTransitionArray = p7_oprofile_GetFwdTransitionArray_sse;
+      return p7_oprofile_GetFwdTransitionArray_sse(om, type, arr);
+    }
+#endif
+
+  p7_Die("p7_oprofile_GetFwdTransitionArray_dispatcher found no vector implementation - that shouldn't happen.");
+  return eslFAIL;
 }
+
 
 /* Function:  p7_oprofile_GetSSVEmissionScoreArray()
  * Synopsis:  Retrieve MSV residue emission scores from an optimized
@@ -1916,26 +816,53 @@ p7_oprofile_GetFwdTransitionArray(const P7_OPROFILE *om, int type, float *arr )
  *
  * Throws:    (no abnormal error conditions)
  */
-int
-p7_oprofile_GetSSVEmissionScoreArray(const P7_OPROFILE *om, uint8_t *arr )
+
+static int
+p7_oprofile_GetSSVEmissionScoreArray_Dispatcher(const P7_OPROFILE *om, uint8_t *arr );
+
+int (* p7_oprofile_GetSSVEmissionScoreArray)(const P7_OPROFILE *om, uint8_t *arr ) = p7_oprofile_GetSSVEmissionScoreArray_Dispatcher;
+
+static int
+p7_oprofile_GetSSVEmissionScoreArray_Dispatcher(const P7_OPROFILE *om, uint8_t *arr )
 {
-  int x, q, z, k;
-  union { __m128i v; uint8_t i[16]; } tmp; /* used to align and read simd minivectors           */
-  int      M   = om->M;    /* length of the query                                          */
-  int      K   = om->abc->Kp;
-  int      nq  = p7O_NQB(M);     /* segment length; total # of striped vectors needed            */
-  int cell_cnt = (om->M + 1) * K;
+  
+  #ifdef P7_TEST_ALL_SIMD
+ p7_oprofile_GetSSVEmissionScoreArray = p7_oprofile_GetSSVEmissionScoreArray_test_all;
+ return p7_oprofile_GetSSVEmissionScoreArray_test_all(om,  arr);
+ 
+#endif
 
-  for (x = 0; x < K ; x++) {
-    for (q = 0, k = 1; q < nq; q++, k++) {
-      tmp.v = om->rbv[x][q];
-      for (z=0; z<16; z++)
-        if (  (K * (k+z*nq) + x) < cell_cnt) 
-          arr[ K * (k+z*nq) + x ] = tmp.i[z];
+#ifdef P7_TEST_SSE_AVX
+ p7_oprofile_GetSSVEmissionScoreArray = p7_oprofile_GetSSVEmissionScoreArray_test_sse_avx;
+ return p7_oprofile_GetSSVEmissionScoreArray_test_sse_avx(om,  arr);  
+#endif
+
+#ifdef eslENABLE_AVX512  // Fastest first.
+ if (esl_cpu_has_avx512())
+   {
+     p7_oprofile_GetSSVEmissionScoreArray = p7_oprofile_GetSSVEmissionScoreArray_avx512;
+     return p7_oprofile_GetSSVEmissionScoreArray_avx512(om, arr);
+   }
+#endif
+
+#ifdef eslENABLE_AVX
+  if (esl_cpu_has_avx())
+    {
+     p7_oprofile_GetSSVEmissionScoreArray = p7_oprofile_GetSSVEmissionScoreArray_avx;
+     return p7_oprofile_GetSSVEmissionScoreArray_avx(om,  arr); 
     }
-  }
+#endif
 
-  return eslOK;
+#ifdef eslENABLE_SSE
+  if (esl_cpu_has_sse4())
+    {
+      p7_oprofile_GetSSVEmissionScoreArray = p7_oprofile_GetSSVEmissionScoreArray_sse;
+      return p7_oprofile_GetSSVEmissionScoreArray_sse(om, arr);
+    }
+#endif
+
+  p7_Die("p7_oprofile_GetSSVEmissionScoreArray_dispatcher found no vector implementation - that shouldn't happen.");
+  return eslFAIL;
 }
 
 
@@ -1968,27 +895,54 @@ p7_oprofile_GetSSVEmissionScoreArray(const P7_OPROFILE *om, uint8_t *arr )
  *            I think it's only working because of order of operations:
  *            it improperly stores a few values then overwrites them.
  */
-int
-p7_oprofile_GetFwdEmissionScoreArray(const P7_OPROFILE *om, float *arr )
+static int
+p7_oprofile_GetFwdEmissionScoreArray_Dispatcher(const P7_OPROFILE *om, float *arr );
+
+int (* p7_oprofile_GetFwdEmissionScoreArray)(const P7_OPROFILE *om, float *arr ) = p7_oprofile_GetFwdEmissionScoreArray_Dispatcher;
+
+static int
+p7_oprofile_GetFwdEmissionScoreArray_Dispatcher(const P7_OPROFILE *om, float *arr )
 {
-  int x, q, z, k;
-  union { __m128 v; float f[4]; } tmp; /* used to align and read simd minivectors               */
-  int      M   = om->M;    /* length of the query                                          */
-  int      K   = om->abc->Kp;
-  int      nq  = p7O_NQF(M);     /* segment length; total # of striped vectors needed            */
-  int cell_cnt = (om->M + 1) * K;
+  
+  #ifdef P7_TEST_ALL_SIMD
+ p7_oprofile_GetFwdEmissionScoreArray = p7_oprofile_GetFwdEmissionScoreArray_test_all;
+ return p7_oprofile_GetFwdEmissionScoreArray_test_all(om,  arr);
+ 
+#endif
 
-  for (x = 0; x < K; x++) {
-      for (q = 0, k = 1; q < nq; q++, k++) {
-        tmp.v = esl_sse_logf(om->rfv[x][q]);
-        for (z = 0; z < 4; z++)
-          if (  (K * (k+z*nq) + x) < cell_cnt)
-            arr[ K * (k+z*nq) + x ] = tmp.f[z];
-      }
-  }
+#ifdef P7_TEST_SSE_AVX
+ p7_oprofile_GetFwdEmissionScoreArray = p7_oprofile_GetFwdEmissionScoreArray_test_sse_avx;
+ return p7_oprofile_GetFwdEmissionScoreArray_test_sse_avx(om,  arr);  
+#endif
 
-  return eslOK;
+#ifdef eslENABLE_AVX512  // Fastest first.
+ if (esl_cpu_has_avx512())
+   {
+     p7_oprofile_GetFwdEmissionScoreArray = p7_oprofile_GetFwdEmissionScoreArray_avx512;
+     return p7_oprofile_GetFwdEmissionScoreArray_avx512(om, arr);
+   }
+#endif
+
+#ifdef eslENABLE_AVX
+  if (esl_cpu_has_avx())
+    {
+     p7_oprofile_GetFwdEmissionScoreArray = p7_oprofile_GetFwdEmissionScoreArray_avx;
+     return p7_oprofile_GetFwdEmissionScoreArray_avx(om,  arr); 
+    }
+#endif
+
+#ifdef eslENABLE_SSE
+  if (esl_cpu_has_sse4())
+    {
+      p7_oprofile_GetFwdEmissionScoreArray = p7_oprofile_GetFwdEmissionScoreArray_sse;
+      return p7_oprofile_GetFwdEmissionScoreArray_sse(om, arr);
+    }
+#endif
+
+  p7_Die("p7_oprofile_GetFwdEmissionScoreArray_dispatcher found no vector implementation - that shouldn't happen.");
+  return eslFAIL;
 }
+
 
 /* Function:  p7_oprofile_GetFwdEmissionArray()
  * Synopsis:  Retrieve Fwd (float) residue emission values from an optimized
@@ -2019,32 +973,55 @@ p7_oprofile_GetFwdEmissionScoreArray(const P7_OPROFILE *om, float *arr )
  *            (Why are we even doing this. If we want unstriped probabilities,
  *            use the HMM, not the vectorized profile, right?)
  */
-int
-p7_oprofile_GetFwdEmissionArray(const P7_OPROFILE *om, P7_BG *bg, float *arr )
+
+static int
+p7_oprofile_GetFwdEmissionArray_Dispatcher(const P7_OPROFILE *om, P7_BG *bg, float *arr );
+
+int (* p7_oprofile_GetFwdEmissionArray)(const P7_OPROFILE *om, P7_BG *bg, float *arr ) = p7_oprofile_GetFwdEmissionArray_Dispatcher;
+
+static int
+p7_oprofile_GetFwdEmissionArray_Dispatcher(const P7_OPROFILE *om, P7_BG *bg, float *arr )
 {
-  int x, q, z, k;
-  union { __m128 v; float f[4]; } tmp; /* used to align and read simd minivectors               */
-  int      M   = om->M;    /* length of the query                                          */
-  int      Kp  = om->abc->Kp;
-  int      K   = om->abc->K;
-  int      nq  = p7O_NQF(M);     /* segment length; total # of striped vectors needed            */
-  int cell_cnt = (om->M + 1) * Kp;
+  
+  #ifdef P7_TEST_ALL_SIMD
+ p7_oprofile_GetFwdEmissionArray = p7_oprofile_GetFwdEmissionArray_test_all;
+ return p7_oprofile_GetFwdEmissionArray_test_all(om, bg, arr);
+ 
+#endif
 
-  for (x = 0; x < K; x++) {
-      for (q = 0, k = 1; q < nq; q++, k++) {
-        tmp.v = om->rfv[x][q];
-        for (z = 0; z < 4; z++)
-          if (  (Kp * (k+z*nq) + x) < cell_cnt)
-            arr[ Kp * (k+z*nq) + x ] = tmp.f[z] * bg->f[x];
-      }
-  }
+#ifdef P7_TEST_SSE_AVX
+ p7_oprofile_GetFwdEmissionArray = p7_oprofile_GetFwdEmissionArray_test_sse_avx;
+ return p7_oprofile_GetFwdEmissionArray_test_sse_avx(om, bg, arr);  
+#endif
 
-  //degeneracy emissions for each position
-  for (x = 0; x <= M; x++)
-    esl_abc_FExpectScVec(om->abc, arr+Kp*x, bg->f);
+#ifdef eslENABLE_AVX512  // Fastest first.
+ if (esl_cpu_has_avx512())
+   {
+     p7_oprofile_GetFwdEmissionArray = p7_oprofile_GetFwdEmissionArray_avx512;
+     return p7_oprofile_GetFwdEmissionArray_avx512(om, bg, arr);
+   }
+#endif
 
-  return eslOK;
+#ifdef eslENABLE_AVX
+  if (esl_cpu_has_avx())
+    {
+     p7_oprofile_GetFwdEmissionArray = p7_oprofile_GetFwdEmissionArray_avx;
+     return p7_oprofile_GetFwdEmissionArray_avx(om, bg, arr); 
+    }
+#endif
+
+#ifdef eslENABLE_SSE
+  if (esl_cpu_has_sse4())
+    {
+      p7_oprofile_GetFwdEmissionArray = p7_oprofile_GetFwdEmissionArray_sse;
+      return p7_oprofile_GetFwdEmissionArray_sse(om, bg, arr);
+    }
+#endif
+
+  p7_Die("p7_oprofile_GetFwdEmissionArray_dispatcher found no vector implementation - that shouldn't happen.");
+  return eslFAIL;
 }
+
 
 
 /*------------ end, conversions from P7_OPROFILE ------------------*/
@@ -2464,90 +1441,53 @@ p7_oprofile_Sample(ESL_RANDOMNESS *r, const ESL_ALPHABET *abc, const P7_BG *bg, 
  *            
  * Returns:   <eslOK> on effective equality;  <eslFAIL> on difference.
  */
+
+static int p7_oprofile_compare_Dispatcher(const P7_OPROFILE *om1, const P7_OPROFILE *om2, float tol, char *errmsg);
+
 int
-p7_oprofile_Compare(const P7_OPROFILE *om1, const P7_OPROFILE *om2, float tol, char *errmsg)
-{
-  int Q4  = p7O_NQF(om1->M);
-  int Q8  = p7O_NQW(om1->M);
-  int Q16 = p7O_NQB(om1->M);
-  int q, r, x, y;
-  union { __m128i v; uint8_t c[16]; } a16, b16;
-  union { __m128i v; int16_t w[8];  } a8,  b8;
-  union { __m128  v; float   x[4];  } a4,  b4;
+(*p7_oprofile_Compare)(const P7_OPROFILE *om1, const P7_OPROFILE *om2, float tol, char *errmsg) = p7_oprofile_compare_Dispatcher;
 
-  if (om1->mode      != om2->mode)      ESL_FAIL(eslFAIL, errmsg, "comparison failed: mode");
-  if (om1->L         != om2->L)         ESL_FAIL(eslFAIL, errmsg, "comparison failed: L");
-  if (om1->M         != om2->M)         ESL_FAIL(eslFAIL, errmsg, "comparison failed: M");
-  if (om1->nj        != om2->nj)        ESL_FAIL(eslFAIL, errmsg, "comparison failed: nj");
-  if (om1->abc->type != om2->abc->type) ESL_FAIL(eslFAIL, errmsg, "comparison failed: alphabet type");
-
-  /* MSVFilter part */
-  for (x = 0; x < om1->abc->Kp; x++)
-    for (q = 0; q < Q16; q++)
-      {
-	a16.v = om1->rbv[x][q]; b16.v = om2->rbv[x][q];
-	for (r = 0; r < 16; r++) if (a16.c[r] != b16.c[r]) ESL_FAIL(eslFAIL, errmsg, "comparison failed: rb[%d] elem %d", q, r);
-      }
-  if (om1->tbm_b     != om2->tbm_b)     ESL_FAIL(eslFAIL, errmsg, "comparison failed: tbm_b");
-  if (om1->tec_b     != om2->tec_b)     ESL_FAIL(eslFAIL, errmsg, "comparison failed: tec_b");
-  if (om1->tjb_b     != om2->tjb_b)     ESL_FAIL(eslFAIL, errmsg, "comparison failed: tjb_b");
-  if (om1->scale_b   != om2->scale_b)   ESL_FAIL(eslFAIL, errmsg, "comparison failed: scale_b");
-  if (om1->base_b    != om2->base_b)    ESL_FAIL(eslFAIL, errmsg, "comparison failed: base_b");
-  if (om1->bias_b    != om2->bias_b)    ESL_FAIL(eslFAIL, errmsg, "comparison failed: bias_b");
-
-  /* ViterbiFilter() part */
-  for (x = 0; x < om1->abc->Kp; x++)
-    for (q = 0; q < Q8; q++)
-      {
-	a8.v = om1->rwv[x][q]; b8.v = om2->rwv[x][q];
-	for (r = 0; r < 8; r++) if (a8.w[r] != b8.w[r]) ESL_FAIL(eslFAIL, errmsg, "comparison failed: rw[%d] elem %d", q, r);
-      }
-  for (q = 0; q < 8*Q16; q++)
-    {
-      a8.v = om1->twv[q]; b8.v = om2->twv[q];
-      for (r = 0; r < 8; r++) if (a8.w[r] != b8.w[r]) ESL_FAIL(eslFAIL, errmsg, "comparison failed: tw[%d] elem %d", q, r);
-    }
-  for (x = 0; x < p7O_NXSTATES; x++)
-    for (y = 0; y < p7O_NXTRANS; y++)
-      if (om1->xw[x][y] != om2->xw[x][y]) ESL_FAIL(eslFAIL, errmsg, "comparison failed: xw[%d][%d]", x, y);
-
-  if (om1->scale_w   != om2->scale_w)   ESL_FAIL(eslFAIL, errmsg, "comparison failed: scale");
-  if (om1->base_w    != om2->base_w)    ESL_FAIL(eslFAIL, errmsg, "comparison failed: base");
-  if (om1->ddbound_w != om2->ddbound_w) ESL_FAIL(eslFAIL, errmsg, "comparison failed: ddbound_w");
+static int p7_oprofile_compare_Dispatcher(const P7_OPROFILE *om1, const P7_OPROFILE *om2, float tol, char *errmsg){
   
-  /* Forward/Backward part */
-  for (x = 0; x < om1->abc->Kp; x++)
-    for (q = 0; q < Q4; q++)
-      {
-	a4.v = om1->rfv[x][q]; b4.v = om2->rfv[x][q];
-	for (r = 0; r < 4; r++) if (esl_FCompare_old(a4.x[r], b4.x[r], tol) != eslOK)  ESL_FAIL(eslFAIL, errmsg, "comparison failed: rf[%d] elem %d", q, r);
-      }
-  for (q = 0; q < 8*Q4; q++)
+#ifdef P7_TEST_ALL_SIMD
+ p7_oprofile_Compare = p7_oprofile_Compare_test_all;
+ return p7_oprofile_Compare_test_all(om1, om2, tol, errmsg);
+ 
+#endif
+
+#ifdef P7_TEST_SSE_AVX
+ p7_oprofile_Compare = p7_oprofile_Compare_test_sse_avx;
+ return p7_oprofile_Compare_test_sse_avx(om1, om2, tol, errmsg);  
+#endif
+
+#ifdef eslENABLE_AVX512  // Fastest first.
+ if (esl_cpu_has_avx512())
+   {
+     p7_oprofile_Compare = p7_oprofile_Compare_avx512;
+     return p7_oprofile_Compare_avx512(om1, om2, tol, errmsg);
+   }
+#endif
+
+#ifdef eslENABLE_AVX
+  if (esl_cpu_has_avx())
     {
-      a4.v = om1->tfv[q]; b4.v = om2->tfv[q];
-      for (r = 0; r < 4; r++) if (a4.x[r] != b4.x[r]) ESL_FAIL(eslFAIL, errmsg, "comparison failed: tf[%d] elem %d", q, r);
+     p7_oprofile_Compare = p7_oprofile_Compare_avx;
+     return p7_oprofile_Compare_avx(om1, om2, tol, errmsg); 
     }
-  for (x = 0; x < p7O_NXSTATES; x++)
-    if (esl_vec_FCompare(om1->xf[x], om2->xf[x], p7O_NXTRANS, tol) != eslOK) ESL_FAIL(eslFAIL, errmsg, "comparison failed: xf[%d] vector", x);
+#endif
 
-   for (x = 0; x < p7_NOFFSETS; x++)
-     if (om1->offs[x] != om2->offs[x]) ESL_FAIL(eslFAIL, errmsg, "comparison failed: offs[%d]", x);
+#ifdef eslENABLE_SSE
+  if (esl_cpu_has_sse4())
+    {
+      p7_oprofile_Compare = p7_oprofile_Compare_sse;
+      return p7_oprofile_Compare_sse(om1, om2, tol, errmsg);
+    }
+#endif
 
-   if (esl_strcmp(om1->name,      om2->name)      != 0) ESL_FAIL(eslFAIL, errmsg, "comparison failed: name");
-   if (esl_strcmp(om1->acc,       om2->acc)       != 0) ESL_FAIL(eslFAIL, errmsg, "comparison failed: acc");
-   if (esl_strcmp(om1->desc,      om2->desc)      != 0) ESL_FAIL(eslFAIL, errmsg, "comparison failed: desc");
-   if (esl_strcmp(om1->rf,        om2->rf)        != 0) ESL_FAIL(eslFAIL, errmsg, "comparison failed: ref");
-   if (esl_strcmp(om1->mm,        om2->mm)        != 0) ESL_FAIL(eslFAIL, errmsg, "comparison failed: mm");
-   if (esl_strcmp(om1->cs,        om2->cs)        != 0) ESL_FAIL(eslFAIL, errmsg, "comparison failed: cs");
-   if (esl_strcmp(om1->consensus, om2->consensus) != 0) ESL_FAIL(eslFAIL, errmsg, "comparison failed: consensus");
-   
-   if (esl_vec_FCompare(om1->evparam, om2->evparam, p7_NEVPARAM, tol) != eslOK) ESL_FAIL(eslFAIL, errmsg, "comparison failed: evparam vector");
-   if (esl_vec_FCompare(om1->cutoff,  om2->cutoff,  p7_NCUTOFFS, tol) != eslOK) ESL_FAIL(eslFAIL, errmsg, "comparison failed: cutoff vector");
-   if (esl_vec_FCompare(om1->compo,   om2->compo,   p7_MAXABET,  tol) != eslOK) ESL_FAIL(eslFAIL, errmsg, "comparison failed: compo vector");
+  p7_Die("p7_oprofile_Compare_dispatcher found no vector implementation - that shouldn't happen.");
+  return eslFAIL;
 
-   return eslOK;
 }
-
 
 /* Function:  p7_profile_SameAsMF()
  * Synopsis:  Set a generic profile's scores to give MSV scores.
@@ -2562,6 +1502,7 @@ p7_oprofile_Compare(const P7_OPROFILE *om1, const P7_OPROFILE *om2, float tol, c
  *
  * Returns:   <eslOK> on success.
  */
+// Does not require separate versions for different SIMD ISAs
 int
 p7_profile_SameAsMF(const P7_OPROFILE *om, P7_PROFILE *gm)
 {
@@ -2623,6 +1564,7 @@ p7_profile_SameAsMF(const P7_OPROFILE *om, P7_PROFILE *gm)
  *
  * Throws:    (no abnormal error conditions)
  */
+// Does not require separate versions for different SIMD ISAs
 int
 p7_profile_SameAsVF(const P7_OPROFILE *om, P7_PROFILE *gm)
 {

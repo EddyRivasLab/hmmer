@@ -1,7 +1,7 @@
 #include "hmmer.h"
-#include "./impl_avx.h"
+#include "impl_avx.h"
 #include "esl_gumbel.h"
-
+#include "esl_cpu.h"
 /* The MSV (Multiple-Segment Viterbi) Filter
  * This is the second stage in the acceleration pipeline
  * 
@@ -61,34 +61,52 @@
  *
  * Throws:    <eslEINVAL> if <ox> allocation is too small.
  */
+static int
+msvfilter_dispatcher(const ESL_DSQ *dsq, int L, const P7_OPROFILE *om, P7_OMX *ox, float *ret_sc);
+// SSV Filter function pointer.  Starts out pointing to the dispatcher, gets updated to
+// point at the best-available SIMD implementation on first call
+int (*p7_MSVFilter)(const ESL_DSQ *dsq, int L, const P7_OPROFILE *om, P7_OMX *ox, float *ret_sc) =
+  msvfilter_dispatcher;
 
-// This is a testing stub.  
-int
-p7_MSVFilter(const ESL_DSQ *dsq, int L, const P7_OPROFILE *om, P7_OMX *ox, float *ret_sc)
+static int
+msvfilter_dispatcher(const ESL_DSQ *dsq, int L, const P7_OPROFILE *om, P7_OMX *ox, float *ret_sc)
 {
-  float res_sse, res_avx, res_avx512;
-  int res, res2, res3;
-  res = p7_MSVFilter_sse(dsq, L, om, ox, &res_sse);
-  res2 = p7_MSVFilter_avx(dsq, L, om, ox, &res_avx);
-  if(res != res2){
-    printf("Error: miss-match in MSV return codes.  SSE= %d, AVX = %d\n", res, res2);
-  }
-  if(esl_FCompare(res_sse, res_avx, .01, .01) != eslOK){
-    printf("Error: MSV miss-match.  SSE = %f, AVX = %f\n", res_sse, res_avx);
-  }
-  #ifdef USE_AVX512
-
-  res3 = p7_MSVFilter_avx512(dsq, L, om, ox, &res_avx512);
-  if(res != res3){
-    printf("Error: miss-match in MSV return codes.  SSE= %d, AVX512 = %d\n", res, res3);
-  }
-  if(esl_FCompare(res_sse, res_avx512, .01, .01) != eslOK){
-    printf("Error: MSV miss-match.  SSE = %f, AVX512 = %f\n", res_sse, res_avx);
-  }
-  //printf("checking MSV avx512 %f %f\n", res_sse, res_avx512);
+#ifdef P7_TEST_ALL_SIMD
+  p7_MSVFilter = p7_MSVFilter_test_all;
+  return p7_MSVFilter_test_all(dsq, L, om, ox, ret_sc);
 #endif
-  *ret_sc = res_sse;
-  return res;
+
+#ifdef P7_TEST_SSE_AVX
+  p7_MSVFilter = p7_MSVFilter_test_sse_avx;
+  return p7_MSVFilter_test_sse_avx(dsq, L, om, ox, ret_sc); 
+#endif
+
+#ifdef eslENABLE_AVX512  // Fastest first.
+  if (esl_cpu_has_avx512())
+    {
+      p7_MSVFilter = p7_MSVFilter_avx512;
+      return p7_MSVFilter_avx512(dsq, L, om, ox, ret_sc);
+    }
+#endif
+
+#ifdef eslENABLE_AVX
+  if (esl_cpu_has_avx())
+    {
+      p7_MSVFilter = p7_MSVFilter_avx;
+      return p7_MSVFilter_avx(dsq, L, om, ox, ret_sc);
+    }
+#endif
+
+#ifdef eslENABLE_SSE
+  if (esl_cpu_has_sse4())
+    {
+      p7_MSVFilter = p7_MSVFilter_sse;
+      return p7_MSVFilter_sse(dsq, L, om, ox, ret_sc);
+    }
+#endif
+
+  p7_Die("(msvfilter_dispatcher found no vector implementation - that shouldn't happen.");
+  return eslFAIL;
 }
 
 

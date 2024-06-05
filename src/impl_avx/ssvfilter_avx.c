@@ -836,4 +836,27 @@ p7_SSVFilter_avx_unrolled(const ESL_DSQ *dsq, int L, const P7_OPROFILE *om, floa
   return eslOK;
 }
 
+// test code
+int
+p7_SSVFilter_test_sse_avx(const ESL_DSQ *dsq, int L, const P7_OPROFILE *om, float *ret_sc){
+
+  float res_sse, res_avx;
+  int res, res2;
+
+  res = p7_SSVFilter_sse(dsq, L, om, &res_sse);
+  res2 = p7_SSVFilter_avx(dsq, L, om, &res_avx);
+
+  if(res != res2){
+    printf("Error: SSV calls returned different results: %d %d\n", res, res2);
+  }
+
+  // ret_sc is undefined if the result is eslENORESULT
+  if(res != eslENORESULT && (esl_FCompare(res_sse, res_avx, .01, .01) != eslOK)){
+    printf("Error: SSV miss-match.  SSE = %f, AVX = %f\n", res_sse, res_avx);
+  }
+
+  *ret_sc = res_sse;
+
+  return res;
+}
 

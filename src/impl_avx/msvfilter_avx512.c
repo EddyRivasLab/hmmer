@@ -20,17 +20,11 @@
 #include <stdio.h>
 #include <math.h>
 
-#include <xmmintrin.h>		/* SSE  */
-#include <emmintrin.h>		/* SSE2 */
-#include <immintrin.h>    /* AVX2*/
-
 #include "easel.h"
-#include "esl_sse.h"
 #include "esl_gumbel.h"
 
 #include "hmmer.h"
 #include "impl_avx.h"
-#ifdef USE_AVX512
 #include <x86intrin.h>
 #include "esl_avx512.h"
 /*****************************************************************
@@ -214,6 +208,5 @@ p7_MSVFilter_avx512(const ESL_DSQ *dsq, int L, const P7_OPROFILE *om, P7_OMX *ox
   return eslOK;
 }
 
-#endif
 /*------------------ end, p7_MSVFilter() ------------------------*/
 

@@ -38,7 +38,7 @@
 #include <emmintrin.h>		/* SSE2 */
 
 #include "easel.h"
-#include "esl_sse.h"
+#include "esl_cpu.h"
 
 #include "hmmer.h"
 #include "impl_avx.h"
@@ -84,35 +84,54 @@
  *            a probability-space odds ratio.
  *            In either case, <*opt_sc> is undefined.
  */
-int
-p7_Forward(const ESL_DSQ *dsq, int L, const P7_OPROFILE *om, P7_OMX *ox, float *opt_sc)
+
+static int
+forward_dispatcher(const ESL_DSQ *dsq, int L, const P7_OPROFILE *om, P7_OMX *fwd, float *opt_sc);
+// SSV Filter function pointer.  Starts out pointing to the dispatcher, gets updated to
+// point at the best-available SIMD implementation on first call
+int (*p7_Forward) (const ESL_DSQ *dsq, int L, const P7_OPROFILE *om, P7_OMX *ox, float *opt_sc)=
+  forward_dispatcher;
+
+static int
+forward_dispatcher(const ESL_DSQ *dsq, int L, const P7_OPROFILE *om, P7_OMX *fwd, float *opt_sc)
 {
-#if eslDEBUGLEVEL > 0		
-  if (om->M >  ox->allocQ4*4)    ESL_EXCEPTION(eslEINVAL, "DP matrix allocated too small (too few columns)");
-  if (L     >= ox->validR)       ESL_EXCEPTION(eslEINVAL, "DP matrix allocated too small (too few MDI rows)");
-  if (L     >= ox->allocXR)      ESL_EXCEPTION(eslEINVAL, "DP matrix allocated too small (too few X rows)");
-  if (! p7_oprofile_IsLocal(om)) ESL_EXCEPTION(eslEINVAL, "Forward implementation makes assumptions that only work for local alignment");
+#ifdef P7_TEST_ALL_SIMD
+  p7_Forward = p7_Forward_test_all;
+  return p7_Forward_test_all(dsq, L, om, fwd, opt_sc);
 #endif
 
-  float res_sse, res_avx, res_avx512;;
-  int ret;
+#ifdef P7_TEST_SSE_AVX
+  p7_Forward = p7_Forward_test_sse_avx;
+  return p7_Forward_test_sse_avx(dsq, L, om, fwd, opt_sc); 
+#endif
 
-  ret=p7_Forward_sse(dsq, L, om, ox, &res_sse);
-  p7_Forward_avx(dsq, L, om, ox, &res_avx);
-  p7_Forward_avx512(dsq, L, om, ox, &res_avx512);
+#ifdef eslENABLE_AVX512  // Fastest first.
+  if (esl_cpu_has_avx512())
+    {
+      p7_Forward = p7_Forward_avx512;
+      return p7_Forward_avx512(dsq, L, om, fwd, opt_sc);
+    }
+#endif
 
-  if(esl_FCompare(res_sse, res_avx, .01, .01) != eslOK){
-    printf("Error: p7_Forward miss-match.  SSE = %f, AVX = %f\n", res_sse, res_avx);
-  }
-  if(esl_FCompare(res_sse, res_avx512, .01, .01) != eslOK){
-    printf("Error: p7_Forward miss-match.  SSE = %f, AVX512 = %f\n", res_sse, res_avx512);
-  }
-  if(opt_sc != NULL){
-    *opt_sc = res_sse;
-  }
-  return ret;
+#ifdef eslENABLE_AVX
+  if (esl_cpu_has_avx())
+    {
+      p7_Forward = p7_Forward_avx;
+      return p7_Forward_avx(dsq, L, om, fwd, opt_sc);
+    }
+#endif
+
+#ifdef eslENABLE_SSE
+  if (esl_cpu_has_sse4())
+    {
+      p7_Forward = p7_Forward_sse;
+      return p7_Forward_sse(dsq, L, om, fwd, opt_sc);
+    }
+#endif
+
+  p7_Die("forward_dispatcher found no vector implementation - that shouldn't happen.");
+  return eslFAIL;
 }
-
 /* Function:  p7_ForwardParser()
  * Synopsis:  The Forward algorithm, linear memory parsing version.
  * Incept:    SRE, Fri Aug 15 19:05:26 2008 [Casa de Gatos]
@@ -125,7 +144,7 @@ p7_Forward(const ESL_DSQ *dsq, int L, const P7_OPROFILE *om, P7_OMX *ox, float *
  *            domains are.
  * 
  *            The caller must provide a suitably allocated "parsing"
- *            <ox> by calling <ox = p7_omx_Create(M, 0, L)> or
+ *            <fwd> by calling <ox = p7_omx_Create(M, 0, L)> or
  *            <p7_omx_GrowTo(ox, M, 0, L)>.
  *            
  * Args:      dsq     - digital target sequence, 1..L
@@ -142,36 +161,54 @@ p7_Forward(const ESL_DSQ *dsq, int L, const P7_OPROFILE *om, P7_OMX *ox, float *
  *            a probability-space odds ratio.
  *            In either case, <*opt_sc> is undefined.
  */
-int
-p7_ForwardParser(const ESL_DSQ *dsq, int L, const P7_OPROFILE *om, P7_OMX *ox, float *opt_sc)
+
+static int
+forwardParser_dispatcher(const ESL_DSQ *dsq, int L, const P7_OPROFILE *om, P7_OMX *fwd, float *opt_sc);
+// SSV Filter function pointer.  Starts out pointing to the dispatcher, gets updated to
+// point at the best-available SIMD implementation on first call
+int (*p7_ForwardParser) (const ESL_DSQ *dsq, int L, const P7_OPROFILE *om, P7_OMX *fwd, float *opt_sc)=
+  forwardParser_dispatcher;
+
+static int
+forwardParser_dispatcher(const ESL_DSQ *dsq, int L, const P7_OPROFILE *om, P7_OMX *fwd, float *opt_sc)
 {
-#if eslDEBUGLEVEL > 0		
-  if (om->M >  ox->allocQ4*4)    ESL_EXCEPTION(eslEINVAL, "DP matrix allocated too small (too few columns)");
-  if (ox->validR < 1)            ESL_EXCEPTION(eslEINVAL, "DP matrix allocated too small (too few MDI rows)");
-  if (L     >= ox->allocXR)      ESL_EXCEPTION(eslEINVAL, "DP matrix allocated too small (too few X rows)");
-  if (! p7_oprofile_IsLocal(om)) ESL_EXCEPTION(eslEINVAL, "Forward implementation makes assumptions that only work for local alignment");
+#ifdef P7_TEST_ALL_SIMD
+  p7_ForwardParser = p7_ForwardParser_test_all;
+  return p7_ForwardParser_test_all(dsq, L, om, fwd, opt_sc);
 #endif
-  float res_sse, res_avx, res_avx512;
-  int ret;
 
-  ret=p7_ForwardParser_sse(dsq, L, om, ox, &res_sse);
-  p7_ForwardParser_avx(dsq, L, om, ox, &res_avx);
-  p7_ForwardParser_avx512(dsq, L, om, ox, &res_avx512);
+#ifdef P7_TEST_SSE_AVX
+  p7_ForwardParser = p7_ForwardParser_test_sse_avx;
+  return p7_ForwardParser_test_sse_avx(dsq, L, om, fwd, opt_sc); 
+#endif
 
-  
-    if(esl_FCompare(res_sse, res_avx, .01, .01) != eslOK){
-    printf("Error: p7_Forward miss-match.  SSE = %f, AVX = %f\n", res_sse, res_avx);
-  }
-  if(esl_FCompare(res_sse, res_avx512, .01, .01) != eslOK){
-    printf("Error: p7_Forward miss-match.  SSE = %f, AVX512 = %f\n", res_sse, res_avx512);
-  }
-    if(opt_sc != NULL){
-    *opt_sc = res_sse;
-  }
-  return ret;
+#ifdef eslENABLE_AVX512  // Fastest first.
+  if (esl_cpu_has_avx512())
+    {
+      p7_ForwardParser = p7_ForwardParser_avx512;
+      return p7_ForwardParser_avx512(dsq, L, om, fwd, opt_sc);
+    }
+#endif
 
+#ifdef eslENABLE_AVX
+  if (esl_cpu_has_avx())
+    {
+      p7_ForwardParser = p7_ForwardParser_avx;
+      return p7_ForwardParser_avx(dsq, L, om, fwd, opt_sc);
+    }
+#endif
+
+#ifdef eslENABLE_SSE
+  if (esl_cpu_has_sse4())
+    {
+      p7_ForwardParser = p7_ForwardParser_sse;
+      return p7_ForwardParser_sse(dsq, L, om, fwd, opt_sc);
+    }
+#endif
+
+  p7_Die("forward_dispatcher found no vector implementation - that shouldn't happen.");
+  return eslFAIL;
 }
-
 
 
 /* Function:  p7_Backward()
@@ -217,38 +254,54 @@ p7_ForwardParser(const ESL_DSQ *dsq, int L, const P7_OPROFILE *om, P7_OMX *ox, f
  *            a probability-space odds ratio.
  *            In either case, <*opt_sc> is undefined.
  */
-int 
-p7_Backward(const ESL_DSQ *dsq, int L, const P7_OPROFILE *om, const P7_OMX *fwd, P7_OMX *bck, float *opt_sc)
+
+static int
+backward_dispatcher(const ESL_DSQ *dsq, int L, const P7_OPROFILE *om, const P7_OMX *fwd, P7_OMX *bck, float *opt_sc);
+// SSV Filter function pointer.  Starts out pointing to the dispatcher, gets updated to
+// point at the best-available SIMD implementation on first call
+int (*p7_Backward) (const ESL_DSQ *dsq, int L, const P7_OPROFILE *om, const P7_OMX *fwd, P7_OMX *bck, float *opt_sc)=
+  backward_dispatcher;
+
+static int
+backward_dispatcher(const ESL_DSQ *dsq, int L, const P7_OPROFILE *om, const P7_OMX *fwd, P7_OMX *bck, float *opt_sc)
 {
-#if eslDEBUGLEVEL > 0		
-  if (om->M >  bck->allocQ4*4)    ESL_EXCEPTION(eslEINVAL, "DP matrix allocated too small (too few columns)");
-  if (L     >= bck->validR)       ESL_EXCEPTION(eslEINVAL, "DP matrix allocated too small (too few MDI rows)");
-  if (L     >= bck->allocXR)      ESL_EXCEPTION(eslEINVAL, "DP matrix allocated too small (too few X rows)");
-  if (L     != fwd->L)            ESL_EXCEPTION(eslEINVAL, "fwd matrix size doesn't agree with length L");
-  if (! p7_oprofile_IsLocal(om))  ESL_EXCEPTION(eslEINVAL, "Forward implementation makes assumptions that only work for local alignment");
+#ifdef P7_TEST_ALL_SIMD
+  p7_Backward = p7_Backward_test_all;
+  return p7_Backward_test_all(dsq, L, om, fwd, bck, opt_sc);
 #endif
 
-  float res_sse, res_avx, res_avx512;
-  int ret;
+#ifdef P7_TEST_SSE_AVX
+  p7_Backward = p7_Backward_test_sse_avx;
+  return p7_Backward_test_sse_avx(dsq, L, om, fwd, bck, opt_sc); 
+#endif
 
-  ret=p7_Backward_sse(dsq, L, om, fwd, bck, &res_sse);
-  p7_Backward_avx(dsq, L, om, fwd, bck, &res_avx);
-  p7_Backward_avx512(dsq, L, om, fwd, bck, &res_avx512);
+#ifdef eslENABLE_AVX512  // Fastest first.
+  if (esl_cpu_has_avx512())
+    {
+      p7_Backward = p7_Backward_avx512;
+      return p7_Backward_avx512(dsq, L, om, fwd, bck, opt_sc);
+    }
+#endif
 
-  
-    if(esl_FCompare(res_sse, res_avx, .01, .01) != eslOK){
-    printf("Error: p7_Forward miss-match.  SSE = %f, AVX = %f\n", res_sse, res_avx);
-  }
-  if(esl_FCompare(res_sse, res_avx512, .01, .01) != eslOK){
-    printf("Error: p7_Forward miss-match.  SSE = %f, AVX512 = %f\n", res_sse, res_avx512);
-  }
-    if(opt_sc != NULL){
-    *opt_sc = res_sse;
-  }
-  return ret;
+#ifdef eslENABLE_AVX
+  if (esl_cpu_has_avx())
+    {
+      p7_Backward = p7_Backward_avx;
+      return p7_Backward_avx(dsq, L, om, fwd, bck, opt_sc);
+    }
+#endif
+
+#ifdef eslENABLE_SSE
+  if (esl_cpu_has_sse4())
+    {
+      p7_Backward = p7_Backward_sse;
+      return p7_Backward_sse(dsq, L, om, fwd, bck, opt_sc);
+    }
+#endif
+
+  p7_Die("backward_dispatcher found no vector implementation - that shouldn't happen.");
+  return eslFAIL;
 }
-
-
 
 /* Function:  p7_BackwardParser()
  * Synopsis:  The Backward algorithm, linear memory parsing version.
@@ -280,38 +333,55 @@ p7_Backward(const ESL_DSQ *dsq, int L, const P7_OPROFILE *om, const P7_OMX *fwd,
  *            a probability-space odds ratio.
  *            In either case, <*opt_sc> is undefined.
  */
-int 
-p7_BackwardParser(const ESL_DSQ *dsq, int L, const P7_OPROFILE *om, const P7_OMX *fwd, P7_OMX *bck, float *opt_sc)
+
+
+static int
+backwardparser_dispatcher(const ESL_DSQ *dsq, int L, const P7_OPROFILE *om, const P7_OMX *fwd, P7_OMX *bck, float *opt_sc);
+// SSV Filter function pointer.  Starts out pointing to the dispatcher, gets updated to
+// point at the best-available SIMD implementation on first call
+int (*p7_BackwardParser) (const ESL_DSQ *dsq, int L, const P7_OPROFILE *om, const P7_OMX *fwd, P7_OMX *bck, float *opt_sc)=
+  backwardparser_dispatcher;
+
+static int
+backwardparser_dispatcher(const ESL_DSQ *dsq, int L, const P7_OPROFILE *om, const P7_OMX *fwd, P7_OMX *bck, float *opt_sc)
 {
-#if eslDEBUGLEVEL > 0		
-  if (om->M >  bck->allocQ4*4)    ESL_EXCEPTION(eslEINVAL, "DP matrix allocated too small (too few columns)");
-  if (bck->validR < 1)            ESL_EXCEPTION(eslEINVAL, "DP matrix allocated too small (too few MDI rows)");
-  if (L     >= bck->allocXR)      ESL_EXCEPTION(eslEINVAL, "DP matrix allocated too small (too few X rows)");
-  if (L     != fwd->L)            ESL_EXCEPTION(eslEINVAL, "fwd matrix size doesn't agree with length L");
-  if (! p7_oprofile_IsLocal(om))  ESL_EXCEPTION(eslEINVAL, "Forward implementation makes assumptions that only work for local alignment");
+#ifdef P7_TEST_ALL_SIMD
+  p7_BackwardParser = p7_BackwardParser_test_all;
+  return p7_BackwardParser_test_all(dsq, L, om, fwd, bck, opt_sc);
 #endif
 
-  float res_sse, res_avx, res_avx512;
-  int ret;
+#ifdef P7_TEST_SSE_AVX
+  p7_BackwardParser = p7_BackwardParser_test_sse_avx;
+  return p7_BackwardParser_test_sse_avx(dsq, L, om, fwd, bck, opt_sc); 
+#endif
 
-  ret=p7_BackwardParser_sse(dsq, L, om, fwd, bck, &res_sse);
-  p7_BackwardParser_avx(dsq, L, om, fwd, bck, &res_avx);
-  p7_BackwardParser_avx512(dsq, L, om, fwd, bck, &res_avx512);
+#ifdef eslENABLE_AVX512  // Fastest first.
+  if (esl_cpu_has_avx512())
+    {
+      p7_BackwardParser = p7_BackwardParser_avx512;
+      return p7_BackwardParser_avx512(dsq, L, om, fwd, bck, opt_sc);
+    }
+#endif
 
-  
-    if(esl_FCompare(res_sse, res_avx, .01, .01) != eslOK){
-    printf("Error: p7_Forward miss-match.  SSE = %f, AVX = %f\n", res_sse, res_avx);
-  }
-  if(esl_FCompare(res_sse, res_avx512, .01, .01) != eslOK){
-    printf("Error: p7_Forward miss-match.  SSE = %f, AVX512 = %f\n", res_sse, res_avx512);
-  }
-    if(opt_sc != NULL){
-    *opt_sc = res_sse;
-  }
-  return ret;
+#ifdef eslENABLE_AVX
+  if (esl_cpu_has_avx())
+    {
+      p7_BackwardParser = p7_BackwardParser_avx;
+      return p7_BackwardParser_avx(dsq, L, om, fwd, bck, opt_sc);
+    }
+#endif
+
+#ifdef eslENABLE_SSE
+  if (esl_cpu_has_sse4())
+    {
+      p7_BackwardParser = p7_BackwardParser_sse;
+      return p7_BackwardParser_sse(dsq, L, om, fwd, bck, opt_sc);
+    }
+#endif
+
+  p7_Die("backwardparser_dispatcher found no vector implementation - that shouldn't happen.");
+  return eslFAIL;
 }
-
-
 
 
 /*****************************************************************

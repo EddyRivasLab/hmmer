@@ -231,10 +231,10 @@ p7_oprofile_Sizeof(P7_OPROFILE *om)
 }
 
 /* Function:  p7_oprofile_Copy()
- * Synopsis:  Allocate an optimized profile structure.
+ * Synopsis:  Performs a full copy of a P7_Oprofile structure
  * Incept:    SRE, Sun Nov 25 12:03:19 2007 [Casa de Gatos]
  *
- * Purpose:   Allocate for profiles of up to <allocM> nodes for digital alphabet <abc>.
+ * Purpose:   Creates a copy of the input data structure.
  *
  * Throws:    <NULL> on allocation error.
  */

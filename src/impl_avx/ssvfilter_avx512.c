@@ -21,7 +21,7 @@
 
 #include "hmmer.h"
 #include "impl_avx.h"
-#ifdef USE_AVX512 // Only build this if we're going to use AVX512
+
 #include <x86intrin.h>
 
 /* Note that some ifdefs below has to be changed if these values are
@@ -845,4 +845,33 @@ p7_SSVFilter_avx512_unrolled(const ESL_DSQ *dsq, int L, const P7_OPROFILE *om, f
   return eslOK;
 }
 
-#endif
+
+// Test code
+int p7_SSVFilter_test_all(const ESL_DSQ *dsq, int L, const P7_OPROFILE *om, float *ret_sc){
+
+  float res_sse, res_avx, res_avx512;
+  int res, res2, res3;
+
+  res = p7_SSVFilter_sse(dsq, L, om, &res_sse);
+  res2 = p7_SSVFilter_avx(dsq, L, om, &res_avx);
+
+  if(res != res2){
+    printf("Error: SSV calls returned different results: %d %d\n", res, res2);
+  }
+
+  // ret_sc is undefined if the result is eslENORESULT
+  if(res != eslENORESULT && (esl_FCompare(res_sse, res_avx, .01, .01) != eslOK)){
+    printf("Error: SSV miss-match.  SSE = %f, AVX = %f\n", res_sse, res_avx);
+  }
+  res3 = p7_SSVFilter_avx512(dsq, L, om, &res_avx512);
+  if(res != res3){
+    printf("Error: miss-match in SSV return codes.  SSE= %d, AVX512 = %d\n", res, res3);
+  }
+  if(res != eslENORESULT && esl_FCompare(res_sse, res_avx512, .01, .01) != eslOK){
+    printf("Error: SSV miss-match.  SSE = %f, AVX512 = %f\n", res_sse, res_avx);
+  }
+  *ret_sc = res_sse;
+
+  return res;
+}
+

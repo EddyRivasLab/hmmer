@@ -412,38 +412,56 @@
 #include "hmmer.h"
 #include "impl_avx.h"
 
- // Stub code that determines which ISA to use.
+static int
+ssvfilter_dispatcher(const ESL_DSQ *dsq, int L, const P7_OPROFILE *om, float *ret_sc);
+// SSV Filter function pointer.  Starts out pointing to the dispatcher, gets updated to
+// point at the best-available SIMD implementation on first call
+int (*p7_SSVFilter)(const ESL_DSQ *dsq, int L, const P7_OPROFILE *om, float *ret_sc) =
+  ssvfilter_dispatcher;
 
+static int
+ssvfilter_dispatcher(const ESL_DSQ *dsq, int L, const P7_OPROFILE *om, float *ret_sc)
+{
+#ifdef P7_TEST_ALL_SIMD
+  p7_SSVFilter = p7_SSVFilter_test_all;
+  return p7_SSVFilter_test_all(dsq, L, om, ret_sc);
+#endif
 
- // Test code, runs both filters and checks them against each other
+#ifdef P7_TEST_SSE_AVX
+  p7_SSVFilter = p7_SSVFilter_test_sse_avx;
+  return p7_SSVFilter_test_sse_avx(dsq, L, om, ret_sc); 
+#endif
 
- int
-p7_SSVFilter(const ESL_DSQ *dsq, int L, const P7_OPROFILE *om, float *ret_sc){
+#ifdef eslENABLE_AVX512  // Fastest first.
+  if (esl_cpu_has_avx512())
+    {
+      p7_SSVFilter = p7_SSVFilter_avx512;
+      return p7_SSVFilter_avx512(dsq, L, om, ret_sc);
+    }
+#endif
 
-  float res_sse, res_avx, res_avx512;
-  int res, res2, res3;
+#ifdef eslENABLE_AVX
+  if (esl_cpu_has_avx())
+    {
+      p7_SSVFilter = p7_SSVFilter_avx;
+      return p7_SSVFilter_avx(dsq, L, om, ret_sc);
+    }
+#endif
 
-  res = p7_SSVFilter_avx512(dsq, L, om, &res_sse);
-  res2 = p7_SSVFilter_sse_unrolled(dsq, L, om, &res_avx);
+#ifdef eslENABLE_SSE
+  if (esl_cpu_has_sse4())
+    {
+      p7_SSVFilter = p7_SSVFilter_sse;
+      return p7_SSVFilter_sse(dsq, L, om, ret_sc);
+    }
+#endif
 
-  if(res != res2){
-    printf("Error: SSV calls returned different results: %d %d\n", res, res2);
-  }
-
-  // ret_sc is undefined if the result is eslENORESULT
-  if(res != eslENORESULT && (esl_FCompare(res_sse, res_avx, .01, .01) != eslOK)){
-    printf("Error: SSV miss-match.  SSE = %f, AVX = %f\n", res_sse, res_avx);
-  }
-  #ifdef USE_AVX512
-  res3 = p7_SSVFilter_avx512(dsq, L, om, &res_avx512);
-  if(res != res3){
-    printf("Error: miss-match in SSV return codes.  SSE= %d, AVX512 = %d\n", res, res3);
-  }
-  if(res != eslENORESULT && esl_FCompare(res_sse, res_avx512, .01, .01) != eslOK){
-    printf("Error: SSV miss-match.  SSE = %f, AVX512 = %f\n", res_sse, res_avx);
-  }
-  //   printf("checking SSV avx512 %f %f\n", res_sse, res_avx512);
-  #endif
-  *ret_sc = res_sse;
-  return res;
+  p7_Die("ssvfilter_dispatcher found no vector implementation - that shouldn't happen.");
+  return eslFAIL;
 }
+ 
+
+ // Test code, runs multiple filters and checks them against each other
+
+
+
