@@ -93,12 +93,8 @@ main(int argc, char **argv)
   /* Main body: read HMMs one at a time, print one line of stats per profile
    */
   nhmm = 0;
-  while ((status = p7_hmmfile_Read(hfp, &abc, &hmm)) != eslEOF) 
+  while ((status = p7_hmmfile_Read(hfp, &abc, &hmm)) == eslOK) 
     {
-      if      (status == eslEOD)       esl_fatal("read failed, HMM file %s may be truncated?", hmmfile);
-      else if (status == eslEFORMAT)   esl_fatal("bad file format in HMM file %s",             hmmfile);
-      else if (status == eslEINCOMPAT) esl_fatal("HMM file %s contains different alphabets",   hmmfile);
-      else if (status != eslOK)        esl_fatal("Unexpected error in reading HMMs from %s",   hmmfile);
       nhmm++;
 
       if (bg == NULL) bg = p7_bg_Create(abc);
@@ -120,6 +116,12 @@ main(int argc, char **argv)
 
       p7_hmm_Destroy(hmm);
     }
+  if      (nhmm == 0)              esl_fatal("HMM file %s empty (or at least, parser found no valid models)", hmmfile);
+  else if (status == eslEOD)       esl_fatal("read failed, HMM file %s may be truncated?", hmmfile);
+  else if (status == eslEFORMAT)   esl_fatal("bad file format in HMM file %s\n   %s",      hmmfile, hfp->errbuf);
+  else if (status == eslEINCOMPAT) esl_fatal("HMM file %s contains different alphabets",   hmmfile);
+  else if (status != eslEOF)       esl_fatal("Unexpected error in reading HMMs from %s",   hmmfile);
+
 
   p7_bg_Destroy(bg);
   esl_alphabet_Destroy(abc);
