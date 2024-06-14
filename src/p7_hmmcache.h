@@ -16,7 +16,6 @@ typedef struct {
 } P7_HMMCACHE;
 
 extern int    p7_hmmcache_Open (char *hmmfile, P7_HMMCACHE **ret_cache, char *errbuf);
-extern size_t p7_hmmcache_Sizeof         (P7_HMMCACHE *cache);
 extern int    p7_hmmcache_SetNumericNames(P7_HMMCACHE *cache);
 extern void   p7_hmmcache_Close          (P7_HMMCACHE *cache);
 

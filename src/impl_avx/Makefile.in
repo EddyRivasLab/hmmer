@@ -47,8 +47,8 @@ BASE_OBJS =  decoding.o\
 	stotrace.o\
 	vitfilter.o\
 	p7_omx.o\
-	p7_oprofile.o\
-	mpi.o
+	p7_oprofile.o
+
 
 SSE_OBJS = decoding_sse.o\
 	   fwdback_sse.o\
@@ -57,7 +57,9 @@ SSE_OBJS = decoding_sse.o\
 	   vitfilter_sse.o\
 	   p7_omx_sse.o\
 	   p7_oprofile_sse.o\
+	null2_sse.o\
 	optacc_sse.o\
+	stotrace_sse.o
 
 AVX_OBJS = decoding_avx.o\
 	   fwdback_avx.o\
@@ -66,15 +68,20 @@ AVX_OBJS = decoding_avx.o\
 	   vitfilter_avx.o\
 	   p7_omx_avx.o\
 	   p7_oprofile_avx.o\
-	optacc_avx.o
+	null2_avx.o\
+	optacc_avx.o\
+	stotrace_avx.o
 
-AVX512_OBJS = fwdback_avx512.o\
+AVX512_OBJS = decoding_avx512.o\
+	      fwdback_avx512.o\
 	      ssvfilter_avx512.o\
 	      msvfilter_avx512.o\
 	      vitfilter_avx512.o\
 	      p7_omx_avx512.o\
 	      p7_oprofile_avx512.o\
-	optacc_avx512.o
+	null2_avx512.o\
+	optacc_avx512.o\
+	stotrace_avx512.o
 
 OBJS = ${BASE_OBJS} ${SSE_OBJS} ${AVX_OBJS} ${AVX512_OBJS}
 

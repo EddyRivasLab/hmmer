@@ -12,11 +12,9 @@
 #include <stdio.h>
 #include <math.h>
 
-#include <x86intrin.h>
-
 #include "easel.h"
-#include "esl_sse.h"
 
+#include "esl_cpu.h"
 #include "hmmer.h"
 #include "impl_avx.h"
 
@@ -72,41 +70,52 @@
  * Xref:      [J3/119-121]: for analysis of numeric range issues when
  *            <scaleproduct> overflows.
  */
-int
-p7_Decoding(const P7_OPROFILE *om, const P7_OMX *oxf, P7_OMX *oxb, P7_OMX *pp)
-{
-  char *msg1 ="p7_omx_FDeconvert failed in p7_Decoding";
-  char *msg2 = "SSE and AVX returned different results in p7_Decoding";
-  int res1 = p7_Decoding_sse(om, oxf, oxb, pp);
-  /*    P7_GMX      *gxp1 = p7_gmx_Create(pp->allocQ4*4, pp->validR-1);
-    if (p7_omx_FDeconvert(pp, gxp1)                    != eslOK) esl_fatal(msg1);
-  P7_OMX *pp2 = p7_omx_Create(pp->allocQ4 * 4, pp->validR-1, pp->allocXR-1);
-  int res2 = p7_Decoding_avx(om, oxf, oxb, pp2);
-  if(res1 != res2){
-    printf("result difference in p7_Decoding: SSE= %d, AVX = %d\n", res1, res2);
-  }
-  if(pp->L != pp2->L){
-    printf("L miss-match in p7_Decoding: SSE=%d, AVX=%d\n", pp->L, pp2->L);
-    p7_omx_Destroy(pp2);
-    return res1;
-  }
-    if(pp->M != pp2->M){
-    printf("L miss-match in p7_Decoding: SSE=%d, AVX=%d\n", pp->M, pp2->M);
-    p7_omx_Destroy(pp2);
-    return res1;
-  }
 
-  P7_GMX      *gxp2 = p7_gmx_Create(pp->allocQ4*4, pp->validR-1);
+static int
+p7_Decoding_Dispatcher(const P7_OPROFILE *om, const P7_OMX *oxf, P7_OMX *oxb, P7_OMX *pp){
+#ifdef P7_TEST_ALL_SIMD
+  p7_Decoding = p7_Decoding_test_all;
+  return p7_Decoding_test_all(om, oxf, oxb, pp);
+#endif
 
-  if (p7_omx_FDeconvert(pp2, gxp2)                    != eslOK) esl_fatal(msg1);
+#ifdef P7_TEST_SSE_AVX
+  p7_Decoding = p7_Decoding_test_sse_avx;
+  return p7_Decoding_test_sse_avx(om, oxf, oxb, pp);
+#endif
 
-  if (p7_gmx_Compare(gxp1, gxp2, 0.01)          != eslOK) esl_fatal(msg2);
+#ifdef eslENABLE_AVX512  // Fastest first.
+  if (esl_cpu_has_avx512())
+    {
+      p7_Decoding = p7_Decoding_avx512;
+      return p7_Decoding_avx512(om, oxf, oxb, pp);
+    }
+#endif
 
-  p7_gmx_Destroy(gxp1);
-  p7_gmx_Destroy(gxp1);
-  p7_omx_Destroy(pp2);*/
-  return(res1);
+#ifdef eslENABLE_AVX
+  if (esl_cpu_has_avx())
+    {
+      p7_Decoding = p7_Decoding_avx;
+      return p7_Decoding_avx(om, oxf, oxb, pp);
+    }
+#endif
+
+#ifdef eslENABLE_SSE
+  if (esl_cpu_has_sse4())
+    {
+      p7_Decoding = p7_Decoding_sse;
+      return p7_Decoding_sse(om, oxf, oxb, pp);
+    }
+#endif
+
+  p7_Die("p7_deconding__dispatcher found no vector implementation - that shouldn't happen.");
+  return eslFAIL;
+
 }
+
+
+int
+(*p7_Decoding)(const P7_OPROFILE *om, const P7_OMX *oxf, P7_OMX *oxb, P7_OMX *pp) = p7_Decoding_Dispatcher;
+
 
 /* Function:  p7_DomainDecoding()
  * Synopsis:  Posterior decoding of domain location.

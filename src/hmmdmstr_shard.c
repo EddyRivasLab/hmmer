@@ -577,8 +577,8 @@ master_process_shard(ESL_GETOPTS *go)
 
     p7_hmmcache_SetNumericNames(hmm_db);
 
-    printf("Loaded profile db %s;  models: %d  memory: %" PRId64 "\n", 
-	   name, hmm_db->n, (uint64_t) p7_hmmcache_Sizeof(hmm_db));
+    printf("Loaded profile db %s;  models: %d\n", 
+	   name, hmm_db->n);
   }
 
   /* if stdout is redirected at the commandline, it causes printf's to be buffered,

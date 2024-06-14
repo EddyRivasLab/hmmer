@@ -351,14 +351,35 @@ p7_omx_FSetMDI(const P7_OMX *ox, int s, int i, int k, float val)
  *****************************************************************/
 
 /* p7_omx.c */
-extern P7_OMX      *p7_omx_Create(int allocM, int allocL, int allocXL);
-extern int          p7_omx_GrowTo(P7_OMX *ox, int allocM, int allocL, int allocXL);
-extern int          p7_omx_FDeconvert(P7_OMX *ox, P7_GMX *gx);
+extern P7_OMX      *(*p7_omx_Create)(int allocM, int allocL, int allocXL);
+extern P7_OMX      *p7_omx_Create_sse(int allocM, int allocL, int allocXL);
+extern P7_OMX      *p7_omx_Create_avx(int allocM, int allocL, int allocXL);
+extern P7_OMX      *p7_omx_Create_avx512(int allocM, int allocL, int allocXL);
+extern P7_OMX      *p7_omx_Create_test_sse_avx(int allocM, int allocL, int allocXL);
+extern P7_OMX      *p7_omx_Create_test_all_simd(int allocM, int allocL, int allocXL);
+
+extern int          (*p7_omx_GrowTo)(P7_OMX *ox, int allocM, int allocL, int allocXL);
+extern int          p7_omx_GrowTo_sse(P7_OMX *ox, int allocM, int allocL, int allocXL);
+extern int          p7_omx_GrowTo_avx(P7_OMX *ox, int allocM, int allocL, int allocXL);
+extern int          p7_omx_GrowTo_avx512(P7_OMX *ox, int allocM, int allocL, int allocXL);
+extern int          p7_omx_GrowTo_test_sse_avx(P7_OMX *ox, int allocM, int allocL, int allocXL);
+extern int          p7_omx_GrowTo_test_all_simd(P7_OMX *ox, int allocM, int allocL, int allocXL);
+
+extern int          (*p7_omx_FDeconvert)(P7_OMX *ox, P7_GMX *gx);
 extern int          p7_omx_FDeconvert_sse(P7_OMX *ox, P7_GMX *gx);
 extern int          p7_omx_FDeconvert_avx(P7_OMX *ox, P7_GMX *gx);
 extern int          p7_omx_FDeconvert_avx512(P7_OMX *ox, P7_GMX *gx);
+extern int          p7_omx_FDeconvert_test_sse_avx(P7_OMX *ox, P7_GMX *gx);
+extern int          p7_omx_FDeconvert_test_all_simd(P7_OMX *ox, P7_GMX *gx);
+
 extern int          p7_omx_Reuse  (P7_OMX *ox);
-extern void         p7_omx_Destroy(P7_OMX *ox);
+
+extern void         (* p7_omx_Destroy)(P7_OMX *ox);
+extern void         p7_omx_Destroy_sse(P7_OMX *ox);
+extern void         p7_omx_Destroy_avx(P7_OMX *ox);
+extern void         p7_omx_Destroy_avx512(P7_OMX *ox);
+extern void         p7_omx_Destroy_test_sse_avx(P7_OMX *ox);
+extern void         p7_omx_Destroy_test_all_simd(P7_OMX *ox);
 
 extern int          p7_omx_SetDumpMode(FILE *fp, P7_OMX *ox, int truefalse);
 extern int          p7_omx_DumpMFRow_sse(P7_OMX *ox, int rowi, uint8_t xE, uint8_t xN, uint8_t xJ, uint8_t xB, uint8_t xC);
@@ -389,13 +410,6 @@ extern void         p7_oprofile_Destroy_avx512(P7_OPROFILE *om);
 extern void         p7_oprofile_Destroy_test_avx_sse(P7_OPROFILE *om);
 extern void         p7_oprofile_Destroy_test_all(P7_OPROFILE *om);
 extern void         (*p7_oprofile_Destroy)(P7_OPROFILE *om);
-
-extern size_t       p7_oprofile_Sizeof_sse(P7_OPROFILE *om);
-extern size_t       p7_oprofile_Sizeof_avx(P7_OPROFILE *om);
-extern size_t       p7_oprofile_Sizeof_avx512(P7_OPROFILE *om);
-extern size_t       p7_oprofile_Sizeof_test_avx_sse(P7_OPROFILE *om);
-extern size_t       p7_oprofile_Sizeof_test_all(P7_OPROFILE *om);
-extern size_t       (* p7_oprofile_Sizeof)(P7_OPROFILE *om);
 
 extern P7_OPROFILE * p7_oprofile_Copy_sse(P7_OPROFILE *om);
 extern P7_OPROFILE * p7_oprofile_Copy_avx(P7_OPROFILE *om);
@@ -497,12 +511,14 @@ extern int          p7_oprofile_GetFwdEmissionArray_test_all(const P7_OPROFILE *
 extern int          (*p7_oprofile_GetFwdEmissionArray)(const P7_OPROFILE *om, P7_BG *bg, float *arr );
 
 /* decoding.c */
-extern int p7_Decoding      (const P7_OPROFILE *om, const P7_OMX *oxf,       P7_OMX *oxb, P7_OMX *pp);
+extern int (*p7_Decoding)      (const P7_OPROFILE *om, const P7_OMX *oxf,       P7_OMX *oxb, P7_OMX *pp);
 extern int p7_DomainDecoding(const P7_OPROFILE *om, const P7_OMX *oxf, const P7_OMX *oxb, P7_DOMAINDEF *ddef);
 extern int p7_Decoding_sse      (const P7_OPROFILE *om, const P7_OMX *oxf,       P7_OMX *oxb, P7_OMX *pp);
-extern int p7_DomainDecoding_sse(const P7_OPROFILE *om, const P7_OMX *oxf, const P7_OMX *oxb, P7_DOMAINDEF *ddef);
 extern int p7_Decoding_avx      (const P7_OPROFILE *om, const P7_OMX *oxf,       P7_OMX *oxb, P7_OMX *pp);
-extern int p7_DomainDecoding_avx(const P7_OPROFILE *om, const P7_OMX *oxf, const P7_OMX *oxb, P7_DOMAINDEF *ddef);
+extern int p7_Decoding_avx512      (const P7_OPROFILE *om, const P7_OMX *oxf,       P7_OMX *oxb, P7_OMX *pp);
+extern int p7_Decoding_test_sse_avx      (const P7_OPROFILE *om, const P7_OMX *oxf,       P7_OMX *oxb, P7_OMX *pp);
+extern int p7_Decoding_test_all_simd      (const P7_OPROFILE *om, const P7_OMX *oxf,       P7_OMX *oxb, P7_OMX *pp);
+
 /* fwdback.c */
 extern int (* p7_Forward)       (const ESL_DSQ *dsq, int L, const P7_OPROFILE *om,                    P7_OMX *fwd, float *opt_sc);
 extern int (* p7_ForwardParser) (const ESL_DSQ *dsq, int L, const P7_OPROFILE *om,                    P7_OMX *fwd, float *opt_sc);
@@ -554,8 +570,18 @@ extern int p7_SSVFilter_longtarget(const ESL_DSQ *dsq, int L, P7_OPROFILE *om, P
 
 
 /* null2.c */
-extern int p7_Null2_ByExpectation(const P7_OPROFILE *om, const P7_OMX *pp, float *null2);
-extern int p7_Null2_ByTrace      (const P7_OPROFILE *om, const P7_TRACE *tr, int zstart, int zend, P7_OMX *wrk, float *null2);
+extern int (*p7_Null2_ByExpectation)(const P7_OPROFILE *om, const P7_OMX *pp, float *null2);
+extern int (*p7_Null2_ByTrace)      (const P7_OPROFILE *om, const P7_TRACE *tr, int zstart, int zend, P7_OMX *wrk, float *null2);
+extern int p7_Null2_ByExpectation_sse(const P7_OPROFILE *om, const P7_OMX *pp, float *null2);
+extern int p7_Null2_ByTrace_sse      (const P7_OPROFILE *om, const P7_TRACE *tr, int zstart, int zend, P7_OMX *wrk, float *null2);
+extern int p7_Null2_ByExpectation_avx(const P7_OPROFILE *om, const P7_OMX *pp, float *null2);
+extern int p7_Null2_ByTrace_avx      (const P7_OPROFILE *om, const P7_TRACE *tr, int zstart, int zend, P7_OMX *wrk, float *null2);
+extern int p7_Null2_ByExpectation_avx512(const P7_OPROFILE *om, const P7_OMX *pp, float *null2);
+extern int p7_Null2_ByTrace_avx512      (const P7_OPROFILE *om, const P7_TRACE *tr, int zstart, int zend, P7_OMX *wrk, float *null2);
+extern int p7_Null2_ByExpectation_test_sse_avx(const P7_OPROFILE *om, const P7_OMX *pp, float *null2);
+extern int p7_Null2_ByTrace_test_sse_avx      (const P7_OPROFILE *om, const P7_TRACE *tr, int zstart, int zend, P7_OMX *wrk, float *null2);
+extern int p7_Null2_ByExpectation_test_all_simd(const P7_OPROFILE *om, const P7_OMX *pp, float *null2);
+extern int p7_Null2_ByTrace_test_all_simd      (const P7_OPROFILE *om, const P7_TRACE *tr, int zstart, int zend, P7_OMX *wrk, float *null2);
 
 /* optacc.c */
 extern int (* p7_OptimalAccuracy)(const P7_OPROFILE *om, const P7_OMX *pp,       P7_OMX *ox, float *ret_e);
@@ -568,7 +594,12 @@ extern int p7_OptimalAccuracy_avx512(const P7_OPROFILE *om, const P7_OMX *pp,   
 extern int p7_OATrace_avx512        (const P7_OPROFILE *om, const P7_OMX *pp, const P7_OMX *ox, P7_TRACE *tr);
 
 /* stotrace.c */
-extern int p7_StochasticTrace(ESL_RANDOMNESS *rng, const ESL_DSQ *dsq, int L, const P7_OPROFILE *om, const P7_OMX *ox, P7_TRACE *tr);
+extern int (*p7_StochasticTrace)(ESL_RANDOMNESS *rng, const ESL_DSQ *dsq, int L, const P7_OPROFILE *om, const P7_OMX *ox, P7_TRACE *tr);
+extern int p7_StochasticTrace_sse(ESL_RANDOMNESS *rng, const ESL_DSQ *dsq, int L, const P7_OPROFILE *om, const P7_OMX *ox, P7_TRACE *tr);
+extern int p7_StochasticTrace_avx(ESL_RANDOMNESS *rng, const ESL_DSQ *dsq, int L, const P7_OPROFILE *om, const P7_OMX *ox, P7_TRACE *tr);
+extern int p7_StochasticTrace_avx512(ESL_RANDOMNESS *rng, const ESL_DSQ *dsq, int L, const P7_OPROFILE *om, const P7_OMX *ox, P7_TRACE *tr);
+extern int p7_StochasticTrace_test_sse_avx(ESL_RANDOMNESS *rng, const ESL_DSQ *dsq, int L, const P7_OPROFILE *om, const P7_OMX *ox, P7_TRACE *tr);
+extern int p7_StochasticTrace_test_all_simd(ESL_RANDOMNESS *rng, const ESL_DSQ *dsq, int L, const P7_OPROFILE *om, const P7_OMX *ox, P7_TRACE *tr);
 
 /* vitfilter.c */
 extern int (* p7_ViterbiFilter)(const ESL_DSQ *dsq, int L, const P7_OPROFILE *om, P7_OMX *ox, float *ret_sc);
@@ -579,8 +610,7 @@ extern int p7_ViterbiFilter_longtarget(const ESL_DSQ *dsq, int L, const P7_OPROF
                                         float filtersc, double P, P7_HMM_WINDOWLIST *windowlist);
 
 
-/* vitscore.c */
-extern int p7_ViterbiScore (const ESL_DSQ *dsq, int L, const P7_OPROFILE *om, P7_OMX *ox, float *ret_sc);
+
 
 // Functionsto convert striped data from one vector size to another
 extern void p7_restripe_byte(char *source, char *dest, int length, int source_vector_length, int dest_vector_length, uint8_t pad_value);

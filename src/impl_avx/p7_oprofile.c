@@ -147,59 +147,6 @@ void p7_oprofile_Destroy_Dispatcher(P7_OPROFILE *om)
   p7_Die("p7_oprofile_Destroy_dispatcher found no vector implementation - that shouldn't happen.");
 }
 
-/* Function:  p7_oprofile_Sizeof()
- * Synopsis:  Return the allocated size of a <P7_OPROFILE>.
- * Incept:    SRE, Wed Mar  2 10:09:21 2011 [Janelia]
- *
- * Purpose:   Returns the allocated size of a <P7_OPROFILE>,
- *            in bytes.
- */
-
-size_t p7_oprofile_Sizeof_Dispatcher(P7_OPROFILE *om);
-
-size_t (*p7_oprofile_Sizeof)(P7_OPROFILE *om) = p7_oprofile_Sizeof_Dispatcher;
-
-size_t p7_oprofile_Sizeof_Dispatcher(P7_OPROFILE *om){
-#ifdef P7_TEST_ALL_SIMD
- p7_oprofile_Sizeof = p7_oprofile_Sizeof_test_all;
- return p7_oprofile_Sizeof_test_all(om);
- 
-#endif
-
-#ifdef P7_TEST_SSE_AVX
- p7_oprofile_Sizeof = p7_oprofile_Sizeof_test_sse_avx;
- return p7_oprofile_Sizeof_test_sse_avx(om);  
-#endif
-
-#ifdef eslENABLE_AVX512  // Fastest first.
- if (esl_cpu_has_avx512())
-   {
-     p7_oprofile_Sizeof = p7_oprofile_Sizeof_avx512;
-     return p7_oprofile_Sizeof_avx512(om);
-   }
-#endif
-
-#ifdef eslENABLE_AVX
-  if (esl_cpu_has_avx())
-    {
-     p7_oprofile_Sizeof = p7_oprofile_Sizeof_avx;
-     return p7_oprofile_Sizeof_avx(om); 
-    }
-#endif
-
-#ifdef eslENABLE_SSE
-  if (esl_cpu_has_sse4())
-    {
-      p7_oprofile_Sizeof = p7_oprofile_Sizeof_sse;
-      return p7_oprofile_Sizeof_sse(om);
-    }
-#endif
-
-  p7_Die("p7_oprofile_Sizeof_dispatcher found no vector implementation - that shouldn't happen.");
-  return -1;
-}
-
-
 
 /* TODO: this is not following the _Copy interface guidelines; it's a _Clone */
 /* Function:  p7_oprofile_Copy()

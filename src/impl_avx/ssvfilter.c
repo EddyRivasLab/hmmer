@@ -424,7 +424,7 @@ ssvfilter_dispatcher(const ESL_DSQ *dsq, int L, const P7_OPROFILE *om, float *re
 {
 #ifdef P7_TEST_ALL_SIMD
   p7_SSVFilter = p7_SSVFilter_test_all;
-  return p7_SSVFilter_test_all(dsq, L, om, ret_sc);
+  return p7_SSVFilter_test_all_simd(dsq, L, om, ret_sc);
 #endif
 
 #ifdef P7_TEST_SSE_AVX

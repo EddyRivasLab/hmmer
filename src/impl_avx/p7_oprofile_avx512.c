@@ -515,119 +515,7 @@ p7_oprofile_Destroy_avx512(P7_OPROFILE *om)
     }
   free(om);
 }
-/* Function:  p7_oprofile_Sizeof()
- * Synopsis:  Return the allocated size of a <P7_OPROFILE>.
- * Incept:    SRE, Wed Mar  2 10:09:21 2011 [Janelia]
- *
- * Purpose:   Returns the allocated size of a <P7_OPROFILE>,
- *            in bytes.
- */
-size_t
-p7_oprofile_Sizeof_test_all(P7_OPROFILE *om)
-{
-  size_t n   = 0;
-  int    nqb = om->allocQ16;	/* # of uchar vectors needed for query */
-  int    nqw = om->allocQ8;     /* # of sword vectors needed for query */
-  int    nqf = om->allocQ4;     /* # of float vectors needed for query */
-  int    nqs = nqb + p7O_EXTRA_SB;
 
-  /* Stuff below exactly mirrors the malloc()'s in
-   * p7_oprofile_Create(); so even though we could
-   * write this more compactly, leave it like this
-   * w/ one:one correspondence to _Create(), for
-   * maintainability and clarity.
-   */
-  n  += sizeof(P7_OPROFILE);
-  n  += sizeof(__m128i) * nqb  * om->abc->Kp +15; /* om->rbv_mem   */
-  n  += sizeof(__m128i) * nqs  * om->abc->Kp +15; /* om->sbv_mem   */
-  n  += sizeof(__m128i) * nqw  * om->abc->Kp +15; /* om->rwv_mem   */
-  n  += sizeof(__m128i) * nqw  * p7O_NTRANS  +15; /* om->twv_mem   */
-  n  += sizeof(__m128)  * nqf  * om->abc->Kp +15; /* om->rfv_mem   */
-  n  += sizeof(__m128)  * nqf  * p7O_NTRANS  +15; /* om->tfv_mem   */
-  
-  n  += sizeof(__m128i *) * om->abc->Kp;          /* om->rbv       */
-  n  += sizeof(__m128i *) * om->abc->Kp;          /* om->sbv       */
-  n  += sizeof(__m128i *) * om->abc->Kp;          /* om->rwv       */
-  n  += sizeof(__m128  *) * om->abc->Kp;          /* om->rfv       */
-  
-  n  += sizeof(char) * (om->allocM+2);            /* om->rf        */
-  n  += sizeof(char) * (om->allocM+2);            /* om->mm        */
-  n  += sizeof(char) * (om->allocM+2);            /* om->cs        */
-  n  += sizeof(char) * (om->allocM+2);            /* om->consensus */
-
-  // avx part, move into separate function once filters working.
-  /* Stuff below exactly mirrors the malloc()'s in
-   * p7_oprofile_Create(); so even though we could
-   * write this more compactly, leave it like this
-   * w/ one:one correspondence to _Create(), for
-   * maintainability and clarity.
-   */
-  int    nqb_avx = om->allocQ16_avx;  /* # of uchar vectors needed for query */
-  int    nqw_avx = om->allocQ8_avx;     /* # of sword vectors needed for query */
-  int    nqf_avx = om->allocQ4_avx;     /* # of float vectors needed for query */
-  int    nqs_avx = nqb_avx + p7O_EXTRA_SB;
-
-  n  += sizeof(__m256i) * nqb_avx  * om->abc->Kp +31; /* om->rbv_mem_avx   */
-  n  += sizeof(__m256i) * nqs_avx  * om->abc->Kp +31; /* om->sbv_mem_avx   */
-  n  += sizeof(__m256i) * nqw_avx  * om->abc->Kp +31; /* om->rwv_mem_avx   */
-  n  += sizeof(__m256i) * nqw_avx  * p7O_NTRANS  +31; /* om->twv_mem_avx   */
-  n  += sizeof(__m256)  * nqf_avx  * om->abc->Kp +31; /* om->rfv_mem_avx   */
-  n  += sizeof(__m256)  * nqf_avx  * p7O_NTRANS  +31; /* om->tfv_mem_avx  */
-  
-  n  += sizeof(__m256i *) * om->abc->Kp;          /* om->rbv_avx       */
-  n  += sizeof(__m256i *) * om->abc->Kp;          /* om->sbv_avx       */
-  n  += sizeof(__m256i *) * om->abc->Kp;          /* om->rwv_avx       */
-   n  += sizeof(__m256  *) * om->abc->Kp;          /* om->rfv_avx       */
-
-
-  int    nqb_avx512 = om->allocQ16_avx512;  /* # of uchar vectors needed for query */
-  int    nqw_avx512 = om->allocQ8_avx512;     /* # of sword vectors needed for query */
-  int    nqf_avx512 = om->allocQ4_avx512;     /* # of float vectors needed for query */
-  int    nqs_avx512 = nqb_avx512 + p7O_EXTRA_SB;
-
-
-
-
-   n  += sizeof(__m512i) * nqb_avx512  * om->abc->Kp +31; /* om->rbv_mem_avx   */
-  n  += sizeof(__m512i) * nqs_avx512  * om->abc->Kp +31; /* om->sbv_mem_avx   */
-  n  += sizeof(__m512i) * nqw_avx512  * om->abc->Kp +31; /* om->rwv_mem_avx   */
-  n  += sizeof(__m512i) * nqw_avx512  * p7O_NTRANS  +31; /* om->twv_mem_avx   */
-  n  += sizeof(__m512)  * nqf_avx512  * om->abc->Kp +31; /* om->rfv_mem_avx   */
-  n  += sizeof(__m512)  * nqf_avx512  * p7O_NTRANS  +31; /* om->tfv_mem_avx  */
-  
-  n  += sizeof(__m512i *) * om->abc->Kp;          /* om->rbv_avx       */
-  n  += sizeof(__m512i *) * om->abc->Kp;          /* om->sbv_avx       */
-  n  += sizeof(__m512i *) * om->abc->Kp;          /* om->rwv_avx       */
-   n  += sizeof(__m512  *) * om->abc->Kp;          /* om->rfv_avx       */
-  return n;
-}
-
-size_t
-p7_oprofile_Sizeof_avx512(P7_OPROFILE *om)
-{
-  size_t n   = 0;
-
-  int    nqb_avx512 = om->allocQ16_avx512;  /* # of uchar vectors needed for query */
-  int    nqw_avx512 = om->allocQ8_avx512;     /* # of sword vectors needed for query */
-  int    nqf_avx512 = om->allocQ4_avx512;     /* # of float vectors needed for query */
-  int    nqs_avx512 = nqb_avx512 + p7O_EXTRA_SB;
-
-
-
-
-   n  += sizeof(__m512i) * nqb_avx512  * om->abc->Kp +31; /* om->rbv_mem_avx   */
-  n  += sizeof(__m512i) * nqs_avx512  * om->abc->Kp +31; /* om->sbv_mem_avx   */
-  n  += sizeof(__m512i) * nqw_avx512  * om->abc->Kp +31; /* om->rwv_mem_avx   */
-  n  += sizeof(__m512i) * nqw_avx512  * p7O_NTRANS  +31; /* om->twv_mem_avx   */
-  n  += sizeof(__m512)  * nqf_avx512  * om->abc->Kp +31; /* om->rfv_mem_avx   */
-  n  += sizeof(__m512)  * nqf_avx512  * p7O_NTRANS  +31; /* om->tfv_mem_avx  */
-  
-  n  += sizeof(__m512i *) * om->abc->Kp;          /* om->rbv_avx       */
-  n  += sizeof(__m512i *) * om->abc->Kp;          /* om->sbv_avx       */
-  n  += sizeof(__m512i *) * om->abc->Kp;          /* om->rwv_avx       */
-   n  += sizeof(__m512  *) * om->abc->Kp;          /* om->rfv_avx       */
-  return n;
-}
 
 /* TODO: this is not following the _Copy interface guidelines; it's a _Clone */
 /* TODO: its documentation header is a cut/paste of _Create; FIXME */
@@ -1331,7 +1219,7 @@ p7_oprofile_UpdateMSVEmissionScores_avx512(P7_OPROFILE *om, P7_BG *bg, float *fw
   int     Kp  = om->abc->Kp;
   int     idx;
   float   max = 0.0;    /* maximum residue score: used for unsigned emission score bias */
-  union   { __m512i v; int16_t i[32]; } tmp; /* used to align and load simd minivectors            */
+  union   { __m512i v; int16_t i[64]; } tmp; /* used to align and load simd minivectors            */
 
   /* First we determine the basis for the limited-precision MSVFilter scoring system.
    * Default: 1/3 bit units, base offset 190:  range 0..255 => -190..65 => -63.3..21.7 bits

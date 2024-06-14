@@ -545,8 +545,8 @@ process_InitCmd(HMMD_COMMAND_SHARD *cmd, WORKER_ENV  *env)
 
     env->hmm_db = hcache;
 
-    printf("Loaded profile db %s;  models: %d  memory: %" PRId64 "\n",
-         p, hcache->n, (uint64_t) p7_hmmcache_Sizeof(hcache));
+    printf("Loaded profile db %s;  models: %d\n",
+         p, hcache->n);
 
   }
 

@@ -95,25 +95,6 @@ p7_hmmcache_Open(char *hmmfile, P7_HMMCACHE **ret_cache, char *errbuf)
 }
 
 
-/* Function:  p7_hmmcache_Sizeof()
- * Synopsis:  Returns total size of a profile cache, in bytes.
- */
-size_t
-p7_hmmcache_Sizeof(P7_HMMCACHE *cache)
-{
-  size_t n = sizeof(P7_HMMCACHE);
-  int    i;
-
-  n += sizeof(char) * (strlen(cache->name) + 1);
-  n += esl_alphabet_Sizeof(cache->abc);
-  n += sizeof(P7_OPROFILE *) * cache->lalloc;     /* cache->list */
-
-  for (i = 0; i < cache->n; i++)
-    n += p7_oprofile_Sizeof(cache->list[i]);
-
-  return n;
-}
-  
 
 /* Function:  p7_hmmcache_SetNumericNames()
  * Synopsis:  Rename each profile in cache with a numeric name.
@@ -208,11 +189,10 @@ main(int argc, char **argv)
   else if (status != eslOK)        p7_Fail("Failed to cache %s: error code %d\n", hmmfile, status);
 
   p7_hmmcache_SetNumericNames(hcache);
-  tot_mem = p7_hmmcache_Sizeof(hcache);
+
 
   esl_stopwatch_Stop(w);
   esl_stopwatch_Display(stdout, w, "# CPU time: ");
-  printf("tot memory = %" PRIu64 "\n", (uint64_t) tot_mem);
   
   p7_hmmcache_Close(hcache);
   esl_getopts_Destroy(go);

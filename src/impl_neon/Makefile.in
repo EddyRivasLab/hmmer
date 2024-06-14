@@ -43,8 +43,7 @@ OBJS =  decoding.o\
 	stotrace.o\
 	vitfilter.o\
 	p7_omx.o\
-	p7_oprofile.o\
-	mpi.o
+	p7_oprofile.o
 
 HDRS =  impl_neon.h
 

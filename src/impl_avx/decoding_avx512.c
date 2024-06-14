@@ -8,36 +8,36 @@
 
 #include <stdio.h>
 #include <math.h>
-#include <immintrin.h>   // AVX2
+
+#include <x86intrin.h>
 
 #include "easel.h"
-#include "esl_sse.h"
 
 #include "hmmer.h"
 #include "impl_avx.h"
 
 
 int
-p7_Decoding_avx(const P7_OPROFILE *om, const P7_OMX *oxf, P7_OMX *oxb, P7_OMX *pp)
+p7_Decoding_avx512(const P7_OPROFILE *om, const P7_OMX *oxf, P7_OMX *oxb, P7_OMX *pp)
 {
-  __m256 *ppv;
-  __m256 *fv;
-  __m256 *bv;
-  __m256  totrv;
+  __m512 *ppv;
+  __m512 *fv;
+  __m512 *bv;
+  __m512  totrv;
   int    L  = oxf->L;
   int    M  = om->M;
-  int    Q  = p7O_NQF_AVX(M);	
+  int    Q  = p7O_NQF_AVX512(M);	
   int    i,q;
   float  scaleproduct = 1.0 / oxb->xmx[p7X_N];
 
   pp->M = M;
   pp->L = L;
-  pp->last_written_by = avx;
-  ppv = pp->dpf_avx[0];
+  pp->last_written_by = avx512;
+  ppv = pp->dpf_avx512[0];
   for (q = 0; q < Q; q++) {
-    *ppv = _mm256_setzero_ps(); ppv++;
-    *ppv = _mm256_setzero_ps(); ppv++;
-    *ppv = _mm256_setzero_ps(); ppv++;
+    *ppv = _mm512_setzero_ps(); ppv++;
+    *ppv = _mm512_setzero_ps(); ppv++;
+    *ppv = _mm512_setzero_ps(); ppv++;
   }
   pp->xmx[p7X_E] = 0.0;
   pp->xmx[p7X_N] = 0.0;
@@ -47,25 +47,25 @@ p7_Decoding_avx(const P7_OPROFILE *om, const P7_OMX *oxf, P7_OMX *oxb, P7_OMX *p
 
   for (i = 1; i <= L; i++)
     {
-      ppv   =  pp->dpf_avx[i];
-      fv    = oxf->dpf_avx[i];
-      bv    = oxb->dpf_avx[i];
-      totrv = _mm256_set1_ps(scaleproduct * oxf->xmx[i*p7X_NXCELLS+p7X_SCALE]);
+      ppv   =  pp->dpf_avx512[i];
+      fv    = oxf->dpf_avx512[i];
+      bv    = oxb->dpf_avx512[i];
+      totrv = _mm512_set1_ps(scaleproduct * oxf->xmx[i*p7X_NXCELLS+p7X_SCALE]);
 
       for (q = 0; q < Q; q++)
 	{
 	  /* M */
-	  *ppv = _mm256_mul_ps(*fv,  *bv);
-	  *ppv = _mm256_mul_ps(*ppv,  totrv);
+	  *ppv = _mm512_mul_ps(*fv,  *bv);
+	  *ppv = _mm512_mul_ps(*ppv,  totrv);
 	  ppv++;  fv++;  bv++;
 
 	  /* D */
-	  *ppv = _mm256_setzero_ps();
+	  *ppv = _mm512_setzero_ps();
 	  ppv++;  fv++;  bv++;
 
 	  /* I */
-	  *ppv = _mm256_mul_ps(*fv,  *bv);
-	  *ppv = _mm256_mul_ps(*ppv,  totrv);
+	  *ppv = _mm512_mul_ps(*fv,  *bv);
+	  *ppv = _mm512_mul_ps(*ppv,  totrv);
 	  ppv++;  fv++;  bv++;
 	}
       pp->xmx[i*p7X_NXCELLS+p7X_E] = 0.0;

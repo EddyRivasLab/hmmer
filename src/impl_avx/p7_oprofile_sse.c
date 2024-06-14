@@ -195,48 +195,6 @@ p7_oprofile_Destroy_sse(P7_OPROFILE *om)
   free(om);
 }
 
-/* Function:  p7_oprofile_Sizeof_sse()
- * Synopsis:  Return the allocated size of a <P7_OPROFILE>, Intel SSE version.
- * Incept:    NPC, 5/20/24 [House of Deer]
- *
- * Purpose:   Returns the allocated size of a <P7_OPROFILE>,
- *            in bytes.
- */
-size_t
-p7_oprofile_Sizeof_sse(P7_OPROFILE *om)
-{
-  size_t n   = 0;
-  int    nqb = om->allocQ16;	/* # of uchar vectors needed for query */
-  int    nqw = om->allocQ8;     /* # of sword vectors needed for query */
-  int    nqf = om->allocQ4;     /* # of float vectors needed for query */
-  int    nqs = nqb + p7O_EXTRA_SB;
-
-  /* Stuff below exactly mirrors the malloc()'s in
-   * p7_oprofile_Create(); so even though we could
-   * write this more compactly, leave it like this
-   * w/ one:one correspondence to _Create(), for
-   * maintainability and clarity.
-   */
-  n  += sizeof(P7_OPROFILE);
-  n  += sizeof(__m128i) * nqb  * om->abc->Kp +15; /* om->rbv_mem   */
-  n  += sizeof(__m128i) * nqs  * om->abc->Kp +15; /* om->sbv_mem   */
-  n  += sizeof(__m128i) * nqw  * om->abc->Kp +15; /* om->rwv_mem   */
-  n  += sizeof(__m128i) * nqw  * p7O_NTRANS  +15; /* om->twv_mem   */
-  n  += sizeof(__m128)  * nqf  * om->abc->Kp +15; /* om->rfv_mem   */
-  n  += sizeof(__m128)  * nqf  * p7O_NTRANS  +15; /* om->tfv_mem   */
-  
-  n  += sizeof(__m128i *) * om->abc->Kp;          /* om->rbv       */
-  n  += sizeof(__m128i *) * om->abc->Kp;          /* om->sbv       */
-  n  += sizeof(__m128i *) * om->abc->Kp;          /* om->rwv       */
-  n  += sizeof(__m128  *) * om->abc->Kp;          /* om->rfv       */
-  
-  n  += sizeof(char) * (om->allocM+2);            /* om->rf        */
-  n  += sizeof(char) * (om->allocM+2);            /* om->mm        */
-  n  += sizeof(char) * (om->allocM+2);            /* om->cs        */
-  n  += sizeof(char) * (om->allocM+2);            /* om->consensus */
-
-  return n;
-}
 
 
 /* TODO: this is not following the _Copy interface guidelines; it's a _Clone */

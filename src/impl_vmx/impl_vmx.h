@@ -334,8 +334,6 @@ extern int p7_ViterbiFilter_longtarget(const ESL_DSQ *dsq, int L, const P7_OPROF
                             float filtersc, double P, P7_HMM_WINDOWLIST *windowlist);
 
 
-/* vitscore.c */
-extern int p7_ViterbiScore (const ESL_DSQ *dsq, int L, const P7_OPROFILE *om, P7_OMX *ox, float *ret_sc);
 
 
 

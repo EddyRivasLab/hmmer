@@ -6,7 +6,7 @@
  * This is the second stage in the acceleration pipeline
  * 
  * The code in this file is only the runtime dispatcher that 
- * selects the best SIMD imprelemenvtetaineo of the filter 
+ * selects the best SIMD implementation of the filter 
  * depending on the instruction set(s) the processor supports.
  * The ISA-specific implementations are in msvfilter_sse.c and
  * msvfilter_avx.c.  Function call documentation and unit testing

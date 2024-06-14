@@ -14,11 +14,10 @@
 
 #include <float.h>
 
-#include <xmmintrin.h>
-#include <emmintrin.h>
+#include <x86intrin.h>
 
 #include "easel.h"
-#include "esl_sse.h"
+#include "esl_avx512.h"
 #include "esl_vectorops.h"
 
 #include "hmmer.h"
@@ -57,18 +56,18 @@
 int
 p7_OptimalAccuracy_avx512(const P7_OPROFILE *om, const P7_OMX *pp, P7_OMX *ox, float *ret_e)
 {
-  register __m128 mpv, dpv, ipv;   /* previous row values                                       */
-  register __m128 sv;		   /* temp storage of 1 curr row value in progress              */
-  register __m128 xEv;		   /* E state: keeps max for Mk->E as we go                     */
-  register __m128 xBv;		   /* B state: splatted vector of B[i-1] for B->Mk calculations */
-  register __m128 dcv;
+  register __m512 mpv, dpv, ipv;   /* previous row values                                       */
+  register __m512 sv;		   /* temp storage of 1 curr row value in progress              */
+  register __m512 xEv;		   /* E state: keeps max for Mk->E as we go                     */
+  register __m512 xBv;		   /* B state: splatted vector of B[i-1] for B->Mk calculations */
+  register __m512 dcv;
   float  *xmx = ox->xmx;
-  __m128 *dpc = ox->dpf[0];        /* current row, for use in {MDI}MO(dpp,q) access macro       */
-  __m128 *dpp;                     /* previous row, for use in {MDI}MO(dpp,q) access macro      */
-  __m128 *ppp;			   /* quads in the <pp> posterior probability matrix            */
-  __m128 *tp;			   /* quads in the <om->tfv> transition scores                  */
-  __m128 zerov = _mm_setzero_ps();
-  __m128 infv  = _mm_set1_ps(-eslINFINITY);
+  __m512 *dpc = ox->dpf_avx512[0];        /* current row, for use in {MDI}MO(dpp,q) access macro       */
+  __m512 *dpp;                     /* previous row, for use in {MDI}MO(dpp,q) access macro      */
+  __m512 *ppp;			   /* quads in the <pp> posterior probability matrix            */
+  __m512 *tp;			   /* quads in the <om->tfv> transition scores                  */
+  __m512 zerov = _mm512_setzero_ps();
+  __m512 infv  = _mm512_set1_ps(-eslINFINITY);
   int M = om->M;
   int Q = p7O_NQF(M);
   int q;
@@ -84,28 +83,44 @@ p7_OptimalAccuracy_avx512(const P7_OPROFILE *om, const P7_OMX *pp, P7_OMX *ox, f
   XMXo(0, p7X_J)    = -eslINFINITY;
   XMXo(0, p7X_B)    = 0.;
   XMXo(0, p7X_C)    = -eslINFINITY;
-
+  __mmask16 lowone = 0x0001;
   for (i = 1; i <= pp->L; i++)
     {
       dpp = dpc;		/* previous DP row in OA matrix */
-      dpc = ox->dpf[i];   	/* current DP row in OA matrix  */
-      ppp = pp->dpf[i];		/* current row in the posterior probabilities per position */
-      tp  = om->tfv;		/* transition probabilities */
+      dpc = ox->dpf_avx512[i];   	/* current DP row in OA matrix  */
+      ppp = pp->dpf_avx512[i];		/* current row in the posterior probabilities per position */
+      tp  = om->tfv_avx512;		/* transition probabilities */
       dcv = infv;
       xEv = infv;
-      xBv = _mm_set1_ps(XMXo(i-1, p7X_B));
+      xBv = _mm512_set1_ps(XMXo(i-1, p7X_B));
 
-      mpv = esl_sse_rightshift_ps(MMO(dpp,Q-1), infv);  /* Right shifts by 4 bytes. 4,8,12,x becomes x,4,8,12. */
-      dpv = esl_sse_rightshift_ps(DMO(dpp,Q-1), infv);
-      ipv = esl_sse_rightshift_ps(IMO(dpp,Q-1), infv);
+      mpv = _mm512_mask_blend_ps(lowone, esl_avx512_rightshiftz_float(MMO(dpp,Q-1)), infv);  /* Right shifts by 4 bytes. 4,8,12,x becomes x,4,8,12. */
+      dpv = _mm512_mask_blend_ps(lowone, esl_avx512_rightshiftz_float(DMO(dpp,Q-1)), infv);
+      ipv = _mm512_mask_blend_ps(lowone, esl_avx512_rightshiftz_float(IMO(dpp,Q-1)), infv);
+
+      // This code is a bit different than the SSE/AVX versions because compares are
+      // very different in AVX512. The original code used compares and AND operations
+      // to create a vector that had xBv, mpv, ipv, or dpv in elements corresponding to
+      // locations in *tp that were greater than zero.  This code uses blend to accomplish the same
+      // thing because AVX512 doesn't have a compare operation that generates a 512-bit output
+
+      __mmask16 greater_zero;
       for (q = 0; q < Q; q++)
 	{
-	  sv  =                _mm_and_ps(_mm_cmpgt_ps(*tp, zerov), xBv);  tp++;
-	  sv  = _mm_max_ps(sv, _mm_and_ps(_mm_cmpgt_ps(*tp, zerov), mpv)); tp++;
-	  sv  = _mm_max_ps(sv, _mm_and_ps(_mm_cmpgt_ps(*tp, zerov), ipv)); tp++;
-	  sv  = _mm_max_ps(sv, _mm_and_ps(_mm_cmpgt_ps(*tp, zerov), dpv)); tp++;
-	  sv  = _mm_add_ps(sv, *ppp);                                      ppp += 2;
-	  xEv = _mm_max_ps(xEv, sv);
+	  greater_zero = _mm512_cmp_ps_mask(*tp, zerov, 14); // 14= greater than
+	  sv  = _mm512_mask_blend_ps(greater_zero, zerov, xBv);
+	  tp++;
+	  greater_zero = _mm512_cmp_ps_mask(*tp, zerov, 14); // 14= greater than
+	  sv  = _mm512_max_ps(sv, _mm512_mask_blend_ps(greater_zero, zerov, mpv));
+	  tp++;
+	  greater_zero = _mm512_cmp_ps_mask(*tp, zerov, 14); // 14= greater than
+	  sv  = _mm512_max_ps(sv, _mm512_mask_blend_ps(greater_zero, zerov, ipv));
+	  tp++;
+	  greater_zero = _mm512_cmp_ps_mask(*tp, zerov, 14); // 14= greater than
+	  sv  = _mm512_max_ps(sv, _mm512_mask_blend_ps(greater_zero, zerov, dpv));
+	  tp++;
+	  sv  = _mm512_add_ps(sv, *ppp);                                      ppp += 2;
+	  xEv = _mm512_max_ps(xEv, sv);
 	  
 	  mpv = MMO(dpp,q);
 	  dpv = DMO(dpp,q);
@@ -114,41 +129,50 @@ p7_OptimalAccuracy_avx512(const P7_OPROFILE *om, const P7_OMX *pp, P7_OMX *ox, f
 	  MMO(dpc,q) = sv;
 	  DMO(dpc,q) = dcv;
 
-	  dcv = _mm_and_ps(_mm_cmpgt_ps(*tp, zerov), sv); tp++;
+	  greater_zero = _mm512_cmp_ps_mask(*tp, zerov, 14); // 14= greater than
+	  dcv = _mm512_mask_blend_ps(greater_zero, zerov, sv);
+	  tp++;
+	  greater_zero = _mm512_cmp_ps_mask(*tp, zerov, 14); // 14= greater than
+	  sv  = _mm512_mask_blend_ps(greater_zero, zerov, mpv);
+	  tp++;
+	  greater_zero = _mm512_cmp_ps_mask(*tp, zerov, 14); // 14= greater than
+	  sv  = _mm512_max_ps(sv, _mm512_mask_blend_ps(greater_zero, zerov, ipv));
+	  tp++;
 
-	  sv         =                _mm_and_ps(_mm_cmpgt_ps(*tp, zerov), mpv);   tp++;
-	  sv         = _mm_max_ps(sv, _mm_and_ps(_mm_cmpgt_ps(*tp, zerov), ipv));  tp++;
-	  IMO(dpc,q) = _mm_add_ps(sv, *ppp);                                       ppp++;
+	  IMO(dpc,q) = _mm512_add_ps(sv, *ppp);                                       ppp++;
 	}
       
       /* dcv has carried through from end of q loop above; store it 
        * in first pass, we add M->D and D->D path into DMX
        */
-      dcv = esl_sse_rightshift_ps(dcv, infv); 
-      tp  = om->tfv + 7*Q;	/* set tp to start of the DD's */
+      dcv = _mm512_mask_blend_ps(lowone, esl_avx512_rightshiftz_float(dcv), infv);
+      tp  = om->tfv_avx512 + 7*Q;	/* set tp to start of the DD's */
       for (q = 0; q < Q; q++)
 	{
-	  DMO(dpc, q) = _mm_max_ps(dcv, DMO(dpc, q));
-	  dcv         = _mm_and_ps(_mm_cmpgt_ps(*tp, zerov), DMO(dpc,q));   tp++;
+	  DMO(dpc, q) = _mm512_max_ps(dcv, DMO(dpc, q));
+
+	  greater_zero = _mm512_cmp_ps_mask(*tp, zerov, 14); // 14= greater than
+          dcv = _mm512_mask_blend_ps(greater_zero, zerov, DMO(dpc,q));
+          tp++;
 	}
 
       /* fully serialized D->D; can optimize later */
-      for (j = 1; j < 4; j++)
+      for (j = 1; j < 16; j++)
 	{
-	  dcv = esl_sse_rightshift_ps(dcv, infv);
-	  tp  = om->tfv + 7*Q;	
+	  dcv = _mm512_mask_blend_ps(lowone, esl_avx512_rightshiftz_float(dcv), infv);
+	  tp  = om->tfv_avx512 + 7*Q;	
 	  for (q = 0; q < Q; q++)
 	    {
-	      DMO(dpc, q) = _mm_max_ps(dcv, DMO(dpc, q));
-	      dcv         = _mm_and_ps(_mm_cmpgt_ps(*tp, zerov), dcv);   tp++;
+	      DMO(dpc, q) = _mm512_max_ps(dcv, DMO(dpc, q));
+	      dcv = _mm512_mask_blend_ps(greater_zero, zerov, dcv);
 	    }
 	}
 
       /* D->E paths */
-      for (q = 0; q < Q; q++) xEv = _mm_max_ps(xEv, DMO(dpc,q));
+      for (q = 0; q < Q; q++) xEv = _mm512_max_ps(xEv, DMO(dpc,q));
       
       /* Specials */
-      esl_sse_hmax_ps(xEv, &(XMXo(i,p7X_E)));
+      esl_avx512_hmax_ps(xEv, &(XMXo(i,p7X_E)));
       
       t1 = ( (om->xf[p7O_J][p7O_LOOP] == 0.0) ? 0.0 : ox->xmx[(i-1)*p7X_NXCELLS+p7X_J] + pp->xmx[i*p7X_NXCELLS+p7X_J]);
       t2 = ( (om->xf[p7O_E][p7O_LOOP] == 0.0) ? 0.0 : ox->xmx[   i *p7X_NXCELLS+p7X_E]);
@@ -265,14 +289,14 @@ p7_OATrace_avx512(const P7_OPROFILE *om, const P7_OMX *pp, const P7_OMX *ox, P7_
 static inline float
 get_postprob(const P7_OMX *pp, int scur, int sprv, int k, int i)
 {
-  int     Q     = p7O_NQF(pp->M);
+  int     Q     = p7O_NQF_AVX512(pp->M);
   int     q     = (k-1) % Q;		/* (q,r) is position of the current DP cell M(i,k) */
   int     r     = (k-1) / Q;
-  union { __m128 v; float p[4]; } u;
+  union { __m512 v; float p[16]; } u;
 
   switch (scur) {
-  case p7T_M: u.v = MMO(pp->dpf[i], q); return u.p[r]; 
-  case p7T_I: u.v = IMO(pp->dpf[i], q); return u.p[r]; 
+  case p7T_M: u.v = MMO(pp->dpf_avx512[i], q); return u.p[r]; 
+  case p7T_I: u.v = IMO(pp->dpf_avx512[i], q); return u.p[r]; 
   case p7T_N: if (sprv == scur) return pp->xmx[i*p7X_NXCELLS+p7X_N];
   case p7T_C: if (sprv == scur) return pp->xmx[i*p7X_NXCELLS+p7X_C];
   case p7T_J: if (sprv == scur) return pp->xmx[i*p7X_NXCELLS+p7X_J];
@@ -284,24 +308,24 @@ get_postprob(const P7_OMX *pp, int scur, int sprv, int k, int i)
 static inline int
 select_m(const P7_OPROFILE *om, const P7_OMX *ox, int i, int k)
 {
-  int     Q     = p7O_NQF(ox->M);
+  int     Q     = p7O_NQF_AVX512(ox->M);
   int     q     = (k-1) % Q;		/* (q,r) is position of the current DP cell M(i,k) */
   int     r     = (k-1) / Q;
-  __m128 *tp    = om->tfv + 7*q;       	/* *tp now at start of transitions to cur cell M(i,k) */
-  __m128  xBv   = _mm_set1_ps(ox->xmx[(i-1)*p7X_NXCELLS+p7X_B]);
-  __m128  mpv, dpv, ipv;
-  union { __m128 v; float p[4]; } u, tv;
+  __m512 *tp    = om->tfv_avx512 + 7*q;       	/* *tp now at start of transitions to cur cell M(i,k) */
+  __m512  xBv   = _mm512_set1_ps(ox->xmx[(i-1)*p7X_NXCELLS+p7X_B]);
+  __m512  mpv, dpv, ipv;
+  union { __m512 v; float p[16]; } u, tv;
   float   path[4];
   int     state[4] = { p7T_M, p7T_I, p7T_D, p7T_B };
   
   if (q > 0) {
-    mpv = ox->dpf[i-1][(q-1)*3 + p7X_M];
-    dpv = ox->dpf[i-1][(q-1)*3 + p7X_D];
-    ipv = ox->dpf[i-1][(q-1)*3 + p7X_I];
+    mpv = ox->dpf_avx512[i-1][(q-1)*3 + p7X_M];
+    dpv = ox->dpf_avx512[i-1][(q-1)*3 + p7X_D];
+    ipv = ox->dpf_avx512[i-1][(q-1)*3 + p7X_I];
   } else {
-    mpv = esl_sse_rightshiftz_float(ox->dpf[i-1][(Q-1)*3 + p7X_M]);
-    dpv = esl_sse_rightshiftz_float(ox->dpf[i-1][(Q-1)*3 + p7X_D]);
-    ipv = esl_sse_rightshiftz_float(ox->dpf[i-1][(Q-1)*3 + p7X_I]);
+    mpv = esl_avx512_rightshiftz_float(ox->dpf_avx512[i-1][(Q-1)*3 + p7X_M]);
+    dpv = esl_avx512_rightshiftz_float(ox->dpf_avx512[i-1][(Q-1)*3 + p7X_D]);
+    ipv = esl_avx512_rightshiftz_float(ox->dpf_avx512[i-1][(Q-1)*3 + p7X_I]);
   }	  
 
   /* paths are numbered so that most desirable choice in case of tie is first. */
@@ -317,22 +341,22 @@ select_m(const P7_OPROFILE *om, const P7_OMX *ox, int i, int k)
 static inline int
 select_d(const P7_OPROFILE *om, const P7_OMX *ox, int i, int k)
 {
-  int     Q     = p7O_NQF(ox->M);
+  int     Q     = p7O_NQF_AVX512(ox->M);
   int     q     = (k-1) % Q;		/* (q,r) is position of the current DP cell D(i,k) */
   int     r     = (k-1) / Q;
-  union { __m128 v; float p[4]; } mpv, dpv, tmdv, tddv;
+  union { __m512 v; float p[16]; } mpv, dpv, tmdv, tddv;
   float   path[2];
 
   if (q > 0) {
-    mpv.v  = ox->dpf[i][(q-1)*3 + p7X_M];
-    dpv.v  = ox->dpf[i][(q-1)*3 + p7X_D];
-    tmdv.v = om->tfv[7*(q-1) + p7O_MD];
-    tddv.v = om->tfv[7*Q + (q-1)];
+    mpv.v  = ox->dpf_avx512[i][(q-1)*3 + p7X_M];
+    dpv.v  = ox->dpf_avx512[i][(q-1)*3 + p7X_D];
+    tmdv.v = om->tfv_avx512[7*(q-1) + p7O_MD];
+    tddv.v = om->tfv_avx512[7*Q + (q-1)];
   } else {
-    mpv.v  = esl_sse_rightshiftz_float(ox->dpf[i][(Q-1)*3 + p7X_M]);
-    dpv.v  = esl_sse_rightshiftz_float(ox->dpf[i][(Q-1)*3 + p7X_D]);
-    tmdv.v = esl_sse_rightshiftz_float(om->tfv[7*(Q-1) + p7O_MD]);
-    tddv.v = esl_sse_rightshiftz_float(om->tfv[8*Q-1]);
+    mpv.v  = esl_avx512_rightshiftz_float(ox->dpf_avx512[i][(Q-1)*3 + p7X_M]);
+    dpv.v  = esl_avx512_rightshiftz_float(ox->dpf_avx512[i][(Q-1)*3 + p7X_D]);
+    tmdv.v = esl_avx512_rightshiftz_float(om->tfv_avx512[7*(Q-1) + p7O_MD]);
+    tddv.v = esl_avx512_rightshiftz_float(om->tfv_avx512[8*Q-1]);
   }	  
 
   path[0] = ((tmdv.p[r] == 0.0) ? -eslINFINITY : mpv.p[r]);
@@ -344,15 +368,15 @@ select_d(const P7_OPROFILE *om, const P7_OMX *ox, int i, int k)
 static inline int
 select_i(const P7_OPROFILE *om, const P7_OMX *ox, int i, int k)
 {
-  int     Q    = p7O_NQF(ox->M);
+  int     Q    = p7O_NQF_AVX512(ox->M);
   int     q    = (k-1) % Q;		/* (q,r) is position of the current DP cell D(i,k) */
   int     r    = (k-1) / Q;
-  __m128 *tp   = om->tfv + 7*q + p7O_MI;
-  union { __m128 v; float p[4]; } tv, mpv, ipv;
+  __m512 *tp   = om->tfv_avx512 + 7*q + p7O_MI;
+  union { __m512 v; float p[16]; } tv, mpv, ipv;
   float   path[2];
 
-  mpv.v = ox->dpf[i-1][q*3 + p7X_M]; tv.v = *tp;  path[0] = ((tv.p[r] == 0.0) ? -eslINFINITY : mpv.p[r]);  tp++;
-  ipv.v = ox->dpf[i-1][q*3 + p7X_I]; tv.v = *tp;  path[1] = ((tv.p[r] == 0.0) ? -eslINFINITY : ipv.p[r]);  
+  mpv.v = ox->dpf_avx512[i-1][q*3 + p7X_M]; tv.v = *tp;  path[0] = ((tv.p[r] == 0.0) ? -eslINFINITY : mpv.p[r]);  tp++;
+  ipv.v = ox->dpf_avx512[i-1][q*3 + p7X_I]; tv.v = *tp;  path[1] = ((tv.p[r] == 0.0) ? -eslINFINITY : ipv.p[r]);  
   return  ((path[0] >= path[1]) ? p7T_M : p7T_I);
 }
 
@@ -389,9 +413,9 @@ select_j(const P7_OPROFILE *om, const P7_OMX *pp, const P7_OMX *ox, int i)
 static inline int
 select_e(const P7_OPROFILE *om, const P7_OMX *ox, int i, int *ret_k)
 {
-  int     Q     = p7O_NQF(ox->M);
-  __m128 *dp    = ox->dpf[i];
-  union { __m128 v; float p[4]; } u;
+  int     Q     = p7O_NQF_AVX512(ox->M);
+  __m512 *dp    = ox->dpf_avx512[i];
+  union { __m512 v; float p[16]; } u;
   float  max   = -eslINFINITY;
   int    smax, kmax;
   int    q,r;

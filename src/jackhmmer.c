@@ -1095,6 +1095,9 @@ mpi_master(ESL_GETOPTS *go, struct cfg_s *cfg)
       P7_TOPHITS      *th      = NULL;       /* top-scoring sequence hits                */
       P7_HMM          *hmm     = NULL;	     /* HMM - only needed if checkpointed        */
       P7_HMM         **ret_hmm = NULL;	     /* HMM - only needed if checkpointed        */
+      P7_PROFILE      *gm      = NULL;       /* base profile, to send to workers.  Sending 
+                                                base profile improves compatibility if master and 
+                                                worker are running on different hardware  */
       P7_OPROFILE     *om      = NULL;       /* optimized query profile                  */
       P7_TRACE        *qtr     = NULL;       /* faux trace for query sequence            */
       ESL_MSA         *msa     = NULL;       /* multiple alignment of included hits      */
@@ -1118,18 +1121,18 @@ mpi_master(ESL_GETOPTS *go, struct cfg_s *cfg)
 	  if (pli != NULL) p7_pipeline_Destroy(pli);
 	  if (th  != NULL) p7_tophits_Destroy(th);
 	  if (om  != NULL) p7_oprofile_Destroy(om);
-
+    if (gm  != NULL) p7_profile_Destroy(gm);
  	  /* Create the search model: from query alone (round 1) or from MSA (round 2+) */
 	  if (msa == NULL)	/* round 1 */
 	    {
-	      p7_SingleBuilder(bld, qsq, bg, ret_hmm, &qtr, NULL, &om); /* bypass HMM - only need model */
+	      p7_SingleBuilder(bld, qsq, bg, ret_hmm, &qtr, &gm, &om); /* bypass HMM - only need model */
 
 	      prv_msa_nseq = 1;
 	    }
 	  else
 	    {
 	      /* Throw away old model. Build new one. */
-	      status = p7_Builder(bld, msa, bg, ret_hmm, NULL, NULL, &om, NULL);
+	      status = p7_Builder(bld, msa, bg, ret_hmm, NULL, &gm, &om, NULL);
 	      if      (status == eslENORESULT) mpi_failure("Failed to construct new model from iteration %d results:\n%s", iteration, bld->errbuf);
 	      else if (status == eslEFORMAT)   mpi_failure("Failed to construct new model from iteration %d results:\n%s", iteration, bld->errbuf);
 	      else if (status != eslOK)        mpi_failure("Unexpected error constructing new model at iteration %d:",     iteration);
@@ -1203,7 +1206,7 @@ mpi_master(ESL_GETOPTS *go, struct cfg_s *cfg)
 		    mpi_failure("MPI client %d raised error:\n%s\n", dest, mpi_buf);
 		    break;
 		  case HMMER_SETUP_READY_TAG:
-		    status = p7_oprofile_MPISend(om, dest, HMMER_OPROFILE_TAG, MPI_COMM_WORLD, &mpi_buf, &mpi_size);
+		    status = p7_profile_MPISend(gm, dest, HMMER_OPROFILE_TAG, MPI_COMM_WORLD, &mpi_buf, &mpi_size);
 		    if (status != eslOK) mpi_failure("Failed to send optimized model to %d\n", dest);
 		    break;
 		  case HMMER_READY_TAG:
@@ -1300,7 +1303,7 @@ mpi_master(ESL_GETOPTS *go, struct cfg_s *cfg)
       p7_pipeline_Destroy(pli);
       p7_tophits_Destroy(th);
       p7_oprofile_Destroy(om);
-
+      p7_profile_Destroy(gm);
       esl_msa_Destroy(msa);
       p7_trace_Destroy(qtr);
       esl_sq_Reuse(qsq);
@@ -1443,6 +1446,7 @@ mpi_worker(ESL_GETOPTS *go, struct cfg_s *cfg)
       P7_PIPELINE     *pli     = NULL;	     /* accelerated HMM/seq comparison pipeline  */
       P7_TOPHITS      *th      = NULL;       /* top-scoring sequence hits                */
       P7_OPROFILE     *om      = NULL;       /* optimized query profile                  */
+      P7_PROFILE      *gm      = NULL;
       P7_TRACE        *qtr     = NULL;       /* faux trace for query sequence            */
       
       SEQ_BLOCK        block;
@@ -1458,8 +1462,8 @@ mpi_worker(ESL_GETOPTS *go, struct cfg_s *cfg)
 	  MPI_Send(&status, 1, MPI_INT, 0, HMMER_SETUP_READY_TAG, MPI_COMM_WORLD);
 
  	  /* Receive the search model from the master */
-	  status = p7_oprofile_MPIRecv(0, HMMER_OPROFILE_TAG, MPI_COMM_WORLD, &mpi_buf, &mpi_size, &abc, &om);
-
+	  status = p7_oprofile_MPIRecv(0, HMMER_OPROFILE_TAG, MPI_COMM_WORLD, &mpi_buf, &mpi_size, &abc, &gm);
+    p7_oprofile_Convert(gm, om);
 	  /* check the status of the oprofile */
 	  if (status != eslOK)  mpi_failure("Error %d receiving optimized model on iteration %d\n", status, iteration);
 	  if (iteration > maxiterations) mpi_failure("Iteration %d exceeds max iterations of %d\n", iteration, maxiterations);
@@ -1515,7 +1519,7 @@ mpi_worker(ESL_GETOPTS *go, struct cfg_s *cfg)
 	  /* Send the top hits back to the master. */
 	  p7_tophits_MPISend(th, 0, HMMER_TOPHITS_TAG, MPI_COMM_WORLD,  &mpi_buf, &mpi_size);
 	  p7_pipeline_MPISend(pli, 0, HMMER_PIPELINE_TAG, MPI_COMM_WORLD,  &mpi_buf, &mpi_size);
-
+    if (gm  != NULL) p7_profile_Destroy(gm);
 	  if (om  != NULL) p7_oprofile_Destroy(om);
 	  if (pli != NULL) p7_pipeline_Destroy(pli);
 	  if (th  != NULL) p7_tophits_Destroy(th);
