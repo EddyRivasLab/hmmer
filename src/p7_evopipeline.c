@@ -238,44 +238,46 @@ extern int p7_EvoPipeline_Overthruster(P7_PIPELINE *pli, ESL_RANDOMNESS *r, floa
 
 }
 
-  /* Function:  p7_Pipeline_Mainstage()
-   * Synopsis:  HMMER3's accelerated seq/profile comparison pipeline.
-   *
-   * Purpose:   Run the main stage of HMMER's accelerated comparison
-   *            pipeline to determine if a hit really has occurred  
-   *            and update the hitlist accordingly.
-   *
-   * Returns:   <eslOK> on success. If a significant hit is obtained,
-   *            its information is added to the growing <hitlist>.
-   *
-   *            <eslEINVAL> if (in a scan pipeline) we're supposed to
-   *            set GA/TC/NC bit score thresholds but the model doesn't
-   *            have any.
-   *
-   *            <eslERANGE> on numerical overflow errors in the
-   *            optimized vector implementations; particularly in
-   *            posterior decoding. I don't believe this is possible for
-   *            multihit local models, but I'm set up to catch it
-   *            anyway. We may emit a warning to the user, but cleanly
-   *            skip the problematic sequence and continue.
-   *
-   * Throws:    <eslEMEM> on allocation failure.
-   *
-   *            <eslETYPE> if <sq> is more than 100K long, which can
-   *            happen when someone uses hmmsearch/hmmscan instead of
-   *            nhmmer/nhmmscan on a genome DNA seq db.
-   *
-   * Xref:      J4/25.
-   *
-   * Note:      Error handling needs improvement. The <eslETYPE> exception
-   *            was added as a late bugfix. It really should be an <eslEINVAL>
-   *            normal error (because it's a user error). But then we need
-   *            all our p7_Pipeline() calls to check their return status
-   *            and handle normal errors appropriately, which we haven't
-   *            been careful enough about. [SRE H9/4]
-   */
+/* Function:  p7_Pipeline_Mainstage()
+ * Synopsis:  HMMER3's accelerated seq/profile comparison pipeline.
+ *
+ * Purpose:   Run the main stage of HMMER's accelerated comparison
+ *            pipeline to determine if a hit really has occurred  
+ *            and update the hitlist accordingly.
+ *
+ * Returns:   <eslOK> on success. If a significant hit is obtained,
+ *            its information is added to the growing <hitlist>.
+ *
+ *            <eslEINVAL> if (in a scan pipeline) we're supposed to
+ *            set GA/TC/NC bit score thresholds but the model doesn't
+ *            have any.
+ *
+ *            <eslERANGE> on numerical overflow errors in the
+ *            optimized vector implementations; particularly in
+ *            posterior decoding. I don't believe this is possible for
+ *            multihit local models, but I'm set up to catch it
+ *            anyway. We may emit a warning to the user, but cleanly
+ *            skip the problematic sequence and continue.
+ *
+ * Throws:    <eslEMEM> on allocation failure.
+ *
+ *            <eslETYPE> if <sq> is more than 100K long, which can
+ *            happen when someone uses hmmsearch/hmmscan instead of
+ *            nhmmer/nhmmscan on a genome DNA seq db.
+ *
+ * Xref:      J4/25.
+ *
+ * Note:      Error handling needs improvement. The <eslETYPE> exception
+ *            was added as a late bugfix. It really should be an <eslEINVAL>
+ *            normal error (because it's a user error). But then we need
+ *            all our p7_Pipeline() calls to check their return status
+ *            and handle normal errors appropriately, which we haven't
+ *            been careful enough about. [SRE H9/4]
+ */
 extern
-int p7_EvoPipeline_Mainstage(P7_PIPELINE * pli, P7_OPROFILE * om, P7_BG * bg, const ESL_SQ *sq, const ESL_SQ *ntsq, P7_TOPHITS *hitlist, float fwdsc, float nullsc, float time)
+int p7_EvoPipeline_Mainstage(P7_PIPELINE * pli, float *evparam_star, P7_RATE *R, P7_HMM *hmm, P7_PROFILE *gm, P7_OPROFILE *om, P7_BG * bg,
+			     const ESL_SQ *sq, const ESL_SQ *ntsq, P7_TOPHITS *hitlist,
+			     float fwdsc, float nullsc, float time, int *ret_hmm_restore)
   {
     P7_HIT *hit = NULL;     /* ptr to the current hit output data      */                    
     float seqbias;
@@ -284,6 +286,7 @@ int p7_EvoPipeline_Mainstage(P7_PIPELINE * pli, P7_OPROFILE * om, P7_BG * bg, co
     float pre_score, pre2_score; /* uncorrected bit scores for seq */
     double P;                    /* P-value of a hit */
     double lnP;                  /* log P-value of a hit */
+    int hmm_restore = *ret_hmm_restore; // do we need to restore the HMM to tstar? 
     int Ld;                      /* # of residues in envelopes */
     int d;
     int status;
@@ -291,13 +294,17 @@ int p7_EvoPipeline_Mainstage(P7_PIPELINE * pli, P7_OPROFILE * om, P7_BG * bg, co
   /* Run a Backwards parser pass, and hand it to domain definition workflow */
   p7_omx_GrowTo(pli->oxb, om->M, 0, sq->n);
   p7_BackwardParser(sq->dsq, sq->n, om, pli->oxf, pli->oxb, NULL);
- 
+
+  // ER: do the domaindef on the original profile, not the evolved one
+  if (hmm_restore) {
+    workaround_restore_profile(evparam_star, sq->n, R, bg, hmm, gm, om);
+    hmm_restore = FALSE;
+  }
   status = p7_domaindef_ByPosteriorHeuristics(sq, ntsq, om, pli->oxf, pli->oxb, pli->fwd, pli->bck, pli->ddef, bg, FALSE, NULL, NULL, NULL);
   if (status != eslOK) ESL_FAIL(status, pli->errbuf, "domain definition workflow failure"); /* eslERANGE can happen  */
   if (pli->ddef->nregions   == 0) return eslOK; /* score passed threshold but there's no discrete domains here       */
   if (pli->ddef->nenvelopes == 0) return eslOK; /* rarer: region was found, stochastic clustered, no envelopes found */
   if (pli->ddef->ndom       == 0) return eslOK; /* even rarer: envelope found, no domain identified {iss131}         */
-
 
   /* Calculate the null2-corrected per-seq score */
   if (pli->do_null2)
@@ -459,6 +466,8 @@ int p7_EvoPipeline_Mainstage(P7_PIPELINE * pli, P7_OPROFILE * om, P7_BG * bg, co
 	  
     }
 
+  *ret_hmm_restore = hmm_restore;
+  
   return eslOK;
 }
 
@@ -483,7 +492,7 @@ extern int p7_EvoPipeline(P7_PIPELINE *pli, ESL_RANDOMNESS *r, float *evparam_st
 
   status = p7_EvoPipeline_Overthruster(pli, r, evparam_star, evopipe_opt, R, hmm, gm, om, bg, sq, ntsq, ret_hmm_restore, &fwdsc, &nullsc, &time);
   if (status == eslOK){ //run the main stage
-    return p7_EvoPipeline_Mainstage(pli, om, bg, sq, ntsq, hitlist, fwdsc, nullsc, time);
+    return p7_EvoPipeline_Mainstage(pli, evparam_star, R, hmm, gm, om, bg, sq, ntsq, hitlist, fwdsc, nullsc, time, ret_hmm_restore);
   }
   if (status == eslFAIL){  /* overthruster status of eslFAIL indicates that the thruster completed 
                               correctly, but the comparison did not score highly enough to proceed,
@@ -917,7 +926,7 @@ p7_OptimizeForwardParser(ESL_RANDOMNESS *r, ESL_MIN_CFG *cfg, ESL_MIN_DAT *stats
     /* unpack the final parameter vector */
     optimize_unpack_paramvector(p, &data);
     data.fwdsc = func_forwardparser(r, (ESL_DSQ *)dsq, n, hmm, R, gm, om, bg, oxf, data.time, TRUE, evopipe_opt.recalibrate);
-    //printf("END FWD OPTIMIZATION: time %f fwdsc %f --> %f\n", data.time, fwdsc_init, data.fwdsc);
+    //printf("^^END FWD OPTIMIZATION: time %f fwdsc %f --> %f\n", data.time, fwdsc_init, data.fwdsc);
     
     if (fwdsc_init > data.fwdsc || data.fwdsc == eslINFINITY) {
       *ret_fwdsc = fwdsc_init;
