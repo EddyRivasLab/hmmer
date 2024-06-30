@@ -291,15 +291,18 @@ int p7_EvoPipeline_Mainstage(P7_PIPELINE * pli, float *evparam_star, P7_RATE *R,
     int d;
     int status;
 
+  // ER: do the domaindef on the original profile, not the evolved one
+  if (hmm_restore) {
+    workaround_restore_profile(evparam_star, sq->n, R, bg, hmm, gm, om);
+    p7_ForwardParser(sq->dsq, sq->n, om, pli->oxf, NULL);
+
+    hmm_restore = FALSE;
+  }
+
   /* Run a Backwards parser pass, and hand it to domain definition workflow */
   p7_omx_GrowTo(pli->oxb, om->M, 0, sq->n);
   p7_BackwardParser(sq->dsq, sq->n, om, pli->oxf, pli->oxb, NULL);
 
-  // ER: do the domaindef on the original profile, not the evolved one
-  if (hmm_restore) {
-    workaround_restore_profile(evparam_star, sq->n, R, bg, hmm, gm, om);
-    hmm_restore = FALSE;
-  }
   status = p7_domaindef_ByPosteriorHeuristics(sq, ntsq, om, pli->oxf, pli->oxb, pli->fwd, pli->bck, pli->ddef, bg, FALSE, NULL, NULL, NULL);
   if (status != eslOK) ESL_FAIL(status, pli->errbuf, "domain definition workflow failure"); /* eslERANGE can happen  */
   if (pli->ddef->nregions   == 0) return eslOK; /* score passed threshold but there's no discrete domains here       */
@@ -315,6 +318,7 @@ int p7_EvoPipeline_Mainstage(P7_PIPELINE * pli, float *evparam_star, P7_RATE *R,
   else seqbias = 0.0;
   pre_score =  (fwdsc - nullsc) / eslCONST_LOG2; 
   seq_score =  (fwdsc - (nullsc + seqbias)) / eslCONST_LOG2;
+  //printf("^^ fwd %f null %f seqbias %f\n", fwdsc, nullsc, seqbias);
   
   /* Calculate the "reconstruction score": estimated
    * per-sequence score as sum of individual domains,
