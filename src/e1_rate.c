@@ -891,13 +891,11 @@ e1_rate_CalculateInsertRatesAG(struct rateparam_s *ret_rateparam, double betaMin
   if (betaDStar >  betaDinf) ESL_XFAIL(eslFAIL, errbuf, "betaD_AG = %f > betaD_AGinf = %f\n", betaMStar, betaMinf);
 
   /* ld and muE */
-  rateparam.muEM  = log(betaMinf - betaMStar) - log(betaMinf);
-  rateparam.muED  = log(betaDinf - betaDStar) - log(betaDinf);
-  rateparam.muEM *= (betaMinf - 1.);
-  rateparam.muED *= (betaDinf - 1.);
+  rateparam.muEM  = (betaMinf < 1.0)? ( log(betaMinf - betaMStar) - log(betaMinf) ) * (betaMinf - 1.) : 0.0;
+  rateparam.muED  = (betaDinf < 1.0)? ( log(betaDinf - betaDStar) - log(betaDinf) ) * (betaDinf - 1.) : 0.0;
   
-  rateparam.ldEM  = rateparam.muEM * betaMinf / (1.0 - betaMinf);
-  rateparam.ldED  = rateparam.muED * betaDinf / (1.0 - betaDinf);
+  rateparam.ldEM  = (betaMinf < 1.0)? rateparam.muEM * betaMinf / (1.0 - betaMinf) : -log(1.0-betaMStar);
+  rateparam.ldED  = (betaDinf < 1.0)? rateparam.muED * betaDinf / (1.0 - betaDinf) : -log(1.0-betaDStar);
   
   rateparam.sI = etaStar;
  

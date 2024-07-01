@@ -656,7 +656,7 @@ p7_RateCalculate(const P7_HMM *hmm, const P7_BG *bg, P7_RATE *R, char *errbuf, i
   if (p7_RateValidate(R, errbuf) != eslOK) { status = eslFAIL; goto ERROR; }
 
 #if 0
-  status = p7_RateTest(hmm, R, bg, 0.2, errbuf, verbose);
+  status = p7_RateTest(hmm, R, bg, errbuf, verbose);
   if (status != eslOK) { printf("p7_RateTest() failed\n"); goto ERROR; }
 #endif
 
@@ -726,10 +726,11 @@ p7_RateTransitions(const P7_HMM *hmm, P7_RATE *R, char *errbuf, int verbose)
     eta      = hmm->t[m][p7H_II];
     gammaD   = hmm->t[m][p7H_DD];
 
-    if (betaM >= betainfk) betainfk = (betaM + 0.05 < 1.0)? betaM + 0.05 : 1.0;
+    if (betaM >= betainfk) {
+      betainfk = (betaM + 0.05 < 1.0)? betaM + 0.05 : 1.0;
+    }
   
-    if (fabs(betaM -1.0 + hmm->t[m][p7H_MD]) < 0.00001) gammaM = 1.0;	
-    else                                                gammaM = (betaM < 1.0)? hmm->t[m][p7H_MD] / (1.0 - betaM) : 0.0;
+    gammaM = (betaM < 1.0)? hmm->t[m][p7H_MD] / (1.0 - betaM) : 0.0;
  
     rateparam.muAM =  e1_rate_CalculateAncestralDeletionRates(gammaM, 1.0);
     rateparam.muAD =  e1_rate_CalculateAncestralDeletionRates(gammaD, 1.0);
@@ -754,7 +755,7 @@ p7_RateTransitions(const P7_HMM *hmm, P7_RATE *R, char *errbuf, int verbose)
     if (status != eslOK) goto ERROR;
     
 #if 0
-    if (m == 2) {
+    if (m == 59) {
       printf("\nhmm[k=%d] | MM %f MI %f MD %f IM %f II %f DM %f DD %f \n", m, hmm->t[m][p7H_MM], hmm->t[m][p7H_MI], hmm->t[m][p7H_MD], 
 	     hmm->t[m][p7H_IM], hmm->t[m][p7H_II], hmm->t[m][p7H_DM], hmm->t[m][p7H_DD]);
       printf("%s-RATES:state=%d\tmuAM=%.4f\tmuAD=%.4f\tldEM=%.4f\tmuEM=%.4f\tldED=%.4f\tmuED=%.4f\tsI=%.4f\tbetainfk=%.4f\n", 
@@ -1001,7 +1002,7 @@ p7_RateTest(const P7_HMM *h1, P7_RATE *R, const P7_BG *bg, char *errbuf, int ver
       }
       
     if ((status = esl_vec_FCompare(h1->t[k],   h2->t[k],   7,          R->tol)) != eslOK) {
-      for (t = 0; t < 7; t ++) printf("t[%d] %f %f diff=%f %f\n", t, h1->t[k][t], h2->t[k][t],
+      for (t = 0; t < 7; t ++) printf("k = %d/%d t[%d] %f %f diff=%f %f\n", k, h1->M, t, h1->t[k][t], h2->t[k][t],
 				      fabs(h1->t[k][t]-h2->t[k][t]), 2.0*fabs(h1->t[k][t]-h2->t[k][t])/fabs(h1->t[k][t]+h2->t[k][t]));
 	goto ERROR;
       }

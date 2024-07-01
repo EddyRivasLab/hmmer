@@ -278,31 +278,24 @@ extern
 int p7_EvoPipeline_Mainstage(P7_PIPELINE * pli, float *evparam_star, P7_RATE *R, P7_HMM *hmm, P7_PROFILE *gm, P7_OPROFILE *om, P7_BG * bg,
 			     const ESL_SQ *sq, const ESL_SQ *ntsq, P7_TOPHITS *hitlist,
 			     float fwdsc, float nullsc, float time, int *ret_hmm_restore)
-  {
-    P7_HIT *hit = NULL;     /* ptr to the current hit output data      */                    
-    float seqbias;
-    float seq_score;             /* the corrected per-seq bit score */
-    float sum_score;             /* the corrected reconstruction score for the seq */
-    float pre_score, pre2_score; /* uncorrected bit scores for seq */
-    double P;                    /* P-value of a hit */
-    double lnP;                  /* log P-value of a hit */
-    int hmm_restore = *ret_hmm_restore; // do we need to restore the HMM to tstar? 
-    int Ld;                      /* # of residues in envelopes */
-    int d;
-    int status;
-
-  // ER: do the domaindef on the original profile, not the evolved one
-  if (hmm_restore) {
-    workaround_restore_profile(evparam_star, sq->n, R, bg, hmm, gm, om);
-    p7_ForwardParser(sq->dsq, sq->n, om, pli->oxf, NULL);
-
-    hmm_restore = FALSE;
-  }
-
+{
+  P7_HIT *hit = NULL;     /* ptr to the current hit output data      */                    
+  float seqbias;
+  float seq_score;             /* the corrected per-seq bit score */
+  float sum_score;             /* the corrected reconstruction score for the seq */
+  float pre_score, pre2_score; /* uncorrected bit scores for seq */
+  double P;                    /* P-value of a hit */
+  double lnP;                  /* log P-value of a hit */
+  int hmm_restore = *ret_hmm_restore; // do we need to restore the HMM to tstar? 
+  int Ld;                      /* # of residues in envelopes */
+  int d;
+  int null2_evolved = TRUE;
+  int status;
+  
   /* Run a Backwards parser pass, and hand it to domain definition workflow */
   p7_omx_GrowTo(pli->oxb, om->M, 0, sq->n);
   p7_BackwardParser(sq->dsq, sq->n, om, pli->oxf, pli->oxb, NULL);
-
+    
   status = p7_domaindef_ByPosteriorHeuristics(sq, ntsq, om, pli->oxf, pli->oxb, pli->fwd, pli->bck, pli->ddef, bg, FALSE, NULL, NULL, NULL);
   if (status != eslOK) ESL_FAIL(status, pli->errbuf, "domain definition workflow failure"); /* eslERANGE can happen  */
   if (pli->ddef->nregions   == 0) return eslOK; /* score passed threshold but there's no discrete domains here       */
