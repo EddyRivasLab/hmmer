@@ -656,6 +656,7 @@ p7_RateCalculate(const P7_HMM *hmm, const P7_BG *bg, P7_RATE *R, char *errbuf, i
   if (p7_RateValidate(R, errbuf) != eslOK) { status = eslFAIL; goto ERROR; }
 
 #if 0
+  printf("^^ testing the rate\n");
   status = p7_RateTest(hmm, R, bg, errbuf, verbose);
   if (status != eslOK) { printf("p7_RateTest() failed\n"); goto ERROR; }
 #endif
@@ -680,7 +681,7 @@ p7_RateConstruct(const P7_HMM *hmm, const P7_BG *bg, HMMRATE *hmmrate, P7_RATE *
   status = p7_RateCalculate(hmm, bg, R, errbuf, verbose);
   if (status != eslOK) goto ERROR;
     
-  if (hmmrate->statfp) {
+  if (0&&hmmrate->statfp) {
     fprintf(hmmrate->statfp, "%*s time\tME\tMRE\n", (int)strlen(hmm->name), "#anchor hmm");
     fprintf(hmmrate->statfp, "%s %4.4f\t%2.4f\t%2.4f \n",
 	    hmm->name, 0.0,         er_MeanEntropy(R->pzero, R->M, R->abc_r->K), er_MeanRelativeEntropy(R->pzero, R->M, bg->f, R->abc_r->K));
@@ -984,10 +985,10 @@ p7_RateTest(const P7_HMM *h1, P7_RATE *R, const P7_BG *bg, char *errbuf, int ver
   int      a;
   int      t;
   int      status;
-
+  
   p7_EvolveFromRate(NULL, h2, R, bg, time, errbuf, verbose);
 
-    for (k = 0; k <= h1->M; k++)	/* (it's safe to include 0 here.) */
+  for (k = 0; k <= h1->M; k++)	/* (it's safe to include 0 here.) */
     {
       if ((status = esl_vec_FCompare(h1->mat[k], h2->mat[k], h1->abc->K, R->tol)) != eslOK) {
 	for (a = 0; a < h1->abc->K; a ++) printf("mat[%d] %f %f diff=%f %f\n", k, h1->mat[k][a], h2->mat[k][a],

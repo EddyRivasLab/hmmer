@@ -597,6 +597,16 @@ serial_master(ESL_GETOPTS *go, struct cfg_s *cfg)
       if (!esl_opt_IsOn(go, "--noevo")) {
 	if (p7_RateConstruct(hmm, info[0].bg, hmmrate, &R, errbuf, FALSE) != eslOK) esl_fatal("%s", errbuf);
 	//R = p7_RateCreate(hmm->abc, hmm->M, hmmrate->emR, hmmrate->S, hmmrate->evomodel, hmmrate->fixtime, hmmrate->betainf, hmmrate->tol);
+
+#if 0
+	P7_HMM *hmm1 = NULL;
+	printf("^^ check the rate\n");
+	hmm1 = p7_hmm_Clone(hmm);
+	p7_EvolveFromRate(hmmrate->statfp, hmm1, R, info[0].bg, 1.0, errbuf, FALSE);
+	p7_hmm_Compare(hmm, hmm1, 0.001);
+	p7_hmm_Destroy(hmm1);	
+#endif
+	
       }
       
       // store the calibration parametersb at t^star
