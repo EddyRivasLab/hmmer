@@ -926,7 +926,7 @@ p7_EvolveFromRate(FILE *statfp, P7_HMM *hmm, const P7_RATE *R, const P7_BG *bg, 
 #endif
   }
 
-  if (statfp) {
+  if (0&&statfp) {
     fprintf(statfp, "%*s time\tME\tMRE\n", (int)strlen(hmm->name), "#ehmm");
     fprintf(statfp, "%s %4.4f\t%2.4f\t%2.4f \n", hmm->name, time, p7_MeanMatchEntropy(hmm), p7_MeanMatchRelativeEntropy(hmm, bg));
   }

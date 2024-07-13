@@ -67,6 +67,7 @@ PROGS = alimask\
 	nhmmscan\
 	hmmer-makefmdb\
 	ehmmsearch\
+	ehmmevolve\
 	#ehmmscan\
 	ehmmemit\
 	ejackhmmer\
@@ -98,6 +99,7 @@ PROGOBJS =\
 	nhmmscan.o\
 	hmmer-makefmdb.o\
 	ehmmsearch.o\
+	ehmmevolve.o\
 	#ehmmemit.o\
 	ehmmscan.o\
 	ejackhmmer.o\

@@ -210,7 +210,7 @@ extern int p7_EvoPipeline_Overthruster(P7_PIPELINE *pli, ESL_RANDOMNESS *r, floa
       printf("\nsequence %s forwardparser did not optimize\n", sq->name);
   seq_score = (fwdsc-filtersc) / eslCONST_LOG2;
   P = esl_exp_surv(seq_score,  om->evparam[p7_FTAU],  om->evparam[p7_FLAMBDA]);
-#if 0
+#if 1
   printf("^^FWD %s P %f F3 %f time %f fwdsc %f filter %f score %f tau %f lambda %f\n",
 	 sq->name, P, pli->F3, time, fwdsc, filtersc, (fwdsc-filtersc) / eslCONST_LOG2, om->evparam[p7_FTAU],  om->evparam[p7_FLAMBDA]);
 #endif
@@ -311,7 +311,7 @@ int p7_EvoPipeline_Mainstage(P7_PIPELINE * pli, float *evparam_star, P7_RATE *R,
   else seqbias = 0.0;
   pre_score =  (fwdsc - nullsc) / eslCONST_LOG2; 
   seq_score =  (fwdsc - (nullsc + seqbias)) / eslCONST_LOG2;
-  //printf("^^ fwd %f null %f seqbias %f\n", fwdsc, nullsc, seqbias);
+  printf("^^ fwd %f null %f seqbias %f | seq_score %f\n\n", fwdsc, nullsc, seqbias, seq_score);
   
   /* Calculate the "reconstruction score": estimated
    * per-sequence score as sum of individual domains,
@@ -923,7 +923,7 @@ p7_OptimizeForwardParser(ESL_RANDOMNESS *r, ESL_MIN_CFG *cfg, ESL_MIN_DAT *stats
     /* unpack the final parameter vector */
     optimize_unpack_paramvector(p, &data);
     data.fwdsc = func_forwardparser(r, (ESL_DSQ *)dsq, n, hmm, R, gm, om, bg, oxf, data.time, TRUE, evopipe_opt.recalibrate);
-    //printf("^^END FWD OPTIMIZATION: time %f fwdsc %f --> %f\n", data.time, fwdsc_init, data.fwdsc);
+    printf("\n^^END FWD OPTIMIZATION: time %f fwdsc %f --> %f\n", data.time, fwdsc_init, data.fwdsc);
     
     if (fwdsc_init > data.fwdsc || data.fwdsc == eslINFINITY) {
       *ret_fwdsc = fwdsc_init;
