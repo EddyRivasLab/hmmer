@@ -178,42 +178,42 @@ main(int argc, char **argv)
   int             i;
   float           sc, fsc, vsc;
   float           bestsc  = -eslINFINITY;
-  
+  float           oldsc, newsc;
   if (p7_hmmfile_Open(hmmfile, NULL, &hfp, NULL) != eslOK) p7_Fail("Failed to open HMM file %s", hmmfile);
   if (p7_hmmfile_Read(hfp, &abc, &hmm)           != eslOK) p7_Fail("Failed to read HMM");
 
   bg = p7_bg_Create(abc);                p7_bg_SetLength(bg, L);
   gm = p7_profile_Create(hmm->M, abc);   p7_ProfileConfig(hmm, bg, gm, L, p7_UNILOCAL);
-  om = p7_oprofile_Create(gm->M, abc);   p7_oprofile_Convert(gm, om);
+  om = p7_oprofile_Create_sse(gm->M, abc);   p7_oprofile_Convert_sse(gm, om);
 
-  fwd = p7_omx_Create(gm->M, L, L);
+  fwd = p7_omx_Create_sse(gm->M, L, L);
   gx  = p7_gmx_Create(gm->M, L);
   tr  = p7_trace_Create();
   esl_rsq_xfIID(r, bg->f, abc->K, L, dsq);
 
   p7_GViterbi(dsq, L, gm, gx,  &vsc);
-  p7_Forward (dsq, L, om, fwd, &fsc);
+  p7_Forward_sse (dsq, L, om, fwd, &fsc);
 
   esl_stopwatch_Start(w);
   for (i = 0; i < N; i++)
     {
-      p7_StochasticTrace(r, dsq, L, om, fwd, tr);
-      p7_trace_Score(tr, dsq, gm, &sc);
-      bestsc = ESL_MAX(bestsc, sc);
+      p7_StochasticTrace_sse(r, dsq, L, om, fwd, tr);
+      p7_trace_Score(tr, dsq, gm, &oldsc);
       p7_trace_Reuse(tr);
+      p7_StochasticTrace_sse(r, dsq, L, om, fwd, tr);
+      p7_trace_Score(tr, dsq, gm, &newsc);
+      p7_trace_Reuse(tr);
+      printf("%f, %f\n", oldsc, newsc);
     }
   esl_stopwatch_Stop(w);
-  esl_stopwatch_Display(stdout, w, "# CPU time: ");
 
-  printf("forward sc   = %.4f nats\n", fsc);
-  printf("viterbi sc   = %.4f nats\n", vsc);
-  printf("max trace sc = %.4f nats\n", bestsc);
 
+  //esl_stopwatch_Display(stdout, w, "# CPU time (new): ");
   free(dsq);
   p7_trace_Destroy(tr);
   p7_gmx_Destroy(gx);
   p7_omx_Destroy(fwd);
-  p7_oprofile_Destroy(om);
+  p7_oprofile_Destroy_sse(om);
   p7_profile_Destroy(gm);
   p7_bg_Destroy(bg);
   p7_hmm_Destroy(hmm);
@@ -333,8 +333,8 @@ main(int argc, char **argv)
   if ((bg = p7_bg_Create(abc))                      == NULL)  esl_fatal("failed to create null model");
   if ((gm = p7_profile_Create(hmm->M, abc))         == NULL)  esl_fatal("failed to create profile");
   if (p7_ProfileConfig(hmm, bg, gm, L, p7_LOCAL)    != eslOK) esl_fatal("failed to config profile");
-  if ((om = p7_oprofile_Create(gm->M, abc))         == NULL)  esl_fatal("failed to create optimized profile");
-  if (p7_oprofile_Convert(gm, om)                   != eslOK) esl_fatal("failed to convert profile");
+  if ((om = p7_oprofile_Create_sse(gm->M, abc))         == NULL)  esl_fatal("failed to create optimized profile");
+  if (p7_oprofile_Convert_sse(gm, om)                   != eslOK) esl_fatal("failed to convert profile");
 
   /* Test with randomly generated (iid) sequence */
   if ((dsq = malloc(sizeof(ESL_DSQ) *(L+2)))  == NULL)  esl_fatal("malloc failed");
@@ -348,7 +348,7 @@ main(int argc, char **argv)
    
   esl_sq_Destroy(sq);
   free(dsq);
-  p7_oprofile_Destroy(om);
+  p7_oprofile_Destroy_sse(om);
   p7_profile_Destroy(gm);
   p7_bg_Destroy(bg);
   p7_hmm_Destroy(hmm);
