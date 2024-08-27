@@ -249,7 +249,9 @@ static int             add_id_length(ID_LENGTH_LIST *list, int id, int L);
 static int             assign_Lengths(P7_TOPHITS *th, ID_LENGTH_LIST *id_length_list);
 
 static void          assign_msa_name(struct cfg_s *cfg, ESL_MSA *msa);
+#ifdef p7ENABLE_FMINDEX
 static P7_SCOREDATA *create_fm_scoredata(struct cfg_s *cfg, P7_PROFILE *gm, P7_OPROFILE *om);
+#endif
 static void          output_optional_msa(FILE *afp, P7_HMM *hmm, P7_TOPHITS *th);
 
 
@@ -642,8 +644,12 @@ output_header(FILE *ofp, const ESL_GETOPTS *go, struct cfg_s *cfg)
   else if (esl_opt_IsUsed(go, "--qmsa"))     esl_fprintf(ofp, "# query MSA file:                  %s\n", cfg->queryfile);
   else                                       esl_fprintf(ofp, "# query profile file:              %s\n", cfg->queryfile);
 
+#ifdef p7ENABLE_FMINDEX
   if      (esl_opt_IsUsed(go, "--fmindex"))  esl_fprintf(ofp, "# target binary FM-index file:     %s\n", cfg->dbfile);
   else                                       esl_fprintf(ofp, "# target sequence file:            %s\n", cfg->dbfile);
+#else
+  esl_fprintf(ofp, "# target sequence file:            %s\n", cfg->dbfile);
+#endif
 
   if (esl_opt_IsUsed(go, "--qformat"))       esl_fprintf(ofp, "# query file format asserted:      %s\n", esl_opt_GetString(go, "--qformat"));
   if (esl_opt_IsUsed(go, "--popen"))         esl_fprintf(ofp, "# gap open probability:            %f\n", esl_opt_GetReal   (go, "--popen"));
@@ -785,8 +791,13 @@ static void
 initialize_cfg(ESL_GETOPTS *go, struct cfg_s *cfg)
 {
   int  fmt;
+  int  do_fmindex = FALSE;
   char errbuf[eslERRBUFSIZE];
   int  status;
+
+#ifdef p7ENABLE_FMINDEX
+  if ( esl_opt_GetBoolean(go, "--fmindex")) do_fmindex = TRUE;
+#endif  
 
   if ((cfg->queryfile = esl_opt_GetArg(go, 1)) == NULL)  p7_Fail("Failed to get <query_hmmfile> argument on command line.\n");
   if ((cfg->dbfile    = esl_opt_GetArg(go, 2)) == NULL)  p7_Fail("Failed to get <target_seqfile> argument on command line.\n"); 
@@ -842,7 +853,7 @@ initialize_cfg(ESL_GETOPTS *go, struct cfg_s *cfg)
    * Default, it's a sequence file or a stdin stream: <dbfp>
    * With --fmindex, this file is a binary FM-index db, made with hmmer-makefmdb: <fmdb>
    */
-  if (esl_opt_GetBoolean(go, "--fmindex"))
+  if (do_fmindex)
     {
       if ( fm_configAlloc(&(cfg->fmdb))                     != eslOK) p7_Fail("FM metadata allocation failed");
       if ( (cfg->fmdb->meta->fp = fopen(cfg->dbfile, "rb")) == NULL)  p7_Fail("failed to open target FM-index database %s for reading\n", cfg->dbfile);
@@ -1323,7 +1334,7 @@ thread_worker_FM(void *arg)
 }
 #else // provide dummy functions 
 static void thread_director_FM(WORKER_INFO *info, ESL_THREADS *obj, ESL_WORK_QUEUE *queue) { exit(1); }
-static void thread_workerFM(void *arg) { exit(1); }
+static void thread_worker_FM(void *arg) { exit(1); }
 #endif 
 
 
@@ -1427,6 +1438,7 @@ assign_msa_name(struct cfg_s *cfg, ESL_MSA *msa)
   else esl_msa_SetName(msa, "query", -1);
 }
 
+#ifdef p7ENABLE_FMINDEX
 /* set_fm_scoredata()
  *
  * TJW: "capture a measure of score density multiplied by something I
@@ -1457,7 +1469,7 @@ create_fm_scoredata(struct cfg_s *cfg, P7_PROFILE *gm, P7_OPROFILE *om)
   cfg->fmdb->sc_thresh_ratio = ESL_MIN(best_sc_avg/7.0, 1.0); // (SRE: 7.0 is mysterious here)
   return p7_hmm_ScoreDataCreate(om, gm);
 }  
-
+#endif
 
 static void
 output_optional_msa(FILE *afp, P7_HMM *hmm, P7_TOPHITS *th)
