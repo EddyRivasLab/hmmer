@@ -16,8 +16,10 @@
 #include <stdio.h>
 #include <string.h>
 #include <math.h>		/* roundf() */
-
+#ifdef eslENABLE_AVX512
 #include <x86intrin.h>
+#endif
+
 #include "easel.h"
 #include "esl_random.h"
 #include "esl_sse.h"
@@ -44,6 +46,7 @@ static int16_t wordify(P7_OPROFILE *om, float sc);
  *
  * Throws:    <NULL> on allocation error.
  */
+#ifdef eslENABLE_AVX512
 P7_OPROFILE *
 p7_oprofile_Create_avx512(int allocM, const ESL_ALPHABET *abc)
 {
@@ -1282,8 +1285,7 @@ p7_oprofile_UpdateMSVEmissionScores_avx512(P7_OPROFILE *om, P7_BG *bg, float *fw
 
   return eslOK;
 }
-
-
+#endif
 /*----------------- end, P7_OPROFILE structure ------------------*/
 
 
@@ -1354,6 +1356,7 @@ wordify(P7_OPROFILE *om, float sc)
  *
  * Throws:    (no abnormal error conditions)
  */
+#ifdef eslENABLE_AVX512
 int
 p7_oprofile_sf_Conversion_avx512(P7_OPROFILE *om)
 {
@@ -2363,5 +2366,119 @@ p7_oprofile_Compare_avx512(const P7_OPROFILE *om1, const P7_OPROFILE *om2, float
 
    return eslOK;
 }
-
+#endif
 /*------------ end, P7_OPROFILE debugging tools  ----------------*/
+
+
+// Stubs in case the compiler can't handle AVX-512
+#ifdef eslENABLE_AVX512
+extern P7_OPROFILE *p7_oprofile_Create_test_all(int M, const ESL_ALPHABET *abc){
+  return NULL;
+}
+extern P7_OPROFILE *p7_oprofile_Create_avx512(int M, const ESL_ALPHABET *abc){
+  return NULL;
+}
+
+extern void         p7_oprofile_Destroy_avx512(P7_OPROFILE *om){
+  return;
+}
+
+extern void         p7_oprofile_Destroy_test_all(P7_OPROFILE *om){
+  return;
+}
+
+extern P7_OPROFILE * p7_oprofile_Copy_avx512(P7_OPROFILE *om){
+  return NULL;
+}
+extern P7_OPROFILE * p7_oprofile_Copy_test_all(P7_OPROFILE *om){
+  return NULL;
+}
+
+extern int          p7_oprofile_UpdateFwdEmissionScores_avx512(P7_OPROFILE *om, P7_BG *bg, float *fwd_emissions, float *sc_arr){
+  return eslEUNSUPPORTEDISA;
+}
+extern int          p7_oprofile_UpdateFwdEmissionScores_test_all_simd(P7_OPROFILE *om, P7_BG *bg, float *fwd_emissions, float *sc_arr){
+  return eslEUNSUPPORTEDISA;
+}
+
+extern int          p7_oprofile_UpdateVitEmissionScores_avx512(P7_OPROFILE *om, P7_BG *bg, float *fwd_emissions, float *sc_arr){
+  return eslEUNSUPPORTEDISA;
+}
+
+extern int          p7_oprofile_UpdateVitEmissionScores_test_all_simd(P7_OPROFILE *om, P7_BG *bg, float *fwd_emissions, float *sc_arr){
+  return eslEUNSUPPORTEDISA;
+}
+
+extern int          p7_oprofile_UpdateMSVEmissionScores_avx512(P7_OPROFILE *om, P7_BG *bg, float *fwd_emissions, float *sc_arr){
+  return eslEUNSUPPORTEDISA;
+}
+
+extern int          p7_oprofile_UpdateMSVEmissionScores_test_all_simd(P7_OPROFILE *om, P7_BG *bg, float *fwd_emissions, float *sc_arr){
+  return eslEUNSUPPORTEDISA;
+}
+
+extern int          p7_oprofile_sf_Conversion_avx512(P7_OPROFILE *om){
+  return eslEUNSUPPORTEDISA;
+}
+
+extern int          p7_oprofile_mf_Conversion_avx512(const P7_PROFILE *gm, P7_OPROFILE *om){
+  return eslEUNSUPPORTEDISA;
+}
+
+extern int          p7_oprofile_vf_Conversion_avx512(const P7_PROFILE *gm, P7_OPROFILE *om){
+  return eslEUNSUPPORTEDISA;
+}
+
+extern int          p7_oprofile_fb_Conversion_avx512(const P7_PROFILE *gm, P7_OPROFILE *om){
+  return eslEUNSUPPORTEDISA;
+}
+
+extern int          p7_oprofile_Convert_avx512(const P7_PROFILE *gm, P7_OPROFILE *om){
+  return eslEUNSUPPORTEDISA;
+}
+
+extern int          p7_oprofile_Convert_test_all_simd(const P7_PROFILE *gm, P7_OPROFILE *om){
+  return eslEUNSUPPORTEDISA;
+}
+
+extern int          p7_oprofile_Compare_avx512(const P7_OPROFILE *om1, const P7_OPROFILE *om2, float tol, char *errmsg){
+  return eslEUNSUPPORTEDISA;
+}
+
+extern int          p7_oprofile_Compare_test_all(const P7_OPROFILE *om1, const P7_OPROFILE *om2, float tol, char *errmsg){
+  return eslEUNSUPPORTEDISA;
+}
+
+extern int          p7_oprofile_GetFwdTransitionArray_avx512(const P7_OPROFILE *om, int type, float *arr ){
+  return eslEUNSUPPORTEDISA;
+}
+
+extern int          p7_oprofile_GetFwdTransitionArray_test_all(const P7_OPROFILE *om, int type, float *arr ){
+  return eslEUNSUPPORTEDISA;
+}
+
+extern int          p7_oprofile_GetSSVEmissionScoreArray_avx512(const P7_OPROFILE *om, uint8_t *arr ){
+  return eslEUNSUPPORTEDISA;
+}
+
+extern int          p7_oprofile_GetSSVEmissionScoreArray_test_all(const P7_OPROFILE *om, uint8_t *arr ){
+  return eslEUNSUPPORTEDISA;
+}
+
+extern int          p7_oprofile_GetFwdEmissionScoreArray_avx512(const P7_OPROFILE *om, float *arr ){
+  return eslEUNSUPPORTEDISA;
+}
+
+extern int          p7_oprofile_GetFwdEmissionScoreArray_test_all(const P7_OPROFILE *om, float *arr ){
+  return eslEUNSUPPORTEDISA;
+}
+
+extern int          p7_oprofile_GetFwdEmissionArray_avx512(const P7_OPROFILE *om, P7_BG *bg, float *arr ){
+  return eslEUNSUPPORTEDISA;
+}
+
+extern int          p7_oprofile_GetFwdEmissionArray_test_all(const P7_OPROFILE *om, P7_BG *bg, float *arr ){
+  return eslEUNSUPPORTEDISA;
+}
+
+#endif

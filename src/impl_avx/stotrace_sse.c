@@ -61,6 +61,7 @@ p7_StochasticTrace_sse(ESL_RANDOMNESS *rng, const ESL_DSQ *dsq, int L, const P7_
   return p7_trace_Reverse(tr);
 }
 
+
 /* M(i,k) is reached from B(i-1), M(i-1,k-1), D(i-1,k-1), or I(i-1,k-1). */
 static inline int
 select_m(ESL_RANDOMNESS *rng, const P7_OPROFILE *om, const P7_OMX *ox, int i, int k)
@@ -194,25 +195,31 @@ select_e(ESL_RANDOMNESS *rng, const P7_OPROFILE *om, const P7_OMX *ox, int i, in
   double sum   = 0.0;
   double roll  = esl_random(rng);
   double norm  = 1.0 / ox->xmx[i*p7X_NXCELLS+p7X_E];
-  __m128 xEv   = _mm_set1_ps(norm); /* all M, D already scaled exactly the same */
   union { __m128 v; float p[4]; } u;
   int    q,r;
 
   while (1) {
-    for (q = 0; q < Q; q++)
-      {
-	u.v = _mm_mul_ps(ox->dpf[i][q*3 + p7X_M], xEv);
-	for (r = 0; r < 4; r++) {
-	  sum += u.p[r];
-	  if (roll < sum) { *ret_k = r*Q + q + 1; return p7T_M;}
-	}
+    for (q = 0; q < ox->M; q++){ // Start with the D path
 
-	u.v = _mm_mul_ps(ox->dpf[i][q*3 + p7X_D], xEv);
-	for (r = 0; r < 4; r++) {
-	  sum += u.p[r];
-	  if (roll < sum) { *ret_k = r*Q + q + 1; return p7T_D;}
-	}
-      }
+      float *row = (float *) ox->dpf[i];
+      int vector = q % Q;
+      int within_vector = q /Q;
+      int index = (((vector * 3)+p7X_D) * 4)+within_vector;
+      double val = row[index] * norm;
+      sum += val;
+      if (roll < sum) { *ret_k = q + 1; return p7T_D;}
+    }   
+    for (q = 0; q < ox->M; q++){ // Start with the D path
+
+      float *row = (float *) ox->dpf[i];
+      int vector = q % Q;
+      int within_vector = q /Q;
+      int index = (((vector * 3)+p7X_M) * 4)+within_vector;
+      double val = row[index] * norm;
+      sum += val;
+      if (roll < sum) { *ret_k = q + 1; return p7T_M;}
+
+    }
     ESL_DASSERT1((sum > 0.99));
   }
   /*UNREACHED*/

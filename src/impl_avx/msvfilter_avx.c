@@ -209,5 +209,8 @@ p7_MSVFilter_avx(const ESL_DSQ *dsq, int L, const P7_OPROFILE *om, P7_OMX *ox, f
 
   return eslOK;
 }
+
+
+
 /*------------------ end, p7_MSVFilter() ------------------------*/
 

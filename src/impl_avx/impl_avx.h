@@ -15,9 +15,8 @@
 #endif
 
 #ifdef eslENABLE_AVX
-#include <immintrin.h>  /* AVX2 */
+#include <immintrin.h>  /* AVX*/
 #endif
-
 #ifdef eslENABLE_AVX512
 #include <x86intrin.h>  /* AVX512 */
 #endif
@@ -318,7 +317,7 @@ typedef struct p7_omx_s {
 #define DMO(dp,q) ((dp)[(q) * p7X_NSCELLS + p7X_D])
 #define IMO(dp,q) ((dp)[(q) * p7X_NSCELLS + p7X_I])
 
-
+/*
 static inline float
 p7_omx_FGetMDI(const P7_OMX *ox, int s, int i, int k)
 {
@@ -342,7 +341,7 @@ p7_omx_FSetMDI(const P7_OMX *ox, int s, int i, int k, float val)
   u.p[r]        = val;
   ox->dpf[i][q] = u.v;
 }
-  
+*/
 
 
 
@@ -596,6 +595,7 @@ extern int p7_OATrace_avx512        (const P7_OPROFILE *om, const P7_OMX *pp, co
 /* stotrace.c */
 extern int (*p7_StochasticTrace)(ESL_RANDOMNESS *rng, const ESL_DSQ *dsq, int L, const P7_OPROFILE *om, const P7_OMX *ox, P7_TRACE *tr);
 extern int p7_StochasticTrace_sse(ESL_RANDOMNESS *rng, const ESL_DSQ *dsq, int L, const P7_OPROFILE *om, const P7_OMX *ox, P7_TRACE *tr);
+extern int p7_StochasticTrace_sse_new(ESL_RANDOMNESS *rng, const ESL_DSQ *dsq, int L, const P7_OPROFILE *om, const P7_OMX *ox, P7_TRACE *tr);
 extern int p7_StochasticTrace_avx(ESL_RANDOMNESS *rng, const ESL_DSQ *dsq, int L, const P7_OPROFILE *om, const P7_OMX *ox, P7_TRACE *tr);
 extern int p7_StochasticTrace_avx512(ESL_RANDOMNESS *rng, const ESL_DSQ *dsq, int L, const P7_OPROFILE *om, const P7_OMX *ox, P7_TRACE *tr);
 extern int p7_StochasticTrace_test_sse_avx(ESL_RANDOMNESS *rng, const ESL_DSQ *dsq, int L, const P7_OPROFILE *om, const P7_OMX *ox, P7_TRACE *tr);

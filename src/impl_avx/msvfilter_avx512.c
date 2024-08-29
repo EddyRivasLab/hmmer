@@ -25,7 +25,9 @@
 
 #include "hmmer.h"
 #include "impl_avx.h"
+#ifdef eslENABLE_AVX512
 #include <x86intrin.h>
+#endif
 #include "esl_avx512.h"
 /*****************************************************************
  * 1. The p7_MSVFilter() DP implementation.
@@ -67,6 +69,7 @@
  *
  * Throws:    <eslEINVAL> if <ox> allocation is too small.
  */
+#ifdef eslENABLE_AVX512
 int
 p7_MSVFilter_avx512(const ESL_DSQ *dsq, int L, const P7_OPROFILE *om, P7_OMX *ox, float *ret_sc)
 {
@@ -207,6 +210,12 @@ p7_MSVFilter_avx512(const ESL_DSQ *dsq, int L, const P7_OPROFILE *om, P7_OMX *ox
 
   return eslOK;
 }
-
+#endif
+#ifndef eslENABLE_AVX512
+int
+p7_MSVFilter_avx512(const ESL_DSQ *dsq, int L, const P7_OPROFILE *om, P7_OMX *ox, float *ret_sc)
+{
+    return eslEUNSUPPORTEDISA;
+}
+#endif
 /*------------------ end, p7_MSVFilter() ------------------------*/
-

@@ -16,6 +16,11 @@ p7_omx_Create_sse(int allocM, int allocL, int allocXL)
   ox->dpf    = NULL;
   ox->xmx    = NULL;
   ox->x_mem  = NULL;
+  ox->dp_mem_avx = NULL;
+  ox->dpb_avx = NULL;
+  ox->dpw_avx = NULL;
+  ox->dpf_avx = NULL;
+  
   ox->last_written_by = none;
   /* DP matrix will be allocated for allocL+1 rows 0,1..L; allocQ4*p7X_NSCELLS columns */
   ox->allocR   = allocL+1;
@@ -23,6 +28,10 @@ p7_omx_Create_sse(int allocM, int allocL, int allocXL)
   ox->allocQ4  = p7O_NQF(allocM);
   ox->allocQ8  = p7O_NQW(allocM);
   ox->allocQ16 = p7O_NQB(allocM);
+  ox->allocQ4_avx =0;
+  ox->allocQ8_avx = 0;
+  ox->allocQ16_avx = 0;
+
   ox->ncells   = (int64_t) ox->allocR * (int64_t) ox->allocQ4 * 4;      /* # of DP cells allocated, where 1 cell contains MDI */
 
   ESL_ALLOC(ox->dp_mem, sizeof(__m128) * (int64_t) ox->allocR * (int64_t) ox->allocQ4 * p7X_NSCELLS + 15);  /* floats always dominate; +15 for alignment */

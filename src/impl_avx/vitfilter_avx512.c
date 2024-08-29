@@ -16,9 +16,9 @@
 
 #include <stdio.h>
 #include <math.h>
-
+#ifdef eslENABLE_AVX512
 #include <x86intrin.h>
-
+#endif
 #include "easel.h"
 #include "esl_avx512.h"
 #include "esl_gumbel.h"
@@ -74,6 +74,8 @@
  *            J2/66 for precision maximization
  *            J4/138-140 for reimplementation in 16-bit precision
  */
+
+#ifdef eslENABLE_AVX512
 int
 p7_ViterbiFilter_avx512(const ESL_DSQ *dsq, int L, const P7_OPROFILE *om, P7_OMX *ox, float *ret_sc)
 {
@@ -247,5 +249,14 @@ p7_ViterbiFilter_avx512(const ESL_DSQ *dsq, int L, const P7_OPROFILE *om, P7_OMX
   else  *ret_sc = -eslINFINITY;
   return eslOK;
 }
+#endif 
+
+#ifndef eslENABLE_AVX512
+int
+p7_ViterbiFilter_avx512(const ESL_DSQ *dsq, int L, const P7_OPROFILE *om, P7_OMX *ox, float *ret_sc)
+{
+  return eslEUNSUPPORTEDISA;
+}
+#endif
 /*---------------- end, p7_ViterbiFilter() ----------------------*/
 

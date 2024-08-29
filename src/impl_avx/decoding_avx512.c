@@ -9,14 +9,18 @@
 #include <stdio.h>
 #include <math.h>
 
+#ifdef eslENABLE_AVX512 
 #include <x86intrin.h>
+#endif
 
 #include "easel.h"
 
 #include "hmmer.h"
+
 #include "impl_avx.h"
 
 
+#ifdef eslENABLE_AVX512 
 int
 p7_Decoding_avx512(const P7_OPROFILE *om, const P7_OMX *oxf, P7_OMX *oxb, P7_OMX *pp)
 {
@@ -80,8 +84,15 @@ p7_Decoding_avx512(const P7_OPROFILE *om, const P7_OMX *oxf, P7_OMX *oxb, P7_OMX
   if (isinf(scaleproduct)) return eslERANGE;
   else                     return eslOK;
 }
+#endif
 
-
-
+// Stub so that function exists if our compiler can't handle AVX-512
+#ifndef eslENABLE_AVX512 
+int
+p7_Decoding_avx512(const P7_OPROFILE *om, const P7_OMX *oxf, P7_OMX *oxb, P7_OMX *pp)
+{
+  return eslEUNSUPPORTEDISA;
+}
+#endif
 /*------------------ end, posterior decoding --------------------*/
 

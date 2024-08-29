@@ -13,9 +13,9 @@
 #include <p7_config.h>
 
 #include <float.h>
-
+#ifdef eslENABLE_AVX512
 #include <x86intrin.h>
-
+#endif
 #include "easel.h"
 #include "esl_avx512.h"
 #include "esl_vectorops.h"
@@ -53,6 +53,7 @@
  *
  * Throws:    (no abnormal error conditions)
  */
+#ifdef eslENABLE_AVX512
 int
 p7_OptimalAccuracy_avx512(const P7_OPROFILE *om, const P7_OMX *pp, P7_OMX *ox, float *ret_e)
 {
@@ -441,6 +442,19 @@ select_b(const P7_OPROFILE *om, const P7_OMX *ox, int i)
   path[1] = ( (om->xf[p7O_J][p7O_MOVE] == 0.0) ? -eslINFINITY : ox->xmx[i*p7X_NXCELLS+p7X_J]);
   return  ((path[0] > path[1]) ? p7T_N : p7T_J);
 }
+#endif
 /*---------------------- end, OA traceback ----------------------*/
+// stubs for case where compiler can't handle AVX-512
+#ifndef eslENABLE_AVX512
+int
+p7_OptimalAccuracy_avx512(const P7_OPROFILE *om, const P7_OMX *pp, P7_OMX *ox, float *ret_e)
+{
+    return eslEUNSUPPORTEDISA;
+}
 
-
+int
+p7_OATrace_avx512(const P7_OPROFILE *om, const P7_OMX *pp, const P7_OMX *ox, P7_TRACE *tr)
+{
+    return eslEUNSUPPORTEDISA;
+}
+#endif

@@ -814,7 +814,6 @@ AC_CONFIG_FILES([ \
   easel/miniapps/esl-seqrange.man    \
   easel/miniapps/esl-seqstat.man     \
   easel/miniapps/esl-sfetch.man      \
-  easel/miniapps/esl-shuffle.man     \
   easel/miniapps/esl-ssdraw.man      \
   easel/miniapps/esl-weight.man      \
   easel/miniapps/easel-translate.man \

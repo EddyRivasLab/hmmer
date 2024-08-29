@@ -729,22 +729,6 @@ int p7_oprofile_mf_Conversion_sse(const P7_PROFILE *gm, P7_OPROFILE *om)
   om->tjb_b = unbiased_byteify(om, logf(3.0f / (float) (gm->L+3))); /* this adopts the L setting of the parent profile */
 
   p7_oprofile_sf_Conversion_sse(om);
-  int     nq_avx  = p7O_NQB_AVX(M);     /* segment length; total # of striped vectors needed    */   
-  union { __m256i v; uint8_t i[32]; } tmp_avx; /* used to align and load simd minivectors        */        
-
-  max = 0.0;		/* maximum residue score: used for unsigned emission score bias */
- 
-
-  if (nq_avx > om->allocQ16_avx) ESL_EXCEPTION(eslEINVAL, "optimized profile is too small to hold conversion");
-
-
-  /* striped match costs: start at k=1.  */
-  for (x = 0; x < gm->abc->Kp; x++)
-    for (q = 0, k = 1; q < nq_avx; q++, k++)
-      {
-  for (z = 0; z < 32; z++) tmp_avx.i[z] = ((k+ z*nq_avx <= M) ? biased_byteify(om, p7P_MSC(gm, k+z*nq_avx, x)) : 255);
-  om->rbv_avx[x][q]   = tmp_avx.v;  
-      }
 
   return eslOK;
 }

@@ -12,8 +12,9 @@
 
 #include <stdlib.h>
 #include <string.h>
-
+#ifdef eslENABLE_AVX512
 #include <x86intrin.h>
+#endif
 
 #include "easel.h"
 #include "esl_avx512.h"
@@ -39,6 +40,7 @@
  *            pp    - posterior prob matrix, for <om> against domain envelope <dsq+i-1> (offset)
  *            null2 - RETURN: null2 log odds scores per residue; <0..Kp-1>; caller allocated space
  */
+#ifdef eslENABLE_AVX512
 int
 p7_Null2_ByExpectation_avx512(const P7_OPROFILE *om, const P7_OMX *pp, float *null2)
 {
@@ -216,9 +218,25 @@ p7_Null2_ByTrace_avx512(const P7_OPROFILE *om, const P7_TRACE *tr, int zstart, i
 
   return eslOK;
 }
+#endif
 
+//stubs for when the compiler can't handle AVX-512
+#ifndef eslENABLE_AVX512
 
+extern int p7_Null2_ByExpectation_avx512(const P7_OPROFILE *om, const P7_OMX *pp, float *null2){
+  return eslEUNSUPPORTEDISA;
+}
 
+extern int p7_Null2_ByTrace_avx512      (const P7_OPROFILE *om, const P7_TRACE *tr, int zstart, int zend, P7_OMX *wrk, float *null2){
+  return eslEUNSUPPORTEDISA;
+}
 
+extern int p7_Null2_ByExpectation_test_all_simd(const P7_OPROFILE *om, const P7_OMX *pp, float *null2){
+  return eslEUNSUPPORTEDISA;
+}
 
+extern int p7_Null2_ByTrace_test_all_simd      (const P7_OPROFILE *om, const P7_TRACE *tr, int zstart, int zend, P7_OMX *wrk, float *null2){
+  return eslEUNSUPPORTEDISA;
+}
 
+#endif

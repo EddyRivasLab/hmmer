@@ -29,10 +29,12 @@
 
 #include <stdio.h>
 #include <math.h>
-
+#ifdef eslENABLE_AVX512
 #include <xmmintrin.h>		/* SSE  */
 #include <emmintrin.h>		/* SSE2 */
 #include <x86intrin.h>
+#endif
+
 #include "easel.h"
 #include "esl_avx512.h"
 
@@ -46,12 +48,12 @@ static int backward_engine(int do_full, const ESL_DSQ *dsq, int L, const P7_OPRO
 /*****************************************************************
  * 1. Forward/Backward API.
  *****************************************************************/
-
+#ifdef eslENABLE_AVX512
 int
 p7_Forward_avx512(const ESL_DSQ *dsq, int L, const P7_OPROFILE *om, P7_OMX *ox, float *opt_sc)
 {
 #if eslDEBUGLEVEL > 0		
-  if (om->M >  ox->allocQ4*4)    ESL_EXCEPTION(eslEINVAL, "DP matrix allocated too small (too few columns)");
+  if (om->M >  ox->allocQ4_avx512*16)    ESL_EXCEPTION(eslEINVAL, "DP matrix allocated too small (too few columns)");
   if (L     >= ox->validR)       ESL_EXCEPTION(eslEINVAL, "DP matrix allocated too small (too few MDI rows)");
   if (L     >= ox->allocXR)      ESL_EXCEPTION(eslEINVAL, "DP matrix allocated too small (too few X rows)");
   if (! p7_oprofile_IsLocal(om)) ESL_EXCEPTION(eslEINVAL, "Forward implementation makes assumptions that only work for local alignment");
@@ -65,7 +67,7 @@ int
 p7_ForwardParser_avx512(const ESL_DSQ *dsq, int L, const P7_OPROFILE *om, P7_OMX *ox, float *opt_sc)
 {
 #if eslDEBUGLEVEL > 0		
-  if (om->M >  ox->allocQ4*4)    ESL_EXCEPTION(eslEINVAL, "DP matrix allocated too small (too few columns)");
+  if (om->M >  ox->allocQ4_avx512*16)    ESL_EXCEPTION(eslEINVAL, "DP matrix allocated too small (too few columns)");
   if (ox->validR < 1)            ESL_EXCEPTION(eslEINVAL, "DP matrix allocated too small (too few MDI rows)");
   if (L     >= ox->allocXR)      ESL_EXCEPTION(eslEINVAL, "DP matrix allocated too small (too few X rows)");
   if (! p7_oprofile_IsLocal(om)) ESL_EXCEPTION(eslEINVAL, "Forward implementation makes assumptions that only work for local alignment");
@@ -80,7 +82,7 @@ int
 p7_Backward_avx512(const ESL_DSQ *dsq, int L, const P7_OPROFILE *om, const P7_OMX *fwd, P7_OMX *bck, float *opt_sc)
 {
 #if eslDEBUGLEVEL > 0		
-  if (om->M >  bck->allocQ4*4)    ESL_EXCEPTION(eslEINVAL, "DP matrix allocated too small (too few columns)");
+  if (om->M >  bck->allocQ4_avx512*16)    ESL_EXCEPTION(eslEINVAL, "DP matrix allocated too small (too few columns)");
   if (L     >= bck->validR)       ESL_EXCEPTION(eslEINVAL, "DP matrix allocated too small (too few MDI rows)");
   if (L     >= bck->allocXR)      ESL_EXCEPTION(eslEINVAL, "DP matrix allocated too small (too few X rows)");
   if (L     != fwd->L)            ESL_EXCEPTION(eslEINVAL, "fwd matrix size doesn't agree with length L");
@@ -95,7 +97,7 @@ int
 p7_BackwardParser_avx512(const ESL_DSQ *dsq, int L, const P7_OPROFILE *om, const P7_OMX *fwd, P7_OMX *bck, float *opt_sc)
 {
 #if eslDEBUGLEVEL > 0		
-  if (om->M >  bck->allocQ4*4)    ESL_EXCEPTION(eslEINVAL, "DP matrix allocated too small (too few columns)");
+  if (om->M >  bck->allocQ4_avx512*16)    ESL_EXCEPTION(eslEINVAL, "DP matrix allocated too small (too few columns)");
   if (bck->validR < 1)            ESL_EXCEPTION(eslEINVAL, "DP matrix allocated too small (too few MDI rows)");
   if (L     >= bck->allocXR)      ESL_EXCEPTION(eslEINVAL, "DP matrix allocated too small (too few X rows)");
   if (L     != fwd->L)            ESL_EXCEPTION(eslEINVAL, "fwd matrix size doesn't agree with length L");
@@ -104,13 +106,46 @@ p7_BackwardParser_avx512(const ESL_DSQ *dsq, int L, const P7_OPROFILE *om, const
 
   return backward_engine(FALSE, dsq, L, om, fwd, bck, opt_sc);
 }
+#endif
+
+//stubs so that functions exist when compiler can't handle AVX-512
+#ifndef eslENABLE_AVX512
+int
+p7_Forward_avx512(const ESL_DSQ *dsq, int L, const P7_OPROFILE *om, P7_OMX *ox, float *opt_sc)
+{
+  return eslEUNSUPPORTEDISA;
+}
 
 
+int
+p7_ForwardParser_avx512(const ESL_DSQ *dsq, int L, const P7_OPROFILE *om, P7_OMX *ox, float *opt_sc)
+{
+  return eslEUNSUPPORTEDISA;
+}
+
+
+
+int 
+p7_Backward_avx512(const ESL_DSQ *dsq, int L, const P7_OPROFILE *om, const P7_OMX *fwd, P7_OMX *bck, float *opt_sc)
+{
+  return eslEUNSUPPORTEDISA;
+}
+
+
+int 
+p7_BackwardParser_avx512(const ESL_DSQ *dsq, int L, const P7_OPROFILE *om, const P7_OMX *fwd, P7_OMX *bck, float *opt_sc)
+{
+  return eslEUNSUPPORTEDISA;
+}
+#endif
 
 /*****************************************************************
  * 2. Forward/Backward engine implementations (called thru API)
  *****************************************************************/
 
+// Don't need stubs for static functions when the compiler can't support
+//   AVX-512, as the stubs for API-visible functions don't call anything
+#ifdef eslENABLE_AVX512
 static int
 forward_engine(int do_full, const ESL_DSQ *dsq, int L, const P7_OPROFILE *om, P7_OMX *ox, float *opt_sc)
 {
@@ -585,5 +620,6 @@ B, xC);  /* logify=TRUE, <rowi>=L, width=9, precision=4*/
   if (opt_sc != NULL) *opt_sc = bck->totscale + log(xN);
   return eslOK;
 }
+#endif
 /*-------------- end, forward/backward engines  -----------------*/
 

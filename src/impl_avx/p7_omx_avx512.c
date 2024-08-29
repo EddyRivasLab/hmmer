@@ -1,5 +1,7 @@
 #include "hmmer.h"
 #include "impl_avx.h"
+
+#ifdef eslENABLE_AVX512
 #include <x86intrin.h>
 
 P7_OMX *
@@ -571,3 +573,61 @@ ERROR:
   free(v);
   return status;
 }
+
+#endif
+
+// Stubs for when the compiler can't handle AVX-512
+#ifndef eslENABLE_AVX512
+
+extern P7_OMX      *p7_omx_Create_avx512(int allocM, int allocL, int allocXL){
+  return NULL;
+}
+
+extern P7_OMX      *p7_omx_Create_test_all_simd(int allocM, int allocL, int allocXL){
+  return NULL;
+}
+
+extern int          p7_omx_GrowTo_avx512(P7_OMX *ox, int allocM, int allocL, int allocXL){
+  return eslEUNSUPPORTEDISA;
+}
+
+extern int          p7_omx_GrowTo_test_all_simd(P7_OMX *ox, int allocM, int allocL, int allocXL){
+  return eslEUNSUPPORTEDISA;
+}
+
+extern int          p7_omx_FDeconvert_avx512(P7_OMX *ox, P7_GMX *gx){
+  return eslEUNSUPPORTEDISA;
+}
+
+extern int          p7_omx_FDeconvert_test_sse_avx(P7_OMX *ox, P7_GMX *gx){
+  return eslEUNSUPPORTEDISA;
+}
+
+extern int          p7_omx_FDeconvert_test_all_simd(P7_OMX *ox, P7_GMX *gx){
+  return eslEUNSUPPORTEDISA;
+}
+
+extern void         p7_omx_Destroy_avx512(P7_OMX *ox){
+  return;
+}
+
+extern void         p7_omx_Destroy_test_sse_avx(P7_OMX *ox){
+  return;
+}
+
+extern void         p7_omx_Destroy_test_all_simd(P7_OMX *ox){
+  return;
+}
+
+extern int          p7_omx_DumpMFRow_avx512(P7_OMX *ox, int rowi, uint8_t xE, uint8_t xN, uint8_t xJ, uint8_t xB, uint8_t xC){
+  return eslEUNSUPPORTEDISA;
+}
+
+extern int          p7_omx_DumpVFRow_avx512(P7_OMX *ox, int rowi, int16_t xE, int16_t xN, int16_t xJ, int16_t xB, int16_t xC){
+  return eslEUNSUPPORTEDISA;
+}
+
+extern int          p7_omx_DumpFBRow_avx512(P7_OMX *ox, int logify, int rowi, int width, int precision, float xE, float xN, float xJ, float xB, float xC){
+  return eslEUNSUPPORTEDISA;
+}
+#endif
