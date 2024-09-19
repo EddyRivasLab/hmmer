@@ -1,14 +1,14 @@
 // Descriptions for all functions are in stotrace.c
-
+#ifdef eslENABLE_AVX
 #include <immintrin.h>   // AVX2
+#endif
 #include "easel.h"
 #include "esl_random.h"
 #include "esl_avx.h"
 #include "esl_vectorops.h"
 
 #include "hmmer.h"
-#include "impl_avx.h"
-
+#ifdef eslENABLE_AVX
 static inline int select_m(ESL_RANDOMNESS *rng, const P7_OPROFILE *om, const P7_OMX *ox, int i, int k);
 static inline int select_d(ESL_RANDOMNESS *rng, const P7_OPROFILE *om, const P7_OMX *ox, int i, int k);
 static inline int select_i(ESL_RANDOMNESS *rng, const P7_OPROFILE *om, const P7_OMX *ox, int i, int k);
@@ -229,4 +229,15 @@ select_b(ESL_RANDOMNESS *rng, const P7_OPROFILE *om, const P7_OMX *ox, int i)
   path[1] = ox->xmx[i*p7X_NXCELLS+p7X_J] * om->xf[p7O_J][p7O_MOVE];
   esl_vec_FNorm(path, 2);
   return state[esl_rnd_FChoose(rng, path, 2)];
+} 
+#endif
+
+#ifndef eslENABLE_AVX  // Stubs for compilers that can't handle AVX
+int
+p7_StochasticTrace_avx(ESL_RANDOMNESS *rng, const ESL_DSQ *dsq, int L, const P7_OPROFILE *om, const P7_OMX *ox,
+		   P7_TRACE *tr)
+{
+  return eslEUNSUPPORTEDISA;
 }
+
+#endif

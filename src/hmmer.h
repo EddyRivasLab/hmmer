@@ -826,10 +826,12 @@ typedef struct p7_hmm_window_list_s {
  *****************************************************************/
 #if   defined (eslENABLE_NEON)
 #include "impl_neon/impl_neon.h"
+#elif defined(eslENABLE_AVX512)
+#include "impl_avx/impl_avx.h"
 #elif defined(eslENABLE_AVX)
 #include "impl_avx/impl_avx.h"
 #elif defined (eslENABLE_SSE)
-#include "impl_sse/impl_sse.h"
+#include "impl_avx/impl_avx.h" //impl_avx.h handles all x86 SIMD ISAs
 #elif defined (eslENABLE_VMX)
 #include "impl_vmx/impl_vmx.h"
 #else

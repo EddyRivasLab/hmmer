@@ -285,11 +285,11 @@ p7_oprofile_ReadMSV(P7_HMMFILE *hfp, ESL_ALPHABET **byp_abc, P7_OPROFILE **ret_o
   if (! fread((char *) &(om->bias_b),    sizeof(uint8_t), 1,           hfp->ffp)) ESL_XFAIL(eslEFORMAT, hfp->errbuf, "failed to read bias");
   for (x = 0; x < abc->Kp; x++){
     if (! fread((char *) om->sbv[x],     sizeof(__m128i), Q16x,        hfp->ffp)) ESL_XFAIL(eslEFORMAT, hfp->errbuf, "failed to read ssv scores at %d [residue %c]", x, abc->sym[x]); 
-    p7_restripe_byte((char *) om->sbv[x], (char*) om->sbv_avx[x], padded_byte_vector_length, 128, 256, 255);
+  //  p7_restripe_byte((char *) om->sbv[x], (char*) om->sbv_avx[x], padded_byte_vector_length, 128, 256, 255);
   }
   for (x = 0; x < abc->Kp; x++){
     if (! fread((char *) om->rbv[x],     sizeof(__m128i), Q16,         hfp->ffp)) ESL_XFAIL(eslEFORMAT, hfp->errbuf, "failed to read msv scores at %d [residue %c]", x, abc->sym[x]);
-    p7_restripe_byte((char *) om->rbv[x], (char *) om->rbv_avx[x], byte_vector_length, 128, 256, 255);
+    //p7_restripe_byte((char *) om->rbv[x], (char *) om->rbv_avx[x], byte_vector_length, 128, 256, 255);
   }
   if (! fread((char *) om->evparam,      sizeof(float),   p7_NEVPARAM, hfp->ffp)) ESL_XFAIL(eslEFORMAT, hfp->errbuf, "failed to read stat params");
   if (! fread((char *) om->offs,         sizeof(off_t),   p7_NOFFSETS, hfp->ffp)) ESL_XFAIL(eslEFORMAT, hfp->errbuf, "failed to read hmmpfam offsets");
@@ -563,10 +563,10 @@ p7_oprofile_ReadRest(P7_HMMFILE *hfp, P7_OPROFILE *om)
   Q8  = p7O_NQW(om->M);
 
   if (! fread((char *) om->twv,             sizeof(__m128i),  8*Q8,        hfp->pfp)) ESL_XFAIL(eslEFORMAT, hfp->rr_errbuf, "failed to read <tu>, vitfilter transitions");
-  p7_restripe_short((int16_t *) om->twv, (int16_t*) om->twv_avx, short_vector_length *8, 128, 256);
+  //p7_restripe_short((int16_t *) om->twv, (int16_t*) om->twv_avx, short_vector_length *8, 128, 256);
   for (x = 0; x < om->abc->Kp; x++){
     if (! fread( (char *) om->rwv[x],       sizeof(__m128i),  Q8,          hfp->pfp)) ESL_XFAIL(eslEFORMAT, hfp->rr_errbuf, "failed to read <ru>[%d], vitfilter emissions for sym %c", x, om->abc->sym[x]);
-    p7_restripe_short((int16_t *) om->rwv, (int16_t*) om->rwv_avx[x], short_vector_length, 128, 256);
+    //p7_restripe_short((int16_t *) om->rwv, (int16_t*) om->rwv_avx[x], short_vector_length, 128, 256);
   }
   for (x = 0; x < p7O_NXSTATES; x++)
     if (! fread( (char *) om->xw[x],        sizeof(int16_t),  p7O_NXTRANS, hfp->pfp)) ESL_XFAIL(eslEFORMAT, hfp->rr_errbuf, "failed to read <xu>[%d], vitfilter special transitions", x);
@@ -576,10 +576,10 @@ p7_oprofile_ReadRest(P7_HMMFILE *hfp, P7_OPROFILE *om)
   if (! fread((char *) &(om->ncj_roundoff), sizeof(float),    1,           hfp->pfp)) ESL_XFAIL(eslEFORMAT, hfp->rr_errbuf, "failed to read ddbound_w");
 
   if (! fread((char *) om->tfv,          sizeof(__m128),   8*Q4,        hfp->pfp)) ESL_XFAIL(eslEFORMAT, hfp->rr_errbuf, "failed to read <tf> transitions");
-  p7_restripe_float((float *) om->tfv, (float*) om->tfv_avx, float_vector_length *8, 128, 256);
+  //p7_restripe_float((float *) om->tfv, (float*) om->tfv_avx, float_vector_length *8, 128, 256);
   for (x = 0; x < om->abc->Kp; x++){
     if (! fread( (char *) om->rfv[x],    sizeof(__m128),   Q4,          hfp->pfp)) ESL_XFAIL(eslEFORMAT, hfp->rr_errbuf, "failed to read <rf>[%d] emissions for sym %c", x, om->abc->sym[x]);
-    p7_restripe_float((float *) om->rfv, (float*) om->rfv_avx[x], float_vector_length, 128, 256);
+    //p7_restripe_float((float *) om->rfv, (float*) om->rfv_avx[x], float_vector_length, 128, 256);
   }
   for (x = 0; x < p7O_NXSTATES; x++)
     if (! fread( (char *) om->xf[x],     sizeof(float),    p7O_NXTRANS, hfp->pfp)) ESL_XFAIL(eslEFORMAT, hfp->rr_errbuf, "failed to read <xf>[%d] special transitions", x);

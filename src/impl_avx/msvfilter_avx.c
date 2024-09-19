@@ -20,17 +20,16 @@
 #include <stdio.h>
 #include <math.h>
 
-#include <xmmintrin.h>		/* SSE  */
-#include <emmintrin.h>		/* SSE2 */
+#ifdef eslENABLE_AVX
 #include <immintrin.h>    /* AVX2*/
-
+#endif
 #include "easel.h"
-#include "esl_sse.h"
+
 #include "esl_avx.h"
 #include "esl_gumbel.h"
 
 #include "hmmer.h"
-#include "impl_avx.h"
+
 
 /*****************************************************************
  * 1. The p7_MSVFilter() DP implementation.
@@ -72,6 +71,7 @@
  *
  * Throws:    <eslEINVAL> if <ox> allocation is too small.
  */
+#ifdef eslENABLE_AVX
 int
 p7_MSVFilter_avx(const ESL_DSQ *dsq, int L, const P7_OPROFILE *om, P7_OMX *ox, float *ret_sc)
 {
@@ -209,8 +209,14 @@ p7_MSVFilter_avx(const ESL_DSQ *dsq, int L, const P7_OPROFILE *om, P7_OMX *ox, f
 
   return eslOK;
 }
-
-
+#endif
+#ifndef eslENABLE_AVX
+int
+p7_MSVFilter_avx(const ESL_DSQ *dsq, int L, const P7_OPROFILE *om, P7_OMX *ox, float *ret_sc)
+{
+  return eslEUNSUPPORTEDISA;
+}
+#endif
 
 /*------------------ end, p7_MSVFilter() ------------------------*/
 

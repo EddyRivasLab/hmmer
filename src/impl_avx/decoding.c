@@ -16,7 +16,6 @@
 
 #include "esl_cpu.h"
 #include "hmmer.h"
-#include "impl_avx.h"
 
 /*****************************************************************
  * 1. Posterior decoding algorithms.

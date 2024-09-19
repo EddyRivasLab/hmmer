@@ -31,10 +31,11 @@
 #include <math.h>
 #include <immintrin.h>   // AVX2
 #include "easel.h"
+#ifdef eslENABLE_AVX
 #include "esl_avx.h"
-
+#include <immintrin.h>   // AVX2
+#endif
 #include "hmmer.h"
-#include "impl_avx.h"
 
 static int forward_engine (int do_full, const ESL_DSQ *dsq, int L, const P7_OPROFILE *om,                    P7_OMX *fwd, float *opt_sc);
 static int backward_engine(int do_full, const ESL_DSQ *dsq, int L, const P7_OPROFILE *om, const P7_OMX *fwd, P7_OMX *bck, float *opt_sc);
@@ -43,7 +44,7 @@ static int backward_engine(int do_full, const ESL_DSQ *dsq, int L, const P7_OPRO
 /*****************************************************************
  * 1. Forward/Backward API.
  *****************************************************************/
-
+#ifdef eslENABLE_AVX
 int
 p7_Forward_avx(const ESL_DSQ *dsq, int L, const P7_OPROFILE *om, P7_OMX *ox, float *opt_sc)
 {
@@ -101,13 +102,41 @@ p7_BackwardParser_avx(const ESL_DSQ *dsq, int L, const P7_OPROFILE *om, const P7
 
   return backward_engine(FALSE, dsq, L, om, fwd, bck, opt_sc);
 }
+#endif
+
+#ifndef eslENABLE_AVX  // stubs for compilers that can't handle AVX
+int
+p7_Forward_avx(const ESL_DSQ *dsq, int L, const P7_OPROFILE *om, P7_OMX *ox, float *opt_sc)
+{
+  return eslEUNSUPPORTEDISA;
+}
+
+
+int
+p7_ForwardParser_avx(const ESL_DSQ *dsq, int L, const P7_OPROFILE *om, P7_OMX *ox, float *opt_sc)
+{
+  return eslEUNSUPPORTEDISA;
+}
 
 
 
+int 
+p7_Backward_avx(const ESL_DSQ *dsq, int L, const P7_OPROFILE *om, const P7_OMX *fwd, P7_OMX *bck, float *opt_sc)
+{
+   return eslEUNSUPPORTEDISA;
+}
+
+
+int 
+p7_BackwardParser_avx(const ESL_DSQ *dsq, int L, const P7_OPROFILE *om, const P7_OMX *fwd, P7_OMX *bck, float *opt_sc)
+{
+   return eslEUNSUPPORTEDISA;
+}
+#endif
 /*****************************************************************
  * 2. Forward/Backward engine implementations (called thru API)
  *****************************************************************/
-
+#ifdef eslENABLE_AVX
 static int
 forward_engine(int do_full, const ESL_DSQ *dsq, int L, const P7_OPROFILE *om, P7_OMX *ox, float *opt_sc)
 {
@@ -576,5 +605,6 @@ backward_engine(int do_full, const ESL_DSQ *dsq, int L, const P7_OPROFILE *om, c
   if (opt_sc != NULL) *opt_sc = bck->totscale + log(xN);
   return eslOK;
 }
+#endif
 /*-------------- end, forward/backward engines  -----------------*/
 

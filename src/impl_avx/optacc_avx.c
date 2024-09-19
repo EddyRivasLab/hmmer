@@ -13,8 +13,9 @@
 #include <p7_config.h>
 
 #include <float.h>
-
+#ifdef eslENABLE_AVX
 #include <immintrin.h>   // AVX2
+#endif
 #include "easel.h"
 #include "esl_avx.h"
 #include "esl_vectorops.h"
@@ -52,6 +53,7 @@
  *
  * Throws:    (no abnormal error conditions)
  */
+#ifdef eslENABLE_AVX
 int
 p7_OptimalAccuracy_avx(const P7_OPROFILE *om, const P7_OMX *pp, P7_OMX *ox, float *ret_e)
 {
@@ -416,6 +418,19 @@ select_b(const P7_OPROFILE *om, const P7_OMX *ox, int i)
   return  ((path[0] > path[1]) ? p7T_N : p7T_J);
 }
 /*---------------------- end, OA traceback ----------------------*/
+#endif
 
 
+#ifndef eslENABLE_AVX // stubs for compilers that can't handle AVX
+int
+p7_OptimalAccuracy_avx(const P7_OPROFILE *om, const P7_OMX *pp, P7_OMX *ox, float *ret_e)
+{
+  return eslEUNSUPPORTEDISA;
+}
+int
+p7_OATrace_avx(const P7_OPROFILE *om, const P7_OMX *pp, const P7_OMX *ox, P7_TRACE *tr)
+{
+  return eslEUNSUPPORTEDISA;
+}
 
+#endif

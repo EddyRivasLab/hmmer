@@ -16,15 +16,15 @@
 #include <stdio.h>
 #include <string.h>
 #include <math.h>		/* roundf() */
+#ifndef eslENABLE_AVX
 #include <immintrin.h>  /* AVX2 */
+#endif
 #include "easel.h"
 #include "esl_random.h"
-#include "esl_sse.h"
 #include "esl_avx.h"
 #include "esl_vectorops.h"
 
 #include "hmmer.h"
-#include "impl_avx.h"
 
 static uint8_t unbiased_byteify(P7_OPROFILE *om, float sc);
 static uint8_t biased_byteify(P7_OPROFILE *om, float sc);
@@ -43,6 +43,7 @@ static int16_t wordify(P7_OPROFILE *om, float sc);
  *
  * Throws:    <NULL> on allocation error.
  */
+#ifdef eslENABLE_AVX
 P7_OPROFILE *
 p7_oprofile_Create_test_sse_avx(int allocM, const ESL_ALPHABET *abc)
 {
@@ -2017,5 +2018,506 @@ p7_oprofile_Compare_avx(const P7_OPROFILE *om1, const P7_OPROFILE *om2, float to
 
    return eslOK;
 }
+#endif
 
+//Stubs for compilers that can't handle AVX
+#ifndef eslENABLE_AVX
+P7_OPROFILE *
+p7_oprofile_Create_test_sse_avx(int allocM, const ESL_ALPHABET *abc)
+{
+  return NULL;
+}
+/* Function:  p7_oprofile_Create_avx()
+ * Synopsis:  Allocate an optimized profile structure for Intel AVX ISA
+ * Incept:    NPC 5/21/24 [The Cushy Office]
+ *
+ * Purpose:   Allocate for profiles of up to <allocM> nodes for digital alphabet <abc>.
+ *
+ * Throws:    <NULL> on allocation error.
+ */
+P7_OPROFILE *
+p7_oprofile_Create_avx(int allocM, const ESL_ALPHABET *abc)
+{
+  return NULL;
+}
+
+/* Function:  p7_oprofile_Destroy_test_sse_avx()
+ * Synopsis:  Frees an optimized profile structure, test version with both SSE and AVX ISAs.
+ * Incept:    NPC, 5/23/24 [The Cushy Office]
+ */
+void
+p7_oprofile_Destroy_test_sse_avx(P7_OPROFILE *om)
+{
+  return;
+}
+/* Function:  p7_oprofile_Destroy_test_avx()
+ * Synopsis:  Frees an optimized profile structure for intel AVX ISA.
+ * Incept:    NPC, 5/23/24 [The Cushy Office]
+ */
+void
+p7_oprofile_Destroy_avx(P7_OPROFILE *om)
+{
+  return;
+}
+
+
+
+/* TODO: this is not following the _Copy interface guidelines; it's a _Clone */
+/* TODO: its documentation header is a cut/paste of _Create; FIXME */
+/* Function:  p7_oprofile_Copy_test_sse_avx()
+ * Synopsis:  Allocate an optimized profile structure, test version with both SSE and AVX ISAs.
+ * Incept:    NPC, 5/23/24 [The Cushy Office]
+ *
+ * Purpose:   Allocate for profiles of up to <allocM> nodes for digital alphabet <abc>.
+ *
+ * Throws:    <NULL> on allocation error.
+ */
+P7_OPROFILE *
+p7_oprofile_Copy_test_sse_avx(P7_OPROFILE *om1)
+{
+  return NULL;
+}
+
+P7_OPROFILE *
+p7_oprofile_Copy_avx(P7_OPROFILE *om1)
+{
+  return NULL;
+}
+/* Function:  p7_oprofile_UpdateFwdEmissionScores_test_sse_avx()
+ * Synopsis:  Update the Forward/Backward part of the optimized profile
+ *            match emissions to account for new background distribution that 
+ *            handles both SSE and AVX ISAs for testing
+ *
+ * Purpose:   This implementation re-orders the loops used to access/modify
+ *            the rfv array relative to how it's accessed for example in
+ *            fb_conversion(), to minimize the required size of sc_arr.
+ *
+ * Args:      om              - optimized profile to be updated.
+ *            bg              - the new bg distribution
+ *            fwd_emissions   - precomputed Fwd (float) residue emission
+ *                              probabilities in serial order (gathered from
+ *                              the optimized striped <om> with
+ *                              p7_oprofile_GetFwdEmissionArray() ).
+ *            sc_arr            Preallocated array of at least Kp*4 floats
+ */
+int
+p7_oprofile_UpdateFwdEmissionScores_test_sse_avx(P7_OPROFILE *om, P7_BG *bg, float *fwd_emissions, float *sc_arr)
+{
+  return eslEUNSUPPORTEDISA;
+}
+
+/* Function:  p7_oprofile_UpdateFwdEmissionScores_avx()
+ * Synopsis:  Update the Forward/Backward part of the optimized profile
+ *            match emissions to account for new background distribution that 
+ *            handles both SSE and AVX ISAs for testing
+ *
+ * Purpose:   This implementation re-orders the loops used to access/modify
+ *            the rfv array relative to how it's accessed for example in
+ *            fb_conversion(), to minimize the required size of sc_arr.
+ *
+ * Args:      om              - optimized profile to be updated.
+ *            bg              - the new bg distribution
+ *            fwd_emissions   - precomputed Fwd (float) residue emission
+ *                              probabilities in serial order (gathered from
+ *                              the optimized striped <om> with
+ *                              p7_oprofile_GetFwdEmissionArray() ).
+ *            sc_arr            Preallocated array of at least Kp*4 floats
+ */
+int
+p7_oprofile_UpdateFwdEmissionScores_avx(P7_OPROFILE *om, P7_BG *bg, float *fwd_emissions, float *sc_arr)
+{
+  return eslEUNSUPPORTEDISA;
+}
+
+
+/* Function:  p7_oprofile_UpdateVitEmissionScores()
+ * Synopsis:  Update the Viterbi part of the optimized profile match
+ *            emissions to account for new background distribution.
+ *.
+ * Purpose:   This implementation re-orders the loops used to access/modify
+ *            the rmv array relative to how it's accessed for example in
+ *            vf_conversion(), to minimize the required size of sc_arr.
+ *
+ * Args:      om              - optimized profile to be updated.
+ *            bg              - the new bg distribution
+ *            fwd_emissions   - precomputed Fwd (float) residue emission
+ *                              probabilities in serial order (gathered from
+ *                              the optimized striped <om> with
+ *                              p7_oprofile_GetFwdEmissionArray() ).
+ *            sc_arr            Preallocated array of at least Kp*8 floats
+ */
+int
+p7_oprofile_UpdateVitEmissionScores_avx(P7_OPROFILE *om, P7_BG *bg, float *fwd_emissions, float *sc_arr)
+{
+  return eslEUNSUPPORTEDISA;
+}
+
+
+
+/* Function:  p7_oprofile_UpdateMSVEmissionScores()
+ * Synopsis:  Update the MSV part of the optimized profile match
+ *            emissions to account for new background distribution.
+ *.
+ * Purpose:   This implementation re-orders the loops used to access/modify
+ *            the rbv array relative to how it's accessed for example in
+ *            mf_conversion(), to minimize the required size of sc_arr.
+ *
+ * Args:      om              - optimized profile to be updated.
+ *            bg              - the new bg distribution
+ *            fwd_emissions   - precomputed Fwd (float) residue emission
+ *                              probabilities in serial order (gathered from
+ *                              the optimized striped <om> with
+ *                              p7_oprofile_GetFwdEmissionArray() ).
+ *            sc_arr            Preallocated array of at least Kp*16 floats
+ */
+int
+p7_oprofile_UpdateMSVEmissionScores_avx(P7_OPROFILE *om, P7_BG *bg, float *fwd_emissions, float *sc_arr)
+{
+  return eslEUNSUPPORTEDISA;
+}
+
+
+/*----------------- end, P7_OPROFILE structure ------------------*/
+
+
+
+/*****************************************************************
+ * 2. Conversion from generic P7_PROFILE to optimized P7_OPROFILE
+ *****************************************************************/
+
+/* sf_conversion():
+ * Author: Bjarne Knudsen
+ * 
+ * Generates the SSVFilter() parts of the profile <om> scores
+ * from the completed MSV score.  This includes calculating 
+ * special versions of the match scores for using the the
+ * ssv filter.
+ *
+ * Returns:   <eslOK> on success.
+ *
+ * Throws:    (no abnormal error conditions)
+ */
+
+int p7_oprofile_sf_Conversion_avx(P7_OPROFILE *om)
+{
+  return eslEUNSUPPORTEDISA;
+}
+
+
+/* mf_conversion_avx(): 
+ * 
+ * This builds the MSVFilter() parts of the profile <om> for AVX ISA, scores
+ * in lspace uchars (32-way parallel), by rescaling, rounding, and
+ * casting the scores in <gm>.
+ * 
+ * Returns <eslOK> on success;
+ * throws <eslEINVAL> if <om> hasn't been allocated properly.
+ */
+ int p7_oprofile_mf_Conversion_avx(const P7_PROFILE *gm, P7_OPROFILE *om)
+{
+  return eslEUNSUPPORTEDISA;
+}
+
+
+/* vf_conversion(): 
+ * 
+ * This builds the ViterbiFilter() parts of the profile <om>, scores
+ * in lspace swords (8-way parallel), by rescaling, rounding, and
+ * casting the scores in <gm>.
+ * 
+ * Returns <eslOK> on success;
+ * throws <eslEINVAL> if <om> hasn't been allocated properly.
+ */
+int p7_oprofile_vf_Conversion_avx(const P7_PROFILE *gm, P7_OPROFILE *om)
+{
+  return eslEUNSUPPORTEDISA;
+}
+
+
+/* fb_conversion()
+ * This builds the Forward/Backward part of the optimized profile <om>,
+ * where we use odds ratios (not log-odds scores).
+ */
+int p7_oprofile_fb_Conversion_avx(const P7_PROFILE *gm, P7_OPROFILE *om)
+{
+  return eslEUNSUPPORTEDISA;
+}
+
+
+
+/* Function:  p7_oprofile_Convert_test_sse_avx()
+ * Synopsis:  Converts standard profile to an optimized one, test version with both sse and avx.
+ * Incept:    NPC 5/24/24 [House of Deer]
+ *
+ * Purpose:   Convert a standard profile <gm> to an optimized profile <om>,
+ *            where <om> has already been allocated for a profile of at 
+ *            least <gm->M> nodes and the same emission alphabet <gm->abc>.
+ *
+ * Args:      gm - profile to optimize
+ *            om - allocated optimized profile for holding the result.
+ *
+ * Returns:   <eslOK> on success.
+ *
+ * Throws:    <eslEINVAL> if <gm>, <om> aren't compatible. 
+ *            <eslEMEM> on allocation failure.
+ */
+int
+p7_oprofile_Convert_test_sse_avx(const P7_PROFILE *gm, P7_OPROFILE *om)
+{
+  return eslEUNSUPPORTEDISA;
+}
+
+/* Function:  p7_oprofile_Convert_avx()
+ * Synopsis:  Converts standard profile to an optimized one, AVX ISA version.
+ * Incept:    NPC 5/24/24 [House of Deer]
+ *
+ * Purpose:   Convert a standard profile <gm> to an optimized profile <om>,
+ *            where <om> has already been allocated for a profile of at 
+ *            least <gm->M> nodes and the same emission alphabet <gm->abc>.
+ *
+ * Args:      gm - profile to optimize
+ *            om - allocated optimized profile for holding the result.
+ *
+ * Returns:   <eslOK> on success.
+ *
+ * Throws:    <eslEINVAL> if <gm>, <om> aren't compatible. 
+ *            <eslEMEM> on allocation failure.
+ */
+int
+p7_oprofile_Convert_avx(const P7_PROFILE *gm, P7_OPROFILE *om)
+{
+  return eslEUNSUPPORTEDISA;
+}
+
+
+
+/*------------ end, conversions to P7_OPROFILE ------------------*/
+
+/*******************************************************************
+*   3. Conversion from optimized P7_OPROFILE to compact score arrays
+ *******************************************************************/
+
+/* Function:  p7_oprofile_GetFwdTransitionArray()
+ * Synopsis:  Retrieve full 32-bit float transition probabilities from an
+ *            optimized profile into a flat array
+ *
+ * Purpose:   Extract an array of <type> (e.g. p7O_II) transition probabilities
+ *            from the underlying <om> profile. In SIMD implementations,
+ *            these are striped and interleaved, making them difficult to
+ *            directly access.
+ *
+ * Args:      <om>   - optimized profile, containing transition information
+ *            <type> - transition type (e.g. p7O_II)
+ *            <arr>  - preallocated array into which floats will be placed
+ *
+ * Returns:   <eslOK> on success.
+ *
+ * Throws:    (no abnormal error conditions)
+ */
+int
+p7_oprofile_GetFwdTransitionArray_avx(const P7_OPROFILE *om, int type, float *arr )
+{
+  return eslEUNSUPPORTEDISA;
+
+}
+
+/* Function:  p7_oprofile_GetSSVEmissionScoreArray()
+ * Synopsis:  Retrieve MSV residue emission scores from an optimized
+ *            profile into an array
+ *
+ * Purpose:   Extract an implicitly 2D array of 8-bit int SSV residue
+ *            emission scores from an optimized profile <om>. <arr> must
+ *            be allocated by the calling function to be of size
+ *            ( om->abc->Kp * ( om->M  + 1 )), and indexing into the array
+ *            is done as  [om->abc->Kp * i +  c ] for character c at
+ *            position i.
+ *
+ *            In SIMD implementations, the residue scores are striped
+ *            and interleaved, making them somewhat difficult to
+ *            directly access. Faster access is desired, for example,
+ *            in SSV back-tracking of a high-scoring diagonal
+ *
+ * Args:      <om>   - optimized profile, containing transition information
+ *            <arr>  - preallocated array into which scores will be placed
+ *
+ * Returns:   <eslOK> on success.
+ *
+ * Throws:    (no abnormal error conditions)
+ */
+int
+p7_oprofile_GetSSVEmissionScoreArray_avx(const P7_OPROFILE *om, uint8_t *arr )
+{
+  return eslEUNSUPPORTEDISA;
+}
+
+
+/* Function:  p7_oprofile_GetFwdEmissionScoreArray()
+ * Synopsis:  Retrieve Fwd (float) residue emission scores from an optimized
+ *            profile into an array
+ *
+ * Purpose:   Extract an implicitly 2D array of 32-bit float Fwd residue
+ *            emission scores from an optimized profile <om>. <arr> must
+ *            be allocated by the calling function to be of size
+ *            ( om->abc->Kp * ( om->M  + 1 )), and indexing into the array
+ *            is done as  [om->abc->Kp * i +  c ] for character c at
+ *            position i.
+ *
+ *            In SIMD implementations, the residue scores are striped
+ *            and interleaved, making them somewhat difficult to
+ *            directly access.
+ *
+ * Args:      <om>   - optimized profile, containing transition information
+ *            <arr>  - preallocated array into which scores will be placed
+ *
+ * Returns:   <eslOK> on success.
+ *
+ * Throws:    (no abnormal error conditions)
+ *
+ * Note:      [SRE 2024/0107-h3-iss320] This is inelegant, if not bugged.
+ *            It's accessing slots in vectors that aren't valid scores,
+ *            because 4*nq >= K, so you can't just take all the slots
+ *            in the striped vectors and try to store them somewhere.
+ *            I think it's only working because of order of operations:
+ *            it improperly stores a few values then overwrites them.
+ */
+int
+p7_oprofile_GetFwdEmissionScoreArray_avx(const P7_OPROFILE *om, float *arr )
+{
+  return eslEUNSUPPORTEDISA;
+}
+
+/* Function:  p7_oprofile_GetFwdEmissionArray()
+ * Synopsis:  Retrieve Fwd (float) residue emission values from an optimized
+ *            profile into an array
+ *
+ * Purpose:   Extract an implicitly 2D array of 32-bit float Fwd residue
+ *            emission values from an optimized profile <om>, converting
+ *            back to emission values based on the background. <arr> must
+ *            be allocated by the calling function to be of size
+ *            ( om->abc->Kp * ( om->M  + 1 )), and indexing into the array
+ *            is done as  [om->abc->Kp * i +  c ] for character c at
+ *            position i.
+ *
+ *            In SIMD implementations, the residue scores are striped
+ *            and interleaved, making them somewhat difficult to
+ *            directly access.
+ *
+ * Args:      <om>   - optimized profile, containing transition information
+ *            <bg>   - background frequencies
+ *            <arr>  - preallocated array into which scores will be placed
+ *
+ * Returns:   <eslOK> on success.
+ *
+ * Throws:    (no abnormal error conditions)
+ *
+ * Note:      see above comment for p7_oprofile_GetFwdEmissionScoreArray.
+ *            This function also appears to be problematic.
+ *            (Why are we even doing this. If we want unstriped probabilities,
+ *            use the HMM, not the vectorized profile, right?)
+ */
+int
+p7_oprofile_GetFwdEmissionArray_avx(const P7_OPROFILE *om, P7_BG *bg, float *arr )
+{
+  return eslEUNSUPPORTEDISA;
+}
+
+
+/*------------ end, conversions from P7_OPROFILE ------------------*/
+
+
+/*****************************************************************
+ * 4. Debugging and development utilities.
+ *****************************************************************/
+
+
+/* oprofile_dump_mf()
+ * 
+ * Dump the MSVFilter part of a profile <om> to <stdout>.
+ */
+static int
+oprofile_dump_mf(FILE *fp, const P7_OPROFILE *om)
+{
+  return eslEUNSUPPORTEDISA;
+}
+
+
+
+/* oprofile_dump_vf()
+ * 
+ * Dump the ViterbiFilter part of a profile <om> to <stdout>.
+ */
+static int
+oprofile_dump_vf(FILE *fp, const P7_OPROFILE *om)
+{
+  return eslEUNSUPPORTEDISA;
+}
+
+
+/* oprofile_dump_fb()
+ * 
+ * Dump the Forward/Backward part of a profile <om> to <stdout>.
+ * <width>, <precision> control the floating point output:
+ *  8,5 is a reasonable choice for prob space,
+ *  5,2 is reasonable for log space.
+ */
+static int
+oprofile_dump_fb(FILE *fp, const P7_OPROFILE *om, int width, int precision)
+{
+  return eslEUNSUPPORTEDISA;
+}
+
+
+/* Function:  p7_oprofile_Dump()
+ * Synopsis:  Dump internals of a <P7_OPROFILE>
+ * Incept:    SRE, Thu Dec 13 08:49:30 2007 [Janelia]
+ *
+ * Purpose:   Dump the internals of <P7_OPROFILE> structure <om>
+ *            to stream <fp>; generally for testing or debugging
+ *            purposes.
+ *
+ * Args:      fp   - output stream (often stdout)
+ *            om   - optimized profile to dump
+ *
+ * Returns:   <eslOK> on success.
+ *
+ * Throws:    (no abnormal error conditions)
+ */
+int
+p7_oprofile_Dump_avx(FILE *fp, const P7_OPROFILE *om)
+{
+  return eslEUNSUPPORTEDISA;
+}
+
+
+
+/* Function:  p7_oprofile_Compare()
+ * Synopsis:  Compare two optimized profiles for equality.
+ * Incept:    SRE, Wed Jan 21 13:29:10 2009 [Janelia]
+ *
+ * Purpose:   Compare the contents of <om1> and <om2>; return 
+ *            <eslOK> if they are effectively identical profiles,
+ *            or <eslFAIL> if not.
+ * 
+ *            Floating point comparisons are done to a tolerance
+ *            of <tol> using <esl_FCompare_old()>.
+ *            
+ *            If a comparison fails, an informative error message is
+ *            left in <errmsg> to indicate why.
+ *            
+ *            Internal allocation sizes are not compared, only the
+ *            data.
+ *            
+ * Args:      om1    - one optimized profile to compare
+ *            om2    - the other
+ *            tol    - floating point comparison tolerance; see <esl_FCompare_old()>
+ *            errmsg - ptr to array of at least <eslERRBUFSIZE> characters.
+ *            
+ * Returns:   <eslOK> on effective equality;  <eslFAIL> on difference.
+ */
+int
+p7_oprofile_Compare_avx(const P7_OPROFILE *om1, const P7_OPROFILE *om2, float tol, char *errmsg)
+{
+   return eslEUNSUPPORTEDISA;
+}
+#endif
 /*------------ end, P7_OPROFILE debugging tools  ----------------*/

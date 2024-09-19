@@ -1,7 +1,7 @@
 #include "hmmer.h"
-#include "impl_avx.h"
 
 //descriptions of functions can be found in p7_omx.c
+#ifdef eslENABLE_AVX
 P7_OMX *
 p7_omx_Create_avx(int allocM, int allocL, int allocXL)
 {
@@ -545,3 +545,62 @@ ERROR:
   free(v);
   return status;
 }
+#endif
+// Stubs for compilers that can't handle AVX
+#ifndef eslENABLE_AVX
+P7_OMX *
+p7_omx_Create_avx(int allocM, int allocL, int allocXL)
+{
+  return NULL;
+}
+
+P7_OMX *
+p7_omx_Create_test_sse_avx(int allocM, int allocL, int allocXL)
+{
+  return NULL;
+}
+
+int
+p7_omx_GrowTo_avx(P7_OMX *ox, int allocM, int allocL, int allocXL)
+{
+  return eslEUNSUPPORTEDISA;
+}  
+
+int
+p7_omx_GrowTo_test_sse_avx(P7_OMX *ox, int allocM, int allocL, int allocXL)
+{
+  return eslEUNSUPPORTEDISA;
+}  
+
+
+void
+p7_omx_Destroy_avx(P7_OMX *ox)
+{
+  return;
+}
+
+int
+p7_omx_FDeconvert_avx(P7_OMX *ox, P7_GMX *gx)
+{
+  return eslEUNSUPPORTEDISA;
+}
+
+
+int
+p7_omx_DumpMFRow_avx(P7_OMX *ox, int rowi, uint8_t xE, uint8_t xN, uint8_t xJ, uint8_t xB, uint8_t xC)
+{
+  return eslEUNSUPPORTEDISA;
+}
+
+int
+p7_omx_DumpVFRow_avx(P7_OMX *ox, int rowi, int16_t xE, int16_t xN, int16_t xJ, int16_t xB, int16_t xC)
+{
+  return eslEUNSUPPORTEDISA;
+}
+
+int
+p7_omx_DumpFBRow_avx(P7_OMX *ox, int logify, int rowi, int width, int precision, float xE, float xN, float xJ, float xB, float xC)
+{
+  return eslEUNSUPPORTEDISA;
+}
+#endif

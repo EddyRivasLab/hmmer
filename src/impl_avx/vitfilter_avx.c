@@ -17,15 +17,11 @@
 #include <stdio.h>
 #include <math.h>
 
-#include <xmmintrin.h>		/* SSE  */
-#include <emmintrin.h>		/* SSE2 */
-
 #include "easel.h"
 #include "esl_avx.h"
 #include "esl_gumbel.h"
 
 #include "hmmer.h"
-#include "impl_avx.h"
 
 
 /*****************************************************************
@@ -75,6 +71,7 @@
  *            J2/66 for precision maximization
  *            J4/138-140 for reimplementation in 16-bit precision
  */
+#ifdef eslENABLE_AVX
 int
 p7_ViterbiFilter_avx(const ESL_DSQ *dsq, int L, const P7_OPROFILE *om, P7_OMX *ox, float *ret_sc)
 {
@@ -245,5 +242,14 @@ p7_ViterbiFilter_avx(const ESL_DSQ *dsq, int L, const P7_OPROFILE *om, P7_OMX *o
   else  *ret_sc = -eslINFINITY;
   return eslOK;
 }
+#endif
+#ifndef eslENABLE_AVX
+int
+p7_ViterbiFilter_avx(const ESL_DSQ *dsq, int L, const P7_OPROFILE *om, P7_OMX *ox, float *ret_sc)
+{
+ 
+  return eslEUNSUPPORTEDISA;
+}
+#endif
 /*---------------- end, p7_ViterbiFilter() ----------------------*/
 

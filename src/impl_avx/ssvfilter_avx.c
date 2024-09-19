@@ -12,18 +12,16 @@
 #include <p7_config.h>
 
 #include <math.h>
-
-#include <xmmintrin.h>		/* SSE  */
-#include <emmintrin.h>		/* SSE2 */
+#ifdef eslENABLE_AVX
 #include <immintrin.h>   // AVX2
+#endif
 #include "easel.h"
 #include "esl_gumbel.h"
-#include "esl_avx.h"
+
 
 #include "hmmer.h"
-#include "impl_avx.h"
 
-
+#ifdef eslENABLE_AVX
 /* Note that some ifdefs below has to be changed if these values are
    changed. These values are chosen based on some simple speed
    tests. Apparently, two registers are generally used for something
@@ -1049,3 +1047,34 @@ p7_SSVFilter_longtarget_avx(const ESL_DSQ *dsq, int L, P7_OPROFILE *om, P7_OMX *
     } /* end loop over sequence residues 1..L */
   return eslOK;
 }
+#endif
+#ifndef eslENABLE_AVX
+int
+p7_SSVFilter_avx(const ESL_DSQ *dsq, int L, const P7_OPROFILE *om, float *ret_sc)
+{
+  return eslEUNSUPPORTEDISA;
+}
+
+int
+p7_SSVFilter_avx_unrolled(const ESL_DSQ *dsq, int L, const P7_OPROFILE *om, float *ret_sc)
+{
+
+  return eslEUNSUPPORTEDISA;
+}
+
+// test code
+int
+p7_SSVFilter_test_sse_avx(const ESL_DSQ *dsq, int L, const P7_OPROFILE *om, float *ret_sc){
+
+  return eslEUNSUPPORTEDISA;
+}
+
+
+
+int
+p7_SSVFilter_longtarget_avx(const ESL_DSQ *dsq, int L, P7_OPROFILE *om, P7_OMX *ox, const P7_SCOREDATA *ssvdata,
+                        P7_BG *bg, double P, P7_HMM_WINDOWLIST *windowlist)
+{
+  return eslEUNSUPPORTEDISA;
+}
+#endif
