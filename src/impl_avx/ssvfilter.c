@@ -449,7 +449,7 @@ ssvfilter_dispatcher(const ESL_DSQ *dsq, int L, const P7_OPROFILE *om, float *re
 #endif
 
 #ifdef eslENABLE_SSE
-  if (esl_cpu_has_sse4())
+  if (esl_cpu_has_sse())
     {
       p7_SSVFilter = p7_SSVFilter_sse;
       return p7_SSVFilter_sse(dsq, L, om, ret_sc);

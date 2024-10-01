@@ -64,7 +64,7 @@ viterbifilter_dispatcher(const ESL_DSQ *dsq, int L, const P7_OPROFILE *om, P7_OM
 #endif
 
 #ifdef eslENABLE_SSE
-  if (esl_cpu_has_sse4())
+  if (esl_cpu_has_sse())
     {
       p7_ViterbiFilter = p7_ViterbiFilter_sse;
       return p7_ViterbiFilter_sse(dsq, L, om, ox, ret_sc);

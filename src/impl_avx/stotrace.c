@@ -94,7 +94,7 @@ static int p7_StochasticTrace_Dispatcher(ESL_RANDOMNESS *rng, const ESL_DSQ *dsq
 #endif
 
 #ifdef eslENABLE_SSE
-  if (esl_cpu_has_sse4())
+  if (esl_cpu_has_sse())
     {
       p7_StochasticTrace = p7_StochasticTrace_sse;
       return p7_StochasticTrace_sse(rng, dsq, L, om, ox, tr);

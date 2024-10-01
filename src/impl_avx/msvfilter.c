@@ -98,7 +98,7 @@ msvfilter_dispatcher(const ESL_DSQ *dsq, int L, const P7_OPROFILE *om, P7_OMX *o
 #endif
 
 #ifdef eslENABLE_SSE
-  if (esl_cpu_has_sse4())
+  if (esl_cpu_has_sse())
     {
       p7_MSVFilter = p7_MSVFilter_sse;
       return p7_MSVFilter_sse(dsq, L, om, ox, ret_sc);

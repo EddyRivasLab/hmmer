@@ -119,7 +119,7 @@ forward_dispatcher(const ESL_DSQ *dsq, int L, const P7_OPROFILE *om, P7_OMX *fwd
 #endif
 
 #ifdef eslENABLE_SSE
-  if (esl_cpu_has_sse4())
+  if (esl_cpu_has_sse())
     {
       p7_Forward = p7_Forward_sse;
       return p7_Forward_sse(dsq, L, om, fwd, opt_sc);
@@ -196,7 +196,7 @@ forwardParser_dispatcher(const ESL_DSQ *dsq, int L, const P7_OPROFILE *om, P7_OM
 #endif
 
 #ifdef eslENABLE_SSE
-  if (esl_cpu_has_sse4())
+  if (esl_cpu_has_sse())
     {
       p7_ForwardParser = p7_ForwardParser_sse;
       return p7_ForwardParser_sse(dsq, L, om, fwd, opt_sc);
@@ -289,7 +289,7 @@ backward_dispatcher(const ESL_DSQ *dsq, int L, const P7_OPROFILE *om, const P7_O
 #endif
 
 #ifdef eslENABLE_SSE
-  if (esl_cpu_has_sse4())
+  if (esl_cpu_has_sse())
     {
       p7_Backward = p7_Backward_sse;
       return p7_Backward_sse(dsq, L, om, fwd, bck, opt_sc);
@@ -369,7 +369,7 @@ backwardparser_dispatcher(const ESL_DSQ *dsq, int L, const P7_OPROFILE *om, cons
 #endif
 
 #ifdef eslENABLE_SSE
-  if (esl_cpu_has_sse4())
+  if (esl_cpu_has_sse())
     {
       p7_BackwardParser = p7_BackwardParser_sse;
       return p7_BackwardParser_sse(dsq, L, om, fwd, bck, opt_sc);

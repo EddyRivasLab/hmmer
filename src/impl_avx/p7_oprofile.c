@@ -73,7 +73,7 @@ P7_OPROFILE * p7_oprofile_Create_Dispatcher(int allocM, const ESL_ALPHABET *abc)
 #endif
 
 #ifdef eslENABLE_SSE
-  if (esl_cpu_has_sse4())
+  if (esl_cpu_has_sse())
     {
       p7_oprofile_Create = p7_oprofile_Create_sse;
       return p7_oprofile_Create_sse(allocM, abc);
@@ -112,12 +112,13 @@ void p7_oprofile_Destroy_Dispatcher(P7_OPROFILE *om)
 #ifdef P7_TEST_ALL_SIMD
  p7_oprofile_Destroy = p7_oprofile_Destroy_test_all;
  p7_oprofile_Destroy_test_all(om);
- 
+ return;
 #endif
 
 #ifdef P7_TEST_SSE_AVX
  p7_oprofile_Destroy = p7_oprofile_Destroy_test_sse_avx;
- p7_oprofile_Destroy_test_sse_avx(om);  
+ p7_oprofile_Destroy_test_sse_avx(om);
+ return;  
 #endif
 
 #ifdef eslENABLE_AVX512  // Fastest first.
@@ -125,6 +126,7 @@ void p7_oprofile_Destroy_Dispatcher(P7_OPROFILE *om)
    {
      p7_oprofile_Destroy = p7_oprofile_Destroy_avx512;
      p7_oprofile_Destroy_avx512(om);
+     return;
    }
 #endif
 
@@ -132,15 +134,17 @@ void p7_oprofile_Destroy_Dispatcher(P7_OPROFILE *om)
   if (esl_cpu_has_avx())
     {
      p7_oprofile_Destroy = p7_oprofile_Destroy_avx;
-     p7_oprofile_Destroy_avx(om); 
+     p7_oprofile_Destroy_avx(om);
+     return; 
     }
 #endif
 
 #ifdef eslENABLE_SSE
-  if (esl_cpu_has_sse4())
+  if (esl_cpu_has_sse())
     {
       p7_oprofile_Destroy = p7_oprofile_Destroy_sse;
       p7_oprofile_Destroy_sse(om);
+      return;
     }
 #endif
 
@@ -190,7 +194,7 @@ P7_OPROFILE * p7_oprofile_Copy_Dispatcher(P7_OPROFILE *om1){
 #endif
 
 #ifdef eslENABLE_SSE
-  if (esl_cpu_has_sse4())
+  if (esl_cpu_has_sse())
     {
       p7_oprofile_Copy = p7_oprofile_Copy_sse;
       return p7_oprofile_Copy_sse(om1);
@@ -286,7 +290,7 @@ static int p7_oprofile_UpdateFwdEmissionScores_Dispatcher(P7_OPROFILE *om, P7_BG
 #endif
 
 #ifdef eslENABLE_SSE
-  if (esl_cpu_has_sse4())
+  if (esl_cpu_has_sse())
     {
       p7_oprofile_UpdateFwdEmissionScores = p7_oprofile_UpdateFwdEmissionScores_sse;
       return p7_oprofile_UpdateFwdEmissionScores_sse(om, bg, fwd_emissions, sc_arr);
@@ -347,7 +351,7 @@ static int p7_oprofile_UpdateVitEmissionScores_Dispatcher(P7_OPROFILE *om, P7_BG
 #endif
 
 #ifdef eslENABLE_SSE
-  if (esl_cpu_has_sse4())
+  if (esl_cpu_has_sse())
     {
       p7_oprofile_UpdateVitEmissionScores = p7_oprofile_UpdateVitEmissionScores_sse;
       return p7_oprofile_UpdateVitEmissionScores_sse(om, bg, fwd_emissions, sc_arr);
@@ -411,7 +415,7 @@ static int p7_oprofile_UpdateMSVEmissionScores_Dispatcher(P7_OPROFILE *om, P7_BG
 #endif
 
 #ifdef eslENABLE_SSE
-  if (esl_cpu_has_sse4())
+  if (esl_cpu_has_sse())
     {
       p7_oprofile_UpdateMSVEmissionScores = p7_oprofile_UpdateMSVEmissionScores_sse;
       return p7_oprofile_UpdateMSVEmissionScores_sse(om, bg, fwd_emissions, sc_arr);
@@ -512,7 +516,7 @@ static int p7_oprofile_Convert_Dispatcher(const P7_PROFILE *gm, P7_OPROFILE *om)
 #endif
 
 #ifdef eslENABLE_SSE
-  if (esl_cpu_has_sse4())
+  if (esl_cpu_has_sse())
     {
       p7_oprofile_Convert = p7_oprofile_Convert_sse;
       return p7_oprofile_Convert_sse(gm, om);
@@ -728,7 +732,7 @@ p7_oprofile_GetFwdTransitionArray_Dispatcher(const P7_OPROFILE *om, int type, fl
 #endif
 
 #ifdef eslENABLE_SSE
-  if (esl_cpu_has_sse4())
+  if (esl_cpu_has_sse())
     {
       p7_oprofile_GetFwdTransitionArray = p7_oprofile_GetFwdTransitionArray_sse;
       return p7_oprofile_GetFwdTransitionArray_sse(om, type, arr);
@@ -801,7 +805,7 @@ p7_oprofile_GetSSVEmissionScoreArray_Dispatcher(const P7_OPROFILE *om, uint8_t *
 #endif
 
 #ifdef eslENABLE_SSE
-  if (esl_cpu_has_sse4())
+  if (esl_cpu_has_sse())
     {
       p7_oprofile_GetSSVEmissionScoreArray = p7_oprofile_GetSSVEmissionScoreArray_sse;
       return p7_oprofile_GetSSVEmissionScoreArray_sse(om, arr);
@@ -879,7 +883,7 @@ p7_oprofile_GetFwdEmissionScoreArray_Dispatcher(const P7_OPROFILE *om, float *ar
 #endif
 
 #ifdef eslENABLE_SSE
-  if (esl_cpu_has_sse4())
+  if (esl_cpu_has_sse())
     {
       p7_oprofile_GetFwdEmissionScoreArray = p7_oprofile_GetFwdEmissionScoreArray_sse;
       return p7_oprofile_GetFwdEmissionScoreArray_sse(om, arr);
@@ -958,7 +962,7 @@ p7_oprofile_GetFwdEmissionArray_Dispatcher(const P7_OPROFILE *om, P7_BG *bg, flo
 #endif
 
 #ifdef eslENABLE_SSE
-  if (esl_cpu_has_sse4())
+  if (esl_cpu_has_sse())
     {
       p7_oprofile_GetFwdEmissionArray = p7_oprofile_GetFwdEmissionArray_sse;
       return p7_oprofile_GetFwdEmissionArray_sse(om, bg, arr);
@@ -1424,7 +1428,7 @@ static int p7_oprofile_compare_Dispatcher(const P7_OPROFILE *om1, const P7_OPROF
 #endif
 
 #ifdef eslENABLE_SSE
-  if (esl_cpu_has_sse4())
+  if (esl_cpu_has_sse())
     {
       p7_oprofile_Compare = p7_oprofile_Compare_sse;
       return p7_oprofile_Compare_sse(om1, om2, tol, errmsg);

@@ -69,7 +69,7 @@ p7_Null2_ByExpectation_Dispatcher(const P7_OPROFILE *om, const P7_OMX *pp, float
 #endif
 
 #ifdef eslENABLE_SSE
-  if (esl_cpu_has_sse4())
+  if (esl_cpu_has_sse())
     {
       p7_Null2_ByExpectation = p7_Null2_ByExpectation_sse;
       return p7_Null2_ByExpectation_sse(om, pp, null2);
@@ -124,7 +124,7 @@ p7_Null2_ByTrace_Dispatcher(const P7_OPROFILE *om, const P7_TRACE *tr, int zstar
 #endif
 
 #ifdef eslENABLE_SSE
-  if (esl_cpu_has_sse4())
+  if (esl_cpu_has_sse())
     {
       p7_Null2_ByTrace = p7_Null2_ByTrace_sse;
       return p7_Null2_ByTrace_sse(om, tr, zstart, zend, wrk,  null2);

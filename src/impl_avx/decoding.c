@@ -99,7 +99,7 @@ p7_Decoding_Dispatcher(const P7_OPROFILE *om, const P7_OMX *oxf, P7_OMX *oxb, P7
 #endif
 
 #ifdef eslENABLE_SSE
-  if (esl_cpu_has_sse4())
+  if (esl_cpu_has_sse())
     {
       p7_Decoding = p7_Decoding_sse;
       return p7_Decoding_sse(om, oxf, oxb, pp);

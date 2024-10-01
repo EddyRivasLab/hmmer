@@ -93,7 +93,7 @@ OptimalAccuracy_dispatcher(const P7_OPROFILE *om, const P7_OMX *pp, P7_OMX *ox, 
 #endif
 
 #ifdef eslENABLE_SSE
-  if (esl_cpu_has_sse4())
+  if (esl_cpu_has_sse())
     {
       p7_OptimalAccuracy = p7_OptimalAccuracy_sse;
       return p7_OptimalAccuracy_sse(om, pp, ox, ret_e);
@@ -184,7 +184,7 @@ oatrace_dispatcher(const P7_OPROFILE *om, const P7_OMX *pp, const P7_OMX *ox, P7
 #endif
 
 #ifdef eslENABLE_SSE
-  if (esl_cpu_has_sse4())
+  if (esl_cpu_has_sse())
     {
       p7_OATrace = p7_OATrace_sse;
       return p7_OATrace_sse(om, pp, ox, tr);

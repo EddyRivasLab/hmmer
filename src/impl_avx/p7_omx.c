@@ -87,7 +87,7 @@ static P7_OMX *p7_omx_Create_Dispatcher(int allocM, int allocL, int allocXL){
 #endif
 
 #ifdef eslENABLE_SSE
-  if (esl_cpu_has_sse4())
+  if (esl_cpu_has_sse())
     {
       p7_omx_Create = p7_omx_Create_sse;
       return p7_omx_Create_sse(allocM, allocL, allocXL);
@@ -149,7 +149,7 @@ static int p7_omx_GrowTo_Dispatcher(P7_OMX *ox, int allocM, int allocL, int allo
 #endif
 
 #ifdef eslENABLE_SSE
-  if (esl_cpu_has_sse4())
+  if (esl_cpu_has_sse())
     {
       p7_omx_GrowTo = p7_omx_GrowTo_sse;
       return p7_omx_GrowTo_sse(ox, allocM, allocL, allocXL);
@@ -203,7 +203,7 @@ static int p7_omx_FDeconvert_Dispatcher(P7_OMX *ox, P7_GMX *gx){
 #endif
 
 #ifdef eslENABLE_SSE
-  if (esl_cpu_has_sse4())
+  if (esl_cpu_has_sse())
     {
       p7_omx_FDeconvert = p7_omx_FDeconvert_sse;
       return p7_omx_FDeconvert_sse(ox, gx);
@@ -280,7 +280,7 @@ static void p7_omx_Destroy_Dispatcher(P7_OMX *ox){
 #endif
 
 #ifdef eslENABLE_SSE
-  if (esl_cpu_has_sse4())
+  if (esl_cpu_has_sse())
     {
       p7_omx_Destroy = p7_omx_Destroy_sse;
       return p7_omx_Destroy_sse(ox);
