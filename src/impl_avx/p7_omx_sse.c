@@ -64,12 +64,14 @@ p7_omx_Create_sse(int allocM, int allocL, int allocXL)
 int
 p7_omx_GrowTo_sse(P7_OMX *ox, int allocM, int allocL, int allocXL)
 {
+  printf("p7_omx_GrowTo_sse, allocM = %d, allocL = %d, allocXL = %d\n", allocM, allocL, allocXL);
+
   void   *p;
   int     nqf    = p7O_NQF(allocM);	   /* segment length; total # of striped vectors for uchar */
   int     nqw    = p7O_NQW(allocM);	   /* segment length; total # of striped vectors for float */
   int     nqb    = p7O_NQB(allocM);	   /* segment length; total # of striped vectors for float */
 
-  int64_t ncells = (int64_t) (allocL+1) * (int64_t) nqf * 8;
+  int64_t ncells = (int64_t) (allocL+1) * (int64_t) nqf * 4;
   int     reset_row_pointers = FALSE;
   int     i;
   int     status;

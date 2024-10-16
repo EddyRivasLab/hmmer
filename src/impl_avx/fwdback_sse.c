@@ -264,9 +264,9 @@ forward_engine(int do_full, const ESL_DSQ *dsq, int L, const P7_OPROFILE *om, P7
       mpv   = esl_sse_rightshiftz_float(MMO(dpp,Q-1));
       dpv   = esl_sse_rightshiftz_float(DMO(dpp,Q-1));
       ipv   = esl_sse_rightshiftz_float(IMO(dpp,Q-1));
-      
       for (q = 0; q < Q; q++)
 	{
+    
 	  /* Calculate new MMO(i,q); don't store it yet, hold it in sv. */
 	  sv   =                _mm_mul_ps(xBv, *tp);  tp++;
 	  sv   = _mm_add_ps(sv, _mm_mul_ps(mpv, *tp)); tp++;
