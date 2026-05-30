@@ -804,16 +804,16 @@ p7_trace_Compare(P7_TRACE *tr1, P7_TRACE *tr2, float pptol)
 {
   int z,d;
   
-  if (tr1->N != tr2->N) esl_fatal("FAIL");
-  if (tr1->M != tr2->M) esl_fatal("FAIL");
-  if (tr1->L != tr2->L) esl_fatal("FAIL");
+  if (tr1->N != tr2->N) return eslFAIL;
+  if (tr1->M != tr2->M) return eslFAIL;
+  if (tr1->L != tr2->L) return eslFAIL;
   
   /* Main data in the trace */
   for (z = 0; z < tr1->N; z++)
     {
-      if (tr1->st[z] != tr2->st[z]) esl_fatal("FAIL");
-      if (tr1->k[z]  != tr2->k[z])  esl_fatal("FAIL");
-      if (tr1->i[z]  != tr2->i[z])  esl_fatal("FAIL");
+      if (tr1->st[z] != tr2->st[z]) return eslFAIL;
+      if (tr1->k[z]  != tr2->k[z])  return eslFAIL;
+      if (tr1->i[z]  != tr2->i[z])  return eslFAIL;
     }
 
   /* Optional posterior probability annotation */
@@ -822,27 +822,27 @@ p7_trace_Compare(P7_TRACE *tr1, P7_TRACE *tr2, float pptol)
       for (z = 0; z < tr1->N; z++)
 	if (tr1->i[z] != 0) 	/* an emission: has a nonzero posterior prob*/
 	  {
-	    if (esl_FCompare_old(tr1->pp[z], tr2->pp[z], pptol) != eslOK) esl_fatal("FAIL");
+	    if (esl_FCompare_old(tr1->pp[z], tr2->pp[z], pptol) != eslOK) return eslFAIL;
 	  }
 	else
 	  {
-	    if (tr1->pp[z] != tr2->pp[z]) esl_fatal("FAIL"); /* both 0.0 */
+	    if (tr1->pp[z] != tr2->pp[z]) return eslFAIL; /* both 0.0 */
 	  }
     }
 
   /* Optional domain index */
   if (tr1->ndom > 0 && tr2->ndom > 0)
     {
-      if (tr1->ndom != tr2->ndom) esl_fatal("FAIL");
+      if (tr1->ndom != tr2->ndom) return eslFAIL;
 
       for (d = 0; d < tr1->ndom; d++)
 	{
-	  if (tr1->tfrom[d]   != tr2->tfrom[d])    esl_fatal("FAIL");
-	  if (tr1->tto[d]     != tr2->tto[d])      esl_fatal("FAIL");
-	  if (tr1->sqfrom[d]  != tr2->sqfrom[d])   esl_fatal("FAIL");
-	  if (tr1->sqto[d]    != tr2->sqto[d])     esl_fatal("FAIL");
-	  if (tr1->hmmfrom[d] != tr2->hmmfrom[d])  esl_fatal("FAIL");
-	  if (tr1->hmmto[d]   != tr2->hmmto[d])    esl_fatal("FAIL");
+	  if (tr1->tfrom[d]   != tr2->tfrom[d])    return eslFAIL;
+	  if (tr1->tto[d]     != tr2->tto[d])      return eslFAIL;
+	  if (tr1->sqfrom[d]  != tr2->sqfrom[d])   return eslFAIL;
+	  if (tr1->sqto[d]    != tr2->sqto[d])     return eslFAIL;
+	  if (tr1->hmmfrom[d] != tr2->hmmfrom[d])  return eslFAIL;
+	  if (tr1->hmmto[d]   != tr2->hmmto[d])    return eslFAIL;
 	}
     }
   return eslOK;
