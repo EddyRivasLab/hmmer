@@ -50,7 +50,8 @@ can replace the \mono{cat mytargets.list} with \emph{any} incantation
 that generates a list of sequence names/accessions (including SQL
 database queries).
 
-Ditto for piping subsets of profiles. Supposing you have a copy of Pfam in Pfam-A.hmm:
+Ditto for piping subsets of profiles. Supposing you have a copy of
+Pfam in Pfam-A.hmm:
 
    \vspace{1ex}
    \begin{fullwidth}
@@ -260,17 +261,19 @@ in the alignment. Position-specific insertion and deletion rates are not
 altered, even in masked regions. \textbf{Optional}; assumed to be
 no if not present.
 
-\item [\monob{CONS <s>}] Consensus residue annotation flag;
-  \mono{<s>} is either \mono{no} or \mono{yes} (case insensitive).  If
+\item [\monob{CONS <s>}] Consensus residue annotation flag; \mono{<s>}
+  is either \mono{no} or \mono{yes} (case insensitive).  If
   \mono{yes}, the consensus residue field for each match state in the
   main model (see below) is valid. If \mono{no}, these characters are
   ignored. Consensus residue annotation is determined when models are
   built. For models of single sequences, the consensus is the same as
-  the query sequence. For models of multiple alignments, the consensus
-  is the maximum likelihood residue at each position. Upper case
-  indicates that the model's emission probability for the consensus
-  residue is $\geq$ an arbitrary threshold (0.5 for protein models,
-  0.9 for DNA/RNA models).
+  the query sequence, and is all upper case. For models of multiple
+  alignments, the consensus is the maximum likelihood residue at each
+  position, and upper versus lower case indicates highly conserved
+  vs. less conserved positions.  ``Highly conserved'' is defined as an
+  emission probability for the consensus residue of $\geq$ an
+  arbitrary threshold (0.5 for protein models, 0.9 for DNA/RNA
+  models).
 
 \item [\monob{CS <s>}] Consensus structure annotation flag;
 \mono{<s>} is either \mono{no} or \mono{yes} (case insensitive). If

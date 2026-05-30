@@ -667,16 +667,16 @@ p7_hmm_SetComposition(P7_HMM *hmm)
  *            the digital sequence it was built from. If <sq> is <NULL>
  *            this is a standard multiple-sequence model.
  *            
- *            In a standard model, the most likely (highest emission
- *            probability) residue is the consensus at each position.
- *            In a single-sequence model, the consensus is the
- *            sequence itself.
- *            
- *            In both cases, if the emission probability is $\geq$
- *            certain threshold, the residue is upper cased. The
- *            threshold is arbitrarily set to 0.9 for nucleic acid
- *            alphabets (<eslDNA>, <eslRNA>) and 0.5 for amino acid
- *            alphabets (<eslAMINO>) and all other alphabets.
+ *            In a standard profile model, the most likely (highest
+ *            emission probability) residue is the consensus at each
+ *            position.  Upper vs. lower case indicates a highly
+ *            vs. less conserved consensus residue. The threshold for
+ *            "highly conserved" is arbitrarily set to 0.9 for nucleic
+ *            acid alphabets (<eslDNA>, <eslRNA>) and 0.5 for amino
+ *            acid alphabets (<eslAMINO>) and all other alphabets.
+ *
+ *            In a single-sequence model, the consensus is simply the
+ *            sequence itself, all upper case.
  *            
  *            The special handling of single-sequence models avoids
  *            a counterintuitive case where the most likely residue is
@@ -702,32 +702,40 @@ int
 p7_hmm_SetConsensus(P7_HMM *hmm, ESL_SQ *sq)
 {
   int   k, x;
-  float mthresh;
   int   status;
-  
-  /* allocation, if needed */
+
+  // allocation, if needed
   if (! hmm->consensus) ESL_ALLOC(hmm->consensus, sizeof(char) * (hmm->M+2));
-
-  /* set our arbitrary threshold for upper/lower casing */
-  if      (hmm->abc->type == eslAMINO) mthresh = 0.5;
-  else if (hmm->abc->type == eslDNA)   mthresh = 0.9;
-  else if (hmm->abc->type == eslRNA)   mthresh = 0.9;
-  else                                 mthresh = 0.5;
-
   hmm->consensus[0] = ' ';
-  for (k = 1; k <= hmm->M; k++) 
+
+  if (sq)
+    {  // single sequence case
+      for (k = 1; k <= hmm->M; k++)
+        hmm->consensus[k]  = hmm->abc->sym[sq->dsq[k]];
+    }
+  else // profile case
     {
-      x = (sq ?  sq->dsq[k] : esl_vec_FArgMax(hmm->mat[k], hmm->abc->K));
-      hmm->consensus[k] = ((hmm->mat[k][x] >= mthresh) ? toupper(hmm->abc->sym[x]) : tolower(hmm->abc->sym[x]));
+      float mthresh;
+      // set our arbitrary threshold for upper/lower casing
+      if      (hmm->abc->type == eslAMINO) mthresh = 0.5;
+      else if (hmm->abc->type == eslDNA)   mthresh = 0.9;
+      else if (hmm->abc->type == eslRNA)   mthresh = 0.9;
+      else                                 mthresh = 0.5;
+
+      for (k = 1; k <= hmm->M; k++)
+        {
+          x = esl_vec_FArgMax(hmm->mat[k], hmm->abc->K);
+          hmm->consensus[k] = ((hmm->mat[k][x] >= mthresh) ? toupper(hmm->abc->sym[x]) : tolower(hmm->abc->sym[x]));
+        }
     }
   hmm->consensus[hmm->M+1] = '\0';
-  hmm->flags  |= p7H_CONS;	
+  hmm->flags  |= p7H_CONS;
   return eslOK;
 
  ERROR:
   if (hmm->consensus) free(hmm->consensus);
   hmm->consensus = NULL;
-  hmm->flags    &= (~p7H_CONS);	
+  hmm->flags    &= (~p7H_CONS);
   return status;
 }
 /*---------------- end, internal-setting routines ---------------*/
