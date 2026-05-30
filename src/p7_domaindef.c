@@ -1009,6 +1009,7 @@ rescore_isolated_domain(P7_DOMAINDEF *ddef, P7_OPROFILE *om, const ESL_SQ *sq, c
 static ESL_OPTIONS options[] = {
   /* name           type      default  env  range toggles reqs incomp  help                                       docgroup*/
   { "-h",        eslARG_NONE,   FALSE, NULL, NULL,  NULL,  NULL, NULL, "show brief help on version and usage",             0 },
+  { "--version", eslARG_NONE,   FALSE, NULL, NULL,  NULL,  NULL, NULL, "show version information and exit",                0 },
   { "-V",        eslARG_NONE,    NULL, NULL, NULL,  NULL,  NULL, NULL, "find domains by Viterbi parsing",                  0 },
   { "--occp",    eslARG_OUTFILE, NULL, NULL, NULL,  NULL,  NULL, NULL, "output posterior occupancies for xmgrace to <f>",  0 },
   {  0, 0, 0, 0, 0, 0, 0, 0, 0, 0 },
@@ -1020,7 +1021,7 @@ static char banner[] = "example of domain definition by posterior sampling";
 int 
 main(int argc, char **argv)
 {
-  ESL_GETOPTS    *go      = p7_CreateDefaultApp(options, 2, argc, argv, banner, usage);
+  ESL_GETOPTS    *go      = p7_CreateDefaultApp("p7_domaindef_example", options, 2, argc, argv, banner, usage);
   ESL_RANDOMNESS *r       = esl_randomness_CreateFast(42);
   char           *hmmfile = esl_opt_GetArg(go, 1);
   P7_HMMFILE     *hfp     = NULL;
@@ -1147,6 +1148,7 @@ main(int argc, char **argv)
 static ESL_OPTIONS options[] = {
   /* name           type      default  env  range toggles reqs incomp  help                                       docgroup*/
   { "-h",        eslARG_NONE,   FALSE, NULL, NULL,  NULL,  NULL, NULL, "show brief help on version and usage",             0 },
+  { "--version", eslARG_NONE,   FALSE, NULL, NULL,  NULL,  NULL, NULL, "show version information and exit",                0 },
   { "-N",        eslARG_INT,   "1000", NULL, NULL,  NULL,  NULL, NULL, "number of sampled sequences",                      0 },
   { "-L",        eslARG_INT,    "400", NULL, NULL,  NULL,  NULL, NULL, "length config for the profile",                    0 },
   { "-V",        eslARG_NONE,    NULL, NULL, NULL,  NULL,  NULL, NULL, "find domains by Viterbi parsing",                  0 },
@@ -1161,7 +1163,7 @@ static char banner[] = "example of domain definition by posterior sampling";
 int 
 main(int argc, char **argv)
 {
-  ESL_GETOPTS    *go      = p7_CreateDefaultApp(options, 1, argc, argv, banner, usage);
+  ESL_GETOPTS    *go      = p7_CreateDefaultApp("p7_domaindef_example2", options, 1, argc, argv, banner, usage);
   ESL_RANDOMNESS *r       = esl_randomness_CreateFast(42);
   ESL_STOPWATCH  *w       = esl_stopwatch_Create();
   char           *hmmfile = esl_opt_GetArg(go, 1);

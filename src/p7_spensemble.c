@@ -484,6 +484,7 @@ p7_spensemble_Destroy(P7_SPENSEMBLE *sp)
 static ESL_OPTIONS options[] = {
   /* name           type      default  env  range toggles reqs incomp  help                                       docgroup*/
   { "-h",        eslARG_NONE,   FALSE, NULL, NULL,  NULL,  NULL, NULL, "show brief help on version and usage",             0 },
+  { "--version", eslARG_NONE,   FALSE, NULL, NULL,  NULL,  NULL, NULL, "show version information and exit",                0 },
   { "-s",        eslARG_INT,     "42", NULL, NULL,  NULL,  NULL, NULL, "set random number seed to <n>",                    0 },
   { "-N",        eslARG_INT,   "1000", NULL, NULL,  NULL,  NULL, NULL, "number of trace samples to take",                  0 },
   {  0, 0, 0, 0, 0, 0, 0, 0, 0, 0 },
@@ -494,7 +495,7 @@ static char banner[] = "example, test, benchmark of defining domains by posterio
 int 
 main(int argc, char **argv)
 {
-  ESL_GETOPTS    *go      = p7_CreateDefaultApp(options, 2, argc, argv, banner, usage);
+  ESL_GETOPTS    *go      = p7_CreateDefaultApp("p7_spensemble_example", options, 2, argc, argv, banner, usage);
   ESL_STOPWATCH  *w       = esl_stopwatch_Create();
   ESL_RANDOMNESS *r       = esl_randomness_CreateFast(esl_opt_GetInteger(go, "-s"));
   char           *hmmfile = esl_opt_GetArg(go, 1);

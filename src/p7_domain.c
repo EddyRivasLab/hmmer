@@ -860,7 +860,6 @@ static void utest_Serialize(int ntrials){
 int
 main(int argc, char **argv)
 {
-
   utest_Serialize_error_conditions();
   utest_Deserialize_error_conditions();
   utest_Serialize(100);

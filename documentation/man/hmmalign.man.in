@@ -50,8 +50,12 @@ option.
 
 .TP
 .B \-h
-Help; print a brief reminder of command line usage and all available
-options.
+Help: print a brief reminder of command line usage and all available
+options, and exit.
+
+.TP
+.B \-\-version
+Print version information and exit.
 
 .TP
 .BI \-o " <f>"

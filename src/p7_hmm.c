@@ -2306,6 +2306,7 @@ utest_synchronize(ESL_GETOPTS *go, ESL_RANDOMNESS *r, ESL_ALPHABET *abc)
 static ESL_OPTIONS options[] = {
   /* name           type      default  env  range toggles reqs incomp  help                                       docgroup*/
   { "-h",        eslARG_NONE,   FALSE, NULL, NULL,  NULL,  NULL, NULL, "show brief help on version and usage",           0 },
+  { "--version", eslARG_NONE,   FALSE, NULL, NULL,  NULL,  NULL, NULL, "show version information and exit",              0 },
   { "-s",        eslARG_INT,     "42", NULL, NULL,  NULL,  NULL, NULL, "set random number seed to <n>",                  0 },
   { "-v",        eslARG_NONE,   FALSE, NULL, NULL,  NULL,  NULL, NULL, "be verbose",                                     0 },
   {  0, 0, 0, 0, 0, 0, 0, 0, 0, 0 },
@@ -2316,7 +2317,7 @@ static char banner[] = "unit test driver for p7_hmm.c core model routines";
 int
 main(int argc, char **argv)
 {
-  ESL_GETOPTS    *go   = p7_CreateDefaultApp(options, 1, argc, argv, banner, usage);
+  ESL_GETOPTS    *go   = p7_CreateDefaultApp("p7_hmm_utest", options, 1, argc, argv, banner, usage);
   ESL_RANDOMNESS *r    = esl_randomness_Create(esl_opt_GetInteger(go, "-s"));
   ESL_ALPHABET   *abc  = esl_alphabet_Create(eslAMINO);
   utest_occupancy  (go, r, abc);

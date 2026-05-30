@@ -119,8 +119,12 @@ By default, fetched HMMs are printed to standard output in HMMER3 format.
 
 .TP
 .B \-h
-Help; print a brief reminder of command line usage and all available
-options.
+Help: print a brief reminder of command line usage and all available
+options, and exit.
+
+.TP
+.B \-\-version
+Print version information and exit.
 
 .TP
 .B \-f

@@ -1412,7 +1412,7 @@ extern int   p7_h2io_WriteASCII(FILE *fp, P7_HMM *hmm);
 
 /* hmmer.c */
 extern void         p7_banner(FILE *fp, const char *progname, char *banner);
-extern ESL_GETOPTS *p7_CreateDefaultApp(ESL_OPTIONS *options, int nargs, int argc, char **argv, char *banner, char *usage);
+extern ESL_GETOPTS *p7_CreateDefaultApp(char *progname, ESL_OPTIONS *options, int nargs, int argc, char **argv, char *banner, char *usage);
 extern int          p7_AminoFrequencies(float *f);
 
 /* logsum.c */

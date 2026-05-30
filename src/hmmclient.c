@@ -112,6 +112,7 @@ process_commandline(int argc, char **argv, ESL_GETOPTS **ret_go, char **ret_quer
   if (esl_opt_VerifyConfig(go)               != eslOK)  { if (printf("Failed to parse command line: %s\n",  go->errbuf) < 0) ESL_XEXCEPTION_SYS(eslEWRITE, "write failed"); goto FAILURE; }
 
   /* help format: */
+  if (esl_opt_GetBoolean(go, "--version")) { esl_printf("hmmclient %s\n", HMMER_VERSION); exit(0); }
   if (esl_opt_GetBoolean(go, "-h") == TRUE) 
     {
       p7_banner(stdout, argv[0], banner);

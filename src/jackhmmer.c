@@ -60,7 +60,8 @@ typedef struct {
 
 static ESL_OPTIONS options[] = {
   /* name           type              default   env  range   toggles     reqs   incomp                             help                                                  docgroup*/
-  { "-h",           eslARG_NONE,        FALSE, NULL, NULL,      NULL,    NULL,  NULL,            "show brief help on version and usage",                         1 },
+  { "-h",           eslARG_NONE,        FALSE, NULL, NULL,      NULL,    NULL,  NULL,            "show brief help information and exit",                         1 },
+  { "--version",    eslARG_NONE,        FALSE, NULL, NULL,      NULL,    NULL,  NULL,            "show version information and exit",                            1 },
   { "-N",           eslARG_INT,           "5", NULL, "n>0",     NULL,    NULL,  NULL,            "set maximum number of iterations to <n>",                      1 },
 /* Control of output */
   { "-o",           eslARG_OUTFILE,      NULL, NULL, NULL,      NULL,    NULL,  NULL,            "direct output to file <f>, not stdout",                        2 },
@@ -215,6 +216,7 @@ process_commandline(int argc, char **argv, ESL_GETOPTS **ret_go, char **ret_qfil
   if (esl_opt_GetSetter(go, "--wgiven")  != eslARG_SETBY_DEFAULT)  { if (printf("Failed to parse command line: jackhmmer does not accept a --wgiven option\n")  < 0) ESL_XEXCEPTION_SYS(eslEWRITE, "write failed"); goto FAILURE; }
 
   /* help format: */
+  if (esl_opt_GetBoolean(go, "--version")) { esl_printf("jackhmmer %s\n", HMMER_VERSION); exit(0); }
   if (esl_opt_GetBoolean(go, "-h") == TRUE) 
     {
       p7_banner(stdout, argv[0], banner);

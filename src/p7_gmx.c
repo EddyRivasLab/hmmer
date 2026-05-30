@@ -483,6 +483,7 @@ utest_Compare(ESL_RANDOMNESS *r, P7_PROFILE *gm, P7_BG *bg, int L, float toleran
 static ESL_OPTIONS options[] = {
   /* name  type         default  env   range togs  reqs  incomp  help                docgrp */
   { "-h",  eslARG_NONE,    FALSE, NULL, NULL, NULL, NULL, NULL, "show help and usage",                  0},
+  { "--version", eslARG_NONE,    FALSE, NULL, NULL, NULL, NULL, NULL, "show version information and exit", 0},
   { "-s",  eslARG_INT,     "42",  NULL, NULL, NULL, NULL, NULL, "set random number seed to <n>",        0 },
   { "-t",  eslARG_REAL,  "1e-5",  NULL, NULL, NULL, NULL, NULL, "floating point comparison tolerance",  0 },
   { "-L",  eslARG_INT,     "40",  NULL, NULL, NULL, NULL, NULL, "length of sampled sequences",          0 },
@@ -496,7 +497,7 @@ int
 main(int argc, char **argv)
 {
   char           *msg  = "p7_gmx unit test driver failed";
-  ESL_GETOPTS    *go   = p7_CreateDefaultApp(options, 0, argc, argv, banner, usage);
+  ESL_GETOPTS    *go   = p7_CreateDefaultApp("p7_gmx_utest", options, 0, argc, argv, banner, usage);
   ESL_RANDOMNESS *r    = esl_randomness_CreateFast(esl_opt_GetInteger(go, "-s"));
   ESL_ALPHABET   *abc  = esl_alphabet_Create(eslAMINO);
   P7_BG          *bg   = p7_bg_Create(abc);

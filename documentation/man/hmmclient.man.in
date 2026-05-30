@@ -74,8 +74,12 @@ instead of a file name.
 
 .TP
 .B \-h
-Help; print a brief reminder of command line usage and all available
-options.
+Help: print a brief reminder of command line usage and all available
+options, and exit.
+
+.TP
+.B \-\-version
+Print version information and exit.
 
 .SH OPTIONS THAT CONTROL THE CONNECTION TO THE SERVER 
 

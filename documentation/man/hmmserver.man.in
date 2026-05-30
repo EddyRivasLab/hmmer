@@ -40,8 +40,12 @@ for details on how to start an MPI process, as the details vary depending on clu
 
 .TP
 .B \-h
-Help; print a brief reminder of command line usage and all available
-options.
+Help: print a brief reminder of command line usage and all available
+options, and exit.
+
+.TP
+.B \-\-version
+Print version information and exit.
 
 .TP 
 .BI \-\-cport " <n>"

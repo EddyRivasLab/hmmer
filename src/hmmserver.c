@@ -20,7 +20,8 @@
 #ifdef HAVE_MPI
 static ESL_OPTIONS options[] = {
   /* name           type      default  env  range     toggles   reqs   incomp              help                                                      docgroup*/
-  { "-h",           eslARG_NONE,   FALSE, NULL, NULL,    NULL,  NULL,  NULL, "show brief help on version and usage",                         1 },
+  { "-h",           eslARG_NONE,   FALSE, NULL, NULL,    NULL,  NULL,  NULL, "show brief help information and exit",                         1 },
+  { "--version",    eslARG_NONE,   FALSE, NULL, NULL,    NULL,  NULL,  NULL, "show version information and exit",                            1 },
   /* Interface with server */
   { "--cport",      eslARG_INT,     "51371",  NULL, "49151<n<65536",NULL,  NULL,  "--worker", "port to use for client/server communication",                 12 },
   { "--ccncts",     eslARG_INT,     "16",     NULL, "n>0",          NULL,  NULL,  "--worker", "maximum number of client side connections to accept",         12 },
@@ -45,7 +46,7 @@ int main(int argc, char **argv){
 #endif	
 #ifdef HAVE_MPI
 
-    ESL_GETOPTS *go = p7_CreateDefaultApp(options, -1, argc, argv, banner, usage);
+    ESL_GETOPTS *go = p7_CreateDefaultApp("hmmserver", options, -1, argc, argv, banner, usage);
     if(esl_opt_ArgNumber(go) != esl_opt_GetInteger(go, "--num_dbs")){
         p7_Fail("Error: number of database files provided as arguments not equal to the value passed to --num_dbs");
     }

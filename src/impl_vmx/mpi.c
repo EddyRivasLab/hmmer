@@ -580,6 +580,7 @@ p7_oprofile_MPIRecv(int source, int tag, MPI_Comm comm, char **buf, int *nalloc,
 static ESL_OPTIONS options[] = {
   /* name           type      default  env  range toggles reqs incomp  help                                       docgroup*/
   { "-h",        eslARG_NONE,   FALSE, NULL, NULL,  NULL,  NULL, NULL, "show brief help on version and usage",             0 },
+  { "--version", eslARG_NONE,   FALSE, NULL, NULL,  NULL,  NULL, NULL, "show version information and exit",                0 },
   { "-b",        eslARG_NONE,   FALSE, NULL, NULL,  NULL,  NULL, NULL, "baseline timing: don't send any HMMs",             0 },
   { "--stall",   eslARG_NONE,   FALSE, NULL, NULL,  NULL,  NULL, NULL, "arrest after start: for debugging MPI under gdb",  0 },  
   {  0, 0, 0, 0, 0, 0, 0, 0, 0, 0 },
@@ -590,7 +591,7 @@ static char banner[] = "benchmark driver for MPI communication";
 int
 main(int argc, char **argv)
 {
-  ESL_GETOPTS    *go      = p7_CreateDefaultApp(options, 1, argc, argv, banner, usage);
+  ESL_GETOPTS    *go      = p7_CreateDefaultApp("mpi_benchmark", options, 1, argc, argv, banner, usage);
   char           *hmmfile = esl_opt_GetArg(go, 1);
   ESL_ALPHABET   *abc     = esl_alphabet_Create(eslAMINO);
   P7_BG          *bg      = p7_bg_Create(abc);
@@ -740,6 +741,7 @@ utest_oprofileSendRecv(int my_rank, int nproc)
 static ESL_OPTIONS options[] = {
   /* name           type      default  env  range toggles reqs incomp  help                                       docgroup*/
   { "-h",        eslARG_NONE,   FALSE, NULL, NULL, NULL, NULL, NULL, "show brief help on version and usage",              0 },
+  { "--version", eslARG_NONE,   FALSE, NULL, NULL, NULL, NULL, NULL, "show version information and exit",                 0 },
   { "--stall",   eslARG_NONE,   FALSE, NULL, NULL, NULL, NULL, NULL, "arrest after start: for debugging MPI under gdb",   0 },  
   {  0, 0, 0, 0, 0, 0, 0, 0, 0, 0 },
 };
@@ -749,7 +751,7 @@ static char banner[] = "test driver for mpi.c";
 int
 main(int argc, char **argv)
 {
-  ESL_GETOPTS *go = p7_CreateDefaultApp(options, 0, argc, argv, banner, usage);
+  ESL_GETOPTS *go = p7_CreateDefaultApp("mpi_utest", options, 0, argc, argv, banner, usage);
   int          my_rank;
   int          nproc;
 

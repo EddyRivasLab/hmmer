@@ -50,7 +50,8 @@ cmdline_help(char *argv0, ESL_GETOPTS *go)
 
 static ESL_OPTIONS options[] = {
   /* name       type        default env   range togs  reqs  incomp      help                                                   docgroup */
-  { "-h",       eslARG_NONE,  FALSE, NULL, NULL, NULL, NULL, NULL,          "help; show brief info on version and usage",        0 },
+  { "-h",       eslARG_NONE,  FALSE, NULL, NULL, NULL, NULL, NULL,          "show brief help information and exit",        0 },
+  { "--version", eslARG_NONE,  FALSE, NULL, NULL, NULL, NULL, NULL,          "show version information and exit",                0 },
   { "-f",       eslARG_NONE,  FALSE, NULL, NULL, NULL, NULL,"--index",      "second cmdline arg is a file of names to retrieve", 0 },
   { "-o",       eslARG_OUTFILE,FALSE,NULL, NULL, NULL, NULL,"-O,--index",   "output HMM to file <f> instead of stdout",          0 },
   { "-O",       eslARG_NONE,  FALSE, NULL, NULL, NULL, NULL,"-o,-f,--index","output HMM to file named <key>",                    0 },
@@ -80,6 +81,7 @@ main(int argc, char **argv)
   go = esl_getopts_Create(options);
   if (esl_opt_ProcessCmdline(go, argc, argv) != eslOK) cmdline_failure(argv[0], "Failed to parse command line: %s\n", go->errbuf);
   if (esl_opt_VerifyConfig(go)               != eslOK) cmdline_failure(argv[0], "Error in configuration: %s\n",       go->errbuf);
+  if (esl_opt_GetBoolean(go, "--version")) { esl_printf("hmmfetch %s\n", HMMER_VERSION); exit(0); }
   if (esl_opt_GetBoolean(go, "-h") )                   cmdline_help   (argv[0], go);
   if (esl_opt_ArgNumber(go) < 1)                       cmdline_failure(argv[0], "Incorrect number of command line arguments.\n");        
   

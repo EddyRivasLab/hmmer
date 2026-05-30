@@ -16,7 +16,8 @@
 
 static ESL_OPTIONS options[] = {
   /* name           type      default  env  range     toggles      reqs   incomp  help   docgroup*/
-  { "-h",        eslARG_NONE,   FALSE, NULL, NULL,      NULL,       NULL,    NULL, "show brief help on version and usage",                             0 },
+  { "-h",        eslARG_NONE,   FALSE, NULL, NULL,      NULL,       NULL,    NULL, "show brief help information and exit",                             0 },
+  { "--version", eslARG_NONE,   FALSE, NULL, NULL,      NULL,       NULL,    NULL, "show version information and exit",                                0 },
   { "-a",        eslARG_NONE,"default",NULL, NULL, "-a,-b,-2",      NULL,    NULL, "ascii:  output models in HMMER3 ASCII format",                     0 },
   { "-b",        eslARG_NONE,   FALSE, NULL, NULL, "-a,-b,-2",      NULL,    NULL, "binary: output models in HMMER3 binary format",                    0 },
   { "-2",        eslARG_NONE,   FALSE, NULL, NULL, "-a,-b,-2",      NULL,    NULL, "HMMER2: output backward compatible HMMER2 ASCII format (ls mode)", 0 },
@@ -30,7 +31,7 @@ static char banner[] = "convert profile file to a HMMER format";
 int 
 main(int argc, char **argv)
 {
-  ESL_GETOPTS   *go      = p7_CreateDefaultApp(options, 1, argc, argv, banner, usage);
+  ESL_GETOPTS   *go      = p7_CreateDefaultApp("hmmconvert", options, 1, argc, argv, banner, usage);
   ESL_ALPHABET  *abc     = NULL;
   char          *hmmfile = esl_opt_GetArg(go, 1);
   P7_HMMFILE    *hfp     = NULL;

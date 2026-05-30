@@ -483,6 +483,7 @@ p7_Tau(ESL_RANDOMNESS *r, P7_OPROFILE *om, P7_BG *bg, int L, int N, double lambd
 static ESL_OPTIONS options[] = {
   /* name           type      default  env  range toggles reqs incomp   help                                       docgroup*/
   { "-h",        eslARG_NONE,   FALSE, NULL, NULL,  NULL,  NULL, NULL,  "show brief help on version and usage",            0 },
+  { "--version", eslARG_NONE,   FALSE, NULL, NULL,  NULL,  NULL, NULL,  "show version information and exit",               0 },
   { "-s",        eslARG_INT,      "0", NULL, NULL,  NULL,  NULL, NULL,  "set random number generator seed to <n>",         0 },
   { "--EmL",     eslARG_INT,    "200", NULL,"n>0",  NULL,  NULL, NULL,  "length of sequences for MSV Gumbel mu fit",       0 },   
   { "--EmN",     eslARG_INT,    "200", NULL,"n>0",  NULL,  NULL, NULL,  "number of sequences for MSV Gumbel mu fit",       0 },   
@@ -504,7 +505,7 @@ static char banner[] = "collect test statistics for E-value calculations";
 int 
 main(int argc, char **argv)
 {
-  ESL_GETOPTS    *go      = p7_CreateDefaultApp(options, 1, argc, argv, banner, usage);
+  ESL_GETOPTS    *go      = p7_CreateDefaultApp("evalues_stats", options, 1, argc, argv, banner, usage);
   char           *hmmfile = esl_opt_GetArg(go, 1);
   ESL_RANDOMNESS *r       = esl_randomness_CreateFast(esl_opt_GetInteger(go, "-s"));
   ESL_ALPHABET   *abc     = NULL;
@@ -601,6 +602,7 @@ main(int argc, char **argv)
 static ESL_OPTIONS options[] = {
   /* name           type      default  env  range toggles reqs incomp  help                                       docgroup*/
   { "-h",        eslARG_NONE,   FALSE, NULL, NULL,  NULL,  NULL, NULL, "show brief help on version and usage",             0 },
+  { "--version", eslARG_NONE,   FALSE, NULL, NULL,  NULL,  NULL, NULL, "show version information and exit",                0 },
   { "-N",        eslARG_INT,    "100", NULL, "n>0", NULL,  NULL, NULL, "number of calibrations to do",                     0 },
    {  0, 0, 0, 0, 0, 0, 0, 0, 0, 0 },
 };
@@ -610,7 +612,7 @@ static char banner[] = "benchmark driver for E-value calibration";
 int 
 main(int argc, char **argv)
 {
-  ESL_GETOPTS    *go      = p7_CreateDefaultApp(options, 1, argc, argv, banner, usage);
+  ESL_GETOPTS    *go      = p7_CreateDefaultApp("evalues_benchmark", options, 1, argc, argv, banner, usage);
   char           *hmmfile = esl_opt_GetArg(go, 1);
   int             N       = esl_opt_GetInteger(go, "-N");
   ESL_STOPWATCH  *w       = esl_stopwatch_Create();

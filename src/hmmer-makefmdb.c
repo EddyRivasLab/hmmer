@@ -18,7 +18,8 @@
 
 static ESL_OPTIONS options[] = {
   /* name           type      default  env  range     toggles   reqs   incomp              help                                                      docgroup*/
-  { "-h",           eslARG_NONE,        FALSE, NULL, NULL,    NULL,  NULL,  NULL,       "show brief help on version and usage",                      1 },
+  { "-h",           eslARG_NONE,        FALSE, NULL, NULL,    NULL,  NULL,  NULL,       "show brief help information and exit",                      1 },
+  { "--version",    eslARG_NONE,        FALSE, NULL, NULL,    NULL,  NULL,  NULL,       "show version information and exit",                         1 },
 
   /* Selecting the alphabet rather than autoguessing it */
   //TODO: when I make the FM method work for amino acids, re-enable this selection
@@ -52,6 +53,7 @@ process_commandline(int argc, char **argv, ESL_GETOPTS **ret_go, char **ret_seqf
   if (esl_opt_VerifyConfig(go)               != eslOK)  { if (printf("Failed to parse command line: %s\n", go->errbuf)  < 0) ESL_XEXCEPTION_SYS(eslEWRITE, "write failed"); goto FAILURE; }
 
   /* help format: */
+  if (esl_opt_GetBoolean(go, "--version")) { esl_printf("hmmer-makefmdb %s\n", HMMER_VERSION); exit(0); }
   if (esl_opt_GetBoolean(go, "-h") == TRUE) 
     {
       p7_banner(stdout, argv[0], banner);
@@ -426,10 +428,6 @@ main(int argc, char **argv)
   ESL_RANDOMNESS *r   = esl_randomness_Create(42);
 
 
-#if !defined (eslENABLE_SSE)
-    p7_Fail("The hmmerfm sequence database file format is valid only on systems supporting SSE vector instructions\n");
-#endif
-
   ESL_ALLOC (meta, sizeof(FM_METADATA));
   if (meta == NULL)
     esl_fatal("unable to allocate memory to store FM meta data\n");
@@ -453,6 +451,10 @@ main(int argc, char **argv)
 
 
   process_commandline(argc, argv, &go, &fname_in, &fname_out);
+
+#if !defined (eslENABLE_SSE)
+  p7_Fail("The hmmerfm sequence database file format is valid only on systems supporting SSE vector instructions\n");
+#endif
 
   if (esl_opt_IsOn(go, "--bin_length")) meta->freq_cnt_b = esl_opt_GetInteger(go, "--bin_length");
   if ( meta->freq_cnt_b < 32 || meta->freq_cnt_b >4096 ||  (meta->freq_cnt_b & (meta->freq_cnt_b - 1))  ) // test power of 2

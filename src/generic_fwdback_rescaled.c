@@ -29,6 +29,7 @@ extern float p7_gmx_Min(P7_GMX *gx);
 static ESL_OPTIONS options[] = {
   /* name           type      default  env  range  toggles reqs incomp  help                                       docgroup*/
   { "-h",        eslARG_NONE,   FALSE, NULL, NULL,   NULL,  NULL, NULL, "show brief help on version and usage",             0 },
+  { "--version", eslARG_NONE,   FALSE, NULL, NULL,   NULL,  NULL, NULL, "show version information and exit",                0 },
   { "--dd",      eslARG_NONE,   FALSE, NULL, NULL,   NULL,  NULL, NULL, "DD-scaled unihit glocal alignment",                0 },
   { "--fs",      eslARG_NONE,"default",NULL, NULL, STYLES,  NULL, NULL, "multihit local alignment",                         0 },
   { "--sw",      eslARG_NONE,   FALSE, NULL, NULL, STYLES,  NULL, NULL, "unihit local alignment",                           0 },
@@ -42,7 +43,7 @@ static char banner[] = "testbed for Farrar DD-scaled Forward, generic implementa
 int 
 main(int argc, char **argv)
 {
-  ESL_GETOPTS    *go      = p7_CreateDefaultApp(options, 2, argc, argv, banner, usage);
+  ESL_GETOPTS    *go      = p7_CreateDefaultApp("generic_fwdback_rescaled_example", options, 2, argc, argv, banner, usage);
   char           *hmmfile = esl_opt_GetArg(go, 1);
   char           *seqfile = esl_opt_GetArg(go, 2);
   ESL_ALPHABET   *abc     = NULL;

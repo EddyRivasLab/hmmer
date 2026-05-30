@@ -42,7 +42,8 @@ typedef struct p7_server_chunk_reply{
 
 static ESL_OPTIONS server_Client_Options[] = {
   /* name           type      default  env  range     toggles   reqs   incomp              help                                                      docgroup*/
-  { "-h",           eslARG_NONE,   FALSE, NULL, NULL,    NULL,  NULL,  NULL,           "show brief help on version and usage",                         1 },
+  { "-h",           eslARG_NONE,   FALSE, NULL, NULL,    NULL,  NULL,  NULL,           "show brief help information and exit",                         1 },
+  { "--version",    eslARG_NONE,   FALSE, NULL, NULL,    NULL,  NULL,  NULL,           "show version information and exit",                            1 },
   /* Interface with server */
   { "-s",           eslARG_STRING,   "localhost", NULL, NULL,    NULL,  NULL,  NULL,            "name of the server to connect to",                         42 },
  { "--cport",      eslARG_INT,     "51371",  NULL, "49151<n<65536",NULL,  NULL,  "--worker",      "port to use for client/server communication",                 42 },

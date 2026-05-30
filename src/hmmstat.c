@@ -14,7 +14,8 @@
 
 static ESL_OPTIONS options[] = {
   /* name           type       default   env  range    toggles    reqs       incomp  help   docgroup*/
-  { "-h",        eslARG_NONE,    FALSE,  NULL, NULL,    NULL,  NULL,           NULL, "show brief help on version and usage",            0 },
+  { "-h",        eslARG_NONE,    FALSE,  NULL, NULL,    NULL,  NULL,           NULL, "show brief help information and exit",            0 },
+  { "--version", eslARG_NONE,    FALSE,  NULL, NULL,    NULL,  NULL,           NULL, "show version information and exit",               0 },
   {  0, 0, 0, 0, 0, 0, 0, 0, 0, 0 },
 };
 
@@ -48,6 +49,7 @@ main(int argc, char **argv)
       printf("\nTo see more help on available options, do %s -h\n\n", argv[0]);
       exit(1);
     }
+  if (esl_opt_GetBoolean(go, "--version")) { esl_printf("hmmstat %s\n", HMMER_VERSION); exit(0); }
   if (esl_opt_GetBoolean(go, "-h") == TRUE) 
     {
       p7_banner(stdout, argv[0], banner);

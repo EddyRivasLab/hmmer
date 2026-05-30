@@ -623,6 +623,7 @@ utest_Compare(void)
 static ESL_OPTIONS options[] = {
   /* name           type      default  env  range toggles reqs incomp  help                                       docgroup*/
   { "-h",        eslARG_NONE,   FALSE, NULL, NULL, NULL, NULL, NULL, "show brief help on version and usage",              0 },
+  { "--version", eslARG_NONE,   FALSE, NULL, NULL, NULL, NULL, NULL, "show version information and exit",                 0 },
   {  0, 0, 0, 0, 0, 0, 0, 0, 0, 0 },
 };
 static char usage[]  = "[-options]";
@@ -631,7 +632,7 @@ static char banner[] = "test driver for p7_profile.c";
 int
 main(int argc, char **argv)
 {
-  ESL_GETOPTS *go = p7_CreateDefaultApp(options, 0, argc, argv, banner, usage);
+  ESL_GETOPTS *go = p7_CreateDefaultApp("p7_profile_utest", options, 0, argc, argv, banner, usage);
 
   utest_Compare();
 

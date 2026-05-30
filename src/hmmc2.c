@@ -218,6 +218,7 @@ int main(int argc, char *argv[])
 
   i = 1;
   while (i < argc) {
+    if (strcmp(argv[i], "--version") == 0) { esl_printf("hmmc2 %s\n", HMMER_VERSION); exit(0); }
     if (argv[i][0] != '-') usage(argv[0]);
     if (argv[i][1] == 0 || argv[i][2] != 0) usage(argv[0]);
     switch (argv[i][1]) {

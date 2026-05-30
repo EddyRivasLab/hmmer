@@ -566,6 +566,7 @@ main(int argc, char **argv)
 static ESL_OPTIONS options[] = {
   /* name           type      default  env  range toggles reqs incomp  help                                       docgroup*/
   { "-h",        eslARG_NONE,   FALSE,  NULL, NULL,  NULL,  NULL, NULL, "show brief help on version and usage",    0 },
+  { "--version", eslARG_NONE,   FALSE,  NULL, NULL,  NULL,  NULL, NULL, "show version information and exit",       0 },
   { "--dna",     eslARG_NONE,   FALSE,  NULL, NULL,  NULL,  NULL, NULL, "use DNA alphabet",                        0 },
   { "--rna",     eslARG_NONE,   FALSE,  NULL, NULL,  NULL,  NULL, NULL, "use RNA alphabet",                        0 },
   { "--amino",   eslARG_NONE,   FALSE,  NULL, NULL,  NULL,  NULL, NULL, "use protein alphabet",                    0 },
@@ -578,7 +579,7 @@ static char banner[] = "example for the build module";
 int
 main(int argc, char **argv)
 {
-  ESL_GETOPTS  *go        = p7_CreateDefaultApp(options, 1, argc, argv, banner, usage);
+  ESL_GETOPTS  *go        = p7_CreateDefaultApp("build_example", options, 1, argc, argv, banner, usage);
   char         *msafile   = esl_opt_GetArg(go, 1);
   int           fmt       = eslMSAFILE_UNKNOWN;
   ESL_ALPHABET *abc       = NULL;

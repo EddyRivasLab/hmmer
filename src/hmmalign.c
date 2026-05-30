@@ -24,7 +24,8 @@ static int map_alignment(const char *msafile, const P7_HMM *hmm, ESL_SQ ***ret_s
 
 static ESL_OPTIONS options[] = {
   /* name             type        default      env  range   toggles   reqs  incomp               help                                          docgroup*/
-  { "-h",          eslARG_NONE,     FALSE,     NULL, NULL,   NULL,    NULL,  NULL, "show brief help on version and usage",                         1 },
+  { "-h",          eslARG_NONE,     FALSE,     NULL, NULL,   NULL,    NULL,  NULL, "show brief help information and exit",                         1 },
+  { "--version",   eslARG_NONE,     FALSE,     NULL, NULL,   NULL,    NULL,  NULL, "show version information and exit",                            1 },
   { "-o",          eslARG_OUTFILE,   NULL,     NULL, NULL,   NULL,    NULL,  NULL, "output alignment to file <f>, not stdout",                     1 },
 
   { "--mapali",    eslARG_INFILE,    NULL,     NULL, NULL,   NULL,    NULL,  NULL, "include alignment in file <f> (same ali that HMM came from)",  2 },
@@ -104,6 +105,7 @@ main(int argc, char **argv)
   go = esl_getopts_Create(options);
   if (esl_opt_ProcessCmdline(go, argc, argv) != eslOK) cmdline_failure(argv[0], "Failed to parse command line: %s\n", go->errbuf);
   if (esl_opt_VerifyConfig(go)               != eslOK) cmdline_failure(argv[0], "Error in configuration: %s\n",       go->errbuf);
+  if (esl_opt_GetBoolean(go, "--version")) { esl_printf("hmmalign %s\n", HMMER_VERSION); exit(0); }
   if (esl_opt_GetBoolean(go, "-h") )                   cmdline_help   (argv[0], go);
   if (esl_opt_ArgNumber(go) != 2)                      cmdline_failure(argv[0], "Incorrect number of command line arguments.\n");        
 

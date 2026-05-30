@@ -36,7 +36,8 @@
 
 static ESL_OPTIONS options[] = {
   /* name           type      default  env  range     toggles   reqs   incomp  help   docgroup*/
-  { "-h",        eslARG_NONE,   FALSE, NULL, NULL,      NULL,  NULL, NULL, "show brief help on version and usage",              1 },
+  { "-h",        eslARG_NONE,   FALSE, NULL, NULL,      NULL,  NULL, NULL, "show brief help information and exit",              1 },
+  { "--version", eslARG_NONE,   FALSE, NULL, NULL,      NULL,  NULL, NULL, "show version information and exit",                 1 },
   { "-a",        eslARG_NONE,   FALSE, NULL, NULL,      NULL,"--vit",NULL, "obtain alignment length statistics too",            1 },
   { "-v",        eslARG_NONE,   FALSE, NULL, NULL,      NULL,  NULL, NULL, "verbose: print scores",                             1 },
   { "-L",        eslARG_INT,    "100", NULL, "n>0",     NULL,  NULL, NULL, "length of random target seqs",                      1 },
@@ -153,6 +154,7 @@ main(int argc, char **argv)
       printf("\nTo see more help on available options, do %s -h\n\n", argv[0]);
       exit(1);
     }
+  if (esl_opt_GetBoolean(go, "--version")) { esl_printf("hmmsim %s\n", HMMER_VERSION); exit(0); }
   if (esl_opt_GetBoolean(go, "-h") == TRUE) 
     {
       p7_banner(stdout, argv[0], banner);

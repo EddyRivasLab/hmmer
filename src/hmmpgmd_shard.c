@@ -24,7 +24,8 @@
 
 static ESL_OPTIONS cmdlineOpts[] = {
   /* name           type         default      env   range           toggles  reqs   incomp           help                                                     docgroup */
-  { "-h",           eslARG_NONE,   FALSE,     NULL, NULL,           NULL,  NULL,  NULL,            "show brief help on version and usage",                         1 },
+  { "-h",           eslARG_NONE,   FALSE,     NULL, NULL,           NULL,  NULL,  NULL,            "show brief help information and exit",                         1 },
+  { "--version",    eslARG_NONE,   FALSE,     NULL, NULL,           NULL,  NULL,  NULL,            "show version information and exit",                            1 },
   { "--master",     eslARG_NONE,    NULL,     NULL, NULL,           NULL,  NULL,  "--worker",      "run program as the master server",                            12 },
   { "--worker",     eslARG_STRING,  NULL,     NULL, NULL,           NULL,  NULL,  "--master",      "run program as a worker with server at <s>",                  12 },
   { "--cport",      eslARG_INT,     "51371",  NULL, "49151<n<65536",NULL,  NULL,  "--worker",      "port to use for client/server communication",                 12 },
@@ -118,6 +119,7 @@ process_commandline(int argc, char **argv, ESL_GETOPTS **ret_go)
   if (esl_opt_VerifyConfig(go) != eslOK) { if (printf("Failed to parse command line: %s\n", go->errbuf) < 0) ESL_XEXCEPTION_SYS(eslEWRITE, "write failed"); goto FAILURE; }
  
   /* help format: */
+  if (esl_opt_GetBoolean(go, "--version")) { esl_printf("hmmpgmd_shard %s\n", HMMER_VERSION); exit(0); }
   if (esl_opt_GetBoolean(go, "-h") == TRUE) 
     {
       p7_banner(stdout, argv[0], banner);

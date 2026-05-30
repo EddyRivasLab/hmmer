@@ -2222,6 +2222,7 @@ h2ascii2prob(char *s, float null)
 static ESL_OPTIONS options[] = {
   /* name           type      default  env  range toggles reqs incomp  help                                  docgroup*/
   { "-h",        eslARG_NONE,   FALSE, NULL, NULL,  NULL,  NULL, NULL, "show brief help on version and usage",  0 },
+  { "--version", eslARG_NONE,   FALSE, NULL, NULL,  NULL,  NULL, NULL, "show version information and exit",     0 },
   { "-a",        eslARG_NONE,   FALSE, NULL, NULL,  NULL,  NULL, NULL, "include time of profile configuration", 0 }, 
   { "-v",        eslARG_NONE,   FALSE, NULL, NULL,  NULL,  NULL, NULL, "verbose: print model info as they're read", 0 }, 
   {  0, 0, 0, 0, 0, 0, 0, 0, 0, 0 },
@@ -2232,7 +2233,7 @@ static char banner[] = "benchmark driver for HMM input";
 int 
 main(int argc, char **argv)
 {
-  ESL_GETOPTS   *go      = p7_CreateDefaultApp(options, 1, argc, argv, banner, usage);
+  ESL_GETOPTS   *go      = p7_CreateDefaultApp("p7_hmmfile_benchmark", options, 1, argc, argv, banner, usage);
   ESL_STOPWATCH *w       = esl_stopwatch_Create();
   ESL_ALPHABET  *abc     = NULL;
   char          *hmmfile = esl_opt_GetArg(go, 1);

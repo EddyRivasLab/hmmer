@@ -57,7 +57,8 @@ static char banner[] = "search a DNA profile against a DNA database";
 
 static ESL_OPTIONS options[] = {
   /* name           type              default  env  range   toggles  reqs   incomp         help                                                      docgroup */
-  { "-h",           eslARG_NONE,        FALSE, NULL, NULL,    NULL,  NULL,  NULL,          "show brief help on version and usage",                         1 },
+  { "-h",           eslARG_NONE,        FALSE, NULL, NULL,    NULL,  NULL,  NULL,          "show brief help information and exit",                         1 },
+  { "--version",    eslARG_NONE,        FALSE, NULL, NULL,    NULL,  NULL,  NULL,          "show version information and exit",                            1 },
 
   /* alternative query file options (other than using profile HMMs) */
   { "--qseq",       eslARG_NONE,        FALSE, NULL, NULL,    NULL,  NULL,  "--qmsa",      "query file is a set of single query sequences, not a profile HMM",      2 },
@@ -733,6 +734,7 @@ process_commandline(int argc, char **argv, ESL_GETOPTS **ret_go)
   if (esl_opt_VerifyConfig(go)               != eslOK)  { esl_printf("Failed to parse command line: %s\n",  go->errbuf); goto FAILURE; }
  
   /* help format: */
+  if (esl_opt_GetBoolean(go, "--version")) { esl_printf("nhmmer %s\n", HMMER_VERSION); exit(0); }
   if (esl_opt_GetBoolean(go, "-h"))
     {
       p7_banner(stdout, argv[0], banner);

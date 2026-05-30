@@ -160,7 +160,8 @@ hmmlogo_IndelValues (P7_HMM *hmm, float *insert_P, float *insert_expL, float *oc
 
 static ESL_OPTIONS options[] = {
   /* name                           type        defaul  env  range   toggles   reqs   incomp              help                                                      docgroup*/
-  { "-h",                        eslARG_NONE,   FALSE, NULL, NULL,    NULL,  NULL,  NULL,             "show brief help on version and usage",                         1 },
+  { "-h",                        eslARG_NONE,   FALSE, NULL, NULL,    NULL,  NULL,  NULL,             "show brief help information and exit",                         1 },
+  { "--version",                 eslARG_NONE,   FALSE, NULL, NULL,    NULL,  NULL,  NULL,             "show version information and exit",                            1 },
   /* Control of output */
   { "--height_relent_all",       eslARG_NONE,    NULL, NULL, NULL,    NULL,  NULL,  HMMLOGO_OPTS,     "total height = relative entropy ; all letters shown (default)",     1 },
   { "--height_relent_abovebg",   eslARG_NONE,    NULL, NULL, NULL,    NULL,  NULL,  HMMLOGO_OPTS,     "total height = relative entropy ; only letters >bg shown",    1 },
@@ -197,6 +198,7 @@ main(int argc, char **argv)
   if (esl_opt_ProcessCmdline(go, argc, argv) != eslOK) esl_fatal(argv[0], "Failed to parse command line: %s\n", go->errbuf);
   if (esl_opt_VerifyConfig(go)               != eslOK) esl_fatal(argv[0], "Error in configuration: %s\n",       go->errbuf);
 
+  if (esl_opt_GetBoolean(go, "--version")) { esl_printf("hmmlogo %s\n", HMMER_VERSION); exit(0); }
   if (esl_opt_GetBoolean(go, "-h") )  {
    p7_banner (stdout, argv[0], banner);
    esl_usage (stdout, argv[0], usage);

@@ -24,7 +24,8 @@
 
 static ESL_OPTIONS options[] = {
   /* name           type      default  env  range     toggles      reqs   incomp  help   docgroup*/
-  { "-h",          eslARG_NONE,   FALSE, NULL, NULL,      NULL,      NULL,    NULL,  "show brief help on version and usage",                   1 },
+  { "-h",          eslARG_NONE,   FALSE, NULL, NULL,      NULL,      NULL,    NULL,  "show brief help information and exit",                   1 },
+  { "--version",   eslARG_NONE,   FALSE, NULL, NULL,      NULL,      NULL,    NULL,  "show version information and exit",                      1 },
   { "-o",          eslARG_OUTFILE,FALSE, NULL, NULL,      NULL,      NULL,    NULL,  "send sequence output to file <f>, not stdout",           1 },
   { "-N",          eslARG_INT,      "1", NULL, "n>0",     NULL,      NULL,  "-c,-C", "number of seqs to sample",                               1 },
 /* options controlling what to emit */
@@ -76,6 +77,7 @@ main(int argc, char **argv)
   go = esl_getopts_Create(options);
   if (esl_opt_ProcessCmdline(go, argc, argv) != eslOK) cmdline_failure(argv[0], "Failed to parse command line: %s\n", go->errbuf);
   if (esl_opt_VerifyConfig(go)               != eslOK) cmdline_failure(argv[0], "Error in configuration: %s\n",       go->errbuf);
+  if (esl_opt_GetBoolean(go, "--version")) { esl_printf("hmmemit %s\n", HMMER_VERSION); exit(0); }
   if (esl_opt_GetBoolean(go, "-h"))                    cmdline_help   (argv[0], go);      
   if (esl_opt_ArgNumber(go) != 1)                      cmdline_failure(argv[0], "Incorrect number of command line arguments.\n");        
 

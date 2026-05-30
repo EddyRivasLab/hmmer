@@ -723,6 +723,7 @@ p7_oprofile_Position(P7_HMMFILE *hfp, off_t offset)
 static ESL_OPTIONS options[] = {
   /* name           type      default  env  range toggles reqs incomp  help                                  docgroup*/
   { "-h",        eslARG_NONE,   FALSE, NULL, NULL,  NULL,  NULL, NULL, "show brief help on version and usage",  0 },
+  { "--version", eslARG_NONE,   FALSE, NULL, NULL,  NULL,  NULL, NULL, "show version information and exit",     0 },
   {  0, 0, 0, 0, 0, 0, 0, 0, 0, 0 },
 };
 static char usage[]  = "[-options] <HMM MSV profile file>";
@@ -731,7 +732,7 @@ static char banner[] = "benchmark driver for profile input";
 int
 main(int argc, char **argv)
 {
-  ESL_GETOPTS   *go      = p7_CreateDefaultApp(options, 1, argc, argv, banner, usage);
+  ESL_GETOPTS   *go      = p7_CreateDefaultApp("io_benchmark", options, 1, argc, argv, banner, usage);
   ESL_STOPWATCH *w       = esl_stopwatch_Create();
   ESL_ALPHABET  *abc     = NULL;
   char          *msvfile = esl_opt_GetArg(go, 1);
@@ -879,6 +880,7 @@ utest_ReadWrite(P7_HMM *hmm, P7_OPROFILE *om)
 static ESL_OPTIONS options[] = {
   /* name           type      default  env  range toggles reqs incomp  help                                       docgroup*/
   { "-h",        eslARG_NONE,   FALSE, NULL, NULL,  NULL,  NULL, NULL, "show brief help on version and usage",           0 },
+  { "--version", eslARG_NONE,   FALSE, NULL, NULL,  NULL,  NULL, NULL, "show version information and exit",              0 },
   { "-s",        eslARG_INT,     "42", NULL, NULL,  NULL,  NULL, NULL, "set random number seed to <n>",                  0 },
   { "-M",        eslARG_INT,     "45", NULL, NULL,  NULL,  NULL, NULL, "size of random model to sample",                 0 },
   { "-L",        eslARG_INT,     "45", NULL, NULL,  NULL,  NULL, NULL, "configure model for length <n>",                 0 },
@@ -890,7 +892,7 @@ static char banner[] = "test driver for NEON Forward, Backward implementations";
 int
 main(int argc, char **argv)
 {
-  ESL_GETOPTS    *go   = p7_CreateDefaultApp(options, 0, argc, argv, banner, usage);
+  ESL_GETOPTS    *go   = p7_CreateDefaultApp("io_utest", options, 0, argc, argv, banner, usage);
   ESL_RANDOMNESS *r    = esl_randomness_CreateFast(esl_opt_GetInteger(go, "-s"));
   ESL_ALPHABET   *abc  = NULL;
   P7_BG          *bg   = NULL;
@@ -941,6 +943,7 @@ main(int argc, char **argv)
 static ESL_OPTIONS options[] = {
   /* name           type      default  env  range toggles reqs incomp  help                                  docgroup*/
   { "-h",        eslARG_NONE,   FALSE, NULL, NULL,  NULL,  NULL, NULL, "show brief help on version and usage",      0 },
+  { "--version", eslARG_NONE,   FALSE, NULL, NULL,  NULL,  NULL, NULL, "show version information and exit",         0 },
   { "-v",        eslARG_NONE,   FALSE, NULL, NULL,  NULL,  NULL, NULL, "verbose: print model info as they're read", 0 },
   {  0, 0, 0, 0, 0, 0, 0, 0, 0, 0 },
 };
@@ -950,7 +953,7 @@ static char banner[] = "example of writing MSV profile part";
 int
 main(int argc, char **argv)
 {
-  ESL_GETOPTS   *go      = p7_CreateDefaultApp(options, 1, argc, argv, banner, usage);
+  ESL_GETOPTS   *go      = p7_CreateDefaultApp("io_example", options, 1, argc, argv, banner, usage);
   ESL_ALPHABET  *abc     = NULL;
   char          *hmmfile = esl_opt_GetArg(go, 1);
   P7_HMMFILE    *hfp     = NULL;

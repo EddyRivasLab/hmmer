@@ -2097,6 +2097,7 @@ p7_tophits_TabularTail(FILE *ofp, const char *progname, enum p7_pipemodes_e pipe
 static ESL_OPTIONS options[] = {
   /* name           type      default  env  range toggles reqs incomp  help                                       docgroup*/
   { "-h",        eslARG_NONE,   FALSE, NULL, NULL,  NULL,  NULL, NULL, "show brief help on version and usage",             0 },
+  { "--version", eslARG_NONE,   FALSE, NULL, NULL,  NULL,  NULL, NULL, "show version information and exit",                0 },
   { "-s",        eslARG_INT,     "42", NULL, NULL,  NULL,  NULL, NULL, "set random number seed to <n>",                    0 },
   { "-M",        eslARG_INT,     "10", NULL, NULL,  NULL,  NULL, NULL, "number of top hits lists to simulate and merge",   0 },
   { "-N",        eslARG_INT,  "10000", NULL, NULL,  NULL,  NULL, NULL, "number of top hits to simulate",                   0 },
@@ -2108,7 +2109,7 @@ static char banner[] = "benchmark driver for P7_TOPHITS";
 int
 main(int argc, char **argv)
 {
-  ESL_GETOPTS    *go       = p7_CreateDefaultApp(options, 0, argc, argv, banner, usage);
+  ESL_GETOPTS    *go       = p7_CreateDefaultApp("p7_tophits_benchmark", options, 0, argc, argv, banner, usage);
   ESL_STOPWATCH  *w        = esl_stopwatch_Create();
   ESL_RANDOMNESS *r        = esl_randomness_CreateFast(esl_opt_GetInteger(go, "-s"));
   int             N        = esl_opt_GetInteger(go, "-N");
@@ -2184,6 +2185,7 @@ main(int argc, char **argv)
 static ESL_OPTIONS options[] = {
   /* name           type      default  env  range toggles reqs incomp  help                                       docgroup*/
   { "-h",        eslARG_NONE,   FALSE, NULL, NULL,  NULL,  NULL, NULL, "show brief help on version and usage",             0 },
+  { "--version", eslARG_NONE,   FALSE, NULL, NULL,  NULL,  NULL, NULL, "show version information and exit",                0 },
   { "-s",        eslARG_INT,     "42", NULL, NULL,  NULL,  NULL, NULL, "set random number seed to <n>",                    0 },
   { "-N",        eslARG_INT,    "100", NULL, NULL,  NULL,  NULL, NULL, "number of top hits to simulate",                   0 },
   {  0, 0, 0, 0, 0, 0, 0, 0, 0, 0 },
@@ -2195,7 +2197,7 @@ static char banner[] = "test driver for P7_TOPHITS";
 int
 main(int argc, char **argv)
 {
-  ESL_GETOPTS    *go       = p7_CreateDefaultApp(options, 0, argc, argv, banner, usage);
+  ESL_GETOPTS    *go       = p7_CreateDefaultApp("p7_tophits_utest", options, 0, argc, argv, banner, usage);
   ESL_RANDOMNESS *r        = esl_randomness_CreateFast(esl_opt_GetInteger(go, "-s"));
   int             N        = esl_opt_GetInteger(go, "-N");
   P7_TOPHITS     *h1       = NULL;

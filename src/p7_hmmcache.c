@@ -183,6 +183,7 @@ p7_hmmcache_Close(P7_HMMCACHE *cache)
 static ESL_OPTIONS options[] = {
   /* name           type      default  env  range toggles reqs incomp  help                                  docgroup*/
   { "-h",        eslARG_NONE,   FALSE, NULL, NULL,  NULL,  NULL, NULL, "show brief help on version and usage",      0 },
+  { "--version", eslARG_NONE,   FALSE, NULL, NULL,  NULL,  NULL, NULL, "show version information and exit",         0 },
   {  0, 0, 0, 0, 0, 0, 0, 0, 0, 0 },
 };
 static char usage[]  = "[-options] <HMM file>";
@@ -191,7 +192,7 @@ static char banner[] = "benchmark driver for profile database cache";
 int 
 main(int argc, char **argv)
 {
-  ESL_GETOPTS   *go      = p7_CreateDefaultApp(options, 1, argc, argv, banner, usage);
+  ESL_GETOPTS   *go      = p7_CreateDefaultApp("p7_hmmcache_benchmark", options, 1, argc, argv, banner, usage);
   ESL_STOPWATCH *w       = esl_stopwatch_Create();
   char          *hmmfile = esl_opt_GetArg(go, 1);
   P7_HMMCACHE   *hcache  = NULL;

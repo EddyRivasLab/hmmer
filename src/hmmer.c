@@ -22,7 +22,7 @@
  *****************************************************************/
 
 /* Function:  p7_banner()
- * Synopsis:  print standard HMMER application output header
+ * Synopsis:  Print standard HMMER application output header
  * Incept:    SRE, Wed May 23 10:45:53 2007 [Janelia]
  *
  * Purpose:   Print the standard HMMER command line application banner
@@ -86,26 +86,31 @@ p7_banner(FILE *fp, const char *progname, char *banner)
  *            specialized for HMMER. See documentation in 
  *            <easel/esl_getopts.c>.
  *
- * Args:      options - array of <ESL_OPTIONS> structures for getopts
- *            nargs   - number of cmd line arguments expected (excl. of cmdname) If nargs = -1, the number
- *                      of command-line arguments may vary from run to run.
+ * Args:      progname - program name to show in output (e.g. "hmmsearch"),
+ *            options  - array of <ESL_OPTIONS> structures for getopts (must include -h, --version)
+ *            nargs    - number of cmd line arguments expected (excl. of cmdname) If nargs = -1, the number
+ *                       of command-line arguments may vary from run to run.
  *            argc    - <argc> from main()
  *            argv    - <argv> from main()
  *            banner  - optional one-line description of program (or NULL)
  *            usage   - optional one-line usage hint (or NULL)
  *
  * Returns:   ptr to new <ESL_GETOPTS> object.
- * 
+ *
  *            On command line errors, this routine prints an error
  *            message to <stderr> then calls <exit(1)> to halt
  *            execution with abnormal (1) status.
- *            
+ *
  *            If the standard <-h> option is seen, the routine prints
  *            the help page (using the data in the <options> structure),
  *            then calls <exit(0)> to exit with normal (0) status.
- *            
+ *
+ *            If the standard <--version> option is seen, the routine
+ *            prints the program name and version number, then calls
+ *            <exit(0)> to exit with normal (0) status.
+ *
  * Xref:      J7/3
- * 
+ *
  * Note:      The only difference between this and esl_getopts_CreateDefaultApp()
  *            is to call p7_banner() instead of esl_banner(), to get HMMER
  *            versioning info into the header. There ought to be a better way
@@ -113,32 +118,37 @@ p7_banner(FILE *fp, const char *progname, char *banner)
  *            define's in esl_banner(), thus removing the need for p7_banner).
  */
 ESL_GETOPTS *
-p7_CreateDefaultApp(ESL_OPTIONS *options, int nargs, int argc, char **argv, char *banner, char *usage)
+p7_CreateDefaultApp(char *progname, ESL_OPTIONS *options, int nargs, int argc, char **argv, char *banner, char *usage)
 {
   ESL_GETOPTS *go = NULL;
 
   go = esl_getopts_Create(options);
   if (esl_opt_ProcessCmdline(go, argc, argv) != eslOK ||
-      esl_opt_VerifyConfig(go)               != eslOK) 
+      esl_opt_VerifyConfig(go)               != eslOK)
     {
       printf("Failed to parse command line: %s\n", go->errbuf);
-      if (usage != NULL) esl_usage(stdout, argv[0], usage);
-      printf("\nTo see more help on available options, do %s -h\n\n", argv[0]);
+      if (usage != NULL) esl_usage(stdout, progname, usage);
+      printf("\nTo see more help on available options, do %s -h\n\n", progname);
       exit(1);
     }
-  if (esl_opt_GetBoolean(go, "-h") == TRUE) 
+  if (esl_opt_GetBoolean(go, "--version") == TRUE)
     {
-      if (banner != NULL) p7_banner(stdout, argv[0], banner);
-      if (usage  != NULL) esl_usage (stdout, argv[0], usage);
+      printf("%s %s\n", progname, HMMER_VERSION);
+      exit(0);
+    }
+  if (esl_opt_GetBoolean(go, "-h") == TRUE)
+    {
+      if (banner != NULL) p7_banner(stdout, progname, banner);
+      if (usage  != NULL) esl_usage (stdout, progname, usage);
       puts("\nOptions:");
       esl_opt_DisplayHelp(stdout, go, 0, 2, 80);
       exit(0);
     }
-  if (nargs != -1 && esl_opt_ArgNumber(go) != nargs) 
+  if (nargs != -1 && esl_opt_ArgNumber(go) != nargs)
     {
       puts("Incorrect number of command line arguments.");
-      esl_usage(stdout, argv[0], usage);
-      printf("\nTo see more help on available options, do %s -h\n\n", argv[0]);
+      esl_usage(stdout, progname, usage);
+      printf("\nTo see more help on available options, do %s -h\n\n", progname);
       exit(1);
     }
   return go;
@@ -217,6 +227,7 @@ utest_alphabet_config(int alphatype)
 static ESL_OPTIONS options[] = {
   /* name           type      default  env  range toggles reqs incomp  help                                       docgroup*/
   { "-h",        eslARG_NONE,   FALSE, NULL, NULL, NULL, NULL, NULL, "show brief help on version and usage",              0 },
+  { "--version", eslARG_NONE,   FALSE, NULL, NULL, NULL, NULL, NULL, "show version information and exit",                 0 },
   {  0, 0, 0, 0, 0, 0, 0, 0, 0, 0 },
 };
 static char usage[]  = "[-options]";
@@ -225,7 +236,7 @@ static char banner[] = "test driver for hmmer.c";
 int
 main(int argc, char **argv)
 {
-  ESL_GETOPTS *go = p7_CreateDefaultApp(options, 0, argc, argv, banner, usage);
+  ESL_GETOPTS *go = p7_CreateDefaultApp("hmmer_utest", options, 0, argc, argv, banner, usage);
 
   utest_alphabet_config(eslAMINO);
   utest_alphabet_config(eslDNA);

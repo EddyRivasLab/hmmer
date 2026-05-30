@@ -506,6 +506,7 @@ p7_bg_FilterScore(P7_BG *bg, const ESL_DSQ *dsq, int L, float *ret_sc)
 static ESL_OPTIONS options[] = {
   /* name           type      default  env  range     toggles      reqs   incomp  help   docgroup*/
   { "-h",        eslARG_NONE,   FALSE, NULL, NULL,      NULL,      NULL,    NULL, "show brief help on version and usage",      0 },
+  { "--version", eslARG_NONE,   FALSE, NULL, NULL,      NULL,      NULL,    NULL, "show version information and exit",         0 },
   { "-L",        eslARG_INT,    "400", NULL, "n>0",     NULL,      NULL,    NULL, "length of random target seqs",              0 },
   { "-N",        eslARG_INT,    "100", NULL, "n>0",     NULL,      NULL,    NULL, "number of random target seqs",              0 },
   {  0, 0, 0, 0, 0, 0, 0, 0, 0, 0 },
@@ -516,7 +517,7 @@ static char banner[] = "benchmark timing for calculating null model scores";
 int
 main(int argc, char **argv)
 {
-  ESL_GETOPTS    *go      = p7_CreateDefaultApp(options, 1, argc, argv, banner, usage);
+  ESL_GETOPTS    *go      = p7_CreateDefaultApp("p7_bg_benchmark", options, 1, argc, argv, banner, usage);
   ESL_STOPWATCH  *w       = esl_stopwatch_Create();
   char           *hmmfile = esl_opt_GetArg(go, 1);
   ESL_ALPHABET   *abc     = NULL;
@@ -609,6 +610,7 @@ utest_ReadWrite(ESL_RANDOMNESS *rng)
 static ESL_OPTIONS options[] = {
    /* name  type         default  env   range togs  reqs  incomp  help                docgrp */
   {"-h",  eslARG_NONE,    FALSE, NULL, NULL, NULL, NULL, NULL, "show help and usage",                            0},
+  {"--version", eslARG_NONE,    FALSE, NULL, NULL, NULL, NULL, NULL, "show version information and exit",        0},
   {"-s",  eslARG_INT,       "0", NULL, NULL, NULL, NULL, NULL, "set random number seed to <n>",                  0},
   {"-v",  eslARG_NONE,    FALSE, NULL, NULL, NULL, NULL, NULL, "show verbose commentary/output",                 0},
   { 0,0,0,0,0,0,0,0,0,0},
@@ -655,6 +657,7 @@ main(int argc, char **argv)
 static ESL_OPTIONS options[] = {
   /* name           type      default  env  range     toggles      reqs   incomp  help   docgroup*/
   { "-h",        eslARG_NONE,   FALSE, NULL, NULL,      NULL,      NULL,    NULL, "show brief help on version and usage",      0 },
+  { "--version", eslARG_NONE,   FALSE, NULL, NULL,      NULL,      NULL,    NULL, "show version information and exit",         0 },
   {  0, 0, 0, 0, 0, 0, 0, 0, 0, 0 },
 };
 static char usage[]  = "[-options] <hmmfile> <seqfile>";
@@ -663,7 +666,7 @@ static char banner[] = "example of calculating null model scores";
 int
 main(int argc, char **argv)
 {
-  ESL_GETOPTS    *go      = p7_CreateDefaultApp(options, 2, argc, argv, banner, usage);
+  ESL_GETOPTS    *go      = p7_CreateDefaultApp("p7_bg_example", options, 2, argc, argv, banner, usage);
   char           *hmmfile = esl_opt_GetArg(go, 1);
   char           *seqfile = esl_opt_GetArg(go, 2);
   ESL_ALPHABET   *abc     = NULL;

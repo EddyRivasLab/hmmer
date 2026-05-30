@@ -128,6 +128,7 @@ p7_Seqmodel(const ESL_ALPHABET *abc, ESL_DSQ *dsq, int M, char *name,
 static ESL_OPTIONS options[] = {
   /* name           type      default  env  range toggles reqs incomp  help                                       docgroup*/
   { "-h",        eslARG_NONE,   FALSE, NULL, NULL,      NULL,  NULL, NULL, "show brief help on version and usage",           0 },
+  { "--version", eslARG_NONE,   FALSE, NULL, NULL,      NULL,  NULL, NULL, "show version information and exit",              0 },
   { "-m",        eslARG_INFILE,  NULL, NULL, NULL,      NULL,  NULL, NULL, "use substitution score matrix file from <f>",    0 },
   { "-q",        eslARG_REAL,   "0.1", NULL, "0<=x<0.5",NULL,  NULL, NULL, "gap open probability",                           0 },
   { "-r",        eslARG_REAL,   "0.4", NULL, "0<=x<1",  NULL,  NULL, NULL, "gap extend probability",                         0 },
@@ -140,7 +141,7 @@ static char banner[] = "collect histograms of probabilistic S/W for E-value calc
 int 
 main(int argc, char **argv)
 {
-  ESL_GETOPTS    *go    = p7_CreateDefaultApp(options, 2, argc, argv, banner, usage);
+  ESL_GETOPTS    *go    = p7_CreateDefaultApp("seqmodel_experiment", options, 2, argc, argv, banner, usage);
   ESL_ALPHABET   *abc   = esl_alphabet_Create(eslAMINO);
   char           *hmmfile = esl_opt_GetArg(go, 1);
   char           *qfile = esl_opt_GetArg(go, 2);
@@ -280,6 +281,7 @@ utest_normalization(ESL_GETOPTS *go)
 static ESL_OPTIONS options[] = {
   /* name           type      default  env  range toggles reqs incomp  help                                       docgroup*/
   { "-h",        eslARG_NONE,   FALSE, NULL, NULL,  NULL,  NULL, NULL, "show brief help on version and usage",           0 },
+  { "--version", eslARG_NONE,   FALSE, NULL, NULL,  NULL,  NULL, NULL, "show version information and exit",              0 },
   {  0, 0, 0, 0, 0, 0, 0, 0, 0, 0 },
 };
 static char usage[]  = "[-options]";
@@ -288,7 +290,7 @@ static char banner[] = "unit test driver for seqmodel.c: single sequence query c
 int
 main(int argc, char **argv)
 {
-  ESL_GETOPTS    *go   = p7_CreateDefaultApp(options, 0, argc, argv, banner, usage);
+  ESL_GETOPTS    *go   = p7_CreateDefaultApp("seqmodel_utest", options, 0, argc, argv, banner, usage);
 
   utest_normalization(go);
 

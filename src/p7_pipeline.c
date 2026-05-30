@@ -1940,6 +1940,7 @@ p7_pli_Statistics(FILE *ofp, P7_PIPELINE *pli, ESL_STOPWATCH *w)
 static ESL_OPTIONS options[] = {
   /* name           type         default   env  range   toggles   reqs   incomp                             help                                                  docgroup*/
   { "-h",           eslARG_NONE,   FALSE, NULL, NULL,      NULL,  NULL,  NULL,                          "show brief help on version and usage",                         0 },
+  { "--version",    eslARG_NONE,   FALSE, NULL, NULL,      NULL,  NULL,  NULL,                          "show version information and exit",                            0 },
   { "-E",           eslARG_REAL,  "10.0", NULL, "x>0",     NULL,  NULL,  "--cut_ga,--cut_nc,--cut_tc",  "E-value cutoff for reporting significant sequence hits",       0 },
   { "-T",           eslARG_REAL,   FALSE, NULL, "x>0",     NULL,  NULL,  "--cut_ga,--cut_nc,--cut_tc",  "bit score cutoff for reporting significant sequence hits",     0 },
   { "-Z",           eslARG_REAL,   FALSE, NULL, "x>0",     NULL,  NULL,  NULL,                          "set # of comparisons done, for E-value calculation",           0 },
@@ -1965,7 +1966,7 @@ static char banner[] = "example of using acceleration pipeline in search mode (s
 int
 main(int argc, char **argv)
 {
-  ESL_GETOPTS  *go      = p7_CreateDefaultApp(options, 2, argc, argv, banner, usage);
+  ESL_GETOPTS  *go      = p7_CreateDefaultApp("p7_pipeline_example", options, 2, argc, argv, banner, usage);
   char         *hmmfile = esl_opt_GetArg(go, 1);
   char         *seqfile = esl_opt_GetArg(go, 2);
   int           format  = eslSQFILE_FASTA;
@@ -2079,6 +2080,7 @@ main(int argc, char **argv)
 static ESL_OPTIONS options[] = {
   /* name           type         default   env  range   toggles   reqs   incomp                             help                                                  docgroup*/
   { "-h",           eslARG_NONE,   FALSE, NULL, NULL,      NULL,  NULL,  NULL,                          "show brief help on version and usage",                         0 },
+  { "--version",    eslARG_NONE,   FALSE, NULL, NULL,      NULL,  NULL,  NULL,                          "show version information and exit",                            0 },
   { "-E",           eslARG_REAL,  "10.0", NULL, "x>0",     NULL,  NULL,  "--cut_ga,--cut_nc,--cut_tc",  "E-value cutoff for reporting significant sequence hits",       0 },
   { "-T",           eslARG_REAL,   FALSE, NULL, "x>0",     NULL,  NULL,  "--cut_ga,--cut_nc,--cut_tc",  "bit score cutoff for reporting significant sequence hits",     0 },
   { "-Z",           eslARG_REAL,   FALSE, NULL, "x>0",     NULL,  NULL,  NULL,                          "set # of comparisons done, for E-value calculation",           0 },
@@ -2104,7 +2106,7 @@ static char banner[] = "example of using acceleration pipeline in scan mode (HMM
 int
 main(int argc, char **argv)
 {
-  ESL_GETOPTS  *go      = p7_CreateDefaultApp(options, 2, argc, argv, banner, usage);
+  ESL_GETOPTS  *go      = p7_CreateDefaultApp("p7_pipeline_example2", options, 2, argc, argv, banner, usage);
   char         *hmmfile = esl_opt_GetArg(go, 1);
   char         *seqfile = esl_opt_GetArg(go, 2);
   int           format  = eslSQFILE_FASTA;
