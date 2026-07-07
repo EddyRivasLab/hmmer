@@ -7,13 +7,22 @@
 #     % make check
 #
 # Optionally, you can install programs and man pages more permanently:
+#     % ./configure --prefix=/your/path
 #     % make install
 #
 # Optionally, you can install some small tools ("miniapps") from our Easel library:
 #     % (cd easel; make install)
 #
-# For more information, see the Installation section in the User's Guide.
+# So the recommended overall procedure, to build, test, and install:
+# (installing programs in /your/path/bin, man pages in /your/path/share/man/man1/)
+#     % ./configure --prefix=/your/path
+#     % make
+#     % make check
+#     % make install
+#     % (cd easel; make install)
 #
+# For more information, see the Installation section in the User's Guide.
+
 
 
 # VPATH and shell configuration
@@ -44,7 +53,6 @@ datarootdir = @datarootdir@
 bindir      = @bindir@
 libdir      = @libdir@
 includedir  = @includedir@
-mandir      = @mandir@
 docdir      = @docdir@
 pdfdir      = @pdfdir@
 mandir      = @mandir@
@@ -91,15 +99,17 @@ all:
 	${QUIET_SUBDIR0}${ESLDIR}     ${QUIET_SUBDIR1} all
 	${QUIET_SUBDIR0}${SADIR}      ${QUIET_SUBDIR1} all
 	${QUIET_SUBDIR0}src           ${QUIET_SUBDIR1} all
+	${QUIET_SUBDIR0}documentation ${QUIET_SUBDIR1} all
 	${QUIET_SUBDIR0}profmark      ${QUIET_SUBDIR1} all
 
 # dev: compile all executables, including drivers.
 #
 dev:
-	${QUIET_SUBDIR0}${ESLDIR}  ${QUIET_SUBDIR1} dev
-	${QUIET_SUBDIR0}${SADIR}   ${QUIET_SUBDIR1} all
-	${QUIET_SUBDIR0}src        ${QUIET_SUBDIR1} dev
-	${QUIET_SUBDIR0}profmark   ${QUIET_SUBDIR1} dev
+	${QUIET_SUBDIR0}${ESLDIR}     ${QUIET_SUBDIR1} dev
+	${QUIET_SUBDIR0}${SADIR}      ${QUIET_SUBDIR1} all
+	${QUIET_SUBDIR0}src           ${QUIET_SUBDIR1} dev
+	${QUIET_SUBDIR0}documentation ${QUIET_SUBDIR1} all
+	${QUIET_SUBDIR0}profmark      ${QUIET_SUBDIR1} dev
 
 # tests: compile all test drivers for 'make check'
 #
@@ -124,6 +134,7 @@ pdf:
 
 # install: binaries in ${bindir}/, man pages in ${man1dir}/
 #          Creates these directories if they don't exist.
+#          ${man1dir} is created by documentation/man/Makefile `make install`.
 #
 #          Prefix paths with optional ${DESTDIR}, which
 #          downstream packagers may set on make command line when
@@ -132,7 +143,6 @@ pdf:
 #          Does not use quiet beautification magic; always verbose.
 install: all
 	if [ ! -d ${DESTDIR}${bindir} ]; then ${INSTALL} -d ${DESTDIR}${bindir}; fi
-	if [ ! -d ${DESTDIR}${man1dir} ]; then ${INSTALL} -d ${DESTDIR}${man1dir}; fi
 	${MAKE} -C src install
 	${MAKE} -C documentation install
 

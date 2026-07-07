@@ -276,8 +276,9 @@ hmmpgmd_GetRanges (RANGE_LIST *list, char *rangestr)  {
   rangestr_cpy_ptr = rangestr_cpy;
   while ( (status = esl_strtok(&rangestr_cpy, ",", &range) ) == eslOK) {
     status = esl_regexp_ParseCoordString(range, &pos1, &pos2);
-    if (status == eslESYNTAX) esl_fatal("--seqdb_ranges takes coords <from>..<to>; %s not recognized", range);
-    if (status == eslFAIL)    esl_fatal("Failed to find <from> or <to> coord in %s", range);
+    if (status == eslESYNTAX)   esl_fatal("--seqdb_ranges takes coords <from>..<to>; %s not recognized", range);
+    if (status == eslFAIL)      esl_fatal("Failed to find <from> or <to> coord in %s", range);
+    if (pos1 == 0 || pos2 == 0) esl_fatal("<from> and <to> must both be >=1");
     list->starts[list->N] = (uint32_t) pos1;
     list->ends[list->N]   = (uint32_t) pos2;
     list->N++;

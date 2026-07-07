@@ -310,9 +310,10 @@ main(int argc, char **argv)
 
   while ( (status = esl_strtok(&rangestr, ",", &range) ) == eslOK) {
     status = esl_regexp_ParseCoordString(range, &pos1, &pos2);
-    if (status == eslESYNTAX) esl_fatal("Range flags take coords <from>..<to>; %s not recognized", range);
-    if (status == eslFAIL)    esl_fatal("Failed to find <from> or <to> coord in %s", range);
-    if (pos1 > pos2)          esl_fatal("In range (%s) <from> can not be larger than <to>", range);
+    if (status == eslESYNTAX)   esl_fatal("Range flags take coords <from>..<to>; %s not recognized", range);
+    if (status == eslFAIL)      esl_fatal("Failed to find <from> or <to> coord in %s", range);
+    if (pos1 > pos2)            esl_fatal("In range (%s) <from> can not be larger than <to>", range);
+    if (pos1 == 0 || pos2 == 0) esl_fatal("<from> and <to> coords must both be 1..alen");
 
     if (pos1<min_mask_start) min_mask_start = pos1;
     if (pos2>max_mask_end)   max_mask_end   = pos2;

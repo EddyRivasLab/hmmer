@@ -722,8 +722,9 @@ static void *clientside_thread(void *arg)  // new version that reads exactly one
         int64_t start, end;
         status = esl_regexp_ParseCoordString(range, &start, &end);
         // These errors should never occur, because we sanity check-the range when receiving the search command
-        if (status == eslESYNTAX) client_msg_longjmp(data->sock_fd, eslEINVAL, &jmp_env,"--db_ranges takes coords <from>..<to>; %s not recognized", range);
-        if (status == eslFAIL)    client_msg_longjmp(data->sock_fd, eslEINVAL, &jmp_env,"Failed to find <from> or <to> coord in %s", range);
+        if (status == eslESYNTAX)   client_msg_longjmp(data->sock_fd, eslEINVAL, &jmp_env,"--db_ranges takes coords <from>..<to>; %s not recognized", range);
+        if (status == eslFAIL)      client_msg_longjmp(data->sock_fd, eslEINVAL, &jmp_env,"Failed to find <from> or <to> coord in %s", range);
+        if (start == 0 || end == 0) client_msg_longjmp(data->sock_fd, eslEINVAL, &jmp_env,"<from> and <to> coord must both be >= 1 in %s", range);
         if (start > end){
           client_msg_longjmp(data->sock_fd, eslEINVAL, &jmp_env,"Illegal range from %lu to %lu found in --db_ranges", start, end);
         }
@@ -1339,8 +1340,9 @@ int process_search(P7_SERVER_MASTERNODE_STATE *masternode, P7_SERVER_QUEUE_DATA 
         int64_t db_start, db_end, shard_start, shard_end;
         status = esl_regexp_ParseCoordString(range, &db_start, &db_end);
         // These errors should never occur, because we sanity check-the range when receiving the search command
-        if (status == eslESYNTAX) p7_Fail("--db_ranges takes coords <from>..<to>; %s not recognized", range);
-        if (status == eslFAIL)    p7_Fail("Failed to find <from> or <to> coord in %s", range);
+        if (status == eslESYNTAX)          p7_Fail("--db_ranges takes coords <from>..<to>; %s not recognized", range);
+        if (status == eslFAIL)             p7_Fail("Failed to find <from> or <to> coord in %s", range);
+        if (db_start == 0 || db_end == 0)  p7_Fail("<from> and <to> coord must both be >= 1 in %s", range);
         if(db_end < db_start){
           p7_Fail("Error: search range from %ld to %ld has negative length\n", db_start, db_end);
         }

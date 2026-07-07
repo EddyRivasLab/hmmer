@@ -11,7 +11,11 @@ ifndef V
 endif
 
 
-.PHONY: pdf install uninstall clean distclean
+.PHONY: all pdf install uninstall clean distclean
+.FORCE:
+
+all: .FORCE
+	${QUIET_SUBDIR0}man       ${QUIET_SUBDIR1} all
 
 pdf:
 	${QUIET_SUBDIR0}userguide ${QUIET_SUBDIR1} pdf
@@ -27,16 +31,9 @@ clean:
 	${QUIET_SUBDIR0}userguide ${QUIET_SUBDIR1} clean
 	${QUIET_SUBDIR0}man       ${QUIET_SUBDIR1} clean
 	-rm -f *~
-ifndef V
-	@echo '     ' CLEAN documentation
-endif
-
 
 distclean:
 	${QUIET_SUBDIR0}userguide ${QUIET_SUBDIR1} distclean
 	${QUIET_SUBDIR0}man       ${QUIET_SUBDIR1} distclean
 	-rm -f *~
 	-rm -f Makefile
-ifndef V
-	@echo '     ' CLEAN documentation
-endif

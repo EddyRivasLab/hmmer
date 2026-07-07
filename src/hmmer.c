@@ -86,6 +86,8 @@ p7_banner(FILE *fp, const char *progname, char *banner)
  *            specialized for HMMER. See documentation in 
  *            <easel/esl_getopts.c>.
  *
+ *            The <options> must include "-h" and "--version".
+ *
  * Args:      progname - program name to show in output (e.g. "hmmsearch"),
  *            options  - array of <ESL_OPTIONS> structures for getopts (must include -h, --version)
  *            nargs    - number of cmd line arguments expected (excl. of cmdname) If nargs = -1, the number

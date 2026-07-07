@@ -704,7 +704,6 @@ AC_CONFIG_FILES([ \
   easel/Makefile                \
   easel/miniapps/Makefile       \
   easel/testsuite/Makefile      \
-  easel/documentation/Makefile  \
   ])
 
 # Substitutions in Userguide .tex files
@@ -715,64 +714,6 @@ AC_CONFIG_FILES([ \
   documentation/userguide/titlepage_server.tex  \
   documentation/userguide/copyright.tex  \
   ])
-
-# Substitutions in HMMER man pages:
-# HMMER_VERSION, HMMER_DATE, HMMER_COPYRIGHT, HMMER_LICENSE, HMMER_URL
-AC_CONFIG_FILES([ \
-  documentation/man/alimask.man     \
-  documentation/man/hmmalign.man    \
-  documentation/man/hmmbuild.man    \
-  documentation/man/hmmc2.man       \
-  documentation/man/hmmclient.man       \
-  documentation/man/hmmconvert.man  \
-  documentation/man/hmmemit.man     \
-  documentation/man/hmmer.man       \
-  documentation/man/hmmfetch.man    \
-  documentation/man/hmmlogo.man     \
-  documentation/man/hmmpgmd.man     \
-  documentation/man/hmmpgmd_shard.man     \
-  documentation/man/hmmpress.man    \
-  documentation/man/hmmscan.man     \
-  documentation/man/hmmsearch.man   \
-  documentation/man/hmmserver.man   \
-  documentation/man/hmmsim.man      \
-  documentation/man/hmmstat.man     \
-  documentation/man/jackhmmer.man   \
-  documentation/man/nhmmer.man      \
-  documentation/man/nhmmscan.man    \
-  documentation/man/phmmer.man      \
-  ])
-
-# Substitutions in Easel man pages:
-# EASEL_VERSION, EASEL_DATE, EASEL_COPYRIGHT, EASEL_LICENSE, EASEL_URL
-#
-# TK TK   As of 3 Jul 2025 these are under re-development.
-#         Temporarily taking them out.  
-#
-dnl AC_CONFIG_FILES([ \
-dnl   easel/miniapps/esl-afetch.man      \
-dnl   easel/miniapps/esl-alimanip.man    \
-dnl   easel/miniapps/esl-alimap.man      \
-dnl   easel/miniapps/esl-alimask.man     \
-dnl   easel/miniapps/esl-alimerge.man    \
-dnl   easel/miniapps/esl-alipid.man      \
-dnl   easel/miniapps/esl-alirev.man      \
-dnl   easel/miniapps/esl-alistat.man     \
-dnl   easel/miniapps/esl-compalign.man   \
-dnl   easel/miniapps/esl-compstruct.man  \
-dnl   easel/miniapps/esl-construct.man   \
-dnl   easel/miniapps/esl-histplot.man    \
-dnl   easel/miniapps/esl-mask.man        \
-dnl   easel/miniapps/esl-mixdchlet.man   \
-dnl   easel/miniapps/esl-reformat.man    \
-dnl   easel/miniapps/esl-selectn.man     \
-dnl   easel/miniapps/esl-seqrange.man    \
-dnl   easel/miniapps/esl-seqstat.man     \
-dnl   easel/miniapps/esl-sfetch.man      \
-dnl   easel/miniapps/esl-ssdraw.man      \
-dnl   easel/miniapps/esl-weight.man      \
-dnl   easel/miniapps/easel-translate.man \
-dnl  ])
 
 AC_CONFIG_HEADERS([easel/decoy_config.h])   # Put this first to keep gnu 'autoheader' from overwriting a real config file.
 AC_CONFIG_HEADERS([src/p7_config.h])
