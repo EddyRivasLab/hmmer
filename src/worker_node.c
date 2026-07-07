@@ -2238,26 +2238,27 @@ typedef enum{
 // workernode_perform_search_or_scan
 // NOTE !! Only call this procedure from the main (control) thread.  It sends and receives MPI messages, and we've told
 // MPI that only one thread per node will do that
-static int workernode_perform_search_or_scan(P7_SERVER_WORKERNODE_STATE *workernode, P7_SERVER_COMMAND *the_command, ESL_ALPHABET *abc, MPI_Datatype *server_mpitypes){
-
-  int status; 
-  char *compare_obj_buff;
-  P7_PROFILE *gm=NULL;
-  ESL_SQ *seq=NULL;
-  int temp_pos =0;
-  #ifdef CHECK_MUTEXES
+static int
+workernode_perform_search_or_scan(P7_SERVER_WORKERNODE_STATE *workernode, P7_SERVER_COMMAND *the_command, ESL_ALPHABET *abc, MPI_Datatype *server_mpitypes)
+{
+  char       *compare_obj_buff = NULL;
+  P7_PROFILE *gm               = NULL;
+  ESL_SQ     *seq              = NULL;
+  int         temp_pos         = 0;
+  int         works_requested  = 0; 
+  int         works_received   = 0;
+  SEARCH_PROGRESS_ENUM stop    = run; 
+  char       *send_buf         = NULL;       // MPI buffer used to send hits to master
+  int         send_buf_length  = 100 * 1024; // size of the send buffer. Default to 100kB, send code will resize as necessary
+  char       *optsstring       = NULL;
+  int         status; 
+#ifdef CHECK_MUTEXES
   int lock_retval;
 #endif
 
-  int works_requested=0; 
-  int works_received=0;
-  SEARCH_PROGRESS_ENUM stop=run; 
   // get and unpack the query object
-  char *send_buf; // MPI buffer used to send hits to master
-  int send_buf_length = 100 * 1024; // size of the send buffer. Default to 100kB, send code will resize as necessary
   ESL_ALLOC(send_buf, send_buf_length * sizeof(char));
   ESL_ALLOC(compare_obj_buff, the_command->compare_obj_length);
-  
   MPI_Bcast(compare_obj_buff, the_command->compare_obj_length, MPI_CHAR, 0, MPI_COMM_WORLD);
   if(the_command->type == P7_SERVER_HMM_VS_SEQUENCES){ // caller ensures that command is either HMM_VS_SEQUENCES or 
   // SEQUENCES_VS_HMM before calling
@@ -2271,7 +2272,6 @@ static int workernode_perform_search_or_scan(P7_SERVER_WORKERNODE_STATE *workern
     }
   }
   // and the options string
-  char *optsstring;
   ESL_ALLOC(optsstring, the_command->options_length);
   MPI_Bcast(optsstring, the_command->options_length, MPI_CHAR, 0, MPI_COMM_WORLD);
 
@@ -2282,7 +2282,6 @@ static int workernode_perform_search_or_scan(P7_SERVER_WORKERNODE_STATE *workern
   if ((workernode->commandline_options = esl_getopts_Create(server_Client_Options))       == NULL)  p7_Die("Couldn't allocate memory in workernode_perform_search_or_scan");
   if ((status = esl_opt_ProcessSpoof(workernode->commandline_options, optsstring)) != eslOK) p7_Die("Error processing search options in workernode_perform_search_or_scan");
   if ((status = esl_opt_VerifyConfig(workernode->commandline_options))        != eslOK) p7_Die("Error processing search options in workernode_perform_search_or_scan");
-  free(optsstring);
 
   // request some work to start off with 
   workernode_request_Work(workernode->my_shard);
@@ -2602,17 +2601,14 @@ static int workernode_perform_search_or_scan(P7_SERVER_WORKERNODE_STATE *workern
   p7_server_workernode_end_search(workernode);
   
   free(compare_obj_buff);
+  free(optsstring);
   free(send_buf);
   return eslOK;
 
 ERROR:
-  if(compare_obj_buff != NULL){
-    free(compare_obj_buff);
-  }
-  if(optsstring != NULL){
-    free(optsstring);
-  }
-  return eslEMEM;
-
+  free(compare_obj_buff);
+  free(optsstring);
+  free(send_buf);
+  return status;
 }
 #endif

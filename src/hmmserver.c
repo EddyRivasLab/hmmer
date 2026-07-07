@@ -133,62 +133,61 @@ int main(int argc, char **argv){
        */
 	// If we get this far, we're the child process that was forked, so start the actual server
 
-	int provided=-1;
-	MPI_Init_thread(NULL, NULL, MPI_THREAD_FUNNELED, &provided);
+    int provided=-1;
+    MPI_Init_thread(NULL, NULL, MPI_THREAD_FUNNELED, &provided);
     if(provided != MPI_THREAD_FUNNELED){
         p7_Die("Unable to obtain required level of thread support from MPI\n");
     }
-	int num_nodes;
-	MPI_Comm_size(MPI_COMM_WORLD, &num_nodes);
+    int num_nodes;
+    MPI_Comm_size(MPI_COMM_WORLD, &num_nodes);
     // Make sure we're running with enough MPI ranks.  Must have at least one rank per shard plus one for the master node
     if(num_nodes-1 < esl_opt_GetInteger(go, "--num_shards")){
         p7_Die("Hmmserver was started with %d MPI ranks, but %d database shards were requested.  Hmmserver requires at least one rank (worker node) per shard plus one additional rank for the master node.\n", num_nodes, esl_opt_GetInteger(go, "--num_shards"));
     }
-	int my_rank;
-	MPI_Comm_rank(MPI_COMM_WORLD, &my_rank);
+    int my_rank;
+    MPI_Comm_rank(MPI_COMM_WORLD, &my_rank);
 
-	// define datatypes for the structures we'll use in communicating between nodes
-	MPI_Datatype server_mpitypes[P7_NUM_SERVER_MPITYPES];
+    // define datatypes for the structures we'll use in communicating between nodes
+    MPI_Datatype server_mpitypes[P7_NUM_SERVER_MPITYPES];
 
-	// First, the command type (P7_DAEMON_COMMAND)
-	P7_SERVER_COMMAND the_command;
+    // First, the command type (P7_DAEMON_COMMAND)
+    P7_SERVER_COMMAND the_command;
 
-	// P7_DAEMON_COMMAND is two unsigned 32-bit ints followed by two unsigned 64-bit ints
-	MPI_Datatype temp1[4] = {MPI_UNSIGNED, MPI_UNSIGNED, MPI_UNSIGNED_LONG_LONG, MPI_UNSIGNED_LONG_LONG};
-	MPI_Aint disp1[4];
+    // P7_DAEMON_COMMAND is two unsigned 32-bit ints followed by two unsigned 64-bit ints
+    MPI_Datatype temp1[4] = {MPI_UNSIGNED, MPI_UNSIGNED, MPI_UNSIGNED_LONG_LONG, MPI_UNSIGNED_LONG_LONG};
+    MPI_Aint disp1[4];
 
-	// compute displacements from the start of the structure to each element
-	disp1[0] = (MPI_Aint)&(the_command.type) - (MPI_Aint)&(the_command);
-	disp1[1] = (MPI_Aint)&(the_command.db) - (MPI_Aint)&(the_command);
-	disp1[2] = (MPI_Aint)&(the_command.compare_obj_length) - (MPI_Aint)&(the_command);
+    // compute displacements from the start of the structure to each element
+    disp1[0] = (MPI_Aint)&(the_command.type) - (MPI_Aint)&(the_command);
+    disp1[1] = (MPI_Aint)&(the_command.db) - (MPI_Aint)&(the_command);
+    disp1[2] = (MPI_Aint)&(the_command.compare_obj_length) - (MPI_Aint)&(the_command);
     disp1[3] = (MPI_Aint)&(the_command.options_length) - (MPI_Aint)&(the_command);
-	// block lengths for this structure (all 1)
-	int blocklen1[4] = {1,1,1,1};
+    // block lengths for this structure (all 1)
+    int blocklen1[4] = {1,1,1,1};
 
-	// now, define the type
-	MPI_Type_create_struct(4, blocklen1, disp1, temp1, &(server_mpitypes[P7_SERVER_COMMAND_MPITYPE]));
-	MPI_Type_commit(&(server_mpitypes[P7_SERVER_COMMAND_MPITYPE]));
+    // now, define the type
+    MPI_Type_create_struct(4, blocklen1, disp1, temp1, &(server_mpitypes[P7_SERVER_COMMAND_MPITYPE]));
+    MPI_Type_commit(&(server_mpitypes[P7_SERVER_COMMAND_MPITYPE]));
 
-	// P7_DAEMON_CHUNK_REPLY is two unsigned 64-bit ints
-	P7_SERVER_CHUNK_REPLY the_reply;
-	MPI_Datatype temp2[2] = {MPI_UNSIGNED_LONG_LONG, MPI_UNSIGNED_LONG_LONG};
-	MPI_Aint disp2[2];
+    // P7_DAEMON_CHUNK_REPLY is two unsigned 64-bit ints
+    P7_SERVER_CHUNK_REPLY the_reply;
+    MPI_Datatype temp2[2] = {MPI_UNSIGNED_LONG_LONG, MPI_UNSIGNED_LONG_LONG};
+    MPI_Aint disp2[2];
 
-	disp2[0] = (MPI_Aint)&(the_reply.start) - (MPI_Aint)&(the_reply);
-	disp2[1] = (MPI_Aint)&(the_reply.end) - (MPI_Aint)&(the_reply);
+    disp2[0] = (MPI_Aint)&(the_reply.start) - (MPI_Aint)&(the_reply);
+    disp2[1] = (MPI_Aint)&(the_reply.end) - (MPI_Aint)&(the_reply);
 
-	int blocklen2[2] = {1,1};
-	MPI_Type_create_struct(2, blocklen2, disp2, temp2, &(server_mpitypes[P7_SERVER_CHUNK_REPLY_MPITYPE]));
-	MPI_Type_commit(&(server_mpitypes[P7_SERVER_CHUNK_REPLY_MPITYPE]));
+    int blocklen2[2] = {1,1};
+    MPI_Type_create_struct(2, blocklen2, disp2, temp2, &(server_mpitypes[P7_SERVER_CHUNK_REPLY_MPITYPE]));
+    MPI_Type_commit(&(server_mpitypes[P7_SERVER_CHUNK_REPLY_MPITYPE]));
 
-	if(my_rank == 0){
-		// I'm the master node
-		p7_server_master_node_main(argc, argv, server_mpitypes, go);
-	}
-	else{
-		// I'm a worker
-		p7_server_workernode_main(argc, argv, my_rank, server_mpitypes, go);
-	}
+    if(my_rank == 0){
+      // I'm the master node
+      p7_server_master_node_main(argc, argv, server_mpitypes, go);
+    }
+    else{
+      // I'm a worker
+      p7_server_workernode_main(argc, argv, my_rank, server_mpitypes, go);
+    }
 #endif
-
 }

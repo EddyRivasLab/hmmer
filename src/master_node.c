@@ -1348,8 +1348,10 @@ int process_search(P7_SERVER_MASTERNODE_STATE *masternode, P7_SERVER_QUEUE_DATA 
         }
 
         /* The rangelist specifies the start and end of each range as positions within the overall database.  
-           Need to convert those into iindices within each shard's fraction of th edatabase */
-        if((db_end - db_start) +1 >= masternode->num_shards){ // Common case, every shard has at least one item to search
+         * Need to convert those into iindices within each shard's fraction of the database
+         */
+        search_length = db_end - db_start + 1;
+        if(search_length >= masternode->num_shards){ // Common case, every shard has at least one item to search
           if (which_shard < db_start % masternode->num_shards){
             shard_start = (db_start / masternode->num_shards) +1;
           }

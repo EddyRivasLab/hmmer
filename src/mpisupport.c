@@ -644,8 +644,9 @@ p7_profile_MPISend(P7_PROFILE *gm, int dest, int tag, MPI_Comm comm, char **buf,
 int p7_profile_MPIUnpack(char *buf, int n, int *position, MPI_Comm comm, ESL_ALPHABET **abc, P7_PROFILE **ret_profile)
 {
   int         M;
-  int status;
-  P7_PROFILE *gm;
+  P7_PROFILE *gm = NULL;
+  int         status;
+
   if (MPI_Unpack(buf, n, position, &M,                            1, MPI_INT,   comm) != 0) ESL_XEXCEPTION(eslESYS, "unpack failed");
   if (M == -1) { *ret_profile = NULL; return eslEOD; }
 
