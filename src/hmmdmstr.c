@@ -938,18 +938,17 @@ static void
 destroy_worker(WORKER_DATA *worker)
 {
   int i;
-  if (worker == NULL)
-  {
-    if (worker->err_buf  != NULL) free(worker->err_buf);
-    if (worker->hits != NULL){
-      for(i = 0; i < worker->allocated_hits; i++){
-        p7_hit_Destroy(worker->hits[i]);
-      }
-      free(worker->hits);
+  if (worker)
+    {
+      if (worker->hits)
+        {
+          for (i = 0; i < worker->allocated_hits; i++)
+            p7_hit_Destroy(worker->hits[i]);
+          free(worker->hits);
+        }
+      free(worker->err_buf);
+      free(worker);
     }
-    memset(worker, 0, sizeof(WORKER_DATA));
-    free(worker);
-  }
 }
 
 static void

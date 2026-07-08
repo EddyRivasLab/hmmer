@@ -976,18 +976,17 @@ forward_results(QUEUE_DATA_SHARD *query, SEARCH_RESULTS *results)
 static void
 destroy_worker(WORKER_DATA *worker)
 {
-  int i;
-  if (worker == NULL)
-  {
-    if (worker->err_buf  != NULL) free(worker->err_buf);
-    if (worker->hits != NULL){
-      for(i = 0; i < worker->allocated_hits; i++){
-        p7_hit_Destroy(worker->hits[i]);
-      }
+  if (worker)
+    {
+      if (worker->hits)
+        {
+          int i;
+          for(i = 0; i < worker->allocated_hits; i++)
+            p7_hit_Destroy(worker->hits[i]);
+        }
       free(worker->hits);
-    }
-    memset(worker, 0, sizeof(WORKER_DATA));
-    free(worker);
+      free(worker->err_buf);
+      free(worker);
   }
 }
 
