@@ -1,54 +1,38 @@
 # VPATH and shell configuration
 top_srcdir = @top_srcdir@
 srcdir     = @srcdir@
-VPATH      = @srcdir@ 
+VPATH      = @srcdir@
 SHELL      = /bin/sh
-
-# sources
-OBJS	       = divsufsort.o 
-TARGET	       = libdivsufsort.a
-MAKEFILE       = Makefile
 
 # options
 CC             = @CC@
-CFLAGS         = @CFLAGS@ 
-SSE_CFLAGS     = @SSE_CFLAGS@ 
-VMX_CFLAGS     = @VMX_CFLAGS@ 
-PTHREAD_CFLAGS = @PTHREAD_CFLAGS@ 
+CFLAGS         = @CFLAGS@
+SSE_CFLAGS     = @SSE_CFLAGS@
+VMX_CFLAGS     = @VMX_CFLAGS@
+PTHREAD_CFLAGS = @PTHREAD_CFLAGS@
 CPPFLAGS       = @CPPFLAGS@
 AR             = @AR@ rc
 RANLIB         = @RANLIB@
-INSTALL        = @INSTALL@
 
-# beautification magic stolen from git (added within hmmer source)
+# beautification magic
 ifndef V
+	QUIET         = @
 	QUIET_CC      = @echo '    ' CC $@;
 	QUIET_AR      = @echo '    ' AR $@;
 endif
 
+all:  libdivsufsort.a
 
-# targets
-all: $(TARGET) 
-$(TARGET): $(OBJS)
+libdivsufsort.a: divsufsort.o
+	${QUIET_AR}${AR} libdivsufsort.a divsufsort.o
+	${QUIET}${RANLIB} libdivsufsort.a
+	${QUIET}chmod 644 libdivsufsort.a
 
-.c.o:
+divsufsort.o: divsufsort.c divsufsort.h
 	${QUIET_CC}${CC} -I. ${CFLAGS} ${SSE_CFLAGS} ${VMX_CFLAGS} ${PTHREAD_CFLAGS} ${CPPFLAGS} -o $@ -c $<
 
-
-libdivsufsort.a: $(OBJS)
-	${QUIET_AR}${AR} libdivsufsort.a $(OBJS)
-	@${RANLIB} libdivsufsort.a
-	@chmod 644 libdivsufsort.a
-
-
 clean:
-	$(RM) $(TARGET) $(OBJS)
-ifndef V
-	@echo '     ' CLEAN libdivsufsort
-endif
-
+	${QUIET}-rm -f libdivsufsort.a divsufsort.o
 
 distclean:
-	$(RM) $(TARGET) $(OBJS) $(MAKEFILE) divsufsort.h
-
-
+	${QUIET}-rm -f libdivsufsort.a divsufsort.o Makefile divsufsort.h
