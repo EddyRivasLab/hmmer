@@ -11,7 +11,7 @@ SSE_CFLAGS     = @SSE_CFLAGS@
 VMX_CFLAGS     = @VMX_CFLAGS@
 PTHREAD_CFLAGS = @PTHREAD_CFLAGS@
 CPPFLAGS       = @CPPFLAGS@
-AR             = @AR@ rc
+AR             = @AR@ 
 RANLIB         = @RANLIB@
 
 # beautification magic
@@ -21,10 +21,12 @@ ifndef V
 	QUIET_AR      = @echo '    ' AR $@;
 endif
 
+.PHONY: all clean distclean
+
 all:  libdivsufsort.a
 
 libdivsufsort.a: divsufsort.o
-	${QUIET_AR}${AR} libdivsufsort.a divsufsort.o
+	${QUIET_AR}${AR} -r libdivsufsort.a divsufsort.o > /dev/null 2>&1
 	${QUIET}${RANLIB} libdivsufsort.a
 	${QUIET}chmod 644 libdivsufsort.a
 
@@ -32,7 +34,7 @@ divsufsort.o: divsufsort.c divsufsort.h
 	${QUIET_CC}${CC} -I. ${CFLAGS} ${SSE_CFLAGS} ${VMX_CFLAGS} ${PTHREAD_CFLAGS} ${CPPFLAGS} -o $@ -c $<
 
 clean:
-	${QUIET}-rm -f libdivsufsort.a divsufsort.o
+	-rm -f libdivsufsort.a divsufsort.o
 
-distclean:
-	${QUIET}-rm -f libdivsufsort.a divsufsort.o Makefile divsufsort.h
+distclean:  clean
+	-rm -f Makefile divsufsort.h

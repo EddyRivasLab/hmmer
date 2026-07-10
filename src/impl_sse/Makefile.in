@@ -20,8 +20,8 @@ LDFLAGS        = @LDFLAGS@
 DEFS           = @DEFS@
 LIBS           = -lhmmer -leasel @LIBS@ -lm
 
-AR          = @AR@ 
-RANLIB      = @RANLIB@
+AR             = @AR@ 
+RANLIB         = @RANLIB@
 
 ESLDIR         = @HMMER_ESLDIR@
 MYLIBDIRS      = -L../../${ESLDIR} -L.. 
@@ -85,11 +85,10 @@ ifndef V
 	QUIET_AR      = @echo '    ' AR $@;
 	QUIET_SUBDIR0 = +@subdir=
 	QUIET_SUBDIR1 = ; echo '    ' SUBDIR $$subdir; \
-		        ${MAKE} -s -C $$subdir
+		        ${MAKE} -C $$subdir
 endif
 
 .PHONY: all dev check tests distclean clean 
-
 
 all:   libhmmer-impl.stamp
 dev:   ${UTESTS} ${BENCHMARKS} ${EXAMPLES}
@@ -99,12 +98,10 @@ tests: ${UTESTS}
 libhmmer-impl.stamp: ${OBJS}
 	${QUIET_AR}${AR} -r ../libhmmer.a $? > /dev/null 2>&1
 	@${RANLIB} ../libhmmer.a
-	@echo "impl_lib objects compiled:\c" > $@
+	@printf 'impl_lib objects compiled:' > $@
 	@date >> $@
 
-.FORCE:
-
-${OBJS}:   ${HDRS} ../hmmer.h 
+${OBJS}:   ${HDRS} ../hmmer.h ../p7_config.h
 
 .c.o:  
 	${QUIET_CC}${CC} ${CFLAGS} ${PIC_CFLAGS} ${PTHREAD_CFLAGS} ${SSE_CFLAGS} ${CPPFLAGS} ${DEFS} ${MYINCDIRS} -o $@ -c $<
@@ -162,12 +159,9 @@ clean:
 	-rm -f ${EXAMPLES}
 	-rm -f *.o *~ Makefile.bak core TAGS gmon.out cscope.out
 	-rm -f *.gcno
-	for prog in ${UTESTS} ${BENCHMARKS} ${EXAMPLES}; do\
+	-for prog in ${UTESTS} ${BENCHMARKS} ${EXAMPLES}; do\
 	   if test -d $$prog.dSYM; then rm -rf $$prog.dSYM; fi;\
 	done
-ifndef V
-	@echo '     ' CLEAN impl_sse
-endif
 
 distclean: clean
 	-rm -f Makefile 

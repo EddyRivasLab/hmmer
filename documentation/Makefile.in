@@ -1,39 +1,37 @@
 top_srcdir     = @top_srcdir@
 srcdir         = @srcdir@
 VPATH          = @srcdir@
+SHELL          = /bin/sh
 
 QUIET_SUBDIR0 = +${MAKE} -C #space separator after -c
 QUIET_SUBDIR1 = 
 ifndef V
 	QUIET_SUBDIR0 = +@subdir=
 	QUIET_SUBDIR1 = ; echo '    ' SUBDIR $$subdir; \
-		        ${MAKE} -s -C $$subdir
+		        ${MAKE} -C $$subdir
 endif
 
 
 .PHONY: all pdf install uninstall clean distclean
-.FORCE:
 
-all: .FORCE
+all: 
 	${QUIET_SUBDIR0}man       ${QUIET_SUBDIR1} all
 
 pdf:
 	${QUIET_SUBDIR0}userguide ${QUIET_SUBDIR1} pdf
 
-# install, uninstall are always verbose; do not use quiet beautification
 install: 
-	${MAKE} -C man install
+	${QUIET_SUBDIR0}man ${QUIET_SUBDIR1} install
 
 uninstall:
-	${MAKE} -C man uninstall
+	${QUIET_SUBDIR0}man ${QUIET_SUBDIR1} uninstall
 
 clean:
 	${QUIET_SUBDIR0}userguide ${QUIET_SUBDIR1} clean
 	${QUIET_SUBDIR0}man       ${QUIET_SUBDIR1} clean
 	-rm -f *~
 
-distclean:
+distclean: clean
 	${QUIET_SUBDIR0}userguide ${QUIET_SUBDIR1} distclean
 	${QUIET_SUBDIR0}man       ${QUIET_SUBDIR1} distclean
-	-rm -f *~
 	-rm -f Makefile

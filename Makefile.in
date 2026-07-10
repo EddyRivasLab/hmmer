@@ -59,26 +59,13 @@ mandir      = @mandir@
 man1dir     = ${mandir}/man1
 man1ext     = .1
 
-# Compiler configuration
-#
-CC             = @CC@
-CFLAGS         = @CFLAGS@
-PTHREAD_CFLAGS = @PTHREAD_CFLAGS@
-NEON_CFLAGS    = @NEON_CFLAGS@
-SSE_CFLAGS     = @SSE_CFLAGS@
-VMX_CFLAGS     = @VMX_CFLAGS@
-LDFLAGS        = -static @LDFLAGS@
-CPPFLAGS       = @CPPFLAGS@
-
 # Other tools
 #
-AR        = @AR@
-RANLIB    = @RANLIB@
 INSTALL   = @INSTALL@
 
 # beautification magic stolen from git
 #
-QUIET_SUBDIR0 = +${MAKE} -C #space separator after -c
+QUIET_SUBDIR0 = +${MAKE} -C # space separator after -c
 QUIET_SUBDIR1 =
 ifndef V
 	QUIET         = @
@@ -87,10 +74,10 @@ ifndef V
 	QUIET_AR      = @echo '    ' AR $@;
 	QUIET_SUBDIR0 = +@subdir=
 	QUIET_SUBDIR1 = ; echo '    ' SUBDIR $$subdir; \
-		        ${MAKE} -s -C $$subdir
+		        ${MAKE} -C $$subdir
 endif
 
-.PHONY: all dev check pdf install install-strip uninstall clean distclean TAGS
+.PHONY: all dev tests check pdf install uninstall clean distclean TAGS
 
 # all: Compile all documented executables.
 #      (Excludes test programs.)
@@ -133,26 +120,10 @@ pdf:
 	${QUIET_SUBDIR0}documentation ${QUIET_SUBDIR1} pdf
 
 # install: binaries in ${bindir}/, man pages in ${man1dir}/
-#          Creates these directories if they don't exist.
-#          ${man1dir} is created by documentation/man/Makefile `make install`.
 #
-#          Prefix paths with optional ${DESTDIR}, which
-#          downstream packagers may set on make command line when
-#          building packages.
-#
-#          Does not use quiet beautification magic; always verbose.
 install: all
-	if [ ! -d ${DESTDIR}${bindir} ]; then ${INSTALL} -d ${DESTDIR}${bindir}; fi
-	${MAKE} -C src install
-	${MAKE} -C documentation install
-
-# install-strip: same as install, but strip binaries
-#
-install-strip: all
-	if [ ! -d ${DESTDIR}${bindir} ]; then ${INSTALL} -d ${DESTDIR}${bindir}; fi
-	if [ ! -d ${DESTDIR}${man1dir} ]; then ${INSTALL} -d ${DESTDIR}${man1dir}; fi
-	${MAKE} -C src install-strip
-	${MAKE} -C documentation install
+	${QUIET_SUBDIR0}src           ${QUIET_SUBDIR1} install
+	${QUIET_SUBDIR0}documentation ${QUIET_SUBDIR1} install
 
 # uninstall: reverses the steps of "make install".
 #
@@ -160,7 +131,8 @@ uninstall:
 	${MAKE} -C src uninstall
 	${MAKE} -C documentation uninstall
 
-# "make clean" removes almost everything except configuration files.
+# "make clean" removes build artifacts of "make":
+#              leaves the configuration (Makefiles, etc.)
 #
 clean:
 	${QUIET_SUBDIR0}src           ${QUIET_SUBDIR1} clean
@@ -169,29 +141,30 @@ clean:
 	${QUIET_SUBDIR0}documentation ${QUIET_SUBDIR1} clean
 	${QUIET_SUBDIR0}${ESLDIR}     ${QUIET_SUBDIR1} clean
 	${QUIET_SUBDIR0}${SADIR}      ${QUIET_SUBDIR1} clean
-	${QUIET}-rm -f *.o *~ Makefile.bak core TAGS TAGS.part gmon.out
-ifndef V
-	@echo '     ' CLEAN hmmer
-endif
+	-rm -f *.o *~ Makefile.bak core TAGS TAGS.part gmon.out
+	-rm -f cscope.po.out cscope.out cscope.in.out cscope.files
 
-# "make distclean" leaves a pristine source distribution.
+# "make distclean" leaves a pristine source distribution:
+#                  removes artifacts of "configure"
 #
-distclean:
+distclean: clean
 	${QUIET_SUBDIR0}src           ${QUIET_SUBDIR1} distclean
 	${QUIET_SUBDIR0}profmark      ${QUIET_SUBDIR1} distclean
 	${QUIET_SUBDIR0}testsuite     ${QUIET_SUBDIR1} distclean
 	${QUIET_SUBDIR0}documentation ${QUIET_SUBDIR1} distclean
 	${QUIET_SUBDIR0}${ESLDIR}     ${QUIET_SUBDIR1} distclean
 	${QUIET_SUBDIR0}${SADIR}      ${QUIET_SUBDIR1} distclean
-	${QUIET}-rm -f config.log config.status
-	${QUIET}-rm -rf autom4te.cache
-	${QUIET}-rm -f *.o *~ Makefile.bak core TAGS TAGS.part gmon.out
-	${QUIET}-rm -f cscope.po.out cscope.out cscope.in.out cscope.files
-	${QUIET}-rm -f src/impl
-	${QUIET}-rm Makefile
-ifndef V
-	@echo '     ' CLEAN hmmer
-endif
+	-rm -f config.log config.status
+	-rm -rf autom4te.cache
+	-rm -f src/impl
+	-rm Makefile
+
+# "make gitclean" leaves a pristine git repo:
+#                 removes artifacts of "autoconf"
+#
+gitclean:  distclean
+	-rm -rf configure
+
 
 TAGS:
 	./makeTAGS.sh

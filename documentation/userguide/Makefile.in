@@ -11,7 +11,6 @@ datarootdir = @datarootdir@
 bindir      = @bindir@
 libdir      = @libdir@
 includedir  = @includedir@
-mandir      = @mandir@
 docdir      = @docdir@
 pdfdir      = @pdfdir@
 mandir      = @mandir@
@@ -32,7 +31,7 @@ QUIET_SUBDIR1 =
 ifndef V
 	QUIET_SUBDIR0 = +@subdir=
 	QUIET_SUBDIR1 = ; echo '    ' SUBDIR $$subdir; \
-		        ${MAKE} -s -C $$subdir
+		        ${MAKE} -C $$subdir
 endif
 
 # ./configure puts HMMER .man pages in ${top_builddir}/documentation/man
@@ -111,7 +110,7 @@ TEXFILES =\
 	titlepage_daemon.tex \
 	tutorial.tex
 
-.PHONY: pdf manpages clean distclean TAGS
+.PHONY: pdf manpages clean distclean
 
 pdf:    Userguide.pdf Daemon_userguide.pdf Server_userguide.pdf
 
