@@ -1,7 +1,7 @@
 HMMER - Biological sequence analysis with profile hidden Markov models
-Copyright (C) 1992-2023 Sean R. Eddy
-Copyright (C) 2015-2023 President and Fellows of Harvard College
-Copyright (C) 2000-2023 Howard Hughes Medical Institute
+Copyright (C) 1992-2026 Sean R. Eddy
+Copyright (C) 2015-2026 President and Fellows of Harvard College
+Copyright (C) 2000-2025 Howard Hughes Medical Institute
 Copyright (C) 1995-2006 Washington University School of Medicine
 Copyright (C) 1992-1995 MRC Laboratory of Molecular Biology
 -----------------------------------------------------------------------
@@ -50,7 +50,7 @@ redistribution of HMMER.
 
 HMMER development is supported in part by the National Human Genome
 Research Institute of the US National Institutes of Health under grant
-number R01HG009116. The content is solely the responsibility of the
+number R01-HG009116. The content is solely the responsibility of the
 authors and does not necessarily represent the official views of the
 National Institutes of Health.
 

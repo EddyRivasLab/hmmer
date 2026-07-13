@@ -12,7 +12,7 @@ including many members of the
 
 To obtain HMMER releases, visit [hmmer.org](http://hmmer.org).
 
-To participate in HMMER development, visit us at
+To participate in HMMER development, visit 
 [github](https://github.com/EddyRivasLab/hmmer).  HMMER development
 also depends on the lab's Easel library, at
 [github](https://github.com/EddyRivasLab/easel).
@@ -23,7 +23,7 @@ also depends on the lab's Easel library, at
 ```
    % wget http://eddylab.org/software/hmmer/hmmer.tar.gz
    % tar zxf hmmer.tar.gz
-   % cd hmmer-3.4
+   % cd hmmer-3.5
    % ./configure --prefix /your/install/path   # replace /your/install/path with what you want, obv 
    % make
    % make check                                # optional: run automated tests

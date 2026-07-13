@@ -1,10 +1,10 @@
 Brief installation instructions 
-HMMER 3.4 (Aug 2023)
+HMMER 3.5 (Jul 2026)
 
-Starting from a source distribution, hmmer-3.4.tar.gz:
-   uncompress hmmer-3.4.tar.gz  
-   tar xf hmmer-3.4.tar
-   cd hmmer-3.4
+Starting from a source distribution, hmmer-3.5.tar.gz:
+   uncompress hmmer-3.5.tar.gz  
+   tar xf hmmer-3.5.tar
+   cd hmmer-3.5
    ./configure
    make
    make check                        # optional: automated tests

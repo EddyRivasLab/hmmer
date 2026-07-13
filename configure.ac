@@ -77,7 +77,7 @@ m4_include([easel/m4/esl_pic_flags.m4])
 # 2. AC_INIT
 ################################################################
 
-AC_INIT([HMMER],[3.4],[sean@eddylab.org],[hmmer])
+AC_INIT([HMMER],[3.5],[sean@eddylab.org],[hmmer])
 AC_MSG_NOTICE([Configuring HMMER3 for your system.])
 
 # remember if the user is overriding CFLAGS
@@ -109,8 +109,8 @@ fi
 # to use HMMER as a library inside other packages, with no name clashes.
 ################################################################
 
-HMMER_DATE="Aug 2023"
-HMMER_COPYRIGHT="Copyright (C) 2023 Howard Hughes Medical Institute."
+HMMER_DATE="Jul 2026"
+HMMER_COPYRIGHT="Copyright (C) 2026 Harvard University."
 HMMER_LICENSE="Freely distributed under the BSD open source license."
 HMMER_VERSION=$PACKAGE_VERSION
 HMMER_URL="http://hmmer.org/"
@@ -118,10 +118,10 @@ HMMER_URL="http://hmmer.org/"
 HMMER_ESLDIR="easel"
 HMMER_SADIR="libdivsufsort"
 
-EASEL_DATE="Aug 2023"
-EASEL_COPYRIGHT="Copyright (C) 2023 Howard Hughes Medical Institute."
+EASEL_DATE="Jul 2026"
+EASEL_COPYRIGHT="Copyright (C) 2026 Harvard University."
 EASEL_LICENSE="Freely distributed under the BSD open source license."
-EASEL_VERSION="0.49"
+EASEL_VERSION="0.50"
 EASEL_URL="http://bioeasel.org/"
 
 AC_SUBST(HMMER_DATE)
@@ -154,7 +154,7 @@ AC_DEFINE_UNQUOTED([EASEL_URL],       ["$EASEL_URL"],       [Easel web URL])
 
 # Figure out what host we're compiling on.
 # Three GNU scripts must be included in the distro:
-#       install.sh, config.guess, config.sub
+#       install-sh, config.guess, config.sub
 # This sets four shell variables:
 #       host            example: i686-pc-linux-gnu
 #       host_cpu        example: i686
