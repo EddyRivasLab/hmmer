@@ -241,7 +241,7 @@ Output the bit scores as a binary array of double-precision floats (8
 bytes per score) to file
 .IR <f> .
 Programs like Easel's 
-.B esl-histplot
+.B easel histplot
 can read such binary files. This is useful when generating extremely
 large sample sizes.
 

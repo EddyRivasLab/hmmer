@@ -38,7 +38,7 @@ HMM database
 flag). 
 A sequence database must be in hmmpgmd format, which may be
 produced using 
-.BR esl-reformat .
+.BR "easel reformat" .
 An HMM database is of the form produced by 
 .BR hmmbuild .
 The input database(s) will be loaded into memory by the 

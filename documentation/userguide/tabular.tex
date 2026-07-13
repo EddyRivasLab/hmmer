@@ -56,7 +56,7 @@ follows:\marginnote{The \mono{tblout} format is deliberately space-delimited
   model. High bias scores may be a red flag for a false positive,
   especially when the bias score is as large or larger than the
   overall bit score. It is difficult to correct for all possible ways
-  in which a nonrandom but nonhomologous biological sequences can
+  in which a nonrandom but nonhomologous biological sequence can
   appear to be similar, such as short-period tandem repeats, so there
   are cases where the bias correction is not strong enough (creating
   false positives).
@@ -73,7 +73,7 @@ follows:\marginnote{The \mono{tblout} format is deliberately space-delimited
 
 \item[\monob{(9) score (best 1 domain):}]  The bit score if only the
   single best-scoring domain envelope were found in the sequence, and
-  none of the others. (Inclusive of the null2 bias correction.]
+  none of the others. (Inclusive of the null2 bias correction.)
 
 \item[\monob{(10) bias (best 1 domain):}] The null2 bias correction
   that was applied to the bit score of the single best-scoring domain.
@@ -165,10 +165,10 @@ space-delimited fields} followed by a free text target sequence description, as 
   The position in the target sequence at which the surrounding envelope ends.
 
 \item[\monob{(11) sq len:}]
-  The length of the target sequence..
+  The length of the target sequence.
 
 \item[\monob{(12) strand:}]
-  The strand on which the hit was found (``-" when alifrom>ali to). 
+  The strand on which the hit was found (``-'' when alifrom>ali to).
   
 \item[\monob{(13) E-value:}] The expectation value
   (statistical significance) of the target, as above.
@@ -204,7 +204,7 @@ sequence name second (or vice versa), so \mono{hmmsearch} and
 \mono{hmmscan} tblout files were identical? Well, first of all, they
 still wouldn't be identical, because the target database size used for
 E-value calculations is different (number of target sequences for
-\mono{hmmsearch}, number of target profiles for \mono{hmmscan}, and
+\mono{hmmsearch}, number of target profiles for \mono{hmmscan}), and
   it's good not to forget this. Second, what about programs like
   \mono{phmmer} where the query is a sequence and the targets are also
   sequences?
@@ -268,7 +268,7 @@ description, as follows:
   to find with at least this particular domain's bit score, if the
   rest of those reported sequences were random nonhomologous sequence
   (i.e.\ outside the other domain(s) that were sufficient to
-  identified them as homologs in the first place)?
+  identify them as homologs in the first place)?
 
 \item[\monob{(13) i-Evalue:}] The ``independent E-value'', the
   E-value that the sequence/profile comparison would have received if

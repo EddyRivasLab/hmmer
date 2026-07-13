@@ -261,7 +261,7 @@ has a limitation that prevents it from reading
 MSA files as unaligned sequence files. If you need
 to do this, reformat the MSA file using something
 like the
-.B esl-reformat
+.B easel reformat
 miniapp.
 The string
 .I <fmt>

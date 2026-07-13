@@ -2,8 +2,10 @@
 
 \hyphenation{HMMER}
 
-\input{titlepage}                    % definitions for \maketitle 
-\bibliographystyle{unsrtnat-brief}   % customized natbib unsrtnat. Abbrev 3+ authors to ``et al.'' 
+\input{titlepage}                    % definitions for \maketitle
+\bibliographystyle{unsrtnat-brief}   % customized natbib unsrtnat. Abbrev 3+ authors to ``et al.''
+
+\fancyhead[LE]{\thepage\quad\smallcaps{HMMER \HMMERversion}} % verso running head: version, not author (\HMMERversion set in inclusions.def)
 
 \begin{document}
 \setcounter{tocdepth}{2}             % 0=chapters 1=sections 2=subsections 3=subsubsections? 4=paragraphs

@@ -111,7 +111,7 @@ def uniprot_relnotes(deffp):
         if not m: sys.exit('failed to identify UniProt/Swiss-Prot nseq')
         uniprot_nseq     = m.group(1)
 
-    print(r'\newcommand{{\UNIrelease}}{{{0}}}'.format(re.sub('_', r'\_', uniprot_release)), file=deffp)
+    print(r'\newcommand{{\UNIrelease}}{{{0}}}'.format(re.sub(r'_', r'\_', uniprot_release)), file=deffp)
     print(r'\newcommand{{\UNInseq}}{{{0}}}'.format(uniprot_nseq),                           file=deffp)
     print('', file=deffp)
 
@@ -130,7 +130,7 @@ def hmmscan_noargs(deffp):
     with open('hmmscan-noargs.out', 'w') as f:
         print(m.group(1), file=f, end='')
 
-    m = re.search('# HMMER\s+(\S+)\s+\((.+?)\);', r.stdout)
+    m = re.search(r'# HMMER\s+(\S+)\s+\((.+?)\);', r.stdout)
     print(r'\newcommand{{\HMMERversion}}{{{0}}}'.format(m.group(1)), file=deffp)
     print(r'\newcommand{{\HMMERdate}}{{{0}}}'.format(m.group(2)),     file=deffp)
     print('', file=deffp)
@@ -177,7 +177,7 @@ def hmmbuild_globins(deffp):
         # elide both horizontally and vertically. Among the regexp trickery here:
         #   \n matches newline if pattern is not a raw string; but then other regexp elems have to be \\S, etc
         #   (?:) is a non-capturing group, useful when you need the group for a {} repetition operator
-        content = re.sub('(\nHMM\\s+A\\s+C.+\n(?:.+\n){7})(?s:.+)\n((?:.+\n){3}//)',   '\\1...\n\\2', content)                       # Cuts every line between 1st and last state.
+        content = re.sub('(\nHMM\\s+A\\s+C.+\n(?:.+\n){7})(?s:.+)\n((?:.+\n){3}//)',   '\\1...\n\\2', content)                      # Cuts every line between 1st and last state.
         content = re.sub(r'(HMM(?:\s+\S\s{3}){7})(?:\s+\S\s{3}){11}(.+)',              r'\1 ... \2',  content)                       # Cuts columns in the HMM line
         content = re.sub(r'^(\s+COMPO(?:\s+\S+){7})(?:\s+\S+){11}(.+)$',               r'\1 ... \2',  content, flags=re.MULTILINE)   # Cuts columns in the COMPO line
         content = re.sub(r'^(\s+\d+(?:\s+\S+){7})(?:\s+\S+){11}(.+)$',                 r'\1 ... \2',  content, flags=re.MULTILINE)   # Cuts columns in the match lines
@@ -327,7 +327,7 @@ def hmmsearch_fn3_uniprot(deffp, domtbl1):
                        env={"PATH": "{0}/src".format(top_builddir)})
 
     # uniprot name is sp|P13368|7LESS_DROME
-    m = re.search('\n(>> \S+\|7LESS_DROME.+\n.+\n.+\n((?:\\s*\\d+.+\n)+))', r.stdout)   # .out: per-domain hit table (9 domains) for 7LESS_DROME, Uniprot search version
+    m = re.search('\n(>> \\S+\\|7LESS_DROME.+\n.+\n.+\n((?:\\s*\\d+.+\n)+))', r.stdout)   # .out: per-domain hit table (9 domains) for 7LESS_DROME, Uniprot search version
     if not m: sys.exit('bad pattern match to fn3 hmmsearch output')
     with open('hmmsearch-fn3-uniprot.out', 'w') as f:
         print(m.group(1), file=f, end='')

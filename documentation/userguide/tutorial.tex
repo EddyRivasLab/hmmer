@@ -8,9 +8,6 @@
 First let's do something useful and see it work, then we'll do a
 complete walkthrough.
 
-%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-\section{Tap, tap; is this thing on?}
-
 In the \mono{tutorial} subdirectory, \mono{globins4.sto} is an example
 of a basic Stockholm alignment file. \mono{hmmbuild} builds a profile
 from an alignment:\marginnote{\mono{hmmbuild} needs to be installed in
@@ -61,13 +58,13 @@ In rough order of importance, the HMMER programs are:
 \vspace{1ex}
 \begin{tabular}{rp{4in}}
 \monob{hmmbuild}    & build profile from input multiple alignment\\
-\monob{hmmalign}    & make multiple sequence alignment using a profile\\
 \monob{hmmsearch}   & search profile against sequence database\\
-\monob{hmmscan}     & search sequence against profile database\\
-\monob{hmmpress}    & prepare profile database for \mono{hmmscan}\\
 \monob{phmmer}      & search single sequence against sequence database\\
 \monob{jackhmmer}   & iteratively search single sequence against database\\
 \monob{nhmmer}      & search DNA query against DNA sequence database\\
+\monob{hmmalign}    & make multiple sequence alignment using a profile\\
+\monob{hmmscan}     & search sequence against profile database\\
+\monob{hmmpress}    & prepare profile database for \mono{hmmscan}\\
 \monob{nhmmscan}    & search DNA sequence against a DNA profile database\\
 \monob{hmmfetch}    & retrieve profile(s) from a profile file \\
 \monob{hmmstat}     & show summary statistics for a profile file \\
@@ -98,7 +95,6 @@ but is capable of searching long, chromosome-size target DNA
 sequences.  \mono{nhmmscan} is the equivalent of \mono{hmmscan},
 capable of using chromosome-size DNA sequences as a query into a
 profile database.
-\marginnote{\mono{nhmmer} and \mono{nhmmscan} were added in HMMER3.1.}
 
 
 
@@ -125,7 +121,7 @@ chapter, I will assume that you have installed them (with \mono{make
 If you haven't installed the HMMER programs, you need to specify both
 the program name and a path to it. This tutorial chapter assumes
 that you're in the \mono{tutorial} subdirectory, where the tutorial
-example data files are. From \mono{tutorial} , the relative
+example data files are. From \mono{tutorial}, the relative
 path to the compiled programs is \mono{../src/}. So instead of just
 typing \mono{hmmbuild}, you could do: \marginnote{The \mono{\%}
   represents your command prompt. It's not part of what you type.}
@@ -209,7 +205,7 @@ unaligned sequence file formats include \mono{fasta}, \mono{uniprot},
 \mono{genbank}, \mono{ddbj}, and \mono{embl}. Accepted multiple
 alignment file formats include \mono{stockholm}, \mono{afa}
 (i.e.\ aligned FASTA), \mono{clustal}, \mono{clustallike} (MUSCLE,
-etc.), \mono{a2m}, \mono{phylip} (interleaved), \mono{phylips}
+etc.), \mono{a2m|a3m}, \mono{phylip} (interleaved), \mono{phylips}
 (sequential), \mono{psiblast}, and \mono{selex}. These formats are
 described in detail in a later chapter. Where applicable, the programs
 have command line options for asserting an input format and skipping
@@ -222,7 +218,7 @@ files. Where applicable, the programs have options (usually
 \mono{-{}-rna}, \mono{-{}-dna}, \mono{-{}-amino}) for asserting the
 input alphabet type.
 
-For more information in HMMER input files and formats, see the formats
+For more information on HMMER input files and formats, see the formats
 chapter on page \pageref{chapter:formats}.
  
 
@@ -248,7 +244,7 @@ database flatfile containing many alignments. The Pfam database, for
 example, distributes a single file containing representative
 alignments for thousands of sequence families.\marginnote{The Easel
   miniapps provide tools for manipulating alignment files, such as
-  \mono{esl-afetch} for extracting one alignment by name or accession
+  \mono{easel afetch} for extracting one alignment by name or accession
   from a Pfam file.}
 
 You ran \mono{hmmbuild} to build a profile from that
@@ -286,7 +282,7 @@ The new profile was saved to \mono{globins4.hmm}. If you were to look at
 this file (and you don't have to -- it's intended for HMMER's
 consumption, not yours), you'd see something like:
 
-   \xsreoutput{inclusions/hmmbuild-globins.out2}
+   \xtinysreoutput{inclusions/hmmbuild-globins.out2}
 
 The HMMER ASCII save file format is defined on
 page~\pageref{section:savefiles}.
@@ -398,7 +394,7 @@ member of a multidomain family because it contains multiple
 weakly-scoring domains, even if no single domain is solidly
 significant on its own.  On the other hand, if the target sequence
 happened to be a piece of junk consisting of a set of identical
-internal repeats, and one of those repeats accidentially gives a weak
+internal repeats, and one of those repeats accidentally gives a weak
 hit to the query profile, all the repeats will sum up and the sequence
 score might look ``significant''.\sidenote{Mathematically, alas, the
   correct answer: the null hypothesis we're testing against is that
@@ -511,9 +507,9 @@ significance of the sequence in the \emph{whole} database search, if
 this were the only domain we had identified. It's exactly the same as
 the ``best 1 domain'' E-value in the sequence top hits list.
 
-The different between the two E-values is not apparent in the
+The difference between the two E-values is not apparent in the
 \mono{7LESS\_DROME} example because in both cases, the size of the
-search space as 1 sequence. There's a single sequence in the target
+search space is 1 sequence. There's a single sequence in the target
 sequence database (that's the size of the search space that the
 independent/best single domain E-value depends on). There's one
 sequence reported as a putative homolog in the sequence top hits list
@@ -546,7 +542,7 @@ E-values $\leq 10$). If we were to assume that all \SFSdomZ{} are true
 homologs, x out the domain(s) that made us think that, and then went
 looking for \emph{additional} domains in those \SFSdomZ{} sequences, we'd be
 searching a smaller database of \SFSdomZ{} sequences: the expected number of
-times we'd see a hit of \SFSmaxsc{} bits or better is now \SFSievalue{} $\times$
+times we'd see a hit of \SFSmaxsc{} bits or better would now be \SFSievalue{} $\times$
 \SFSdomZ{} $=$ \SFSucevalue.\marginnote{If you calculate this
   yourself, you may see some small discrepancies
 due to floating point roundoff.} That's where the conditional E-value (c-Evalue) is
@@ -692,7 +688,7 @@ deletion, which you'd intuitively expect.
 
 You'll also see expected alignment accuracy degrade at the ends of an
 alignment -- this is because ``alignment accuracy'' posterior
-probabilities currently not only includes whether the residue is
+probabilities currently not only include whether the residue is
 aligned to one profile position versus others, but also confounded with
 whether a residue should be considered to be homologous (aligned to
 the profile somewhere) versus not homologous at all.\marginnote{It may
@@ -910,7 +906,7 @@ automating lots of searches and you want to be sure that they worked.
 \section{Searching a profile database with a query sequence}
 
 Rather than searching a single profile against a collection of
-sequences, you might want to wish to annotate a single sequence by
+sequences, you might wish to annotate a single sequence by
 searching it against a collection of profiles of different domains.
 \mono{hmmscan} takes as input a query file containing one or more
 sequences to annotate, and a profile database to search them against.
@@ -997,8 +993,8 @@ on our Harvard cluster):
 
    \vspace{1ex}
    \begin{fullwidth}
-   \user{\indent \% sbatch -J hmmbuild -e hmmbuild.err -o hmmbuild.out -p eddy -n 128 -t 6-00:00 --mem-per-cpu=4000 \textbackslash}\\
-   \user{\indent   --wrap="srun -n 128 --mpi=pmi2 ./hmmbuild --mpi Pfam-A.hmm Pfam-A.seed"}
+   \user{\% sbatch -J hmmbuild -e hmmbuild.err -o hmmbuild.out -p eddy -n 128 -t 6-00:00 --mem-per-cpu=4000 \textbackslash}\\
+   \user{   --wrap="srun -n 128 --mpi=pmi2 ./hmmbuild --mpi Pfam-A.hmm Pfam-A.seed"}
    \end{fullwidth}
    \vspace{1em}
 
@@ -1176,7 +1172,7 @@ gaps.  This is because there are two different kinds of columns:
 ``match'' columns in which residues are assigned to match states and
 gaps are treated as deletions relative to consensus, and ``insert''
 columns where residues are assigned to insert states and gaps in other
-sequences are just padding for the alignment to accomodate those
+sequences are just padding for the alignment to accommodate those
 insertions. In a match column, residues are upper case, and a '-'
 character means a deletion relative to the consensus. In an insert
 column, residues are lower case, and a '.' is padding.  A '-' deletion
@@ -1195,7 +1191,7 @@ residues and gap characters \marginnote{By default, \mono{hmmalign}
   \mono{-{}-allcol} option. This can be helpful if you're writing a
   postprocessor that's trying to keep track of what columns are
   assigned to what match states in the profile.}.  In input files, in
-most alignment formats\sidenote[][1ex]{A2M format is an important exception!} HMMER is
+most alignment formats\sidenote[][1ex]{A2M|A3M format is an important exception.} HMMER is
 case-insensitive, and it does not distinguish between different gap
 characters: '-' (dash), '.' (period), or even '\_' (underscore) are
 accepted as gap characters.
@@ -1203,7 +1199,7 @@ accepted as gap characters.
 Important: insertions relative to a profile are
 \emph{unaligned}. Suppose one sequence has an insertion of length 10
 and another has an insertion of length 2 in the same place in the
-profile. The alignment will have ten insert columns, to accomodate the
+profile. The alignment will have ten insert columns, to accommodate the
 longest insertion.  The residues of the shorter insertion are thrown
 down in an arbitrary order.\marginnote[2ex]{By arbitrary HMMER convention,
   the insertion is divided in half; half is left-justified, and the
@@ -1341,7 +1337,7 @@ a sequence alignment, or a single sequence.
 If a sequence or alignment is used as query input, \mono{nhmmer}
 internally produces the profile for that alignment\marginnote{Using
   default hmmbuild parameters; if you want more control, explicitly
-  built the profile with hmmbuild.}, then searches with that
+  build the profile with hmmbuild.}, then searches with that
 profile. The profile produced in this way can be written to a file
 specified by the \mono{-{}-hmmout} flag.
 
@@ -1467,7 +1463,7 @@ Finally, nhmmer reports the speed of the search in units of Mc/sec
 elapsed time.
 
 \mono{nhmmscan} is to \mono{hmmscan} as \mono{nhmmer} is to
-\mono{hmmsearch}.  There is not currently a iterative DNA search
+\mono{hmmsearch}.  There is not currently an iterative DNA search
 analog to \mono{jackhmmer}.
 
 

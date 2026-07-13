@@ -109,7 +109,7 @@ fi
 # to use HMMER as a library inside other packages, with no name clashes.
 ################################################################
 
-HMMER_DATE="Jul 2026"
+HMMER_DATE="July 2026"
 HMMER_COPYRIGHT="Copyright (C) 2026 Harvard University."
 HMMER_LICENSE="Freely distributed under the BSD open source license."
 HMMER_VERSION=$PACKAGE_VERSION
@@ -118,7 +118,7 @@ HMMER_URL="http://hmmer.org/"
 HMMER_ESLDIR="easel"
 HMMER_SADIR="libdivsufsort"
 
-EASEL_DATE="Jul 2026"
+EASEL_DATE="July 2026"
 EASEL_COPYRIGHT="Copyright (C) 2026 Harvard University."
 EASEL_LICENSE="Freely distributed under the BSD open source license."
 EASEL_VERSION="0.50"

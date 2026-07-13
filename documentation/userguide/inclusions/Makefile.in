@@ -23,8 +23,7 @@ TUTORIAL_FILES = \
 	fn3.sto       \
 	globins45.fa
 
-.PHONY: clean distclean
-
+.PHONY: all clean distclean
 
 all:
 	./gen-includes.py
@@ -32,10 +31,6 @@ all:
 clean:
 	-rm -f ${TMPFILES}
 	-rm -f ${TUTORIAL_FILES}
-ifndef V
-	@echo '     ' CLEAN inclusions
-endif
-
 
 distclean: clean
 	-rm -f Makefile

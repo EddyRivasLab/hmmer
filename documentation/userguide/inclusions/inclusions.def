@@ -1,8 +1,8 @@
-\newcommand{\UNIrelease}{2022\_02}
-\newcommand{\UNInseq}{567,483}
+\newcommand{\UNIrelease}{2025\_03}
+\newcommand{\UNInseq}{573,661}
 
-\newcommand{\HMMERversion}{3.4}
-\newcommand{\HMMERdate}{Aug 2023}
+\newcommand{\HMMERversion}{3.5}
+\newcommand{\HMMERdate}{Jul 2026}
 
 \newcommand{\BGLnseq}{4}
 \newcommand{\BGLalen}{171}
@@ -12,19 +12,19 @@
 \newcommand{\BGLre}{0.589}
 
 \newcommand{\HMMERfmtversion}{f}
-\newcommand{\HMMERsavestamp}{[3.4 | Aug 2023]}
+\newcommand{\HMMERsavestamp}{[3.5 | Jul 2026]}
 
-\newcommand{\SGUevalue}{4.9e-65}
+\newcommand{\SGUevalue}{5e-65}
 \newcommand{\SGUbitscore}{223.2}
 \newcommand{\SGUbias}{0.1}
 \newcommand{\SGUorigscore}{223.3}
 \newcommand{\SGUdombitscore}{223.0}
 \newcommand{\SGUseqname}{HBB\_GORGO}
 \newcommand{\SGUmsvpass}{3.7}
-\newcommand{\SGUbiaspass}{17124}
-\newcommand{\SGUvitpass}{2331}
-\newcommand{\SGUfwdpass}{1129}
-\newcommand{\SGUelapsed}{1.6}
+\newcommand{\SGUbiaspass}{17301}
+\newcommand{\SGUvitpass}{2358}
+\newcommand{\SGUfwdpass}{1147}
+\newcommand{\SGUelapsed}{14.7}
 
 \newcommand{\SFSevalue}{5.6e-57}
 \newcommand{\SFSbitscore}{176.4}
@@ -38,17 +38,17 @@
 \newcommand{\SFSmaxsc}{46.2}
 \newcommand{\SFSievalue}{2.3e-16}
 \newcommand{\SFSuievalue}{1.3e-10}
-\newcommand{\SFSdomZ}{800}
+\newcommand{\SFSdomZ}{808}
 \newcommand{\SFSucevalue}{1.9e-13}
 \newcommand{\SFSaidx}{1}
 \newcommand{\SFSascore}{-1.9}
 \newcommand{\SFSaevalue}{0.24}
-\newcommand{\SFSauevalue}{192}
+\newcommand{\SFSauevalue}{194}
 \newcommand{\SFSacoords}{395-410}
 \newcommand{\SFSbidx}{6}
 \newcommand{\SFSbscore}{0.4}
 \newcommand{\SFSbevalue}{0.045}
-\newcommand{\SFSbuevalue}{36.0}
+\newcommand{\SFSbuevalue}{36.4}
 \newcommand{\SFSbcoords}{1742-1769}
 \newcommand{\SFSainsig}{4.6}
 \newcommand{\SFSbinsig}{8.9}

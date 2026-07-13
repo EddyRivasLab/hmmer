@@ -68,7 +68,7 @@ A multiple sequence alignment of a homologous family of protein
 domains reveals patterns of site-specific evolutionary
 conservation. Key residues may be highly conserved at certain
 positions; some positions may tolerate certain substitutions while
-conserving physiochemical properties like hydrophobicity, charge, or
+conserving physicochemical properties like hydrophobicity, charge, or
 size; some positions may be evolutionarily near-neutral and variable;
 insertions and deletions are tolerated at some positions better than
 others.  A \textbf{profile} is a position-specific scoring model that
@@ -96,7 +96,7 @@ typical protein domain, and these thousands of parameters are
 estimated for one particular sequence family alignment, not averaged
 across all of them. Early profile methods were vexed by a lack of
 theoretical underpinnings for how to parameterize these models
-effectively, especially for insertion and deletions.
+effectively, especially for insertions and deletions.
 
 In the 1990's, Anders Krogh, David Haussler, and co-workers at UC
 Santa Cruz recognized a parallel between profiles and widely used
@@ -185,7 +185,7 @@ The use of ensemble algorithms shows up in several HMMER features:
 
 \paragraph{Explicit representation of alignment uncertainty.}
   When HMMER shows an alignment, it also calculates how much
-  probability mass that this alignment has in the ensemble -- which
+  probability mass this alignment has in the ensemble -- which
   means HMMER can annotate a probabilistic confidence in an alignment,
   or in each individual aligned residue. Some downstream analyses that
   depend on alignments (such as phylogenetic tree inference) benefit
@@ -202,7 +202,7 @@ The use of ensemble algorithms shows up in several HMMER features:
 \paragraph{Different speed heuristics.} The ensemble (Forward) algorithm is more
   computationally intensive than optimal alignment algorithms.
   HMMER3's acceleration strategy is quite different from
-  BLAST's.\cite{Eddy11}.  HMMER implements heuristic accelerations of
+  BLAST's\cite{Eddy11}.  HMMER implements heuristic accelerations of
   the HMM Forward algorithm using vectorization technology available
   on modern processors.\vspace{1em}
 
@@ -285,10 +285,6 @@ GitHub.\sidenote{\href{http://github.com/EddyRivasLab/hmmer}{github.com/EddyRiva
 The GitHub issue tracker is the best way to give me suggestions,
 feature requests, bug reports, and pull requests.
 
-\textbf{Cryptogenomicon}\sidenote{\href{http://cryptogenomicon.org/}{cryptogenomicon.org}}
-  is a blog where I sometimes talk about issues as they arise in HMMER, and
-where you can comment or follow the discussion.
-
 
 
 
@@ -296,8 +292,8 @@ where you can comment or follow the discussion.
 \section{How to cite HMMER}
 
 There has never been a paper on the HMMER software.\sidenote{And the
-  way things are going, there may never be!}  The best citation is to
-the web site, \url{hmmer.org}.
+  way things are going, there may never be.}  The best citation is to
+the web site, \href{http://hmmer.org}{hmmer.org}.
 
 You should also cite what version of the software you used. I archive
 all old versions, so anyone should be able to obtain the version you
@@ -374,81 +370,6 @@ recompile the code yourself. You may or may not want to do this.
 
 
 
-%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-\section{When's HMMER4 coming?}
-
-HMMER4 has been in development since 2011.\sidenote{OK, \emph{slow}
-  development, but hey.} Some of the stuff it will include:
-
-\paragraph{The return of glocal alignment.} Slow old HMMER2 was
- capable of ``glocal'' alignment, in which it would align a complete
- profile to a subsequence of a target sequence; this was great for
- annotating domain structure of protein sequences, among other things.
- In developing our speed heuristic for HMMER3, for numerical reasons,
- I had to sacrifice glocal alignment; HMMER3 \emph{only} does local
-alignment. In HMMER4, I've solved the problems that prevented H3 from
-using glocal alignment. H4 uses a new \emph{dual-mode} profile
-architecture, combining local and glocal alignment modes in a single
-probability model.
-
-\paragraph{Memory efficiency.} The HMMER ensemble alignment
-algorithms (the HMM Forward and Backward algorithms) are expensive in
-memory. For most uses, you don't notice, but there are extreme cases
-where you may. H3 can require as much as $\sim 36L^2$ bytes of memory
-for a query sequence of length $L$, and for a 35Kaa titin sequence,
-that's 44GB of RAM. In HMMER4, I've solved this with a variety of old
-and new techniques.
-
-\paragraph{Ensemble calculations everywhere.} HMMER uses ensemble
-calculations (i.e., integrates over alignment uncertainty) for scoring
-homologous sequences and for calculating the confidence in individual
-aligned residues. However, when it decides how many domains are in a
-sequence, and where they are, it uses an \emph{ad hoc} procedure that
-uses ensemble information, but is not well defined. In HMMER4, we've
-solved that problem with a new domain definition algorithm.
-
-\paragraph{More processor support.} One of the attractive features of the
-HMMER ``MSV'' acceleration algorithm is that it is a very tight and
-efficient piece of code. The bad news is, it's a very tight and
-efficient piece of \emph{assembly} code. We have to write
-processor-specific SIMD vector instructions for each platform that
-HMMER runs on. HMMER currently only supports x86 (Intel/AMD) and
-PowerPC platforms (big-endian AIX PowerPC's, not the newer crop of
-little-endian Linux PowerPC's). HMMER4 will also include support for
-Linux/PowerPC and ARM NEON. It also can use the latest x86 vector
-instructions (AVX and AVX-512).
-
-\paragraph{Better parallelization.} HMMER is so fast that it's often
-input-bound, rather than CPU-bound: that is, it takes longer just to
-get the sequences from your disk than it takes to compare them to a
-profile. That's been taxing the simple parallelization methods we
-use. HMMER's multithreaded parallelization really doesn't scale well
-beyond 2-4 processors, on most machines; and possibly worse, if you're
-on a slow filesystem (for example, if you're reading data from a
-network filesystem instead of from local disk). In H4, we're working
-on improving our parallelization and our data input.
-
-
-
-
-
-%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-\section{What's still missing}
-
-Two of the more important holes for me are:
-
-\paragraph{Translated comparisons.} I'd love to have the HMM
-equivalents of BLASTX, TBLASTN, and TBLASTX. They'll come. In the
-meantime, I translate DNA sequence to six frames, and search
-hypothetical ORFs as protein sequences.
-
-\paragraph{Profile/profile comparison.} A number of pioneering papers and
-software packages have demonstrated the power of profile/profile
-comparison for even more sensitive remote homology detection.  Check
-out HHBLITS from Johannes S\"oding's
-group.\sidenote{\href{https://toolkit.tuebingen.mpg.de/\#/tools/hhblits}{toolkit.tuebingen.mpg.de/\#/tools/hhblits}}
-
-
 
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 \section{How to avoid using this software (links to similar software)}
@@ -459,10 +380,9 @@ scoring matrix methods are available, including:
 \begin{center}
 \begin{tabular}{lp{5in}l}
 Software  &   URL \\ \hline
-HH-SUITE  & \href{http://www.soeding.genzentrum.lmu.de/software-and-servers-2/}{www.soeding.genzentrum.lmu.de/software-and-servers-2}\\
+HH-SUITE  & \href{https://soedinglab-hh-suite.mintlify.app/}{soedinglab-hh-suite.mintlify.app}\\
 PSI-BLAST & \href{https://blast.ncbi.nlm.nih.gov/}{blast.ncbi.nlm.nih.gov}\\
 PFTOOLS   & \href{http://web.expasy.org/pftools/}{web.expasy.org/pftools}\\
-SAM       & \href{https://compbio.soe.ucsc.edu/sam.html}{compbio.soe.ucsc.edu/sam.html}\\
 \end{tabular}
 \end{center}
 

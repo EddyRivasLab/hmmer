@@ -18,7 +18,7 @@ want to use optional configuration or installation parameters.
 
 The easiest way to install HMMER is to install a precompiled package
 for your operating system.\sidenote{Thanks to all the people who do
-  the packaging!}
+  the packaging.}
 Some examples that I know of:
 
 \vspace{1ex}
@@ -57,7 +57,7 @@ you might need something like \mono{sudo make install} when you get to
 that part below). If you want to install somewhere else, you want to
 set a different install directory prefix using \mono{./configure
   {-}{-}prefix /your/install/path}, so programs and man pages will be
-installed in \mono{/your/install/path/bin}
+installed in \mono{/your/install/path/bin} and
 \mono{/your/install/path/share/man/man1/} respectively.\sidenote{These
   directories will be created, if they didn't already exist.}  For
 example, you might do \mono{./configure {-}{-}prefix=\$\{HOME\}}, for
@@ -67,17 +67,18 @@ directory.
 
 So, to configure and compile:
 
-  \vspace{1ex}
+
+  \vspace{1ex} 
   \user{\% ./configure {-}{-}prefix=/your/install/path}\\
   \user{\% make}
-  \vspace{1ex}
+  \vspace{1ex} 
 
 Optionally, to compile and run a test suite\sidenote{The test suite
-  uses scripts, and requires that you have \mono{python3} and
-  \mono{perl}. We haven't encountered any systems without perl.  If
-  you don't have \mono{python3}, \mono{make check} will fail and tell
-  you so. But HMMER is still fine, and you can install it -- running
-  the test suite is optional!}:
+uses scripts, and requires that you have \mono{python3} and
+\mono{perl}. We haven't encountered any systems without perl.  If
+you don't have \mono{python3}, \mono{make check} will fail and tell
+you so. But HMMER is still fine, and you can install it -- running
+the test suite is optional.}:
 
   \vspace{1ex}
   \user{\% make check}
@@ -99,7 +100,7 @@ Infernal, for example). To install Easel miniapps and their man pages
 too:
 
   \vspace{1ex}
-  \user{\% cd easel; make install} 
+  \user{\% (cd easel; make install)} 
   \vspace{1ex}
 
 If you decide you did something wrong after the \mono{./configure},
@@ -110,9 +111,7 @@ restore the distribution to a pristine state, and you can start again.
 \section{Geeky: compile source from our github repository}
 
 Alternatively, you can clone our git repository master
-branch:\sidenote{As of 3.2, our git master branch is the stable
-  current release, as the git deities prefer. This wasn't true for us
-  in the past.}
+branch:
   
   \vspace{1ex}
   \user{\% git clone https://github.com/EddyRivasLab/hmmer hmmer-\HMMERversion{}} \\
@@ -174,8 +173,8 @@ processors since 2000 and AMD processors since 2003.
 Altivec/VMX is supported on Motorola G4, IBM G5, and IBM PowerPC
 processors starting with the Power6, which includes almost all
 PowerPC-based desktop systems since 1999 and servers since
-2007.\sidenote{If your platform does not support either of these
-  vector instruction sets -- or if you're on a ppc64le system that
+2007.\sidenote{If your platform does not support any of these
+  vector instruction sets -- like, if you're on a ppc64le system that
   supports VMX but in little-endian byte order -- the configure script
   will stop with an error message.}
 
@@ -187,7 +186,7 @@ were big-endian. More recent Power 8 and 9 machines are ``bi-endian'',
 bootable into either a big-endian or little-endian system. IBM has
 stated that it really, really wants them to all be in little-endian
 mode. Among common Linux/PowerPC distros, Debian, Fedora, Red Hat, and
-openSUSE still come in either ppc64 and ppc64le flavors; HMMER3 will
+openSUSE still come in either ppc64 or ppc64le flavors; HMMER3 will
 run on the former but not the latter. Recent Ubuntu and SUSE for
 PowerPC distros are only coming in ppc64le flavor, incompatible with
 H3.
@@ -204,21 +203,21 @@ We depend on IEEE754-compliant floating point math.\sidenote{With one
   highly technical exception; on x86-compatible CPUs, we deliberately
   turn on a CPU mode called FTZ (flush-to-zero).}  Most C compilers,
 including gcc and clang, are IEEE754-compliant by default. \textbf{Do
-  not use their \mono{\-\-fast-math} option.} The Intel compiler icc/icx
+  not disable IEEE-754 compliance with the \mono{\-\-fast-math} option.} The Intel compiler icc/icx
 defaults to using an unsafe ``fast-math'' mode. If you want to use an
-Intel compiler, you must turn on IEEE754 compliance with an option
+Intel compiler, you must turn on strict IEEE754 compliance with an option
 such as \mono{-fp-model strict}; for example, you could configure for
 Intel icx with \mono{./configure CC=icx CFLAGS='-O3 -fp-model=strict'}.
 
 
 \paragraph{Libraries and other installation requirements:}
-HMMER3 does not have any dependencies other than a C compiler.  It
-does not require any additional libraries to be installed by you,
-other than standard ANSI C99 libraries that are already present on a
-system with a C99 compiler.
+HMMER3 does not have any dependencies other than a C compiler and GNU
+make. HMMER3 does not require any additional libraries to be installed
+by you, other than standard ANSI C99 libraries that are already
+present on a system with a C99 compiler.
 
 The HMMER distribution is bundled with a software library from our lab
-called Easel.\sidenote{\href{http://bioeasel.org}{bioeasel.org}}
+called Easel.\sidenote{\href{https://github.com/EddyRivasLab/easel}{github.com/EddyRivasLab/easel}}
 Bundling Easel instead of making it a separate installation
 requirement simplifies installation. Easel is also included in other
 software from our lab. For example,
@@ -228,15 +227,14 @@ probably only want to do that once, from the most recent version of
 HMMER, Infernal, or Easel itself, to avoid clobbering a newer version
 with an older one.
 
-Our configuration and compilation process uses standard UNIX
-utilities. Although these utilities are \emph{supposed} to be
-available on all POSIX-compliant systems, there are always a few
-crufty old dinosaurs still running out there that do not support all
-the features that our \mono{./configure} script and Makefiles are
-expecting. We do aim to build cleanly on anything from supercomputers
-to Ebay'ed junk, but if you have an old system, you may want to hedge
-your bets and install up-to-date versions of GNU command line tools
-such as GNU make and GNU grep.
+Our configuration and compilation process uses standard GNU-flavored
+UNIX utilities. Although these utilities are generally available on
+all POSIX-compliant systems, there are always a few crufty old
+dinosaurs still running out there that do not support all the features
+that our \mono{./configure} script and Makefiles are expecting. We do
+aim to build cleanly on anything from supercomputers to Ebay'ed junk,
+but if you have an old system, you may need to install up-to-date
+versions of GNU command line tools such as GNU make and GNU grep.
 
 Running the test suite (and some of our development tools, if you
 delve deep into our codebase) requires Perl and Python3 to be
@@ -245,8 +243,8 @@ installed.  If you don't have them (which should be rare), \mono{make
 \mono{make install} will still work fine.
 
 Compiling the user guide itself (this document) does require
-additional tools to be installed, including \mono{rman} and some extra
-\LaTeX\ packages, described below.
+additional tools to be installed, including \mono{pandoc} and some
+extra \LaTeX\ packages, described below.
 
 
 \subsection{Multicore parallelization is (almost always) default}
@@ -313,8 +311,8 @@ processors at most. Improving MPI scaling is something we're working on.
 \subsection{Using build directories}
 
 The configuration and compilation process from source supports the use
-of separate build trees, using the GNU-standard \mono{VPATH}
-mechanism. This allows you to do separate builds for different
+of separate build trees, using the \mono{VPATH} mechanism in GNU
+\mono{make}. This allows you to do separate builds for different
 processors or with different configuration/compilation options. All
 you have to do is run the configure script from the directory you want
 to be the root of your build tree.  For example:
@@ -327,7 +325,7 @@ to be the root of your build tree.  For example:
   \vspace{1ex}
 
 This assumes you have a \mono{make} that supports \mono{VPATH}. If your
-system's \mono{make} does not, you can install GNU make.
+system's \mono{make} does not, install GNU make.
 
 
 \subsection{Makefile targets}
@@ -363,26 +361,22 @@ system's \mono{make} does not, you can install GNU make.
 \subsection{Compiling the user guide}
 
 Compiling this User Guide from its source \LaTeX\ requires \LaTeX, of
-course, and also the \mono{rman} program from
-\mono{PolyGlotMan}.\sidenote{\href{https://sourceforge.net/projects/polyglotman/}{sourceforge.net/projects/polyglotman}}
-It use a customized version of the
+course, and also the \mono{pandoc} software.
+\sidenote{\href{https://pandoc.org/}{pandoc.org}}
+It uses a customized version of the
 Tufte-LaTeX book class\sidenote{\href{https://tufte-latex.github.io/tufte-latex/}{tufte-latex.github.io/tufte-latex}}
 (which we include in our source code, so you don't have to
 install it), and the Tufte-LaTeX package depends on some optional \LaTeX\ packages
 listed at the
 Tufte-LaTeX site.
 These packages are typically included in bundles in
-standard \LaTeX\ distributions such as
-TeX Live.\sidenote{\href{https://www.tug.org/texlive/}{www.tug.org/texlive}}
-You can probably
-identify a short list of basic plus extra \LaTeX\ stuff you need to install on your machine. For
-example, on my Mac OS/X laptop, using the MacPorts
-package manager:\sidenote{\href{https://www.macports.org/}{www.macports.org}}
+standard \LaTeX\ distributions.
+For example, on my Mac OS/X laptop, using the HomeBrew
+package manager:\sidenote{\href{https://brew.sh/}{brew.sh}}
 
   \vspace{1ex}
-  \user{\% sudo port install texlive}\\              
-  \user{\% sudo port install texlive-latex-extra}\\
-  \user{\% sudo port install rman}                 
+  \user{\% brew install mactex}\\              
+  \user{\% brew install pandoc}                 
   \vspace{1ex}
 
 Once you have these dependencies, doing:
@@ -398,7 +392,9 @@ in the subdirectory \mono{documentation/userguide}.
 \subsection{What gets installed by \mono{make install}, and where?}
 
 HMMER only installs programs and man pages. There are 18 programs in
-HMMER and 22 in Easel (the Easel ``miniapps''), each with a man page.
+HMMER and 1 in Easel (the Easel ``miniapps'' program, `easel`).  Each
+HMMER program has a man page, and each of the $\sim$30 Easel miniapp
+commands has a man page.
 
 Each program is free-standing. Programs don't depend on any details of
 where other files are installed, and they will run fine no matter
@@ -414,8 +410,8 @@ directories where \mono{make install} installs things:
 \vspace{1em}
 \begin{tabular}{ll}
 Variable             & What       \\ \hline
-\monobi{bindir}       & programs   \\
-\monobi{man1dir}      & man pages  \\
+\monoi{bindir}       & programs   \\
+\monoi{man1dir}      & man pages  \\
 \end{tabular}
 \vspace{1em}
 
@@ -425,12 +421,12 @@ Coding Standards, as follows:
 \vspace{1em}
 \begin{tabular}{lll}
 Variable              & Default                          & \mono{./configure} option \\ \hline
-\monobi{prefix}        & \mono{/usr/local}               & \mono{-{}-prefix}         \\
-\monobi{exec\_prefix}  & \monoi{prefix}                  & \mono{-{}-exec\_prefix}   \\
-\monobi{bindir}        & \monoi{exec\_prefix}\mono{/bin} & \mono{-{}-bindir}         \\
-\monobi{datarootdir}   & \monoi{prefix}\mono{/share}     & \mono{-{}-datarootdir}    \\
-\monobi{mandir}        & \monoi{datarootdir}\mono{/man}  & \mono{-{}-mandir}         \\
-\monobi{man1dir}       & \monoi{mandir}\mono{/man1}      & \mono{-{}-man1dir}        \\
+\monoi{prefix}        & \mono{/usr/local}               & \mono{-{}-prefix}         \\
+\monoi{exec\_prefix}  & \monoi{prefix}                  & \mono{-{}-exec\_prefix}   \\
+\monoi{bindir}        & \monoi{exec\_prefix}\mono{/bin} & \mono{-{}-bindir}         \\
+\monoi{datarootdir}   & \monoi{prefix}\mono{/share}     & \mono{-{}-datarootdir}    \\
+\monoi{mandir}        & \monoi{datarootdir}\mono{/man}  & \mono{-{}-mandir}         \\
+\monoi{man1dir}       & \monoi{mandir}\mono{/man1}      & \mono{-{}-man1dir}        \\
 \end{tabular}
 \vspace{1em}
 
@@ -562,7 +558,7 @@ workaround is to shut threading off:
   \user{\% ./configure {-}{-}disable-threads}
   \vspace{1ex}
 
-This will compile code won't parallelize across multiple cores, of
+This will compile code that won't parallelize across multiple cores, of
 course, but it will still work fine on a single processor at a time
 (and MPI, if you build with MPI enabled).
 

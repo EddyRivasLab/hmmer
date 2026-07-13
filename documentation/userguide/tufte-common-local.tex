@@ -1,8 +1,28 @@
-% additional customization of tufte-latex package 
+% additional customization of tufte-latex package
 
 \usepackage{fancybox}
 \usepackage{relsize}
 \usepackage{fancyvrb}
+
+% Letterspacing fix for XeLaTeX.
+%   Under XeTeX, tufte-common.def deliberately skips the microtype-based
+%   `letterspace' package and falls back to `soul' for the small-caps/all-caps
+%   letterspacing in running heads (see the \NOT\boolean{@tufte@xetex} guard).
+%   But `soul' can't cope with the braced \MakeTextLowercase{...} that
+%   \smallcaps produces, and it fails at every page break with a cryptic
+%   "! Argument of \MakeTextLowercase has an extra }" (really soul's
+%   "Reconstruction failed"). microtype's \textls works fine under XeTeX, so
+%   we reinstate the letterspace path here (this file is \input after tufte's
+%   own soul setup). pdflatex is unaffected.
+%
+\ifxetex
+  \RequirePackage{letterspace}%
+  \renewcommand{\allcapsspacing}[1]{\textls[200]{#1}}%
+  \renewcommand{\smallcapsspacing}[1]{\textls[50]{#1}}%
+  \renewcommand{\allcaps}[1]{\allcapsspacing{\MakeTextUppercase{#1}}}%
+  \renewcommand{\smallcaps}[1]{\smallcapsspacing{\scshape\MakeTextLowercase{#1}}}%
+  \renewcommand{\textsc}[1]{\smallcapsspacing{\textsmallcaps{#1}}}%
+\fi
 
 
 \hypersetup{colorlinks,
@@ -58,10 +78,11 @@
 \newcommand{\monoi}[1]{{\smaller\itshape\texttt{#1}}}           % meta (to be substituted): vars, options, args
 \newcommand{\monob}[1]{{\smaller\bfseries\texttt{#1}}}          % emphasized literals
 \newcommand{\monobi}[1]{{\smaller\bfseries\itshape\texttt{#1}}} % emphasized variables
-\newcommand{\user}[1]{\indent\indent\monob{#1}}                 % user-typed command line, on its own line
+\newcommand{\user}[1]{\noindent\hspace*{2\parindent}\monob{#1}} % user-typed command line, on its own line
 
 
 \CustomVerbatimCommand{\xsreoutput}{VerbatimInput}{fontsize=\scriptsize,xleftmargin=2.0\parindent}%
+\CustomVerbatimCommand{\xtinysreoutput}{VerbatimInput}{fontsize=\tiny,xleftmargin=2.0\parindent}%
 \DefineVerbatimEnvironment{sreoutput}{Verbatim}{fontsize=\scriptsize,xleftmargin=2.0\parindent}%
 \DefineVerbatimEnvironment{tinysreoutput}{Verbatim}{fontsize=\tiny,xleftmargin=2.0\parindent}%
 
@@ -88,18 +109,8 @@
 % The ``wideitem'' environment is mostly obsolete, but
 % it gets used in converted manpages.
 % 
-\newenvironment{wideitem}{\begin{list} 
+\newenvironment{wideitem}{\begin{list}
      {}
      { \setlength{\labelwidth}{2in}\setlength{\leftmargin}{1.5in}}}
      {\end{list}}
-
-% The following are used as temp vars in how man pages are 
-% converted into LaTeX w/ rman; see ``make manpages'' in Makefile.
-%
-% (Obsolete now, I think)
-\newlength{\sresavei}
-\newlength{\sresaves}
-
-
-
 
