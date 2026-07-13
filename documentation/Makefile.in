@@ -3,7 +3,7 @@ srcdir         = @srcdir@
 VPATH          = @srcdir@
 SHELL          = /bin/sh
 
-QUIET_SUBDIR0 = +${MAKE} -C #space separator after -c
+QUIET_SUBDIR0 = +${MAKE} -C #space separator after -C
 QUIET_SUBDIR1 = 
 ifndef V
 	QUIET_SUBDIR0 = +@subdir=

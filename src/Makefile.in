@@ -242,7 +242,7 @@ EXAMPLES = \
 	p7_spensemble_example
 
 # beautification magic stolen from git
-QUIET_SUBDIR0 = +${MAKE} -C #space separator after -c
+QUIET_SUBDIR0 = +${MAKE} -C #space separator after -C
 QUIET_SUBDIR1 =
 ifndef V
 	QUIET_CC      = @echo '    ' CC $@;
