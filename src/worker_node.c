@@ -851,38 +851,32 @@ int server_set_shard(P7_SERVER_WORKERNODE_STATE *workernode, P7_SHARD *the_shard
 }
 
 
-/* Creates the threads for the workernode */
-int p7_server_workernode_create_threads(P7_SERVER_WORKERNODE_STATE *workernode){
+/* Creates the threads for the workernode
+ */
+int
+p7_server_workernode_create_threads(P7_SERVER_WORKERNODE_STATE *workernode)
+{
+  P7_SERVER_WORKER_ARGUMENT *the_argument = NULL;
   int i;
-  int status;  // error return value in ESL_ALLOC
-  // allocate space for pthread_t objects
+  int status;
+
   ESL_ALLOC(workernode->thread_objs, workernode->num_threads * sizeof(pthread_t));
-    
-  pthread_attr_t attr;
-  //create pthread attribute structure
-  if(pthread_attr_init(&attr)){
-    p7_Die("Couldn't create pthread attr structure in p7_server_workernode_create_threads");
-  }
 
-  for(i = 0; i < workernode->num_threads; i++){
-
-    // Set up the arguments to the thread
-    P7_SERVER_WORKER_ARGUMENT *the_argument;
-    ESL_ALLOC(the_argument, sizeof(P7_SERVER_WORKER_ARGUMENT));
-    the_argument->my_id = i;
-    the_argument->workernode = workernode;
-
-    if(pthread_create(&(workernode->thread_objs[i]), &attr, p7_server_worker_thread, (void *) the_argument)){
-      p7_Die("Unable to create thread %d in p7_server_workernode_create_threads", i);
+  for (i = 0; i < workernode->num_threads; i++)
+    {
+      ESL_ALLOC(the_argument, sizeof(P7_SERVER_WORKER_ARGUMENT));
+      the_argument->workernode = workernode;
+      the_argument->my_id = i;
+      if (pthread_create(&(workernode->thread_objs[i]), NULL, p7_server_worker_thread, (void *) the_argument))  // allocation control for the_argument passes to the thread
+        p7_Die("Unable to create thread %d in p7_server_workernode_create_threads", i); 
+      the_argument = NULL;
     }
-    pthread_attr_destroy(&attr);
-  }
-
   return eslOK;
-// GOTO target used to catch error cases from ESL_ALLOC because we're too low-tech to write in C++
+
 ERROR:
-  p7_Die("Unable to allocate memory in p7_server_workernode_create_threads");
-  return eslFAIL; // silence compiler warning on Mac
+  free(workernode->thread_objs);
+  workernode->thread_objs = NULL;
+  return status;
 }
 
 
