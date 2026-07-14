@@ -1207,7 +1207,7 @@ clientside_loop(CLIENTSIDE_ARGS *data)
 
     /* the options string can handle an optional database */
     if (esl_opt_ArgNumber(opts) > 0) {
-      client_msg_longjmp(data->sock_fd, status, &jmp_env, "Incorrect number of command line arguments.");
+      client_msg_longjmp(data->sock_fd, eslEINVAL, &jmp_env, "Incorrect number of command line arguments.");
     }
 
     if (esl_opt_IsUsed(opts, "--seqdb")) {
@@ -1233,7 +1233,7 @@ clientside_loop(CLIENTSIDE_ARGS *data)
 
     } else if (strncmp(ptr, "HMM", 3) == 0) {
       if (esl_opt_IsUsed(opts, "--hmmdb")) {
-        client_msg_longjmp(data->sock_fd, status, &jmp_env, "A HMM cannot be used to search a hmm database");
+        client_msg_longjmp(data->sock_fd, eslEINCOMPAT, &jmp_env, "A HMM cannot be used to search a hmm database");
       }
 
       /* try to parse the buffer as an hmm */

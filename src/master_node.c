@@ -651,7 +651,7 @@ static void *clientside_thread(void *arg)  // new version that reads exactly one
   opt_str = (char *) malloc(slen +10);  //This does not need to get freed in this function if we're doing a search.  It gets added to the query
   // data structure, which is freed after the query has been completed
   if (opt_str == NULL){
-    client_msg(data->sock_fd, status, "Unable to allocate memory for options string. This is a fatal error");
+    client_msg(data->sock_fd, eslEMEM, "Unable to allocate memory for options string. This is a fatal error");
   }
   if(*ptr == '!'){ // opt_string for command gets created differently than search
     if(slen > 0){
@@ -676,7 +676,7 @@ static void *clientside_thread(void *arg)  // new version that reads exactly one
 #endif
 
   if (!setjmp(jmp_env)) {
-    if ((opts = esl_getopts_Create(server_Client_Options))       == NULL)  client_msg_longjmp(data->sock_fd, status,  &jmp_env,"Failed to create search options object");
+    if ((opts = esl_getopts_Create(server_Client_Options))       == NULL)  client_msg_longjmp(data->sock_fd, eslEMEM,  &jmp_env,"Failed to create search options object");
     if ((status = esl_opt_ProcessSpoof(opts, opt_str)) != eslOK) client_msg_longjmp(data->sock_fd, status, &jmp_env, "Failed to parse options string: %s", opts->errbuf);
     if ((status = esl_opt_VerifyConfig(opts))         != eslOK) client_msg_longjmp(data->sock_fd, status, &jmp_env, "Failed to parse options string: %s", opts->errbuf);
     if (*ptr == '!') {
@@ -862,7 +862,7 @@ static void *clientside_thread(void *arg)  // new version that reads exactly one
 
     else if (*ptr == '*'){ // parse query object as serialized HMM
       if (data->masternode->database_shards[dbx-1]->data_type == HMM){
-        client_msg_longjmp(data->sock_fd, status, &jmp_env, "Database %d contains HMM data, and a HMM cannot be used to search a HMM database", dbx);
+        client_msg_longjmp(data->sock_fd, eslEINCOMPAT, &jmp_env, "Database %d contains HMM data, and a HMM cannot be used to search a HMM database", dbx);
       }
       check_phmmer_jackhmmer_only_flags(opts, data->sock_fd, &jmp_env); // Make sure we aren't using any of the flags that can only be used on phmmer or jackhmmer searches
       abc = esl_alphabet_Create(eslAMINO);
@@ -873,7 +873,7 @@ static void *clientside_thread(void *arg)  // new version that reads exactly one
     }
     else if (strncmp(ptr, "HMM", 3) == 0) {  // parse query object as text-mode HMM, must be amino (protein) HMM
        if (data->masternode->database_shards[dbx-1]->data_type == HMM){
-        client_msg_longjmp(data->sock_fd, status, &jmp_env, "Database %d contains HMM data, and a HMM cannot be used to search a HMM database", dbx);
+        client_msg_longjmp(data->sock_fd, eslEINCOMPAT, &jmp_env, "Database %d contains HMM data, and a HMM cannot be used to search a HMM database", dbx);
       }
       check_phmmer_jackhmmer_only_flags(opts, data->sock_fd, &jmp_env); // Make sure we aren't using any of the flags that can only be used on phmmer or jackhmmer searches
       abc = esl_alphabet_Create(eslAMINO);
