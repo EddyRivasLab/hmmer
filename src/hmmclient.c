@@ -1046,6 +1046,7 @@ main(int argc, char **argv)
       //p7_tophits_Threshold(th, pli); 
       p7_tophits_Targets(ofp, th, pli, textw); if (fprintf(ofp, "\n\n") < 0) ESL_EXCEPTION_SYS(eslEWRITE, "write failed");
       p7_tophits_Domains(ofp, th, pli, textw); if (fprintf(ofp, "\n\n") < 0) ESL_EXCEPTION_SYS(eslEWRITE, "write failed");
+      esl_stopwatch_Stop(w);
       p7_pli_Statistics(ofp, pli, w);
       num_rounds -=1;
       if(num_rounds > 0){ // need to build HMM for next jackhmmer round
@@ -1132,7 +1133,6 @@ main(int argc, char **argv)
       if (domtblfp)  p7_tophits_TabularDomains(domtblfp, query_name, query_accession, th, pli, 1);
       if (pfamtblfp) p7_tophits_TabularXfam(pfamtblfp, query_name, query_accession, th, pli);
   
-      esl_stopwatch_Stop(w);
       if (fprintf(ofp, "//\n") < 0) ESL_EXCEPTION_SYS(eslEWRITE, "write failed");
   
       /* Output the results in an MSA (-A option) */
