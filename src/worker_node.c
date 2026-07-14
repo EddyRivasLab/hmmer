@@ -1882,25 +1882,31 @@ static void workernode_put_backend_queue_entry_in_pool(P7_SERVER_WORKERNODE_STAT
 }
 
 
-// workernode_put_backend_queue_entry_in_queue
-/*! \brief Adds a backend queue entry that describes a comparison that needs to be processed by the back end to the workernode's backend queue.
- *  \details Currently maintains the backend queue as a LIFO stack.  May need to revisit this when we look at running HMMER in non-server mode
- *  to reduce how long any given sequence/HMM has to be kept in memory.
- *  \param [in,out] workernode The worker node's P7_SERVER_WORKERNODE_STATE object, which is modified during execution.
- *  \param [in] the_entry The entry to be added to the queue.
- *  \returns Nothing.
+/* workernode_put_backend_queue_entry_in_queue()
+ *
+ * Adds a backend queue entry that describes a comparison that needs
+ * to be processed by the back end to the workernode's backend queue.
+ *
+ * Currently maintains the backend queue as a LIFO stack. May need to revisit this when we look at running HMMER in non-server mode
+ * to reduce how long any given sequence/HMM has to be kept in memory.
+ *
+ * workernode : worker node's P7_SERVER_WORKERNODE_STATE object; modified here.
+ * the_entry  : entry to be added to the queue 
  */
-static void workernode_put_backend_queue_entry_in_queue(P7_SERVER_WORKERNODE_STATE *workernode, P7_BACKEND_QUEUE_ENTRY *the_entry){
-  #ifdef CHECK_MUTEXES
+static void
+workernode_put_backend_queue_entry_in_queue(P7_SERVER_WORKERNODE_STATE *workernode, P7_BACKEND_QUEUE_ENTRY *the_entry)
+{
+#ifdef CHECK_MUTEXES
   int lock_retval;
-  #endif
+#endif
+
+  CHECKED_PTHREAD_MUTEX_LOCK(&(workernode->backend_queue_lock));
 
   the_entry->next = workernode->backend_queue;
   workernode->backend_queue = the_entry;
   workernode->backend_queue_depth +=1 ; // increment the count of operations in the queue
 
   CHECKED_PTHREAD_MUTEX_UNLOCK(&(workernode->backend_queue_lock));
-
 }
  
 

@@ -686,15 +686,12 @@ ERROR:
 static int
 hit_sorter2(const void *p1, const void *p2)
 {
-  int cmp;
-
   const P7_HIT *h1 = *((P7_HIT **) p1);
   const P7_HIT *h2 = *((P7_HIT **) p2);
 
-  cmp  = (h1->sortkey < h2->sortkey);
-  cmp -= (h1->sortkey > h2->sortkey);
-
-  return cmp;
+  if      (h1->sortkey < h2->sortkey) return  1;
+  else if (h1->sortkey > h2->sortkey) return -1;
+  else                                return strcmp(h1->name, h2->name);
 }
 
 
