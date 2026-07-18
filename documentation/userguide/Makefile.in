@@ -115,16 +115,19 @@ TEXFILES =\
 
 pdf:    Userguide.pdf Daemon_userguide.pdf Server_userguide.pdf
 
-# We add ${srcdir} to TEXINPUTS, etc so we can build userguide in a build tree, with input files in source tree.
+# ${srcdir} prepended to TEXINPUTS, etc so we can build userguide in a
+# build tree, with input files in source tree. Putting ${srcdir} before
+# TEXINPUTs says to prefer our own files first.
+#
 Userguide.pdf: manpages ${TEXFILES}
 	@for prog in pdflatex bibtex; do \
 	  command -v $$prog >/dev/null 2>&1 || { echo >&2 "$$prog is required to build Userguide, but it's not installed. Aborting."; exit 1; } \
 	done
 	@echo "     LATEX Userguide.pdf  (see latex.log for output)"
-	@TEXINPUTS=${TEXINPUTS}:${srcdir} pdflatex main                                >  latex.log 2>&1 
-	@BIBINPUTS=${BIBINPUTS}:${srcdir} BSTINPUTS=${BSTINPUTS}:${srcdir} bibtex main >> latex.log 2>&1 
-	@TEXINPUTS=${TEXINPUTS}:${srcdir} pdflatex main                                >> latex.log 2>&1 
-	@TEXINPUTS=${TEXINPUTS}:${srcdir} pdflatex main                                >> latex.log 2>&1 
+	@TEXINPUTS=${srcdir}:${TEXINPUTS} pdflatex main                                >  latex.log 2>&1 
+	@BIBINPUTS=${srcdir}:${BIBINPUTS} BSTINPUTS=${srcdir}:${BSTINPUTS} bibtex main >> latex.log 2>&1 
+	@TEXINPUTS=${srcdir}:${TEXINPUTS} pdflatex main                                >> latex.log 2>&1 
+	@TEXINPUTS=${srcdir}:${TEXINPUTS} pdflatex main                                >> latex.log 2>&1 
 	@mv main.pdf Userguide.pdf
 
 Daemon_userguide.pdf: manpages ${TEXFILES}
@@ -132,10 +135,10 @@ Daemon_userguide.pdf: manpages ${TEXFILES}
 	  command -v $$prog >/dev/null 2>&1 || { echo >&2 "$$prog is required to build Userguide, but it's not installed. Aborting."; exit 1; } \
 	done
 	@echo "     LATEX Daemon_userguide.pdf  (see latex.log for output)"
-	@TEXINPUTS=${TEXINPUTS}:${srcdir} pdflatex daemon                                >  latex.log 2>&1 
-	@BIBINPUTS=${BIBINPUTS}:${srcdir} BSTINPUTS=${BSTINPUTS}:${srcdir} bibtex main >> latex.log 2>&1 
-	@TEXINPUTS=${TEXINPUTS}:${srcdir} pdflatex daemon                                >> latex.log 2>&1 
-	@TEXINPUTS=${TEXINPUTS}:${srcdir} pdflatex daemon                                >> latex.log 2>&1 
+	@TEXINPUTS=${srcdir}:${TEXINPUTS} pdflatex daemon                              >  latex.log 2>&1 
+	@BIBINPUTS=${srcdir}:${BIBINPUTS} BSTINPUTS=${srcdir}:${BSTINPUTS} bibtex main >> latex.log 2>&1 
+	@TEXINPUTS=${srcdir}:${TEXINPUTS} pdflatex daemon                              >> latex.log 2>&1 
+	@TEXINPUTS=${srcdir}:${TEXINPUTS} pdflatex daemon                              >> latex.log 2>&1 
 	@mv daemon.pdf Daemon_userguide.pdf
 
 Server_userguide.pdf: manpages ${TEXFILES}
@@ -143,10 +146,10 @@ Server_userguide.pdf: manpages ${TEXFILES}
 	  command -v $$prog >/dev/null 2>&1 || { echo >&2 "$$prog is required to build Userguide, but it's not installed. Aborting."; exit 1; } \
 	done
 	@echo "     LATEX Server_userguide.pdf  (see latex.log for output)"
-	@TEXINPUTS=${TEXINPUTS}:${srcdir} pdflatex server                               >  latex.log 2>&1 
-	@BIBINPUTS=${BIBINPUTS}:${srcdir} BSTINPUTS=${BSTINPUTS}:${srcdir} bibtex main >> latex.log 2>&1 
-	@TEXINPUTS=${TEXINPUTS}:${srcdir} pdflatex server                                >> latex.log 2>&1 
-	@TEXINPUTS=${TEXINPUTS}:${srcdir} pdflatex server                                >> latex.log 2>&1 
+	@TEXINPUTS=${srcdir}:${TEXINPUTS} pdflatex server                              >  latex.log 2>&1 
+	@BIBINPUTS=${srcdir}:${BIBINPUTS} BSTINPUTS=${srcdir}:${BSTINPUTS} bibtex main >> latex.log 2>&1 
+	@TEXINPUTS=${srcdir}:${TEXINPUTS} pdflatex server                              >> latex.log 2>&1 
+	@TEXINPUTS=${srcdir}:${TEXINPUTS} pdflatex server                              >> latex.log 2>&1 
 	@mv server.pdf Server_userguide.pdf
 
 # manpages: convert man pages to LaTeX chapter in User Guide.
