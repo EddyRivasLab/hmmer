@@ -509,18 +509,17 @@ p7_domaindef_ByPosteriorHeuristics(const ESL_SQ *sq, const ESL_SQ *ntsq, P7_OPRO
  * 
  * The criterion is to find the split point z at which the expected
  * number of E occurrences preceding B occurrences is maximized, and
- * if that number is greater than the heuristic threshold <ddef->rt3>,
+ * if that number is >= the heuristic threshold <ddef->rt3>,
  * then return TRUE. In other words, we're checking to see if there's
  * any point in the region at which it looks like an E was followed by
  * a B, as expected for a multidomain interpretation of the region.
  * 
- * More precisely: return TRUE if  \max_z [ \min (B(z), E(z)) ]  >= rt3
+ * More precisely: return TRUE if  \max_{z=i}^{j-1} [ \min (B(z), E(z)) ]  >= rt3
  * where
- *   E(z) = expected number of E states occurring in region before z is emitted
- *        = \sum_{y=i}^{z} eocc[i]  =  etot[z] - etot[i-1]
- *   B(z) = expected number of B states occurring in region after z is emitted
- *        = \sum_{y=z}^{j} bocc[i]  =  btot[j] - btot[z-1]               
- *        
+ *   E(z) = expected number of domains that end with their last residue in interval [i,z]
+ *        = \sum_{y=i}^{z}   eocc[y]  =  etot[z] - etot[i-1]
+ *   B(z) = expected number of domains that start with their first residue in interval [z+1,j]
+ *        = \sum_{y=z+1}^{j} bocc[y]  =  btot[j] - btot[z]               
  *        
  * Because this relies on the <ddef->etot> and <ddef->btot> arrays,
  * <calculate_domain_posteriors()> needs to have been called first.
@@ -535,9 +534,9 @@ is_multidomain_region(P7_DOMAINDEF *ddef, int i, int j)
   float expected_n;
 
   max = -1.0;
-  for (z = i; z <= j; z++)
+  for (z = i; z < j; z++)    // <j because at z=j, btot[j]-btot[z]=0, so z=j can't give the max
     {
-      expected_n = ESL_MIN( (ddef->etot[z] - ddef->etot[i-1]), (ddef->btot[j] - ddef->btot[z-1]));
+      expected_n = ESL_MIN( (ddef->etot[z] - ddef->etot[i-1]), (ddef->btot[j] - ddef->btot[z]));
       max        = ESL_MAX(max, expected_n);
     }
 

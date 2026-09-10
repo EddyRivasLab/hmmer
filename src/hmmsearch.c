@@ -1,4 +1,3 @@
-
 /* hmmsearch: search profile HMM(s) against a sequence database.
  *
  * To do:
@@ -299,7 +298,7 @@ main(int argc, char **argv)
 
   process_commandline(argc, argv, &go, &cfg.hmmfile, &cfg.dbfile);    
 
-/* is the range restricted? */
+  /* is the range restricted? */
   if (esl_opt_IsUsed(go, "--restrictdb_stkey") )
     if ((cfg.firstseq_key = esl_opt_GetString(go, "--restrictdb_stkey")) == NULL)  p7_Fail("Failure capturing --restrictdb_stkey\n");
 

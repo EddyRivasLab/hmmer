@@ -154,10 +154,10 @@ p7_GDecoding(const P7_PROFILE *gm, const P7_GMX *fwd, P7_GMX *bck, P7_GMX *pp)
  *            position i.
  * 
  *            <ddef->etot[i]> stores the cumulative expectation
- *            $\sum_1^i$ of the number of i's that were emitted (by
- *            an Mk or Dk state) and immediately followed by an end
- *            transition to E : i.e., the expected number of times
- *            domains have ended at or before position i.
+ *            $\sum_1^i$ of the number of i's that were emitted and
+ *            immediately followed by an end transition to E : i.e.,
+ *            the expected number of times domains have ended at or
+ *            before position i.
  * 
  *            <ddef->mocc[i]> stores the probability that residue i is
  *            emitted by the core model, as opposed to the flanking
