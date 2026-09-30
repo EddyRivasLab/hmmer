@@ -23,6 +23,13 @@
  *    It can be edited and configured manually before compilation.
  *****************************************************************/
 
+/* p7_MAXM     sets the maximum allowed model length, in consensus
+ *             positions. 
+ */
+#ifndef p7_MAXM
+#define p7_MAXM  100000
+#endif
+
 /* p7_RAMLIMIT controls the switch from fast full DP to slow
  *             linear-memory divide and conquer. Default devotes 32
  *             MB/thread.

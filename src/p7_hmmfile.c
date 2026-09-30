@@ -1309,7 +1309,8 @@ read_asc30hmm(P7_HMMFILE *hfp, ESL_ALPHABET **ret_abc, P7_HMM **opt_hmm)
 
       else if (strcmp(tag, "LENG") == 0) {
 	if ((status = esl_fileparser_GetTokenOnLine(hfp->efp, &tok1, NULL))  != eslOK) ESL_XFAIL(eslEFORMAT, hfp->errbuf, "No model length found on LENG line");
-	if ((hmm->M = atoi(tok1))                                            == 0)     ESL_XFAIL(eslEFORMAT, hfp->errbuf, "Invalid model length %s on LENG line", tok1);
+        hmm->M = atoi(tok1);
+        if (hmm->M < 1 || hmm->M > p7_MAXM) ESL_XFAIL(eslEFORMAT, hfp->errbuf, "Invalid model length %s on LENG line (must be 1..%d)", tok1, p7_MAXM);
       }  
 
       else if (hfp->format >= p7_HMMFILE_3c && strcmp(tag, "MAXL") == 0) {
@@ -1630,7 +1631,8 @@ read_bin30hmm(P7_HMMFILE *hfp, ESL_ALPHABET **ret_abc, P7_HMM **opt_hmm)
   if (! fread((char *) &(hmm->flags),  sizeof(int), 1, hfp->f)) ESL_XFAIL(eslEFORMAT, hfp->errbuf, "failed to read flags");
   if (! fread((char *) &(hmm->M),      sizeof(int), 1, hfp->f)) ESL_XFAIL(eslEFORMAT, hfp->errbuf, "failed to read model size M");
   if (! fread((char *) &alphabet_type, sizeof(int), 1, hfp->f)) ESL_XFAIL(eslEFORMAT, hfp->errbuf, "failed to read alphabet_type");
-  
+  if (hmm->M < 1 || hmm->M > p7_MAXM)                           ESL_XFAIL(eslEFORMAT, hfp->errbuf, "bad model length M=%d", hmm->M);
+
   /* Set or verify alphabet. */
   if (*ret_abc == NULL)  {  /* still unknown: set it, pass control of it back to caller */
     if ((abc = esl_alphabet_Create(alphabet_type)) == NULL)     ESL_XFAIL(eslEMEM, hfp->errbuf, "allocation failed, alphabet");
@@ -1770,7 +1772,8 @@ read_asc20hmm(P7_HMMFILE *hfp, ESL_ALPHABET **ret_abc, P7_HMM **opt_hmm)
 
       else if (strcmp(tag, "LENG") == 0) {
         if ((status = esl_fileparser_GetTokenOnLine(hfp->efp, &tok1, NULL))  != eslOK) ESL_XFAIL(eslEFORMAT, hfp->errbuf, "No model length found on LENG line");
-        if ((hmm->M = atoi(tok1))                                            == 0)     ESL_XFAIL(eslEFORMAT, hfp->errbuf, "Invalid model length %s on LENG line", tok1);
+        hmm->M = atoi(tok1);
+        if (hmm->M < 1 || hmm->M > p7_MAXM) ESL_XFAIL(eslEFORMAT, hfp->errbuf, "Invalid model length %s on LENG line (must be 1..%d)", tok1, p7_MAXM);
       }  
 
       else if (strcmp(tag, "ALPH") == 0) {
@@ -2167,6 +2170,8 @@ write_bin_string(FILE *fp, char *s)
  * Return:   <eslOK> on success. ret_s is malloc'ed here.
  *           <eslEOD> if a read fails - likely because no more
  *             data in file.
+ *           <eslEFORMAT> if the <len> field is negative, or if
+ *             the stored string lacks a \0 NUL terminator.
  * 
  * Throws    <eslEMEM> on allocation error.
  */                            
@@ -2177,10 +2182,12 @@ read_bin_string(FILE *fp, char **ret_s)
   char *s = NULL;
   int   len;
 
-  if (! fread((char *) &len, sizeof(int), 1, fp)) { status = eslEOD; goto ERROR; }
+  if (! fread((char *) &len, sizeof(int), 1, fp)) { status = eslEOD;     goto ERROR; }
+  if (len < 0)                                    { status = eslEFORMAT; goto ERROR; }
   if (len > 0) {
     ESL_ALLOC(s,  (sizeof(char) * len));
-    if (! fread((char *) s, sizeof(char), len, fp)) { status = eslEOD; goto ERROR; }
+    if (fread((char *) s, sizeof(char), len, fp) != len) { status = eslEOD;     goto ERROR; }
+    if (s[len-1] != '\0')                                { status = eslEFORMAT; goto ERROR; }
   }
   *ret_s = s;
   return eslOK;
@@ -2401,6 +2408,65 @@ utest_io_3a(char *tmpfile, P7_HMM *hmm)
   return eslOK;
 }
 
+
+/* utest_bad_M()
+ *
+ * Tests that parsers reject an out-of-range model length M with a
+ * normal <eslEFORMAT> error (iss #350).
+ */
+static int
+utest_bad_M(char *tmpfile, P7_HMM *hmm)
+{
+  FILE         *fp     = NULL;
+  P7_HMMFILE   *hfp    = NULL;
+  P7_HMM       *new    = NULL;
+  ESL_ALPHABET *newabc = NULL;
+  char         *s      = NULL;
+  char         *p, *eol;
+  int           badM[] = { 0, -1, p7_MAXM+1, 214748364 };
+  int           nbad   = sizeof(badM) / sizeof(int);
+  int           i;
+  char          msg[]  = "bad M unit test failed";
+
+  if (p7_hmmfile_WriteToString(&s, -1, hmm) != eslOK) esl_fatal(msg);
+  if ((p   = strstr(s, "\nLENG "))          == NULL)  esl_fatal(msg);
+  if ((eol = strchr(p+1, '\n'))             == NULL)  esl_fatal(msg);
+
+  for (i = 0; i < nbad; i++)
+    {
+      /* ASCII: rewrite the LENG line */
+      if ((fp = fopen(tmpfile, "w"))                                      == NULL)       esl_fatal(msg);
+      if (fprintf(fp, "%.*sLENG  %d%s", (int) (p+1-s), s, badM[i], eol)   < 0)           esl_fatal(msg);
+      fclose(fp);
+
+      if (p7_hmmfile_Open(tmpfile, NULL, &hfp, NULL)                      != eslOK)      esl_fatal(msg);
+      if (p7_hmmfile_Read(hfp, &newabc, &new)                             != eslEFORMAT) esl_fatal(msg);
+      if (new != NULL)                                                                   esl_fatal(msg);
+      p7_hmmfile_Close(hfp);
+      esl_alphabet_Destroy(newabc);
+      newabc = NULL;
+
+      /* Binary: overwrite M, which follows the 4-byte magic and 4-byte flags */
+      if ((fp = fopen(tmpfile, "w"))                                      == NULL)       esl_fatal(msg);
+      if (p7_hmmfile_WriteBinary(fp, -1, hmm)                             != eslOK)      esl_fatal(msg);
+      fclose(fp);
+      if ((fp = fopen(tmpfile, "r+b"))                                    == NULL)       esl_fatal(msg);
+      if (fseek(fp, sizeof(uint32_t) + sizeof(int), SEEK_SET)             != 0)          esl_fatal(msg);
+      if (fwrite((char *) &(badM[i]), sizeof(int), 1, fp)                 != 1)          esl_fatal(msg);
+      fclose(fp);
+
+      if (p7_hmmfile_Open(tmpfile, NULL, &hfp, NULL)                      != eslOK)      esl_fatal(msg);
+      if (p7_hmmfile_Read(hfp, &newabc, &new)                             != eslEFORMAT) esl_fatal(msg);
+      if (new != NULL)                                                                   esl_fatal(msg);
+      p7_hmmfile_Close(hfp);
+      esl_alphabet_Destroy(newabc);
+      newabc = NULL;
+    }
+
+  free(s);
+  return eslOK;
+}
+
 #endif /*p7HMMFILE_TESTDRIVE*/
 /*-------------------- end, unit tests --------------------------*/
 
@@ -2443,12 +2509,14 @@ main(int argc, char **argv)
   p7_hmm_Sample(r, M, aa_abc, &hmm);
   utest_io_current(tmpfile, hmm);
   utest_io_3a     (tmpfile, hmm);
+  utest_bad_M     (tmpfile, hmm);
   p7_hmm_Destroy(hmm);
 
   /* Nucleic acid HMMs */
   p7_hmm_Sample(r, M, nt_abc, &hmm);
   utest_io_current(tmpfile, hmm);
   utest_io_3a     (tmpfile, hmm);
+  utest_bad_M     (tmpfile, hmm);
   p7_hmm_Destroy(hmm);
 
   esl_alphabet_Destroy(aa_abc);

@@ -54,9 +54,10 @@ static double checkpointed_rows(int L, int R);
  *            many parallel threads there are, each with its own
  *            <P7_GMXCHK> matrix allocation.
  *            
- *            By design spec, <M> and <L> are $\leq$ 100000. 
+ *            By design spec, <M> and <L> are $\leq$ 100000. (p7_MAXM, for <M>)
+ *            
  *
- * Args:      M         - query profile size in consensus positions (<=100000)
+ * Args:      M         - query profile size in consensus positions (<= p7_MAXM, 100000)
  *            L         - target sequence length in residues (<=100000)
  *            ramlimit  - recommended memory limit in bytes
  *
@@ -72,9 +73,9 @@ p7_gmxchk_Create(int M, int L, int64_t ramlimit)
   int        r;
   int        status;
 
-  /* Validity of integer variable ranges may depend on design spec:                         */
-  ESL_DASSERT1( (M        <= 100000) );       /* design spec says, model length M <= 100000 */
-  ESL_DASSERT1( (L        <= 100000) );       /*           ... and,  seq length L <= 100000 */
+  /* Validity of integer variable ranges may depend on design spec:                                   */
+  ESL_DASSERT1( (M        <= p7_MAXM) );       /* design spec says, model length M <= p7_MAXM (100000) */
+  ESL_DASSERT1( (L        <= 100000)  );       /*           ... and,  seq length L <= 100000           */
 
   /* Level 1 allocation: the structure itself */
   ESL_ALLOC(gxc, sizeof(P7_GMXCHK));
@@ -495,7 +496,7 @@ p7_gmxchk_DumpRow(FILE *ofp, P7_GMXCHK *gxc, float *dpc, int i, int kstart, int 
  * Upon return, we've set the R{0abc} and L{abc} fields in the <gxc>
  * structure.
  * 
- * Design spec says <allocM> <= 100000, <allocL> <= 100000.
+ * Design spec says <allocM> <= 100000 (p7_MAXM), <allocL> <= 100000.
  * 
  * <maxR> is the maximum number of rows the caller wants to use. 
  * We will exceed this for one comparison if absolutely necessary, but

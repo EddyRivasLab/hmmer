@@ -505,6 +505,8 @@ p7_SingleBuilder(P7_BUILDER *bld, ESL_SQ *sq, P7_BG *bg, P7_HMM **opt_hmm,
   bld->errbuf[0] = '\0';
   if (! bld->Q) ESL_XEXCEPTION(eslEINVAL, "score system not initialized");
 
+  if (sq->n > p7_MAXM) ESL_XFAIL(eslERANGE, bld->errbuf, "Sequence %s is too long (%" PRId64 " residues) to use as a query; max model length is %d", sq->name, sq->n, p7_MAXM);
+
   if ((status = p7_Seqmodel(bld->abc, sq->dsq, sq->n, sq->name, bld->Q, bg->f, bld->popen, bld->pextend, &hmm)) != eslOK) goto ERROR;
   if ((status = p7_hmm_SetComposition(hmm))                                                                     != eslOK) goto ERROR;
   if ((status = p7_hmm_SetConsensus(hmm, sq))                                                                   != eslOK) goto ERROR; 
@@ -843,6 +845,7 @@ build_model(P7_BUILDER *bld, ESL_MSA *msa, P7_HMM **ret_hmm, P7_TRACE ***opt_tr)
     {
       status = p7_Fastmodelmaker( msa, bld->symfrac, bld, ret_hmm, opt_tr);
       if      (status == eslENORESULT) ESL_XFAIL(status, bld->errbuf, "Alignment %s has no consensus columns w/ > %d%% residues - can't build a model.\n", msa->name != NULL ? msa->name : "", (int) (100 * bld->symfrac));
+      else if (status == eslERANGE)    ESL_XFAIL(status, bld->errbuf, "Alignment %s has too many consensus columns; max model len is %d\n",                msa->name != NULL ? msa->name : "", p7_MAXM);
       else if (status == eslEMEM)      ESL_XFAIL(status, bld->errbuf, "Memory allocation failure in model construction.\n");
       else if (status != eslOK)        ESL_XFAIL(status, bld->errbuf, "internal error in model construction.\n");      
     }
@@ -850,7 +853,8 @@ build_model(P7_BUILDER *bld, ESL_MSA *msa, P7_HMM **ret_hmm, P7_TRACE ***opt_tr)
     {
       status = p7_Handmodelmaker( msa, bld, ret_hmm, opt_tr);
       if      (status == eslENORESULT) ESL_XFAIL(status, bld->errbuf, "Alignment %s has no annotated consensus columns - can't build a model.\n", msa->name != NULL ? msa->name : "");
-      else if (status == eslEFORMAT)   ESL_XFAIL(status, bld->errbuf, "Alignment %s has no reference annotation line\n", msa->name != NULL ? msa->name : "");            
+      else if (status == eslERANGE)    ESL_XFAIL(status, bld->errbuf, "Alignment %s has too many consensus columns; max model len is %d\n",       msa->name != NULL ? msa->name : "", p7_MAXM);
+      else if (status == eslEFORMAT)   ESL_XFAIL(status, bld->errbuf, "Alignment %s has no reference annotation line\n",                          msa->name != NULL ? msa->name : "");            
       else if (status == eslEMEM)      ESL_XFAIL(status, bld->errbuf, "Memory allocation failure in model construction.\n");
       else if (status != eslOK)        ESL_XFAIL(status, bld->errbuf, "internal error in model construction.\n");
     }

@@ -69,7 +69,9 @@ static int annotate_model(P7_HMM *hmm, int *matassign, ESL_MSA *msa);
  *           here, and must be free'd by caller.
  *
  *           Returns <eslENORESULT> if no consensus columns were annotated;
- *           in this case, <ret_hmm> and <opt_tr> are returned NULL. 
+ *           in this case, <ret_hmm> and <opt_tr> are returned NULL.
+ *
+ *           Returns <eslERANGE> if model length exceeds design limit (p7_MAXM).
  *           
  *           Returns <eslEFORMAT> if the <msa> doesn't have a reference
  *           annotation line.
@@ -147,6 +149,8 @@ p7_Handmodelmaker(ESL_MSA *msa, P7_BUILDER *bld, P7_HMM **ret_hmm, P7_TRACE ***o
  *
  *           Returns <eslENORESULT> if no consensus columns were annotated;
  *           in this case, <ret_hmm> and <opt_tr> are returned NULL.
+ *
+ *           Returns <eslERANGE> if model length exceeds design limit (p7_MAXM).
  *           
  * Throws:   <eslEMEM> on allocation failure; <eslEINVAL> if the 
  *           <msa> isn't in digital mode.
@@ -251,6 +255,7 @@ do_modelmask( ESL_MSA *msa)
  *                         
  * Return:   <eslOK> on success.
  *           <eslENORESULT> if no consensus columns are identified.
+ *           <eslERANGE> if model length exceeds design limit (p7_MAXM)
  *
  *           ret_hmm and opt_tr alloc'ed here.
  */
@@ -271,7 +276,8 @@ matassign2hmm(ESL_MSA *msa, int *matassign, P7_HMM **ret_hmm, P7_TRACE ***opt_tr
   /* How many match states in the HMM? */
   for (M = 0, apos = 1; apos <= msa->alen; apos++) 
     if (matassign[apos]) M++;
-  if (M == 0) { status = eslENORESULT; goto ERROR; }
+  if (M == 0)      { status = eslENORESULT; goto ERROR; }
+  if (M > p7_MAXM) { status = eslERANGE;    goto ERROR; }
 
   /* Make fake tracebacks for each seq */
   ESL_ALLOC(tr, sizeof(P7_TRACE *) * msa->nseq);

@@ -254,6 +254,7 @@ p7_oprofile_ReadMSV(P7_HMMFILE *hfp, ESL_ALPHABET **byp_abc, P7_OPROFILE **ret_o
   if (magic != v3f_fmagic)  ESL_XFAIL(eslEFORMAT, hfp->errbuf, "bad magic; not an HMM database?");
 
   if (! fread( (char *) &M,         sizeof(int),      1, hfp->ffp)) ESL_XFAIL(eslEFORMAT, hfp->errbuf, "failed to read model size M");
+  if (M < 1 || M > p7_MAXM)                                         ESL_XFAIL(eslEFORMAT, hfp->errbuf, "bad model length M=%d", M);
   if (! fread( (char *) &alphatype, sizeof(int),      1, hfp->ffp)) ESL_XFAIL(eslEFORMAT, hfp->errbuf, "failed to read alphabet type");
   Q16  = p7O_NQB(M);
   Q16x = p7O_NQB(M) + p7O_EXTRA_SB;
@@ -273,8 +274,11 @@ p7_oprofile_ReadMSV(P7_HMMFILE *hfp, ESL_ALPHABET **byp_abc, P7_OPROFILE **ret_o
   om->roff = roff;
 
   if (! fread((char *) &n,               sizeof(int),     1,           hfp->ffp)) ESL_XFAIL(eslEFORMAT, hfp->errbuf, "failed to read name length");
+  if (n < 0) ESL_XFAIL(eslEFORMAT, hfp->errbuf, "failed to read valid name length (saw %d)", n);
+
   ESL_ALLOC(om->name, sizeof(char) * (n+1));
   if (! fread((char *) om->name,         sizeof(char),    n+1,         hfp->ffp)) ESL_XFAIL(eslEFORMAT, hfp->errbuf, "failed to read name");
+  om->name[n] = '\0';   // a valid file stores the \0, but guard against adversarial input
 
   if (! fread((char *) &(om->max_length),sizeof(int),     1,           hfp->ffp)) ESL_XFAIL(eslEFORMAT, hfp->errbuf, "failed to read max_length");
   if (! fread((char *) &(om->tbm_b),     sizeof(uint8_t), 1,           hfp->ffp)) ESL_XFAIL(eslEFORMAT, hfp->errbuf, "failed to read tbm");
@@ -375,6 +379,7 @@ p7_oprofile_ReadInfoMSV(P7_HMMFILE *hfp, ESL_ALPHABET **byp_abc, P7_OPROFILE **r
   if (magic != v3f_fmagic)  ESL_XFAIL(eslEFORMAT, hfp->errbuf, "bad magic; not an HMM database?");
 
   if (! fread( (char *) &M,         sizeof(int),      1, hfp->ffp)) ESL_XFAIL(eslEFORMAT, hfp->errbuf, "failed to read model size M");
+  if (M < 1 || M > p7_MAXM)                                         ESL_XFAIL(eslEFORMAT, hfp->errbuf, "bad model length M=%d", M);
   if (! fread( (char *) &alphatype, sizeof(int),      1, hfp->ffp)) ESL_XFAIL(eslEFORMAT, hfp->errbuf, "failed to read alphabet type");
   Q16  = p7O_NQB(M);
   Q16x = p7O_NQB(M) + p7O_EXTRA_SB;
@@ -396,6 +401,7 @@ p7_oprofile_ReadInfoMSV(P7_HMMFILE *hfp, ESL_ALPHABET **byp_abc, P7_OPROFILE **r
   /* calculate the remaining length of the msv model */
   om->name = NULL;
   if (!fread((char *) &n, sizeof(int), 1, hfp->ffp)) ESL_XFAIL(eslEFORMAT, hfp->errbuf, "failed to read name length");
+  if (n < 0) ESL_XFAIL(eslEFORMAT, hfp->errbuf, "failed to read valid name length (saw %d)", n);
   roff += (sizeof(int) * 5);                      /* magic, model size, alphabet type, max length, name length */
   roff += (sizeof(char) * (n + 1));               /* name string and terminator '\0'                           */
   roff += (sizeof(float) + sizeof(uint8_t) * 5);  /* transition  costs, bias, scale and base                   */
@@ -521,23 +527,27 @@ p7_oprofile_ReadRest(P7_HMMFILE *hfp, P7_OPROFILE *om)
   if (! fread( (char *) &M,              sizeof(int),      1,           hfp->pfp)) ESL_XFAIL(eslEFORMAT, hfp->rr_errbuf, "failed to read model size M");
   if (! fread( (char *) &alphatype,      sizeof(int),      1,           hfp->pfp)) ESL_XFAIL(eslEFORMAT, hfp->rr_errbuf, "failed to read alphabet type");
   if (! fread( (char *) &n,              sizeof(int),      1,           hfp->pfp)) ESL_XFAIL(eslEFORMAT, hfp->rr_errbuf, "failed to read name length");
-  if (M         != om->M)                                                          ESL_XFAIL(eslEFORMAT, hfp->rr_errbuf, "p/f model length mismatch");
+  if (M         != om->M)                                                          ESL_XFAIL(eslEFORMAT, hfp->rr_errbuf, "p/f model length mismatch");      // don't need to check against p7_MAXM; this check suffices
   if (alphatype != om->abc->type)                                                  ESL_XFAIL(eslEFORMAT, hfp->rr_errbuf, "p/f alphabet type mismatch");
+  if (n < 0)                                                                       ESL_XFAIL(eslEFORMAT, hfp->rr_errbuf, "failed to read valid name length (saw %d)", n);
 
   ESL_ALLOC(name, sizeof(char) * (n+1));
   if (! fread( (char *) name,            sizeof(char),     n+1,         hfp->pfp)) ESL_XFAIL(eslEFORMAT, hfp->rr_errbuf, "failed to read name");
+  name[n] = '\0';      // a valid file stores the \0, but guard against adversarial input
   if (strcmp(name, om->name) != 0)                                                 ESL_XFAIL(eslEFORMAT, hfp->rr_errbuf, "p/f name mismatch");
 
   if (! fread((char *) &n,               sizeof(int),      1,           hfp->pfp)) ESL_XFAIL(eslEFORMAT, hfp->rr_errbuf, "failed to read accession length");
   if (n > 0) {
     ESL_ALLOC(om->acc, sizeof(char) * (n+1));
     if (! fread( (char *) om->acc,       sizeof(char),     n+1,         hfp->pfp)) ESL_XFAIL(eslEFORMAT, hfp->rr_errbuf, "failed to read accession");
-  }
+    om->acc[n] = '\0';   // a valid file stores the \0, but guard against adversarial input
+  } else if (n < 0) ESL_XFAIL(eslEFORMAT, hfp->rr_errbuf, "failed to read valid accession length (saw %d)", n);
   if (! fread((char *) &n,               sizeof(int),      1,           hfp->pfp)) ESL_XFAIL(eslEFORMAT, hfp->rr_errbuf, "failed to read description length");
   if (n > 0) {
     ESL_ALLOC(om->desc, sizeof(char) * (n+1));
     if (! fread( (char *) om->desc,      sizeof(char),     n+1,         hfp->pfp)) ESL_XFAIL(eslEFORMAT, hfp->rr_errbuf, "failed to read description");
-  }
+    om->desc[n] = '\0';  // a valid file stores the \0, but guard against adversarial input
+  } else if (n < 0) ESL_XFAIL(eslEFORMAT, hfp->rr_errbuf, "failed to read valid description length (saw %d)", n);
 
   if (! fread((char *) om->rf,           sizeof(char),     M+2,         hfp->pfp)) ESL_XFAIL(eslEFORMAT, hfp->rr_errbuf, "failed to read rf annotation");
   if (! fread((char *) om->mm,           sizeof(char),     M+2,         hfp->pfp)) ESL_XFAIL(eslEFORMAT, hfp->rr_errbuf, "failed to read mm annotation");

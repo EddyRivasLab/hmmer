@@ -125,12 +125,16 @@ p7_hmm_CreateShell(void)
  *
  * Throws:    <eslEMEM> on allocation failure; in this case, the HMM
  *            is likely corrupted, and the caller should destroy it.
+ *
+ *            <eslEINVAL> if M is < 1 or > p7_MAXM.
  */
 int
 p7_hmm_CreateBody(P7_HMM *hmm, int M, const ESL_ALPHABET *abc) 
 {
   int k;
   int status;
+
+  if (M < 1 || M > p7_MAXM) ESL_EXCEPTION(eslEINVAL, "model length M=%d out of range 1..%d", M, p7_MAXM);
 
   hmm->abc = abc;
   hmm->M   = M;
@@ -144,9 +148,9 @@ p7_hmm_CreateBody(P7_HMM *hmm, int M, const ESL_ALPHABET *abc)
   hmm->ins[0] = NULL;
 
   /* level 2 */
-  ESL_ALLOC(hmm->t[0],   (p7H_NTRANSITIONS*(M+1)) * sizeof(float));
-  ESL_ALLOC(hmm->mat[0], (abc->K*(M+1))           * sizeof(float));
-  ESL_ALLOC(hmm->ins[0], (abc->K*(M+1))           * sizeof(float));
+  ESL_ALLOC(hmm->t[0],   sizeof(float) *  p7H_NTRANSITIONS * (M+1));
+  ESL_ALLOC(hmm->mat[0], sizeof(float) *  abc->K           * (M+1));
+  ESL_ALLOC(hmm->ins[0], sizeof(float) *  abc->K           * (M+1));
   for (k = 1; k <= M; k++) {
     hmm->mat[k] = hmm->mat[0] + k * hmm->abc->K;
     hmm->ins[k] = hmm->ins[0] + k * hmm->abc->K;
