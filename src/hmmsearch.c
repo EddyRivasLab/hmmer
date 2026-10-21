@@ -10,6 +10,8 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <sys/stat.h>
+#include <unistd.h>
 
 #include "easel.h"
 #include "esl_alphabet.h"
@@ -33,10 +35,27 @@
 
 #include "hmmer.h"
 
+/* The target database held in memory, so that it's read only once when
+ * searching with multiple queries (otherwise the reader thread rereads and
+ * redigitizes the whole database for each query, and the workers wait for it).
+ * Workers take the blocks in turn; the results are the same as when streaming
+ * the database since each sequence is processed independently.
+ */
+typedef struct {
+  ESL_SQ_BLOCK   **block;
+  int64_t         *first;       /* index of the first sequence of each block in the database */
+  int              nblock;
+  int              next;        /* next block to process, shared by the workers */
+#ifdef HMMER_THREADS
+  pthread_mutex_t  mutex;
+#endif
+} SEQ_CACHE;
+
 typedef struct {
 #ifdef HMMER_THREADS
   ESL_WORK_QUEUE   *queue;
 #endif 
+  SEQ_CACHE        *cache;       /* if non-NULL, process the cached database instead of the queue */
   P7_BG            *bg;	         /* null model                              */
   P7_PIPELINE      *pli;         /* work pipeline                           */
   P7_TOPHITS       *th;          /* top hit results                         */
@@ -148,6 +167,10 @@ static int  serial_loop  (WORKER_INFO *info, ESL_SQFILE *dbfp, int n_targetseqs)
 
 static int  thread_loop(ESL_THREADS *obj, ESL_WORK_QUEUE *queue, ESL_SQFILE *dbfp, int n_targetseqs);
 static void pipeline_thread(void *arg);
+static int  cache_loop(ESL_THREADS *obj, SEQ_CACHE *cache);
+static void cache_thread(void *arg);
+static SEQ_CACHE *seqcache_Create(ESL_GETOPTS *go, struct cfg_s *cfg, ESL_SQFILE *dbfp, const ESL_ALPHABET *abc);
+static void seqcache_Destroy(SEQ_CACHE *cache);
 #endif 
 
 #ifdef HMMER_MPI
@@ -382,6 +405,8 @@ serial_master(ESL_GETOPTS *go, struct cfg_s *cfg)
   ESL_SQ_BLOCK    *block    = NULL;
   ESL_THREADS     *threadObj= NULL;
   ESL_WORK_QUEUE  *queue    = NULL;
+  ESL_THREADS     *cacheObj = NULL;
+  SEQ_CACHE       *cache    = NULL;
 #endif
   char             errbuf[eslERRBUFSIZE];
 
@@ -450,11 +475,17 @@ serial_master(ESL_GETOPTS *go, struct cfg_s *cfg)
       output_header(ofp, go, cfg->hmmfile, cfg->dbfile);
       esl_sqfile_SetDigital(dbfp, abc); //ReadBlock requires knowledge of the alphabet to decide how best to read blocks
 
+#ifdef HMMER_THREADS
+      if (ncpus > 0 && (cache = seqcache_Create(go, cfg, dbfp, abc)) != NULL)
+        cacheObj = esl_threads_Create(&cache_thread);
+#endif
       for (i = 0; i < infocnt; ++i)
 	{
 	  info[i].bg    = p7_bg_Create(abc);
+          info[i].cache = NULL;
 #ifdef HMMER_THREADS
 	  info[i].queue = queue;
+          info[i].cache = cache;
 #endif
 	}
 
@@ -480,7 +511,7 @@ serial_master(ESL_GETOPTS *go, struct cfg_s *cfg)
       esl_stopwatch_Start(w);
 
       /* seqfile may need to be rewound (multiquery mode) */
-      if (nquery > 1)
+      if (nquery > 1 && ! info->cache)
       {
         if (! esl_sqfile_IsRewindable(dbfp))
           esl_fatal("Target sequence file %s isn't rewindable; can't search it with multiple queries", cfg->dbfile);
@@ -514,13 +545,15 @@ serial_master(ESL_GETOPTS *go, struct cfg_s *cfg)
         if (status == eslEINVAL) p7_Fail(info->pli->errbuf);
 
 #ifdef HMMER_THREADS
-        if (ncpus > 0) esl_threads_AddThread(threadObj, &info[i]);
+        if      (cache)    esl_threads_AddThread(cacheObj,  &info[i]);
+        else if (ncpus > 0) esl_threads_AddThread(threadObj, &info[i]);
 #endif
       }
 
 #ifdef HMMER_THREADS
-      if (ncpus > 0)  sstatus = thread_loop(threadObj, queue, dbfp, cfg->n_targetseq);
-      else            sstatus = serial_loop(info, dbfp, cfg->n_targetseq);
+      if      (cache)     sstatus = cache_loop(cacheObj, cache);
+      else if (ncpus > 0) sstatus = thread_loop(threadObj, queue, dbfp, cfg->n_targetseq);
+      else                sstatus = serial_loop(info, dbfp, cfg->n_targetseq);
 #else
       sstatus = serial_loop(info, dbfp, cfg->n_targetseq);
 #endif
@@ -622,6 +655,8 @@ serial_master(ESL_GETOPTS *go, struct cfg_s *cfg)
       esl_workqueue_Destroy(queue);
       esl_threads_Destroy(threadObj);
     }
+  if (cacheObj) esl_threads_Destroy(cacheObj);
+  seqcache_Destroy(cache);
 #endif
 
   free(info);
@@ -1434,6 +1469,133 @@ pipeline_thread(void *arg)
 
   status = esl_workqueue_WorkerUpdate(info->queue, block, NULL);
   if (status != eslOK) esl_fatal("Work queue worker failed");
+
+  esl_threads_Finished(obj, workeridx);
+  return;
+}
+
+static int64_t
+physical_memory(void)
+{
+#if defined(_SC_PHYS_PAGES) && defined(_SC_PAGESIZE)
+  long np = sysconf(_SC_PHYS_PAGES), ps = sysconf(_SC_PAGESIZE);
+  if (np > 0 && ps > 0) return (int64_t) np * ps;
+#endif
+  return 0;
+}
+
+/* seqcache_Create()
+ * Read the whole target database into memory, if that makes sense: the file
+ * must be rewindable, no part of the database is selected with --restrictdb,
+ * and the file is not larger than a quarter of the physical memory (or the
+ * limit in MiB set by the environment variable HMMER_SEQCACHE_MAX, 0 disables
+ * the cache). Returns NULL if the cache is not used.
+ */
+static SEQ_CACHE *
+seqcache_Create(ESL_GETOPTS *go, struct cfg_s *cfg, ESL_SQFILE *dbfp, const ESL_ALPHABET *abc)
+{
+  SEQ_CACHE *cache = NULL;
+  ESL_SQ_BLOCK *block;
+  struct stat st;
+  int64_t max_size = physical_memory() / 4;
+  int status;
+
+  if (getenv("HMMER_SEQCACHE_MAX")) max_size = (int64_t) atol(getenv("HMMER_SEQCACHE_MAX")) * 1024 * 1024;
+  if (max_size <= 0) return NULL;
+  if (! esl_sqfile_IsRewindable(dbfp)) return NULL;
+  if (esl_opt_IsUsed(go, "--restrictdb_stkey") || esl_opt_IsUsed(go, "--restrictdb_n") || cfg->n_targetseq >= 0) return NULL;
+  if (stat(cfg->dbfile, &st) != 0 || st.st_size > max_size) return NULL;
+
+  ESL_ALLOC(cache, sizeof(SEQ_CACHE));
+  cache->block  = NULL;
+  cache->first  = NULL;
+  cache->nblock = 0;
+  cache->next   = 0;
+  if (pthread_mutex_init(&cache->mutex, NULL) != 0) esl_fatal("mutex init failed");
+
+  while (1)
+    {
+      if ((block = esl_sq_CreateDigitalBlock(BLOCK_SIZE, abc)) == NULL) esl_fatal("Failed to allocate sequence block");
+      status = esl_sqio_ReadBlock(dbfp, block, -1, -1, /*max_init_window=*/FALSE, FALSE);
+      if (status == eslEOF || block->count == 0) { esl_sq_DestroyBlock(block); break; }
+      if (status != eslOK) esl_fatal("Parse failed (sequence file %s):\n%s\n", dbfp->filename, esl_sqfile_GetErrorBuf(dbfp));
+      ESL_REALLOC(cache->block, sizeof(ESL_SQ_BLOCK *) * (cache->nblock + 1));
+      ESL_REALLOC(cache->first, sizeof(int64_t)        * (cache->nblock + 1));
+      cache->first[cache->nblock] = cache->nblock ? cache->first[cache->nblock-1] + cache->block[cache->nblock-1]->count : 0;
+      cache->block[cache->nblock++] = block;
+    }
+  if (status != eslEOF && status != eslOK) esl_fatal("Parse failed (sequence file %s):\n%s\n", dbfp->filename, esl_sqfile_GetErrorBuf(dbfp));
+  return cache;
+
+ ERROR:
+  esl_fatal("Failed to allocate the sequence cache");
+  return NULL;
+}
+
+static void
+seqcache_Destroy(SEQ_CACHE *cache)
+{
+  int i;
+  if (! cache) return;
+  for (i = 0; i < cache->nblock; i++) esl_sq_DestroyBlock(cache->block[i]);
+  free(cache->block);
+  free(cache->first);
+  pthread_mutex_destroy(&cache->mutex);
+  free(cache);
+}
+
+static int
+cache_loop(ESL_THREADS *obj, SEQ_CACHE *cache)
+{
+  cache->next = 0;
+  esl_threads_WaitForStart(obj);
+  esl_threads_WaitForFinish(obj);
+  return eslEOF;
+}
+
+static void
+cache_thread(void *arg)
+{
+  ESL_THREADS *obj = (ESL_THREADS *) arg;
+  WORKER_INFO *info;
+  SEQ_CACHE   *cache;
+  int          workeridx;
+  int          i, k;
+
+  impl_Init();
+  esl_threads_Started(obj, &workeridx);
+  info  = (WORKER_INFO *) esl_threads_GetData(obj, workeridx);
+  cache = info->cache;
+
+  while (1)
+    {
+      if (pthread_mutex_lock(&cache->mutex) != 0) esl_fatal("mutex lock failed");
+      k = cache->next++;
+      if (pthread_mutex_unlock(&cache->mutex) != 0) esl_fatal("mutex unlock failed");
+      if (k >= cache->nblock) break;
+
+      ESL_SQ_BLOCK *block = cache->block[k];
+      for (i = 0; i < block->count; ++i)
+	{
+	  ESL_SQ *dbsq = block->list + i;
+
+	  p7_pli_NewSeq(info->pli, dbsq);
+	  /* While searching, the E-value used to decide whether to keep a hit is
+	   * based on the number of sequences seen so far. Use the count a serial
+	   * run would have, so that the hit list doesn't depend on which worker
+	   * processed which sequences.
+	   */
+	  if (info->pli->Z_setby == p7_ZSETBY_NTARGETS) info->pli->Z = (double) (cache->first[k] + i + 1);
+	  p7_bg_SetLength(info->bg, dbsq->n);
+	  p7_oprofile_ReconfigLength(info->om, dbsq->n);
+
+	  p7_Pipeline(info->pli, info->om, info->bg, dbsq, NULL, info->th);
+
+	  p7_pipeline_Reuse(info->pli);
+	}
+    }
+  /* p7_pipeline_Merge() expects Z to be this worker's count */
+  if (info->pli->Z_setby == p7_ZSETBY_NTARGETS) info->pli->Z = info->pli->nseqs;
 
   esl_threads_Finished(obj, workeridx);
   return;
