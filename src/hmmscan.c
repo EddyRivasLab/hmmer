@@ -10,6 +10,8 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <sys/stat.h>
+#include <unistd.h>
 
 #include "easel.h"
 #include "esl_alphabet.h"
@@ -31,10 +33,29 @@
 
 #include "hmmer.h"
 
+/* The profile database held in memory, so that it's read only once when
+ * scanning multiple query sequences (otherwise all the profiles are reread
+ * and reallocated for every query, and the workers wait for the reader).
+ * Workers take the blocks in turn; the results are the same as when streaming
+ * the database since each profile is processed independently.
+ */
+#define MODEL_CACHE_BLOCK 1000
+typedef struct {
+  P7_OPROFILE    **om;
+  ESL_ALPHABET    *abc;         /* the profiles refer to it */
+  int              nom;
+  int              nblock;
+  int              next;        /* next block to process, shared by the workers */
+#ifdef HMMER_THREADS
+  pthread_mutex_t  mutex;
+#endif
+} MODEL_CACHE;
+
 typedef struct {
 #ifdef HMMER_THREADS
   ESL_WORK_QUEUE   *queue;
 #endif
+  MODEL_CACHE      *cache;       /* if non-NULL, scan the cached profiles instead of the queue */
   ESL_SQ           *qsq;
   P7_BG            *bg;	         /* null model                              */
   P7_PIPELINE      *pli;         /* work pipeline                           */
@@ -124,11 +145,15 @@ static char banner[] = "search sequence(s) against a profile database";
 
 static int  serial_master(ESL_GETOPTS *go, struct cfg_s *cfg);
 static int  serial_loop  (WORKER_INFO *info, P7_HMMFILE *hfp);
+static void modelcache_Destroy(MODEL_CACHE *cache);
 
 #ifdef HMMER_THREADS
 #define BLOCK_SIZE 1000
 
 static int  thread_loop(ESL_THREADS *obj, ESL_WORK_QUEUE *queue, P7_HMMFILE *hfp);
+static int  cache_loop(ESL_THREADS *obj, MODEL_CACHE *cache);
+static void cache_thread(void *arg);
+static MODEL_CACHE *modelcache_Create(struct cfg_s *cfg);
 static void pipeline_thread(void *arg);
 #endif
 
@@ -349,7 +374,9 @@ serial_master(ESL_GETOPTS *go, struct cfg_s *cfg)
   P7_OM_BLOCK     *block    = NULL;
   ESL_THREADS     *threadObj= NULL;
   ESL_WORK_QUEUE  *queue    = NULL;
+  ESL_THREADS     *cacheObj = NULL;
 #endif
+  MODEL_CACHE     *cache    = NULL;
   char             errbuf[eslERRBUFSIZE];
 
   w = esl_stopwatch_Create();
@@ -401,6 +428,8 @@ serial_master(ESL_GETOPTS *go, struct cfg_s *cfg)
     {
       threadObj = esl_threads_Create(&pipeline_thread);
       queue = esl_workqueue_Create(ncpus * 2);
+      if ((cache = modelcache_Create(cfg)) != NULL)
+        cacheObj = esl_threads_Create(&cache_thread);
     }
 #endif
 
@@ -410,8 +439,10 @@ serial_master(ESL_GETOPTS *go, struct cfg_s *cfg)
   for (i = 0; i < infocnt; ++i)
     {
       info[i].bg    = p7_bg_Create(abc);
+      info[i].cache = NULL;
 #ifdef HMMER_THREADS
       info[i].queue = queue;
+      info[i].cache = cache;
 #endif
     }
 
@@ -433,12 +464,14 @@ serial_master(ESL_GETOPTS *go, struct cfg_s *cfg)
       esl_stopwatch_Start(w);	                          
 
       /* Open the target profile database */
+      if (! info->cache) {
       status = p7_hmmfile_Open(cfg->hmmfile, p7_HMMDBENV, &hfp, NULL);
       if (status != eslOK)        p7_Fail("Unexpected error %d in opening hmm file %s.\n",           status, cfg->hmmfile);  
+      }
   
 #ifdef HMMER_THREADS
       /* if we are threaded, create a lock to prevent multiple readers */
-      if (ncpus > 0)
+      if (ncpus > 0 && ! info->cache)
 	{
 	  status = p7_hmmfile_CreateLock(hfp);
 	  if (status != eslOK) p7_Fail("Unexpected error %d creating lock\n", status);
@@ -454,19 +487,21 @@ serial_master(ESL_GETOPTS *go, struct cfg_s *cfg)
 	  /* Create processing pipeline and hit list */
 	  info[i].th  = p7_tophits_Create(); 
 	  info[i].pli = p7_pipeline_Create(go, 100, 100, FALSE, p7_SCAN_MODELS); /* M_hint = 100, L_hint = 100 are just dummies for now */
-	  info[i].pli->hfp = hfp;  /* for two-stage input, pipeline needs <hfp> */
+	  info[i].pli->hfp = info->cache ? NULL : hfp;  /* for two-stage input, pipeline needs <hfp>; cached profiles are complete */
 
 	  p7_pli_NewSeq(info[i].pli, qsq);
 	  info[i].qsq = qsq;
 
 #ifdef HMMER_THREADS
-	  if (ncpus > 0) esl_threads_AddThread(threadObj, &info[i]);
+	  if      (cache)     esl_threads_AddThread(cacheObj,  &info[i]);
+	  else if (ncpus > 0) esl_threads_AddThread(threadObj, &info[i]);
 #endif
 	}
 
 #ifdef HMMER_THREADS
-      if (ncpus > 0)  hstatus = thread_loop(threadObj, queue, hfp);
-      else	      hstatus = serial_loop(info, hfp);
+      if      (cache)     hstatus = cache_loop(cacheObj, cache);
+      else if (ncpus > 0) hstatus = thread_loop(threadObj, queue, hfp);
+      else	          hstatus = serial_loop(info, hfp);
 #else
       hstatus = serial_loop(info, hfp);
 #endif
@@ -504,7 +539,7 @@ serial_master(ESL_GETOPTS *go, struct cfg_s *cfg)
       if (fprintf(ofp, "//\n") < 0) ESL_EXCEPTION_SYS(eslEWRITE, "write failed");
       fflush(ofp);
 
-      p7_hmmfile_Close(hfp);
+      if (! info->cache) p7_hmmfile_Close(hfp);
       p7_pipeline_Destroy(info->pli);
       p7_tophits_Destroy(info->th);
       esl_sq_Reuse(qsq);
@@ -534,8 +569,10 @@ serial_master(ESL_GETOPTS *go, struct cfg_s *cfg)
 	p7_oprofile_DestroyBlock(block);
       esl_workqueue_Destroy(queue);
       esl_threads_Destroy(threadObj);
+      if (cacheObj) esl_threads_Destroy(cacheObj);
     }
 #endif
+  modelcache_Destroy(cache);
 
   free(info);
 
@@ -1284,6 +1321,149 @@ pipeline_thread(void *arg)
 
   status = esl_workqueue_WorkerUpdate(info->queue, block, NULL);
   if (status != eslOK) esl_fatal("Work queue worker failed");
+
+  esl_threads_Finished(obj, workeridx);
+  return;
+}
+#endif   /* HMMER_THREADS */
+
+static int64_t
+physical_memory(void)
+{
+#if defined(_SC_PHYS_PAGES) && defined(_SC_PAGESIZE)
+  long np = sysconf(_SC_PHYS_PAGES), ps = sysconf(_SC_PAGESIZE);
+  if (np > 0 && ps > 0) return (int64_t) np * ps;
+#endif
+  return 0;
+}
+
+/* modelcache_Create()
+ * Read all the profiles of the pressed database into memory, if the pressed
+ * files are not larger than a quarter of the physical memory (or the limit in
+ * MiB set by the environment variable HMMER_SEQCACHE_MAX, 0 disables the
+ * cache). Returns NULL if the cache is not used.
+ */
+static MODEL_CACHE *
+modelcache_Create(struct cfg_s *cfg)
+{
+  MODEL_CACHE  *cache = NULL;
+  P7_HMMFILE   *hfp   = NULL;
+  ESL_ALPHABET *abc   = NULL;
+  P7_OPROFILE  *om    = NULL;
+  struct stat   st;
+  char         *fname = NULL;
+  int64_t       max_size = physical_memory() / 4, size = 0;
+  int           status;
+  const char   *sfx[2] = { ".h3f", ".h3p" };
+  int           i;
+
+  if (getenv("HMMER_SEQCACHE_MAX")) max_size = (int64_t) atol(getenv("HMMER_SEQCACHE_MAX")) * 1024 * 1024;
+  if (max_size <= 0) return NULL;
+  for (i = 0; i < 2; i++)
+    {
+      if (esl_sprintf(&fname, "%s%s", cfg->hmmfile, sfx[i]) != eslOK) return NULL;
+      if (stat(fname, &st) != 0) { free(fname); return NULL; }   /* e.g. found via HMMERDB: just stream it */
+      size += st.st_size;
+      free(fname); fname = NULL;
+    }
+  if (size > max_size) return NULL;
+
+  if (p7_hmmfile_Open(cfg->hmmfile, p7_HMMDBENV, &hfp, NULL) != eslOK) return NULL;
+  if (! hfp->is_pressed) { p7_hmmfile_Close(hfp); return NULL; }
+
+  ESL_ALLOC(cache, sizeof(MODEL_CACHE));
+  cache->om     = NULL;
+  cache->nom    = 0;
+  cache->next   = 0;
+#ifdef HMMER_THREADS
+  if (pthread_mutex_init(&cache->mutex, NULL) != 0) esl_fatal("mutex init failed");
+#endif
+  while ((status = p7_oprofile_ReadMSV(hfp, &abc, &om)) == eslOK)
+    {
+      if ((status = p7_oprofile_ReadRest(hfp, om)) != eslOK) esl_fatal("Failed to read profile %s from %s", om->name, cfg->hmmfile);
+      if (cache->nom % MODEL_CACHE_BLOCK == 0)
+        ESL_REALLOC(cache->om, sizeof(P7_OPROFILE *) * (cache->nom + MODEL_CACHE_BLOCK));
+      cache->om[cache->nom++] = om;
+      om = NULL;
+    }
+  if (status != eslEOF) esl_fatal("Failed to read the profiles from %s", cfg->hmmfile);
+  cache->nblock = (cache->nom + MODEL_CACHE_BLOCK - 1) / MODEL_CACHE_BLOCK;
+  cache->abc    = abc;
+  p7_hmmfile_Close(hfp);
+  return cache;
+
+ ERROR:
+  esl_fatal("Failed to allocate the profile cache");
+  return NULL;
+}
+
+static void
+modelcache_Destroy(MODEL_CACHE *cache)
+{
+  int i;
+  if (! cache) return;
+  for (i = 0; i < cache->nom; i++) p7_oprofile_Destroy(cache->om[i]);
+  free(cache->om);
+  esl_alphabet_Destroy(cache->abc);
+#ifdef HMMER_THREADS
+  pthread_mutex_destroy(&cache->mutex);
+#endif
+  free(cache);
+}
+
+#ifdef HMMER_THREADS
+static int
+cache_loop(ESL_THREADS *obj, MODEL_CACHE *cache)
+{
+  cache->next = 0;
+  esl_threads_WaitForStart(obj);
+  esl_threads_WaitForFinish(obj);
+  return eslEOF;
+}
+
+static void
+cache_thread(void *arg)
+{
+  ESL_THREADS *obj = (ESL_THREADS *) arg;
+  WORKER_INFO *info;
+  MODEL_CACHE *cache;
+  int          workeridx;
+  int          i, k, status;
+
+  impl_Init();
+  esl_threads_Started(obj, &workeridx);
+  info  = (WORKER_INFO *) esl_threads_GetData(obj, workeridx);
+  cache = info->cache;
+
+  while (1)
+    {
+      if (pthread_mutex_lock(&cache->mutex) != 0) esl_fatal("mutex lock failed");
+      k = cache->next++;
+      if (pthread_mutex_unlock(&cache->mutex) != 0) esl_fatal("mutex unlock failed");
+      if (k >= cache->nblock) break;
+
+      for (i = k * MODEL_CACHE_BLOCK; i < cache->nom && i < (k+1) * MODEL_CACHE_BLOCK; ++i)
+	{
+	  P7_OPROFILE *om = cache->om[i];
+
+	  p7_pli_NewModel(info->pli, om, info->bg);
+	  /* While searching, the E-value used to decide whether to keep a hit is
+	   * based on the number of profiles seen so far. Use the count a serial
+	   * run would have, so that the hit list doesn't depend on which worker
+	   * processed which profiles.
+	   */
+	  if (info->pli->Z_setby == p7_ZSETBY_NTARGETS) info->pli->Z = (double) (i + 1);
+	  p7_bg_SetLength(info->bg, info->qsq->n);
+	  p7_oprofile_ReconfigLength(om, info->qsq->n);
+
+	  status = p7_Pipeline(info->pli, om, info->bg, info->qsq, NULL, info->th);
+	  if (status == eslEINVAL) p7_Fail(info->pli->errbuf);
+
+	  p7_pipeline_Reuse(info->pli);
+	}
+    }
+  /* p7_pipeline_Merge() expects Z to be this worker's count */
+  if (info->pli->Z_setby == p7_ZSETBY_NTARGETS) info->pli->Z = info->pli->nmodels;
 
   esl_threads_Finished(obj, workeridx);
   return;
