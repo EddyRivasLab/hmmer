@@ -145,6 +145,7 @@ static char banner[] = "search sequence(s) against a profile database";
 
 static int  serial_master(ESL_GETOPTS *go, struct cfg_s *cfg);
 static int  serial_loop  (WORKER_INFO *info, P7_HMMFILE *hfp);
+static void modelcache_Destroy(MODEL_CACHE *cache);
 
 #ifdef HMMER_THREADS
 #define BLOCK_SIZE 1000
@@ -153,7 +154,6 @@ static int  thread_loop(ESL_THREADS *obj, ESL_WORK_QUEUE *queue, P7_HMMFILE *hfp
 static int  cache_loop(ESL_THREADS *obj, MODEL_CACHE *cache);
 static void cache_thread(void *arg);
 static MODEL_CACHE *modelcache_Create(struct cfg_s *cfg);
-static void modelcache_Destroy(MODEL_CACHE *cache);
 static void pipeline_thread(void *arg);
 #endif
 
