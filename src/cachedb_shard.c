@@ -11,7 +11,7 @@
 #include "esl_alphabet.h"
 #include "esl_getopts.h"
 #include "esl_sq.h"
-#include "esl_sqio.h"
+#include "esl_sqfile.h"
 #include "esl_stopwatch.h"
 
 #include "hmmer.h"
@@ -71,7 +71,6 @@ p7_seqcache_Open_master(char *seqfile, P7_SEQCACHE **ret_cache, char *errbuf)
   ESL_SQFILE        *sqfp       = NULL;
   ESL_SQ            *sq         = NULL;
   ESL_ALPHABET      *abc        = NULL;
-  ESL_SQASCII_DATA  *ascii      = NULL;
 
   if (errbuf) errbuf[0] = '\0';	/* CURRENTLY UNUSED. FIXME */
 
@@ -89,9 +88,8 @@ p7_seqcache_Open_master(char *seqfile, P7_SEQCACHE **ret_cache, char *errbuf)
    * The header line will be read in, parsed and saved.  Then the
    * parser will be repositioned after the line and used normally.
    */
-  ascii = &sqfp->data.ascii;
-  fseek(ascii->fp, 0L, SEEK_SET);
-  if (fgets(buffer, sizeof(buffer), ascii->fp) == NULL) return eslEFORMAT;
+  fseek(sqfp->fp, 0L, SEEK_SET);
+  if (fgets(buffer, sizeof(buffer), sqfp->fp) == NULL) return eslEFORMAT;
   if (buffer[0] != '#')                                 return eslEFORMAT;
 
   ptr = buffer + 1;
@@ -140,7 +138,7 @@ p7_seqcache_Open_master(char *seqfile, P7_SEQCACHE **ret_cache, char *errbuf)
   /* position the sequence file to the start of the first sequence.
    * this will force any buffers associated with the file to be reset.
    */
-  offset = ftell(ascii->fp);
+  offset = ftell(sqfp->fp);
   if ((status = esl_sqfile_Position(sqfp, offset)) != eslOK) goto ERROR;
 
   abc = esl_alphabet_Create(eslAMINO);
@@ -161,7 +159,7 @@ p7_seqcache_Open_master(char *seqfile, P7_SEQCACHE **ret_cache, char *errbuf)
   strcpy(buffer, "000000001");
   
   inx = 0;
-  while ((status = esl_sqio_Read(sqfp, sq)) == eslOK) {
+  while ((status = esl_sqfile_Read(sqfp, sq)) == eslOK) {
 
     /* sanity checks */
     if (inx >= seq_cnt)       { printf("inx: %d\n", inx); return eslEFORMAT; }
@@ -343,7 +341,6 @@ p7_seqcache_Open_shard(char *seqfile, P7_SEQCACHE **ret_cache, char *errbuf, int
   ESL_SQFILE        *sqfp       = NULL;
   ESL_SQ            *sq         = NULL;
   ESL_ALPHABET      *abc        = NULL;
-  ESL_SQASCII_DATA  *ascii      = NULL;
   uint64_t *db_seq_count, *seq_in_db;
   if (errbuf) errbuf[0] = '\0'; /* CURRENTLY UNUSED. FIXME */
 
@@ -361,10 +358,9 @@ p7_seqcache_Open_shard(char *seqfile, P7_SEQCACHE **ret_cache, char *errbuf, int
    * The header line will be read in, parsed and saved.  Then the
    * parser will be repositioned after the line and used normally.
    */
-  ascii = &sqfp->data.ascii;
-  fseek(ascii->fp, 0L, SEEK_SET);
-  if (fgets(buffer, sizeof(buffer), ascii->fp) == NULL) return eslEFORMAT;
-  if (buffer[0] != '#')                                 return eslEFORMAT;
+  fseek(sqfp->fp, 0L, SEEK_SET);
+  if (fgets(buffer, sizeof(buffer), sqfp->fp) == NULL) return eslEFORMAT;
+  if (buffer[0] != '#')                                return eslEFORMAT;
 
   ptr = buffer + 1;
   res_cnt = strtoll(ptr, &ptr, 10);
@@ -416,7 +412,7 @@ p7_seqcache_Open_shard(char *seqfile, P7_SEQCACHE **ret_cache, char *errbuf, int
   /* position the sequence file to the start of the first sequence.
    * this will force any buffers associated with the file to be reset.
    */
-  offset = ftell(ascii->fp);
+  offset = ftell(sqfp->fp);
   if ((status = esl_sqfile_Position(sqfp, offset)) != eslOK) goto ERROR;
 
   abc = esl_alphabet_Create(eslAMINO);
@@ -439,7 +435,7 @@ p7_seqcache_Open_shard(char *seqfile, P7_SEQCACHE **ret_cache, char *errbuf, int
   sequence_number = 1;
   res_mem_used = 0;
   hdr_mem_used = 0;
-  while ((status = esl_sqio_Read(sqfp, sq)) == eslOK) {
+  while ((status = esl_sqfile_Read(sqfp, sq)) == eslOK) {
 
     /* sanity checks */
     if (inx >= seq_cnt)       { printf("inx: %d\n", inx); return eslEFORMAT; }
@@ -669,7 +665,7 @@ p7_seqcache_Close(P7_SEQCACHE *cache)
 #include "esl_dsq.h"
 #include "esl_getopts.h"
 #include "esl_sq.h"
-#include "esl_sqio.h"
+#include "esl_sqfile.h"
 #include "esl_stopwatch.h"
 
 #include "hmmer.h"
@@ -780,7 +776,7 @@ main(int argc, char **argv)
     }
     printf("Database %d: %s\n", db_inx, seqfile);
 
-    while ((status = esl_sqio_Read(sqfp, sq)) == eslOK) {
+    while ((status = esl_sqfile_Read(sqfp, sq)) == eslOK) {
       int sum = 0;
 
       inx = 0;
@@ -927,7 +923,7 @@ main(int argc, char **argv)
 #include "esl_alphabet.h"
 #include "esl_getopts.h"
 #include "esl_sq.h"
-#include "esl_sqio.h"
+#include "esl_sqfile.h"
 #include "esl_stopwatch.h"
 
 #include "hmmer.h"

@@ -478,7 +478,7 @@ main(int argc, char **argv)
 #include "esl_getopts.h"
 #include "esl_gumbel.h"
 #include "esl_sq.h"
-#include "esl_sqio.h"
+#include "esl_sqfile.h"
 
 #include "hmmer.h"
 
@@ -534,7 +534,7 @@ main(int argc, char **argv)
   /* Allocate matrix */
   fwd = p7_gmx_Create(gm->M, sq->n);
 
-  while ((status = esl_sqio_Read(sqfp, sq)) == eslOK)
+  while ((status = esl_sqfile_Read(sqfp, sq)) == eslOK)
     {
       p7_ReconfigLength(gm,  sq->n);
       p7_bg_SetLength(bg,    sq->n);

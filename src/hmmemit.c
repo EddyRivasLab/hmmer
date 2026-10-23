@@ -14,7 +14,7 @@
 #include "esl_msafile.h"
 #include "esl_random.h"
 #include "esl_sq.h"
-#include "esl_sqio.h"
+#include "esl_sqfile.h"
 #include "esl_vectorops.h"
 
 #include "hmmer.h"
@@ -164,7 +164,7 @@ emit_consensus(ESL_GETOPTS *go, FILE *ofp, int outfmt, P7_HMM *hmm)
 
   if (p7_emit_SimpleConsensus(hmm, sq)                 != eslOK) esl_fatal("failed to create simple consensus seq");
   if (esl_sq_FormatName(sq, "%s-consensus", hmm->name) != eslOK) esl_fatal("failed to set sequence name");
-  if (esl_sqio_Write(ofp, sq, outfmt, FALSE)           != eslOK) esl_fatal("failed to write sequence");
+  if (esl_sqfile_Write(ofp, sq, outfmt, FALSE)           != eslOK) esl_fatal("failed to write sequence");
 
   esl_sq_Destroy(sq);
   return;
@@ -181,7 +181,7 @@ emit_fancycons(ESL_GETOPTS *go, FILE *ofp, int outfmt, P7_HMM *hmm)
 
   if (p7_emit_FancyConsensus(hmm, minl, minu, sq)      != eslOK) esl_fatal("failed to create consensus seq");
   if (esl_sq_FormatName(sq, "%s-consensus", hmm->name) != eslOK) esl_fatal("failed to set sequence name");
-  if (esl_sqio_Write(ofp, sq, outfmt, FALSE)           != eslOK) esl_fatal("failed to write sequence");
+  if (esl_sqfile_Write(ofp, sq, outfmt, FALSE)           != eslOK) esl_fatal("failed to write sequence");
 
   esl_sq_Destroy(sq);
   return;
@@ -258,7 +258,7 @@ emit_sequences(ESL_GETOPTS *go, FILE *ofp, int outfmt, ESL_RANDOMNESS *r, P7_HMM
       status = esl_sq_FormatName(sq, "%s-sample%d", hmm->name, nseq);
       if (status) esl_fatal("Failed to set sequence name\n");
 
-      status = esl_sqio_Write(ofp, sq, outfmt, FALSE);
+      status = esl_sqfile_Write(ofp, sq, outfmt, FALSE);
       if (status != eslOK) esl_fatal("Failed to write sequence\n");
 
       p7_trace_Reuse(tr);

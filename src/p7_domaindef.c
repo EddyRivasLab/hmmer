@@ -1002,7 +1002,7 @@ rescore_isolated_domain(P7_DOMAINDEF *ddef, P7_OPROFILE *om, const ESL_SQ *sq, c
 #include "esl_random.h"
 #include "esl_alphabet.h"
 #include "esl_sq.h"
-#include "esl_sqio.h"
+#include "esl_sqfile.h"
 #include "hmmer.h"
 
 static ESL_OPTIONS options[] = {
@@ -1056,7 +1056,7 @@ main(int argc, char **argv)
   else if (status == eslEFORMAT)   p7_Fail("Format unrecognized.");
   else if (status == eslEINVAL)    p7_Fail("Can't autodetect stdin or .gz.");
   else if (status != eslOK)        p7_Fail("Open failed, code %d.", status);
-  if  (esl_sqio_Read(sqfp, sq) != eslOK) p7_Fail("Failed to read sequence");
+  if  (esl_sqfile_Read(sqfp, sq) != eslOK) p7_Fail("Failed to read sequence");
   esl_sqfile_Close(sqfp);
 
   /* Configure a profile from the HMM */

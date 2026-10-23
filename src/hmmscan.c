@@ -15,7 +15,7 @@
 #include "esl_alphabet.h"
 #include "esl_getopts.h"
 #include "esl_sq.h"
-#include "esl_sqio.h"
+#include "esl_sqfile.h"
 #include "esl_stopwatch.h"
 
 #ifdef HMMER_MPI
@@ -359,7 +359,7 @@ serial_master(ESL_GETOPTS *go, struct cfg_s *cfg)
 
   /* If caller declared an input format, decode it */
   if (esl_opt_IsOn(go, "--qformat")) {
-    seqfmt = esl_sqio_EncodeFormat(esl_opt_GetString(go, "--qformat"));
+    seqfmt = esl_sqfile_EncodeFormat(esl_opt_GetString(go, "--qformat"));
     if (seqfmt == eslSQFILE_UNKNOWN) p7_Fail("%s is not a recognized input sequence file format\n", esl_opt_GetString(go, "--qformat"));
   }
 
@@ -427,7 +427,7 @@ serial_master(ESL_GETOPTS *go, struct cfg_s *cfg)
 #endif
 
   /* Outside loop: over each query sequence in <seqfile>. */
-  while ((sstatus = esl_sqio_Read(sqfp, qsq)) == eslOK)
+  while ((sstatus = esl_sqfile_Read(sqfp, qsq)) == eslOK)
     {
       nquery++;
       esl_stopwatch_Start(w);	                          
@@ -758,7 +758,7 @@ mpi_master(ESL_GETOPTS *go, struct cfg_s *cfg)
 
   /* If caller declared an input format, decode it */
   if (esl_opt_IsOn(go, "--qformat")) {
-    seqfmt = esl_sqio_EncodeFormat(esl_opt_GetString(go, "--qformat"));
+    seqfmt = esl_sqfile_EncodeFormat(esl_opt_GetString(go, "--qformat"));
     if (seqfmt == eslSQFILE_UNKNOWN) mpi_failure("%s is not a recognized input sequence file format\n", esl_opt_GetString(go, "--qformat"));
   }
 
@@ -806,7 +806,7 @@ mpi_master(ESL_GETOPTS *go, struct cfg_s *cfg)
   bg = p7_bg_Create(abc);
 
   /* Outside loop: over each query sequence in <seqfile>. */
-  while ((sstatus = esl_sqio_Read(sqfp, qsq)) == eslOK)
+  while ((sstatus = esl_sqfile_Read(sqfp, qsq)) == eslOK)
     {
       P7_PIPELINE     *pli     = NULL;		/* processing pipeline                      */
       P7_TOPHITS      *th      = NULL;        	/* top-scoring sequence hits                */
@@ -1045,7 +1045,7 @@ mpi_worker(ESL_GETOPTS *go, struct cfg_s *cfg)
   bg = p7_bg_Create(abc);
 
   /* Outside loop: over each query sequence in <seqfile>. */
-  while ((sstatus = esl_sqio_Read(sqfp, qsq)) == eslOK)
+  while ((sstatus = esl_sqfile_Read(sqfp, qsq)) == eslOK)
     {
       P7_PIPELINE     *pli     = NULL;		/* processing pipeline                      */
       P7_TOPHITS      *th      = NULL;        	/* top-scoring sequence hits                */

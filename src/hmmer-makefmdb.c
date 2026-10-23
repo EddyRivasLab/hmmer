@@ -2,7 +2,7 @@
 
 #include "easel.h"
 #include "esl_sq.h"
-#include "esl_sqio.h"
+#include "esl_sqfile.h"
 #include "esl_mem.h"
 
 #include <string.h>
@@ -479,7 +479,7 @@ main(int argc, char **argv)
   output_header(stdout, go, fname_in, fname_out);
 
   if (esl_opt_GetString(go, "--informat") != NULL) {
-    infmt = esl_sqio_EncodeFormat(esl_opt_GetString(go, "--informat"));
+    infmt = esl_sqfile_EncodeFormat(esl_opt_GetString(go, "--informat"));
     if (infmt == eslSQFILE_UNKNOWN) esl_fatal("%s is not a valid input sequence file format for --informat");
   }
 
@@ -604,7 +604,7 @@ main(int argc, char **argv)
     }
 
     
-    status = esl_sqio_ReadBlock(sqfp, block, block_size, -1, /*max_init_window=*/FALSE, alphatype != eslAMINO);
+    status = esl_sqfile_ReadBlock(sqfp, block, block_size, -1, /*max_init_window=*/FALSE, alphatype != eslAMINO);
     if (status == eslEOF) continue;
     if (status != eslOK)  esl_fatal("Parse failed (sequence file %s): status:%d\n%s\n",
                                                   sqfp->filename, status, esl_sqfile_GetErrorBuf(sqfp));

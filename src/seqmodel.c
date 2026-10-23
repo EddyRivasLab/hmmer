@@ -119,7 +119,7 @@ p7_Seqmodel(const ESL_ALPHABET *abc, ESL_DSQ *dsq, int M, char *name,
 #include "esl_random.h"
 #include "esl_alphabet.h"
 #include "esl_sq.h"
-#include "esl_sqio.h"
+#include "esl_sqfile.h"
 #include "esl_dmatrix.h"
 #include "esl_scorematrix.h"
 
@@ -201,7 +201,7 @@ main(int argc, char **argv)
 
   /* For each sequence, build a model and save it. 
    */
-  while ((status = esl_sqio_Read(qfp, qsq)) == eslOK)
+  while ((status = esl_sqfile_Read(qfp, qsq)) == eslOK)
     {
       p7_Seqmodel(abc, qsq->dsq, qsq->n, qsq->name, Q, bg->f, popen, pextend, &hmm);
       if ( p7_hmm_Validate(hmm, errbuf, 1e-5)     != eslOK) esl_fatal("HMM validation failed: %s\n", errbuf);

@@ -650,7 +650,7 @@ main(int argc, char **argv)
 #include "esl_alphabet.h"
 #include "esl_getopts.h"
 #include "esl_sq.h"
-#include "esl_sqio.h"
+#include "esl_sqfile.h"
 
 #include "hmmer.h"
 
@@ -701,7 +701,7 @@ main(int argc, char **argv)
   H = esl_vec_FEntropy(hmm->compo, bg->abc->K);
   printf("modelcomp H = %.4f\n", H);
 
-  while ((status = esl_sqio_Read(sqfp, sq)) == eslOK)
+  while ((status = esl_sqfile_Read(sqfp, sq)) == eslOK)
     {
       p7_bg_SetLength(bg, sq->n);
 
@@ -713,7 +713,7 @@ main(int argc, char **argv)
       esl_sq_Reuse(sq);
     }
   if      (status == eslEFORMAT) esl_fatal("Parse failed (sequence file %s)\n%s\n",
-					   sqfp->filename, sqfp->get_error(sqfp));     
+					   sqfp->filename, esl_sqfile_GetErrorBuf(sqfp));     
   else if (status != eslEOF)     esl_fatal("Unexpected error %d reading sequence file %s",
 					   status, sqfp->filename);
 

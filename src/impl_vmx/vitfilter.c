@@ -786,7 +786,7 @@ main(int argc, char **argv)
 #include "esl_getopts.h"
 #include "esl_gumbel.h"
 #include "esl_sq.h"
-#include "esl_sqio.h"
+#include "esl_sqfile.h"
 
 #include "hmmer.h"
 #include "impl_vmx.h"
@@ -854,7 +854,7 @@ main(int argc, char **argv)
      p7_gmx_Dump(stdout, gx, p7_DEFAULT); dumps a generic DP matrix
   */
 
-  while ((status = esl_sqio_Read(sqfp, sq)) == eslOK)
+  while ((status = esl_sqfile_Read(sqfp, sq)) == eslOK)
     {
       p7_oprofile_ReconfigLength(om, sq->n);
       p7_ReconfigLength(gm,          sq->n);

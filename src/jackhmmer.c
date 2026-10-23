@@ -15,7 +15,7 @@
 #include "esl_msafile.h"
 #include "esl_scorematrix.h"
 #include "esl_sq.h"
-#include "esl_sqio.h"
+#include "esl_sqfile.h"
 #include "esl_stopwatch.h"
 
 #ifdef HMMER_MPI
@@ -477,11 +477,11 @@ serial_master(ESL_GETOPTS *go, struct cfg_s *cfg)
 
   /* If caller declared input formats, decode them */
   if (esl_opt_IsOn(go, "--qformat")) {
-    qformat = esl_sqio_EncodeFormat(esl_opt_GetString(go, "--qformat"));
+    qformat = esl_sqfile_EncodeFormat(esl_opt_GetString(go, "--qformat"));
     if (qformat == eslSQFILE_UNKNOWN) p7_Fail("%s is not a recognized input sequence file format\n", esl_opt_GetString(go, "--qformat"));
   }
   if (esl_opt_IsOn(go, "--tformat")) {
-    dbformat = esl_sqio_EncodeFormat(esl_opt_GetString(go, "--tformat"));
+    dbformat = esl_sqfile_EncodeFormat(esl_opt_GetString(go, "--tformat"));
     if (dbformat == eslSQFILE_UNKNOWN) p7_Fail("%s is not a recognized sequence database file format\n", esl_opt_GetString(go, "--tformat"));
   }
  if ((Aformat  = esl_msafile_EncodeFormat(esl_opt_GetString(go, "--Aformat"))) == eslMSAFILE_UNKNOWN)  // default "Stockholm" is set in OPTIONS
@@ -577,7 +577,7 @@ serial_master(ESL_GETOPTS *go, struct cfg_s *cfg)
 #endif
 
   /* Outer loop over sequence queries, if more than one */
-  while ((qstatus = esl_sqio_Read(qfp, qsq)) == eslOK)
+  while ((qstatus = esl_sqfile_Read(qfp, qsq)) == eslOK)
     {
       P7_HMM          *hmm     = NULL;	     /* HMM - only needed if checkpointed        */
       P7_HMM         **ret_hmm = NULL;	     /* HMM - only needed if checkpointed        */
@@ -928,7 +928,7 @@ int next_block(ESL_SQFILE *sqfp, ESL_SQ *sq, BLOCK_LIST *list, SEQ_BLOCK *block)
   block->count = 0;
 
   esl_sq_Reuse(sq);
-  while (block->length < MAX_BLOCK_SIZE && (status = esl_sqio_ReadInfo(sqfp, sq)) == eslOK)
+  while (block->length < MAX_BLOCK_SIZE && (status = esl_sqfile_ReadInfo(sqfp, sq)) == eslOK)
     {
       if (block->count == 0) block->offset = sq->roff;
       block->length = sq->eoff - block->offset + 1;
@@ -1037,11 +1037,11 @@ mpi_master(ESL_GETOPTS *go, struct cfg_s *cfg)
 
   /* If caller declared input formats, decode them */
   if (esl_opt_IsOn(go, "--qformat")) {
-    qformat = esl_sqio_EncodeFormat(esl_opt_GetString(go, "--qformat"));
+    qformat = esl_sqfile_EncodeFormat(esl_opt_GetString(go, "--qformat"));
     if (qformat == eslSQFILE_UNKNOWN) mpi_failure("%s is not a recognized input sequence file format\n", esl_opt_GetString(go, "--qformat"));
   }
   if (esl_opt_IsOn(go, "--tformat")) {
-    dbformat = esl_sqio_EncodeFormat(esl_opt_GetString(go, "--tformat"));
+    dbformat = esl_sqfile_EncodeFormat(esl_opt_GetString(go, "--tformat"));
     if (dbformat == eslSQFILE_UNKNOWN) mpi_failure("%s is not a recognized sequence database file format\n", esl_opt_GetString(go, "--tformat"));
   }
   if ((Aformat  = esl_msafile_EncodeFormat(esl_opt_GetString(go, "--Aformat"))) == eslMSAFILE_UNKNOWN)  // default "Stockholm" is set in OPTIONS
@@ -1096,7 +1096,7 @@ mpi_master(ESL_GETOPTS *go, struct cfg_s *cfg)
   output_header(ofp, go, cfg->qfile, cfg->dbfile);
 
   /* Outer loop over sequence queries, if more than one */
-  while ((qstatus = esl_sqio_Read(qfp, qsq)) == eslOK)
+  while ((qstatus = esl_sqfile_Read(qfp, qsq)) == eslOK)
     {
       P7_PIPELINE     *pli     = NULL;	     /* accelerated HMM/seq comparison pipeline  */
       P7_TOPHITS      *th      = NULL;       /* top-scoring sequence hits                */
@@ -1407,11 +1407,11 @@ mpi_worker(ESL_GETOPTS *go, struct cfg_s *cfg)
 
   /* If caller declared input formats, decode them */
   if (esl_opt_IsOn(go, "--qformat")) {
-    qformat = esl_sqio_EncodeFormat(esl_opt_GetString(go, "--qformat"));
+    qformat = esl_sqfile_EncodeFormat(esl_opt_GetString(go, "--qformat"));
     if (qformat == eslSQFILE_UNKNOWN) mpi_failure("%s is not a recognized input sequence file format\n", esl_opt_GetString(go, "--qformat"));
   }
   if (esl_opt_IsOn(go, "--tformat")) {
-    dbformat = esl_sqio_EncodeFormat(esl_opt_GetString(go, "--tformat"));
+    dbformat = esl_sqfile_EncodeFormat(esl_opt_GetString(go, "--tformat"));
     if (dbformat == eslSQFILE_UNKNOWN) mpi_failure("%s is not a recognized sequence database file format\n", esl_opt_GetString(go, "--tformat"));
   }
 
@@ -1443,7 +1443,7 @@ mpi_worker(ESL_GETOPTS *go, struct cfg_s *cfg)
   qsq = esl_sq_CreateDigital(abc);
 
   /* Outer loop over sequence queries, if more than one */
-  while ((qstatus = esl_sqio_Read(qfp, qsq)) == eslOK)
+  while ((qstatus = esl_sqfile_Read(qfp, qsq)) == eslOK)
     {
       P7_PIPELINE     *pli     = NULL;	     /* accelerated HMM/seq comparison pipeline  */
       P7_TOPHITS      *th      = NULL;       /* top-scoring sequence hits                */
@@ -1487,7 +1487,7 @@ mpi_worker(ESL_GETOPTS *go, struct cfg_s *cfg)
 	      status = esl_sqfile_Position(dbfp, block.offset);
 	      if (status != eslOK) mpi_failure("Cannot position sequence database to %ld\n", block.offset);
 
-	      while (count > 0 && (sstatus = esl_sqio_Read(dbfp, dbsq)) == eslOK)
+	      while (count > 0 && (sstatus = esl_sqfile_Read(dbfp, dbsq)) == eslOK)
 		{
 		  length = dbsq->eoff - block.offset + 1;
 
@@ -1614,7 +1614,7 @@ serial_loop(WORKER_INFO *info, ESL_SQFILE *dbfp)
   dbsq = esl_sq_CreateDigital(info->om->abc);
 
   /* Main loop: */
-  while ((sstatus = esl_sqio_Read(dbfp, dbsq)) == eslOK)
+  while ((sstatus = esl_sqfile_Read(dbfp, dbsq)) == eslOK)
     {
       p7_pli_NewSeq(info->pli, dbsq);
       p7_bg_SetLength(info->bg, dbsq->n);
@@ -1651,7 +1651,7 @@ thread_loop(ESL_THREADS *obj, ESL_WORK_QUEUE *queue, ESL_SQFILE *dbfp)
   while (sstatus == eslOK)
     {
       block = (ESL_SQ_BLOCK *) newBlock;
-      sstatus = esl_sqio_ReadBlock(dbfp, block, -1, -1, /*max_init_window=*/FALSE, FALSE);
+      sstatus = esl_sqfile_ReadBlock(dbfp, block, -1, -1, /*max_init_window=*/FALSE, FALSE);
       if (sstatus == eslEOF)
 	{
 	  if (eofCount < esl_threads_GetWorkerCount(obj)) sstatus = eslOK;

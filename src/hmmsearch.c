@@ -17,7 +17,7 @@
 #include "esl_msa.h"
 #include "esl_msafile.h"
 #include "esl_sq.h"
-#include "esl_sqio.h"
+#include "esl_sqfile.h"
 #include "esl_stopwatch.h"
 
 #ifdef HMMER_MPI
@@ -391,7 +391,7 @@ serial_master(ESL_GETOPTS *go, struct cfg_s *cfg)
   else                                     textw = esl_opt_GetInteger(go, "--textw");
 
   if (esl_opt_IsOn(go, "--tformat")) {
-    dbfmt = esl_sqio_EncodeFormat(esl_opt_GetString(go, "--tformat"));
+    dbfmt = esl_sqfile_EncodeFormat(esl_opt_GetString(go, "--tformat"));
     if (dbfmt == eslSQFILE_UNKNOWN) p7_Fail("%s is not a recognized sequence database file format\n", esl_opt_GetString(go, "--tformat"));
   }
 
@@ -489,7 +489,7 @@ serial_master(ESL_GETOPTS *go, struct cfg_s *cfg)
           esl_sqfile_Position(dbfp, 0); //only re-set current position to 0 if we're not planning to set it in a moment
       }
 
-      if ( cfg->firstseq_key != NULL ) { //it's tempting to want to do this once and capture the offset position for future passes, but ncbi files make this non-trivial, so this keeps it general
+      if ( cfg->firstseq_key != NULL ) { 
         sstatus = esl_sqfile_PositionByKey(dbfp, cfg->firstseq_key);
         if (sstatus != eslOK)
           p7_Fail("Failure setting restrictdb_stkey to %d\n", cfg->firstseq_key);
@@ -754,7 +754,7 @@ int next_block(ESL_SQFILE *sqfp, ESL_SQ *sq, BLOCK_LIST *list, SEQ_BLOCK *block,
 
   esl_sq_Reuse(sq);
   if (n_targetseqs == 0) status = eslEOF; //this is to handle the end-case of a restrictdb scenario, where no more targets are required, and we want to mark the list as complete
-  while (block->length < MAX_BLOCK_SIZE && (n_targetseqs <0 || block->count < n_targetseqs) && (status = esl_sqio_ReadInfo(sqfp, sq)) == eslOK)
+  while (block->length < MAX_BLOCK_SIZE && (n_targetseqs <0 || block->count < n_targetseqs) && (status = esl_sqfile_ReadInfo(sqfp, sq)) == eslOK)
     {
       if (block->count == 0) block->offset = sq->roff;
       block->length = sq->eoff - block->offset + 1;
@@ -851,7 +851,7 @@ mpi_master(ESL_GETOPTS *go, struct cfg_s *cfg)
   else                                     textw = esl_opt_GetInteger(go, "--textw");
 
   if (esl_opt_IsOn(go, "--tformat")) {
-    dbfmt = esl_sqio_EncodeFormat(esl_opt_GetString(go, "--tformat"));
+    dbfmt = esl_sqfile_EncodeFormat(esl_opt_GetString(go, "--tformat"));
     if (dbfmt == eslSQFILE_UNKNOWN) mpi_failure("%s is not a recognized sequence database file format\n", esl_opt_GetString(go, "--tformat"));
   }
 
@@ -913,8 +913,7 @@ mpi_master(ESL_GETOPTS *go, struct cfg_s *cfg)
       bg = p7_bg_Create(abc);
     }
   
-
-  if ( cfg->firstseq_key != NULL ) { //it's tempting to want to do this once and capture the offset position for future passes, but ncbi files make this non-trivial, so this keeps it general
+  if ( cfg->firstseq_key != NULL ) {
     sstatus = esl_sqfile_PositionByKey(dbfp, cfg->firstseq_key);
     if (sstatus != eslOK)
       p7_Fail("Failure setting restrictdb_stkey to %d\n", cfg->firstseq_key);
@@ -1224,7 +1223,7 @@ printf("Starting mpi_worker on node %d\n",cfg->my_rank);
 	  status = esl_sqfile_Position(dbfp, block.offset);
 	  if (status != eslOK) mpi_failure("Cannot position sequence database to %ld\n", block.offset);
 
-	  while (count > 0 && (sstatus = esl_sqio_Read(dbfp, dbsq)) == eslOK)
+	  while (count > 0 && (sstatus = esl_sqfile_Read(dbfp, dbsq)) == eslOK)
 	    {
 	      length = dbsq->eoff - block.offset + 1;
 
@@ -1308,7 +1307,7 @@ serial_loop(WORKER_INFO *info, ESL_SQFILE *dbfp, int n_targetseqs)
   dbsq = esl_sq_CreateDigital(info->om->abc);
 
   /* Main loop: */
-  while ( (n_targetseqs==-1 || seq_cnt<n_targetseqs) &&  (sstatus = esl_sqio_Read(dbfp, dbsq)) == eslOK)
+  while ( (n_targetseqs==-1 || seq_cnt<n_targetseqs) &&  (sstatus = esl_sqfile_Read(dbfp, dbsq)) == eslOK)
   {
       p7_pli_NewSeq(info->pli, dbsq);
       p7_bg_SetLength(info->bg, dbsq->n);
@@ -1355,7 +1354,7 @@ thread_loop(ESL_THREADS *obj, ESL_WORK_QUEUE *queue, ESL_SQFILE *dbfp, int n_tar
         block->count = 0;
         sstatus = eslEOF;
       } else {
-        sstatus = esl_sqio_ReadBlock(dbfp, block, -1, n_targetseqs, /*max_init_window=*/FALSE, FALSE);
+        sstatus = esl_sqfile_ReadBlock(dbfp, block, -1, n_targetseqs, /*max_init_window=*/FALSE, FALSE);
         n_targetseqs -= block->count;
       }
 

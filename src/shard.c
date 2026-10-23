@@ -200,7 +200,7 @@ P7_SHARD *p7_shard_Create_sqdata(char *filename, uint32_t num_shards, uint32_t m
   uint64_t my_sequences = 0;
   uint64_t sequence_index = 0;
   // process each of the sequences in the file
-  while (esl_sqio_Read(dbfp, &(sequences->list[sequence_index])) == eslOK)
+  while (esl_sqfile_Read(dbfp, &(sequences->list[sequence_index])) == eslOK)
     {
       if (sequence_count % num_shards == my_shard) {
           // I have to care about this sequence
@@ -843,7 +843,7 @@ main(int argc, char **argv)
       sqarr[i] = NULL;
       if (( status = esl_sq_Sample(rng, abc, maxL, &(sqarr[i])))              != eslOK) esl_fatal(msg);
       if (( status = esl_sq_SetAccession(sqarr[i], ""))                       != eslOK) esl_fatal(msg);
-      if (( status = esl_sqio_Write(tmpfp, sqarr[i], eslSQFILE_FASTA, FALSE)) != eslOK) esl_fatal(msg);
+      if (( status = esl_sqfile_Write(tmpfp, sqarr[i], eslSQFILE_FASTA, FALSE)) != eslOK) esl_fatal(msg);
     }
   fclose(tmpfp);
 

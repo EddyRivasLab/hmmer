@@ -361,7 +361,7 @@ main(int argc, char **argv)
 #include "esl_alphabet.h"
 #include "esl_getopts.h"
 #include "esl_sq.h"
-#include "esl_sqio.h"
+#include "esl_sqfile.h"
 
 #include "hmmer.h"
 
@@ -408,7 +408,7 @@ main(int argc, char **argv)
   /* Read in one target sequence */
   sq     = esl_sq_CreateDigital(abc);
   if (esl_sqfile_Open(seqfile, format, NULL, &sqfp) != eslOK) p7_Fail("Failed to open sequence file %s", seqfile);
-  if (esl_sqio_Read(sqfp, sq)                       != eslOK) p7_Fail("Failed to read sequence");
+  if (esl_sqfile_Read(sqfp, sq)                       != eslOK) p7_Fail("Failed to read sequence");
   esl_sqfile_Close(sqfp);
  
   /* Configure a profile from the HMM */

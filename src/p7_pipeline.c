@@ -20,7 +20,7 @@
 
 #include "hmmer.h"
 
-#include "esl_sqio.h" //!!!!DEBUG
+#include "esl_sqfile.h" //!!!!DEBUG
 
 /* Struct used to pass a collection of useful temporary objects around
  * within the LongTarget functions
@@ -1933,7 +1933,7 @@ p7_pli_Statistics(FILE *ofp, P7_PIPELINE *pli, ESL_STOPWATCH *w)
 
 #include "easel.h"
 #include "esl_getopts.h"
-#include "esl_sqio.h"
+#include "esl_sqfile.h"
 
 #include "hmmer.h"
 
@@ -2007,7 +2007,7 @@ main(int argc, char **argv)
   p7_pli_NewModel(pli, om, bg);
 
   /* Run each target sequence through the pipeline */
-  while (esl_sqio_Read(sqfp, sq) == eslOK)
+  while (esl_sqfile_Read(sqfp, sq) == eslOK)
     { 
       p7_pli_NewSeq(pli, sq);
       p7_bg_SetLength(bg, sq->n);
@@ -2073,7 +2073,7 @@ main(int argc, char **argv)
 
 #include "easel.h"
 #include "esl_getopts.h"
-#include "esl_sqio.h"
+#include "esl_sqfile.h"
 
 #include "hmmer.h"
 
@@ -2128,7 +2128,7 @@ main(int argc, char **argv)
    */
   sq = esl_sq_Create();
   if (esl_sqfile_Open(seqfile, format, NULL, &sqfp) != eslOK) p7_Fail("Failed to open sequence file %s\n", seqfile);
-  if (esl_sqio_Read(sqfp, sq)                       != eslOK) p7_Fail("Failed to read sequence from %s\n", seqfile);
+  if (esl_sqfile_Read(sqfp, sq)                       != eslOK) p7_Fail("Failed to read sequence from %s\n", seqfile);
   esl_sqfile_Close(sqfp);
 
   /* Open the HMM db */

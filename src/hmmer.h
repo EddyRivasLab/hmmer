@@ -1246,7 +1246,7 @@ typedef struct p7_pipeline_s {
   int           long_targets;   /* TRUE if the target sequences are expected to be very long (e.g. dna chromosome search in nhmmer) */
   int           strands;        /*  p7_STRAND_TOPONLY  | p7_STRAND_BOTTOMONLY |  p7_STRAND_BOTH */
   int 		W;              /* window length for nhmmer scan - essentially maximum length of model that we expect to find*/
-  int           block_length;   /* length of overlapping blocks read in the multi-threaded variant (default MAX_RESIDUE_COUNT) */
+  int           block_length;   /* length of overlapping blocks read in the multi-threaded variant (default eslSQFILE_BLOCK_MAXRES) */
 
   int           show_accessions;/* TRUE to output accessions not names      */
   int           show_alignments;/* TRUE to output alignments (default)      */

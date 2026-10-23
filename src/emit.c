@@ -523,7 +523,7 @@ main(int argc, char **argv)
 #include "esl_alphabet.h"
 #include "esl_getopts.h"
 #include "esl_sq.h"
-#include "esl_sqio.h"
+#include "esl_sqfile.h"
 
 #include "hmmer.h"
 
@@ -579,7 +579,7 @@ main(int argc, char **argv)
     {
       p7_ProfileEmit(rng, hmm, gm, bg, sq, tr);
       esl_sq_FormatName(sq, "%s-sample%d", hmm->name, i);
-      esl_sqio_Write(stdout, sq, eslSQFILE_FASTA, FALSE);
+      esl_sqfile_Write(stdout, sq, eslSQFILE_FASTA, FALSE);
 
       if (p7_trace_Validate(tr, abc, sq->dsq, errbuf) != eslOK) esl_fatal(errbuf);
 

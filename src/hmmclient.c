@@ -21,7 +21,7 @@
 #include "esl_msa.h"
 #include "esl_msafile.h"
 #include "esl_sq.h"
-#include "esl_sqio.h"
+#include "esl_sqfile.h"
 #include "esl_stopwatch.h"
 #include "errno.h"
 
@@ -522,11 +522,10 @@ main(int argc, char **argv)
     { // query file is sequences
       fmt = eslSQFILE_UNKNOWN;
       if (esl_opt_IsOn(go, "--qformat")) {
-        if ((fmt = esl_sqio_EncodeFormat(esl_opt_GetString(go, "--qformat"))) == eslSQFILE_UNKNOWN)
+        if ((fmt = esl_sqfile_EncodeFormat(esl_opt_GetString(go, "--qformat"))) == eslSQFILE_UNKNOWN)
           p7_Fail("%s is not a valid input sequence file format for --qformat");       
       }
-      if (fmt == eslSQFILE_NCBI    || fmt == eslSQFILE_DAEMON ||
-          fmt == eslSQFILE_HMMPGMD || fmt == eslSQFILE_FMINDEX )
+      if (fmt == eslSQFILE_DAEMON || fmt == eslSQFILE_HMMPGMD || fmt == eslSQFILE_FMINDEX )
         p7_Fail("%s is not a valid query sequence file format\n", esl_opt_GetString(go, "--qformat"));
 
       status = esl_sqfile_OpenDigital(abc, queryfile, fmt, /*env=*/NULL, &(qseq_fp));
@@ -657,7 +656,7 @@ main(int argc, char **argv)
     
     if (qseq_fp) { // query is one or more sequences
       query_seq = esl_sq_CreateDigital(abc);
-      status = esl_sqio_Read(qseq_fp, query_seq);
+      status = esl_sqfile_Read(qseq_fp, query_seq);
       if      (nquery && status == eslEOF) break;
       else if (status == eslEFORMAT)       p7_Fail("Sequence file parsing failed\n  %s", esl_sqfile_GetErrorBuf(qseq_fp));
       else if (status == eslEOF)           p7_Fail("No sequences found - is file %s empty?\n", queryfile);
@@ -794,7 +793,7 @@ main(int argc, char **argv)
       query_seq = esl_sq_CreateDigital(abc);
       query_obj = cmd + optslen;  // save pointer to  start of query object.  Needs to happen here because otherwise becomes stale if we 
       // realloc cmd because it overflows
-      status = esl_sqio_Parse(query_obj, strlen(query_obj), query_seq, eslSQFILE_DAEMON);
+      status = esl_sqfile_Parse(query_obj, strlen(query_obj), query_seq, eslSQFILE_DAEMON);
       if (status != eslOK) p7_Die("Error parsing query as FASTA sequence");
       if (query_seq->n < 1) p7_Die("Error zero length query sequence");
       query_name = query_seq->name;

@@ -29,7 +29,7 @@
 #include "esl_msafile.h"
 #include "esl_scorematrix.h"
 #include "esl_sq.h"
-#include "esl_sqio.h"
+#include "esl_sqfile.h"
 #include "esl_stopwatch.h"
 
 #ifdef HMMER_THREADS
@@ -353,7 +353,7 @@ main(int argc, char **argv)
         {
           if (!qsq) qsq = esl_sq_CreateDigital(cfg.abc);
 
-          status = esl_sqio_Read(cfg.qseq_fp, qsq);
+          status = esl_sqfile_Read(cfg.qseq_fp, qsq);
           if      (nquery && status == eslEOF) break;
           else if (status == eslEFORMAT)       p7_Fail("Sequence file parsing failed\n  %s", esl_sqfile_GetErrorBuf(cfg.qseq_fp));
           else if (status == eslEOF)           p7_Fail("No sequences found - is file %s empty?\n", cfg.queryfile); 
@@ -823,11 +823,10 @@ initialize_cfg(ESL_GETOPTS *go, struct cfg_s *cfg)
     {
       fmt = eslSQFILE_UNKNOWN;
       if (esl_opt_IsOn(go, "--qformat")) {
-        if ((fmt = esl_sqio_EncodeFormat(esl_opt_GetString(go, "--qformat"))) == eslSQFILE_UNKNOWN)
+        if ((fmt = esl_sqfile_EncodeFormat(esl_opt_GetString(go, "--qformat"))) == eslSQFILE_UNKNOWN)
           p7_Fail("%s is not a valid input sequence file format for --qformat"); 
       }
-      if (fmt == eslSQFILE_NCBI    || fmt == eslSQFILE_DAEMON ||
-          fmt == eslSQFILE_HMMPGMD || fmt == eslSQFILE_FMINDEX )
+      if (fmt == eslSQFILE_DAEMON || fmt == eslSQFILE_HMMPGMD || fmt == eslSQFILE_FMINDEX )
         p7_Fail("%s is not a valid query sequence file format\n", esl_opt_GetString(go, "--qformat"));
 
       status = esl_sqfile_OpenDigital(cfg->abc, cfg->queryfile, fmt, /*env=*/NULL, &(cfg->qseq_fp));
@@ -877,12 +876,12 @@ initialize_cfg(ESL_GETOPTS *go, struct cfg_s *cfg)
       cfg->fmdb  = NULL;
       fmt        = eslSQFILE_UNKNOWN;
       if (esl_opt_IsOn(go, "--tformat")) {
-        fmt = esl_sqio_EncodeFormat(esl_opt_GetString(go, "--tformat"));
+        fmt = esl_sqfile_EncodeFormat(esl_opt_GetString(go, "--tformat"));
         if (fmt == eslSQFILE_UNKNOWN) p7_Fail("%s is not a recognized sequence database file format\n", esl_opt_GetString(go, "--tformat"));
       }
 
       /* nhmmer has a bug somewhere in how it uses ReadBlock on MSA files; I haven't been able to find it (SRE) */
-      if (esl_sqio_IsAlignment(fmt))
+      if (esl_sqfile_IsAlignment(fmt))
         p7_Fail("Target seqfile must be in unaligned format (fasta|embl|genbank)\nnhmmer can't handle MSA target files");
 
       status = esl_sqfile_OpenDigital(cfg->abc, cfg->dbfile, fmt, p7_SEQDBENV, &(cfg->dbfp));
@@ -968,7 +967,7 @@ serial_processor(ESL_SQFILE *dbfp, WORKER_INFO *info, ID_LENGTH_LIST *id_length_
   int       status      = eslOK;
   int       seq_id       = 0;
 
-  status = esl_sqio_ReadWindow(dbfp, 0, info->pli->block_length, dbsq);
+  status = esl_sqfile_ReadWindow(dbfp, 0, info->pli->block_length, dbsq);
   while (status == eslOK && (n_targetseqs==-1 || seq_id < n_targetseqs) )
     {
       dbsq->idx = seq_id;
@@ -991,14 +990,14 @@ serial_processor(ESL_SQFILE *dbfp, WORKER_INFO *info, ID_LENGTH_LIST *id_length_
           info->pli->nres += dbsq_revcmp->W;
         }
 
-      status = esl_sqio_ReadWindow(dbfp, info->om->max_length, info->pli->block_length, dbsq);
+      status = esl_sqfile_ReadWindow(dbfp, info->om->max_length, info->pli->block_length, dbsq);
       if (status == eslEOD)
         { // no more left of this sequence ... move along to the next sequence.
           add_id_length(id_length_list, dbsq->idx, dbsq->L);
           info->pli->nseqs++;
           esl_sq_Reuse(dbsq);
           seq_id++;
-          status = esl_sqio_ReadWindow(dbfp, 0, info->pli->block_length, dbsq);
+          status = esl_sqfile_ReadWindow(dbfp, 0, info->pli->block_length, dbsq);
         }
     }
   if      (status == eslEFORMAT) p7_Fail("Format parsing error in target sequence file\n%s",       esl_sqfile_GetErrorBuf(dbfp));
@@ -1091,7 +1090,7 @@ thread_director(ESL_SQFILE *dbfp, WORKER_INFO *info, ID_LENGTH_LIST *id_length_l
         { block->count = 0; status = eslEOF; }
       else 
         {
-          status = esl_sqio_ReadBlock(dbfp, block, info->pli->block_length, n_targetseqs, /*max_init_window=*/FALSE, TRUE);
+          status = esl_sqfile_ReadBlock(dbfp, block, info->pli->block_length, n_targetseqs, /*max_init_window=*/FALSE, TRUE);
           if      (status == eslEFORMAT)                p7_Fail("Target sequence file parsing failed\n%s", esl_sqfile_GetErrorBuf(dbfp));
           else if (status != eslOK && status != eslEOF) p7_Fail("Unexpected error reading target sequence file");
         }
@@ -1136,7 +1135,7 @@ thread_director(ESL_SQFILE *dbfp, WORKER_INFO *info, ID_LENGTH_LIST *id_length_l
           /* Capture "complete" status prior to placing current block into the work
            * queue, to avoid appearance of a race condition. With only one reader
            * thread, there isn't really a race risk, since "complete" is only set
-           * during the esl_sqio_ReadBlock() function call earlier in this loop
+           * during the esl_sqfile_ReadBlock() function call earlier in this loop
            * (i.e. "complete" isn't altered by the worker threads)*/
           int prev_complete = block->complete;
           if ( esl_workqueue_ReaderUpdate(queue, block, &workpacket) != eslOK) p7_Fail("work queue reader update failure");

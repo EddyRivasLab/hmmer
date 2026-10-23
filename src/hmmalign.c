@@ -12,7 +12,7 @@
 #include "esl_msa.h"
 #include "esl_msafile.h"
 #include "esl_sq.h"
-#include "esl_sqio.h"
+#include "esl_sqfile.h"
 #include "esl_vectorops.h"
 
 #include "hmmer.h"
@@ -121,7 +121,7 @@ main(int argc, char **argv)
   /* If caller declared an input format, decode it 
    */
   if (esl_opt_IsOn(go, "--informat")) {
-    infmt = esl_sqio_EncodeFormat(esl_opt_GetString(go, "--informat"));
+    infmt = esl_sqfile_EncodeFormat(esl_opt_GetString(go, "--informat"));
     if (infmt == eslSQFILE_UNKNOWN) cmdline_failure(argv[0], "%s is not a recognized input sequence file format\n", esl_opt_GetString(go, "--informat"));
   }
 
@@ -180,7 +180,7 @@ main(int argc, char **argv)
   ESL_RALLOC(sq, p, sizeof(ESL_SQ *) * (totseq + 1));
   sq[totseq] = esl_sq_CreateDigital(abc);
   nseq = 0;
-  while ((status = esl_sqio_Read(sqfp, sq[totseq+nseq])) == eslOK)
+  while ((status = esl_sqfile_Read(sqfp, sq[totseq+nseq])) == eslOK)
   {
     nseq++;
     ESL_RALLOC(sq, p, sizeof(ESL_SQ *) * (totseq+nseq+1));

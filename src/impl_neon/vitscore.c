@@ -465,7 +465,7 @@ main(int argc, char **argv)
 #include "easel.h"
 #include "esl_alphabet.h"
 #include "esl_sq.h"
-#include "esl_sqio.h"
+#include "esl_sqfile.h"
 
 #include "hmmer.h"
 #include "impl_neon.h"
@@ -500,7 +500,7 @@ main(int argc, char **argv)
   else if (status == eslEFORMAT)   p7_Fail("Format unrecognized.");
   else if (status == eslEINVAL)    p7_Fail("Can't autodetect stdin or .gz.");
   else if (status != eslOK)        p7_Fail("Open failed, code %d.", status);
-  if  (esl_sqio_Read(sqfp, sq) != eslOK) p7_Fail("Failed to read sequence");
+  if  (esl_sqfile_Read(sqfp, sq) != eslOK) p7_Fail("Failed to read sequence");
 
   /* create default null model, then create and optimize profile */
   bg = p7_bg_Create(abc);

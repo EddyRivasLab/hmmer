@@ -706,7 +706,7 @@ main(int argc, char **argv)
 #include "esl_alphabet.h"
 #include "esl_getopts.h"
 #include "esl_sq.h"
-#include "esl_sqio.h"
+#include "esl_sqfile.h"
 
 #include "hmmer.h"
 
@@ -778,9 +778,9 @@ main(int argc, char **argv)
   printf("%-30s   %-10s %-10s   %-10s %-10s\n", "# seq name",      "fwd (raw)",   "bck (raw) ",  "fwd (bits)",  "bck (bits)");
   printf("%-30s   %10s %10s   %10s %10s\n",     "#--------------", "----------",  "----------",  "----------",  "----------");
 
-  while ( (status = esl_sqio_Read(sqfp, sq)) != eslEOF)
+  while ( (status = esl_sqfile_Read(sqfp, sq)) != eslEOF)
     {
-      if      (status == eslEFORMAT) p7_Fail("Parse failed (sequence file %s)\n%s\n", sqfp->filename, sqfp->get_error(sqfp));     
+      if      (status == eslEFORMAT) p7_Fail("Parse failed (sequence file %s)\n%s\n", sqfp->filename, esl_sqfile_GetErrorBuf(sqfp));     
       else if (status != eslOK)      p7_Fail("Unexpected error %d reading sequence file %s", status, sqfp->filename);
 
       /* Resize the DP matrices if necessary */

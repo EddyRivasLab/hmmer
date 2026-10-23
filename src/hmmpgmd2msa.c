@@ -13,7 +13,7 @@
 #include "hmmer.h"
 #include "hmmpgmd.h"
 
-#include "esl_sqio.h"
+#include "esl_sqfile.h"
 
 
 /******************************************************************************

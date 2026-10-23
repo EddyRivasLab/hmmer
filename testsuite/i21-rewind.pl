@@ -5,7 +5,8 @@
 # database is rewound. This aims to avoid a bug found by 
 # TW in 2016, in which a second pass through an NCBI
 # database would miss hits to the first sequence of that
-# database. 
+# database. (Even though we removed support for NCBI dbs,
+# we still do the test for other formats.)
 #
 # Usage:   ./i21-rewind.pl <builddir> <srcdir> <tmpfile prefix>
 # Example: ./i21-rewind.pl ..         ..       tmpfoo
@@ -40,8 +41,8 @@ foreach $easel_prog  (@easel_progs)  { if (! -x "$builddir/easel/miniapps/$easel
 
 
 
-@formats = ("ncbi" , "fasta",  "afa", "stockholm");
-@exts    = (  "",   ".fa", ".afa", ".sto");
+@formats = ("fasta",  "afa",  "stockholm");
+@exts    = (".fa",    ".afa", ".sto");
 
 # Test hmmsearch.  Make a query with two copies of the hmm. 
 # Should get the same number of hits with both searches
@@ -102,8 +103,8 @@ do_cmd($cmd);
 #do_cmd ( "head -n 4 $tmppfx.B | tail -n 1 >> $database" );
 #do_cmd ( "tail -n 47 $tmppfx.A >> $database" );
 
-@formats = ("ncbi" , "fasta");
-@exts    = (  "",   ".fa" );
+@formats = ("fasta");
+@exts    = (".fa" );
 
 for $i (0..$#formats) {
    $fmt = $formats[$i];

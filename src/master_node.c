@@ -33,7 +33,7 @@
 #include "esl_alphabet.h"
 #include "esl_getopts.h"
 #include "esl_sq.h"
-#include "esl_sqio.h"
+#include "esl_sqfile.h"
 #include "esl_stack.h"
 #include "esl_stopwatch.h"
 #include "esl_threads.h"
@@ -748,7 +748,7 @@ static void *clientside_thread(void *arg)  // new version that reads exactly one
       seq = esl_sq_CreateDigital(abc);
 
       /* try to parse the input buffer as a FASTA sequence */
-      status = esl_sqio_Parse(ptr, strlen(ptr), seq, eslSQFILE_DAEMON);
+      status = esl_sqfile_Parse(ptr, strlen(ptr), seq, eslSQFILE_DAEMON);
       if (status != eslOK) client_msg_longjmp(data->sock_fd, status, &jmp_env, "Error parsing FASTA sequence");
       if (seq->n < 1) client_msg_longjmp(data->sock_fd, eslEFORMAT, &jmp_env, "Error: zero length FASTA sequence");
 

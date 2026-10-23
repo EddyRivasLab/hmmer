@@ -703,7 +703,7 @@ main(int argc, char **argv)
 #include "esl_alphabet.h"
 #include "esl_getopts.h"
 #include "esl_sq.h"
-#include "esl_sqio.h"
+#include "esl_sqfile.h"
 
 #include "hmmer.h"
 #include "p7_gmxchk.h"
@@ -766,9 +766,9 @@ main(int argc, char **argv)
   gxc = p7_gmxchk_Create(gm->M, 400, ESL_MBYTES(32));
   bnd = p7_gbands_Create();
 
-  while ( (status = esl_sqio_Read(sqfp, sq)) != eslEOF)
+  while ( (status = esl_sqfile_Read(sqfp, sq)) != eslEOF)
     {
-      if      (status == eslEFORMAT) p7_Fail("Parse failed (sequence file %s)\n%s\n", sqfp->filename, sqfp->get_error(sqfp));     
+      if      (status == eslEFORMAT) p7_Fail("Parse failed (sequence file %s)\n%s\n", sqfp->filename, esl_sqfile_GetErrorBuf(sqfp));     
       else if (status != eslOK)      p7_Fail("Unexpected error %d reading sequence file %s", status, sqfp->filename);
 
       /* Resize the DP matrices if necessary */

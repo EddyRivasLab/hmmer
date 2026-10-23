@@ -42,7 +42,7 @@
 #include "esl_msa.h"
 #include "esl_msafile.h"
 #include "esl_sq.h"
-#include "esl_sqio.h"
+#include "esl_sqfile.h"
 #include "esl_vectorops.h"
 
 
@@ -130,7 +130,7 @@ static ESL_OPTIONS options[] = {
 typedef struct {
   ESL_MSAFILE    *afp;           // open MSA database for training/test splits
   ESL_SQFILE     *dbfp;          // open seq database for shuffled negative segments
-  ESL_SSI        *dbssi;         // open SSI index; a less buried copy of dbfp->data.ascii.ssi. closing <dbfp> closes it.  
+  ESL_SSI        *dbssi;         // open SSI index; a less buried copy of dbfp->ssi. closing <dbfp> closes it.  
   int64_t         db_nseq;       // # of sequences in db; same as dbssi->nprimary
 
   FILE           *out_tbl;       // summary table, columnar and whitespace-delim
@@ -350,7 +350,7 @@ open_iofiles(PM_CONFIG *cfg, const char *basename, const char *msafile, const ch
       /* Open its SSI index */
       if (esl_sqfile_OpenSSI(cfg->dbfp, NULL) != eslOK)   // <NULL> means no optional ssi filename; use the default <dbfile>.ssi
         esl_fatal("Failed to find an SSI index %s.ssi for <seqdb>\nUse `esl-sfetch --index %s` to create the SSI index file", dbfile, dbfile);
-      cfg->dbssi   = cfg->dbfp->data.ascii.ssi;
+      cfg->dbssi   = cfg->dbfp->ssi;
       cfg->db_nseq = cfg->dbssi->nprimary;
     }
 
@@ -854,7 +854,7 @@ set_random_segment(const PM_CONFIG *cfg, FILE *logfp, int W, ESL_DSQ *dsqp)
       /* Possible future optimization: we have the record and data
        * offsets; we could go ahead and position the disk, we don't
        * need to look up offsets again with
-       * esl_sqio_Fetch{Subseq}(). But we don't currently have a
+       * esl_sqfile_Fetch{Subseq}(). But we don't currently have a
        * ReadSubseq() to use with pre-positioning.
        */
 
@@ -862,13 +862,13 @@ set_random_segment(const PM_CONFIG *cfg, FILE *logfp, int W, ESL_DSQ *dsqp)
         {
           i = 1 + esl_rnd_Roll(cfg->rng, L-W+1);  // i is 1..L-W+1
           j = i + W - 1;                          // j is W..L
-          esl_sqio_FetchSubseq(cfg->dbfp, pkey, i,j, sq);
+          esl_sqfile_FetchSubseq(cfg->dbfp, pkey, i,j, sq);
           esl_sq_ConvertDegen2X(sq);
           memcpy(dsqp, sq->dsq+1, sizeof(ESL_DSQ) * W);
         }
       else        // our source db sequence is too short; concatenate it before taking subseq of length W
         {
-          esl_sqio_Fetch(cfg->dbfp, pkey, sq);
+          esl_sqfile_Fetch(cfg->dbfp, pkey, sq);
           esl_sq_ConvertDegen2X(sq);
           ESL_DASSERT1(( sq->n == L ));
           i = ip = 1 + esl_rnd_Roll(cfg->rng, L);  // i is 1..L; first window is L-i+1 long. ip is our tmp stepping var; i is for the logfile.
@@ -971,7 +971,7 @@ synthesize_twodom_positives(const PM_CONFIG *cfg, const ESL_MSA *msa, const int 
       set_random_segment    (cfg, cfg->out_postbl, L3,          sq->dsq+1+L1+d1n+L2+d2n);
       fprintf(cfg->out_postbl, "\n");
 
-      esl_sqio_Write(cfg->out_test, sq, eslSQFILE_FASTA, FALSE);
+      esl_sqfile_Write(cfg->out_test, sq, eslSQFILE_FASTA, FALSE);
 #if eslDEBUGLEVEL >= 1
       if ( esl_sq_Validate(sq, errbuf) != eslOK) esl_fatal(errbuf);  
 #endif
@@ -1017,7 +1017,7 @@ synthesize_twodom_negatives(const PM_CONFIG *cfg)
       set_random_segment(cfg, cfg->out_negtbl, L3,  sq->dsq+1+L1+d1n+L2+d2n);
       fprintf(cfg->out_negtbl, "\n");
 
-      esl_sqio_Write(cfg->out_test, sq, eslSQFILE_FASTA, FALSE);
+      esl_sqfile_Write(cfg->out_test, sq, eslSQFILE_FASTA, FALSE);
 #if eslDEBUGLEVEL >= 1
       if ( esl_sq_Validate(sq, errbuf) != eslOK) esl_fatal(errbuf);  
 #endif
@@ -1078,7 +1078,7 @@ synthesize_onedom_positives(const PM_CONFIG *cfg, const ESL_MSA *msa, const int 
       set_random_segment    (cfg, cfg->out_postbl, L2,          sq->dsq+1+L1+d1n);
       fprintf(cfg->out_postbl, "\n");
 
-      esl_sqio_Write(cfg->out_test, sq, eslSQFILE_FASTA, FALSE);
+      esl_sqfile_Write(cfg->out_test, sq, eslSQFILE_FASTA, FALSE);
 #if eslDEBUGLEVEL >= 1
       if ( esl_sq_Validate(sq, errbuf) != eslOK) esl_fatal(errbuf);  
 #endif
@@ -1119,7 +1119,7 @@ synthesize_onedom_negatives(const PM_CONFIG *cfg)
       set_random_segment(cfg, cfg->out_negtbl, L2,  sq->dsq+1+L1+d1n);
       fprintf(cfg->out_negtbl, "\n");
 
-      esl_sqio_Write(cfg->out_test, sq, eslSQFILE_FASTA, FALSE);
+      esl_sqfile_Write(cfg->out_test, sq, eslSQFILE_FASTA, FALSE);
 #if eslDEBUGLEVEL >= 1
       if ( esl_sq_Validate(sq, errbuf) != eslOK) esl_fatal(errbuf);  
 #endif
