@@ -95,7 +95,7 @@ do_cmd($cmd);
 
 # the 3box-alitest.fa test was created with:
 #$database   = "$tmppfx.fa";
-#do_cmd ( "$builddir/easel/miniapps/esl-shuffle --seed 1 --dna -G -N 1 -L 10000 -o $tmppfx.A" );
+#do_cmd ( "$builddir/easel/miniapps/easel synth --seed 1 -o $tmppfx.A dna 1 10000" );
 #do_cmd ( "$builddir/src/hmmemit -N 1 --seed 3 $tmppfx.hmm >  $tmppfx.B " );  #makes two sequences
 #do_cmd ( "head -n 70 $tmppfx.A > $database" );
 #do_cmd ( "head -n 2 $tmppfx.B | tail -n 1 >> $database" );

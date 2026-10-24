@@ -206,8 +206,8 @@ main(int argc, char **argv)
  *    
  * Valgrind debugging
  * generate a small test seq database:
- *     esl-shuffle -G --amino -N 10 -L 400 > foo.fa
- *     fasta2daemon.pl foo.fa              > foo.d
+ *     easel synth amino 10 400 > foo.fa
+ *     fasta2daemon.pl foo.fa   > foo.d
  *     
  * in three separate terminal windows    
  *     valgrind --dsymutil=yes --leak-check=yes --show-reachable=yes src/hmmpgmd --master --seqdb foo.d 

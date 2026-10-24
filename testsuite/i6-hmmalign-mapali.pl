@@ -20,16 +20,16 @@ if (! -r "$testsuitedir/Caudal_act.sto") { print "FAIL: didn't find $testsuitedi
 
 
 system("$easel reformat -u --rename foo fasta $testsuitedir/Caudal_act.sto > $tmppfx.fa");
-if ($? != 0)   { print "FAIL: esl-reformat failed unexpectedly\n"; exit 1; }
+if ($? != 0)   { print "FAIL: easel reformat failed unexpectedly\n"; exit 1; }
 
 system("$hmmalign -o $tmppfx.sto  --mapali $testsuitedir/Caudal_act.sto $testsuitedir/Caudal_act.hmm $tmppfx.fa");
 if ($? != 0)   { print "FAIL: hmmalign failed unexpectedly\n"; exit 1; }
 
 system("$easel reformat -u fasta $tmppfx.sto > $tmppfx.2.fa");
-if ($? != 0)   { print "FAIL: esl-reformat failed unexpectedly\n"; exit 1; }
+if ($? != 0)   { print "FAIL: easel reformat failed unexpectedly\n"; exit 1; }
 
 system("$easel reformat -u fasta $testsuitedir/Caudal_act.sto > $tmppfx.3.fa");
-if ($? != 0)   { print "FAIL: esl-reformat failed unexpectedly\n"; exit 1; }
+if ($? != 0)   { print "FAIL: easel reformat failed unexpectedly\n"; exit 1; }
 
 system("cat $tmppfx.fa >> $tmppfx.3.fa");
 if ($? != 0)   { print "FAIL: cat failed unexpectedly\n"; exit 1; }

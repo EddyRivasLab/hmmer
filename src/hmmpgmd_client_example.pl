@@ -546,7 +546,7 @@ sub unpackStats {
   Title    : readMapFile
   Incept   : finnr, Apr 22, 2013 8:00:16 PM
   Usage    : readMapFile('/path/to/file');
-  Function : Reads the map file produced by esl-reformat into an array so that
+  Function : Reads the map file produced by easel reformat into an array so that
            : sequence 'meta' data can be reapplied.
   Args     : Path to file.
   Returns  : ArrayRef containing sequence meta data. The sequence index is
@@ -600,7 +600,7 @@ Usage: hmmpgmd_client_example.pl [options] -file seq.fa
   
   file      : The name of the fasta file.  The file is not being validated; give it
             : rubbish and bad things will happen.
-  map       : The map file produced by esl-reformat when using hmmpgmd format option. 
+  map       : The map file produced by easel reformat when using hmmpgmd format option. 
             : If this is not provided, then it will just report the index numbers.
   h|help    : Prints this help statement   
   verbose   : Prints debug statements/progress reports.
@@ -626,9 +626,9 @@ Details: This example script shows how to search sequences in a FASTA file again
 hmmpgmd format database file, using HMMER's hmmpgmd. Steps include:  
 
 (1) Generate an hmmpgmd format file, including map file, from a FASTA format
-    file, for example using the HMMER/Easel tool esl-reformat:
+    file, for example using the HMMER/Easel tool easel reformat:
   
-  prompt% esl-reformat --id_map my.hmmpgmd.map hmmpgmd my.fasta > my.hmmpgmd 
+  prompt% easel reformat --id_map my.hmmpgmd.map hmmpgmd my.fasta > my.hmmpgmd 
   
 (2) Start the hmmpgmd master/worker, run the following commands:
   

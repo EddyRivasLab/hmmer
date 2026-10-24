@@ -62,10 +62,10 @@ sub hmmalign_msa_integrity_check
     if ($? != 0) { die "FAIL: hmmalign failed"; }
     
     `$builddir/easel/miniapps/easel reformat -u fasta $tmppfx.sto > $tmppfx.fa1 2>/dev/null`;
-    if ($? != 0) { die "FAIL: first esl-reformat failed"; }
+    if ($? != 0) { die "FAIL: first easel reformat failed"; }
     
     `$builddir/easel/miniapps/easel reformat -u fasta $fafile    > $tmppfx.fa2 2>/dev/null`;
-    if ($? != 0) { die "FAIL: second esl-reformat failed"; }
+    if ($? != 0) { die "FAIL: second easel reformat failed"; }
 
     `diff -b $tmppfx.fa1 $tmppfx.fa2 > /dev/null 2>&1`;
     if ($? != 0) { die "FAIL: alignment corrupted\n"; }

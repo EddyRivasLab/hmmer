@@ -628,7 +628,7 @@ main(int argc, char **argv)
 
 
     /* Read dseqs from block into text element T.
-    *  Convert the dsq from esl-alphabet to fm-alphabet (1..k for alphabet of size k).
+    *  Convert the dsq from Easel's digital alphabet to fm-alphabet (1..k for alphabet of size k).
     *  (a) collapsing upper/lower case for appropriate sorting.
     *  (b) reserving 0 for '$', which must be lexicographically smallest
     *      (these will later be shifted to 0-based alphabet, once SA has been built)

@@ -349,7 +349,7 @@ open_iofiles(PM_CONFIG *cfg, const char *basename, const char *msafile, const ch
 
       /* Open its SSI index */
       if (esl_sqfile_OpenSSI(cfg->dbfp, NULL) != eslOK)   // <NULL> means no optional ssi filename; use the default <dbfile>.ssi
-        esl_fatal("Failed to find an SSI index %s.ssi for <seqdb>\nUse `esl-sfetch --index %s` to create the SSI index file", dbfile, dbfile);
+        esl_fatal("Failed to find an SSI index %s.ssi for <seqdb>\nUse `easel sindex %s` to create the SSI index file", dbfile, dbfile);
       cfg->dbssi   = cfg->dbfp->ssi;
       cfg->db_nseq = cfg->dbssi->nprimary;
     }
