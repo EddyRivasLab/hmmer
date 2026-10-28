@@ -92,11 +92,11 @@ p7_gmxchk_Create(int M, int L, int64_t ramlimit)
   gxc->validR      = gxc->allocR;
 
   /* Level 2 allocations: row pointers and dp cell memory */
-  gxc->ncells = gxc->allocR * gxc->allocW;
+  gxc->ncells = (int64_t) gxc->allocR * (int64_t) gxc->allocW;
   ESL_ALLOC( gxc->dp_mem, sizeof(float)   * gxc->ncells);
   ESL_ALLOC( gxc->dp,     sizeof(float *) * gxc->allocR);
   for (r = 0; r < gxc->allocR; r++) 
-    gxc->dp[r] = gxc->dp_mem + (r * gxc->allocW);
+    gxc->dp[r] = gxc->dp_mem + (ptrdiff_t) r * (ptrdiff_t) gxc->allocW;
 
 #if eslDEBUGLEVEL > 0
   gxc->do_debugging  = FALSE;
@@ -172,7 +172,7 @@ p7_gmxchk_GrowTo(P7_GMXCHK *gxc, int M, int L)
     {
       set_row_layout(gxc, L, maxR); 
       gxc->validR = gxc->R0 + gxc->Ra + gxc->Rb + gxc->Rc; /* this may be > allocR now; we'll reallocate dp[] next, if so     */
-      gxc->ncells = gxc->validR * gxc->allocW;
+      gxc->ncells = (int64_t) gxc->validR * (int64_t) gxc->allocW;
       ESL_REALLOC(gxc->dp_mem, sizeof(float) * gxc->ncells);
       reset_dp_ptrs = TRUE;
     }
@@ -193,7 +193,7 @@ p7_gmxchk_GrowTo(P7_GMXCHK *gxc, int M, int L)
   /* Do the row ptrs need to be reset? */
   if (reset_dp_ptrs)
     for (r = 0; r < gxc->validR; r++)
-      gxc->dp[r] = gxc->dp_mem + (r * gxc->allocW);
+      gxc->dp[r] = gxc->dp_mem + (ptrdiff_t) r * (ptrdiff_t) gxc->allocW;
 
   gxc->M = 0;
   gxc->L = 0;
