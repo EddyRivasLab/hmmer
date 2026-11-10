@@ -593,11 +593,7 @@ AC_TYPE_OFF_T
 AC_C_BIGENDIAN([
   AC_DEFINE(WORDS_BIGENDIAN, 1, [Set autoconf's default WORDS_BIGENDIAN flag])
   ],[
-  if test "$enable_vmx" = "yes"; then
-    AC_MSG_NOTICE([::::::::::--- no vector instruction set ---::::::::::])
-    AC_MSG_NOTICE([HMMER3 Altivec/VMX only supports big-endian platforms: e.g. ppc64 not ppc64le])
-    AC_MSG_ERROR([No supported vectorization found for your machine.])
-  elif test "$enable_neon" = "yes"; then
+  if test "$enable_neon" = "yes"; then
     AX_CHECK_COMPILE_FLAG([-mlittle-endian], [NEON_CFLAGS="$NEON_CFLAGS -mlittle-endian"], [], [$NEON_CFLAGS])
   fi
   ],[

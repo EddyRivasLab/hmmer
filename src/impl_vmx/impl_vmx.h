@@ -11,6 +11,21 @@
 #include <altivec.h>
 #endif
 
+/* The H3 striped VMX code is written for big-endian byte order.
+ * On little-endian PowerPC (ppc64le), vec_sld() concatenates its two
+ * operands in the opposite order, so swap them (and complement the
+ * shift count) to get the big-endian result. gcc defines vec_sld as
+ * a macro; clang defines it as an overloaded function.
+ */
+#ifdef __LITTLE_ENDIAN__
+#ifdef vec_sld
+#undef  vec_sld
+#define vec_sld(a, b, n)  __builtin_vec_sld((b), (a), 16 - (n))
+#else
+#define vec_sld(a, b, n)  vec_sld((b), (a), 16 - (n))
+#endif
+#endif
+
 #include "esl_alphabet.h"
 #include "esl_random.h"
 

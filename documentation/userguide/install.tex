@@ -164,7 +164,7 @@ platforms.\sidenote{Many thanks to the GCC Compile Farm Project for
 that are processor-specific. H3 supports three types of processors:
 x86-compatible (Intel/AMD) processors (SSE2 and AVX instruction sets),
 ARM processors such as new Macs (NEON instructions), and some PowerPC
-systems (Altivec/VMX instructions, big-endian mode only).
+systems (Altivec/VMX instructions).
 
 SSE2 is supported on Intel processors from Pentium 4 on, and AMD
 processors from K8 (Athlon 64) on. This includes almost all Intel
@@ -173,23 +173,10 @@ processors since 2000 and AMD processors since 2003.
 Altivec/VMX is supported on Motorola G4, IBM G5, and IBM PowerPC
 processors starting with the Power6, which includes almost all
 PowerPC-based desktop systems since 1999 and servers since
-2007.\sidenote{If your platform does not support any of these
-  vector instruction sets -- like, if you're on a ppc64le system that
-  supports VMX but in little-endian byte order -- the configure script
+2007. This includes both big-endian (ppc64, powerpc) and
+little-endian (ppc64le) systems.\sidenote{If your platform does not
+  support any of these vector instruction sets, the configure script
   will stop with an error message.}
-
-HMMER3 does not support little-endian PowerPC systems (ppc64le). Alas,
-the PowerPC world has been moving toward little-endian ppc64le, away
-from big-endian ppc64 and powerpc. H3's VMX implementation was
-originally developed on an AIX Power 7 system, and Power 7 systems
-were big-endian. More recent Power 8 and 9 machines are ``bi-endian'',
-bootable into either a big-endian or little-endian system. IBM has
-stated that it really, really wants them to all be in little-endian
-mode. Among common Linux/PowerPC distros, Debian, Fedora, Red Hat, and
-openSUSE still come in either ppc64 or ppc64le flavors; HMMER3 will
-run on the former but not the latter. Recent Ubuntu and SUSE for
-PowerPC distros are only coming in ppc64le flavor, incompatible with
-H3.
 
 \paragraph{Compiler:} The source code conforms to ANSI
 C99 and POSIX standards. It should compile with any ANSI C99 compliant
