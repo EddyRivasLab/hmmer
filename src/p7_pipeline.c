@@ -306,6 +306,30 @@ p7_pipeline_Destroy(P7_PIPELINE *pli)
  * 2. The pipeline API.
  *****************************************************************/
 
+/* window_sorter()
+ * qsort() comparison function for a list of P7_HMM_WINDOWs.
+ *
+ * Orders windows by target sequence, then strand, then start
+ * position, which is the order p7_pli_ExtendAndMergeWindows() needs
+ * for its merge of neighbors. Length and model position break ties,
+ * so that the merged list does not depend on how the platform's
+ * qsort() orders windows with the same start.
+ */
+static int
+window_sorter(const void *v1, const void *v2)
+{
+  const P7_HMM_WINDOW *w1 = (const P7_HMM_WINDOW *) v1;
+  const P7_HMM_WINDOW *w2 = (const P7_HMM_WINDOW *) v2;
+
+  if (w1->id              != w2->id)              return (w1->id              < w2->id              ? -1 : 1);
+  if (w1->complementarity != w2->complementarity) return (w1->complementarity < w2->complementarity ? -1 : 1);
+  if (w1->n               != w2->n)               return (w1->n               < w2->n               ? -1 : 1);
+  if (w1->length          != w2->length)          return (w1->length          < w2->length          ? -1 : 1);
+  if (w1->k               != w2->k)               return (w1->k               < w2->k               ? -1 : 1);
+  return 0;
+}
+
+
 /* Function:  p7_pli_ExtendAndMergeWindows
  * Synopsis:  Turns a list of ssv diagonals into windows, and merges
  *            overlapping windows.
@@ -363,6 +387,14 @@ p7_pli_ExtendAndMergeWindows (P7_OPROFILE *om, const P7_SCOREDATA *data, P7_HMM_
     curr_window->fm_n -= (curr_window->n - window_start);
     curr_window->n = window_start;
   }
+
+  /* The merge below compares each window only to the one before it,
+   * so it needs the windows in order of start position. The filters
+   * report windows in the order they find them, and the extension
+   * above moves each start by an amount that depends on the window's
+   * model position, so the list is generally not in that order.
+   */
+  qsort(windowlist->windows, windowlist->count, sizeof(P7_HMM_WINDOW), window_sorter);
 
 
   /* merge overlapping windows, compressing list in place. */
